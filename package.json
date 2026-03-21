@@ -1,0 +1,32 @@
+{
+  "name": "@unit-talk/v2",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.29.3",
+  "description": "Unit Talk 2.0 greenfield monorepo",
+  "scripts": {
+    "build": "pnpm exec tsc -b tsconfig.json",
+    "clean": "pnpm -r --if-present run clean",
+    "dev": "pnpm --filter @unit-talk/api dev",
+    "env:check": "node scripts/validate-env.mjs",
+    "format:check": "prettier --check .",
+    "format:write": "prettier --write .",
+    "lint": "eslint .",
+    "supabase:types": "supabase gen types typescript --linked --schema public | tail -n +2 > packages/db/src/database.types.ts",
+    "test:db": "tsx --test apps/api/src/database-smoke.test.ts",
+    "test": "tsx --test apps/api/src/submission-service.test.ts apps/api/src/settlement-service.test.ts apps/api/src/server.test.ts apps/worker/src/worker-runtime.test.ts apps/operator-web/src/server.test.ts apps/smart-form/src/server.test.ts packages/verification/src/scenarios/registry.test.ts packages/verification/src/run-history/run-store.test.ts packages/verification/src/run-history/query.test.ts packages/verification/src/archive/registry.test.ts packages/domain/src/probability/devig.test.ts packages/domain/src/probability/probability-layer.test.ts packages/domain/src/probability/calibration.test.ts packages/domain/src/outcomes/outcome-resolver.test.ts packages/domain/src/outcomes/loss-attribution.test.ts packages/domain/src/outcomes/settlement-downstream.test.ts packages/domain/src/features/player-form.test.ts packages/domain/src/features/game-context.test.ts packages/domain/src/features/opportunity.test.ts packages/domain/src/features/efficiency.test.ts packages/domain/src/models/model-blend.test.ts packages/domain/src/models/clv-forecast.test.ts packages/domain/src/models/stat-distribution.test.ts packages/domain/src/models/stat-market-blend.test.ts packages/domain/src/models/sharp-consensus.test.ts packages/domain/src/signals/market-signals.test.ts packages/domain/src/signals/book-dispersion.test.ts packages/domain/src/signals/signal-quality.test.ts packages/domain/src/bands/bands.test.ts packages/domain/src/calibration/calibration.test.ts packages/domain/src/scoring/scoring-weights.test.ts packages/domain/src/outcomes/outcomes.test.ts packages/domain/src/market/market-reaction.test.ts packages/domain/src/evaluation/evaluation.test.ts packages/domain/src/edge-validation/edge-validation.test.ts packages/domain/src/rollups/rollups.test.ts packages/domain/src/system-health/system-health.test.ts packages/domain/src/risk/risk.test.ts packages/domain/src/strategy/strategy.test.ts",
+    "type-check": "pnpm exec tsc -b tsconfig.json",
+    "verify": "pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.24.0",
+    "@types/node": "^24.5.2",
+    "eslint": "^9.24.0",
+    "globals": "^16.0.0",
+    "prettier": "^3.5.3",
+    "tsx": "^4.20.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.29.1"
+  },
+  "dependencies": {}
+}

@@ -1,0 +1,29 @@
+{
+  "name": "@unit-talk/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
+    "dev": "tsx src/index.ts",
+    "runs:failures": "tsx src/scripts/query-runs.ts --failures",
+    "runs:recent": "tsx src/scripts/query-runs.ts --recent",
+    "runs:summary": "tsx src/scripts/query-runs.ts --summary",
+    "test:db": "tsx --test src/database-smoke.test.ts",
+    "test": "tsx --test src/submission-service.test.ts src/server.test.ts",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@unit-talk/config": "workspace:*",
+    "@unit-talk/contracts": "workspace:*",
+    "@unit-talk/db": "workspace:*",
+    "@unit-talk/domain": "workspace:*",
+    "@unit-talk/events": "workspace:*",
+    "@unit-talk/intelligence": "workspace:*",
+    "@unit-talk/observability": "workspace:*",
+    "@unit-talk/verification": "workspace:*"
+  }
+}

@@ -1,0 +1,4 @@
+{"type":"submission.validated","timestamp":"2026-03-20T19:43:41.000Z","payload":{"submissionId":"a6a45d66-9a68-4005-a9f8-61394d9634ee","pickId":"1e40951c-696a-4339-98cd-1d743b072c7a","lifecycleState":"validated"}}
+{"type":"promotion.queued","timestamp":"2026-03-20T19:43:42.000Z","payload":{"pickId":"1e40951c-696a-4339-98cd-1d743b072c7a","promotionTarget":"best-bets","lifecycleState":"queued"}}
+{"type":"distribution.sent","timestamp":"2026-03-20T19:43:43.000Z","payload":{"pickId":"1e40951c-696a-4339-98cd-1d743b072c7a","target":"discord:best-bets","lifecycleState":"posted"}}
+{"type":"settlement.recorded","timestamp":"2026-03-20T19:43:44.000Z","payload":{"pickId":"1e40951c-696a-4339-98cd-1d743b072c7a","result":"win","lifecycleState":"settled"}}

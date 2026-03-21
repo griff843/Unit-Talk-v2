@@ -1,0 +1,18 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/config" },
+    { "path": "./packages/contracts" },
+    { "path": "./packages/db" },
+    { "path": "./packages/domain" },
+    { "path": "./packages/events" },
+    { "path": "./packages/intelligence" },
+    { "path": "./packages/observability" },
+    { "path": "./packages/verification" },
+    { "path": "./apps/api" },
+    { "path": "./apps/worker" },
+    { "path": "./apps/operator-web" },
+    { "path": "./apps/smart-form" },
+    { "path": "./apps/discord-bot" }
+  ]
+}

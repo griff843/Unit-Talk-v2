@@ -1,0 +1,24 @@
+export const canonicalTables = [
+  'submissions',
+  'submission_events',
+  'picks',
+  'pick_lifecycle',
+  'pick_promotion_history',
+  'distribution_outbox',
+  'distribution_receipts',
+  'settlement_records',
+  'system_runs',
+  'audit_log',
+  'participants',
+  'participant_memberships',
+] as const;
+
+export type CanonicalTable = (typeof canonicalTables)[number];
+
+export * from './client.js';
+export * from './database.types.js';
+export * from './lifecycle.js';
+export * from './repositories.js';
+export * from './runtime-repositories.js';
+export * from './schema.js';
+export * from './types.js';

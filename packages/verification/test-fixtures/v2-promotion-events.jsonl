@@ -1,0 +1,4 @@
+{"type":"submission.validated","timestamp":"2026-03-20T20:00:00.000Z","payload":{"submissionId":"0523898a-8491-47c6-b991-a7ac814f9177","pickId":"a955039c-616a-4821-bd2a-098a799feb28","promotionTarget":"best-bets","promotionScore":92.2,"lifecycleState":"validated"}}
+{"type":"promotion.queued","timestamp":"2026-03-20T20:00:01.000Z","payload":{"pickId":"a955039c-616a-4821-bd2a-098a799feb28","promotionTarget":"best-bets","promotionStatus":"qualified","lifecycleState":"queued"}}
+{"type":"submission.validated","timestamp":"2026-03-21T12:16:26.000Z","payload":{"submissionId":"1a8d2021-1cfe-42d8-a183-f367e1e0cf82","pickId":"eb12a6c2-0221-44f9-acea-58d684a29fd3","promotionTarget":"trader-insights","promotionScore":92.55,"lifecycleState":"validated"}}
+{"type":"promotion.queued","timestamp":"2026-03-21T12:16:27.000Z","payload":{"pickId":"eb12a6c2-0221-44f9-acea-58d684a29fd3","promotionTarget":"trader-insights","promotionStatus":"qualified","lifecycleState":"queued"}}

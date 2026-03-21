@@ -1,0 +1,32 @@
+project_id = "unit-talk-v2"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public"]
+extra_search_path = ["public"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 17
+
+[studio]
+enabled = true
+port = 54323
+
+[db.migrations]
+enabled = true
+schema_paths = ["./migrations"]
+
+[db.seed]
+enabled = false
+sql_paths = []
+# When a seed file is added: set enabled = true and add path to sql_paths.
+
+[realtime]
+enabled = true
+# Realtime is enabled to support outbox worker wake-up patterns via Postgres
+# LISTEN/NOTIFY. No subscriptions are active by default.
+

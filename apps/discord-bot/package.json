@@ -1,0 +1,20 @@
+{
+  "name": "@unit-talk/discord-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
+    "dev": "tsx src/index.ts",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@unit-talk/config": "workspace:*",
+    "@unit-talk/contracts": "workspace:*",
+    "@unit-talk/events": "workspace:*",
+    "@unit-talk/observability": "workspace:*"
+  }
+}

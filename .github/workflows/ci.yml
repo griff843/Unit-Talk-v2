@@ -1,0 +1,66 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - 'codex/**'
+  pull_request:
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write CI local env
+        run: |
+          cat <<'EOF' > local.env
+          NODE_ENV=development
+          UNIT_TALK_APP_ENV=ci
+          LINEAR_API_TOKEN=
+          LINEAR_TEAM_ID=
+          NOTION_TOKEN=
+          SLACK_BOT_TOKEN=
+          SLACK_SIGNING_SECRET=
+          SUPABASE_URL=
+          SUPABASE_ANON_KEY=
+          SUPABASE_SERVICE_ROLE_KEY=
+          DISCORD_BOT_TOKEN=
+          DISCORD_GUILD_ID=
+          DISCORD_ANNOUNCEMENT_CHANNEL_ID=
+          OPENAI_API_KEY=
+          EOF
+
+      - name: Verify environment
+        run: pnpm env:check
+
+      - name: Lint
+        run: pnpm lint
+
+      - name: Type check
+        run: pnpm type-check
+
+      - name: Build
+        run: pnpm build
+
+      - name: Test
+        run: pnpm test
+
+      - name: Database smoke test
+        run: pnpm test:db

@@ -1,0 +1,133 @@
+import http, { type IncomingMessage, type ServerResponse } from 'node:http';
+import { loadEnvironment } from '@unit-talk/config';
+import {
+  createDatabaseRepositoryBundle,
+  createInMemoryRepositoryBundle,
+  createServiceRoleDatabaseConnectionConfig,
+  type RepositoryBundle,
+} from '@unit-talk/db';
+import { handleSettlePick, handleSubmitPick } from './handlers/index.js';
+
+export interface ApiServerOptions {
+  repositories?: RepositoryBundle;
+}
+
+export interface ApiRuntimeDependencies {
+  repositories: RepositoryBundle;
+  persistenceMode: 'database' | 'in_memory';
+}
+
+export interface ApiHealthResponse {
+  ok: true;
+  service: 'api';
+  persistenceMode: ApiRuntimeDependencies['persistenceMode'];
+}
+
+export function createApiRuntimeDependencies(
+  options: ApiServerOptions = {},
+): ApiRuntimeDependencies {
+  if (options.repositories) {
+    return {
+      repositories: options.repositories,
+      persistenceMode: 'in_memory',
+    };
+  }
+
+  try {
+    const environment = loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
+
+    return {
+      repositories: createDatabaseRepositoryBundle(connection),
+      persistenceMode: 'database',
+    };
+  } catch {
+    return {
+      repositories: createInMemoryRepositoryBundle(),
+      persistenceMode: 'in_memory',
+    };
+  }
+}
+
+export function createApiServer(options: ApiServerOptions = {}) {
+  const runtime = createApiRuntimeDependencies(options);
+
+  return http.createServer(async (request, response) => {
+    await routeRequest(request, response, runtime);
+  });
+}
+
+export async function routeRequest(
+  request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+) {
+  const method = request.method ?? 'GET';
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+
+  if (method === 'GET' && url.pathname === '/health') {
+    return writeJson(response, 200, {
+      ok: true,
+      service: 'api',
+      persistenceMode: runtime.persistenceMode,
+    } satisfies ApiHealthResponse);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/submissions') {
+    const body = await readJsonBody(request);
+    const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
+    return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  const settleMatch =
+    method === 'POST'
+      ? /^\/api\/picks\/([^/]+)\/settle$/.exec(url.pathname)
+      : null;
+
+  if (settleMatch) {
+    const body = await readJsonBody(request);
+    const apiResponse = await handleSettlePick(
+      {
+        params: {
+          pickId: settleMatch[1] ?? '',
+        },
+        body,
+      },
+      runtime.repositories,
+    );
+    return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  return writeJson(response, 404, {
+    ok: false,
+    error: {
+      code: 'NOT_FOUND',
+      message: `Route not found: ${method} ${url.pathname}`,
+    },
+  });
+}
+
+async function readJsonBody(request: IncomingMessage) {
+  const chunks: Buffer[] = [];
+
+  for await (const chunk of request) {
+    chunks.push(typeof chunk === 'string' ? Buffer.from(chunk) : chunk);
+  }
+
+  if (chunks.length === 0) {
+    return {};
+  }
+
+  const rawBody = Buffer.concat(chunks).toString('utf8');
+  try {
+    return JSON.parse(rawBody) as Record<string, unknown>;
+  } catch {
+    throw new Error('Request body must be valid JSON');
+  }
+}
+
+function writeJson(response: ServerResponse, status: number, body: unknown) {
+  response.statusCode = status;
+  response.setHeader('content-type', 'application/json; charset=utf-8');
+  response.end(JSON.stringify(body));
+}
