@@ -2,6 +2,8 @@
 
 ## Status
 
+**Week 18 closed 2026-03-21.** Domain integration layer. First salvaged domain modules wired into real API submission path. `domain-analysis-service.ts` computes implied probability (via `americanToImplied`), edge (vs submitter confidence), and Kelly fraction (via `computeKellyFraction`) at submission time. Results stored in `pick.metadata.domainAnalysis`. Fail-open: picks without odds are not enriched. 11 new tests. All gates pass at 502/502 tests.
+
 **Week 17 closed 2026-03-21.** Git baseline ratification. First commit created from audited post-salvage repo state. `.gitignore` hardened to exclude proof artifacts (`out/`, `.week9-proof.json`). Status docs reconciled. All gates pass at 491/491 tests. Repo is now version-controlled and ready for app-layer buildout.
 
 **Week 16 closed 2026-03-21.** Settlement downstream & loss attribution runtime integration complete. Independent verification PASS. `recordPickSettlement()` computes downstream truth and loss attribution when inputs exist, and operator-web picks pipeline resolves effective corrected settlement instead of raw settlement rows. Accepted Batch 1 through Batch 5 domain salvage foundation is present under `packages/domain/src/market`, `features`, `models`, `signals`, `bands`, `calibration`, `scoring`, `outcomes`, `evaluation`, `edge-validation`, `rollups`, `system-health`, `risk`, and `strategy`. 491/491 tests pass. All gates pass.
@@ -61,6 +63,7 @@ Week 15 selectively salvaged the pure probability, devig, and calibration math f
 - Week 15 proof template: `docs/06_status/week_15_proof_template.md`
 - Week 15 failure/rollback template: `docs/06_status/week_15_failure_rollback_template.md`
 - **Week 16 contract**: `docs/05_operations/week_16_settlement_downstream_loss_attribution_contract.md`
+- **Week 18 contract**: `docs/05_operations/week_18_domain_integration_layer_contract.md`
 - Week 16 proof template: `docs/06_status/week_16_proof_template.md`
 - Week 16 failure note template: `docs/06_status/week_16_failure_note_template.md`
 - Week 16 closeout checklist: `docs/06_status/week_16_closeout_checklist.md`
@@ -108,12 +111,14 @@ Week 15 selectively salvaged the pure probability, devig, and calibration math f
 - Accepted additional Week 16 Batch 4 domain salvage foundation: 12 new files across `packages/domain/src/rollups`, `packages/domain/src/system-health`, and `packages/domain/src/outcomes/baseline-roi.ts`; 60 additional tests; `packages/domain/src/index.ts` now exports `rollups` and `system-health`, and `packages/domain/src/outcomes/index.ts` now exports `baseline-roi`
 - Accepted additional Week 16 Batch 5 domain salvage foundation: 10 new files across `packages/domain/src/risk` and `packages/domain/src/strategy`; 67 additional tests; `packages/domain/src/index.ts` now exports `risk`, while `strategy` remains intentionally commented out from the top-level index until the `americanToDecimal` naming collision is resolved cleanly
 
+- Delivered Week 18 domain integration layer: `apps/api/src/domain-analysis-service.ts` computes implied probability (via `americanToImplied`), edge (vs submitter confidence), and Kelly fraction (via `computeKellyFraction`) at submission time; `apps/api/src/submission-service.ts` enriches `pick.metadata.domainAnalysis` before persistence; fail-open for picks without odds; 11 new tests; 502/502 total — Week 18 closed 2026-03-21
+
 ## Next Recommended Moves
 
-Week 17 closed. Git baseline ratified. Repo is now version-controlled.
+Week 18 closed. First domain modules wired into real API submission path.
 
-**Not yet ported (future work):** Offer Fetch, DeviggingService (service wrapper), Risk Engine (service wrapper), GradingAgent scoring, Observation Hub, Lab/Backtest, Strategy Simulation. Note: the pure computation cores for Kelly/Risk Sizing, devig math, probability layer, calibration, strategy, and bankroll simulation are already ported — only the service wrappers and integration layers remain.
+**Not yet ported (future work):** Offer Fetch, DeviggingService (multi-book consensus service wrapper), Risk Engine (bankroll-aware service wrapper), GradingAgent scoring, Observation Hub, Lab/Backtest, Strategy Simulation. Note: the pure computation cores for Kelly/Risk Sizing, devig math, probability layer, calibration, strategy, and bankroll simulation are already ported — only the service wrappers and deeper integration layers remain.
 
-**Next recommended work:** Wire ported domain logic into API services (submission pipeline validation, settlement service enrichment, distribution worker, operator dashboard analytics). Define and ratify a Week 18 contract before beginning.
+**Next recommended work:** Wire scoring weights, calibration, or edge-validation into promotion scoring; build Offer Fetch service wrapper for multi-book consensus at submission; or deepen settlement enrichment with scoring/calibration. Define and ratify a Week 19 contract before beginning.
 
 Keep `discord:canary` active permanently. Do not change `discord:best-bets` or `discord:trader-insights` routing.

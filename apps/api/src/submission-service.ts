@@ -19,6 +19,10 @@ import {
   createCanonicalPickFromSubmission,
   createValidatedSubmission,
 } from '@unit-talk/domain';
+import {
+  computeSubmissionDomainAnalysis,
+  enrichMetadataWithDomainAnalysis,
+} from './domain-analysis-service.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
 
 export interface SubmissionProcessingResult {
@@ -46,6 +50,17 @@ export async function processSubmission(
   const submission = createValidatedSubmission(nextSubmissionId(), payload);
   const materialized = createCanonicalPickFromSubmission(submission);
 
+  // Domain analysis enrichment: compute implied probability, edge, and Kelly
+  // sizing from odds/confidence and store in pick metadata.
+  const domainAnalysis = computeSubmissionDomainAnalysis(materialized.pick);
+  const enrichedPick: CanonicalPick = {
+    ...materialized.pick,
+    metadata: enrichMetadataWithDomainAnalysis(
+      materialized.pick.metadata,
+      domainAnalysis,
+    ),
+  };
+
   // Step 1: persist the submission row — submission_events and pick_lifecycle
   // both have NOT NULL FKs that require their parents to exist first.
   const submissionRecord = await repositories.submissions.saveSubmission(
@@ -64,7 +79,7 @@ export async function processSubmission(
       },
       createdAt: submission.receivedAt,
     }),
-    repositories.picks.savePick(materialized.pick),
+    repositories.picks.savePick(enrichedPick),
   ]);
 
   // Step 3: lifecycle event (FK → pick) must follow the pick insert.

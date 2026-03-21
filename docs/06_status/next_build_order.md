@@ -26,7 +26,11 @@ All of the following are now done:
 
 ## Current Priority Order
 
-Week 17 closed. Git baseline ratified. Next work requires a ratified Week 18 contract.
+Week 18 closed. Domain integration layer complete. Next work requires a ratified Week 19 contract.
+
+### Completed: Week 18 - Domain Integration Layer (CLOSED 2026-03-21)
+
+First salvaged domain modules wired into real API submission path. `domain-analysis-service.ts` computes implied probability, edge, and Kelly sizing at submission time using `@unit-talk/domain` (probability/devig + risk/kelly-sizer). 502/502 tests. All gates pass.
 
 ### Completed: Week 17 - Git Baseline Ratification (CLOSED 2026-03-21)
 
@@ -48,12 +52,12 @@ First commit created from audited post-salvage repo state. `.gitignore` hardened
 
 87/87 tests, live snapshot 10/10 checks PASS, independent verification PASS.
 
-### Next Candidate Work (Not Yet Started — Requires Ratified Week 18 Contract)
+### Next Candidate Work (Not Yet Started — Requires Ratified Week 19 Contract)
 
-1. Wire ported domain modules into API services (submission validation, settlement enrichment, operator analytics)
+1. Deeper domain integration: wire scoring weights, calibration, or edge-validation into promotion scoring
 2. Offer Fetch service wrapper
-3. DeviggingService integration layer
-4. Risk Engine service integration
+3. DeviggingService integration layer (multi-book consensus at submission)
+4. Risk Engine service integration (bankroll-aware sizing beyond Kelly fraction)
 5. Observation Hub permanent control plane
 
 ## Do Not Start Without Planning

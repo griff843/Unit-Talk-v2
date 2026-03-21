@@ -29,6 +29,7 @@ If Linear, Notion, or chat history disagree with this file, update them to match
 - Week 15: complete - probability and devig math salvage, 128/128 tests, closed 2026-03-21
 - Week 16: complete - settlement downstream and loss attribution plus accepted Batch 1 through Batch 5 salvage foundation, 491/491 tests, independent verification PASS, closed 2026-03-21
 - Week 17: complete - Git baseline ratification, first commit, .gitignore hardened, status docs reconciled, closed 2026-03-21
+- Week 18: complete - Domain integration layer, submission-time domain analysis enrichment using devig + kelly-sizer, 502/502 tests, closed 2026-03-21
 
 Week 16 currently includes:
 - runtime integration complete on the canonical settlement path and operator-web picks pipeline
@@ -169,11 +170,21 @@ Completed outcomes:
 - Status docs reconciled to reflect implemented reality
 - All verification gates passing at time of commit
 
+### Week 18 - Domain Integration Layer
+
+Completed outcomes:
+- `apps/api/src/domain-analysis-service.ts` created: computes implied probability, edge, and Kelly sizing at submission time
+- Uses `americanToImplied` from `@unit-talk/domain` (probability/devig) and `americanToDecimal`/`computeKellyFraction` from `@unit-talk/domain` (risk/kelly-sizer)
+- `apps/api/src/submission-service.ts` modified: enriches `pick.metadata.domainAnalysis` before persistence
+- Fail-open: picks without odds are not enriched
+- 11 new tests added
+- Cumulative gates pass at 502/502 tests
+
 ## Next Required Moves
 
-1. Sync Notion Week 16 + 17 checkpoints to match repo truth.
-2. Sync Linear Week 16 + 17 issues to Done.
-3. Define and ratify a Week 18 contract before beginning new implementation work.
+1. Sync Notion Week 16 + 17 + 18 checkpoints to match repo truth.
+2. Sync Linear Week 16 + 17 + 18 issues to Done.
+3. Define and ratify a Week 19 contract before beginning new implementation work.
 4. Do not widen scope without a ratified contract.
 
 ## Required Sync Targets
