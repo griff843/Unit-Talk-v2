@@ -11,3 +11,4 @@ coverage/
 *.tsbuildinfo
 out/
 .week9-proof.json
+supabase/.temp/
