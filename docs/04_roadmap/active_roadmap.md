@@ -30,6 +30,7 @@ If Linear, Notion, or chat history disagree with this file, update them to match
 - Week 16: complete - settlement downstream and loss attribution plus accepted Batch 1 through Batch 5 salvage foundation, 491/491 tests, independent verification PASS, closed 2026-03-21
 - Week 17: complete - Git baseline ratification, first commit, .gitignore hardened, status docs reconciled, closed 2026-03-21
 - Week 18: complete - Domain integration layer, submission-time domain analysis enrichment using devig + kelly-sizer, 502/502 tests, closed 2026-03-21
+- Week 19: complete - Promotion edge integration, domain analysis edge consumed in promotion scoring, 515/515 tests, closed 2026-03-21
 
 Week 16 currently includes:
 - runtime integration complete on the canonical settlement path and operator-web picks pipeline
@@ -180,11 +181,21 @@ Completed outcomes:
 - 11 new tests added
 - Cumulative gates pass at 502/502 tests
 
+### Week 19 - Promotion Edge Integration
+
+Completed outcomes:
+- `apps/api/src/promotion-service.ts` modified: `readPromotionScoreInputs()` now reads `metadata.domainAnalysis.edge` as a second-tier fallback
+- `readDomainAnalysisEdgeScore()` added: converts raw mathematical edge (-0.5 to +0.5) to 0-100 promotion scale via `clamp(50 + rawEdge * 400, 0, 100)`
+- Three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback
+- No changes to promotion policy definitions, thresholds, or evaluation logic
+- 13 new tests added in `promotion-edge-integration.test.ts`
+- Cumulative gates pass at 515/515 tests
+
 ## Next Required Moves
 
-1. Sync Notion Week 16 + 17 + 18 checkpoints to match repo truth.
-2. Sync Linear Week 16 + 17 + 18 issues to Done.
-3. Define and ratify a Week 19 contract before beginning new implementation work.
+1. Sync Notion Week 16 through 19 checkpoints to match repo truth.
+2. Sync Linear Week 16 through 19 issues to Done.
+3. Define and ratify a Week 20 contract before beginning new implementation work.
 4. Do not widen scope without a ratified contract.
 
 ## Required Sync Targets

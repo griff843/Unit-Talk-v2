@@ -394,13 +394,42 @@ function readPromotionScoreInputs(pick: CanonicalPick) {
   const configured = readNestedRecord(pick.metadata, 'promotionScores');
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
 
+  // Edge fallback priority: explicit promotionScores.edge > domain analysis edge > confidence
+  const edgeFallback = readDomainAnalysisEdgeScore(pick.metadata) ?? confidenceScore;
+
   return {
-    edge: readScore(configured, 'edge', confidenceScore),
+    edge: readScore(configured, 'edge', edgeFallback),
     trust: readScore(configured, 'trust', confidenceScore),
     readiness: readScore(configured, 'readiness', 80),
     uniqueness: readScore(configured, 'uniqueness', 80),
     boardFit: readScore(configured, 'boardFit', 75),
   };
+}
+
+/**
+ * Convert domain analysis raw edge to a 0-100 promotion score.
+ *
+ * Raw edge is confidence - impliedProbability (typically -0.5 to +0.5).
+ * Mapping: score = clamp(50 + rawEdge * 400, 0, 100)
+ *
+ * Examples: +0.10 → 90, +0.05 → 70, 0.00 → 50, -0.05 → 30, -0.10 → 10
+ *
+ * Returns null if domain analysis is absent or edge was not computed.
+ */
+export function readDomainAnalysisEdgeScore(
+  metadata: Record<string, unknown>,
+): number | null {
+  const domainAnalysis = metadata['domainAnalysis'];
+  if (!isRecord(domainAnalysis)) {
+    return null;
+  }
+
+  const rawEdge = domainAnalysis['edge'];
+  if (typeof rawEdge !== 'number' || !Number.isFinite(rawEdge)) {
+    return null;
+  }
+
+  return Math.max(0, Math.min(100, 50 + rawEdge * 400));
 }
 
 function readScore(

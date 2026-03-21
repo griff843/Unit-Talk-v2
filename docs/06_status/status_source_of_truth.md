@@ -7,13 +7,14 @@ Update this file at every milestone boundary.
 
 ## Snapshot Date
 
-2026-03-21 (updated through Week 18 Domain Integration Layer)
+2026-03-21 (updated through Week 19 Promotion Edge Integration)
 
 ## Current Program State
 
 | Field | Value |
 |---|---|
-| Current Week | **Week 18 - CLOSED 2026-03-21** - Domain integration layer; submission-time domain analysis enrichment using devig + kelly-sizer; 502/502 tests; all gates pass |
+| Current Week | **Week 19 - CLOSED 2026-03-21** - Promotion edge integration; domain analysis edge consumed as three-tier fallback in promotion scoring; 515/515 tests; all gates pass |
+| Week 18 | **CLOSED 2026-03-21** - Domain integration layer; submission-time domain analysis enrichment using devig + kelly-sizer; 502/502 tests; all gates pass |
 | Week 17 | **CLOSED 2026-03-21** - Git baseline ratification; first commit created from audited post-salvage repo state; 491/491 tests; all gates pass |
 | Week 16 | **CLOSED 2026-03-21** - settlement downstream and loss attribution runtime integration complete; accepted Batch 1 through Batch 5 domain salvage foundation; 491/491 tests; independent verification PASS |
 | Week 15 | **CLOSED 2026-03-21** - probability and devig math salvage; 128/128 tests |
@@ -21,7 +22,7 @@ Update this file at every milestone boundary.
 | Week 13 | **CLOSED 2026-03-21** - operator trader-insights health; 87/87 tests |
 | Week 12 | **CLOSED 2026-03-21** - settlement hardening complete; 83/83 tests |
 | Week 11 | **CLOSED 2026-03-21** - trader-insights activation complete; real channel `1356613995175481405` live |
-| Phase | Week 18 closed: domain integration layer; first salvaged domain modules wired into real API submission path |
+| Phase | Week 19 closed: promotion edge integration; domain analysis edge consumed as downstream decision input in promotion scoring pipeline |
 | Live Routing | `discord:canary` active; `discord:best-bets` live (`1288613037539852329`); `discord:trader-insights` live (`1356613995175481405`) |
 
 ## Proven Runtime Capabilities
@@ -79,11 +80,18 @@ Update this file at every milestone boundary.
   - `apps/api/src/submission-service.ts` enriches `pick.metadata.domainAnalysis` before persistence
   - Fail-open: picks without odds are not enriched
   - 11 new tests; all repo gates pass at 502/502 tests
+- Week 19 promotion edge integration complete:
+  - `apps/api/src/promotion-service.ts` now reads `metadata.domainAnalysis.edge` as a second-tier fallback for promotion edge scoring
+  - Three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback
+  - `readDomainAnalysisEdgeScore()` converts raw mathematical edge (-0.5 to +0.5) to 0-100 promotion scale via `clamp(50 + rawEdge * 400, 0, 100)`
+  - No changes to promotion policy definitions, thresholds, or evaluation logic
+  - 13 new tests; all repo gates pass at 515/515 tests
 
 ## Week Status
 
 | Week | Status | Truth |
 |---|---|---|
+| Week 19 | **CLOSED** | Promotion edge integration; domain analysis edge consumed in promotion scoring; 515/515 tests 2026-03-21 |
 | Week 18 | **CLOSED** | Domain integration layer; submission-time domain analysis enrichment; 502/502 tests 2026-03-21 |
 | Week 17 | **CLOSED** | Git baseline ratification; first commit created from audited repo state 2026-03-21 |
 | Week 16 | **CLOSED** | Runtime integration complete; Batch 1 through Batch 5 domain salvage foundation accepted; independent verification PASS 2026-03-21 |
@@ -127,6 +135,7 @@ Update this file at every milestone boundary.
 | Week 16 contract | `docs/05_operations/week_16_settlement_downstream_loss_attribution_contract.md` |
 | Week 17 contract | `docs/05_operations/week_17_git_baseline_ratification_contract.md` |
 | Week 18 contract | `docs/05_operations/week_18_domain_integration_layer_contract.md` |
+| Week 19 contract | `docs/05_operations/week_19_promotion_edge_integration_contract.md` |
 | Migration ledger | `docs/05_operations/migration_ledger.md` |
 | Week 16 proof template | `docs/06_status/week_16_proof_template.md` |
 | Week 16 failure note template | `docs/06_status/week_16_failure_note_template.md` |

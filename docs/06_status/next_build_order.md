@@ -26,7 +26,11 @@ All of the following are now done:
 
 ## Current Priority Order
 
-Week 18 closed. Domain integration layer complete. Next work requires a ratified Week 19 contract.
+Week 19 closed. Promotion edge integration complete. Next work requires a ratified Week 20 contract.
+
+### Completed: Week 19 - Promotion Edge Integration (CLOSED 2026-03-21)
+
+Domain analysis edge consumed as downstream decision input in promotion scoring. Three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback. `readDomainAnalysisEdgeScore()` converts raw mathematical edge to 0-100 scale. 515/515 tests. All gates pass.
 
 ### Completed: Week 18 - Domain Integration Layer (CLOSED 2026-03-21)
 
@@ -52,9 +56,9 @@ First commit created from audited post-salvage repo state. `.gitignore` hardened
 
 87/87 tests, live snapshot 10/10 checks PASS, independent verification PASS.
 
-### Next Candidate Work (Not Yet Started — Requires Ratified Week 19 Contract)
+### Next Candidate Work (Not Yet Started — Requires Ratified Week 20 Contract)
 
-1. Deeper domain integration: wire scoring weights, calibration, or edge-validation into promotion scoring
+1. Wire scoring weights or calibration into promotion trust/readiness inputs
 2. Offer Fetch service wrapper
 3. DeviggingService integration layer (multi-book consensus at submission)
 4. Risk Engine service integration (bankroll-aware sizing beyond Kelly fraction)

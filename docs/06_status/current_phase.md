@@ -2,6 +2,8 @@
 
 ## Status
 
+**Week 19 closed 2026-03-21.** Promotion edge integration. Domain analysis edge now consumed as a downstream decision input in the promotion scoring pipeline. `readDomainAnalysisEdgeScore()` converts raw mathematical edge to 0-100 promotion scale. Three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback. No changes to promotion policy definitions, thresholds, or evaluation logic. 13 new tests. All gates pass at 515/515 tests.
+
 **Week 18 closed 2026-03-21.** Domain integration layer. First salvaged domain modules wired into real API submission path. `domain-analysis-service.ts` computes implied probability (via `americanToImplied`), edge (vs submitter confidence), and Kelly fraction (via `computeKellyFraction`) at submission time. Results stored in `pick.metadata.domainAnalysis`. Fail-open: picks without odds are not enriched. 11 new tests. All gates pass at 502/502 tests.
 
 **Week 17 closed 2026-03-21.** Git baseline ratification. First commit created from audited post-salvage repo state. `.gitignore` hardened to exclude proof artifacts (`out/`, `.week9-proof.json`). Status docs reconciled. All gates pass at 491/491 tests. Repo is now version-controlled and ready for app-layer buildout.
@@ -64,6 +66,7 @@ Week 15 selectively salvaged the pure probability, devig, and calibration math f
 - Week 15 failure/rollback template: `docs/06_status/week_15_failure_rollback_template.md`
 - **Week 16 contract**: `docs/05_operations/week_16_settlement_downstream_loss_attribution_contract.md`
 - **Week 18 contract**: `docs/05_operations/week_18_domain_integration_layer_contract.md`
+- **Week 19 contract**: `docs/05_operations/week_19_promotion_edge_integration_contract.md`
 - Week 16 proof template: `docs/06_status/week_16_proof_template.md`
 - Week 16 failure note template: `docs/06_status/week_16_failure_note_template.md`
 - Week 16 closeout checklist: `docs/06_status/week_16_closeout_checklist.md`
@@ -113,12 +116,14 @@ Week 15 selectively salvaged the pure probability, devig, and calibration math f
 
 - Delivered Week 18 domain integration layer: `apps/api/src/domain-analysis-service.ts` computes implied probability (via `americanToImplied`), edge (vs submitter confidence), and Kelly fraction (via `computeKellyFraction`) at submission time; `apps/api/src/submission-service.ts` enriches `pick.metadata.domainAnalysis` before persistence; fail-open for picks without odds; 11 new tests; 502/502 total — Week 18 closed 2026-03-21
 
+- Delivered Week 19 promotion edge integration: `apps/api/src/promotion-service.ts` now reads `metadata.domainAnalysis.edge` as a second-tier fallback for promotion edge scoring; three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback; `readDomainAnalysisEdgeScore()` converts raw edge to 0-100 promotion scale via `clamp(50 + rawEdge * 400, 0, 100)`; 13 new tests; 515/515 total — Week 19 closed 2026-03-21
+
 ## Next Recommended Moves
 
-Week 18 closed. First domain modules wired into real API submission path.
+Week 19 closed. Domain analysis edge now consumed in the promotion scoring pipeline as a downstream decision input.
 
 **Not yet ported (future work):** Offer Fetch, DeviggingService (multi-book consensus service wrapper), Risk Engine (bankroll-aware service wrapper), GradingAgent scoring, Observation Hub, Lab/Backtest, Strategy Simulation. Note: the pure computation cores for Kelly/Risk Sizing, devig math, probability layer, calibration, strategy, and bankroll simulation are already ported — only the service wrappers and deeper integration layers remain.
 
-**Next recommended work:** Wire scoring weights, calibration, or edge-validation into promotion scoring; build Offer Fetch service wrapper for multi-book consensus at submission; or deepen settlement enrichment with scoring/calibration. Define and ratify a Week 19 contract before beginning.
+**Next recommended work:** Wire scoring weights or calibration into promotion trust/readiness inputs; build Offer Fetch service wrapper for multi-book consensus at submission; or deepen settlement enrichment with scoring/calibration. Define and ratify a Week 20 contract before beginning.
 
 Keep `discord:canary` active permanently. Do not change `discord:best-bets` or `discord:trader-insights` routing.
