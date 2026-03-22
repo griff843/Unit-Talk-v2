@@ -7,6 +7,7 @@ export default tseslint.config(
     ignores: [
       '**/dist/**',
       '**/node_modules/**',
+      '**/.next/**',
       '.turbo/**',
       '.pnpm-store/**',
       'coverage/**',
@@ -28,6 +29,14 @@ export default tseslint.config(
         'error',
         { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
+    },
+  },
+  // Ported shadcn/ui + Radix UI components — intentional `any` usage in forwardRef/CVA patterns
+  {
+    files: ['apps/smart-form/components/ui/**'],
+    rules: {
+      '@typescript-eslint/no-explicit-any': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
     },
   },
   {
