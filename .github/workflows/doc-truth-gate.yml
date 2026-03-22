@@ -1,0 +1,71 @@
+name: doc-truth-gate
+
+on:
+  pull_request:
+    paths:
+      - 'docs/02_architecture/week_19_downstream_consumer_matrix.md'
+      - 'docs/03_contracts/domain_analysis_consumer_contract.md'
+
+jobs:
+  doc-truth-audit:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Ensure ripgrep is available
+        shell: pwsh
+        run: |
+          if (-not (Get-Command rg -ErrorAction SilentlyContinue)) {
+            choco install ripgrep -y
+          }
+
+      - name: Find candidate docs
+        shell: pwsh
+        run: |
+          $governed = @(
+            'docs/02_architecture/week_19_downstream_consumer_matrix.md',
+            'docs/03_contracts/domain_analysis_consumer_contract.md'
+          )
+          $docs = git diff --diff-filter=ACMR --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" |
+            Where-Object { $governed -contains $_ } |
+            Where-Object { Test-Path $_ }
+
+          if ($docs) {
+            $docs | Set-Content changed_docs.txt
+            Write-Host "Docs to audit:"
+            Get-Content changed_docs.txt
+          }
+          else {
+            Write-Host "No domain-analysis governed docs changed."
+            Set-Content changed_docs.txt ""
+          }
+
+      - name: Run doc truth audit
+        shell: pwsh
+        run: |
+          $failed = $false
+          $docs = Get-Content changed_docs.txt -ErrorAction SilentlyContinue |
+            Where-Object { $_.Trim() -ne "" }
+
+          if (-not $docs -or $docs.Count -eq 0) {
+            Write-Host "No docs to audit. Skipping."
+            exit 0
+          }
+
+          foreach ($doc in $docs) {
+            Write-Host ""
+            Write-Host "--- Auditing: $doc ---"
+            pwsh .agents/skills/doc-truth-audit/check-doc-truth.ps1 -DocPath $doc
+            if ($LASTEXITCODE -ne 0) {
+              $failed = $true
+            }
+          }
+
+          if ($failed) {
+            Write-Error "Doc truth audit failed. Fix speculative wording, non-binary statuses, or unproven ACTIVE claims and re-submit."
+            exit 1
+          }
