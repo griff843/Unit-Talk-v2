@@ -8,6 +8,9 @@ import {
   type ParsedSmartFormBody,
   type MarketType,
 } from './validation.js';
+import { V1_REFERENCE_DATA } from '@unit-talk/contracts';
+
+const catalog = V1_REFERENCE_DATA;
 
 // --- Helpers ---
 
@@ -16,9 +19,9 @@ function validBase(overrides: Partial<ParsedSmartFormBody> = {}): ParsedSmartFor
     capper: 'griff843',
     date: '2026-03-21',
     sport: 'NBA',
-    sportsbook: 'DraftKings',
+    sportsbook: 'draftkings',
     units: '1.5',
-    oddsFormat: 'american',
+    oddsFormat: 'American',
     odds: '-110',
     ...overrides,
   };
@@ -72,11 +75,11 @@ function validTeamTotal(overrides: Partial<ParsedSmartFormBody> = {}): ParsedSma
 }
 
 function blockingFields(form: ParsedSmartFormBody, marketType: MarketType | undefined): string[] {
-  return getBlockingErrors(validateSmartFormSubmission(form, marketType)).map((e) => e.field);
+  return getBlockingErrors(validateSmartFormSubmission(form, marketType, catalog)).map((e) => e.field);
 }
 
 function warningFields(form: ParsedSmartFormBody, marketType: MarketType | undefined): string[] {
-  return getWarnings(validateSmartFormSubmission(form, marketType)).map((e) => e.field);
+  return getWarnings(validateSmartFormSubmission(form, marketType, catalog)).map((e) => e.field);
 }
 
 // --- Tests ---
@@ -99,7 +102,7 @@ describe('isValidMarketType', () => {
 
 describe('universal required fields', () => {
   test('valid player prop form produces no blocking errors', () => {
-    const errors = getBlockingErrors(validateSmartFormSubmission(validPlayerProp(), 'player-prop'));
+    const errors = getBlockingErrors(validateSmartFormSubmission(validPlayerProp(), 'player-prop', catalog));
     assert.equal(errors.length, 0);
   });
 
@@ -179,35 +182,6 @@ describe('universal required fields', () => {
   });
 });
 
-// --- Confidence (optional but validated if present) ---
-
-describe('confidence validation', () => {
-  test('missing confidence is not a blocking error', () => {
-    const fields = blockingFields(validPlayerProp({ confidence: '' }), 'player-prop');
-    assert.ok(!fields.includes('confidence'));
-  });
-
-  test('confidence at 0 is a blocking error', () => {
-    const fields = blockingFields(validPlayerProp({ confidence: '0' }), 'player-prop');
-    assert.ok(fields.includes('confidence'));
-  });
-
-  test('confidence at 1 is a blocking error', () => {
-    const fields = blockingFields(validPlayerProp({ confidence: '1' }), 'player-prop');
-    assert.ok(fields.includes('confidence'));
-  });
-
-  test('valid confidence (0.72) is accepted', () => {
-    const fields = blockingFields(validPlayerProp({ confidence: '0.72' }), 'player-prop');
-    assert.ok(!fields.includes('confidence'));
-  });
-
-  test('non-numeric confidence is a blocking error', () => {
-    const fields = blockingFields(validPlayerProp({ confidence: 'high' }), 'player-prop');
-    assert.ok(fields.includes('confidence'));
-  });
-});
-
 // --- Warn-only fields ---
 
 describe('warnings', () => {
@@ -231,7 +205,7 @@ describe('warnings', () => {
 
 describe('player-prop conditional fields', () => {
   test('complete player prop has no blocking errors', () => {
-    const errors = getBlockingErrors(validateSmartFormSubmission(validPlayerProp(), 'player-prop'));
+    const errors = getBlockingErrors(validateSmartFormSubmission(validPlayerProp(), 'player-prop', catalog));
     assert.equal(errors.length, 0);
   });
 
@@ -275,7 +249,7 @@ describe('player-prop conditional fields', () => {
 
 describe('moneyline conditional fields', () => {
   test('complete moneyline has no blocking errors', () => {
-    const errors = getBlockingErrors(validateSmartFormSubmission(validMoneyline(), 'moneyline'));
+    const errors = getBlockingErrors(validateSmartFormSubmission(validMoneyline(), 'moneyline', catalog));
     assert.equal(errors.length, 0);
   });
 
@@ -294,7 +268,7 @@ describe('moneyline conditional fields', () => {
 
 describe('spread conditional fields', () => {
   test('complete spread has no blocking errors', () => {
-    const errors = getBlockingErrors(validateSmartFormSubmission(validSpread(), 'spread'));
+    const errors = getBlockingErrors(validateSmartFormSubmission(validSpread(), 'spread', catalog));
     assert.equal(errors.length, 0);
   });
 
@@ -318,7 +292,7 @@ describe('spread conditional fields', () => {
 
 describe('total conditional fields', () => {
   test('complete total has no blocking errors', () => {
-    const errors = getBlockingErrors(validateSmartFormSubmission(validTotal(), 'total'));
+    const errors = getBlockingErrors(validateSmartFormSubmission(validTotal(), 'total', catalog));
     assert.equal(errors.length, 0);
   });
 
@@ -342,7 +316,7 @@ describe('total conditional fields', () => {
 
 describe('team-total conditional fields', () => {
   test('complete team total has no blocking errors', () => {
-    const errors = getBlockingErrors(validateSmartFormSubmission(validTeamTotal(), 'team-total'));
+    const errors = getBlockingErrors(validateSmartFormSubmission(validTeamTotal(), 'team-total', catalog));
     assert.equal(errors.length, 0);
   });
 
@@ -388,5 +362,136 @@ describe('cross-market field requirements', () => {
   test('spread does not require overUnder', () => {
     const fields = blockingFields(validSpread(), 'spread');
     assert.ok(!fields.includes('overUnder'));
+  });
+});
+
+// --- Reference-data enforcement ---
+
+describe('reference-data enforcement', () => {
+  test('unknown capper is a blocking error', () => {
+    const fields = blockingFields(validPlayerProp({ capper: 'unknown_capper' }), 'player-prop');
+    assert.ok(fields.includes('capper'));
+  });
+
+  test('known capper is accepted', () => {
+    const fields = blockingFields(validPlayerProp({ capper: 'griff843' }), 'player-prop');
+    assert.ok(!fields.includes('capper'));
+  });
+
+  test('unknown sport is a blocking error', () => {
+    const fields = blockingFields(validPlayerProp({ sport: 'Cricket' }), 'player-prop');
+    assert.ok(fields.includes('sport'));
+  });
+
+  test('known sport is accepted', () => {
+    const fields = blockingFields(validPlayerProp({ sport: 'NBA' }), 'player-prop');
+    assert.ok(!fields.includes('sport'));
+  });
+
+  test('stat type wrong for sport is a blocking error', () => {
+    // Points is an NBA stat type, not NHL
+    const fields = blockingFields(validPlayerProp({ sport: 'NHL', statType: 'Rebounds' }), 'player-prop');
+    assert.ok(fields.includes('statType'));
+  });
+
+  test('stat type correct for sport is accepted', () => {
+    const fields = blockingFields(validPlayerProp({ sport: 'NBA', statType: 'Points' }), 'player-prop');
+    assert.ok(!fields.includes('statType'));
+  });
+
+  test('team not in sport produces a warning', () => {
+    const fields = warningFields(validMoneyline({ team: 'FakeTeam' }), 'moneyline');
+    assert.ok(fields.includes('team'));
+  });
+
+  test('team in sport produces no warning', () => {
+    const fields = warningFields(validMoneyline({ team: 'Knicks' }), 'moneyline');
+    assert.ok(!fields.includes('team'));
+  });
+
+  test('unknown sportsbook produces a warning (not error)', () => {
+    const warnings = warningFields(validPlayerProp({ sportsbook: 'unknownbook' }), 'player-prop');
+    assert.ok(warnings.includes('sportsbook'));
+    const errors = blockingFields(validPlayerProp({ sportsbook: 'unknownbook' }), 'player-prop');
+    assert.ok(!errors.includes('sportsbook'));
+  });
+
+  test('known sportsbook by ID produces no warning', () => {
+    const warnings = warningFields(validPlayerProp({ sportsbook: 'draftkings' }), 'player-prop');
+    assert.ok(!warnings.includes('sportsbook'));
+  });
+});
+
+// --- Tightened numeric guardrails ---
+
+describe('numeric guardrails', () => {
+  test('American odds must be integer (rejects 110.5)', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '110.5', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(fields.includes('odds'));
+  });
+
+  test('American odds +50 is invalid (below +100)', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '50', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(fields.includes('odds'));
+  });
+
+  test('American odds -50 is invalid (above -100)', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '-50', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(fields.includes('odds'));
+  });
+
+  test('American odds +100 is valid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '100', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(!fields.includes('odds'));
+  });
+
+  test('American odds -100 is valid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '-100', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(!fields.includes('odds'));
+  });
+
+  test('American odds exceeding +50000 is invalid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '50001', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(fields.includes('odds'));
+  });
+
+  test('American odds -50000 is valid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '-50000', oddsFormat: 'American' }), 'player-prop');
+    assert.ok(!fields.includes('odds'));
+  });
+
+  test('Decimal odds below 1.01 is invalid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '1.00', oddsFormat: 'Decimal' }), 'player-prop');
+    assert.ok(fields.includes('odds'));
+  });
+
+  test('Decimal odds above 501.00 is invalid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '502', oddsFormat: 'Decimal' }), 'player-prop');
+    assert.ok(fields.includes('odds'));
+  });
+
+  test('Decimal odds 2.50 is valid', () => {
+    const fields = blockingFields(validPlayerProp({ odds: '2.50', oddsFormat: 'Decimal' }), 'player-prop');
+    assert.ok(!fields.includes('odds'));
+  });
+
+  test('line exceeding 999.5 is invalid', () => {
+    const fields = blockingFields(validPlayerProp({ line: '1000' }), 'player-prop');
+    assert.ok(fields.includes('line'));
+  });
+
+  test('line below -999.5 is invalid', () => {
+    const fields = blockingFields(validPlayerProp({ line: '-1000' }), 'player-prop');
+    assert.ok(fields.includes('line'));
+  });
+
+  test('line at 999.5 is valid', () => {
+    const fields = blockingFields(validPlayerProp({ line: '999.5' }), 'player-prop');
+    assert.ok(!fields.includes('line'));
+  });
+
+  test('line at -999.5 is valid', () => {
+    const fields = blockingFields(validPlayerProp({ line: '-999.5' }), 'player-prop');
+    assert.ok(!fields.includes('line'));
   });
 });

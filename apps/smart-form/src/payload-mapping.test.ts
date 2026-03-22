@@ -127,7 +127,6 @@ describe('mapSmartFormToSubmissionPayload', () => {
       units: '1.5',
       oddsFormat: 'american',
       odds: '-110',
-      confidence: '0.72',
       player: 'Jalen Brunson',
       matchup: 'Knicks vs Heat',
       statType: 'Points',
@@ -144,8 +143,8 @@ describe('mapSmartFormToSubmissionPayload', () => {
     assert.equal(payload.line, 24.5);
     assert.equal(payload.odds, -110);
     assert.equal(payload.stakeUnits, 1.5);
-    assert.equal(payload.confidence, 0.72);
     assert.equal(payload.eventName, 'Knicks vs Heat');
+    assert.equal(payload.metadata.ticketType, 'single');
     assert.equal(payload.metadata.capper, 'griff843');
     assert.equal(payload.metadata.sport, 'NBA');
     assert.equal(payload.metadata.marketType, 'player-prop');
@@ -248,6 +247,21 @@ describe('mapSmartFormToSubmissionPayload', () => {
     assert.equal(payload.metadata.player, undefined);
     assert.equal(payload.metadata.statType, undefined);
     assert.equal(payload.metadata.sportsbook, undefined);
+  });
+
+  test('metadata always includes ticketType single', () => {
+    const form: ParsedSmartFormBody = {
+      capper: 'griff843',
+      date: '2026-03-21',
+      sport: 'NBA',
+      units: '1',
+      odds: '-110',
+      matchup: 'Knicks vs Heat',
+      team: 'Knicks',
+    };
+
+    const payload = mapSmartFormToSubmissionPayload(form, 'moneyline');
+    assert.equal(payload.metadata.ticketType, 'single');
   });
 
   test('decimal odds are converted to american', () => {

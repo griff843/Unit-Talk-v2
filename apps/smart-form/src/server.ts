@@ -8,6 +8,7 @@ import {
 } from './validation.js';
 import { mapSmartFormToSubmissionPayload } from './payload-mapping.js';
 import { renderSmartFormPage, renderSmartFormSuccessPage } from './form-templates.js';
+import { getFormReferenceData } from './reference-data-client.js';
 
 export interface SmartFormServerOptions {
   apiBaseUrl?: string;
@@ -46,7 +47,8 @@ export async function routeSmartFormRequest(
   }
 
   if (method === 'GET' && url.pathname === '/') {
-    return writeHtml(response, 200, renderSmartFormPage());
+    const catalog = getFormReferenceData();
+    return writeHtml(response, 200, renderSmartFormPage({ catalog }));
   }
 
   if (method === 'POST' && url.pathname === '/submit') {
@@ -64,13 +66,14 @@ export async function routeSmartFormRequest(
       );
     }
 
+    const catalog = getFormReferenceData();
     const rawForm = await readFormBody(request);
     const formBody = parseSmartFormBody(rawForm);
     const marketType: MarketType | undefined = isValidMarketType(formBody.marketType)
       ? formBody.marketType
       : undefined;
 
-    const validationErrors = validateSmartFormSubmission(formBody, marketType);
+    const validationErrors = validateSmartFormSubmission(formBody, marketType, catalog);
     const blockingErrors = getBlockingErrors(validationErrors);
 
     if (blockingErrors.length > 0) {
@@ -78,7 +81,7 @@ export async function routeSmartFormRequest(
         return writeHtml(
           response,
           422,
-          renderSmartFormPage({ values: formBody, errors: validationErrors }),
+          renderSmartFormPage({ values: formBody, errors: validationErrors, catalog }),
         );
       }
       return writeJson(response, 422, {
@@ -162,7 +165,6 @@ function parseSmartFormBody(raw: Record<string, string>): ParsedSmartFormBody {
   if (raw['units']) result.units = raw['units'];
   if (raw['oddsFormat']) result.oddsFormat = raw['oddsFormat'];
   if (raw['odds']) result.odds = raw['odds'];
-  if (raw['confidence']) result.confidence = raw['confidence'];
   if (raw['marketType']) result.marketType = raw['marketType'];
   if (raw['player']) result.player = raw['player'];
   if (matchup) result.matchup = matchup;
@@ -201,6 +203,7 @@ function respondFormError(
   values: Record<string, string>,
 ) {
   if (prefersHtml(request)) {
+    const catalog = getFormReferenceData();
     return writeHtml(
       response,
       status,
@@ -213,6 +216,7 @@ function respondFormError(
               severity: 'error' as const,
             }))
           : [{ field: '', message: error.message, severity: 'error' as const }],
+        catalog,
       }),
     );
   }

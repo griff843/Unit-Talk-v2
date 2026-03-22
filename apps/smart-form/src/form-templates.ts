@@ -6,17 +6,7 @@
  */
 
 import type { FieldError, ParsedSmartFormBody } from './validation.js';
-
-// --- Common sports for select ---
-const SPORTS = ['NBA', 'NFL', 'MLB', 'NHL', 'NCAAB', 'NCAAF', 'Soccer', 'MMA', 'Tennis'];
-
-// --- Common stat types per sport (player props) ---
-const STAT_TYPES = [
-  'Points', 'Rebounds', 'Assists', 'Threes', 'Steals', 'Blocks',
-  'Strikeouts', 'Hits', 'Home Runs', 'RBI',
-  'Passing Yards', 'Rushing Yards', 'Receiving Yards', 'Touchdowns',
-  'Shots on Goal', 'Saves',
-];
+import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 
 function escapeHtml(value: string): string {
   return value
@@ -82,13 +72,16 @@ ${options
 export function renderSmartFormPage(options: {
   values?: ParsedSmartFormBody;
   errors?: FieldError[];
-} = {}): string {
+  catalog: ReferenceDataCatalog;
+}): string {
   const v = options.values ?? {};
+  const catalog = options.catalog;
   const errorMap = buildErrorMap(options.errors ?? []);
   const blockingErrors = (options.errors ?? []).filter((e) => e.severity === 'error');
   const warnings = (options.errors ?? []).filter((e) => e.severity === 'warning');
   const selectedMarket = v.marketType ?? '';
   const today = new Date().toISOString().slice(0, 10);
+  const sportIds = catalog.sports.map((s) => s.id);
 
   return `<!doctype html>
 <html lang="en">
@@ -130,18 +123,21 @@ ${warnings.length > 0 ? `<div class="notice warn">
 
         <label class="field${fieldClass(errorMap, 'sport')}">
           <span class="field-label">Sport <span class="req">*</span></span>
-          <select name="sport">
+          <select name="sport" id="sf-sport">
             <option value="">Select sport...</option>
-            ${SPORTS.map((s) => `<option value="${escapeHtml(s)}"${v.sport === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('\n            ')}
-            <option value="Other"${v.sport && !SPORTS.includes(v.sport) && v.sport !== '' ? ' selected' : ''}>Other</option>
+            ${sportIds.map((s) => `<option value="${escapeHtml(s)}"${v.sport === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('\n            ')}
+            <option value="Other"${v.sport && !sportIds.includes(v.sport) && v.sport !== '' ? ' selected' : ''}>Other</option>
           </select>
-          ${v.sport && !SPORTS.includes(v.sport) && v.sport !== '' ? `<input name="sportOther" type="text" placeholder="Enter sport" value="${escapeHtml(v.sport)}" class="other-input" />` : ''}
+          ${v.sport && !sportIds.includes(v.sport) && v.sport !== '' ? `<input name="sportOther" type="text" placeholder="Enter sport" value="${escapeHtml(v.sport)}" class="other-input" />` : ''}
           ${errorHint(errorMap, 'sport')}
         </label>
 
         <label class="field${fieldClass(errorMap, 'sportsbook')}">
           <span class="field-label">Sportsbook</span>
-          <input name="sportsbook" type="text" placeholder="DraftKings" value="${val(v, 'sportsbook')}" />
+          <select name="sportsbook">
+            <option value="">Select sportsbook...</option>
+            ${catalog.sportsbooks.map((sb) => `<option value="${escapeHtml(sb.id)}"${v.sportsbook === sb.id ? ' selected' : ''}>${escapeHtml(sb.name)}</option>`).join('\n            ')}
+          </select>
           ${errorHint(errorMap, 'sportsbook')}
         </label>
 
@@ -162,12 +158,15 @@ ${warnings.length > 0 ? `<div class="notice warn">
           ${errorHint(errorMap, 'odds')}
         </label>
 
-        <label class="field${fieldClass(errorMap, 'confidence')}">
-          <span class="field-label">Confidence</span>
-          <input name="confidence" type="number" step="0.01" min="0.01" max="0.99" inputmode="decimal" placeholder="0.72" value="${val(v, 'confidence')}" />
-          <span class="hint">Optional. Value between 0 and 1.</span>
-          ${errorHint(errorMap, 'confidence')}
-        </label>
+      </fieldset>
+
+      <!-- Ticket Type (V1: single only, read-only) -->
+      <fieldset>
+        <legend>Ticket Type</legend>
+        <div class="field">
+          <span class="ticket-type-badge">Single</span>
+          <span class="hint">V1 supports single-leg tickets only.</span>
+        </div>
       </fieldset>
 
       <!-- Section 2: Market Type -->
@@ -178,30 +177,50 @@ ${warnings.length > 0 ? `<div class="notice warn">
       </fieldset>
 
       <!-- Section 3: Bet Details (conditional) -->
-      ${renderBetDetails(v, errorMap, selectedMarket)}
+      ${renderBetDetails(v, errorMap, selectedMarket, catalog)}
 
       <button type="submit">Submit Pick</button>
     </form>
   </section>
 </main>
-<script>${CLIENT_JS}</script>
+<script>
+var __SF_SPORTS = ${JSON.stringify(Object.fromEntries(catalog.sports.map((s) => [s.id, { statTypes: s.statTypes, teams: s.teams }])))};
+${CLIENT_JS}
+</script>
 </body>
 </html>`;
 }
 
-function renderBetDetails(v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, marketType: string): string {
+function renderBetDetails(v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, marketType: string, catalog: ReferenceDataCatalog): string {
   const marketTypes = ['player-prop', 'moneyline', 'spread', 'total', 'team-total'];
   const sections = marketTypes.map((mt) => {
     const show = marketType === mt;
     return `<fieldset class="bet-details" id="details-${mt}" ${show ? '' : 'style="display:none"'}>
   <legend>Bet Details</legend>
-  ${renderMarketFields(mt, v, errorMap)}
+  ${renderMarketFields(mt, v, errorMap, catalog)}
 </fieldset>`;
   });
   return sections.join('\n');
 }
 
-function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<string, FieldError>): string {
+function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, catalog: ReferenceDataCatalog): string {
+  const sport = catalog.sports.find((s) => s.id === v.sport);
+  const statTypes = sport?.statTypes ?? [];
+  const teams = sport?.teams ?? [];
+  const teamDatalist = teams.length > 0
+    ? `<datalist id="teams-list">${teams.map((t) => `<option value="${escapeHtml(t)}">`).join('')}</datalist>`
+    : '';
+
+  function teamInput(label: string, placeholder: string): string {
+    return `
+  <label class="field${fieldClass(errorMap, 'team')}">
+    <span class="field-label">${label} <span class="req">*</span></span>
+    <input name="team" type="text" placeholder="${placeholder}" value="${val(v, 'team')}" list="teams-list" autocomplete="off" />
+    ${teamDatalist}
+    ${errorHint(errorMap, 'team')}
+  </label>`;
+  }
+
   switch (mt) {
     case 'player-prop':
       return `
@@ -217,11 +236,12 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
   </label>
   <label class="field${fieldClass(errorMap, 'statType')}">
     <span class="field-label">Stat Type <span class="req">*</span></span>
-    <select name="statType">
+    <select name="statType" id="sf-statType">
       <option value="">Select stat...</option>
-      ${STAT_TYPES.map((s) => `<option value="${escapeHtml(s)}"${v.statType === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('\n      ')}
-      <option value="Other"${v.statType && !STAT_TYPES.includes(v.statType) && v.statType !== '' ? ' selected' : ''}>Other</option>
+      ${statTypes.map((s) => `<option value="${escapeHtml(s)}"${v.statType === s ? ' selected' : ''}>${escapeHtml(s)}</option>`).join('\n      ')}
+      <option value="Other"${v.statType && !statTypes.includes(v.statType) && v.statType !== '' ? ' selected' : ''}>Other</option>
     </select>
+    ${v.statType && !statTypes.includes(v.statType) && v.statType !== '' && v.statType !== 'Other' ? `<input name="statTypeOther" type="text" placeholder="Enter stat type" value="${escapeHtml(v.statType)}" class="other-input" />` : ''}
     ${errorHint(errorMap, 'statType')}
   </label>
   <div class="field${fieldClass(errorMap, 'overUnder')}">
@@ -231,7 +251,7 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
   </div>
   <label class="field${fieldClass(errorMap, 'line')}">
     <span class="field-label">Line <span class="req">*</span></span>
-    <input name="line" type="number" step="0.5" inputmode="decimal" placeholder="24.5" value="${val(v, 'line')}" />
+    <input name="line" type="number" step="0.5" min="-999.5" max="999.5" inputmode="decimal" placeholder="24.5" value="${val(v, 'line')}" />
     ${errorHint(errorMap, 'line')}
   </label>`;
 
@@ -242,11 +262,7 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
     <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
-  <label class="field${fieldClass(errorMap, 'team')}">
-    <span class="field-label">Team / Side <span class="req">*</span></span>
-    <input name="team" type="text" placeholder="Knicks" value="${val(v, 'team')}" />
-    ${errorHint(errorMap, 'team')}
-  </label>`;
+  ${teamInput('Team / Side', 'Knicks')}`;
 
     case 'spread':
       return `
@@ -255,14 +271,10 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
     <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
-  <label class="field${fieldClass(errorMap, 'team')}">
-    <span class="field-label">Team / Side <span class="req">*</span></span>
-    <input name="team" type="text" placeholder="Knicks" value="${val(v, 'team')}" />
-    ${errorHint(errorMap, 'team')}
-  </label>
+  ${teamInput('Team / Side', 'Knicks')}
   <label class="field${fieldClass(errorMap, 'line')}">
     <span class="field-label">Line <span class="req">*</span></span>
-    <input name="line" type="number" step="0.5" inputmode="decimal" placeholder="-3.5" value="${val(v, 'line')}" />
+    <input name="line" type="number" step="0.5" min="-999.5" max="999.5" inputmode="decimal" placeholder="-3.5" value="${val(v, 'line')}" />
     ${errorHint(errorMap, 'line')}
   </label>`;
 
@@ -280,7 +292,7 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
   </div>
   <label class="field${fieldClass(errorMap, 'line')}">
     <span class="field-label">Line <span class="req">*</span></span>
-    <input name="line" type="number" step="0.5" inputmode="decimal" placeholder="215.5" value="${val(v, 'line')}" />
+    <input name="line" type="number" step="0.5" min="-999.5" max="999.5" inputmode="decimal" placeholder="215.5" value="${val(v, 'line')}" />
     ${errorHint(errorMap, 'line')}
   </label>`;
 
@@ -291,11 +303,7 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
     <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
-  <label class="field${fieldClass(errorMap, 'team')}">
-    <span class="field-label">Team <span class="req">*</span></span>
-    <input name="team" type="text" placeholder="Knicks" value="${val(v, 'team')}" />
-    ${errorHint(errorMap, 'team')}
-  </label>
+  ${teamInput('Team', 'Knicks')}
   <div class="field${fieldClass(errorMap, 'overUnder')}">
     <span class="field-label">Over / Under <span class="req">*</span></span>
     ${segmented('overUnder', ['Over', 'Under'], v.overUnder || undefined)}
@@ -303,7 +311,7 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
   </div>
   <label class="field${fieldClass(errorMap, 'line')}">
     <span class="field-label">Line <span class="req">*</span></span>
-    <input name="line" type="number" step="0.5" inputmode="decimal" placeholder="108.5" value="${val(v, 'line')}" />
+    <input name="line" type="number" step="0.5" min="-999.5" max="999.5" inputmode="decimal" placeholder="108.5" value="${val(v, 'line')}" />
     ${errorHint(errorMap, 'line')}
   </label>`;
 
@@ -496,6 +504,15 @@ button:active { opacity: 0.9; }
 .review-card dt { font-weight: 700; font-size: 0.875rem; }
 .review-card dd { margin: 0; color: var(--muted); font-size: 0.875rem; }
 code { font-family: Consolas, monospace; font-size: 0.85rem; }
+.ticket-type-badge {
+  display: inline-block;
+  background: var(--accent);
+  color: #fff;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-weight: 700;
+  font-size: 0.85rem;
+}
 .actions { margin-top: 16px; }
 .btn-primary {
   display: inline-block;
@@ -508,7 +525,7 @@ code { font-family: Consolas, monospace; font-size: 0.85rem; }
 }
 `;
 
-// --- Minimal client-side JS for progressive reveal ---
+// --- Minimal client-side JS for progressive reveal + sport filtering ---
 const CLIENT_JS = `
 (function() {
   var types = ['player-prop','moneyline','spread','total','team-total'];
@@ -535,5 +552,42 @@ const CLIENT_JS = `
       });
     });
   });
+
+  // Sport-driven filtering
+  var sportSelect = document.getElementById('sf-sport');
+  var statTypeSelect = document.getElementById('sf-statType');
+  if (sportSelect) {
+    sportSelect.addEventListener('change', function() {
+      var sportId = this.value;
+      var data = (typeof __SF_SPORTS !== 'undefined' && __SF_SPORTS[sportId]) || null;
+
+      // Update stat type options
+      if (statTypeSelect && data) {
+        var current = statTypeSelect.value;
+        statTypeSelect.innerHTML = '<option value="">Select stat...</option>';
+        data.statTypes.forEach(function(st) {
+          var opt = document.createElement('option');
+          opt.value = st; opt.textContent = st;
+          if (st === current) opt.selected = true;
+          statTypeSelect.appendChild(opt);
+        });
+        var otherOpt = document.createElement('option');
+        otherOpt.value = 'Other'; otherOpt.textContent = 'Other';
+        statTypeSelect.appendChild(otherOpt);
+      }
+
+      // Update team datalists
+      document.querySelectorAll('datalist#teams-list').forEach(function(dl) {
+        dl.innerHTML = '';
+        if (data && data.teams) {
+          data.teams.forEach(function(t) {
+            var opt = document.createElement('option');
+            opt.value = t;
+            dl.appendChild(opt);
+          });
+        }
+      });
+    });
+  }
 })();
 `;

@@ -1,9 +1,18 @@
 /**
  * Smart Form V1 — Market-aware validation engine.
  *
- * Pure function: takes parsed form body + market type, returns field errors.
- * No side effects, no I/O.
+ * Pure function: takes parsed form body + market type + reference data catalog,
+ * returns field errors. No side effects, no I/O.
  */
+
+import type { ReferenceDataCatalog } from '@unit-talk/contracts';
+import {
+  isValidCapper,
+  isValidSportId,
+  isValidSportsbook,
+  isValidStatTypeForSport,
+  isValidTeamForSport,
+} from './reference-data-client.js';
 
 export type MarketType = 'player-prop' | 'moneyline' | 'spread' | 'total' | 'team-total';
 
@@ -23,7 +32,6 @@ export interface ParsedSmartFormBody {
   units?: string;
   oddsFormat?: string;
   odds?: string;
-  confidence?: string;
   marketType?: string;
   // Player prop fields
   player?: string;
@@ -50,6 +58,7 @@ export function isValidMarketType(value: string | undefined): value is MarketTyp
 export function validateSmartFormSubmission(
   form: ParsedSmartFormBody,
   marketType: MarketType | undefined,
+  catalog: ReferenceDataCatalog,
 ): FieldError[] {
   const errors: FieldError[] = [];
 
@@ -57,6 +66,8 @@ export function validateSmartFormSubmission(
 
   if (!nonEmpty(form.capper)) {
     errors.push({ field: 'capper', message: 'Capper is required.', severity: 'error' });
+  } else if (!isValidCapper(catalog, form.capper)) {
+    errors.push({ field: 'capper', message: 'Capper is not in the allowed list.', severity: 'error' });
   }
 
   if (!nonEmpty(form.date)) {
@@ -67,19 +78,38 @@ export function validateSmartFormSubmission(
 
   if (!nonEmpty(form.sport)) {
     errors.push({ field: 'sport', message: 'Sport is required.', severity: 'error' });
+  } else if (!isValidSportId(catalog, form.sport)) {
+    errors.push({ field: 'sport', message: 'Sport is not in the supported list.', severity: 'error' });
   }
 
   if (!marketType) {
     errors.push({ field: 'marketType', message: 'Market type is required.', severity: 'error' });
   }
 
-  // Odds: required, must be non-zero finite number
+  // Odds: required, format-aware guardrails
   if (!nonEmpty(form.odds)) {
     errors.push({ field: 'odds', message: 'Odds are required.', severity: 'error' });
   } else {
     const oddsNum = Number(form.odds);
     if (!Number.isFinite(oddsNum) || oddsNum === 0) {
       errors.push({ field: 'odds', message: 'Odds must be a non-zero finite number.', severity: 'error' });
+    } else if (form.oddsFormat === 'Decimal') {
+      if (oddsNum < 1.01) {
+        errors.push({ field: 'odds', message: 'Decimal odds must be at least 1.01.', severity: 'error' });
+      } else if (oddsNum > 501.00) {
+        errors.push({ field: 'odds', message: 'Decimal odds must not exceed 501.00.', severity: 'error' });
+      }
+    } else {
+      // American format
+      if (!Number.isInteger(oddsNum)) {
+        errors.push({ field: 'odds', message: 'American odds must be an integer.', severity: 'error' });
+      } else if (oddsNum > 0 && oddsNum < 100) {
+        errors.push({ field: 'odds', message: 'Positive American odds must be +100 or greater.', severity: 'error' });
+      } else if (oddsNum < 0 && oddsNum > -100) {
+        errors.push({ field: 'odds', message: 'Negative American odds must be -100 or less.', severity: 'error' });
+      } else if (Math.abs(oddsNum) > 50000) {
+        errors.push({ field: 'odds', message: 'American odds must be between ±100 and ±50000.', severity: 'error' });
+      }
     }
   }
 
@@ -95,26 +125,18 @@ export function validateSmartFormSubmission(
     }
   }
 
-  // Confidence: optional, but if provided must be 0 < x < 1
-  if (nonEmpty(form.confidence)) {
-    const confNum = Number(form.confidence);
-    if (!Number.isFinite(confNum)) {
-      errors.push({ field: 'confidence', message: 'Confidence must be a valid number.', severity: 'error' });
-    } else if (confNum <= 0 || confNum >= 1) {
-      errors.push({ field: 'confidence', message: 'Confidence must be between 0 and 1 (exclusive).', severity: 'error' });
-    }
-  }
-
   // --- Warn-only fields ---
 
   if (!nonEmpty(form.sportsbook)) {
     errors.push({ field: 'sportsbook', message: 'Sportsbook not provided.', severity: 'warning' });
+  } else if (!isValidSportsbook(catalog, form.sportsbook)) {
+    errors.push({ field: 'sportsbook', message: 'Sportsbook is not in the known list.', severity: 'warning' });
   }
 
   // --- Market-type conditional required fields ---
 
   if (marketType) {
-    validateMarketTypeFields(form, marketType, errors);
+    validateMarketTypeFields(form, marketType, catalog, errors);
   }
 
   return errors;
@@ -123,6 +145,7 @@ export function validateSmartFormSubmission(
 function validateMarketTypeFields(
   form: ParsedSmartFormBody,
   marketType: MarketType,
+  catalog: ReferenceDataCatalog,
   errors: FieldError[],
 ): void {
   switch (marketType) {
@@ -130,6 +153,9 @@ function validateMarketTypeFields(
       requireField(form.player, 'player', 'Player is required for player prop markets.', errors);
       requireField(form.matchup, 'matchup', 'Matchup is required.', errors);
       requireField(form.statType, 'statType', 'Stat type is required for player prop markets.', errors);
+      if (nonEmpty(form.statType) && nonEmpty(form.sport) && !isValidStatTypeForSport(catalog, form.sport, form.statType)) {
+        errors.push({ field: 'statType', message: 'Stat type is not valid for the selected sport.', severity: 'error' });
+      }
       requireOverUnder(form.overUnder, errors);
       requireLine(form.line, errors);
       break;
@@ -137,11 +163,13 @@ function validateMarketTypeFields(
     case 'moneyline':
       requireField(form.matchup, 'matchup', 'Matchup is required.', errors);
       requireField(form.team, 'team', 'Team / Side is required for moneyline markets.', errors);
+      validateTeamForSport(form, catalog, errors);
       break;
 
     case 'spread':
       requireField(form.matchup, 'matchup', 'Matchup is required.', errors);
       requireField(form.team, 'team', 'Team / Side is required for spread markets.', errors);
+      validateTeamForSport(form, catalog, errors);
       requireLine(form.line, errors);
       break;
 
@@ -154,9 +182,20 @@ function validateMarketTypeFields(
     case 'team-total':
       requireField(form.matchup, 'matchup', 'Matchup is required.', errors);
       requireField(form.team, 'team', 'Team is required for team total markets.', errors);
+      validateTeamForSport(form, catalog, errors);
       requireOverUnder(form.overUnder, errors);
       requireLine(form.line, errors);
       break;
+  }
+}
+
+function validateTeamForSport(
+  form: ParsedSmartFormBody,
+  catalog: ReferenceDataCatalog,
+  errors: FieldError[],
+): void {
+  if (nonEmpty(form.team) && nonEmpty(form.sport) && !isValidTeamForSport(catalog, form.sport, form.team)) {
+    errors.push({ field: 'team', message: 'Team is not recognized for the selected sport.', severity: 'warning' });
   }
 }
 
@@ -186,6 +225,8 @@ function requireLine(value: string | undefined, errors: FieldError[]): void {
     const lineNum = Number(value);
     if (!Number.isFinite(lineNum)) {
       errors.push({ field: 'line', message: 'Line must be a finite number.', severity: 'error' });
+    } else if (Math.abs(lineNum) > 999.5) {
+      errors.push({ field: 'line', message: 'Line must be between -999.5 and 999.5.', severity: 'error' });
     }
   }
 }

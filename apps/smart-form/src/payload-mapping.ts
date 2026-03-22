@@ -15,7 +15,6 @@ export interface SubmissionPayload {
   line?: number;
   odds?: number;
   stakeUnits?: number;
-  confidence?: number;
   eventName?: string;
   metadata: Record<string, unknown>;
 }
@@ -106,7 +105,7 @@ export function normalizeOdds(odds: string | undefined, format: string | undefin
   const num = Number(odds);
   if (!Number.isFinite(num)) return undefined;
 
-  if (format === 'decimal') {
+  if (format === 'decimal' || format === 'Decimal') {
     return decimalToAmerican(num);
   }
   return num;
@@ -124,12 +123,12 @@ export function mapSmartFormToSubmissionPayload(
   const odds = normalizeOdds(form.odds, form.oddsFormat);
   const line = form.line ? Number(form.line) : undefined;
   const stakeUnits = form.units ? Number(form.units) : undefined;
-  const confidence = form.confidence ? Number(form.confidence) : undefined;
 
   const metadata: Record<string, unknown> = {
     capper: form.capper,
     sport: form.sport,
     date: form.date,
+    ticketType: 'single',
     marketType,
     eventName: form.matchup,
   };
@@ -151,7 +150,6 @@ export function mapSmartFormToSubmissionPayload(
   if (typeof line === 'number' && Number.isFinite(line)) result.line = line;
   if (typeof odds === 'number' && Number.isFinite(odds)) result.odds = odds;
   if (typeof stakeUnits === 'number' && Number.isFinite(stakeUnits)) result.stakeUnits = stakeUnits;
-  if (typeof confidence === 'number' && Number.isFinite(confidence)) result.confidence = confidence;
   if (form.matchup) result.eventName = form.matchup;
 
   return result;

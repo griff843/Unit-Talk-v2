@@ -80,7 +80,7 @@ function playerPropBody(overrides: Record<string, string> = {}): string {
     capper: 'griff843',
     date: '2026-03-21',
     sport: 'NBA',
-    sportsbook: 'DraftKings',
+    sportsbook: 'draftkings',
     units: '1.5',
     oddsFormat: 'American',
     odds: '-110',
@@ -141,6 +141,48 @@ describe('GET /', () => {
     assert.match(response.body, /spread/);
     assert.match(response.body, /total/);
     assert.match(response.body, /team-total/);
+  });
+
+  test('renders sport options from reference data', async () => {
+    const server = createTestServer();
+    const port = await startServer(server);
+    const response = await makeRequest(port, '/');
+    await closeServer(server);
+
+    assert.match(response.body, /NBA/);
+    assert.match(response.body, /NFL/);
+    assert.match(response.body, /NHL/);
+    assert.match(response.body, /MLB/);
+  });
+
+  test('renders sportsbook as select (not text input)', async () => {
+    const server = createTestServer();
+    const port = await startServer(server);
+    const response = await makeRequest(port, '/');
+    await closeServer(server);
+
+    assert.match(response.body, /Select sportsbook/);
+    assert.match(response.body, /DraftKings/);
+    assert.match(response.body, /FanDuel/);
+  });
+
+  test('does not render confidence field', async () => {
+    const server = createTestServer();
+    const port = await startServer(server);
+    const response = await makeRequest(port, '/');
+    await closeServer(server);
+
+    assert.doesNotMatch(response.body, /name="confidence"/);
+  });
+
+  test('renders ticket type indicator', async () => {
+    const server = createTestServer();
+    const port = await startServer(server);
+    const response = await makeRequest(port, '/');
+    await closeServer(server);
+
+    assert.match(response.body, /Ticket Type/);
+    assert.match(response.body, /Single/);
   });
 });
 
