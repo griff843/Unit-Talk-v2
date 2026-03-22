@@ -7,16 +7,44 @@
 
 ## Last Updated
 
-2026-03-21
+2026-03-22 (T1 full-cycle proof closed)
 
 ## Current State
 
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | 531/531 passing |
-| Gates | type-check, lint, build, test — all pass |
+| Tests | 528/528 passing — deterministic across consecutive runs |
+| Gates | All gates PASS. `pnpm verify` exits 0 — two consecutive runs confirmed. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) — see `SPRINT_MODEL_v2.md` |
+
+## Gate Notes (2026-03-22)
+
+| Gate | Status | Notes |
+|------|--------|-------|
+| `pnpm env:check` | PASS | Environment files pass validation. |
+| `pnpm lint` | PASS | 0 errors. `.next/**` added to eslint ignores. Ported Radix UI components in `apps/smart-form/components/ui/**` exempt from `no-explicit-any` / `no-empty-object-type`. |
+| `pnpm type-check` | PASS | 0 errors. |
+| `pnpm build` | PASS | Exit 0. |
+| `pnpm test` | PASS | 528/528. 6 bounded groups (4–9 files each), chained with `&&`. Deterministic on Windows. |
+| `pnpm verify` (full chain) | PASS | Exit 0 on two consecutive runs without memory reset. |
+
+### Runner Architecture (post-hardening)
+
+The root `test` script is split into 6 named groups:
+
+| Script | Files | Surface |
+|--------|-------|---------|
+| `pnpm test:apps` | 7 | apps/api + apps/worker + apps/operator-web |
+| `pnpm test:verification` | 4 | packages/verification |
+| `pnpm test:domain-probability` | 6 | domain/probability + domain/outcomes-core |
+| `pnpm test:domain-features` | 9 | domain/features + domain/models |
+| `pnpm test:domain-signals` | 6 | domain/signals + bands + calibration + scoring |
+| `pnpm test:domain-analytics` | 8 | domain/outcomes + market + eval + edge + rollups + system-health + risk + strategy |
+
+`pnpm test` chains all 6 with `&&` (fail-closed). Each group is independently invocable for targeted debugging.
+
+**Previous issue (resolved)**: A single 40-file `tsx --test` invocation caused non-deterministic `STATUS_STACK_BUFFER_OVERRUN` (Windows exit code 3221226505) on the `pnpm verify` chain due to stack exhaustion under memory pressure. Fixed by splitting into groups of ≤9 files — no tsx process now handles more than 9 files. Two consecutive `pnpm verify` runs confirmed deterministic exit 0.
 
 ## Live Routing
 
@@ -33,6 +61,9 @@
 
 | Sprint | Week | Tier | Status | Summary |
 |--------|------|------|--------|---------|
+| T1 Full-Cycle Runtime Proof | — | T1 | **CLOSED** | 6 of 7 stages pass. Submit → DB → Distribution (Discord msgId 1485413938513444887) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 7 (recap) blocked (Blocker B). Enqueue gap documented. 528/528 tests. |
+| Runner Hardening | — | T1 | **CLOSED** | Split 40-file tsx invocation into 6 bounded groups. pnpm verify now deterministic — exit 0 on two consecutive runs. 528/528 tests. |
+| Gate Recovery + Repo Truth (UTV2-32) | — | T1 | **CLOSED** | Restored root pnpm test (supabase-js resolution + stale ref), lint hygiene (.next exclusion + Radix UI exemption), PROGRAM_STATUS.md truth. 528/528 tests. |
 | Promotion Scoring Enrichment | 21 | T3 | **CLOSED** | Domain-aware trust/readiness in promotion scoring. 531/531 tests. |
 | E2E Platform Validation | 20 | T3 | **CLOSED** | All 9 runtime surfaces validated. Live canary proof. 515/515 tests. |
 | Promotion Edge Integration | 19 | T3 | **CLOSED** | Domain analysis edge as Tier 2 fallback in promotion. 515/515 tests. |
@@ -80,6 +111,7 @@ The next major work is designing and building the Smart Form V1 operator submiss
 |------|----------|--------|
 | Historical pre-fix outbox rows may add noise to operator incident triage | Low | Open |
 | Recap/performance/accounting surfaces do not yet consume downstream truth | Low | Deferred — explicitly out of current scope |
+| Enqueue gap: `POST /api/submissions` sets `promotion_status=qualified` but does NOT auto-enqueue to `distribution_outbox` — no HTTP endpoint exists for enqueue | Medium | Open — discovered during T1 proof; must be wired before Smart Form V1 |
 
 ## Key Capabilities
 

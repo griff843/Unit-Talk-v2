@@ -1,5 +1,9 @@
 # SMART_FORM_V1_PHASE2_SPORT_FILTERING_AND_BETSLIP_UX
 
+> Historical implementation contract.
+> This file documents an earlier `apps/smart-form/src/**` implementation path and is retained as sprint history only.
+> It is not the active runtime authority for the current Next-based Smart Form surface under `apps/smart-form/app/**`.
+
 **Status**: COMPLETE
 **Sprint branch**: sprint/recap-field-alignment
 **Contract type**: Implementation milestone
