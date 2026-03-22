@@ -12,7 +12,6 @@
     { "path": "./apps/api" },
     { "path": "./apps/worker" },
     { "path": "./apps/operator-web" },
-    { "path": "./apps/smart-form" },
     { "path": "./apps/discord-bot" }
   ]
 }

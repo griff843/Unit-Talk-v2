@@ -1,0 +1,140 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Unit Talk Smart Form — Dark Navy Design System
+ * Aesthetic: Luxury/refined sportsbook. Bloomberg meets DraftKings dark.
+ * Typography: Barlow (body) + Barlow Condensed (labels) + DM Mono (data/odds)
+ */
+
+:root {
+  /* Deep navy base — near-black with blue undertone */
+  --background: 222 47% 5%;
+  --foreground: 210 40% 96%;
+
+  /* Cards — slightly lifted navy gradient base */
+  --card: 220 40% 8%;
+  --card-foreground: 210 40% 96%;
+
+  /* Popovers match cards */
+  --popover: 220 40% 8%;
+  --popover-foreground: 210 40% 96%;
+
+  /* Primary — electric blue for active states, CTAs */
+  --primary: 217 91% 60%;
+  --primary-foreground: 222 47% 8%;
+
+  /* Secondary — muted navy for secondary actions */
+  --secondary: 217 33% 15%;
+  --secondary-foreground: 210 40% 96%;
+
+  /* Muted — subdued elements, placeholders */
+  --muted: 217 33% 13%;
+  --muted-foreground: 215 20% 55%;
+
+  /* Accent — same as secondary, used for hover states */
+  --accent: 217 33% 15%;
+  --accent-foreground: 210 40% 96%;
+
+  /* Destructive — red for errors, invalid fields */
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 210 40% 96%;
+
+  /* Success — green for confirmed picks, wins */
+  --success: 142 71% 45%;
+  --success-foreground: 210 40% 96%;
+
+  /* Warning — amber for pending, in-progress states */
+  --warning: 38 92% 50%;
+  --warning-foreground: 222 47% 8%;
+
+  /* Structural */
+  --border: 217 33% 16%;
+  --input: 217 33% 12%;
+  --ring: 217 91% 60%;
+  --radius: 0.5rem;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: var(--font-barlow), system-ui, sans-serif;
+    font-feature-settings: "rlig" 1, "calt" 1, "tnum" 1;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  /* Tabular numbers everywhere for data alignment */
+  .font-mono,
+  [class*="odds"],
+  [class*="units"],
+  [class*="line"] {
+    font-family: var(--font-dm-mono), ui-monospace, monospace;
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+@layer components {
+  /* Bet slip card — the core reusable card primitive */
+  .slip-card {
+    @apply rounded-lg border border-border bg-card p-4;
+    background: linear-gradient(
+      135deg,
+      hsl(220 45% 9%) 0%,
+      hsl(217 40% 7%) 100%
+    );
+    box-shadow:
+      0 1px 3px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  /* Section label — condensed all-caps, tracking wide */
+  .section-label {
+    @apply text-xs font-condensed font-semibold tracking-widest uppercase;
+    color: hsl(var(--muted-foreground));
+    letter-spacing: 0.12em;
+  }
+
+  /* Data value — monospace for odds, lines, units */
+  .data-value {
+    @apply font-mono tabular-nums;
+  }
+
+  /* Market type card — interactive selection card */
+  .market-card {
+    @apply slip-card cursor-pointer transition-all duration-150 ease-in-out;
+    @apply hover:border-primary/40 hover:bg-primary/5;
+  }
+
+  .market-card[data-selected="true"] {
+    @apply border-primary bg-primary/10;
+    box-shadow:
+      0 0 0 1px hsl(var(--primary)),
+      0 0 12px rgba(59, 130, 246, 0.15);
+  }
+
+  /* Bet slip panel — sticky right sidebar */
+  .bet-slip-panel {
+    @apply slip-card;
+    background: linear-gradient(
+      160deg,
+      hsl(220 55% 10%) 0%,
+      hsl(215 50% 7%) 100%
+    );
+  }
+
+  /* Field divider — subtle separator between form sections */
+  .field-divider {
+    @apply border-t border-border/60 my-4;
+  }
+
+  /* Animate in for form sections and receipt */
+  .animate-field {
+    @apply animate-fade-in;
+  }
+}
