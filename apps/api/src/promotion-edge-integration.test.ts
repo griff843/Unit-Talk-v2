@@ -1,6 +1,10 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readDomainAnalysisEdgeScore } from './promotion-service.js';
+import {
+  readDomainAnalysisEdgeScore,
+  readDomainAnalysisTrustSignal,
+  readDomainAnalysisReadinessSignal,
+} from './promotion-service.js';
 import { processSubmission } from './submission-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
@@ -229,4 +233,233 @@ test('negative domain edge suppresses promotion correctly', async () => {
   // → bb status = 'suppressed' (score below minimumScore). Neither qualifies.
   assert.equal(result.pick.promotionStatus, 'suppressed');
   assert.equal(result.pick.promotionTarget, undefined);
+});
+
+// ── Unit tests for domain analysis trust signal (Week 21) ────────────────────
+
+test('readDomainAnalysisTrustSignal returns null when domainAnalysis is absent', () => {
+  assert.equal(readDomainAnalysisTrustSignal({}), null);
+  assert.equal(readDomainAnalysisTrustSignal({ sport: 'NBA' }), null);
+});
+
+test('readDomainAnalysisTrustSignal returns null when edge is not positive', () => {
+  const metadata = {
+    domainAnalysis: {
+      edge: -0.05,
+      hasPositiveEdge: false,
+    },
+  };
+  assert.equal(readDomainAnalysisTrustSignal(metadata), null);
+});
+
+test('readDomainAnalysisTrustSignal returns null when edge is absent', () => {
+  const metadata = {
+    domainAnalysis: {
+      impliedProbability: 0.534884,
+      decimalOdds: 1.869565,
+      version: 'domain-analysis-v1.0.0',
+      computedAt: '2026-03-21T12:00:00.000Z',
+    },
+  };
+  assert.equal(readDomainAnalysisTrustSignal(metadata), null);
+});
+
+test('readDomainAnalysisTrustSignal returns 80 for significant positive edge (≥0.05)', () => {
+  const metadata = {
+    domainAnalysis: { edge: 0.10, hasPositiveEdge: true },
+  };
+  assert.equal(readDomainAnalysisTrustSignal(metadata), 80);
+});
+
+test('readDomainAnalysisTrustSignal returns 80 at boundary edge = 0.05', () => {
+  const metadata = {
+    domainAnalysis: { edge: 0.05, hasPositiveEdge: true },
+  };
+  assert.equal(readDomainAnalysisTrustSignal(metadata), 80);
+});
+
+test('readDomainAnalysisTrustSignal returns 65 for marginal positive edge (<0.05)', () => {
+  const metadata = {
+    domainAnalysis: { edge: 0.03, hasPositiveEdge: true },
+  };
+  assert.equal(readDomainAnalysisTrustSignal(metadata), 65);
+});
+
+// ── Unit tests for domain analysis readiness signal (Week 21) ────────────────
+
+test('readDomainAnalysisReadinessSignal returns null when domainAnalysis is absent', () => {
+  assert.equal(readDomainAnalysisReadinessSignal({}), null);
+  assert.equal(readDomainAnalysisReadinessSignal({ sport: 'NBA' }), null);
+});
+
+test('readDomainAnalysisReadinessSignal returns null when kellyFraction is absent', () => {
+  const metadata = {
+    domainAnalysis: {
+      edge: 0.10,
+      hasPositiveEdge: true,
+      // kellyFraction intentionally absent
+    },
+  };
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), null);
+});
+
+test('readDomainAnalysisReadinessSignal returns null when kellyFraction is 0', () => {
+  const metadata = {
+    domainAnalysis: { kellyFraction: 0 },
+  };
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), null);
+});
+
+test('readDomainAnalysisReadinessSignal returns null when kellyFraction is negative', () => {
+  const metadata = {
+    domainAnalysis: { kellyFraction: -0.01 },
+  };
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), null);
+});
+
+test('readDomainAnalysisReadinessSignal returns 85 when kellyFraction is positive', () => {
+  const metadata = {
+    domainAnalysis: { kellyFraction: 0.03 },
+  };
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), 85);
+});
+
+test('readDomainAnalysisReadinessSignal returns 85 for small positive kellyFraction', () => {
+  const metadata = {
+    domainAnalysis: { kellyFraction: 0.001 },
+  };
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), 85);
+});
+
+// ── Integration tests: domain-aware trust/readiness in promotion (Week 21) ───
+
+test('domain trust signal elevates trust when no explicit trust score and positive edge', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // odds +150 → implied 0.4, confidence 0.65 → raw edge 0.25 → hasPositiveEdge=true, edge≥0.05
+  // Domain trust signal = 80 (significant positive edge)
+  // Confidence-based trust would be 0.65*100 = 65
+  // So domain trust (80) > confidence trust (65) — domain signal wins
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA blocks',
+      selection: 'Player Over 1.5',
+      odds: 150,
+      confidence: 0.65,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Warriors',
+        promotionScores: {
+          // trust intentionally absent — domain trust signal should apply
+          uniqueness: 84,
+          boardFit: 89,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // edge: domain edge score = clamp(50+0.25*400)=150→100 (no explicit edge)
+  // trust: domain trust signal = 80 (positive edge ≥ 0.05, no explicit trust)
+  // readiness: domain readiness = 85 (Kelly fraction > 0, no explicit readiness)
+  // uniqueness: 84, boardFit: 89
+  // ti thresholds: edge=100≥85✓, trust=80<85✗ → ti suppressed
+  // bb: score = 100*0.35 + 80*0.25 + 85*0.2 + 84*0.1 + 89*0.1 = 35+20+17+8.4+8.9 = 89.3 ≥ 70
+  assert.equal(result.pick.promotionTarget, 'best-bets');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+});
+
+test('domain readiness signal activates when Kelly fraction is present', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // odds +150, confidence 0.65 → Kelly fraction computed and > 0
+  // Domain readiness = 85 (vs default 80)
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA dunks',
+      selection: 'Player Over 0.5',
+      odds: 150,
+      confidence: 0.65,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Clippers vs Rockets',
+        promotionScores: {
+          edge: 90,
+          trust: 90,
+          // readiness intentionally absent — domain readiness signal should apply
+          uniqueness: 84,
+          boardFit: 89,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // edge: 90 (explicit), trust: 90 (explicit), readiness: 85 (domain Kelly), uniqueness: 84, boardFit: 89
+  // ti: edge=90≥85✓, trust=90≥85✓
+  // score = 90*0.35 + 90*0.25 + 85*0.2 + 84*0.1 + 89*0.1 = 31.5+22.5+17+8.4+8.9 = 88.3 ≥ 80 → qualifies
+  assert.equal(result.pick.promotionTarget, 'trader-insights');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+});
+
+test('without odds, trust and readiness use non-domain fallbacks', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // No odds → no domain analysis → trust falls back to confidence, readiness falls back to 80
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA turnovers',
+      selection: 'Player Under 3.5',
+      confidence: 0.90,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Mavericks vs Spurs',
+        promotionScores: {
+          // No explicit trust/readiness — should use confidence/80 fallback (no domain analysis)
+          uniqueness: 84,
+          boardFit: 89,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // No odds → no domain analysis → all domain signals return null
+  // edge: confidence fallback = 90, trust: confidence fallback = 90, readiness: default 80
+  // ti: edge=90≥85✓, trust=90≥85✓
+  // score = 90*0.35 + 90*0.25 + 80*0.2 + 84*0.1 + 89*0.1 = 31.5+22.5+16+8.4+8.9 = 87.3 ≥ 80 → qualifies
+  assert.equal(result.pick.promotionTarget, 'trader-insights');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+});
+
+test('marginal domain edge gives lower trust than significant edge', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // odds -200 → implied 0.6667, confidence 0.70 → edge ≈ 0.0333 (marginal, < 0.05)
+  // Domain trust signal = 65 (marginal positive edge)
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA fouls',
+      selection: 'Player Over 3.5',
+      odds: -200,
+      confidence: 0.70,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Thunder vs Grizzlies',
+        promotionScores: {
+          // trust absent — domain trust = 65 (marginal edge)
+          uniqueness: 84,
+          boardFit: 89,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // edge: domain edge ≈ 63 (no explicit), trust: domain trust = 65 (marginal, <0.05 edge)
+  // readiness: domain readiness = 85 (Kelly > 0)
+  // ti: edge=63<85 → suppressed
+  // bb: score = 63*0.35+65*0.25+85*0.2+84*0.1+89*0.1 = 22.05+16.25+17+8.4+8.9 = 72.6 ≥ 70 → qualifies
+  assert.equal(result.pick.promotionTarget, 'best-bets');
+  assert.equal(result.pick.promotionStatus, 'qualified');
 });

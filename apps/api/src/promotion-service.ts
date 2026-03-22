@@ -397,10 +397,16 @@ function readPromotionScoreInputs(pick: CanonicalPick) {
   // Edge fallback priority: explicit promotionScores.edge > domain analysis edge > confidence
   const edgeFallback = readDomainAnalysisEdgeScore(pick.metadata) ?? confidenceScore;
 
+  // Trust fallback priority: explicit promotionScores.trust > domain trust signal > confidence
+  const trustFallback = readDomainAnalysisTrustSignal(pick.metadata) ?? confidenceScore;
+
+  // Readiness fallback priority: explicit promotionScores.readiness > domain readiness signal > 80
+  const readinessFallback = readDomainAnalysisReadinessSignal(pick.metadata) ?? 80;
+
   return {
     edge: readScore(configured, 'edge', edgeFallback),
-    trust: readScore(configured, 'trust', confidenceScore),
-    readiness: readScore(configured, 'readiness', 80),
+    trust: readScore(configured, 'trust', trustFallback),
+    readiness: readScore(configured, 'readiness', readinessFallback),
     uniqueness: readScore(configured, 'uniqueness', 80),
     boardFit: readScore(configured, 'boardFit', 75),
   };
@@ -430,6 +436,62 @@ export function readDomainAnalysisEdgeScore(
   }
 
   return Math.max(0, Math.min(100, 50 + rawEdge * 400));
+}
+
+/**
+ * Derive a trust signal from domain analysis edge.
+ *
+ * When domain analysis confirms a positive edge, the pick has mathematically-backed
+ * trustworthiness beyond raw confidence. Picks with significant edge (≥5%) get
+ * higher trust; marginal-edge picks get moderate trust.
+ *
+ * Returns null if domain analysis is absent or edge is not positive (falls through
+ * to confidence-based fallback).
+ */
+export function readDomainAnalysisTrustSignal(
+  metadata: Record<string, unknown>,
+): number | null {
+  const domainAnalysis = metadata['domainAnalysis'];
+  if (!isRecord(domainAnalysis)) {
+    return null;
+  }
+
+  if (domainAnalysis['hasPositiveEdge'] !== true) {
+    return null;
+  }
+
+  const edge = domainAnalysis['edge'];
+  if (typeof edge !== 'number' || !Number.isFinite(edge)) {
+    return null;
+  }
+
+  return edge >= 0.05 ? 80 : 65;
+}
+
+/**
+ * Derive a readiness signal from domain analysis Kelly fraction.
+ *
+ * When domain analysis computed a positive Kelly fraction, the pick has been
+ * mathematically assessed for position sizing — a stronger readiness signal
+ * than the default.
+ *
+ * Returns null if domain analysis is absent or Kelly was not computed (falls
+ * through to default 80).
+ */
+export function readDomainAnalysisReadinessSignal(
+  metadata: Record<string, unknown>,
+): number | null {
+  const domainAnalysis = metadata['domainAnalysis'];
+  if (!isRecord(domainAnalysis)) {
+    return null;
+  }
+
+  const kellyFraction = domainAnalysis['kellyFraction'];
+  if (typeof kellyFraction !== 'number' || !Number.isFinite(kellyFraction) || kellyFraction <= 0) {
+    return null;
+  }
+
+  return 85;
 }
 
 function readScore(

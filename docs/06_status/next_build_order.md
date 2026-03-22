@@ -26,7 +26,15 @@ All of the following are now done:
 
 ## Current Priority Order
 
-Week 19 closed. Promotion edge integration complete. Next work requires a ratified Week 20 contract.
+Week 21 closed. Domain analysis now informs edge, trust, and readiness in promotion scoring. Next work requires a ratified Week 22 contract.
+
+### Completed: Week 21 - Promotion Scoring Enrichment (CLOSED 2026-03-21)
+
+Domain analysis trust and readiness signals wired into promotion scoring fallbacks. `readDomainAnalysisTrustSignal()` returns 80 for significant positive edge (≥0.05), 65 for marginal. `readDomainAnalysisReadinessSignal()` returns 85 when Kelly fraction > 0. 531/531 tests. All gates pass.
+
+### Completed: Week 20 - E2E Platform Validation (CLOSED 2026-03-21)
+
+All 9 runtime surfaces validated end-to-end. Live Discord canary proof delivered. Validation-only sprint — no new code. 515/515 tests. All gates pass.
 
 ### Completed: Week 19 - Promotion Edge Integration (CLOSED 2026-03-21)
 
@@ -56,10 +64,9 @@ First commit created from audited post-salvage repo state. `.gitignore` hardened
 
 87/87 tests, live snapshot 10/10 checks PASS, independent verification PASS.
 
-### Next Candidate Work (Not Yet Started — Requires Ratified Week 20 Contract)
+### Next Candidate Work (Not Yet Started — Requires Ratified Week 22 Contract)
 
-1. Wire scoring weights or calibration into promotion trust/readiness inputs
-2. Offer Fetch service wrapper
+1. Offer Fetch service wrapper
 3. DeviggingService integration layer (multi-book consensus at submission)
 4. Risk Engine service integration (bankroll-aware sizing beyond Kelly fraction)
 5. Observation Hub permanent control plane

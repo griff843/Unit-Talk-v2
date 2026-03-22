@@ -2,6 +2,10 @@
 
 ## Status
 
+**Week 21 closed 2026-03-21.** Promotion scoring enrichment. Domain analysis edge and Kelly fraction now inform trust and readiness fallbacks in promotion scoring. `readDomainAnalysisTrustSignal()` returns 80 for significant positive edge (≥0.05), 65 for marginal. `readDomainAnalysisReadinessSignal()` returns 85 when Kelly fraction > 0. `readPromotionScoreInputs()` uses domain-aware fallback chains for trust and readiness alongside the existing edge fallback. No changes to promotion policy definitions, thresholds, or evaluation logic. 16 new tests. All gates pass at 531/531 tests.
+
+**Week 20 closed 2026-03-21.** E2E platform validation. All 9 runtime surfaces validated end-to-end. Live Discord canary proof delivered (message ID `1485075639424782337`). Validation-only sprint — no new code changes. 515/515 tests. All gates pass.
+
 **Week 19 closed 2026-03-21.** Promotion edge integration. Domain analysis edge now consumed as a downstream decision input in the promotion scoring pipeline. `readDomainAnalysisEdgeScore()` converts raw mathematical edge to 0-100 promotion scale. Three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback. No changes to promotion policy definitions, thresholds, or evaluation logic. 13 new tests. All gates pass at 515/515 tests.
 
 **Week 18 closed 2026-03-21.** Domain integration layer. First salvaged domain modules wired into real API submission path. `domain-analysis-service.ts` computes implied probability (via `americanToImplied`), edge (vs submitter confidence), and Kelly fraction (via `computeKellyFraction`) at submission time. Results stored in `pick.metadata.domainAnalysis`. Fail-open: picks without odds are not enriched. 11 new tests. All gates pass at 502/502 tests.
@@ -67,6 +71,8 @@ Week 15 selectively salvaged the pure probability, devig, and calibration math f
 - **Week 16 contract**: `docs/05_operations/week_16_settlement_downstream_loss_attribution_contract.md`
 - **Week 18 contract**: `docs/05_operations/week_18_domain_integration_layer_contract.md`
 - **Week 19 contract**: `docs/05_operations/week_19_promotion_edge_integration_contract.md`
+- **Week 20 contract**: `docs/05_operations/week_20_e2e_platform_validation_contract.md`
+- **Week 21 contract**: `docs/05_operations/week_21_promotion_scoring_enrichment_contract.md`
 - Week 16 proof template: `docs/06_status/week_16_proof_template.md`
 - Week 16 failure note template: `docs/06_status/week_16_failure_note_template.md`
 - Week 16 closeout checklist: `docs/06_status/week_16_closeout_checklist.md`
@@ -118,12 +124,16 @@ Week 15 selectively salvaged the pure probability, devig, and calibration math f
 
 - Delivered Week 19 promotion edge integration: `apps/api/src/promotion-service.ts` now reads `metadata.domainAnalysis.edge` as a second-tier fallback for promotion edge scoring; three-tier edge fallback: explicit `promotionScores.edge` > domain analysis edge > confidence-based fallback; `readDomainAnalysisEdgeScore()` converts raw edge to 0-100 promotion scale via `clamp(50 + rawEdge * 400, 0, 100)`; 13 new tests; 515/515 total — Week 19 closed 2026-03-21
 
+- Delivered Week 20 E2E platform validation: all 9 runtime surfaces validated end-to-end; live Discord canary proof delivered (message ID `1485075639424782337`); validation-only sprint, no new code; 515/515 tests — Week 20 closed 2026-03-21
+
+- Delivered Week 21 promotion scoring enrichment: `readDomainAnalysisTrustSignal()` derives trust from domain analysis positive edge (80 for edge ≥ 0.05, 65 for marginal); `readDomainAnalysisReadinessSignal()` derives readiness from Kelly fraction (85 when Kelly > 0); `readPromotionScoreInputs()` now uses domain-aware fallbacks for trust and readiness; 16 new tests; 531/531 total — Week 21 closed 2026-03-21
+
 ## Next Recommended Moves
 
-Week 19 closed. Domain analysis edge now consumed in the promotion scoring pipeline as a downstream decision input.
+Week 21 closed. Domain analysis now informs three of five promotion scoring inputs: edge (Week 19), trust, and readiness (Week 21). Uniqueness and boardFit remain at static defaults.
 
 **Not yet ported (future work):** Offer Fetch, DeviggingService (multi-book consensus service wrapper), Risk Engine (bankroll-aware service wrapper), GradingAgent scoring, Observation Hub, Lab/Backtest, Strategy Simulation. Note: the pure computation cores for Kelly/Risk Sizing, devig math, probability layer, calibration, strategy, and bankroll simulation are already ported — only the service wrappers and deeper integration layers remain.
 
-**Next recommended work:** Wire scoring weights or calibration into promotion trust/readiness inputs; build Offer Fetch service wrapper for multi-book consensus at submission; or deepen settlement enrichment with scoring/calibration. Define and ratify a Week 20 contract before beginning.
+**Next recommended work:** Build Offer Fetch service wrapper for multi-book consensus at submission; deepen settlement enrichment with scoring/calibration; or wire uniqueness/boardFit with domain-aware signals. Define and ratify a Week 22 contract before beginning.
 
 Keep `discord:canary` active permanently. Do not change `discord:best-bets` or `discord:trader-insights` routing.
