@@ -4,6 +4,8 @@ import { randomUUID } from 'node:crypto';
 import type {
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
+  PromotionHistoryInsertInput,
+  PromotionHistoryRecord,
   PromotionPersistenceResult,
   AuditLogRepository,
   AuditLogRow,
@@ -300,6 +302,25 @@ class FakePickRepository implements PickRepository {
       sameSportCount: 0,
       sameGameCount: 0,
       duplicateCount: 0,
+    };
+  }
+
+  async insertPromotionHistoryRow(
+    input: PromotionHistoryInsertInput,
+  ): Promise<PromotionHistoryRecord> {
+    return {
+      id: randomUUID(),
+      pick_id: input.pickId,
+      target: input.target,
+      status: input.promotionStatus,
+      score: input.promotionScore ?? null,
+      reason: input.promotionReason ?? null,
+      version: input.promotionVersion,
+      decided_at: input.promotionDecidedAt,
+      decided_by: input.promotionDecidedBy,
+      override_action: input.overrideAction ?? null,
+      payload: JSON.parse(JSON.stringify(input.payload)),
+      created_at: input.promotionDecidedAt,
     };
   }
 }
