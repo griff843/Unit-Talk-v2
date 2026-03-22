@@ -65,6 +65,14 @@ export function createApiServer(options: ApiServerOptions = {}) {
   });
 }
 
+const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
+
+function setCorsHeaders(response: ServerResponse) {
+  response.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
+  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  response.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+}
+
 export async function routeRequest(
   request: IncomingMessage,
   response: ServerResponse,
@@ -72,6 +80,14 @@ export async function routeRequest(
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+
+  if (method === 'OPTIONS') {
+    setCorsHeaders(response);
+    response.setHeader('Access-Control-Max-Age', '86400');
+    response.statusCode = 204;
+    response.end();
+    return;
+  }
 
   if (method === 'GET' && url.pathname === '/health') {
     return writeJson(response, 200, {
@@ -172,5 +188,6 @@ async function readJsonBody(request: IncomingMessage) {
 function writeJson(response: ServerResponse, status: number, body: unknown) {
   response.statusCode = status;
   response.setHeader('content-type', 'application/json; charset=utf-8');
+  setCorsHeaders(response);
   response.end(JSON.stringify(body));
 }
