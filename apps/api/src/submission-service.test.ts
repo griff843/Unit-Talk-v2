@@ -14,6 +14,133 @@ import { transitionPickLifecycle } from './lifecycle-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 import { processSubmission } from './submission-service.js';
+import type { SubmitPickControllerResult } from './controllers/submit-pick-controller.js';
+
+// ─── Enqueue-gap fix tests ────────────────────────────────────────────────────
+
+test('handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued:true', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await handleSubmitPick(
+    {
+      body: {
+        source: 'enqueue-gap-test',
+        market: 'NFL passing yards',
+        selection: 'QB Over 287.5',
+        line: 287.5,
+        odds: -115,
+        stakeUnits: 1.5,
+        confidence: 0.75,
+        eventName: 'NFL Proof Game',
+        metadata: {
+          sport: 'NFL',
+          promotionScores: { edge: 92, trust: 88, readiness: 85, uniqueness: 85, boardFit: 90 },
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(response.status, 201);
+  if (!response.body.ok) throw new Error('expected ok response');
+
+  const data = response.body.data as SubmitPickControllerResult;
+
+  // Promotion should have qualified for trader-insights (edge≥85, trust≥85, score≥80).
+  assert.equal(data.promotionStatus, 'qualified');
+  assert.equal(data.promotionTarget, 'trader-insights');
+  assert.equal(data.outboxEnqueued, true);
+
+  // Lifecycle state must be 'queued' — enqueue transitions validated → queued.
+  assert.equal(data.lifecycleState, 'queued');
+
+  // Outbox entry must exist and be pending.
+  const claimed = await claimDistributionWork(
+    repositories.outbox,
+    'discord:trader-insights',
+    'test-worker',
+  );
+  assert.ok(claimed.outboxRecord, 'outbox entry must exist after auto-enqueue');
+  assert.equal(claimed.outboxRecord?.pick_id, data.pickId);
+  assert.equal(claimed.outboxRecord?.target, 'discord:trader-insights');
+
+  // Pick must be in 'queued' state in the DB.
+  const stored = await repositories.picks.findPickById(data.pickId);
+  assert.equal(stored?.status, 'queued');
+});
+
+test('handleSubmitPick does not enqueue a not-eligible pick and returns outboxEnqueued:false', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await handleSubmitPick(
+    {
+      body: {
+        source: 'enqueue-gap-test',
+        market: 'NBA points',
+        selection: 'Player Over 18.5',
+        // No confidence, no promotionScores → confidenceFloor fails → not_eligible
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(response.status, 201);
+  if (!response.body.ok) throw new Error('expected ok response');
+
+  const data = response.body.data as SubmitPickControllerResult;
+
+  assert.equal(data.promotionStatus, 'not_eligible');
+  assert.equal(data.promotionTarget, null);
+  assert.equal(data.outboxEnqueued, false);
+  assert.equal(data.lifecycleState, 'validated');
+
+  // No outbox entry should exist.
+  const claimed = await claimDistributionWork(
+    repositories.outbox,
+    'discord:best-bets',
+    'test-worker-2',
+  );
+  assert.equal(claimed.outboxRecord, null);
+});
+
+test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await handleSubmitPick(
+    {
+      body: {
+        source: 'enqueue-gap-test',
+        market: 'NBA assists',
+        selection: 'Player Over 8.5',
+        confidence: 0.9,
+        metadata: {
+          sport: 'NBA',
+          eventName: 'Suns vs Nuggets',
+          // edge=78 < 85 → trader-insights suppressed; bb qualifies (score ≥ 70).
+          promotionScores: { edge: 78, trust: 79, readiness: 88, uniqueness: 82, boardFit: 90 },
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(response.status, 201);
+  if (!response.body.ok) throw new Error('expected ok response');
+
+  const data = response.body.data as SubmitPickControllerResult;
+
+  assert.equal(data.promotionStatus, 'qualified');
+  assert.equal(data.promotionTarget, 'best-bets');
+  assert.equal(data.outboxEnqueued, true);
+  assert.equal(data.lifecycleState, 'queued');
+
+  const claimed = await claimDistributionWork(
+    repositories.outbox,
+    'discord:best-bets',
+    'test-worker-3',
+  );
+  assert.ok(claimed.outboxRecord);
+  assert.equal(claimed.outboxRecord?.target, 'discord:best-bets');
+});
+
+// ─── End enqueue-gap fix tests ────────────────────────────────────────────────
 
 test('validateSubmissionPayload rejects empty required fields', () => {
   const result = validateSubmissionPayload({
