@@ -6,8 +6,8 @@ Use it to bootstrap a new chat or agent without relying on prior thread memory.
 
 ## Authority Note
 
-For current program state and kill conditions see:
-- `docs/06_status/status_source_of_truth.md`
+For current program state see:
+- `docs/06_status/PROGRAM_STATUS.md`
 
 This file is the evidence record: specific IDs, receipts, and historical proof.
 

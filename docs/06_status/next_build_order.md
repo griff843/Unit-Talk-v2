@@ -1,6 +1,8 @@
 # Next Build Order
 
-This file answers one question: what should happen next, in order.
+> **SUPERSEDED 2026-03-21.** This file is now a historical record. The active build queue is in `docs/06_status/PROGRAM_STATUS.md`. Do not update this file for new sprints.
+
+This file answered one question: what should happen next, in order. Content below reflects state as of Week 21 close.
 
 ## Immediate Rule
 

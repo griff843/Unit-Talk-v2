@@ -1,9 +1,9 @@
 # Status Source of Truth
 
-This is the single authoritative file for current program state.
+> **SUPERSEDED 2026-03-21.** This file is now a historical record. The active program status authority is `docs/06_status/PROGRAM_STATUS.md`. Do not update this file for new sprints.
 
-When this file and any other status file conflict, this file wins.
-Update this file at every milestone boundary.
+This was the single authoritative file for current program state through Week 21.
+Content below reflects state as of Week 21 close and is preserved as historical record.
 
 ## Snapshot Date
 

@@ -1,6 +1,8 @@
 # Current Phase
 
-## Status
+> **SUPERSEDED 2026-03-21.** This file is now a historical record. The active program status authority is `docs/06_status/PROGRAM_STATUS.md`. Do not update this file for new sprints.
+
+## Status (as of Week 21 close)
 
 **Week 21 closed 2026-03-21.** Promotion scoring enrichment. Domain analysis edge and Kelly fraction now inform trust and readiness fallbacks in promotion scoring. `readDomainAnalysisTrustSignal()` returns 80 for significant positive edge (≥0.05), 65 for marginal. `readDomainAnalysisReadinessSignal()` returns 85 when Kelly fraction > 0. `readPromotionScoreInputs()` uses domain-aware fallback chains for trust and readiness alongside the existing edge fallback. No changes to promotion policy definitions, thresholds, or evaluation logic. 16 new tests. All gates pass at 531/531 tests.
 
