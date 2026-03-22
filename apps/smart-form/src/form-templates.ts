@@ -52,6 +52,69 @@ function buildErrorMap(errors: FieldError[]): Map<string, FieldError> {
   return map;
 }
 
+// --- Market type display labels ---
+const MARKET_LABELS: Record<string, string> = {
+  'player-prop': 'Player Prop',
+  'moneyline': 'Moneyline',
+  'spread': 'Spread',
+  'total': 'Total (O/U)',
+  'team-total': 'Team Total',
+};
+
+// --- Sport context (placeholders, labels) ---
+interface SportCtx {
+  playerPlaceholder: string;
+  matchupPlaceholder: string;
+  teamLabel: string;
+  teamPlaceholder: string;
+}
+
+const SPORT_CTX: Record<string, SportCtx> = {
+  NBA:   { playerPlaceholder: 'Jalen Brunson',   matchupPlaceholder: 'Knicks vs Heat',       teamLabel: 'Team / Side',   teamPlaceholder: 'Knicks' },
+  NFL:   { playerPlaceholder: 'Patrick Mahomes', matchupPlaceholder: 'Bills vs Chiefs',       teamLabel: 'Team / Side',   teamPlaceholder: 'Bills' },
+  MLB:   { playerPlaceholder: 'Aaron Judge',     matchupPlaceholder: 'Yankees vs Red Sox',    teamLabel: 'Team / Side',   teamPlaceholder: 'Yankees' },
+  NHL:   { playerPlaceholder: 'Connor McDavid',  matchupPlaceholder: 'Oilers vs Flames',      teamLabel: 'Team / Side',   teamPlaceholder: 'Oilers' },
+  NCAAB: { playerPlaceholder: 'Cooper Flagg',    matchupPlaceholder: 'Duke vs Kentucky',      teamLabel: 'Team / Side',   teamPlaceholder: 'Duke' },
+  NCAAF: { playerPlaceholder: 'Arch Manning',    matchupPlaceholder: 'Texas vs Alabama',      teamLabel: 'Team / Side',   teamPlaceholder: 'Texas' },
+  Soccer:{ playerPlaceholder: 'Lionel Messi',    matchupPlaceholder: 'Inter Miami vs LAFC',   teamLabel: 'Club / Side',   teamPlaceholder: 'Inter Miami' },
+  Tennis:{ playerPlaceholder: 'Carlos Alcaraz',  matchupPlaceholder: 'Djokovic vs Alcaraz',   teamLabel: 'Player / Side', teamPlaceholder: 'Djokovic' },
+  MMA:   { playerPlaceholder: 'Jon Jones',       matchupPlaceholder: 'Jones vs Miocic',       teamLabel: 'Fighter',       teamPlaceholder: 'Jones' },
+};
+
+const DEFAULT_CTX: SportCtx = {
+  playerPlaceholder: 'Player name',
+  matchupPlaceholder: 'Team A vs Team B',
+  teamLabel: 'Team / Side',
+  teamPlaceholder: 'Team',
+};
+
+function getSportCtx(sportId: string | undefined): SportCtx {
+  return (sportId && SPORT_CTX[sportId]) || DEFAULT_CTX;
+}
+
+// --- Market type card grid renderer ---
+const ALL_MARKET_TYPES = ['player-prop', 'moneyline', 'spread', 'total', 'team-total'] as const;
+
+function renderMarketTypeGrid(
+  validMarkets: readonly string[],
+  selected: string | undefined,
+  errorMap: Map<string, FieldError>,
+): string {
+  const hasErr = hasError(errorMap, 'marketType');
+  const options = ALL_MARKET_TYPES.map((mt) => {
+    const label = MARKET_LABELS[mt] ?? mt;
+    const isSel = selected === mt;
+    const isHidden = !validMarkets.includes(mt);
+    return `<label class="mt-card${isSel ? ' mt-selected' : ''}"${isHidden ? ' style="display:none"' : ''}>
+  <input type="radio" name="marketType" value="${escapeHtml(mt)}"${isSel ? ' checked' : ''} />
+  <span>${escapeHtml(label)}</span>
+</label>`;
+  }).join('\n');
+  return `<div class="mt-grid${hasErr ? ' field-error' : ''}" role="radiogroup" id="sf-market-grid">
+${options}
+</div>`;
+}
+
 // --- Segmented control renderer ---
 function segmented(name: string, options: string[], selected: string | undefined): string {
   return `<div class="segmented" role="radiogroup">
@@ -79,9 +142,11 @@ export function renderSmartFormPage(options: {
   const errorMap = buildErrorMap(options.errors ?? []);
   const blockingErrors = (options.errors ?? []).filter((e) => e.severity === 'error');
   const warnings = (options.errors ?? []).filter((e) => e.severity === 'warning');
-  const selectedMarket = v.marketType ?? '';
   const today = new Date().toISOString().slice(0, 10);
   const sportIds = catalog.sports.map((s) => s.id);
+  const selectedSport = catalog.sports.find((s) => s.id === v.sport);
+  const validMarketTypes: readonly string[] = selectedSport?.marketTypes ?? ALL_MARKET_TYPES;
+  const selectedMarket = validMarketTypes.includes(v.marketType ?? '') ? (v.marketType ?? '') : '';
 
   return `<!doctype html>
 <html lang="en">
@@ -172,41 +237,41 @@ ${warnings.length > 0 ? `<div class="notice warn">
       <!-- Section 2: Market Type -->
       <fieldset>
         <legend>Market Type <span class="req">*</span></legend>
-        ${segmented('marketType', ['player-prop', 'moneyline', 'spread', 'total', 'team-total'], selectedMarket || undefined)}
+        ${renderMarketTypeGrid(validMarketTypes, selectedMarket || undefined, errorMap)}
         ${errorHint(errorMap, 'marketType')}
       </fieldset>
 
       <!-- Section 3: Bet Details (conditional) -->
-      ${renderBetDetails(v, errorMap, selectedMarket, catalog)}
+      ${renderBetDetails(v, errorMap, selectedMarket, catalog, v.sport)}
 
       <button type="submit">Submit Pick</button>
     </form>
   </section>
 </main>
 <script>
-var __SF_SPORTS = ${JSON.stringify(Object.fromEntries(catalog.sports.map((s) => [s.id, { statTypes: s.statTypes, teams: s.teams }])))};
+var __SF_SPORTS = ${JSON.stringify(Object.fromEntries(catalog.sports.map((s) => [s.id, { statTypes: s.statTypes, teams: s.teams, marketTypes: s.marketTypes }])))};
 ${CLIENT_JS}
 </script>
 </body>
 </html>`;
 }
 
-function renderBetDetails(v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, marketType: string, catalog: ReferenceDataCatalog): string {
-  const marketTypes = ['player-prop', 'moneyline', 'spread', 'total', 'team-total'];
-  const sections = marketTypes.map((mt) => {
+function renderBetDetails(v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, marketType: string, catalog: ReferenceDataCatalog, sportId?: string): string {
+  const sections = ALL_MARKET_TYPES.map((mt) => {
     const show = marketType === mt;
-    return `<fieldset class="bet-details" id="details-${mt}" ${show ? '' : 'style="display:none"'}>
+    return `<fieldset class="bet-details" id="details-${mt}" ${show ? '' : 'style="display:none"'}${show ? '' : ' disabled'}>
   <legend>Bet Details</legend>
-  ${renderMarketFields(mt, v, errorMap, catalog)}
+  ${renderMarketFields(mt, v, errorMap, catalog, sportId)}
 </fieldset>`;
   });
   return sections.join('\n');
 }
 
-function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, catalog: ReferenceDataCatalog): string {
+function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<string, FieldError>, catalog: ReferenceDataCatalog, sportId?: string): string {
   const sport = catalog.sports.find((s) => s.id === v.sport);
   const statTypes = sport?.statTypes ?? [];
   const teams = sport?.teams ?? [];
+  const ctx = getSportCtx(sportId);
   const teamDatalist = teams.length > 0
     ? `<datalist id="teams-list">${teams.map((t) => `<option value="${escapeHtml(t)}">`).join('')}</datalist>`
     : '';
@@ -214,8 +279,8 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
   function teamInput(label: string, placeholder: string): string {
     return `
   <label class="field${fieldClass(errorMap, 'team')}">
-    <span class="field-label">${label} <span class="req">*</span></span>
-    <input name="team" type="text" placeholder="${placeholder}" value="${val(v, 'team')}" list="teams-list" autocomplete="off" />
+    <span class="field-label">${escapeHtml(label)} <span class="req">*</span></span>
+    <input name="team" type="text" placeholder="${escapeHtml(placeholder)}" value="${val(v, 'team')}" list="teams-list" autocomplete="off" />
     ${teamDatalist}
     ${errorHint(errorMap, 'team')}
   </label>`;
@@ -226,12 +291,12 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
       return `
   <label class="field${fieldClass(errorMap, 'player')}">
     <span class="field-label">Player <span class="req">*</span></span>
-    <input name="player" type="text" placeholder="Jalen Brunson" value="${val(v, 'player')}" />
+    <input name="player" type="text" placeholder="${escapeHtml(ctx.playerPlaceholder)}" value="${val(v, 'player')}" />
     ${errorHint(errorMap, 'player')}
   </label>
   <label class="field${fieldClass(errorMap, 'matchup')}">
     <span class="field-label">Matchup <span class="req">*</span></span>
-    <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
+    <input name="matchup" type="text" placeholder="${escapeHtml(ctx.matchupPlaceholder)}" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
   <label class="field${fieldClass(errorMap, 'statType')}">
@@ -259,19 +324,19 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
       return `
   <label class="field${fieldClass(errorMap, 'matchup')}">
     <span class="field-label">Matchup <span class="req">*</span></span>
-    <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
+    <input name="matchup" type="text" placeholder="${escapeHtml(ctx.matchupPlaceholder)}" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
-  ${teamInput('Team / Side', 'Knicks')}`;
+  ${teamInput(ctx.teamLabel, ctx.teamPlaceholder)}`;
 
     case 'spread':
       return `
   <label class="field${fieldClass(errorMap, 'matchup')}">
     <span class="field-label">Matchup <span class="req">*</span></span>
-    <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
+    <input name="matchup" type="text" placeholder="${escapeHtml(ctx.matchupPlaceholder)}" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
-  ${teamInput('Team / Side', 'Knicks')}
+  ${teamInput(ctx.teamLabel, ctx.teamPlaceholder)}
   <label class="field${fieldClass(errorMap, 'line')}">
     <span class="field-label">Line <span class="req">*</span></span>
     <input name="line" type="number" step="0.5" min="-999.5" max="999.5" inputmode="decimal" placeholder="-3.5" value="${val(v, 'line')}" />
@@ -282,7 +347,7 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
       return `
   <label class="field${fieldClass(errorMap, 'matchup')}">
     <span class="field-label">Matchup <span class="req">*</span></span>
-    <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
+    <input name="matchup" type="text" placeholder="${escapeHtml(ctx.matchupPlaceholder)}" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
   <div class="field${fieldClass(errorMap, 'overUnder')}">
@@ -300,10 +365,10 @@ function renderMarketFields(mt: string, v: ParsedSmartFormBody, errorMap: Map<st
       return `
   <label class="field${fieldClass(errorMap, 'matchup')}">
     <span class="field-label">Matchup <span class="req">*</span></span>
-    <input name="matchup" type="text" placeholder="Knicks vs Heat" value="${val(v, 'matchup')}" />
+    <input name="matchup" type="text" placeholder="${escapeHtml(ctx.matchupPlaceholder)}" value="${val(v, 'matchup')}" />
     ${errorHint(errorMap, 'matchup')}
   </label>
-  ${teamInput('Team', 'Knicks')}
+  ${teamInput(ctx.teamLabel, ctx.teamPlaceholder)}
   <div class="field${fieldClass(errorMap, 'overUnder')}">
     <span class="field-label">Over / Under <span class="req">*</span></span>
     ${segmented('overUnder', ['Over', 'Under'], v.overUnder || undefined)}
@@ -481,6 +546,29 @@ select { appearance: auto; }
 .seg-option:last-child { border-right: none; }
 .seg-option input { display: none; }
 .seg-selected { background: var(--accent); color: #fff; }
+.mt-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.mt-card {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  cursor: pointer;
+  padding: 12px 8px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  min-height: 48px;
+  border: 1.5px solid var(--line);
+  border-radius: 10px;
+  background: #fff;
+  transition: background 0.12s, border-color 0.12s;
+}
+.mt-card input { display: none; }
+.mt-selected { background: var(--accent); color: #fff; border-color: var(--accent); }
+.field-error .mt-grid, .mt-grid.field-error { border-radius: 10px; outline: 1.5px solid var(--error); }
 button {
   font: inherit;
   background: var(--accent);
@@ -529,29 +617,61 @@ code { font-family: Consolas, monospace; font-size: 0.85rem; }
 const CLIENT_JS = `
 (function() {
   var types = ['player-prop','moneyline','spread','total','team-total'];
-  var radios = document.querySelectorAll('input[name="marketType"]');
 
   function showDetails(selected) {
     types.forEach(function(t) {
       var el = document.getElementById('details-' + t);
-      if (el) el.style.display = t === selected ? '' : 'none';
+      if (el) {
+        var show = t === selected;
+        el.style.display = show ? '' : 'none';
+        el.disabled = !show;
+      }
     });
   }
 
-  radios.forEach(function(r) {
-    r.addEventListener('change', function() { showDetails(this.value); });
-  });
+  // Market type card grid interaction
+  var marketGrid = document.getElementById('sf-market-grid');
+  if (marketGrid) {
+    marketGrid.querySelectorAll('input[type="radio"]').forEach(function(r) {
+      r.addEventListener('change', function() {
+        marketGrid.querySelectorAll('.mt-card').forEach(function(c) {
+          c.classList.toggle('mt-selected', !!c.querySelector('input[type="radio"]:checked'));
+        });
+        showDetails(this.value);
+      });
+    });
+  }
 
-  // Segmented control click highlighting
+  // Segmented control click highlighting (for Over/Under)
   document.querySelectorAll('.segmented').forEach(function(seg) {
     seg.querySelectorAll('input[type="radio"]').forEach(function(r) {
       r.addEventListener('change', function() {
         seg.querySelectorAll('.seg-option').forEach(function(o) {
-          o.classList.toggle('seg-selected', o.querySelector('input').checked);
+          o.classList.toggle('seg-selected', !!o.querySelector('input[type="radio"]:checked'));
         });
       });
     });
   });
+
+  // Filter market type cards to those valid for the selected sport
+  function filterMarketTypes(sportId) {
+    var data = (typeof __SF_SPORTS !== 'undefined' && __SF_SPORTS[sportId]) || null;
+    var validMarkets = (data && data.marketTypes && data.marketTypes.length > 0)
+      ? data.marketTypes : types;
+    var grid = document.getElementById('sf-market-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.mt-card').forEach(function(card) {
+      var input = card.querySelector('input[type="radio"]');
+      var mt = input ? input.value : '';
+      var visible = validMarkets.indexOf(mt) !== -1;
+      card.style.display = visible ? '' : 'none';
+      if (!visible && input && input.checked) {
+        input.checked = false;
+        card.classList.remove('mt-selected');
+        showDetails('');
+      }
+    });
+  }
 
   // Sport-driven filtering
   var sportSelect = document.getElementById('sf-sport');
@@ -560,6 +680,9 @@ const CLIENT_JS = `
     sportSelect.addEventListener('change', function() {
       var sportId = this.value;
       var data = (typeof __SF_SPORTS !== 'undefined' && __SF_SPORTS[sportId]) || null;
+
+      // Filter market types
+      filterMarketTypes(sportId);
 
       // Update stat type options
       if (statTypeSelect && data) {

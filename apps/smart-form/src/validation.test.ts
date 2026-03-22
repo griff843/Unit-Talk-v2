@@ -495,3 +495,83 @@ describe('numeric guardrails', () => {
     assert.ok(!fields.includes('line'));
   });
 });
+
+// ============================================================
+// Sport-market type cross-validation
+// ============================================================
+
+describe('Sport-market type cross-validation', () => {
+  function blockingFields(form: ParsedSmartFormBody, marketType: MarketType): string[] {
+    return getBlockingErrors(validateSmartFormSubmission(form, marketType, catalog)).map((e) => e.field);
+  }
+
+  test('NBA player-prop is valid', () => {
+    const fields = blockingFields(validPlayerProp({ sport: 'NBA' }), 'player-prop');
+    assert.ok(!fields.includes('marketType'));
+  });
+
+  test('NBA moneyline is valid', () => {
+    const fields = blockingFields(validMoneyline({ sport: 'NBA' }), 'moneyline');
+    assert.ok(!fields.includes('marketType'));
+  });
+
+  test('NBA spread is valid', () => {
+    const fields = blockingFields(validSpread({ sport: 'NBA' }), 'spread');
+    assert.ok(!fields.includes('marketType'));
+  });
+
+  test('MMA moneyline is valid', () => {
+    const fields = blockingFields(validMoneyline({ sport: 'MMA' }), 'moneyline');
+    assert.ok(!fields.includes('marketType'));
+  });
+
+  test('MMA player-prop is rejected', () => {
+    const fields = blockingFields(validPlayerProp({ sport: 'MMA' }), 'player-prop');
+    assert.ok(fields.includes('marketType'));
+  });
+
+  test('MMA spread is rejected', () => {
+    const fields = blockingFields(validSpread({ sport: 'MMA' }), 'spread');
+    assert.ok(fields.includes('marketType'));
+  });
+
+  test('NCAAB player-prop is rejected', () => {
+    const fields = blockingFields(validPlayerProp({ sport: 'NCAAB' }), 'player-prop');
+    assert.ok(fields.includes('marketType'));
+  });
+
+  test('NCAAB moneyline is valid', () => {
+    const fields = blockingFields(validMoneyline({ sport: 'NCAAB' }), 'moneyline');
+    assert.ok(!fields.includes('marketType'));
+  });
+
+  test('Tennis team-total is rejected', () => {
+    const form = validBase({
+      sport: 'Tennis',
+      matchup: 'Djokovic vs Alcaraz',
+      team: 'Djokovic',
+      overUnder: 'Over',
+      line: '22.5',
+    });
+    const fields = blockingFields(form, 'team-total');
+    assert.ok(fields.includes('marketType'));
+  });
+
+  test('Soccer total is valid', () => {
+    const form = validBase({
+      sport: 'Soccer',
+      matchup: 'Inter Miami vs LAFC',
+      overUnder: 'Over',
+      line: '2.5',
+    });
+    const fields = blockingFields(form, 'total');
+    assert.ok(!fields.includes('marketType'));
+  });
+
+  test('unknown sport does not produce marketType error', () => {
+    // Unknown sport fails isValidSportId, so cross-check is skipped
+    const fields = blockingFields(validPlayerProp({ sport: 'UNKNOWN' }), 'player-prop');
+    assert.ok(!fields.includes('marketType'));
+    assert.ok(fields.includes('sport'));
+  });
+});

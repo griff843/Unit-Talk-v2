@@ -5,8 +5,9 @@
  * returns field errors. No side effects, no I/O.
  */
 
-import type { ReferenceDataCatalog } from '@unit-talk/contracts';
+import type { ReferenceDataCatalog, MarketTypeId } from '@unit-talk/contracts';
 import {
+  getMarketTypesForSport,
   isValidCapper,
   isValidSportId,
   isValidSportsbook,
@@ -84,6 +85,15 @@ export function validateSmartFormSubmission(
 
   if (!marketType) {
     errors.push({ field: 'marketType', message: 'Market type is required.', severity: 'error' });
+  } else if (nonEmpty(form.sport) && isValidSportId(catalog, form.sport)) {
+    const sportMarkets = getMarketTypesForSport(catalog, form.sport);
+    if (sportMarkets.length > 0 && !sportMarkets.includes(marketType as MarketTypeId)) {
+      errors.push({
+        field: 'marketType',
+        message: `${marketType} is not available for ${form.sport}.`,
+        severity: 'error',
+      });
+    }
   }
 
   // Odds: required, format-aware guardrails

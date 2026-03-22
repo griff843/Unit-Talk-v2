@@ -478,3 +478,58 @@ describe('GET /unknown', () => {
     assert.equal(body.error.code, 'NOT_FOUND');
   });
 });
+
+describe('Sport-market cross-validation (server integration)', () => {
+  test('MMA + player-prop is rejected with 422', async () => {
+    const server = createTestServer();
+    const port = await startServer(server);
+    const body = new URLSearchParams({
+      capper: 'griff843',
+      date: '2026-03-21',
+      sport: 'MMA',
+      units: '1.5',
+      odds: '-110',
+      marketType: 'player-prop',
+      player: 'Jon Jones',
+      matchup: 'Jones vs Miocic',
+      statType: 'Takedowns',
+      overUnder: 'Over',
+      line: '2.5',
+    }).toString();
+    const response = await makeRequest(port, '/submit', 'POST', body, 'application/x-www-form-urlencoded', 'application/json');
+    await closeServer(server);
+
+    assert.equal(response.statusCode, 422);
+    const result = JSON.parse(response.body) as { ok: boolean; error: { code: string; details?: string[] } };
+    assert.equal(result.ok, false);
+    assert.equal(result.error.code, 'FORM_VALIDATION_FAILED');
+    assert.ok(result.error.details?.some((d) => d.includes('marketType')));
+  });
+
+  test('MMA + moneyline is accepted by validation', async () => {
+    const server = createSmartFormServer({
+      fetchImpl: async () =>
+        new Response(
+          JSON.stringify({ ok: true, data: { submissionId: 'sub-1', pickId: 'pick-1', lifecycleState: 'validated' } }),
+          { status: 201, headers: { 'content-type': 'application/json' } },
+        ),
+    });
+    const port = await startServer(server);
+    const body = new URLSearchParams({
+      capper: 'griff843',
+      date: '2026-03-21',
+      sport: 'MMA',
+      units: '1.5',
+      odds: '-110',
+      marketType: 'moneyline',
+      matchup: 'Jones vs Miocic',
+      team: 'Jones',
+    }).toString();
+    const response = await makeRequest(port, '/submit', 'POST', body, 'application/x-www-form-urlencoded', 'application/json');
+    await closeServer(server);
+
+    assert.equal(response.statusCode, 201);
+    const result = JSON.parse(response.body) as { ok: boolean };
+    assert.equal(result.ok, true);
+  });
+});
