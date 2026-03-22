@@ -3,7 +3,7 @@ import { createApiServer, createApiRuntimeDependencies } from './server.js';
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
 const runtime = createApiRuntimeDependencies();
-const server = createApiServer({ repositories: runtime.repositories });
+const server = createApiServer({ runtime });
 
 server.listen(port, () => {
   console.log(

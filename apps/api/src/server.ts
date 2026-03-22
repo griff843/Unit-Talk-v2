@@ -17,6 +17,7 @@ import {
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
+  runtime?: ApiRuntimeDependencies;
 }
 
 export interface ApiRuntimeDependencies {
@@ -57,7 +58,7 @@ export function createApiRuntimeDependencies(
 }
 
 export function createApiServer(options: ApiServerOptions = {}) {
-  const runtime = createApiRuntimeDependencies(options);
+  const runtime = options.runtime ?? createApiRuntimeDependencies(options);
 
   return http.createServer(async (request, response) => {
     await routeRequest(request, response, runtime);
