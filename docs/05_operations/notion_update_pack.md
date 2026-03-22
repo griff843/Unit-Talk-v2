@@ -3,85 +3,59 @@
 Use this pack to update Notion so it matches the current repo authority.
 
 Reference docs:
-- `docs/04_roadmap/active_roadmap.md`
+- `docs/06_status/status_source_of_truth.md`
 - `docs/06_status/current_phase.md`
-- `docs/06_status/system_snapshot.md`
 - `docs/06_status/next_build_order.md`
-- `docs/05_operations/canary_graduation_criteria.md`
 
-## Pages To Update
+## Current Reality (2026-03-21)
+
+- All weeks 11 through 20 are **CLOSED**
+- 515/515 tests passing, all gates green
+- Live Discord canary proof delivered (message ID `1485075639424782337`)
+- Domain analysis enrichment live at submission time
+- Promotion edge integration live with three-tier fallback
+- Doc-truth gate active for domain-analysis consumer contracts
+
+## Pages Updated (2026-03-21)
 
 ### Rebuild Home
-
-Update summary to:
-- Week 1 complete
-- Week 2 complete
-- Week 3 complete
-- Week 4 in progress
-
-Add short status note:
-- live Discord canary delivery is proven
-- operator-web is active as a read-only operational surface
-- smart-form is active as an intake surface with browser-facing confirmation and validation feedback
-- live routing remains constrained to `discord:canary`
+- Checkpoint list updated through Week 20
+- Current program state reflects domain integration + promotion edge + E2E validation
+- Open reality updated: no blocking issues, next scope TBD
+- Checkpoint trail links added for Weeks 17-20
 
 ### Weekly Status
+- Updated from Week 16 to Week 20 closed state
+- 515/515 tests, all gates green
+- Linear alignment note added
 
-Create or update the current weekly/checkpoint entry with:
+### Current Week Execution Hub
+- Updated to post-Week 20 planning state
+- Last completed week: Week 20
+- Full runtime truth documented
 
-Title:
-- `Week 4 Checkpoint - Intake Surface Refined`
+### System Snapshot
+- Updated with all runtime capabilities through Week 20
+- Latest program truth shows all 10 weeks closed
+- Risks narrowed to remaining out-of-scope items
 
-Sections:
-- Current stage
-  - Week 4 intake and operational refinement in progress
-- Proven this week
-  - fresh live canary post through embed path
-  - operator snapshot visibility against live DB
-  - smart-form HTML intake surface and API handoff
-  - smart-form browser feedback and confirmation UX
-- Risks
-  - operator filtering still lightweight
-  - no written graduation criteria for `discord:best-bets` yet
-  - milestone tracking debt still exists for M3/M4
-- Next build order
-  - operator incident view
-  - canary graduation criteria
-  - milestone tracking cleanup
+### Checkpoint Pages Created
+- Week 17 Checkpoint — Git Baseline Ratification
+- Week 18 Checkpoint — Domain Integration Layer
+- Week 19 Checkpoint — Promotion Edge Integration
+- Week 20 Checkpoint — E2E Platform Validation + Live Discord Canary
 
-### Decision Log
+## Pages Not Changed
 
-Add or update entries for:
-- chat history is not the system of record; repo docs are
-- live routing remains `discord:canary` only until explicit graduation criteria are written and passed
-- promotion to `discord:best-bets` is governed by the canary graduation criteria doc
-- operator-web is read-only and should not mutate canonical business state
-- smart-form is intake-only and does not directly write canonical tables
-
-### Risk Register
-
-Ensure these active risks exist:
-- Notion/Linear discipline lagging behind repo state
-- operator visibility still shallow for incident investigation
-- expansion beyond canary lacks written graduation criteria
-- milestone tracking debt obscures completed roadmap slices
-
-### Migration Ledger
-
-Add note:
-- legacy repo remains reference-only
-- no authority is derived from chat memory
-- Discord target IDs were extracted and verified against legacy code but V2 routing policy is governed by repo docs
-
-## Suggested Notion Status Wording
-
-Use this exact short summary if helpful:
-
-`unit-talk-v2` has completed the Week 3 checkpoint and remains in Week 4. The live canary flow is proven end to end: submission -> lifecycle -> outbox -> worker -> Discord -> receipt -> audit. Operator visibility is available through a read-only operator surface. Smart Form now includes browser-facing validation and confirmation UX. The remaining Week 4 work is operator incident visibility, graduation criteria, and milestone tracking cleanup.
+- Decision Log — existing entries remain valid
+- Cutover Plan — not yet active
+- Migration Ledger — updated separately
+- Databases (Contracts, ADRs, Risks, etc.) — no structural changes needed
 
 ## Rule After Update
 
 Once Notion is updated, it should agree with:
-- `docs/04_roadmap/active_roadmap.md`
+- `docs/06_status/status_source_of_truth.md`
 - `docs/06_status/current_phase.md`
-- `docs/06_status/system_snapshot.md`
+- `docs/06_status/next_build_order.md`
+- Linear project/issue state

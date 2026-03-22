@@ -5,133 +5,71 @@ Use this pack to bring Linear into sync with the current repo reality.
 Reference docs:
 - `docs/04_roadmap/active_roadmap.md`
 - `docs/06_status/current_phase.md`
-- `docs/06_status/system_snapshot.md`
+- `docs/06_status/status_source_of_truth.md`
 - `docs/06_status/next_build_order.md`
-- `docs/05_operations/canary_graduation_criteria.md`
+
+## Current Reality Snapshot (2026-03-21)
+
+- Team: `Unit Talk` (key: `UNI`)
+- All weeks 11 through 20 are **CLOSED**
+- 515/515 tests passing, all gates green
+- Live Discord canary proof delivered (Week 20)
+
+## Project State
+
+| Project | Status |
+|---------|--------|
+| UTV2-R1 Foundation | Completed |
+| UTV2-R2 Contracts | Completed |
+| UTV2-R3 Core Pipeline | Completed |
+| UTV2-R4 Distribution | Completed |
+| UTV2-R5 Settlement | Completed |
+| UTV2-R6 Operator Control | Completed |
+| UTV2-R7 Migration | In Progress |
+| UTV2-R8 Hardening | Backlog |
 
 ## Milestone State
 
-Update milestone status as follows:
+| Milestone | Status |
+|-----------|--------|
+| UTV2-M1 Ratified Contracts | Complete |
+| UTV2-M2 Canonical Schema Live | Complete |
+| UTV2-M3 Submission Path Live | Complete |
+| UTV2-M4 Lifecycle Enforced | Complete |
+| UTV2-M5 Discord Post End-to-End | Complete |
+| UTV2-M6 Settlement End-to-End | Complete |
+| UTV2-M7 Operator Control v1 | Complete |
+| UTV2-M8 Cutover Ready | Not Started |
 
-- `UTV2-M1 Ratified Contracts`
-  - mark complete
-- `UTV2-M2 Canonical Schema Live`
-  - mark complete
-- `UTV2-M3 Submission Path Live`
-  - mark complete
-- `UTV2-M4 Lifecycle Enforced`
-  - mark complete
-- `UTV2-M5 Discord Post End-to-End`
-  - mark complete
-- `UTV2-M7 Operator Control v1`
-  - mark in progress
+## Week Issues (UNI-137 through UNI-146)
 
-Notes:
-- Week 3 checkpoint is complete
-- Week 4 is the active execution slice
-
-## Issues To Mark Done
-
-These issue themes are effectively complete in code and should be closed or moved to `Done` if they exist:
-- repo bootstrap / tooling foundation
-- CI / lint / type-check / build guardrails
-- canonical schema and Supabase live setup
-- submission path
-- lifecycle skeleton
-- outbox / receipt / audit flow
-- Discord worker path
-- first live canary proof
-- operator read model v1 foundation
-- smart-form validation and confirmation UX
-
-## Issues To Move To In Progress
-
-These should be the current active Week 4 lane:
-
-### Smart Form
-
-Suggested issue title:
-- `UTV2-SF-01 Build smart-form intake surface`
-
-Current status:
-- `Done`
-
-Acceptance notes:
-- smart-form exists as a real HTML surface
-- posts through the backend-owned submission path
-- includes user-facing success/error feedback
-
-Suggested child/follow-up issue:
-- `UTV2-SF-02 Add validation feedback and confirmation UX to smart-form`
-
-Status note:
-- if `UTV2-SF-02` exists, move it to `Done`
-- `UTV2-SF-01` can now be moved to `Done` if Linear still showed it as in progress
-
-### Operator Web
-
-Suggested issue title:
-- `UTV2-OPS-03 Expand operator-web incident visibility`
-
-Current status:
-- `In Progress`
-
-Acceptance notes:
-- read-only operator surface exists
-- health/counts/recent rows are visible
-- filtering exists but is still lightweight
-- incident-focused visibility still needs refinement
-
-Suggested child/follow-up issue:
-- `UTV2-OPS-04 Add richer operator filtering and incident-oriented views`
-
-### Discord Routing Governance
-
-Suggested issue title:
-- `UTV2-DIST-04 Define canary graduation criteria for next live target`
-
-Current status:
-- `Ready`
-
-Acceptance notes:
-- must define written criteria before `discord:best-bets` can go live
-- no routing expansion before the criteria issue is complete
-
-Status note:
-- the repo authority doc now exists at `docs/05_operations/canary_graduation_criteria.md`
-- update the issue description or comment so Linear cites the criteria file directly
-
-### Tracking Debt Cleanup
-
-Suggested issue titles:
-- `UTV2-PIPE-02 Retroactively link submission path milestone evidence`
-- `UTV2-LIFE-02 Retroactively link lifecycle enforcement milestone evidence`
-
-Current status:
-- `Todo`
-
-Acceptance notes:
-- close the gap causing `UTV2-M3 Submission Path Live` and `UTV2-M4 Lifecycle Enforced` to appear incomplete
-- this is bookkeeping and proof alignment, not missing implementation work
+All created and marked Done:
+- UNI-137: Week 11 — Trader-Insights Framework + Activation
+- UNI-138: Week 12 — Settlement Hardening
+- UNI-139: Week 13 — Operator Trader-Insights Health
+- UNI-140: Week 14 — Verification Control Plane Salvage
+- UNI-141: Week 15 — Probability/Devig Math Salvage
+- UNI-142: Week 16 — Settlement Downstream + Loss Attribution
+- UNI-143: Week 17 — Git Baseline Ratification
+- UNI-144: Week 18 — Domain Integration Layer
+- UNI-145: Week 19 — Promotion Edge Integration
+- UNI-146: Week 20 — E2E Platform Validation + Live Discord Canary
 
 ## Issues To Keep Blocked Or Deferred
 
 Do not move these into active implementation yet:
-- `discord:best-bets` live promotion
+- `discord:exclusive-insights` live routing
 - `discord:game-threads` live routing
 - `discord:strategy-room` live routing
-- broad multi-channel Discord rollout
-- settlement-heavy expansion outside the active roadmap sequence
+- UTV2-HARD-01: Define incident and rollback plan (R8 Backlog)
 
-## Suggested Linear Comment / Update Text
+## Suggested Linear Status Text
 
-Use this exact short update if helpful:
-
-`unit-talk-v2` has completed the Week 3 checkpoint and remains in Week 4. Live canary delivery is proven with embed-based Discord posts, receipts, audit records, and operator visibility. Smart Form now includes browser-facing validation and confirmation UX. The remaining Week 4 work is operator incident visibility, canary graduation criteria, and milestone tracking cleanup. Live routing remains canary-only until written graduation criteria exists for the next target.
+`unit-talk-v2` has completed Week 20 E2E platform validation. All 9 runtime surfaces are validated. Live Discord canary proof delivered (message ID `1485075639424782337`). Domain analysis enrichment, promotion edge integration, and doc-truth gate are all live. 515/515 tests passing, all gates green. R1-R6 projects completed, R7 Migration in progress.
 
 ## Rule After Update
 
 Once Linear is updated, it should agree with:
-- `docs/04_roadmap/active_roadmap.md`
+- `docs/06_status/status_source_of_truth.md`
 - `docs/06_status/current_phase.md`
 - `docs/06_status/next_build_order.md`
