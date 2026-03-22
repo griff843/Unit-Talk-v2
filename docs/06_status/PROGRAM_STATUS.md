@@ -61,6 +61,7 @@ The root `test` script is split into 6 named groups:
 
 | Sprint | Week | Tier | Status | Summary |
 |--------|------|------|--------|---------|
+| T1 Enqueue Gap Fix | — | T1 | **CLOSED** | Auto-enqueue wired into submitPickController. Qualified picks now transition validated→queued and create outbox row at submission time. 531/531 tests. Live proof: pick a42c6524 outboxEnqueued:true, status=queued, outbox=pending. |
 | T1 Full-Cycle Runtime Proof | — | T1 | **CLOSED** | 6 of 7 stages pass. Submit → DB → Distribution (Discord msgId 1485413938513444887) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 7 (recap) blocked (Blocker B). Enqueue gap documented. 528/528 tests. |
 | Runner Hardening | — | T1 | **CLOSED** | Split 40-file tsx invocation into 6 bounded groups. pnpm verify now deterministic — exit 0 on two consecutive runs. 528/528 tests. |
 | Gate Recovery + Repo Truth (UTV2-32) | — | T1 | **CLOSED** | Restored root pnpm test (supabase-js resolution + stale ref), lint hygiene (.next exclusion + Radix UI exemption), PROGRAM_STATUS.md truth. 528/528 tests. |
@@ -111,7 +112,7 @@ The next major work is designing and building the Smart Form V1 operator submiss
 |------|----------|--------|
 | Historical pre-fix outbox rows may add noise to operator incident triage | Low | Open |
 | Recap/performance/accounting surfaces do not yet consume downstream truth | Low | Deferred — explicitly out of current scope |
-| Enqueue gap: `POST /api/submissions` sets `promotion_status=qualified` but does NOT auto-enqueue to `distribution_outbox` — no HTTP endpoint exists for enqueue | Medium | Open — discovered during T1 proof; must be wired before Smart Form V1 |
+| Enqueue gap: `POST /api/submissions` sets `promotion_status=qualified` but does NOT auto-enqueue to `distribution_outbox` — no HTTP endpoint exists for enqueue | Medium | **FIXED** — wired in submitPickController (1a5036d). Qualified picks now auto-enqueue at submission time. |
 
 ## Key Capabilities
 
