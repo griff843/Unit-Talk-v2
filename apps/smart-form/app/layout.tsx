@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Metadata } from 'next';
 import { Barlow, Barlow_Condensed, DM_Mono } from 'next/font/google';
+import { Providers } from '@/components/Providers';
+import { Toaster } from '@/components/toaster';
 import './globals.css';
 
 const barlow = Barlow({
@@ -33,11 +35,14 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html
       lang="en"
-      className={`dark ${barlow.variable} ${barlowCondensed.variable} ${dmMono.variable}`}
+      className={`${barlow.variable} ${barlowCondensed.variable} ${dmMono.variable}`}
       suppressHydrationWarning
     >
       <body className="min-h-screen bg-background text-foreground antialiased">
-        {children}
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   );
