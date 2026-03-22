@@ -12,3 +12,11 @@ coverage/
 out/
 .week9-proof.json
 supabase/.temp/
+# Next.js generated build
+.next/
+# Local tooling artifacts (IDE / Claude Code / Augment skills)
+.augment/
+.claude/skills/
+skills-lock.json
+# Dev logs
+*.log
