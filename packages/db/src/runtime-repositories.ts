@@ -1,3 +1,7 @@
+import {
+  V1_REFERENCE_DATA,
+  type ReferenceDataCatalog,
+} from '@unit-talk/contracts';
 import type {
   CanonicalPick,
   LifecycleEvent,
@@ -5,14 +9,17 @@ import type {
 import type {
   AuditLogCreateInput,
   AuditLogRepository,
+  EventSearchResult,
   OutboxCreateInput,
   OutboxRepository,
   PickRepository,
+  PlayerSearchResult,
   PromotionBoardStateQuery,
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
   PromotionHistoryInsertInput,
   PromotionPersistenceResult,
+  ReferenceDataRepository,
   RepositoryBundle,
   ReceiptCreateInput,
   ReceiptRepository,
@@ -24,6 +31,7 @@ import type {
   SystemRunCompleteInput,
   SystemRunRepository,
   SystemRunStartInput,
+  TeamSearchResult,
 } from './repositories.js';
 import type {
   AuditLogRow,
@@ -459,6 +467,36 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
 
     this.records.push(record);
     return record;
+  }
+}
+
+export class InMemoryReferenceDataRepository implements ReferenceDataRepository {
+  private readonly catalog: ReferenceDataCatalog;
+
+  constructor(catalog: ReferenceDataCatalog) {
+    this.catalog = catalog;
+  }
+
+  async getCatalog(): Promise<ReferenceDataCatalog> {
+    return this.catalog;
+  }
+
+  async searchTeams(sportId: string, query: string, limit = 20): Promise<TeamSearchResult[]> {
+    const sport = this.catalog.sports.find((s) => s.id === sportId);
+    if (!sport) return [];
+    const lowerQuery = query.toLowerCase();
+    return sport.teams
+      .filter((t) => t.toLowerCase().includes(lowerQuery))
+      .slice(0, limit)
+      .map((t) => ({ participantId: `team:${sportId}:${t}`, displayName: t, sport: sportId }));
+  }
+
+  async searchPlayers(_sportId: string, _query: string, _limit?: number): Promise<PlayerSearchResult[]> {
+    return [];
+  }
+
+  async listEvents(_sportId: string, _date: string): Promise<EventSearchResult[]> {
+    return [];
   }
 }
 
@@ -1062,6 +1100,123 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
   }
 }
 
+export class DatabaseReferenceDataRepository implements ReferenceDataRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async getCatalog(): Promise<ReferenceDataCatalog> {
+    const [sportsRes, marketTypesRes, statTypesRes, sportsbooksRes, cappersRes, teamsRes] =
+      await Promise.all([
+        this.client.from('sports').select('*').eq('active', true).order('sort_order'),
+        this.client.from('sport_market_types').select('*').order('sort_order'),
+        this.client.from('stat_types').select('*').eq('active', true).order('sort_order'),
+        this.client.from('sportsbooks').select('*').eq('active', true).order('sort_order'),
+        this.client.from('cappers').select('*').eq('active', true),
+        this.client
+          .from('participants')
+          .select('external_id,display_name,sport')
+          .eq('participant_type', 'team'),
+      ]);
+
+    if (sportsRes.error) throw new Error(`Failed to load sports: ${sportsRes.error.message}`);
+    if (marketTypesRes.error) throw new Error(`Failed to load market types: ${marketTypesRes.error.message}`);
+    if (statTypesRes.error) throw new Error(`Failed to load stat types: ${statTypesRes.error.message}`);
+    if (sportsbooksRes.error) throw new Error(`Failed to load sportsbooks: ${sportsbooksRes.error.message}`);
+    if (cappersRes.error) throw new Error(`Failed to load cappers: ${cappersRes.error.message}`);
+    if (teamsRes.error) throw new Error(`Failed to load teams: ${teamsRes.error.message}`);
+
+    const sports = (sportsRes.data ?? []).map((sport) => ({
+      id: sport.id as string,
+      name: sport.display_name as string,
+      marketTypes: (marketTypesRes.data ?? [])
+        .filter((mt) => mt.sport_id === sport.id)
+        .map((mt) => mt.market_type as string) as ReferenceDataCatalog['sports'][number]['marketTypes'],
+      statTypes: (statTypesRes.data ?? [])
+        .filter((st) => st.sport_id === sport.id)
+        .map((st) => st.name as string),
+      teams: (teamsRes.data ?? [])
+        .filter((t) => t.sport === sport.id)
+        .map((t) => t.display_name as string),
+    }));
+
+    const sportsbooks = (sportsbooksRes.data ?? []).map((sb) => ({
+      id: sb.id as string,
+      name: sb.display_name as string,
+    }));
+
+    const cappers = (cappersRes.data ?? []).map((c) => c.id as string);
+
+    // ticketTypes are a UI concept — not stored in DB
+    const ticketTypes: ReferenceDataCatalog['ticketTypes'] = [
+      { id: 'single', name: 'Single', enabled: true },
+      { id: 'parlay', name: 'Parlay', enabled: false },
+      { id: 'teaser', name: 'Teaser', enabled: false },
+      { id: 'round-robin', name: 'Round Robin', enabled: false },
+      { id: 'future', name: 'Future', enabled: false },
+    ];
+
+    return { sports, sportsbooks, ticketTypes, cappers };
+  }
+
+  async searchTeams(sportId: string, query: string, limit = 20): Promise<TeamSearchResult[]> {
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,display_name,sport')
+      .eq('participant_type', 'team')
+      .eq('sport', sportId)
+      .ilike('display_name', `%${query}%`)
+      .limit(limit);
+
+    if (error) throw new Error(`Failed to search teams: ${error.message}`);
+
+    return (data ?? []).map((row) => ({
+      participantId: row.id as string,
+      displayName: row.display_name as string,
+      sport: row.sport as string,
+    }));
+  }
+
+  async searchPlayers(sportId: string, query: string, limit = 20): Promise<PlayerSearchResult[]> {
+    const { data, error } = await this.client
+      .from('participants')
+      .select('id,display_name,sport')
+      .eq('participant_type', 'player')
+      .eq('sport', sportId)
+      .ilike('display_name', `%${query}%`)
+      .limit(limit);
+
+    if (error) throw new Error(`Failed to search players: ${error.message}`);
+
+    return (data ?? []).map((row) => ({
+      participantId: row.id as string,
+      displayName: row.display_name as string,
+      sport: row.sport as string,
+    }));
+  }
+
+  async listEvents(sportId: string, date: string): Promise<EventSearchResult[]> {
+    const { data, error } = await this.client
+      .from('events')
+      .select('id,event_name,event_date,status,sport_id')
+      .eq('sport_id', sportId)
+      .eq('event_date', date)
+      .order('event_name');
+
+    if (error) throw new Error(`Failed to list events: ${error.message}`);
+
+    return (data ?? []).map((row) => ({
+      eventId: row.id as string,
+      eventName: row.event_name as string,
+      eventDate: row.event_date as string,
+      status: row.status as string,
+      sportId: row.sport_id as string,
+    }));
+  }
+}
+
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
   return {
     submissions: new InMemorySubmissionRepository(),
@@ -1071,6 +1226,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     settlements: new InMemorySettlementRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
+    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
   };
 }
 
@@ -1085,6 +1241,7 @@ export function createDatabaseRepositoryBundle(
     settlements: new DatabaseSettlementRepository(connection),
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
+    referenceData: new DatabaseReferenceDataRepository(connection),
   };
 }
 

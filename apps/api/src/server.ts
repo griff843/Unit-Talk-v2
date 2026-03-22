@@ -6,7 +6,14 @@ import {
   createServiceRoleDatabaseConnectionConfig,
   type RepositoryBundle,
 } from '@unit-talk/db';
-import { handleSettlePick, handleSubmitPick } from './handlers/index.js';
+import {
+  handleGetCatalog,
+  handleListEvents,
+  handleSearchPlayers,
+  handleSearchTeams,
+  handleSettlePick,
+  handleSubmitPick,
+} from './handlers/index.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -71,6 +78,41 @@ export async function routeRequest(
       service: 'api',
       persistenceMode: runtime.persistenceMode,
     } satisfies ApiHealthResponse);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/catalog') {
+    const apiResponse = await handleGetCatalog(runtime.repositories.referenceData);
+    return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/search/teams') {
+    const sport = url.searchParams.get('sport');
+    const q = url.searchParams.get('q');
+    const apiResponse = await handleSearchTeams(
+      { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
+      runtime.repositories.referenceData,
+    );
+    return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/search/players') {
+    const sport = url.searchParams.get('sport');
+    const q = url.searchParams.get('q');
+    const apiResponse = await handleSearchPlayers(
+      { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
+      runtime.repositories.referenceData,
+    );
+    return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/events') {
+    const sport = url.searchParams.get('sport');
+    const date = url.searchParams.get('date');
+    const apiResponse = await handleListEvents(
+      { ...(sport ? { sport } : {}), ...(date ? { date } : {}) },
+      runtime.repositories.referenceData,
+    );
+    return writeJson(response, apiResponse.status, apiResponse.body);
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {

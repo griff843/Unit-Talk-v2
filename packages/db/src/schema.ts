@@ -78,6 +78,24 @@ export const promotionOverrideActions = [
 
 export const participantTypes = ['player', 'team', 'league', 'event'] as const;
 
+export const eventStatuses = [
+  'scheduled',
+  'in_progress',
+  'completed',
+  'postponed',
+  'cancelled',
+] as const;
+
+export const eventParticipantRoles = ['home', 'away', 'competitor'] as const;
+
+export const marketTypes = [
+  'player-prop',
+  'moneyline',
+  'spread',
+  'total',
+  'team-total',
+] as const;
+
 export interface TableDefinition {
   name: string;
   purpose: string;
@@ -143,6 +161,41 @@ export const canonicalSchema: TableDefinition[] = [
   {
     name: 'participant_memberships',
     purpose: 'Stores historical participant-to-parent relationships.',
+    owner: 'api',
+  },
+  {
+    name: 'sports',
+    purpose: 'Canonical sport definitions with ordering and activation state.',
+    owner: 'platform',
+  },
+  {
+    name: 'sport_market_types',
+    purpose: 'Maps which market types are available per sport.',
+    owner: 'platform',
+  },
+  {
+    name: 'stat_types',
+    purpose: 'Stat types available per sport for player-prop markets.',
+    owner: 'platform',
+  },
+  {
+    name: 'sportsbooks',
+    purpose: 'Canonical sportsbook definitions.',
+    owner: 'platform',
+  },
+  {
+    name: 'cappers',
+    purpose: 'Registered cappers authorized to submit picks.',
+    owner: 'platform',
+  },
+  {
+    name: 'events',
+    purpose: 'Sporting events with date, status, and sport linkage.',
+    owner: 'api',
+  },
+  {
+    name: 'event_participants',
+    purpose: 'Links participants to events with role designation.',
     owner: 'api',
   },
 ];

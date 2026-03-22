@@ -8,7 +8,7 @@ import {
 } from './validation.js';
 import { mapSmartFormToSubmissionPayload } from './payload-mapping.js';
 import { renderSmartFormPage, renderSmartFormSuccessPage } from './form-templates.js';
-import { getFormReferenceData } from './reference-data-client.js';
+import { configureReferenceDataClient, getFormReferenceData } from './reference-data-client.js';
 
 export interface SmartFormServerOptions {
   apiBaseUrl?: string;
@@ -20,6 +20,8 @@ export function createSmartFormServer(options: SmartFormServerOptions = {}) {
   const apiBaseUrl = options.apiBaseUrl ?? process.env.UNIT_TALK_API_BASE_URL ?? 'http://127.0.0.1:3000';
   const fetchImpl = options.fetchImpl ?? fetch;
   const maxBodyBytes = options.maxBodyBytes ?? 65536;
+
+  configureReferenceDataClient({ apiBaseUrl, fetchImpl });
 
   return http.createServer(async (request, response) => {
     await routeSmartFormRequest(request, response, { apiBaseUrl, fetchImpl, maxBodyBytes });
@@ -47,7 +49,7 @@ export async function routeSmartFormRequest(
   }
 
   if (method === 'GET' && url.pathname === '/') {
-    const catalog = getFormReferenceData();
+    const catalog = await getFormReferenceData();
     return writeHtml(response, 200, renderSmartFormPage({ catalog }));
   }
 
@@ -66,7 +68,7 @@ export async function routeSmartFormRequest(
       );
     }
 
-    const catalog = getFormReferenceData();
+    const catalog = await getFormReferenceData();
     const rawForm = await readFormBody(request);
     const formBody = parseSmartFormBody(rawForm);
     const marketType: MarketType | undefined = isValidMarketType(formBody.marketType)
@@ -97,14 +99,29 @@ export async function routeSmartFormRequest(
     // All blocking validations pass — build payload and submit
     const submission = mapSmartFormToSubmissionPayload(formBody, marketType!);
 
-    const apiResponse = await dependencies.fetchImpl(
-      `${dependencies.apiBaseUrl}/api/submissions`,
-      {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(submission),
-      },
-    );
+    let apiResponse: Response;
+    try {
+      apiResponse = await dependencies.fetchImpl(
+        `${dependencies.apiBaseUrl}/api/submissions`,
+        {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify(submission),
+        },
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      return respondFormError(
+        request,
+        response,
+        502,
+        {
+          code: 'API_UNREACHABLE',
+          message: `Could not reach API: ${message}`,
+        },
+        rawForm,
+      );
+    }
 
     const payload = (await apiResponse.json()) as {
       ok: boolean;
@@ -195,7 +212,7 @@ function prefersHtml(request: IncomingMessage): boolean {
   return accept.length === 0 || accept.includes('text/html') || accept.includes('*/*');
 }
 
-function respondFormError(
+async function respondFormError(
   request: IncomingMessage,
   response: ServerResponse,
   status: number,
@@ -203,7 +220,7 @@ function respondFormError(
   values: Record<string, string>,
 ) {
   if (prefersHtml(request)) {
-    const catalog = getFormReferenceData();
+    const catalog = await getFormReferenceData();
     return writeHtml(
       response,
       status,

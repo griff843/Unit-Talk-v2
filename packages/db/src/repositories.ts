@@ -4,6 +4,7 @@ import type {
   SubmissionPayload,
   ValidatedSubmission,
 } from '@unit-talk/contracts';
+import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
   ApprovalStatus,
   AuditLogRow,
@@ -198,6 +199,33 @@ export interface SubmissionPersistenceResult {
   lifecycleEvent: PickLifecycleRecord;
 }
 
+export interface TeamSearchResult {
+  participantId: string;
+  displayName: string;
+  sport: string;
+}
+
+export interface PlayerSearchResult {
+  participantId: string;
+  displayName: string;
+  sport: string;
+}
+
+export interface EventSearchResult {
+  eventId: string;
+  eventName: string;
+  eventDate: string;
+  status: string;
+  sportId: string;
+}
+
+export interface ReferenceDataRepository {
+  getCatalog(): Promise<ReferenceDataCatalog>;
+  searchTeams(sportId: string, query: string, limit?: number): Promise<TeamSearchResult[]>;
+  searchPlayers(sportId: string, query: string, limit?: number): Promise<PlayerSearchResult[]>;
+  listEvents(sportId: string, date: string): Promise<EventSearchResult[]>;
+}
+
 export interface RepositoryBundle {
   submissions: SubmissionRepository;
   picks: PickRepository;
@@ -206,6 +234,7 @@ export interface RepositoryBundle {
   settlements: SettlementRepository;
   runs: SystemRunRepository;
   audit: AuditLogRepository;
+  referenceData: ReferenceDataRepository;
 }
 
 export function mapValidatedSubmissionToSubmissionCreateInput(

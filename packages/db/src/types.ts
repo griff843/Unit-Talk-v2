@@ -13,6 +13,9 @@
 
 import {
   approvalStatuses,
+  eventParticipantRoles,
+  eventStatuses,
+  marketTypes,
   outboxStatuses,
   participantTypes,
   pickStatuses,
@@ -49,6 +52,9 @@ export type SettlementSource = (typeof settlementSources)[number];
 export type SettlementConfidence = (typeof settlementConfidences)[number];
 export type SystemRunStatus = (typeof systemRunStatuses)[number];
 export type ParticipantType = (typeof participantTypes)[number];
+export type EventStatus = (typeof eventStatuses)[number];
+export type EventParticipantRole = (typeof eventParticipantRoles)[number];
+export type MarketTypeId = (typeof marketTypes)[number];
 
 export type SubmissionRow = Tables<'submissions'>;
 export type SubmissionEventRow = Tables<'submission_events'>;
@@ -102,3 +108,73 @@ export type ParticipantRecord = ParticipantRow;
 
 /** @see {@link ParticipantMembershipRow} */
 export type ParticipantMembershipRecord = ParticipantMembershipRow;
+
+// ---------------------------------------------------------------------------
+// Reference data types (not generated — tables added in migration 008)
+// ---------------------------------------------------------------------------
+
+export interface SportRow {
+  id: string;
+  display_name: string;
+  sort_order: number;
+  active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SportMarketTypeRow {
+  id: string;
+  sport_id: string;
+  market_type: MarketTypeId;
+  sort_order: number;
+  created_at: string;
+}
+
+export interface StatTypeRow {
+  id: string;
+  sport_id: string;
+  name: string;
+  sort_order: number;
+  active: boolean;
+  created_at: string;
+}
+
+export interface SportsbookRow {
+  id: string;
+  display_name: string;
+  sort_order: number;
+  active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CapperRow {
+  id: string;
+  display_name: string;
+  active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventRow {
+  id: string;
+  sport_id: string;
+  event_name: string;
+  event_date: string;
+  status: EventStatus;
+  external_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EventParticipantRow {
+  id: string;
+  event_id: string;
+  participant_id: string;
+  role: EventParticipantRole;
+  created_at: string;
+}

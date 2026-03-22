@@ -139,6 +139,118 @@ test('POST /api/picks/:id/settle settles a posted pick', async () => {
   }
 });
 
+test('GET /api/reference-data/catalog returns full catalog', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/reference-data/catalog`);
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: {
+        sports: { id: string; name: string; marketTypes: string[]; statTypes: string[]; teams: string[] }[];
+        sportsbooks: { id: string; name: string }[];
+        cappers: string[];
+        ticketTypes: { id: string; name: string; enabled: boolean }[];
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.ok(body.data);
+    assert.equal(body.data.sports.length, 9);
+    assert.equal(body.data.sportsbooks.length, 11);
+    assert.ok(body.data.cappers.includes('griff843'));
+
+    const nba = body.data.sports.find((s) => s.id === 'NBA');
+    assert.ok(nba);
+    assert.ok(nba.marketTypes.includes('player-prop'));
+    assert.ok(nba.statTypes.includes('Points'));
+    assert.equal(nba.teams.length, 30);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/reference-data/search/teams returns matching teams', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/search/teams?sport=NBA&q=Kni`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: { displayName: string }[];
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.ok(body.data);
+    assert.ok(body.data.length > 0);
+    assert.ok(body.data.some((t) => t.displayName === 'Knicks'));
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/reference-data/search/teams returns 400 without sport param', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/search/teams?q=Kni`,
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 400);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'MISSING_PARAM');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/reference-data/search/teams returns 400 for short query', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/search/teams?sport=NBA&q=K`,
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 400);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'QUERY_TOO_SHORT');
+  } finally {
+    server.close();
+  }
+});
+
 test('POST /api/picks/:id/settle returns downstream loss attribution when inputs exist', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
