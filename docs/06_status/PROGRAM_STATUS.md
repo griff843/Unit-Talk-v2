@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-23 (Smart Form Process Hardening closed — SMART_FORM_PROCESS_HARDENED)
+2026-03-23 (Full Lifecycle Truth Verification closed — FULL_LIFECYCLE_VERIFIED)
 
 ## Current State
 
@@ -61,6 +61,7 @@ The root `test` script is split into 6 named groups:
 
 | Sprint | Week | Tier | Status | Summary |
 |--------|------|------|--------|---------|
+| Full Lifecycle Truth Verification | — | T1 | **CLOSED** | All 10 stages verified end-to-end. Fixed: catalog endpoint (DatabaseReferenceDataRepository → InMemoryReferenceDataRepository in database bundle — V2 has no ref-data tables, commit ce7577b). Discord msgId 1485511171011514490 (best-bets). Settlement win, 90.9% ROI. 2 system findings documented: Smart Form V1 missing confidence field (all submissions score 61.5, below 70 threshold) + board caps saturated by test-run picks (perSlate=5). 534/534 tests. Verdict: FULL_LIFECYCLE_VERIFIED. |
 | Smart Form Process Hardening | — | T1 | **CLOSED** | Added `scripts/kill-port.mjs` (cross-platform port cleanup) + `predev` hook in `apps/smart-form/package.json`. Zombie process PID 36184 (persistent across all prior proof runs) forcefully killed. `pnpm dev` in Smart Form now always clears port 4100 before starting. HTTP probe confirmed 307 response from fresh process. Verdict: SMART_FORM_PROCESS_HARDENED. 534/534 tests. |
 | T1 Recap/Stats Consumer Buildout | — | T1 | **CLOSED** | First application-layer consumer for domain recap stats. `GET /api/operator/recap` live — calls `computeSettlementSummary` from `@unit-talk/domain`. `Settlement Recap` section added to operator dashboard HTML. Verdict: RECAP_STAGE_UNBLOCKED. Stage 9 (Smart Form zombie) still DEVIATION. 534/534 tests. |
 | T1 Full-Cycle Proof Rerun | — | T1 | **CLOSED** | Rerun after enqueue gap fix. 7 of 8 wired stages pass. Submit (direct API, SF zombie) → DB (validated→queued at submission) → Distribution (Discord msgId 1485434380414488629) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 9 (recap) still blocked (Blocker B unchanged). Enqueue fix confirmed: `outboxEnqueued:true` in API response, queued lifecycle event at submission time. 531/531 tests. |
@@ -118,6 +119,9 @@ The next major work is designing and building the Smart Form V1 operator submiss
 | API process requires manual restart to load new code — no hot-reload or process manager in dev | Low | Open |
 | Recap/performance/accounting surfaces do not yet consume downstream truth | Low | **PARTIALLY RESOLVED** — `GET /api/operator/recap` now calls `computeSettlementSummary` from domain. Full rollups/evaluation/system-health wiring remains deferred. |
 | Enqueue gap | Medium | **VERIFIED CLOSED** — fix confirmed in T1 Full-Cycle Proof Rerun (2026-03-23). `outboxEnqueued:true` in API response; queued lifecycle event created at submission time. |
+| Smart Form V1 missing `confidence` field — all submissions score 61.5, below promotion threshold 70 | Medium | Open — Smart Form V1 does not include `confidence` in `buildSubmissionPayload()`. Without confidence, domain analysis computes no edge. Promotion score = 61.5 < 70 (best-bets threshold). All Smart Form submissions are not promotion-eligible. Fix: add confidence field to Smart Form or add source-specific promotion scoring. |
+| Board caps (perSlate=5) saturated by accumulated test-run picks | Medium | Open — `getPromotionBoardState` counts ALL picks with `promotion_status IN ('qualified', 'promoted')` including settled/historical. After 5+ test runs, both best-bets and trader-insights boards are full. New picks cannot qualify. Fix: filter board state query to only count picks with `lifecycle_state IN ('queued', 'posted')`. |
+| Catalog endpoint used DatabaseReferenceDataRepository querying non-existent V2 DB tables | Low | **CLOSED** — Fixed in Full Lifecycle Truth Verification sprint (commit ce7577b). `createDatabaseRepositoryBundle` now uses `InMemoryReferenceDataRepository(V1_REFERENCE_DATA)`. |
 
 ## Key Capabilities
 
