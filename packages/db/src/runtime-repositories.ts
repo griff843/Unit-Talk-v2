@@ -1241,7 +1241,7 @@ export function createDatabaseRepositoryBundle(
     settlements: new DatabaseSettlementRepository(connection),
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
-    referenceData: new DatabaseReferenceDataRepository(connection),
+    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
   };
 }
 
