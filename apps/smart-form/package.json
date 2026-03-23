@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
+    "predev": "node ../../scripts/kill-port.mjs 4100",
     "dev": "next dev -p 4100",
     "build": "next build",
     "start": "next start -p 4100",

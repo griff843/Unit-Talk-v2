@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-23 (T1 Recap/Stats Consumer Buildout closed — RECAP_STAGE_UNBLOCKED)
+2026-03-23 (Smart Form Process Hardening closed — SMART_FORM_PROCESS_HARDENED)
 
 ## Current State
 
@@ -61,6 +61,7 @@ The root `test` script is split into 6 named groups:
 
 | Sprint | Week | Tier | Status | Summary |
 |--------|------|------|--------|---------|
+| Smart Form Process Hardening | — | T1 | **CLOSED** | Added `scripts/kill-port.mjs` (cross-platform port cleanup) + `predev` hook in `apps/smart-form/package.json`. Zombie process PID 36184 (persistent across all prior proof runs) forcefully killed. `pnpm dev` in Smart Form now always clears port 4100 before starting. HTTP probe confirmed 307 response from fresh process. Verdict: SMART_FORM_PROCESS_HARDENED. 534/534 tests. |
 | T1 Recap/Stats Consumer Buildout | — | T1 | **CLOSED** | First application-layer consumer for domain recap stats. `GET /api/operator/recap` live — calls `computeSettlementSummary` from `@unit-talk/domain`. `Settlement Recap` section added to operator dashboard HTML. Verdict: RECAP_STAGE_UNBLOCKED. Stage 9 (Smart Form zombie) still DEVIATION. 534/534 tests. |
 | T1 Full-Cycle Proof Rerun | — | T1 | **CLOSED** | Rerun after enqueue gap fix. 7 of 8 wired stages pass. Submit (direct API, SF zombie) → DB (validated→queued at submission) → Distribution (Discord msgId 1485434380414488629) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 9 (recap) still blocked (Blocker B unchanged). Enqueue fix confirmed: `outboxEnqueued:true` in API response, queued lifecycle event at submission time. 531/531 tests. |
 | T1 Enqueue Gap Fix | — | T1 | **CLOSED** | Auto-enqueue wired into submitPickController. Qualified picks now transition validated→queued and create outbox row at submission time. 531/531 tests. Live proof: pick a42c6524 outboxEnqueued:true, status=queued, outbox=pending. |
@@ -113,6 +114,7 @@ The next major work is designing and building the Smart Form V1 operator submiss
 | Risk | Severity | Status |
 |------|----------|--------|
 | Historical pre-fix outbox rows may add noise to operator incident triage | Low | Open |
+| Smart Form zombie / stale process on port 4100 | Low | **CLOSED** — `predev` hook kills any process on port 4100 before `next dev` starts. Fix: `scripts/kill-port.mjs` + `predev` in `apps/smart-form/package.json`. |
 | API process requires manual restart to load new code — no hot-reload or process manager in dev | Low | Open |
 | Recap/performance/accounting surfaces do not yet consume downstream truth | Low | **PARTIALLY RESOLVED** — `GET /api/operator/recap` now calls `computeSettlementSummary` from domain. Full rollups/evaluation/system-health wiring remains deferred. |
 | Enqueue gap | Medium | **VERIFIED CLOSED** — fix confirmed in T1 Full-Cycle Proof Rerun (2026-03-23). `outboxEnqueued:true` in API response; queued lifecycle event created at submission time. |
