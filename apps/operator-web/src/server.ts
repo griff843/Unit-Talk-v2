@@ -12,7 +12,10 @@ import {
 import { loadEnvironment } from '@unit-talk/config';
 import {
   resolveEffectiveSettlement,
+  computeSettlementSummary,
   type SettlementInput,
+  type EffectiveSettlement,
+  type SettlementSummary,
 } from '@unit-talk/domain';
 
 export interface OperatorHealthSignal {
@@ -51,6 +54,7 @@ export interface OperatorSnapshot {
     blockers: string[];
   };
   picksPipeline: PicksPipelineSummary;
+  recap: SettlementSummary;
 }
 
 export interface OutboxFilter {
@@ -167,6 +171,11 @@ export async function routeOperatorRequest(
         recentPicks: snapshot.picksPipeline.recentPicks,
       },
     });
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/recap') {
+    const snapshot = await provider.getSnapshot();
+    return writeJson(response, 200, { ok: true, data: snapshot.recap });
   }
 
   if (method === 'GET' && url.pathname === '/') {
@@ -380,6 +389,7 @@ export function createSnapshotFromRows(input: {
       input.recentSettlements ?? [],
       input.picksPipelineCounts,
     ),
+    recap: computeSettlementSummary(resolveAllEffectiveSettlements(input.recentSettlements ?? [])),
   };
 }
 
@@ -481,7 +491,7 @@ function summarizePicksPipeline(
   };
 }
 
-function buildEffectiveSettlementResultMap(settlements: SettlementRecord[]) {
+function resolveAllEffectiveSettlements(settlements: SettlementRecord[]): EffectiveSettlement[] {
   const grouped = new Map<string, SettlementRecord[]>();
   for (const row of settlements) {
     const existing = grouped.get(row.pick_id);
@@ -492,18 +502,21 @@ function buildEffectiveSettlementResultMap(settlements: SettlementRecord[]) {
     }
   }
 
-  const effective = new Map<string, string | null>();
-  for (const [pickId, rows] of grouped.entries()) {
-    const resolved = resolveEffectiveSettlement(
-      rows.map(mapSettlementRecordToInput),
-    );
-
-    effective.set(
-      pickId,
-      resolved.ok ? resolved.settlement.result : rows[0]?.result ?? null,
-    );
+  const effective: EffectiveSettlement[] = [];
+  for (const rows of grouped.values()) {
+    const resolved = resolveEffectiveSettlement(rows.map(mapSettlementRecordToInput));
+    if (resolved.ok) {
+      effective.push(resolved.settlement);
+    }
   }
+  return effective;
+}
 
+function buildEffectiveSettlementResultMap(settlements: SettlementRecord[]) {
+  const effective = new Map<string, string | null>();
+  for (const s of resolveAllEffectiveSettlements(settlements)) {
+    effective.set(s.pick_id, s.result);
+  }
   return effective;
 }
 
@@ -742,6 +755,33 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
         </table>
       </section>`;
 
+  const recapCountCards = [
+    ['total picks', snapshot.recap.total_picks],
+    ['hit rate %', snapshot.recap.hit_rate_pct.toFixed(1)],
+    ['flat-bet ROI %', snapshot.recap.flat_bet_roi.roi_pct.toFixed(1)],
+    ['corrections', snapshot.recap.correction_count],
+    ['pending review', snapshot.recap.pending_review_count],
+  ]
+    .map(
+      ([label, value]) => `
+      <article class="card stat">
+        <h2>${escapeHtml(String(label))}</h2>
+        <p class="stat-value">${escapeHtml(String(value))}</p>
+      </article>`,
+    )
+    .join('');
+  const recapResultRows = Object.entries(snapshot.recap.by_result)
+    .map(([result, count]) => `<tr><td><code>${escapeHtml(result)}</code></td><td><code>${escapeHtml(String(count))}</code></td></tr>`)
+    .join('') || `<tr><td colspan="2">No settled picks yet.</td></tr>`;
+  const recapSection = `<section>
+        <h2>Settlement Recap</h2>
+        <div class="grid count-grid">${recapCountCards}</div>
+        <table>
+          <thead><tr><th>Result</th><th>Count</th></tr></thead>
+          <tbody>${recapResultRows}</tbody>
+        </table>
+      </section>`;
+
   const outboxRows = renderTableRows(snapshot.recentOutbox, (row) => [
     row.id,
     row.target,
@@ -921,6 +961,7 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${bestBetsHealthSection}
       ${traderInsightsHealthSection}
       ${picksPipelineSection}
+      ${recapSection}
       <section>
         <h2>Recent Outbox</h2>
         <table>

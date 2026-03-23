@@ -7,14 +7,14 @@
 
 ## Last Updated
 
-2026-03-23 (T1 Full-Cycle Proof Rerun closed)
+2026-03-23 (T1 Recap/Stats Consumer Buildout closed — RECAP_STAGE_UNBLOCKED)
 
 ## Current State
 
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | 531/531 passing — deterministic across consecutive runs |
+| Tests | 534/534 passing — deterministic across consecutive runs |
 | Gates | All gates PASS. `pnpm verify` exits 0. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) — see `SPRINT_MODEL_v2.md` |
 
@@ -26,7 +26,7 @@
 | `pnpm lint` | PASS | 0 errors. `.next/**` added to eslint ignores. Ported Radix UI components in `apps/smart-form/components/ui/**` exempt from `no-explicit-any` / `no-empty-object-type`. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 528/528. 6 bounded groups (4–9 files each), chained with `&&`. Deterministic on Windows. |
+| `pnpm test` | PASS | 534/534. 6 bounded groups (4–9 files each), chained with `&&`. Deterministic on Windows. |
 | `pnpm verify` (full chain) | PASS | Exit 0 on two consecutive runs without memory reset. |
 
 ### Runner Architecture (post-hardening)
@@ -61,6 +61,7 @@ The root `test` script is split into 6 named groups:
 
 | Sprint | Week | Tier | Status | Summary |
 |--------|------|------|--------|---------|
+| T1 Recap/Stats Consumer Buildout | — | T1 | **CLOSED** | First application-layer consumer for domain recap stats. `GET /api/operator/recap` live — calls `computeSettlementSummary` from `@unit-talk/domain`. `Settlement Recap` section added to operator dashboard HTML. Verdict: RECAP_STAGE_UNBLOCKED. Stage 9 (Smart Form zombie) still DEVIATION. 534/534 tests. |
 | T1 Full-Cycle Proof Rerun | — | T1 | **CLOSED** | Rerun after enqueue gap fix. 7 of 8 wired stages pass. Submit (direct API, SF zombie) → DB (validated→queued at submission) → Distribution (Discord msgId 1485434380414488629) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 9 (recap) still blocked (Blocker B unchanged). Enqueue fix confirmed: `outboxEnqueued:true` in API response, queued lifecycle event at submission time. 531/531 tests. |
 | T1 Enqueue Gap Fix | — | T1 | **CLOSED** | Auto-enqueue wired into submitPickController. Qualified picks now transition validated→queued and create outbox row at submission time. 531/531 tests. Live proof: pick a42c6524 outboxEnqueued:true, status=queued, outbox=pending. |
 | T1 Full-Cycle Runtime Proof | — | T1 | **CLOSED** | 6 of 7 stages pass. Submit → DB → Distribution (Discord msgId 1485413938513444887) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 7 (recap) blocked (Blocker B). Enqueue gap documented. 528/528 tests. |
@@ -113,7 +114,7 @@ The next major work is designing and building the Smart Form V1 operator submiss
 |------|----------|--------|
 | Historical pre-fix outbox rows may add noise to operator incident triage | Low | Open |
 | API process requires manual restart to load new code — no hot-reload or process manager in dev | Low | Open |
-| Recap/performance/accounting surfaces do not yet consume downstream truth | Low | Deferred — explicitly out of current scope |
+| Recap/performance/accounting surfaces do not yet consume downstream truth | Low | **PARTIALLY RESOLVED** — `GET /api/operator/recap` now calls `computeSettlementSummary` from domain. Full rollups/evaluation/system-health wiring remains deferred. |
 | Enqueue gap | Medium | **VERIFIED CLOSED** — fix confirmed in T1 Full-Cycle Proof Rerun (2026-03-23). `outboxEnqueued:true` in API response; queued lifecycle event created at submission time. |
 
 ## Key Capabilities

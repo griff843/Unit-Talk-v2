@@ -970,6 +970,108 @@ test('createSnapshotFromRows marks canary ready when 3 sent rows are visible and
   assert.equal(snapshot.canary.latestMessageId, 'discord-message-3');
 });
 
+test('createSnapshotFromRows computes recap summary from settled records', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [
+      {
+        id: 'settlement-recap-1',
+        pick_id: 'pick-recap-1',
+        status: 'settled',
+        result: 'win',
+        source: 'operator',
+        confidence: 'confirmed',
+        evidence_ref: 'boxscore://recap-1',
+        notes: null,
+        review_reason: null,
+        settled_by: 'operator',
+        settled_at: '2026-03-22T10:00:00.000Z',
+        corrects_id: null,
+        payload: {},
+        created_at: '2026-03-22T10:00:00.000Z',
+      },
+      {
+        id: 'settlement-recap-2',
+        pick_id: 'pick-recap-2',
+        status: 'settled',
+        result: 'loss',
+        source: 'operator',
+        confidence: 'confirmed',
+        evidence_ref: 'boxscore://recap-2',
+        notes: null,
+        review_reason: null,
+        settled_by: 'operator',
+        settled_at: '2026-03-22T11:00:00.000Z',
+        corrects_id: null,
+        payload: {},
+        created_at: '2026-03-22T11:00:00.000Z',
+      },
+    ],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.recap.total_picks, 2);
+  assert.equal(snapshot.recap.by_result['win'], 1);
+  assert.equal(snapshot.recap.by_result['loss'], 1);
+  assert.equal(snapshot.recap.hit_rate_pct, 50);
+  assert.equal(snapshot.recap.correction_count, 0);
+});
+
+test('GET /api/operator/recap returns settlement summary', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/recap');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      total_picks: number;
+      hit_rate_pct: number;
+      flat_bet_roi: { roi_pct: number; total_wagered: number; total_profit: number };
+      by_result: Record<string, number>;
+      correction_count: number;
+      pending_review_count: number;
+    };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(typeof body.data.total_picks, 'number');
+  assert.equal(typeof body.data.hit_rate_pct, 'number');
+  assert.ok('roi_pct' in body.data.flat_bet_roi);
+  assert.ok('by_result' in body.data);
+});
+
+test('GET / renders Settlement Recap section', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Settlement Recap/);
+  assert.match(response.body, /hit rate %/);
+  assert.match(response.body, /flat-bet ROI %/);
+});
+
 function createStaticProvider(): OperatorSnapshotProvider {
   return {
     async getSnapshot(_filter?: OutboxFilter) {
