@@ -15,9 +15,26 @@ export interface AppEnv {
   SUPABASE_URL?: string | undefined;
   SUPABASE_ANON_KEY?: string | undefined;
   SUPABASE_SERVICE_ROLE_KEY?: string | undefined;
+  SGO_API_KEY?: string | undefined;
+  UNIT_TALK_INGESTOR_LEAGUES?: string | undefined;
+  UNIT_TALK_INGESTOR_POLL_MS?: string | undefined;
+  UNIT_TALK_INGESTOR_MAX_CYCLES?: string | undefined;
+  UNIT_TALK_INGESTOR_AUTORUN?: string | undefined;
+  UNIT_TALK_INGESTOR_SKIP_RESULTS?: string | undefined;
+  UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS?: string | undefined;
+  UNIT_TALK_WORKER_ID?: string | undefined;
+  UNIT_TALK_DISTRIBUTION_TARGETS?: string | undefined;
+  UNIT_TALK_DISCORD_TARGET_MAP?: string | undefined;
+  UNIT_TALK_WORKER_POLL_MS?: string | undefined;
+  UNIT_TALK_WORKER_MAX_CYCLES?: string | undefined;
+  UNIT_TALK_WORKER_DRY_RUN?: string | undefined;
+  UNIT_TALK_WORKER_AUTORUN?: string | undefined;
   DISCORD_BOT_TOKEN?: string | undefined;
+  DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
+  DISCORD_CAPPER_ROLE_ID?: string | undefined;
   DISCORD_ANNOUNCEMENT_CHANNEL_ID?: string | undefined;
+  UNIT_TALK_API_URL?: string | undefined;
   OPENAI_API_KEY?: string | undefined;
   NOTION_TOKEN?: string | undefined;
   SLACK_BOT_TOKEN?: string | undefined;
@@ -84,9 +101,26 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     SUPABASE_URL: optionalEnv('SUPABASE_URL', merged),
     SUPABASE_ANON_KEY: optionalEnv('SUPABASE_ANON_KEY', merged),
     SUPABASE_SERVICE_ROLE_KEY: optionalEnv('SUPABASE_SERVICE_ROLE_KEY', merged),
+    SGO_API_KEY: optionalEnv('SGO_API_KEY', merged),
+    UNIT_TALK_INGESTOR_LEAGUES: optionalEnv('UNIT_TALK_INGESTOR_LEAGUES', merged),
+    UNIT_TALK_INGESTOR_POLL_MS: optionalEnv('UNIT_TALK_INGESTOR_POLL_MS', merged),
+    UNIT_TALK_INGESTOR_MAX_CYCLES: optionalEnv('UNIT_TALK_INGESTOR_MAX_CYCLES', merged),
+    UNIT_TALK_INGESTOR_AUTORUN: optionalEnv('UNIT_TALK_INGESTOR_AUTORUN', merged),
+    UNIT_TALK_INGESTOR_SKIP_RESULTS: optionalEnv('UNIT_TALK_INGESTOR_SKIP_RESULTS', merged),
+    UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS: optionalEnv('UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS', merged),
+    UNIT_TALK_WORKER_ID: optionalEnv('UNIT_TALK_WORKER_ID', merged),
+    UNIT_TALK_DISTRIBUTION_TARGETS: optionalEnv('UNIT_TALK_DISTRIBUTION_TARGETS', merged),
+    UNIT_TALK_DISCORD_TARGET_MAP: optionalEnv('UNIT_TALK_DISCORD_TARGET_MAP', merged),
+    UNIT_TALK_WORKER_POLL_MS: optionalEnv('UNIT_TALK_WORKER_POLL_MS', merged),
+    UNIT_TALK_WORKER_MAX_CYCLES: optionalEnv('UNIT_TALK_WORKER_MAX_CYCLES', merged),
+    UNIT_TALK_WORKER_DRY_RUN: optionalEnv('UNIT_TALK_WORKER_DRY_RUN', merged),
+    UNIT_TALK_WORKER_AUTORUN: optionalEnv('UNIT_TALK_WORKER_AUTORUN', merged),
     DISCORD_BOT_TOKEN: optionalEnv('DISCORD_BOT_TOKEN', merged),
+    DISCORD_CLIENT_ID: optionalEnv('DISCORD_CLIENT_ID', merged),
     DISCORD_GUILD_ID: optionalEnv('DISCORD_GUILD_ID', merged),
+    DISCORD_CAPPER_ROLE_ID: optionalEnv('DISCORD_CAPPER_ROLE_ID', merged),
     DISCORD_ANNOUNCEMENT_CHANNEL_ID: optionalEnv('DISCORD_ANNOUNCEMENT_CHANNEL_ID', merged),
+    UNIT_TALK_API_URL: optionalEnv('UNIT_TALK_API_URL', merged),
     OPENAI_API_KEY: optionalEnv('OPENAI_API_KEY', merged),
     NOTION_TOKEN: optionalEnv('NOTION_TOKEN', merged),
     SLACK_BOT_TOKEN: optionalEnv('SLACK_BOT_TOKEN', merged),
