@@ -17,6 +17,9 @@ supabase/.temp/
 # Local tooling artifacts (IDE / Claude Code / Augment skills)
 .augment/
 .claude/skills/
+.claude/settings.local.json
 skills-lock.json
+# Supabase local branch tracking
+supabase/.branches/
 # Dev logs
 *.log
