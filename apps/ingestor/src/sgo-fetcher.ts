@@ -60,6 +60,7 @@ export interface SGOEventResult {
   providerEventId: string;
   status: SGOEventStatus | null;
   playerStats: SGOPlayerStatRow[];
+  resolvedEvent: SGOResolvedEvent | null;
 }
 
 export interface SGOResolvedEvent {
@@ -378,6 +379,7 @@ function extractEventResult(event: Record<string, unknown>): SGOEventResult | nu
     providerEventId,
     status,
     playerStats: extractPlayerStatRows(event.results),
+    resolvedEvent: extractResolvedEvent(event),
   };
 }
 

@@ -88,6 +88,27 @@ export async function ingestLeague(
 
     const upsert = await repositories.providerOffers.upsertBatch(normalized);
     const skippedCount = fetched.pairedProps.length - normalized.length;
+    const fetchedResults = options.skipResults
+      ? []
+      : await fetchSGOResults({
+          apiKey,
+          league,
+          snapshotAt,
+          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+        });
+
+    const completedResultEvents = fetchedResults
+      .map((result) => result.resolvedEvent)
+      .filter((event): event is NonNullable<(typeof fetchedResults)[number]['resolvedEvent']> =>
+        event !== null,
+      );
+
+    if (completedResultEvents.length > 0) {
+      await resolveSgoEntities(completedResultEvents, repositories, {
+        ...(options.logger ? { logger: options.logger } : {}),
+      });
+    }
+
     const resolvedResults = options.skipResults
       ? {
           processedEvents: 0,
@@ -96,16 +117,7 @@ export async function ingestLeague(
           skippedResults: 0,
           errors: 0,
         }
-      : await resolveAndInsertResults(
-          await fetchSGOResults({
-            apiKey,
-            league,
-            snapshotAt,
-            ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-          }),
-          repositories,
-          options.logger,
-        );
+      : await resolveAndInsertResults(fetchedResults, repositories, options.logger);
 
     await repositories.runs.completeRun({
       runId: run.id,

@@ -358,6 +358,7 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
             stats: { points: 9 },
           },
         ],
+        resolvedEvent: null,
       },
     ],
     repositories,
@@ -385,6 +386,26 @@ test('ingestLeague can skip results phase without breaking offer/entity ingest',
   assert.equal(summary.resolvedEventsCount, 1);
   assert.equal(summary.insertedResultsCount, 0);
   assert.equal(summary.resultsEventsCount, 0);
+});
+
+test('ingestLeague resolves completed result events before inserting game results', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const summary = await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  assert.equal(summary.resultsEventsCount, 1);
+  assert.ok(summary.insertedResultsCount > 0);
+  assert.ok(results.length > 0);
 });
 
 test('ingestLeague does not create player participants for home away market keys', async () => {
@@ -668,5 +689,17 @@ function createCompletedEventResult(): SGOEventResult {
         },
       },
     ],
+    resolvedEvent: createResolvedEvent({
+      status: {
+        started: true,
+        completed: true,
+        cancelled: false,
+        ended: true,
+        live: false,
+        delayed: false,
+        finalized: true,
+        oddsAvailable: false,
+      },
+    }),
   };
 }
