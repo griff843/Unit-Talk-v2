@@ -1,5 +1,7 @@
+import crypto from 'node:crypto';
 import {
   V1_REFERENCE_DATA,
+  type ProviderOfferInsert,
   type ReferenceDataCatalog,
 } from '@unit-talk/contracts';
 import type {
@@ -9,17 +11,31 @@ import type {
 import type {
   AuditLogCreateInput,
   AuditLogRepository,
+  ClosingLineLookupCriteria,
+  EventParticipantRepository,
+  EventParticipantUpsertInput,
+  EventRepository,
   EventSearchResult,
+  EventUpsertInput,
+  GradeResultInsertInput,
+  GradeResultLookupCriteria,
+  GradeResultRepository,
   OutboxCreateInput,
   OutboxRepository,
+  ParticipantRepository,
+  ParticipantUpsertInput,
   PickRepository,
   PlayerSearchResult,
+  ProviderOfferRepository,
+  ProviderOfferUpsertInput,
+  ProviderOfferUpsertResult,
   PromotionBoardStateQuery,
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
   PromotionHistoryInsertInput,
   PromotionPersistenceResult,
   ReferenceDataRepository,
+  IngestorRepositoryBundle,
   RepositoryBundle,
   ReceiptCreateInput,
   ReceiptRepository,
@@ -35,10 +51,15 @@ import type {
 } from './repositories.js';
 import type {
   AuditLogRow,
+  EventParticipantRow,
+  EventRow,
+  GradeResultRecord,
+  ParticipantRow,
   SystemRunRecord,
   OutboxRecord,
   PickRecord,
   PickLifecycleRecord,
+  ProviderOfferRecord,
   PromotionHistoryRecord,
   ReceiptRecord,
   SettlementRecord,
@@ -180,6 +201,17 @@ export class InMemoryPickRepository implements PickRepository {
     return this.picks.get(pickId) ?? null;
   }
 
+  async listByLifecycleState(
+    lifecycleState: CanonicalPick['lifecycleState'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    const matches = Array.from(this.picks.values())
+      .filter((pick) => pick.status === lifecycleState)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+
+    return limit === undefined ? matches : matches.slice(0, limit);
+  }
+
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
@@ -249,10 +281,13 @@ export class InMemoryPickRepository implements PickRepository {
   async getPromotionBoardState(
     input: PromotionBoardStateQuery,
   ): Promise<PromotionBoardStateSnapshot> {
+    // Only count picks that are currently active on the board.
+    // Settled and voided picks no longer occupy board capacity.
     const promoted = Array.from(this.picks.values()).filter(
       (pick) =>
         pick.promotion_target === input.target &&
-        (pick.promotion_status === 'qualified' || pick.promotion_status === 'promoted'),
+        (pick.promotion_status === 'qualified' || pick.promotion_status === 'promoted') &&
+        (pick.status === 'validated' || pick.status === 'queued' || pick.status === 'posted'),
     );
 
     return {
@@ -365,6 +400,55 @@ export class InMemoryReceiptRepository implements ReceiptRepository {
   }
 }
 
+export class InMemoryGradeResultRepository implements GradeResultRepository {
+  private readonly records: GradeResultRecord[] = [];
+
+  async insert(input: GradeResultInsertInput): Promise<GradeResultRecord> {
+    const duplicate = this.records.find(
+      (record) =>
+        record.event_id === input.eventId &&
+        record.participant_id === input.participantId &&
+        record.market_key === input.marketKey &&
+        record.source === input.source,
+    );
+
+    if (duplicate) {
+      return duplicate;
+    }
+
+    const record: GradeResultRecord = {
+      id: `game_result_${this.records.length + 1}`,
+      event_id: input.eventId,
+      participant_id: input.participantId,
+      market_key: input.marketKey,
+      actual_value: input.actualValue,
+      source: input.source,
+      sourced_at: input.sourcedAt,
+      created_at: new Date().toISOString(),
+    };
+
+    this.records.push(record);
+    return record;
+  }
+
+  async findResult(
+    criteria: GradeResultLookupCriteria,
+  ): Promise<GradeResultRecord | null> {
+    return (
+      this.records.find(
+        (record) =>
+          record.event_id === criteria.eventId &&
+          record.participant_id === criteria.participantId &&
+          record.market_key === criteria.marketKey,
+      ) ?? null
+    );
+  }
+
+  async listByEvent(eventId: string): Promise<GradeResultRecord[]> {
+    return this.records.filter((record) => record.event_id === eventId);
+  }
+}
+
 export class InMemorySettlementRepository implements SettlementRepository {
   private readonly settlements: SettlementRecord[] = [];
 
@@ -408,6 +492,217 @@ export class InMemorySettlementRepository implements SettlementRepository {
     return [...this.settlements]
       .sort(compareSettlementRecordsDescending)
       .slice(0, limit);
+  }
+
+  async updatePayload(
+    settlementId: string,
+    payload: Record<string, unknown>,
+  ): Promise<SettlementRecord> {
+    const existing = this.settlements.find((record) => record.id === settlementId);
+    if (!existing) {
+      throw new Error(`Settlement record not found: ${settlementId}`);
+    }
+
+    existing.payload = toJsonObject(payload);
+    return existing;
+  }
+}
+
+export class InMemoryProviderOfferRepository implements ProviderOfferRepository {
+  private readonly offers = new Map<string, ProviderOfferRecord>();
+
+  async upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult> {
+    let insertedCount = 0;
+    let updatedCount = 0;
+
+    for (const offer of offers) {
+      const existing = this.offers.get(offer.idempotencyKey);
+      if (existing) {
+        this.offers.set(
+          offer.idempotencyKey,
+          mapProviderOfferInsertToRecord(offer, existing.id, existing.created_at),
+        );
+        updatedCount += 1;
+      } else {
+        this.offers.set(offer.idempotencyKey, mapProviderOfferInsertToRecord(offer));
+        insertedCount += 1;
+      }
+    }
+
+    return {
+      insertedCount,
+      updatedCount,
+      totalProcessed: offers.length,
+    };
+  }
+
+  async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
+    return Array.from(this.offers.values())
+      .filter((offer) => offer.provider_key === providerKey)
+      .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at));
+  }
+
+  async findClosingLine(
+    criteria: ClosingLineLookupCriteria,
+  ): Promise<ProviderOfferRecord | null> {
+    const providerParticipantId =
+      criteria.providerParticipantId === undefined ? null : criteria.providerParticipantId;
+
+    return (
+      Array.from(this.offers.values())
+        .filter(
+          (offer) =>
+            offer.provider_event_id === criteria.providerEventId &&
+            offer.provider_market_key === criteria.providerMarketKey &&
+            offer.snapshot_at <= criteria.before &&
+            offer.provider_participant_id === providerParticipantId,
+        )
+        .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null
+    );
+  }
+}
+
+export class InMemoryParticipantRepository implements ParticipantRepository {
+  private readonly participants = new Map<string, ParticipantRow>();
+
+  constructor(seed: ParticipantRow[] = []) {
+    for (const row of seed) {
+      this.participants.set(row.id, row);
+    }
+  }
+
+  async upsertByExternalId(input: ParticipantUpsertInput): Promise<ParticipantRow> {
+    const existing = Array.from(this.participants.values()).find(
+      (row) => row.external_id === input.externalId,
+    );
+    const now = new Date().toISOString();
+    const record: ParticipantRow = {
+      id: existing?.id ?? crypto.randomUUID(),
+      display_name: input.displayName,
+      external_id: input.externalId,
+      league: input.league ?? null,
+      metadata: toJsonObject(input.metadata),
+      participant_type: input.participantType,
+      sport: input.sport ?? null,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    };
+
+    this.participants.set(record.id, record);
+    return record;
+  }
+
+  async findByExternalId(externalId: string): Promise<ParticipantRow | null> {
+    return (
+      Array.from(this.participants.values()).find((row) => row.external_id === externalId) ??
+      null
+    );
+  }
+
+  async findById(participantId: string): Promise<ParticipantRow | null> {
+    return this.participants.get(participantId) ?? null;
+  }
+
+  async listByType(
+    participantType: ParticipantUpsertInput['participantType'],
+    sport?: string,
+  ): Promise<ParticipantRow[]> {
+    return Array.from(this.participants.values())
+      .filter(
+        (row) =>
+          row.participant_type === participantType && (sport ? row.sport === sport : true),
+      )
+      .sort((left, right) => left.display_name.localeCompare(right.display_name));
+  }
+}
+
+export class InMemoryEventRepository implements EventRepository {
+  private readonly events = new Map<string, EventRow>();
+
+  constructor(seed: EventRow[] = []) {
+    for (const row of seed) {
+      this.events.set(row.id, row);
+    }
+  }
+
+  async upsertByExternalId(input: EventUpsertInput): Promise<EventRow> {
+    const existing = Array.from(this.events.values()).find(
+      (row) => row.external_id === input.externalId,
+    );
+    const now = new Date().toISOString();
+    const record: EventRow = {
+      id: existing?.id ?? crypto.randomUUID(),
+      sport_id: input.sportId,
+      event_name: input.eventName,
+      event_date: input.eventDate,
+      external_id: input.externalId,
+      status: existing && existing.status !== 'scheduled' ? existing.status : input.status,
+      metadata: JSON.parse(JSON.stringify(input.metadata)) as Record<string, unknown>,
+      created_at: existing?.created_at ?? now,
+      updated_at: now,
+    };
+
+    this.events.set(record.id, record);
+    return record;
+  }
+
+  async findByExternalId(externalId: string): Promise<EventRow | null> {
+    return Array.from(this.events.values()).find((row) => row.external_id === externalId) ?? null;
+  }
+
+  async findById(eventId: string): Promise<EventRow | null> {
+    return this.events.get(eventId) ?? null;
+  }
+
+  async listUpcoming(sportId?: string, windowDays = 7): Promise<EventRow[]> {
+    const now = new Date();
+    const start = toIsoDate(addDays(now, -windowDays));
+    const end = toIsoDate(addDays(now, windowDays));
+    return Array.from(this.events.values())
+      .filter(
+        (row) =>
+          (sportId ? row.sport_id === sportId : true) &&
+          row.event_date >= start &&
+          row.event_date <= end,
+      )
+      .sort((left, right) => left.event_date.localeCompare(right.event_date));
+  }
+}
+
+export class InMemoryEventParticipantRepository implements EventParticipantRepository {
+  private readonly rows = new Map<string, EventParticipantRow>();
+
+  constructor(seed: EventParticipantRow[] = []) {
+    for (const row of seed) {
+      this.rows.set(eventParticipantKey(row.event_id, row.participant_id), row);
+    }
+  }
+
+  async upsert(input: EventParticipantUpsertInput): Promise<EventParticipantRow> {
+    const key = eventParticipantKey(input.eventId, input.participantId);
+    const existing = this.rows.get(key);
+    if (existing) {
+      return existing;
+    }
+
+    const row: EventParticipantRow = {
+      id: crypto.randomUUID(),
+      event_id: input.eventId,
+      participant_id: input.participantId,
+      role: input.role,
+      created_at: new Date().toISOString(),
+    };
+
+    this.rows.set(key, row);
+    return row;
+  }
+
+  async listByEvent(eventId: string): Promise<EventParticipantRow[]> {
+    return Array.from(this.rows.values()).filter((row) => row.event_id === eventId);
+  }
+
+  async listByParticipant(participantId: string): Promise<EventParticipantRow[]> {
+    return Array.from(this.rows.values()).filter((row) => row.participant_id === participantId);
   }
 }
 
@@ -472,9 +767,19 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
 
 export class InMemoryReferenceDataRepository implements ReferenceDataRepository {
   private readonly catalog: ReferenceDataCatalog;
+  private readonly participants: ParticipantRow[];
+  private readonly events: EventRow[];
 
-  constructor(catalog: ReferenceDataCatalog) {
+  constructor(
+    catalog: ReferenceDataCatalog,
+    options: {
+      participants?: ParticipantRow[];
+      events?: EventRow[];
+    } = {},
+  ) {
     this.catalog = catalog;
+    this.participants = options.participants ?? [];
+    this.events = options.events ?? [];
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
@@ -491,12 +796,34 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       .map((t) => ({ participantId: `team:${sportId}:${t}`, displayName: t, sport: sportId }));
   }
 
-  async searchPlayers(_sportId: string, _query: string, _limit?: number): Promise<PlayerSearchResult[]> {
-    return [];
+  async searchPlayers(sportId: string, query: string, limit = 20): Promise<PlayerSearchResult[]> {
+    const lowerQuery = query.toLowerCase();
+    return this.participants
+      .filter(
+        (row) =>
+          row.participant_type === 'player' &&
+          row.sport === sportId &&
+          row.display_name.toLowerCase().includes(lowerQuery),
+      )
+      .slice(0, limit)
+      .map((row) => ({
+        participantId: row.id,
+        displayName: row.display_name,
+        sport: row.sport ?? sportId,
+      }));
   }
 
-  async listEvents(_sportId: string, _date: string): Promise<EventSearchResult[]> {
-    return [];
+  async listEvents(sportId: string, date: string): Promise<EventSearchResult[]> {
+    return this.events
+      .filter((row) => row.sport_id === sportId && row.event_date === date)
+      .sort((left, right) => left.event_name.localeCompare(right.event_name))
+      .map((row) => ({
+        eventId: row.id,
+        eventName: row.event_name,
+        eventDate: row.event_date,
+        status: row.status,
+        sportId: row.sport_id,
+      }));
   }
 }
 
@@ -680,6 +1007,29 @@ export class DatabasePickRepository implements PickRepository {
     return data;
   }
 
+  async listByLifecycleState(
+    lifecycleState: CanonicalPick['lifecycleState'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    let query = this.client
+      .from('picks')
+      .select('*')
+      .eq('status', lifecycleState)
+      .order('created_at', { ascending: true });
+
+    if (limit !== undefined) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to list picks by lifecycle state: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
@@ -766,11 +1116,14 @@ export class DatabasePickRepository implements PickRepository {
   async getPromotionBoardState(
     input: PromotionBoardStateQuery,
   ): Promise<PromotionBoardStateSnapshot> {
+    // Only count picks that are currently active on the board.
+    // Settled and voided picks no longer occupy board capacity.
     const { data, error } = await this.client
       .from('picks')
       .select('market,selection,metadata,promotion_target,promotion_status')
       .eq('promotion_target', input.target)
-      .in('promotion_status', ['qualified', 'promoted']);
+      .in('promotion_status', ['qualified', 'promoted'])
+      .in('status', ['validated', 'queued', 'posted']);
 
     if (error) {
       throw new Error(`Failed to query promotion board state: ${error.message}`);
@@ -1021,6 +1374,115 @@ export class DatabaseSettlementRepository implements SettlementRepository {
 
     return data ?? [];
   }
+
+  async updatePayload(
+    settlementId: string,
+    payload: Record<string, unknown>,
+  ): Promise<SettlementRecord> {
+    const { data, error } = await this.client
+      .from('settlement_records')
+      .update({
+        payload: toJsonObject(payload),
+      })
+      .eq('id', settlementId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `Failed to update settlement payload: ${error?.message ?? 'unknown error'}`,
+      );
+    }
+
+    return data;
+  }
+}
+
+export class DatabaseGradeResultRepository implements GradeResultRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async insert(input: GradeResultInsertInput): Promise<GradeResultRecord> {
+    const { data, error } = await this.client
+      .from('game_results')
+      .insert({
+        event_id: input.eventId,
+        participant_id: input.participantId,
+        market_key: input.marketKey,
+        actual_value: input.actualValue,
+        source: input.source,
+        sourced_at: input.sourcedAt,
+      })
+      .select()
+      .single();
+
+    if (
+      error &&
+      (error.code === '23505' ||
+        error.message.toLowerCase().includes('duplicate key') ||
+        error.message.toLowerCase().includes('duplicate'))
+    ) {
+      const existing = await this.findResult({
+        eventId: input.eventId,
+        participantId: input.participantId,
+        marketKey: input.marketKey,
+      });
+      if (existing) {
+        return existing;
+      }
+    }
+
+    if (error || !data) {
+      throw new Error(`Failed to insert game result: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data;
+  }
+
+  async findResult(
+    criteria: GradeResultLookupCriteria,
+  ): Promise<GradeResultRecord | null> {
+    let query = this.client
+      .from('game_results')
+      .select()
+      .select('*')
+      .eq('event_id', criteria.eventId)
+      .eq('market_key', criteria.marketKey);
+
+    if (criteria.participantId === null) {
+      query = query.is('participant_id', null);
+    } else {
+      query = query.eq('participant_id', criteria.participantId);
+    }
+
+    const { data, error } = await query
+      .order('sourced_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find game result: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async listByEvent(eventId: string): Promise<GradeResultRecord[]> {
+    const { data, error } = await this.client
+      .from('game_results')
+      .select('*')
+      .eq('event_id', eventId)
+      .order('sourced_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to list game results: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
 }
 
 export class DatabaseSystemRunRepository implements SystemRunRepository {
@@ -1071,6 +1533,97 @@ export class DatabaseSystemRunRepository implements SystemRunRepository {
   }
 }
 
+export class DatabaseProviderOfferRepository implements ProviderOfferRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult> {
+    if (offers.length === 0) {
+      return {
+        insertedCount: 0,
+        updatedCount: 0,
+        totalProcessed: 0,
+      };
+    }
+
+    const idempotencyKeys = [...new Set(offers.map((offer) => offer.idempotencyKey))];
+    const existingKeys = new Set<string>();
+    for (let i = 0; i < idempotencyKeys.length; i += 100) {
+      const chunk = idempotencyKeys.slice(i, i + 100);
+      const { data: chunkRows, error: existingError } = await this.client
+        .from('provider_offers')
+        .select('idempotency_key')
+        .in('idempotency_key', chunk);
+      if (existingError) {
+        throw new Error(`Failed to load existing provider offers: ${existingError.message}`);
+      }
+      for (const row of chunkRows ?? []) {
+        existingKeys.add(row.idempotency_key);
+      }
+    }
+    const rows = offers.map(mapProviderOfferInsertToRow);
+
+    const { error } = await this.client
+      .from('provider_offers')
+      .upsert(rows, { onConflict: 'idempotency_key' });
+
+    if (error) {
+      throw new Error(`Failed to upsert provider offers: ${error.message}`);
+    }
+
+    return {
+      insertedCount: rows.length - existingKeys.size,
+      updatedCount: existingKeys.size,
+      totalProcessed: rows.length,
+    };
+  }
+
+  async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
+    const { data, error } = await this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('provider_key', providerKey)
+      .order('snapshot_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to list provider offers: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async findClosingLine(
+    criteria: ClosingLineLookupCriteria,
+  ): Promise<ProviderOfferRecord | null> {
+    let query = this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('provider_event_id', criteria.providerEventId)
+      .eq('provider_market_key', criteria.providerMarketKey)
+      .lte('snapshot_at', criteria.before);
+
+    if (criteria.providerParticipantId === undefined || criteria.providerParticipantId === null) {
+      query = query.is('provider_participant_id', null);
+    } else {
+      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+    }
+
+    const { data, error } = await query
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find closing line: ${error.message}`);
+    }
+
+    return data;
+  }
+}
+
 export class DatabaseAuditLogRepository implements AuditLogRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -1097,6 +1650,252 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
     }
 
     return data;
+  }
+}
+
+export class DatabaseParticipantRepository implements ParticipantRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async upsertByExternalId(input: ParticipantUpsertInput): Promise<ParticipantRow> {
+    const row = {
+      external_id: input.externalId,
+      display_name: input.displayName,
+      participant_type: input.participantType,
+      sport: input.sport ?? null,
+      league: input.league ?? null,
+      metadata: toJsonObject(input.metadata),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await this.client
+      .from('participants')
+      .upsert(row, { onConflict: 'external_id' })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to upsert participant: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data;
+  }
+
+  async findByExternalId(externalId: string): Promise<ParticipantRow | null> {
+    const { data, error } = await this.client
+      .from('participants')
+      .select('*')
+      .eq('external_id', externalId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load participant by external_id: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async findById(participantId: string): Promise<ParticipantRow | null> {
+    const { data, error } = await this.client
+      .from('participants')
+      .select('*')
+      .eq('id', participantId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load participant by id: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async listByType(participantType: ParticipantUpsertInput['participantType'], sport?: string) {
+    let query = this.client
+      .from('participants')
+      .select('*')
+      .eq('participant_type', participantType);
+    if (sport) {
+      query = query.eq('sport', sport);
+    }
+
+    const { data, error } = await query.order('display_name');
+    if (error) {
+      throw new Error(`Failed to list participants by type: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+}
+
+export class DatabaseEventRepository implements EventRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async upsertByExternalId(input: EventUpsertInput): Promise<EventRow> {
+    const existing = await this.findByExternalId(input.externalId);
+    if (existing) {
+      const { data, error } = await this.client
+        .from('events')
+        .update({
+          sport_id: input.sportId,
+          event_name: input.eventName,
+          event_date: input.eventDate,
+          metadata: toJsonObject(input.metadata),
+          status: existing.status === 'scheduled' ? input.status : existing.status,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', existing.id)
+        .select()
+        .single();
+
+      if (error || !data) {
+        throw new Error(`Failed to update event: ${error?.message ?? 'unknown error'}`);
+      }
+
+      return data;
+    }
+
+    const { data, error } = await this.client
+      .from('events')
+      .insert({
+        external_id: input.externalId,
+        sport_id: input.sportId,
+        event_name: input.eventName,
+        event_date: input.eventDate,
+        status: input.status,
+        metadata: toJsonObject(input.metadata),
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to insert event: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data;
+  }
+
+  async findByExternalId(externalId: string): Promise<EventRow | null> {
+    const { data, error } = await this.client
+      .from('events')
+      .select('*')
+      .eq('external_id', externalId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load event by external_id: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async findById(eventId: string): Promise<EventRow | null> {
+    const { data, error } = await this.client
+      .from('events')
+      .select('*')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load event by id: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async listUpcoming(sportId?: string, windowDays = 7): Promise<EventRow[]> {
+    const today = new Date();
+    const start = toIsoDate(addDays(today, -windowDays));
+    const end = toIsoDate(addDays(today, windowDays));
+    let query = this.client
+      .from('events')
+      .select('*')
+      .gte('event_date', start)
+      .lte('event_date', end);
+    if (sportId) {
+      query = query.eq('sport_id', sportId);
+    }
+
+    const { data, error } = await query.order('event_date', { ascending: true });
+    if (error) {
+      throw new Error(`Failed to list upcoming events: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+}
+
+export class DatabaseEventParticipantRepository implements EventParticipantRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async upsert(input: EventParticipantUpsertInput): Promise<EventParticipantRow> {
+    const existing = await this.client
+      .from('event_participants')
+      .select('*')
+      .eq('event_id', input.eventId)
+      .eq('participant_id', input.participantId)
+      .maybeSingle();
+
+    if (existing.error) {
+      throw new Error(`Failed to load event participant: ${existing.error.message}`);
+    }
+    if (existing.data) {
+      return existing.data;
+    }
+
+    const { data, error } = await this.client
+      .from('event_participants')
+      .insert({
+        event_id: input.eventId,
+        participant_id: input.participantId,
+        role: input.role,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `Failed to insert event participant link: ${error?.message ?? 'unknown error'}`,
+      );
+    }
+
+    return data;
+  }
+
+  async listByEvent(eventId: string): Promise<EventParticipantRow[]> {
+    const { data, error } = await this.client
+      .from('event_participants')
+      .select('*')
+      .eq('event_id', eventId);
+
+    if (error) {
+      throw new Error(`Failed to list event participants: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listByParticipant(participantId: string): Promise<EventParticipantRow[]> {
+    const { data, error } = await this.client
+      .from('event_participants')
+      .select('*')
+      .eq('participant_id', participantId);
+
+    if (error) {
+      throw new Error(`Failed to list participant event links: ${error.message}`);
+    }
+
+    return data ?? [];
   }
 }
 
@@ -1218,12 +2017,22 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
 }
 
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
+  const seededTeams = createSeededTeamParticipants();
+  const providerOffers = new InMemoryProviderOfferRepository();
+  const participants = new InMemoryParticipantRepository(seededTeams);
+  const events = new InMemoryEventRepository();
+  const eventParticipants = new InMemoryEventParticipantRepository();
   return {
     submissions: new InMemorySubmissionRepository(),
     picks: new InMemoryPickRepository(),
     outbox: new InMemoryOutboxRepository(),
     receipts: new InMemoryReceiptRepository(),
     settlements: new InMemorySettlementRepository(),
+    providerOffers,
+    participants,
+    events,
+    eventParticipants,
+    gradeResults: new InMemoryGradeResultRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
@@ -1239,14 +2048,75 @@ export function createDatabaseRepositoryBundle(
     outbox: new DatabaseOutboxRepository(connection),
     receipts: new DatabaseReceiptRepository(connection),
     settlements: new DatabaseSettlementRepository(connection),
+    providerOffers: new DatabaseProviderOfferRepository(connection),
+    participants: new DatabaseParticipantRepository(connection),
+    events: new DatabaseEventRepository(connection),
+    eventParticipants: new DatabaseEventParticipantRepository(connection),
+    gradeResults: new DatabaseGradeResultRepository(connection),
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
-    referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
+    referenceData: new DatabaseReferenceDataRepository(connection),
   };
+}
+
+export function createInMemoryIngestorRepositoryBundle(): IngestorRepositoryBundle {
+  const seededTeams = createSeededTeamParticipants();
+  return {
+    providerOffers: new InMemoryProviderOfferRepository(),
+    runs: new InMemorySystemRunRepository(),
+    events: new InMemoryEventRepository(),
+    eventParticipants: new InMemoryEventParticipantRepository(),
+    participants: new InMemoryParticipantRepository(seededTeams),
+    gradeResults: new InMemoryGradeResultRepository(),
+  };
+}
+
+export function createDatabaseIngestorRepositoryBundle(
+  connection: DatabaseConnectionConfig,
+): IngestorRepositoryBundle {
+  return {
+    providerOffers: new DatabaseProviderOfferRepository(connection),
+    runs: new DatabaseSystemRunRepository(connection),
+    events: new DatabaseEventRepository(connection),
+    eventParticipants: new DatabaseEventParticipantRepository(connection),
+    participants: new DatabaseParticipantRepository(connection),
+    gradeResults: new DatabaseGradeResultRepository(connection),
+  };
+}
+
+function createSeededTeamParticipants(): ParticipantRow[] {
+  const now = new Date().toISOString();
+  return V1_REFERENCE_DATA.sports.flatMap((sport) =>
+    sport.teams.map((team) => ({
+      id: crypto.randomUUID(),
+      display_name: team,
+      external_id: null,
+      league: sport.id.toUpperCase(),
+      metadata: toJsonObject({}),
+      participant_type: 'team',
+      sport: sport.id.toUpperCase(),
+      created_at: now,
+      updated_at: now,
+    })),
+  );
 }
 
 function toJsonObject(value: Record<string, unknown>): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
+}
+
+function eventParticipantKey(eventId: string, participantId: string) {
+  return `${eventId}:${participantId}`;
+}
+
+function addDays(date: Date, days: number) {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
+}
+
+function toIsoDate(date: Date) {
+  return date.toISOString().slice(0, 10);
 }
 
 function countMatchingSport(picks: PickRecord[], sport: string | undefined) {
@@ -1297,4 +2167,46 @@ function compareSettlementRecordsDescending(
   }
 
   return right.id.localeCompare(left.id);
+}
+
+function mapProviderOfferInsertToRecord(
+  offer: ProviderOfferInsert,
+  id: string = crypto.randomUUID(),
+  createdAt: string = new Date().toISOString(),
+): ProviderOfferRecord {
+  return {
+    id,
+    provider_key: offer.providerKey,
+    provider_event_id: offer.providerEventId,
+    provider_market_key: offer.providerMarketKey,
+    provider_participant_id: offer.providerParticipantId,
+    sport_key: offer.sportKey,
+    line: offer.line,
+    over_odds: offer.overOdds,
+    under_odds: offer.underOdds,
+    devig_mode: offer.devigMode,
+    is_opening: offer.isOpening,
+    is_closing: offer.isClosing,
+    snapshot_at: offer.snapshotAt,
+    idempotency_key: offer.idempotencyKey,
+    created_at: createdAt,
+  };
+}
+
+function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
+  return {
+    provider_key: offer.providerKey,
+    provider_event_id: offer.providerEventId,
+    provider_market_key: offer.providerMarketKey,
+    provider_participant_id: offer.providerParticipantId,
+    sport_key: offer.sportKey,
+    line: offer.line,
+    over_odds: offer.overOdds,
+    under_odds: offer.underOdds,
+    devig_mode: offer.devigMode,
+    is_opening: offer.isOpening,
+    is_closing: offer.isClosing,
+    snapshot_at: offer.snapshotAt,
+    idempotency_key: offer.idempotencyKey,
+  };
 }

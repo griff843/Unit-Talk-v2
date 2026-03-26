@@ -15,9 +15,11 @@ export const canonicalTables = [
   'sport_market_types',
   'stat_types',
   'sportsbooks',
+  'provider_offers',
   'cappers',
   'events',
   'event_participants',
+  'game_results',
 ] as const;
 
 export type CanonicalTable = (typeof canonicalTables)[number];

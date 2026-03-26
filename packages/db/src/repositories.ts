@@ -1,6 +1,7 @@
 import type {
   CanonicalPick,
   LifecycleEvent,
+  ProviderOfferInsert,
   SubmissionPayload,
   ValidatedSubmission,
 } from '@unit-talk/contracts';
@@ -8,6 +9,13 @@ import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
   ApprovalStatus,
   AuditLogRow,
+  EventParticipantRole,
+  EventParticipantRow,
+  EventRow,
+  GradeResultRecord,
+  EventStatus,
+  ParticipantRow,
+  ParticipantType,
   PickRecord,
   PickLifecycleRecord,
   PromotionHistoryRecord,
@@ -16,6 +24,7 @@ import type {
   PromotionTarget,
   OutboxRecord,
   ReceiptRecord,
+  ProviderOfferRecord,
   SettlementRecord,
   SubmissionEventRecord,
   SubmissionRecord,
@@ -48,6 +57,10 @@ export interface PickRepository {
     lifecycleState: CanonicalPick['lifecycleState'],
   ): Promise<PickRecord>;
   findPickById(pickId: string): Promise<PickRecord | null>;
+  listByLifecycleState(
+    lifecycleState: CanonicalPick['lifecycleState'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]>;
   persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult>;
@@ -156,6 +169,10 @@ export interface SettlementCreateInput {
 
 export interface SettlementRepository {
   record(input: SettlementCreateInput): Promise<SettlementRecord>;
+  updatePayload(
+    settlementId: string,
+    payload: Record<string, unknown>,
+  ): Promise<SettlementRecord>;
   findLatestForPick(pickId: string): Promise<SettlementRecord | null>;
   listByPick(pickId: string): Promise<SettlementRecord[]>;
   listRecent(limit?: number | undefined): Promise<SettlementRecord[]>;
@@ -177,6 +194,92 @@ export interface SystemRunCompleteInput {
 export interface SystemRunRepository {
   startRun(input: SystemRunStartInput): Promise<SystemRunRecord>;
   completeRun(input: SystemRunCompleteInput): Promise<SystemRunRecord>;
+}
+
+export type ProviderOfferUpsertInput = ProviderOfferInsert;
+
+export interface ProviderOfferUpsertResult {
+  insertedCount: number;
+  updatedCount: number;
+  totalProcessed: number;
+}
+
+export interface ClosingLineLookupCriteria {
+  providerEventId: string;
+  providerMarketKey: string;
+  providerParticipantId?: string | null | undefined;
+  before: string;
+}
+
+export interface ProviderOfferRepository {
+  upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
+  findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
+  listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
+}
+
+export interface ParticipantUpsertInput {
+  externalId: string;
+  displayName: string;
+  participantType: ParticipantType;
+  sport?: string | null | undefined;
+  league?: string | null | undefined;
+  metadata: Record<string, unknown>;
+}
+
+export interface ParticipantRepository {
+  upsertByExternalId(input: ParticipantUpsertInput): Promise<ParticipantRow>;
+  findById(participantId: string): Promise<ParticipantRow | null>;
+  findByExternalId(externalId: string): Promise<ParticipantRow | null>;
+  listByType(participantType: ParticipantType, sport?: string | undefined): Promise<ParticipantRow[]>;
+}
+
+export interface EventUpsertInput {
+  externalId: string;
+  sportId: string;
+  eventName: string;
+  eventDate: string;
+  status: EventStatus;
+  metadata: Record<string, unknown>;
+}
+
+export interface EventRepository {
+  upsertByExternalId(input: EventUpsertInput): Promise<EventRow>;
+  findById(eventId: string): Promise<EventRow | null>;
+  findByExternalId(externalId: string): Promise<EventRow | null>;
+  listUpcoming(sportId?: string, windowDays?: number): Promise<EventRow[]>;
+}
+
+export interface EventParticipantUpsertInput {
+  eventId: string;
+  participantId: string;
+  role: EventParticipantRole;
+}
+
+export interface EventParticipantRepository {
+  upsert(input: EventParticipantUpsertInput): Promise<EventParticipantRow>;
+  listByEvent(eventId: string): Promise<EventParticipantRow[]>;
+  listByParticipant(participantId: string): Promise<EventParticipantRow[]>;
+}
+
+export interface GradeResultInsertInput {
+  eventId: string;
+  participantId: string | null;
+  marketKey: string;
+  actualValue: number;
+  source: string;
+  sourcedAt: string;
+}
+
+export interface GradeResultLookupCriteria {
+  eventId: string;
+  participantId: string | null;
+  marketKey: string;
+}
+
+export interface GradeResultRepository {
+  insert(input: GradeResultInsertInput): Promise<GradeResultRecord>;
+  findResult(criteria: GradeResultLookupCriteria): Promise<GradeResultRecord | null>;
+  listByEvent(eventId: string): Promise<GradeResultRecord[]>;
 }
 
 export interface AuditLogCreateInput {
@@ -232,9 +335,23 @@ export interface RepositoryBundle {
   outbox: OutboxRepository;
   receipts: ReceiptRepository;
   settlements: SettlementRepository;
+  providerOffers: ProviderOfferRepository;
+  participants: ParticipantRepository;
+  events: EventRepository;
+  eventParticipants: EventParticipantRepository;
+  gradeResults: GradeResultRepository;
   runs: SystemRunRepository;
   audit: AuditLogRepository;
   referenceData: ReferenceDataRepository;
+}
+
+export interface IngestorRepositoryBundle {
+  providerOffers: ProviderOfferRepository;
+  runs: SystemRunRepository;
+  events: EventRepository;
+  eventParticipants: EventParticipantRepository;
+  participants: ParticipantRepository;
+  gradeResults: GradeResultRepository;
 }
 
 export function mapValidatedSubmissionToSubmissionCreateInput(
