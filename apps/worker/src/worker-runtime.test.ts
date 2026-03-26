@@ -416,6 +416,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       settlements: {} as RepositoryBundle['settlements'],
       runs,
       audit,
+      referenceData: {} as RepositoryBundle['referenceData'],
     },
     picks,
     receipts,

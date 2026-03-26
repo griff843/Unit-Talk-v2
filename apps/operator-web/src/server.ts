@@ -8,6 +8,7 @@ import {
   type SystemRunRecord,
   type PickRecord,
   type AuditLogRow,
+  type SubmissionRecord,
 } from '@unit-talk/db';
 import { loadEnvironment } from '@unit-talk/config';
 import {
@@ -103,15 +104,46 @@ export interface OperatorSnapshotProvider {
   getSnapshot(filter?: OutboxFilter): Promise<OperatorSnapshot>;
 }
 
+export type StatsWindowDays = 7 | 14 | 30 | 90;
+
+export interface CapperStatsResponse {
+  scope: 'capper' | 'server';
+  capper: string | null;
+  window: StatsWindowDays;
+  sport: string | null;
+  picks: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  winRate: number | null;
+  roiPct: number | null;
+  avgClvPct: number | null;
+  beatsLine: number | null;
+  picksWithClv: number;
+  lastFive: Array<'W' | 'L' | 'P'>;
+}
+
+export interface OperatorStatsQuery {
+  capper?: string;
+  window: StatsWindowDays;
+  sport?: string;
+}
+
+export interface OperatorStatsProvider {
+  getStats(query: OperatorStatsQuery): Promise<CapperStatsResponse>;
+}
+
 export interface OperatorServerOptions {
   provider?: OperatorSnapshotProvider;
+  statsProvider?: OperatorStatsProvider;
 }
 
 export function createOperatorServer(options: OperatorServerOptions = {}) {
   const provider = options.provider ?? createOperatorSnapshotProvider();
+  const statsProvider = options.statsProvider ?? createOperatorStatsProvider();
 
   return http.createServer(async (request, response) => {
-    await routeOperatorRequest(request, response, provider);
+    await routeOperatorRequest(request, response, provider, statsProvider);
   });
 }
 
@@ -119,6 +151,7 @@ export async function routeOperatorRequest(
   request: IncomingMessage,
   response: ServerResponse,
   provider: OperatorSnapshotProvider,
+  statsProvider: OperatorStatsProvider,
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -176,6 +209,22 @@ export async function routeOperatorRequest(
   if (method === 'GET' && url.pathname === '/api/operator/recap') {
     const snapshot = await provider.getSnapshot();
     return writeJson(response, 200, { ok: true, data: snapshot.recap });
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/stats') {
+    const statsQuery = parseStatsQuery(url);
+    if ('error' in statsQuery) {
+      return writeJson(response, 400, {
+        ok: false,
+        error: {
+          code: 'INVALID_QUERY',
+          message: statsQuery.error,
+        },
+      });
+    }
+
+    const stats = await statsProvider.getStats(statsQuery);
+    return writeJson(response, 200, { ok: true, data: stats });
   }
 
   if (method === 'GET' && url.pathname === '/') {
@@ -317,6 +366,85 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           recentPicks: [],
           recentAudit: [],
         });
+      },
+    };
+  }
+}
+
+export function createOperatorStatsProvider(): OperatorStatsProvider {
+  try {
+    const env = loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    const client = createDatabaseClientFromConnection(connection);
+
+    return {
+      async getStats(query: OperatorStatsQuery) {
+        const sinceIso = createStatsSinceIso(query.window);
+        const candidateSettlementsResult = await client
+          .from('settlement_records')
+          .select('*')
+          .eq('source', 'grading')
+          .gte('settled_at', sinceIso)
+          .in('result', ['win', 'loss', 'push']);
+
+        if (candidateSettlementsResult.error) {
+          throw candidateSettlementsResult.error;
+        }
+
+        const candidateSettlements = candidateSettlementsResult.data ?? [];
+        if (candidateSettlements.length === 0) {
+          return createEmptyStatsResponse(query);
+        }
+
+        const pickIds = uniqueStrings(candidateSettlements.map((row) => row.pick_id));
+        const [allSettlementsResult, picksResult] = await Promise.all([
+          client
+            .from('settlement_records')
+            .select('*')
+            .eq('source', 'grading')
+            .in('pick_id', pickIds),
+          client.from('picks').select('*').in('id', pickIds),
+        ]);
+
+        if (allSettlementsResult.error) {
+          throw allSettlementsResult.error;
+        }
+        if (picksResult.error) {
+          throw picksResult.error;
+        }
+
+        const picks = picksResult.data ?? [];
+        const submissionIds = uniqueStrings(
+          picks
+            .map((row) => row.submission_id)
+            .filter((value): value is string => typeof value === 'string' && value.length > 0),
+        );
+
+        const submissionsResult =
+          submissionIds.length > 0
+            ? await client.from('submissions').select('*').in('id', submissionIds)
+            : { data: [] as SubmissionRecord[], error: null };
+
+        if (submissionsResult.error) {
+          throw submissionsResult.error;
+        }
+
+        const statsRows = createStatsRows({
+          settlements: allSettlementsResult.data ?? [],
+          picks,
+          submissions: submissionsResult.data ?? [],
+        });
+
+        return buildCapperStatsResponse(
+          query,
+          statsRows.filter((row) => matchesStatsWindow(row, sinceIso)),
+        );
+      },
+    };
+  } catch {
+    return {
+      async getStats(query: OperatorStatsQuery) {
+        return createEmptyStatsResponse(query);
       },
     };
   }
@@ -510,6 +638,246 @@ function resolveAllEffectiveSettlements(settlements: SettlementRecord[]): Effect
     }
   }
   return effective;
+}
+
+export interface StatsRow {
+  settlement: EffectiveSettlement;
+  rawSettlement: SettlementRecord;
+  pick: PickRecord;
+  submission: SubmissionRecord | null;
+}
+
+export function createStatsRows(input: {
+  settlements: SettlementRecord[];
+  picks: PickRecord[];
+  submissions: SubmissionRecord[];
+}): StatsRow[] {
+  const pickById = new Map(input.picks.map((pick) => [pick.id, pick] as const));
+  const submissionById = new Map(
+    input.submissions.map((submission) => [submission.id, submission] as const),
+  );
+  const grouped = new Map<string, SettlementRecord[]>();
+
+  for (const settlement of input.settlements) {
+    const existing = grouped.get(settlement.pick_id);
+    if (existing) {
+      existing.push(settlement);
+    } else {
+      grouped.set(settlement.pick_id, [settlement]);
+    }
+  }
+
+  const rows: StatsRow[] = [];
+  for (const [pickId, records] of grouped.entries()) {
+    const effective = resolveEffectiveSettlement(records.map(mapSettlementRecordToInput));
+    if (!effective.ok || effective.settlement.status !== 'settled') {
+      continue;
+    }
+
+    const pick = pickById.get(pickId);
+    if (!pick) {
+      continue;
+    }
+
+    const submission =
+      pick.submission_id !== null ? submissionById.get(pick.submission_id) ?? null : null;
+
+    rows.push({
+      settlement: effective.settlement,
+      rawSettlement: records.find((record) => record.id === effective.settlement.effective_record_id) ?? records[records.length - 1]!,
+      pick,
+      submission,
+    });
+  }
+
+  return rows;
+}
+
+export function buildCapperStatsResponse(
+  query: OperatorStatsQuery,
+  rows: StatsRow[],
+): CapperStatsResponse {
+  const filtered = rows.filter((row) => {
+    if (query.capper && !matchesCapperName(row.submission?.submitted_by, query.capper)) {
+      return false;
+    }
+
+    if (query.sport && !matchesSport(row.pick, query.sport)) {
+      return false;
+    }
+
+    return isSettledResult(row.settlement.result);
+  });
+
+  if (filtered.length === 0) {
+    return createEmptyStatsResponse(query);
+  }
+
+  const settledRows = [...filtered].sort((left, right) =>
+    left.settlement.settled_at.localeCompare(right.settlement.settled_at),
+  );
+
+  const wins = settledRows.filter((row) => row.settlement.result === 'win').length;
+  const losses = settledRows.filter((row) => row.settlement.result === 'loss').length;
+  const pushes = settledRows.filter((row) => row.settlement.result === 'push').length;
+  const decidedPicks = wins + losses;
+
+  const clvValues = settledRows
+    .map((row) => readNumericPayloadValue(findSettlementRecordPayload(row, 'clvRaw')))
+    .filter((value): value is number => value !== null);
+
+  const beatsLineCount = settledRows.filter((row) =>
+    readBooleanPayloadValue(findSettlementRecordPayload(row, 'beatsClosingLine')),
+  ).length;
+
+  return {
+    scope: query.capper ? 'capper' : 'server',
+    capper:
+      query.capper ??
+      settledRows.find((row) => row.submission?.submitted_by)?.submission?.submitted_by ??
+      null,
+    window: query.window,
+    sport: query.sport ?? null,
+    picks: settledRows.length,
+    wins,
+    losses,
+    pushes,
+    winRate: decidedPicks > 0 ? roundTo4(wins / decidedPicks) : null,
+    roiPct: decidedPicks > 0 ? roundTo2(((wins - losses) / decidedPicks) * 100) : null,
+    avgClvPct:
+      clvValues.length > 0
+        ? roundTo2(clvValues.reduce((sum, value) => sum + value, 0) / clvValues.length)
+        : null,
+    beatsLine: clvValues.length > 0 ? roundTo4(beatsLineCount / clvValues.length) : null,
+    picksWithClv: clvValues.length,
+    lastFive: settledRows.slice(-5).map((row) => mapResultToLastFiveToken(row.settlement.result)),
+  };
+}
+
+export function createEmptyStatsResponse(query: OperatorStatsQuery): CapperStatsResponse {
+  return {
+    scope: query.capper ? 'capper' : 'server',
+    capper: query.capper ?? null,
+    window: query.window,
+    sport: query.sport ?? null,
+    picks: 0,
+    wins: 0,
+    losses: 0,
+    pushes: 0,
+    winRate: null,
+    roiPct: null,
+    avgClvPct: null,
+    beatsLine: null,
+    picksWithClv: 0,
+    lastFive: [],
+  };
+}
+
+export function parseStatsQuery(
+  url: URL,
+): OperatorStatsQuery | { error: string } {
+  const requestedWindow = url.searchParams.get('last');
+  const parsedWindow = requestedWindow === null ? 30 : Number.parseInt(requestedWindow, 10);
+  if (!isAllowedStatsWindow(parsedWindow)) {
+    return { error: 'Query parameter "last" must be one of 7, 14, 30, 90.' };
+  }
+
+  const capper = normalizeOptionalQueryValue(url.searchParams.get('capper'));
+  const sport = normalizeOptionalQueryValue(url.searchParams.get('sport'));
+
+  return {
+    ...(capper ? { capper } : {}),
+    ...(sport ? { sport } : {}),
+    window: parsedWindow,
+  };
+}
+
+function isAllowedStatsWindow(value: number): value is StatsWindowDays {
+  return value === 7 || value === 14 || value === 30 || value === 90;
+}
+
+function normalizeOptionalQueryValue(value: string | null): string | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function createStatsSinceIso(window: StatsWindowDays) {
+  return new Date(Date.now() - window * 24 * 60 * 60 * 1000).toISOString();
+}
+
+function uniqueStrings(values: string[]) {
+  return [...new Set(values)];
+}
+
+function matchesStatsWindow(row: StatsRow, sinceIso: string) {
+  return row.settlement.settled_at >= sinceIso;
+}
+
+function matchesCapperName(submittedBy: string | null | undefined, requestedCapper: string) {
+  return (submittedBy ?? '').trim().toLowerCase() === requestedCapper.trim().toLowerCase();
+}
+
+function matchesSport(pick: PickRecord, requestedSport: string) {
+  const metadata = readJsonObject(pick.metadata);
+  const sport = metadata?.['sport'];
+  return typeof sport === 'string' && sport.trim().toLowerCase() === requestedSport.trim().toLowerCase();
+}
+
+function isSettledResult(result: string | null): result is 'win' | 'loss' | 'push' {
+  return result === 'win' || result === 'loss' || result === 'push';
+}
+
+function mapResultToLastFiveToken(result: string | null): 'W' | 'L' | 'P' {
+  if (result === 'win') return 'W';
+  if (result === 'loss') return 'L';
+  return 'P';
+}
+
+function findSettlementRecordPayload(row: StatsRow, key: string) {
+  return readJsonObject(row.rawSettlement.payload)?.[key] ?? null;
+}
+
+function readNumericPayloadValue(value: unknown): number | null {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    const parsed = Number.parseFloat(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+}
+
+function readBooleanPayloadValue(value: unknown) {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return value.trim().toLowerCase() === 'true';
+  }
+
+  return false;
+}
+
+function readJsonObject(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : null;
+}
+
+function roundTo2(value: number) {
+  return Math.round(value * 100) / 100;
+}
+
+function roundTo4(value: number) {
+  return Math.round(value * 10000) / 10000;
 }
 
 function buildEffectiveSettlementResultMap(settlements: SettlementRecord[]) {
