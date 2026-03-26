@@ -84,6 +84,7 @@ test(
       assert.ok(savedPick);
       assert.equal(savedPick?.id, result.pick.id);
       assert.equal(savedPick?.submission_id, result.submission.id);
+      assert.equal(savedPick?.market, 'points-all-game-ou');
       assert.equal(savedPick?.status, 'settled');
     } finally {
       await client.from('picks').delete().eq('id', result.pick.id);

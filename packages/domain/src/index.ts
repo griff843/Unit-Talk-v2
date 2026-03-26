@@ -12,6 +12,7 @@ export interface ProgramCapability {
 }
 
 export * from './distribution.js';
+export * from './market-key.js';
 export * from './submission.js';
 export * from './picks.js';
 export * from './promotion.js';
