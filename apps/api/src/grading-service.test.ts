@@ -154,6 +154,28 @@ async function seedClosingLine(
   ]);
 }
 
+async function seedDistributionReceipt(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  pickId: string,
+  channel: string,
+) {
+  const outboxRecord = await repositories.outbox.enqueue({
+    pickId,
+    target: channel,
+    payload: {},
+    idempotencyKey: `outbox:${pickId}:${channel}`,
+  });
+  await repositories.outbox.markSent(outboxRecord.id);
+  await repositories.receipts.record({
+    outboxId: outboxRecord.id,
+    receiptType: 'discord.message',
+    status: 'sent',
+    channel,
+    externalId: `message:${pickId}`,
+    payload: { adapter: 'discord' },
+  });
+}
+
 test('runGradingPass grades a posted over pick and records grading settlement', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
   const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
@@ -184,6 +206,123 @@ test('runGradingPass grades a posted over pick and records grading settlement', 
   assert.equal(settlements.length, 1);
   assert.equal(settlements[0]?.source, 'grading');
   assert.equal(settlements[0]?.result, 'win');
+});
+
+test('runGradingPass posts a settlement recap embed for a graded pick with CLV', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -105,
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+    eventExternalId: 'evt-recap-1',
+    participantExternalId: 'PLAYER_RECAP_1',
+  });
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      capper: 'griff843',
+    },
+  }));
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedClosingLine(repositories, {
+    providerEventId: 'evt-recap-1',
+    providerParticipantId: 'PLAYER_RECAP_1',
+    marketKey: 'points-all-game-ou',
+  });
+  await seedDistributionReceipt(repositories, pickId, 'discord:1296531122234327100');
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousFetch = globalThis.fetch;
+  let capturedUrl = '';
+  let capturedBody = '';
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  globalThis.fetch = async (input, init) => {
+    capturedUrl = String(input);
+    capturedBody = String(init?.body ?? '');
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  try {
+    const result = await runGradingPass(repositories);
+
+    assert.equal(result.graded, 1);
+    assert.equal(
+      capturedUrl,
+      'https://discord.com/api/v10/channels/1296531122234327100/messages',
+    );
+    const body = JSON.parse(capturedBody) as {
+      embeds?: Array<{
+        fields?: Array<{ name: string; value: string }>;
+      }>;
+    };
+    const fields = body.embeds?.[0]?.fields ?? [];
+    assert.deepEqual(
+      fields.map((field) => [field.name, field.value]),
+      [
+        ['Market', 'points-all-game-ou'],
+        ['Selection', 'Over 24.5'],
+        ['Result', 'Win'],
+        ['P/L', '+1.0u'],
+        ['CLV%', '+5.5%'],
+        ['Capper', 'griff843'],
+        ['Stake', '—'],
+      ],
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+});
+
+test('runGradingPass skips recap posting and logs a warning when no delivery target exists', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+  });
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  const warnings: string[] = [];
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+
+  try {
+    const result = await runGradingPass(repositories, {
+      logger: {
+        error() {},
+        warn(message: string) {
+          warnings.push(message);
+        },
+      },
+    });
+
+    assert.equal(result.graded, 1);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? '', /Skipping recap for pick .*no_sent_distribution_outbox/);
+  } finally {
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
 });
 
 test('runGradingPass grades under selections by inverting the over-side result', async () => {

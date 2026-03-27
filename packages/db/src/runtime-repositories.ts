@@ -342,6 +342,17 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     );
   }
 
+  async findLatestByPick(
+    pickId: string,
+    statuses: readonly string[] = ['sent'],
+  ): Promise<OutboxRecord | null> {
+    return (
+      [...this.entries]
+        .filter((entry) => entry.pick_id === pickId && statuses.includes(entry.status))
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null
+    );
+  }
+
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
     const next = this.entries.find(
       (entry) =>
@@ -413,6 +424,21 @@ export class InMemoryReceiptRepository implements ReceiptRepository {
 
     this.receipts.push(record);
     return record;
+  }
+
+  async findLatestByOutboxId(
+    outboxId: string,
+    receiptType?: string | undefined,
+  ): Promise<ReceiptRecord | null> {
+    const matching = this.receipts
+      .filter(
+        (record) =>
+          record.outbox_id === outboxId &&
+          (receiptType === undefined || record.receipt_type === receiptType),
+      )
+      .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at));
+
+    return matching[0] ?? null;
   }
 }
 
@@ -1208,6 +1234,26 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return (data as OutboxRecord | null) ?? null;
   }
 
+  async findLatestByPick(
+    pickId: string,
+    statuses: readonly string[] = ['sent'],
+  ): Promise<OutboxRecord | null> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .select('*')
+      .eq('pick_id', pickId)
+      .in('status', [...statuses])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find latest outbox row by pick: ${error.message}`);
+    }
+
+    return (data as OutboxRecord | null) ?? null;
+  }
+
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
     const { data: pending, error: selectError } = await this.client
       .from('distribution_outbox')
@@ -1331,6 +1377,30 @@ export class DatabaseReceiptRepository implements ReceiptRepository {
     }
 
     return data as ReceiptRecord;
+  }
+
+  async findLatestByOutboxId(
+    outboxId: string,
+    receiptType?: string | undefined,
+  ): Promise<ReceiptRecord | null> {
+    let query = this.client
+      .from('distribution_receipts')
+      .select('*')
+      .eq('outbox_id', outboxId)
+      .order('recorded_at', { ascending: false })
+      .limit(1);
+
+    if (receiptType) {
+      query = query.eq('receipt_type', receiptType);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find latest receipt by outbox id: ${error.message}`);
+    }
+
+    return (data as ReceiptRecord | null) ?? null;
   }
 }
 

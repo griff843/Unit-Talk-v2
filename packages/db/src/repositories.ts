@@ -134,6 +134,10 @@ export interface OutboxRepository {
     target: string,
     statuses?: readonly string[] | undefined,
   ): Promise<OutboxRecord | null>;
+  findLatestByPick(
+    pickId: string,
+    statuses?: readonly string[] | undefined,
+  ): Promise<OutboxRecord | null>;
   claimNext(target: string, workerId: string): Promise<OutboxRecord | null>;
   markSent(outboxId: string): Promise<OutboxRecord>;
   markFailed(
@@ -155,6 +159,10 @@ export interface ReceiptCreateInput {
 
 export interface ReceiptRepository {
   record(input: ReceiptCreateInput): Promise<ReceiptRecord>;
+  findLatestByOutboxId(
+    outboxId: string,
+    receiptType?: string | undefined,
+  ): Promise<ReceiptRecord | null>;
 }
 
 export interface SettlementCreateInput {
