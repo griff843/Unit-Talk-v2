@@ -287,7 +287,8 @@ export class InMemoryPickRepository implements PickRepository {
       (pick) =>
         pick.promotion_target === input.target &&
         (pick.promotion_status === 'qualified' || pick.promotion_status === 'promoted') &&
-        (pick.status === 'validated' || pick.status === 'queued' || pick.status === 'posted'),
+        pick.status !== 'settled' &&
+        pick.status !== 'voided',
     );
 
     return {
@@ -1123,7 +1124,8 @@ export class DatabasePickRepository implements PickRepository {
       .select('market,selection,metadata,promotion_target,promotion_status')
       .eq('promotion_target', input.target)
       .in('promotion_status', ['qualified', 'promoted'])
-      .in('status', ['validated', 'queued', 'posted']);
+      .neq('status', 'settled')
+      .neq('status', 'voided');
 
     if (error) {
       throw new Error(`Failed to query promotion board state: ${error.message}`);

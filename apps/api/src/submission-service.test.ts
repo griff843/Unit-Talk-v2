@@ -1128,6 +1128,107 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
   assert.match(stored?.promotion_reason ?? '', /board cap/i);
 });
 
+test('settled best-bets picks do not consume board capacity', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const seededPickIds: string[] = [];
+  const seededSports = ['NBA', 'NFL', 'NHL', 'MLB', 'NCAAB'];
+
+  for (let index = 0; index < 5; index += 1) {
+    const seeded = await processSubmission(
+      {
+        source: 'test',
+        market: `NBA points ${index}`,
+        selection: `Player Over ${20 + index}.5`,
+        confidence: 0.95,
+        metadata: {
+          sport: seededSports[index],
+          eventName: `Game ${index}`,
+          promotionScores: {
+            edge: 95,
+            trust: 94,
+            readiness: 90,
+            uniqueness: 90,
+            boardFit: 92,
+          },
+        },
+      },
+      repositories,
+    );
+
+    await applyPromotionOverride(
+      {
+        pickId: seeded.pick.id,
+        actor: 'operator',
+        action: 'force_promote',
+        reason: 'seed board state',
+      },
+      repositories.picks,
+      repositories.audit,
+    );
+
+    seededPickIds.push(seeded.pick.id);
+  }
+
+  const settledPickId = seededPickIds[0];
+  assert.ok(settledPickId);
+
+  await transitionPickLifecycle(
+    repositories.picks,
+    settledPickId,
+    'queued',
+    'seed board slot queued',
+  );
+  await transitionPickLifecycle(
+    repositories.picks,
+    settledPickId,
+    'posted',
+    'seed board slot posted',
+  );
+  await transitionPickLifecycle(
+    repositories.picks,
+    settledPickId,
+    'settled',
+    'seed board slot settled',
+  );
+
+  const candidate = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA rebounds',
+      selection: 'Player Over 9.5',
+      confidence: 0.92,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Late Game',
+        promotionScores: {
+          edge: 78,
+          trust: 79,
+          readiness: 90,
+          uniqueness: 88,
+          boardFit: 90,
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(candidate.pick.promotionStatus, 'qualified');
+  assert.equal(candidate.pick.promotionTarget, 'best-bets');
+
+  const boardState = await repositories.picks.getPromotionBoardState({
+    target: 'best-bets',
+    sport: 'NBA',
+    eventName: 'Late Game',
+    market: 'NBA rebounds',
+    selection: 'Player Over 9.5',
+  });
+
+  assert.equal(boardState.currentBoardCount, 5);
+  assert.equal(boardState.sameSportCount, 1);
+  assert.equal(boardState.sameGameCount, 1);
+  assert.equal(boardState.duplicateCount, 1);
+});
+
 test('duplicate suppression blocks repeated best-bets thesis', async () => {
   const repositories = createInMemoryRepositoryBundle();
   // edge=78 < 85 → trader-insights suppressed for both picks; bb sees the duplicate.
