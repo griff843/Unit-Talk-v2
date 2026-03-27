@@ -3,48 +3,53 @@
 > Canonical active status authority for Unit Talk V2.
 > Adopted 2026-03-21. Replaces `status_source_of_truth.md`, `current_phase.md`, and `next_build_order.md` for active maintenance.
 > Operating model: `docs/05_operations/SPRINT_MODEL_v2.md`
-> Runtime evidence: `docs/06_status/system_snapshot.md`
+> Issue queue: `docs/06_status/ISSUE_QUEUE.md`
 
 ## Last Updated
 
-2026-03-23 (Full Lifecycle Truth Verification closed — FULL_LIFECYCLE_VERIFIED)
+2026-03-27 — rebuilt from repo truth after stale-authority drift (prior version was 2026-03-23, 534/534, Smart Form V1 as next milestone — all three claims wrong)
+
+---
 
 ## Current State
 
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | 534/534 passing — deterministic across consecutive runs |
-| Gates | All gates PASS. `pnpm verify` exits 0. |
-| Operating Model | Risk-tiered sprints (T1/T2/T3) — see `SPRINT_MODEL_v2.md` |
+| Tests (main, verified 2026-03-27) | **606/606 passing** — 0 failures, all 6 groups clean |
+| Tests (pending UTV2-44 merge) | 617 — Codex's leaderboard + ephemeral fix uncommitted |
+| Gates | All gates PASS on current main. `pnpm verify` exits 0. |
+| Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
+| Active lanes | UTV2-44 IN_REVIEW (soft block, ephemeral fix applied by Codex); UTV2-46 READY |
+| Milestone | M7 — Discord social surfaces + CLV wiring |
 
-## Gate Notes (2026-03-22)
+## Gate Notes (2026-03-27)
 
 | Gate | Status | Notes |
 |------|--------|-------|
-| `pnpm env:check` | PASS | Environment files pass validation. |
-| `pnpm lint` | PASS | 0 errors. `.next/**` added to eslint ignores. Ported Radix UI components in `apps/smart-form/components/ui/**` exempt from `no-explicit-any` / `no-empty-object-type`. |
+| `pnpm env:check` | PASS | |
+| `pnpm lint` | PASS | 0 errors. `.next/**` in eslint ignores. Radix UI components exempt from `no-explicit-any`/`no-empty-object-type`. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 534/534. 6 bounded groups (4–9 files each), chained with `&&`. Deterministic on Windows. |
-| `pnpm verify` (full chain) | PASS | Exit 0 on two consecutive runs without memory reset. |
+| `pnpm test` | PASS | 606/606. 6 bounded groups chained with `&&`. Verified 2026-03-27. |
+| `pnpm verify` (full chain) | PASS | Exit 0. |
 
-### Runner Architecture (post-hardening)
+### Runner Architecture
 
-The root `test` script is split into 6 named groups:
+Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed).
 
 | Script | Files | Surface |
 |--------|-------|---------|
-| `pnpm test:apps` | 7 | apps/api + apps/worker + apps/operator-web |
+| `pnpm test:apps` | 10 | api (6 files) + worker + operator-web + discord-bot |
 | `pnpm test:verification` | 4 | packages/verification |
 | `pnpm test:domain-probability` | 6 | domain/probability + domain/outcomes-core |
 | `pnpm test:domain-features` | 9 | domain/features + domain/models |
 | `pnpm test:domain-signals` | 6 | domain/signals + bands + calibration + scoring |
-| `pnpm test:domain-analytics` | 8 | domain/outcomes + market + eval + edge + rollups + system-health + risk + strategy |
+| `pnpm test:domain-analytics` | 9 | domain/outcomes + market + eval + edge + rollups + system-health + risk + strategy + market-key |
 
-`pnpm test` chains all 6 with `&&` (fail-closed). Each group is independently invocable for targeted debugging.
+**Note:** `apps/smart-form` tests run via `pnpm --filter @unit-talk/smart-form test` only — not in root `pnpm test`. 12/12 smart-form tests pass locally.
 
-**Previous issue (resolved)**: A single 40-file `tsx --test` invocation caused non-deterministic `STATUS_STACK_BUFFER_OVERRUN` (Windows exit code 3221226505) on the `pnpm verify` chain due to stack exhaustion under memory pressure. Fixed by splitting into groups of ≤9 files — no tsx process now handles more than 9 files. Two consecutive `pnpm verify` runs confirmed deterministic exit 0.
+---
 
 ## Live Routing
 
@@ -57,25 +62,51 @@ The root `test` script is split into 6 named groups:
 | `discord:game-threads` | Blocked | Thread routing not implemented. |
 | `discord:strategy-room` | Blocked | DM routing not implemented. |
 
+---
+
+## Active Lanes (as of 2026-03-27)
+
+| ID | Item | Tier | Status | Notes |
+|----|------|------|--------|-------|
+| UTV2-44 | Discord /leaderboard + GET /api/operator/leaderboard | T2 | **IN_REVIEW** | SOFT BLOCK: ephemeral fix applied by Codex, awaiting re-review and PR. Contract: `T2_DISCORD_LEADERBOARD_CONTRACT.md`. |
+| UTV2-46 | CLV settlement wiring (computeAndAttachCLV) | T2 | READY | Contract: `T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`. Opens after UTV2-44 merges or in parallel. |
+
+---
+
 ## Sprint Log
 
-| Sprint | Week | Tier | Status | Summary |
-|--------|------|------|--------|---------|
-| UTV2-34 Deploy Commands Verify | — | T3 | **IN_REVIEW** | Clean branch (cherry-pick 79fb85f + a3d4faa from stacked PR). `deploy-commands` script reaches Discord API and deploys 1 command to guild `1284478946171293736`. Result: `DiscordAPIError[20012]` — DISCORD_CLIENT_ID in local.env (`1045344984280346674`) does not match the application owning the bot token. Script is correct; fix requires verifying CLIENT_ID in Discord Developer Portal. Added `discord.js@14` as a declared dependency (was missing — pre-existing gap masked by tsbuildinfo cache). `pnpm type-check` exit 0. All tests pass. |
-| Full Lifecycle Truth Verification | — | T1 | **CLOSED** | All 10 stages verified end-to-end. Fixed: catalog endpoint (DatabaseReferenceDataRepository → InMemoryReferenceDataRepository in database bundle — V2 has no ref-data tables, commit ce7577b). Discord msgId 1485511171011514490 (best-bets). Settlement win, 90.9% ROI. 2 system findings documented: Smart Form V1 missing confidence field (all submissions score 61.5, below 70 threshold) + board caps saturated by test-run picks (perSlate=5). 534/534 tests. Verdict: FULL_LIFECYCLE_VERIFIED. |
-| Smart Form Process Hardening | — | T1 | **CLOSED** | Added `scripts/kill-port.mjs` (cross-platform port cleanup) + `predev` hook in `apps/smart-form/package.json`. Zombie process PID 36184 (persistent across all prior proof runs) forcefully killed. `pnpm dev` in Smart Form now always clears port 4100 before starting. HTTP probe confirmed 307 response from fresh process. Verdict: SMART_FORM_PROCESS_HARDENED. 534/534 tests. |
-| T1 Recap/Stats Consumer Buildout | — | T1 | **CLOSED** | First application-layer consumer for domain recap stats. `GET /api/operator/recap` live — calls `computeSettlementSummary` from `@unit-talk/domain`. `Settlement Recap` section added to operator dashboard HTML. Verdict: RECAP_STAGE_UNBLOCKED. Stage 9 (Smart Form zombie) still DEVIATION. 534/534 tests. |
-| T1 Full-Cycle Proof Rerun | — | T1 | **CLOSED** | Rerun after enqueue gap fix. 7 of 8 wired stages pass. Submit (direct API, SF zombie) → DB (validated→queued at submission) → Distribution (Discord msgId 1485434380414488629) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 9 (recap) still blocked (Blocker B unchanged). Enqueue fix confirmed: `outboxEnqueued:true` in API response, queued lifecycle event at submission time. 531/531 tests. |
-| T1 Enqueue Gap Fix | — | T1 | **CLOSED** | Auto-enqueue wired into submitPickController. Qualified picks now transition validated→queued and create outbox row at submission time. 531/531 tests. Live proof: pick a42c6524 outboxEnqueued:true, status=queued, outbox=pending. |
-| T1 Full-Cycle Runtime Proof | — | T1 | **CLOSED** | 6 of 7 stages pass. Submit → DB → Distribution (Discord msgId 1485413938513444887) → Operator-web → Settlement (win, 90.9% ROI) → Downstream truth. Stage 7 (recap) blocked (Blocker B). Enqueue gap documented. 528/528 tests. |
-| Runner Hardening | — | T1 | **CLOSED** | Split 40-file tsx invocation into 6 bounded groups. pnpm verify now deterministic — exit 0 on two consecutive runs. 528/528 tests. |
-| Gate Recovery + Repo Truth (UTV2-32) | — | T1 | **CLOSED** | Restored root pnpm test (supabase-js resolution + stale ref), lint hygiene (.next exclusion + Radix UI exemption), PROGRAM_STATUS.md truth. 528/528 tests. |
-| Promotion Scoring Enrichment | 21 | T3 | **CLOSED** | Domain-aware trust/readiness in promotion scoring. 531/531 tests. |
-| E2E Platform Validation | 20 | T3 | **CLOSED** | All 9 runtime surfaces validated. Live canary proof. 515/515 tests. |
-| Promotion Edge Integration | 19 | T3 | **CLOSED** | Domain analysis edge as Tier 2 fallback in promotion. 515/515 tests. |
-| Domain Integration Layer | 18 | T2 | **CLOSED** | Submission-time domain analysis enrichment. 502/502 tests. |
-| Git Baseline Ratification | 17 | T2 | **CLOSED** | First commit from audited post-salvage state. 491/491 tests. |
-| Settlement Downstream + Domain Salvage | 16 | T1 | **CLOSED** | Runtime integration + Batch 1-5 salvage. 491/491 tests. |
+> New entries prepended. Historical rows preserved.
+
+| Sprint | Issue | Tier | Status | Summary |
+|--------|-------|------|--------|---------|
+| Smart Form Participant Autocomplete | UTV2-45 | T3 | **CLOSED** 2026-03-27 | `ParticipantAutocompleteField` debounced typeahead in BetForm; helpers in `lib/participant-search.ts` (pure, testable); 12/12 smart-form tests. PR #20 merged. |
+| Operator Entity Ingest Health | UTV2-42 | T2 | **CLOSED** 2026-03-27 | `entityHealth` in operator snapshot; `/api/operator/participants` endpoint; HTML dashboard sections (Upcoming Events, Entity Catalog, Last Ingest Cycle). Live proof: 46 events, 535 players, 124 teams. PR #19 merged. |
+| Smart Form Conviction Field | UTV2-40 | T1 | **CLOSED** 2026-03-27 | conviction=1–10 → trust 10–100 in `metadata.promotionScores`. Live proof: 4 picks verified. PR #17 merged. |
+| Market Key Normalization | UTV2-33 | T2 | **CLOSED** 2026-03-27 | `normalizeMarketKey()` at submission time; market stored as canonical key (e.g., `points-all-game-ou`). Live proof: 3 picks verified. PR #18 merged. 598 tests at merge. |
+| Board Cap Lifecycle Filter | UTV2-38 | T3 | **CLOSED** 2026-03-27 | `getPromotionBoardState` now filters to queued/posted only; saturated-board bug from test-run picks resolved. PR #12 merged. |
+| Queue Tooling | UTV2-36 | T3 | **CLOSED** 2026-03-27 | `scripts/claim-issue.mjs` + `scripts/submit-issue.mjs` claim/submit lane scripts. PR #9 merged. |
+| SGO Results Seed Proof | UTV2-37 | T3 | **CLOSED** 2026-03-27 | `scripts/seed-game-result.ts` proof seeder; 1 live grading proof produced. PR #11 merged. |
+| Discord /stats Command | UTV2-31 | T2 | **CLOSED** 2026-03-27 | `GET /api/operator/stats` + Discord `/stats @capper` command; capper win rate, ROI, CLV (null until UTV2-46 lands). PR #13 merged. 591 tests at merge. |
+| Discord Bot Deploy Commands Verify | UTV2-34 | T3 | **CLOSED** 2026-03-27 | `deploy-commands` script live; reaches Discord API. **KNOWN GAP**: `DiscordAPIError[20012]` — DISCORD_CLIENT_ID in `local.env` (`1045344984280346674`) does not match the application owning the bot token. Script correct; fix requires verifying CLIENT_ID in Discord Developer Portal. PR #8 merged. |
+| SGO Results Ingest | UTV2-30 | T2 | **CLOSED** 2026-03-26 | `apps/ingestor/` live; populates `provider_offers` and `game_results` from SGO feed. PR #3 merged. |
+| T1 Automated Grading | UTV2-28 | T1 | **CLOSED** 2026-03-26 | `POST /api/grading/run` live; grading-service evaluates picks against game_results; `recordGradedSettlement()` writes settlement records. Live proof: `attempted=4, graded=1, skipped=3, errors=0`. Settlement `1c9d8581`. Idempotent. |
+| Deploy Commands Verify | UTV2-34 | T3 | **CLOSED** 2026-03-26 | (see above) |
+| — | — | — | — | **— entries above this line added 2026-03-27; entries below from prior log —** |
+| UTV2-34 Deploy Commands Verify | — | T3 | **IN_REVIEW** *(stale — now CLOSED above)* | *(historical — see CLOSED row above)* |
+| Full Lifecycle Truth Verification | — | T1 | **CLOSED** | All 10 stages verified. Discord msgId 1485511171011514490. Settlement win, 90.9% ROI. 534/534 tests. Verdict: FULL_LIFECYCLE_VERIFIED. |
+| Smart Form Process Hardening | — | T1 | **CLOSED** | `scripts/kill-port.mjs` + `predev` hook. 534/534 tests. |
+| T1 Recap/Stats Consumer Buildout | — | T1 | **CLOSED** | `GET /api/operator/recap` live. 534/534 tests. |
+| T1 Full-Cycle Proof Rerun | — | T1 | **CLOSED** | 531/531 tests. Enqueue fix confirmed. |
+| T1 Enqueue Gap Fix | — | T1 | **CLOSED** | 531/531 tests. `outboxEnqueued:true` in API response. |
+| T1 Full-Cycle Runtime Proof | — | T1 | **CLOSED** | 528/528 tests. |
+| Runner Hardening | — | T1 | **CLOSED** | Split 40-file tsx into 6 bounded groups. 528/528 tests. |
+| Gate Recovery + Repo Truth | — | T1 | **CLOSED** | 528/528 tests. |
+| Promotion Scoring Enrichment | 21 | T3 | **CLOSED** | Domain-aware trust/readiness. 531/531 tests. |
+| E2E Platform Validation | 20 | T3 | **CLOSED** | All 9 surfaces validated. 515/515 tests. |
+| Promotion Edge Integration | 19 | T3 | **CLOSED** | Domain analysis edge in promotion. 515/515 tests. |
+| Domain Integration Layer | 18 | T2 | **CLOSED** | Submission-time domain analysis. 502/502 tests. |
+| Git Baseline Ratification | 17 | T2 | **CLOSED** | First commit. 491/491 tests. |
+| Settlement Downstream + Domain Salvage | 16 | T1 | **CLOSED** | Runtime integration + Batch 1-5. 491/491 tests. |
 | Probability/Devig Salvage | 15 | T2 | **CLOSED** | Pure math salvage. 128/128 tests. |
 | Verification Control Plane Salvage | 14 | T2 | **CLOSED** | Scenario registry, run history, archive. 100/100 tests. |
 | Operator Trader-Insights Health | 13 | T2 | **CLOSED** | Operator dashboard health sections. 87/87 tests. |
@@ -87,77 +118,138 @@ The root `test` script is split into 6 named groups:
 | Best Bets Activation | 7 | T1 | **CLOSED** | `discord:best-bets` live. |
 | Runtime Promotion Gate | 6 | T1 | **CLOSED** | Promotion persistence + routing. |
 
-## Next Milestone
+---
 
-**Smart Form V1 — Operator Submission Surface**
+## Next Milestone (M8 — not yet planned)
 
-The next major work is designing and building the Smart Form V1 operator submission surface. This requires a T1 contract before implementation begins.
+M7 closes when UTV2-44 and UTV2-46 both merge. M8 has no ratified contract yet.
 
-## Candidate Work Queue
+**Candidate items for M8:**
 
 | Item | Expected Tier | Rationale |
 |------|---------------|-----------|
-| Smart Form V1 design + contract | T1 | New user-facing surface |
-| Offer Fetch service wrapper | T2 | New service, cross-package |
-| DeviggingService integration | T2 | Multi-book consensus at submission |
-| Risk Engine integration | T2 | Bankroll-aware sizing |
-| Observation Hub permanent form | T2 | Architectural promotion |
-| Promotion uniqueness/boardFit enrichment | T3 | Pure computation wiring |
+| CLV wiring live proof (after UTV2-46) | T1 verify | Confirm `/stats` and `/leaderboard` avgClvPct non-null in live DB |
+| Discord CLIENT_ID fix | T3 | `DiscordAPIError[20012]` — CLIENT_ID in `local.env` doesn't match bot token owner; blocks `deploy-commands` from deploying to real guild |
+| Smart Form `confidence` field | T2 | Without it, all Smart Form submissions score 61.5, below best-bets threshold (70); currently ineligible for promotion |
+| Offer Fetch service wrapper | T2 | Multi-book consensus at submission |
+| DeviggingService integration | T2 | Service wrapper around existing pure-computation devig |
+| Risk Engine integration | T2 | Bankroll-aware sizing service wrapper |
+| Discord `/recap` command | T2 | RecapAgent not implemented; deferred |
+
+**Do not open without a ratified M8 contract.**
+
+---
 
 ## Do Not Start Without Planning
 
 - `discord:game-threads` live routing
 - `discord:strategy-room` live routing
-- Broad multi-channel expansion beyond Best Bets
-- Any new product surface
+- Broad multi-channel expansion
+- Any new product surface without a ratified contract
+
+---
 
 ## Open Risks
 
 | Risk | Severity | Status |
 |------|----------|--------|
-| Historical pre-fix outbox rows may add noise to operator incident triage | Low | Open |
-| Smart Form zombie / stale process on port 4100 | Low | **CLOSED** — `predev` hook kills any process on port 4100 before `next dev` starts. Fix: `scripts/kill-port.mjs` + `predev` in `apps/smart-form/package.json`. |
-| API process requires manual restart to load new code — no hot-reload or process manager in dev | Low | Open |
-| Recap/performance/accounting surfaces do not yet consume downstream truth | Low | **PARTIALLY RESOLVED** — `GET /api/operator/recap` now calls `computeSettlementSummary` from domain. Full rollups/evaluation/system-health wiring remains deferred. |
-| Enqueue gap | Medium | **VERIFIED CLOSED** — fix confirmed in T1 Full-Cycle Proof Rerun (2026-03-23). `outboxEnqueued:true` in API response; queued lifecycle event created at submission time. |
-| Smart Form V1 missing `confidence` field — all submissions score 61.5, below promotion threshold 70 | Medium | Open — Smart Form V1 does not include `confidence` in `buildSubmissionPayload()`. Without confidence, domain analysis computes no edge. Promotion score = 61.5 < 70 (best-bets threshold). All Smart Form submissions are not promotion-eligible. Fix: add confidence field to Smart Form or add source-specific promotion scoring. |
-| Board caps (perSlate=5) saturated by accumulated test-run picks | Medium | Open — `getPromotionBoardState` counts ALL picks with `promotion_status IN ('qualified', 'promoted')` including settled/historical. After 5+ test runs, both best-bets and trader-insights boards are full. New picks cannot qualify. Fix: filter board state query to only count picks with `lifecycle_state IN ('queued', 'posted')`. |
-| Catalog endpoint used DatabaseReferenceDataRepository querying non-existent V2 DB tables | Low | **CLOSED** — Fixed in Full Lifecycle Truth Verification sprint (commit ce7577b). `createDatabaseRepositoryBundle` now uses `InMemoryReferenceDataRepository(V1_REFERENCE_DATA)`. |
+| Discord CLIENT_ID mismatch — `deploy-commands` fails with `DiscordAPIError[20012]` | Medium | **Open** — CLIENT_ID `1045344984280346674` in `local.env` does not match the application owning the bot token. Fix: verify correct APPLICATION_ID in Discord Developer Portal. Script is correct; credentials are wrong. |
+| Smart Form `confidence` field missing — all submissions score 61.5 | Medium | **Open** — `buildSubmissionPayload()` does not include `confidence`. Domain analysis computes no edge. All Smart Form picks ineligible for best-bets (threshold 70). |
+| Board caps (perSlate=5) may re-saturate | Low | **PARTIALLY RESOLVED** — lifecycle filter fix (UTV2-38, PR #12) now counts only queued/posted picks. Historical saturation from test-run picks cleared by fix. Monitor after next full test run. |
+| `/stats` and `/leaderboard` avgClvPct always null | Medium | **Pending UTV2-46** — `resolveClvPayload()` in settlement-service stores raw closing line but never writes `clvRaw`/`beatsClosingLine`. Fix contracted (UTV2-46, `T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`). |
+| Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
+| API process requires manual restart for new code in dev | Low | Open |
+| `NEXT_UP_EXECUTION_QUEUE.md` stale | High | **Stale** — last updated 2026-03-26; lists T1 Automated Grading as ACTIVE. That lane closed 2026-03-26. File is not currently maintained. Use `ISSUE_QUEUE.md` as the operative queue. |
+| `system_snapshot.md` stale | Medium | **Stale** — last updated 2026-03-21; refers to Week 7 state. Proof IDs still valid as historical record but current-state claims are wrong. |
+| Recap/downstream surfaces do not fully consume settlement truth | Low | **Partially resolved** — `GET /api/operator/recap` calls `computeSettlementSummary`. Full rollups/evaluation wiring deferred. |
+| Catalog endpoint | Low | **CLOSED** — Fixed in Full Lifecycle Truth Verification sprint (commit ce7577b). |
+| Smart Form zombie process | Low | **CLOSED** — `predev` hook + `scripts/kill-port.mjs` in `apps/smart-form/package.json`. |
+| Enqueue gap | Medium | **CLOSED** — verified in T1 Full-Cycle Proof Rerun (2026-03-23). |
 
-## Key Capabilities
+---
 
-- Canonical submission intake live
+## Key Capabilities (current as of 2026-03-27)
+
+### Submission and lifecycle
+- Canonical submission intake live (API + Smart Form)
 - Lifecycle transitions enforced (single-writer discipline)
-- Promotion persistence + routing gates live (3 channels)
-- Settlement write path live (initial + correction chains + manual review)
-- Downstream settlement truth computed (effective settlement + loss attribution)
-- Operator-web read-only monitoring live
-- Discord outbox, worker delivery, receipts, and audit logs live
-- Domain analysis enrichment at submission time (implied probability, edge, Kelly)
+- Market key normalization at submission time (`normalizeMarketKey()`)
+- Conviction field → trust score in `metadata.promotionScores`
+- Domain analysis at submission time (implied probability, edge, Kelly fraction)
+
+### Promotion and delivery
+- Promotion evaluation: best-bets policy (min score 70) + trader-insights policy (min score 80)
 - Promotion scoring consumes domain analysis for edge, trust, and readiness
-- Verification control plane with scenarios, run history, and archive
-- Pure computation foundation: probability, devig, calibration, features, models, signals, bands, scoring, outcomes, evaluation, edge-validation, rollups, system-health, risk, strategy
+- Distribution outbox, worker delivery, receipts, and audit logs live
+- 3 live Discord targets: canary, best-bets, trader-insights
+
+### Grading and settlement
+- `POST /api/grading/run` — automated grading against `game_results`; idempotent
+- Settlement write path live: initial + correction chains + manual review
+- Downstream settlement truth computed (effective settlement + loss attribution)
+- CLV payload gap: `clvRaw`/`beatsClosingLine` not yet written (UTV2-46 pending)
+
+### Operator surface
+- `GET /api/operator/snapshot` — health, outbox, runs, settlements, entity health
+- `GET /api/operator/stats` — capper win rate / ROI (avgClvPct null until UTV2-46)
+- `GET /api/operator/leaderboard` — in review (UTV2-44)
+- `GET /api/operator/participants` — player/team search
+- `GET /api/operator/events` — upcoming events
+- `GET /api/operator/recap` — settlement summary via domain
+
+### Data ingestion
+- `apps/ingestor/` live — populates `provider_offers` and `game_results` from SGO feed
+- Entity resolution: events, participants, event_participants resolved from ingestor
+
+### Discord bot
+- Foundation: client, router, role-guard, api-client, command registry
+- `/stats @capper` live
+- `/leaderboard` in review (UTV2-44)
+- `deploy-commands` script works; CLIENT_ID mismatch prevents real guild deployment (see Risks)
+
+### Smart Form
+- Browser submission surface live (Next.js 14)
+- Conviction field 1–10 wired
+- Participant autocomplete typeahead (debounced, calls `/api/operator/participants`)
+
+### Domain and computation foundation
+- Pure computation: probability, devig, calibration, features, models, signals, bands, scoring, outcomes, evaluation, edge-validation, rollups, system-health, risk, strategy
+- Verification control plane: scenarios, run history, archive
+
+---
+
+## Stale Authority Files
+
+These files are no longer maintained and should not be used as current-state truth:
+
+| File | Last Accurate | Do Not Use For |
+|------|---------------|----------------|
+| `docs/06_status/NEXT_UP_EXECUTION_QUEUE.md` | 2026-03-26 | Active lane queue (use `ISSUE_QUEUE.md`) |
+| `docs/06_status/system_snapshot.md` | 2026-03-21 | Current state (use this file); proof IDs still valid as historical record |
+| `docs/06_status/status_source_of_truth.md` | 2026-03-21 | Superseded by this file |
+| `docs/06_status/current_phase.md` | 2026-03-21 | Superseded by this file |
+| `docs/06_status/next_build_order.md` | 2026-03-21 | Superseded by this file |
+| `docs/04_roadmap/active_roadmap.md` | 2026-03-21 | Current roadmap |
+
+---
 
 ## Authority References
 
 | Purpose | File |
 |---------|------|
+| **Active issue queue** | `docs/06_status/ISSUE_QUEUE.md` |
 | Operating model | `docs/05_operations/SPRINT_MODEL_v2.md` |
-| Runtime evidence | `docs/06_status/system_snapshot.md` |
 | Proof template (T1) | `docs/06_status/PROOF_TEMPLATE.md` |
 | Rollback template (T1) | `docs/06_status/ROLLBACK_TEMPLATE.md` |
-| Sprint model proposal | `docs/05_operations/SPRINT_MODEL_v2_PROPOSAL.md` |
+| /leaderboard contract | `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` |
+| CLV wiring contract | `docs/05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md` |
+| Discord routing | `docs/05_operations/discord_routing.md` |
+| Migration ledger | `docs/05_operations/migration_ledger.md` |
 
-### Historical References (superseded — not actively maintained)
-
-| File | Status |
-|------|--------|
-| `docs/06_status/status_source_of_truth.md` | Superseded by this file |
-| `docs/06_status/current_phase.md` | Superseded by this file |
-| `docs/06_status/next_build_order.md` | Superseded by this file |
-| `docs/05_operations/week_*_contract.md` | Historical sprint records |
-| `docs/06_status/week_*_proof_template.md` | Historical sprint templates |
+---
 
 ## Update Rule
 
-Update this file at every sprint close. For T3 sprints, only the sprint log table needs a new row.
+Update this file at every sprint close. For T3 sprints, only the sprint log and test count need a new row. For T1/T2 sprints, update: tests, active lanes, key capabilities, open risks.
+
+Do not let this file go more than 72 hours without a review against `ISSUE_QUEUE.md`.
