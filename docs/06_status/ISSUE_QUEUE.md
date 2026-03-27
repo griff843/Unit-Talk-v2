@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 2 | 0 | 14 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 16 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 9 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 9 |
 
@@ -78,12 +78,12 @@ UTV2-53 added the `/pick` command to the codebase but `deploy-commands` has not 
 | **ID** | UTV2-58 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M10 |
-| **Area** | `area:discord-bot` `area:api` |
-| **Blocked by** | UTV2-57 (uses same embed builder) |
-| **Branch** | — |
-| **PR** | — |
+| **Area** | `area:discord-bot` `area:operator-web` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-58-recap-command` |
+| **PR** | [#33](https://github.com/griff843/Unit-Talk-v2/pull/33) — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
@@ -117,12 +117,12 @@ Add a `/recap` slash command to the Discord bot. Capper runs `/recap [limit]` to
 | **ID** | UTV2-57 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M10 |
 | **Area** | `area:api` `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-57-kickoff` |
+| **PR** | [#31](https://github.com/griff843/Unit-Talk-v2/pull/31) — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
