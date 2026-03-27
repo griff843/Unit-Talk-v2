@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — UTV2-44 CLOSED (PR #21 merged). 617/617 tests on main. M7 one lane remaining (UTV2-46).
+2026-03-27 — UTV2-46 CLOSED (PR #22 merged). 621/621 tests on main. M7 COMPLETE — all lanes closed.
 
 ---
 
@@ -16,11 +16,11 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests (main, verified 2026-03-27) | **617/617 passing** — 0 failures, all 6 groups clean |
+| Tests (main, verified 2026-03-27) | **621/621 passing** — 0 failures, all 6 groups clean |
 | Gates | All gates PASS on current main. `pnpm verify` exits 0. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Active lanes | UTV2-46 READY (CLV wiring — sole remaining M7 lane) |
-| Milestone | M7 — Discord social surfaces + CLV wiring (1/2 lanes closed) |
+| Active lanes | None — M7 COMPLETE |
+| Milestone | **M7 CLOSED** — Discord social surfaces + CLV wiring (all lanes closed 2026-03-27) |
 
 ## Gate Notes (2026-03-27)
 
@@ -30,7 +30,7 @@
 | `pnpm lint` | PASS | 0 errors. `.next/**` in eslint ignores. Radix UI components exempt from `no-explicit-any`/`no-empty-object-type`. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | **617/617**. 6 bounded groups chained with `&&`. Verified 2026-03-27 after UTV2-44 merge. |
+| `pnpm test` | PASS | **621/621**. 6 bounded groups chained with `&&`. Verified 2026-03-27 after UTV2-46 merge. |
 | `pnpm verify` (full chain) | PASS | Exit 0. |
 
 ### Runner Architecture
@@ -68,7 +68,9 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 | ID | Item | Tier | Status | Notes |
 |----|------|------|--------|-------|
 | UTV2-44 | Discord /leaderboard + GET /api/operator/leaderboard | T2 | **CLOSED** | PR #21 merged. 617/617. |
-| UTV2-46 | CLV settlement wiring (computeAndAttachCLV) | T2 | **READY** | Contract: `T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`. Sole remaining M7 lane. |
+| UTV2-46 | CLV settlement wiring (computeAndAttachCLV) | T2 | **CLOSED** | PR #22 merged. 621/621. M7 complete. |
+
+**M7 is closed. No active lanes. Next milestone requires a ratified M8 contract.**
 
 ---
 
@@ -78,6 +80,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 | Sprint | Issue | Tier | Status | Summary |
 |--------|-------|------|--------|---------|
+| CLV Settlement Wiring | UTV2-46 | T2 | **CLOSED** 2026-03-27 | `resolveClvPayload()` removed; `computeAndAttachCLV()` called in `recordGradedSettlement()`; `clvRaw`/`clvPercent`/`beatsClosingLine` written as top-level payload keys; keys omitted (not null) when no matching `provider_offers` row. 621/621 tests (+4 net-new). PR #22 merged. |
 | Discord /leaderboard Command | UTV2-44 | T2 | **CLOSED** 2026-03-27 | `GET /api/operator/leaderboard` ranked response; Discord `/leaderboard` public embed (responseVisibility:'public' + fail-closed router); 617/617 tests (+11 net-new). PR #21 merged. |
 | Smart Form Participant Autocomplete | UTV2-45 | T3 | **CLOSED** 2026-03-27 | `ParticipantAutocompleteField` debounced typeahead in BetForm; helpers in `lib/participant-search.ts` (pure, testable); 12/12 smart-form tests. PR #20 merged. |
 | Operator Entity Ingest Health | UTV2-42 | T2 | **CLOSED** 2026-03-27 | `entityHealth` in operator snapshot; `/api/operator/participants` endpoint; HTML dashboard sections (Upcoming Events, Entity Catalog, Last Ingest Cycle). Live proof: 46 events, 535 players, 124 teams. PR #19 merged. |
@@ -122,7 +125,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ## Next Milestone (M8 — not yet planned)
 
-M7 closes when UTV2-44 and UTV2-46 both merge. M8 has no ratified contract yet.
+**M7 is CLOSED** (2026-03-27). UTV2-44 (PR #21) + UTV2-46 (PR #22) both merged. M8 has no ratified contract yet.
 
 **Candidate items for M8:**
 
@@ -156,7 +159,7 @@ M7 closes when UTV2-44 and UTV2-46 both merge. M8 has no ratified contract yet.
 | Discord CLIENT_ID mismatch — `deploy-commands` fails with `DiscordAPIError[20012]` | Medium | **Open** — CLIENT_ID `1045344984280346674` in `local.env` does not match the application owning the bot token. Fix: verify correct APPLICATION_ID in Discord Developer Portal. Script is correct; credentials are wrong. |
 | Smart Form `confidence` field missing — all submissions score 61.5 | Medium | **Open** — `buildSubmissionPayload()` does not include `confidence`. Domain analysis computes no edge. All Smart Form picks ineligible for best-bets (threshold 70). |
 | Board caps (perSlate=5) may re-saturate | Low | **PARTIALLY RESOLVED** — lifecycle filter fix (UTV2-38, PR #12) now counts only queued/posted picks. Historical saturation from test-run picks cleared by fix. Monitor after next full test run. |
-| `/stats` and `/leaderboard` avgClvPct always null | Medium | **Pending UTV2-46** — `resolveClvPayload()` in settlement-service stores raw closing line but never writes `clvRaw`/`beatsClosingLine`. Fix contracted (UTV2-46, `T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`). |
+| `/stats` and `/leaderboard` avgClvPct always null | Medium | **CLOSED** — UTV2-46 (PR #22) wired `computeAndAttachCLV()`; `clvRaw`/`beatsClosingLine` now written top-level in graded settlement payloads. avgClvPct will populate for picks with matching `provider_offers` rows going forward. Live proof pending M8. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
 | API process requires manual restart for new code in dev | Low | Open |
 | `NEXT_UP_EXECUTION_QUEUE.md` stale | High | **Stale** — last updated 2026-03-26; lists T1 Automated Grading as ACTIVE. That lane closed 2026-03-26. File is not currently maintained. Use `ISSUE_QUEUE.md` as the operative queue. |
@@ -187,12 +190,12 @@ M7 closes when UTV2-44 and UTV2-46 both merge. M8 has no ratified contract yet.
 - `POST /api/grading/run` — automated grading against `game_results`; idempotent
 - Settlement write path live: initial + correction chains + manual review
 - Downstream settlement truth computed (effective settlement + loss attribution)
-- CLV payload gap: `clvRaw`/`beatsClosingLine` not yet written (UTV2-46 pending)
+- CLV wired: `computeAndAttachCLV()` called at graded settlement; `clvRaw`/`clvPercent`/`beatsClosingLine` written as top-level payload keys (UTV2-46 CLOSED)
 
 ### Operator surface
 - `GET /api/operator/snapshot` — health, outbox, runs, settlements, entity health
-- `GET /api/operator/stats` — capper win rate / ROI (avgClvPct null until UTV2-46)
-- `GET /api/operator/leaderboard` — live (UTV2-44 CLOSED); avgClvPct null until UTV2-46 lands
+- `GET /api/operator/stats` — capper win rate / ROI / avgClvPct (populates for picks with closing lines)
+- `GET /api/operator/leaderboard` — live (UTV2-44 CLOSED); avgClvPct populates for picks with closing lines
 - `GET /api/operator/participants` — player/team search
 - `GET /api/operator/events` — upcoming events
 - `GET /api/operator/recap` — settlement summary via domain

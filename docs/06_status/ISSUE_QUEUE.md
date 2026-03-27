@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 9 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 10 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 6 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 3 |
 
@@ -318,22 +318,19 @@ All 10 ACs satisfied. 617/617 tests (606 baseline → +11 net-new; contract requ
 | **ID** | UTV2-46 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M7 |
 | **Area** | `area:api` |
-| **Blocked by** | UTV2-28 DONE ✅, UTV2-30 DONE ✅ |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-46-clv-settlement-wiring` |
+| **PR** | #22 — **MERGED** ✅ (2026-03-27) |
 
-#### Acceptance Criteria
+#### Delivered
 
-See `docs/05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`. Summary:
-- [ ] `recordGradedSettlement()` calls `computeAndAttachCLV` (replaces `resolveClvPayload`)
-- [ ] `payload.clvRaw` (number) written when closing line exists
-- [ ] `payload.beatsClosingLine` (boolean) written when closing line exists
-- [ ] `payload.clvPercent` (number) written when closing line exists
-- [ ] No CLV keys written when no matching closing line found
-- [ ] ≥4 net-new tests; `pnpm verify` exits 0; total ≥ 602
+- `resolveClvPayload()` removed; `computeAndAttachCLV()` called in `recordGradedSettlement()`
+- `payload.clvRaw`, `payload.clvPercent`, `payload.beatsClosingLine` written as top-level keys
+- Keys omitted (not null) when no matching `provider_offers` row
+- 4 new tests in `grading-service.test.ts`; 621/621 total; 0 failures
+- `avgClvPct` in `/stats` and `/leaderboard` will now populate for picks with closing lines
 
 ---
 
@@ -358,5 +355,5 @@ UTV2-42  T2  codex     DONE         ← MERGED: PR #19 (2026-03-27). Live proof:
 UTV2-43  DOC claude    DONE         ← CLOSED: /leaderboard contract RATIFIED (2026-03-27)
 UTV2-44  T2  codex     DONE         ← MERGED: PR #21 (2026-03-27). 617/617 tests. responseVisibility flag added.
 UTV2-45  T3  augment   DONE         ← MERGED: committed to main (2026-03-27). 12/12 smart-form tests.
-UTV2-46  T2  codex     READY        ← CLV wiring contract RATIFIED. Wire computeAndAttachCLV. Baseline: 598. Target: ≥602.
+UTV2-46  T2  codex     DONE         ← MERGED: PR #22 (2026-03-27). 621/621. computeAndAttachCLV wired; clvRaw/clvPercent/beatsClosingLine written top-level.
 ```
