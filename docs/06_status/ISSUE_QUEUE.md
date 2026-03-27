@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 11 |
+| `lane:codex` | 0 | 1 | 0 | 0 | 10 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 6 |
 | `lane:augment` | 0 | 1 | 1 | 0 | 4 |
 
@@ -24,12 +24,12 @@
 | **ID** | UTV2-49 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **DONE** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M8 |
 | **Area** | `area:smart-form` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-49-smart-form-confidence-field` |
-| **PR** | #25 — **MERGED** ✅ (2026-03-27) |
+| **PR** | #25 (all ACs pass; rebase on main required before merge) |
 
 #### Scope
 
