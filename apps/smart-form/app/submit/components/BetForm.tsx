@@ -49,6 +49,7 @@ export function BetForm() {
       statType: '',
       team: '',
       sportsbook: '',
+      capperConviction: undefined,
       units: 1.0,
       odds: undefined,
       line: undefined,
@@ -114,7 +115,17 @@ export function BetForm() {
           onSubmitAnother={() => {
             setSuccessResult(null);
             setSubmittedValues(null);
-            form.reset({ sport: '', eventName: '', playerName: '', statType: '', team: '', sportsbook: '', gameDate: TODAY, units: 1.0 });
+            form.reset({
+              sport: '',
+              eventName: '',
+              playerName: '',
+              statType: '',
+              team: '',
+              sportsbook: '',
+              capperConviction: undefined,
+              gameDate: TODAY,
+              units: 1.0,
+            });
           }}
         />
       </main>
@@ -324,6 +335,38 @@ export function BetForm() {
                                 />
                                 <FormField
                                   control={form.control}
+                                  name="capperConviction"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Conviction (1-10)</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="number"
+                                          min="1"
+                                          max="10"
+                                          step="1"
+                                          placeholder="8"
+                                          {...field}
+                                          value={field.value ?? ''}
+                                          onChange={(e) =>
+                                            field.onChange(
+                                              e.target.value === '' ? undefined : Number(e.target.value),
+                                            )
+                                          }
+                                        />
+                                      </FormControl>
+                                      <p className="text-xs text-muted-foreground">
+                                        How confident are you in this pick? (1 = low, 10 = highest conviction)
+                                      </p>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                <FormField
+                                  control={form.control}
                                   name="capper"
                                   render={({ field }) => (
                                     <FormItem>
@@ -346,25 +389,24 @@ export function BetForm() {
                                     </FormItem>
                                   )}
                                 />
+                                <FormField
+                                  control={form.control}
+                                  name="gameDate"
+                                  render={({ field }) => (
+                                    <FormItem>
+                                      <FormLabel>Game Date</FormLabel>
+                                      <FormControl>
+                                        <Input
+                                          type="date"
+                                          className="w-full sm:max-w-[200px]"
+                                          {...field}
+                                        />
+                                      </FormControl>
+                                      <FormMessage />
+                                    </FormItem>
+                                  )}
+                                />
                               </div>
-
-                              <FormField
-                                control={form.control}
-                                name="gameDate"
-                                render={({ field }) => (
-                                  <FormItem>
-                                    <FormLabel>Game Date</FormLabel>
-                                    <FormControl>
-                                      <Input
-                                        type="date"
-                                        className="w-full sm:max-w-[200px]"
-                                        {...field}
-                                      />
-                                    </FormControl>
-                                    <FormMessage />
-                                  </FormItem>
-                                )}
-                              />
                             </section>
                           </>
                         )}

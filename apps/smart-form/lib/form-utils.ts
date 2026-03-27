@@ -66,6 +66,7 @@ export function buildSubmissionPayload(values: BetFormValues): SubmitPickPayload
   const marketLabel = MARKET_TYPE_LABELS[values.marketType];
   const market = `${values.sport} - ${marketLabel}`;
   const selection = buildSelectionString(values);
+  const trustScore = values.capperConviction * 10;
 
   return {
     source: 'smart-form',
@@ -88,6 +89,10 @@ export function buildSubmissionPayload(values: BetFormValues): SubmitPickPayload
       overUnder: values.direction,
       team: values.team,
       eventName: values.eventName,
+      capperConviction: values.capperConviction,
+      promotionScores: {
+        trust: trustScore,
+      },
     },
   };
 }

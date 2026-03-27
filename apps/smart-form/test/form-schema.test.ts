@@ -19,6 +19,7 @@ function validProp(overrides: Record<string, unknown> = {}) {
     sportsbook: 'DraftKings',
     odds: -110,
     units: 1.5,
+    capperConviction: 8,
     capper: 'griff843',
     gameDate: '2026-03-22',
     ...overrides,
@@ -35,6 +36,7 @@ function validMoneyline(overrides: Record<string, unknown> = {}) {
     sportsbook: 'DraftKings',
     odds: -110,
     units: 1.0,
+    capperConviction: 8,
     capper: 'griff843',
     gameDate: '2026-03-22',
     ...overrides,
@@ -77,6 +79,7 @@ describe('valid submissions parse successfully', () => {
         sportsbook: 'FanDuel',
         odds: -110,
         units: 1.0,
+        capperConviction: 8,
         capper: 'griff843',
         gameDate: '2026-03-22',
       }),
@@ -94,6 +97,7 @@ describe('valid submissions parse successfully', () => {
         sportsbook: 'BetMGM',
         odds: -110,
         units: 2.0,
+        capperConviction: 8,
         capper: 'griff843',
         gameDate: '2026-03-22',
       }),
@@ -112,6 +116,7 @@ describe('valid submissions parse successfully', () => {
         sportsbook: 'Caesars',
         odds: -115,
         units: 1.0,
+        capperConviction: 8,
         capper: 'griff843',
         gameDate: '2026-03-22',
       }),
@@ -163,6 +168,38 @@ describe('units guardrail (contract: 0.5 - 5.0)', () => {
     delete (data as Record<string, unknown>)['units'];
     const fields = errorFields(data);
     assert.ok(fields.includes('units'));
+  });
+});
+
+describe('capper conviction guardrail (contract: 1 - 10 integer, required)', () => {
+  test('conviction 1 is accepted', () => {
+    assert.ok(passes(validProp({ capperConviction: 1 })));
+  });
+
+  test('conviction 10 is accepted', () => {
+    assert.ok(passes(validProp({ capperConviction: 10 })));
+  });
+
+  test('conviction missing is rejected', () => {
+    const data = { ...validProp() };
+    delete (data as Record<string, unknown>)['capperConviction'];
+    const fields = errorFields(data);
+    assert.ok(fields.includes('capperConviction'));
+  });
+
+  test('conviction below 1 is rejected', () => {
+    const fields = errorFields(validProp({ capperConviction: 0 }));
+    assert.ok(fields.includes('capperConviction'));
+  });
+
+  test('conviction above 10 is rejected', () => {
+    const fields = errorFields(validProp({ capperConviction: 11 }));
+    assert.ok(fields.includes('capperConviction'));
+  });
+
+  test('non-integer conviction is rejected', () => {
+    const fields = errorFields(validProp({ capperConviction: 7.5 }));
+    assert.ok(fields.includes('capperConviction'));
   });
 });
 
@@ -365,6 +402,7 @@ describe('spread conditional fields', () => {
       sportsbook: 'FanDuel',
       odds: -110,
       units: 1.0,
+      capperConviction: 8,
       capper: 'griff843',
       gameDate: '2026-03-22',
       ...overrides,
@@ -402,6 +440,7 @@ describe('total conditional fields', () => {
       sportsbook: 'BetMGM',
       odds: -110,
       units: 1.0,
+      capperConviction: 8,
       capper: 'griff843',
       gameDate: '2026-03-22',
       ...overrides,
@@ -437,6 +476,7 @@ describe('team-total conditional fields', () => {
       sportsbook: 'Caesars',
       odds: -115,
       units: 1.0,
+      capperConviction: 8,
       capper: 'griff843',
       gameDate: '2026-03-22',
       ...overrides,

@@ -62,6 +62,9 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
               {values.sportsbook && <LineItem label="Book" value={values.sportsbook} />}
               {values.odds && <LineItem label="Odds" value={values.odds > 0 ? `+${values.odds}` : values.odds} />}
               {values.units && <LineItem label="Units" value={`${values.units}u`} />}
+              {values.capperConviction && (
+                <LineItem label="Conviction" value={`${values.capperConviction}/10`} />
+              )}
             </div>
           )}
 
@@ -119,6 +122,11 @@ export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelPro
                 </p>
                 {selection && (
                   <p className="text-xs text-muted-foreground truncate">{selection}</p>
+                )}
+                {values.capperConviction && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    Conviction {values.capperConviction}/10
+                  </p>
                 )}
               </>
             ) : (
