@@ -9,11 +9,49 @@
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 0 | 0 | 10 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 0 | 0 | 3 |
+| `lane:augment` | 0 | 0 | 1 | 0 | 3 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-47 — T3 Discord APPLICATION_ID Fix
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-47 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **READY** |
+| **Milestone** | M8 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+`deploy-commands` fails with `DiscordAPIError[20012]`. The `DISCORD_CLIENT_ID=1045344984280346674` in `local.env` does not match the application that owns the bot token. The script and the bot token are both correct — the credential value is wrong.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: Identify the correct APPLICATION_ID from the Discord Developer Portal (Applications → the application owning the bot token → copy Application ID)
+- [ ] AC-2: Update `DISCORD_CLIENT_ID` in `local.env` to the correct value
+- [ ] AC-3: Run `pnpm --filter @unit-talk/discord-bot deploy-commands` — confirm exit 0, no `DiscordAPIError[20012]`
+- [ ] AC-4: If `.env.example` `DISCORD_CLIENT_ID` comment or placeholder is incorrect, update it to reflect the correct application
+
+#### Constraints
+
+- `local.env` is gitignored — the credential fix is local only; nothing sensitive lands in git
+- Do not touch runtime code (`apps/discord-bot/src/**`)
+- Do not modify the deploy-commands script
+- Only permitted git-tracked change: `.env.example` comment update if needed
+
+#### Proof
+
+- [ ] `deploy-commands` stdout confirms command registration with no `DiscordAPIError[20012]`
 
 ---
 
