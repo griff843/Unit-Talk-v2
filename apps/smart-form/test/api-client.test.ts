@@ -11,7 +11,7 @@ import type { BetFormValues } from '../lib/form-schema.ts';
 import {
   buildParticipantSearchUrl,
   normalizeParticipantSearchResults,
-} from '../app/submit/components/BetForm.tsx';
+} from '../lib/participant-search.ts';
 
 type FetchFn = typeof globalThis.fetch;
 
