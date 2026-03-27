@@ -29,6 +29,7 @@ import {
   createLeaderboardCommand,
   type LeaderboardResponse,
 } from './commands/leaderboard.js';
+import { createHelpCommand } from './commands/help.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1019,6 +1020,64 @@ test('createApiClient.post throws on non-200 response', async () => {
       assert.ok(err instanceof Error);
       assert.ok(err.message.includes('400'), err.message);
       return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// /help command tests
+// ---------------------------------------------------------------------------
+
+test('/help command registers with name "help" and no role gate or public visibility', () => {
+  const command = createHelpCommand();
+
+  assert.equal(command.data.name, 'help');
+  assert.equal(command.requiredRoles, undefined);
+  // responseVisibility omitted → router treats it as private/ephemeral
+  assert.notEqual(command.responseVisibility, 'public');
+});
+
+test('/help command execute calls editReply with a single embed containing all command names', async () => {
+  const command = createHelpCommand();
+
+  let repliedWith: unknown = null;
+  const mockInteraction = {
+    isChatInputCommand: () => true,
+    commandName: 'help',
+    deferReply: async () => {},
+    editReply: async (payload: unknown) => { repliedWith = payload; },
+  } as unknown as ChatInputCommandInteraction;
+
+  await command.execute(mockInteraction);
+
+  assert.ok(repliedWith !== null, 'editReply was not called');
+  const payload = repliedWith as { embeds: Array<{ toJSON(): { description?: string } }> };
+  assert.ok(Array.isArray(payload.embeds), 'embeds must be an array');
+  assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
+
+  const description = payload.embeds[0]?.toJSON().description ?? '';
+  for (const name of ['pick', 'stats', 'leaderboard', 'help']) {
+    assert.ok(description.includes(`/${name}`), `embed description missing /${name}`);
+  }
+});
+
+test('loadCommandRegistry also loads the help command from the commands directory', async () => {
+  await withEnvVars(
+    {
+      NODE_ENV: 'test',
+      UNIT_TALK_APP_ENV: 'local',
+      DISCORD_BOT_TOKEN: 'test-token',
+      DISCORD_CLIENT_ID: '123',
+      DISCORD_GUILD_ID: 'g123',
+      DISCORD_CAPPER_ROLE_ID: 'r123',
+      UNIT_TALK_API_URL: 'http://localhost:4000',
+    },
+    async () => {
+      const registry = await loadCommandRegistry();
+      const command = registry.get('help');
+      assert.ok(command, 'help command not found in registry');
+      assert.equal(command?.data.name, 'help');
+      assert.notEqual(command?.responseVisibility, 'public');
     },
   );
 });
