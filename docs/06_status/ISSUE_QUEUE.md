@@ -7,13 +7,92 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 12 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 12 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 0 | 0 | 6 |
+| `lane:augment` | 0 | 0 | 1 | 0 | 6 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-53 — T2 Discord /pick Submission Command
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-53 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M9 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+Add a `/pick` slash command to the Discord bot that allows a capper to submit a pick directly from Discord. The command calls `POST /api/submissions` via the existing `ApiClient` and returns an ephemeral confirmation embed with the submission ID and pick ID.
+
+Fields (all required unless noted):
+- `market` — string (e.g. "NBA - Player Prop")
+- `selection` — string (e.g. "Jalen Brunson Points O 24.5")
+- `odds` — integer (American odds, e.g. -110)
+- `stake_units` — number (e.g. 1.5)
+- `event_name` — string (optional)
+
+Source is hardcoded to `'discord-bot'`. `submittedBy` is the Discord username of the interaction user.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `/pick` slash command registered in `CommandHandler` with 4 required + 1 optional option
+- [ ] AC-2: Command calls `POST /api/submissions` with correct payload; source=`'discord-bot'`
+- [ ] AC-3: On success: ephemeral embed shows submission ID, pick ID, market, selection
+- [ ] AC-4: On API error: ephemeral error message shown; command does not throw
+- [ ] AC-5: `pnpm verify` exits 0; test count ≥ 645 + 1
+- [ ] AC-6: At least 2 new tests (success path + error path)
+
+#### Constraints
+
+- `responseVisibility` must be `'private'` (ephemeral) — submission confirmation is capper-only
+- Do not add a new route to `apps/api` — use existing `POST /api/submissions`
+- Do not touch `apps/smart-form`, `apps/operator-web`, `apps/api/src`
+- `ApiClient` in `apps/discord-bot` must call the API, not import from `apps/api` directly
+
+---
+
+### UTV2-54 — T3 Operator Web Ingestor Health Card
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-54 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **READY** |
+| **Milestone** | M9 |
+| **Area** | `area:operator-web` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+The operator HTML dashboard shows health cards for worker, best-bets channel, and trader-insights channel. Add an **Ingestor** health card showing last run status. Read from `system_runs` where `run_type = 'ingestor'`. Display: status (most recent run), last run time, leagues configured. Display `—` when no rows exist (ingestor has not yet run). Read-only — no new write surfaces, no new routes (extend existing snapshot query).
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `createSnapshotFromRows()` includes `ingestorHealth: { status, lastRunAt, runCount }` derived from `system_runs` rows
+- [ ] AC-2: HTML dashboard renders an "Ingestor" card with status and last run time
+- [ ] AC-3: When no `system_runs` rows with `run_type='ingestor'`: card shows `status: 'unknown'` and last run `—`
+- [ ] AC-4: `pnpm verify` exits 0; test count does not decrease
+- [ ] AC-5: At least 2 new tests (with runs / without runs)
+
+#### Constraints
+
+- Only modify `apps/operator-web/src/server.ts` and `server.test.ts`
+- Extend `GET /api/operator/snapshot` — do not add new routes
+- Parallel-safe: no overlap with UTV2-53 (discord-bot)
 
 ---
 
