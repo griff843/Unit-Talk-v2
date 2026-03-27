@@ -1251,7 +1251,7 @@ test('settled best-bets picks do not consume board capacity', async () => {
     target: 'best-bets',
     sport: 'NBA',
     eventName: 'Late Game',
-    market: 'NBA rebounds',
+    market: 'rebounds-all-game-ou',
     selection: 'Player Over 9.5',
   });
 
