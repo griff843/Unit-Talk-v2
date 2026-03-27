@@ -14,6 +14,7 @@ import {
   handleSettlePick,
   handleSubmitPick,
 } from './handlers/index.js';
+import { requeuePickController } from './controllers/requeue-controller.js';
 import { runGradingPass } from './grading-service.js';
 
 export interface ApiServerOptions {
@@ -153,6 +154,19 @@ export async function routeRequest(
         },
         body,
       },
+      runtime.repositories,
+    );
+    return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  const requeueMatch =
+    method === 'POST'
+      ? /^\/api\/picks\/([^/]+)\/requeue$/.exec(url.pathname)
+      : null;
+
+  if (requeueMatch) {
+    const apiResponse = await requeuePickController(
+      requeueMatch[1] ?? '',
       runtime.repositories,
     );
     return writeJson(response, apiResponse.status, apiResponse.body);

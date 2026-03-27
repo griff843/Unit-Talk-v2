@@ -6,6 +6,7 @@ import { createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
+import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 
 test('GET /health returns service status', async () => {
   const server = createApiServer({
@@ -323,3 +324,186 @@ test('POST /api/picks/:id/settle returns downstream loss attribution when inputs
     server.close();
   }
 });
+
+test('POST /api/picks/:id/requeue returns 404 when pick does not exist', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/missing-pick/requeue`,
+      { method: 'POST' },
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 404);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'PICK_NOT_FOUND');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/picks/:id/requeue returns 422 when pick is not qualified', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await processSubmission(
+    {
+      source: 'server-test',
+      market: 'NBA points',
+      selection: 'Player Over 18.5',
+    },
+    repositories,
+  );
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
+      { method: 'POST' },
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 422);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'PICK_NOT_QUALIFIED');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/picks/:id/requeue returns 409 when pick is already queued in outbox', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+  await enqueueDistributionWithRunTracking(
+    created.pick,
+    'discord:best-bets',
+    'server-test',
+    repositories.picks,
+    repositories.outbox,
+    repositories.runs,
+    repositories.audit,
+  );
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
+      { method: 'POST' },
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 409);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'ALREADY_QUEUED');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'settled',
+    'settled',
+    'settler',
+  );
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
+      { method: 'POST' },
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 409);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'PICK_TERMINAL');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pick', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
+      { method: 'POST' },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: { outboxId: string; target: string; pickId: string };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data?.pickId, created.pick.id);
+    assert.equal(body.data?.target, 'discord:best-bets');
+    assert.ok(body.data?.outboxId);
+
+    const claimed = await repositories.outbox.claimNext('discord:best-bets', 'requeue-test');
+    assert.ok(claimed, 'expected requeued outbox record');
+    assert.equal(claimed?.pick_id, created.pick.id);
+  } finally {
+    server.close();
+  }
+});
+
+async function createQualifiedPick(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+) {
+  return processSubmission(
+    {
+      source: 'server-test',
+      market: 'NBA assists',
+      selection: 'Player Over 8.5',
+      confidence: 0.9,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Suns vs Nuggets',
+        promotionScores: {
+          edge: 78,
+          trust: 79,
+          readiness: 88,
+          uniqueness: 82,
+          boardFit: 90,
+        },
+      },
+    },
+    repositories,
+  );
+}
