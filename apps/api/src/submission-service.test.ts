@@ -211,6 +211,97 @@ test('processSubmission leaves unknown market keys unchanged', async () => {
   assert.equal(result.pickRecord.market, 'exotic market type');
 });
 
+test('processSubmission attaches deviggingResult when a matching market offer exists', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-1',
+      providerMarketKey: 'assists-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 7.5,
+      overOdds: -105,
+      underOdds: -115,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T15:00:00.000Z',
+      idempotencyKey: 'offer-old',
+    },
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-1',
+      providerMarketKey: 'assists-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 7.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T16:00:00.000Z',
+      idempotencyKey: 'offer-new',
+    },
+  ]);
+
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  const deviggingResult = metadata.deviggingResult as Record<string, unknown> | undefined;
+
+  assert.ok(deviggingResult);
+  assert.equal(deviggingResult?.providerMarketKey, 'assists-all-game-ou');
+  assert.equal(deviggingResult?.snapshotAt, '2026-03-27T16:00:00.000Z');
+  assert.equal(deviggingResult?.overFair, 0.5);
+  assert.equal(deviggingResult?.underFair, 0.5);
+  assert.equal(deviggingResult?.overround, 1.04762);
+});
+
+test('processSubmission leaves deviggingResult absent when no matching market offer exists', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata.deviggingResult, undefined);
+});
+
+test('processSubmission fails closed when provider offer lookup throws', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.providerOffers.listByProvider = async () => {
+    throw new Error('provider unavailable');
+  };
+
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata.deviggingResult, undefined);
+  assert.equal(result.pick.market, 'assists-all-game-ou');
+});
+
 test('transitionPickLifecycle allows valid transitions', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(

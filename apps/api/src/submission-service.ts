@@ -11,13 +11,17 @@ import {
   type PickLifecycleRecord,
   type PickRecord,
   type PickRepository,
+  type ProviderOfferRecord,
+  type ProviderOfferRepository,
   type SubmissionEventRecord,
   type SubmissionRecord,
   type SubmissionRepository,
 } from '@unit-talk/db';
 import {
+  americanToImplied,
   createCanonicalPickFromSubmission,
   createValidatedSubmission,
+  applyDevig as devig,
   normalizeMarketKey,
 } from '@unit-talk/domain';
 import {
@@ -46,23 +50,36 @@ export async function processSubmission(
     submissions: SubmissionRepository;
     picks: PickRepository;
     audit: AuditLogRepository;
+    providerOffers: ProviderOfferRepository;
   },
 ): Promise<SubmissionProcessingResult> {
+  const normalizedMarketKey = normalizeMarketKey(payload.market);
   const submission = createValidatedSubmission(nextSubmissionId(), {
     ...payload,
-    market: normalizeMarketKey(payload.market),
+    market: normalizedMarketKey,
   });
   const materialized = createCanonicalPickFromSubmission(submission);
 
   // Domain analysis enrichment: compute implied probability, edge, and Kelly
   // sizing from odds/confidence and store in pick metadata.
   const domainAnalysis = computeSubmissionDomainAnalysis(materialized.pick);
+  const deviggingResult = await resolveDeviggingResult(
+    normalizedMarketKey,
+    repositories.providerOffers,
+  );
+
+  const enrichedMetadata = enrichMetadataWithDomainAnalysis(
+    materialized.pick.metadata,
+    domainAnalysis,
+  );
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
-    metadata: enrichMetadataWithDomainAnalysis(
-      materialized.pick.metadata,
-      domainAnalysis,
-    ),
+    metadata: deviggingResult
+      ? {
+          ...enrichedMetadata,
+          deviggingResult,
+        }
+      : enrichedMetadata,
   };
 
   // Step 1: persist the submission row — submission_events and pick_lifecycle
@@ -110,4 +127,57 @@ export async function processSubmission(
     lifecycleEvent: materialized.lifecycleEvent,
     lifecycleEventRecord,
   };
+}
+
+async function resolveDeviggingResult(
+  normalizedMarketKey: string,
+  providerOffers: ProviderOfferRepository,
+) {
+  try {
+    const matchingOffer = await findLatestMatchingOffer(normalizedMarketKey, providerOffers);
+    if (!matchingOffer) {
+      return null;
+    }
+
+    if (
+      !Number.isFinite(matchingOffer.over_odds) ||
+      !Number.isFinite(matchingOffer.under_odds)
+    ) {
+      return null;
+    }
+
+    const overImplied = americanToImplied(matchingOffer.over_odds as number);
+    const underImplied = americanToImplied(matchingOffer.under_odds as number);
+    const devigged = devig(overImplied, underImplied, 'proportional');
+    if (!devigged) {
+      return null;
+    }
+
+    return {
+      providerKey: matchingOffer.provider_key,
+      providerMarketKey: matchingOffer.provider_market_key,
+      snapshotAt: matchingOffer.snapshot_at,
+      line: matchingOffer.line,
+      overOdds: matchingOffer.over_odds,
+      underOdds: matchingOffer.under_odds,
+      overImplied,
+      underImplied,
+      devigMethod: 'proportional' as const,
+      ...devigged,
+    };
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`Devig enrichment skipped for market ${normalizedMarketKey}: ${reason}`);
+    return null;
+  }
+}
+
+async function findLatestMatchingOffer(
+  normalizedMarketKey: string,
+  providerOffers: ProviderOfferRepository,
+): Promise<ProviderOfferRecord | null> {
+  const offers = await providerOffers.listByProvider('sgo');
+  return (
+    offers.find((offer) => offer.provider_market_key === normalizedMarketKey) ?? null
+  );
 }
