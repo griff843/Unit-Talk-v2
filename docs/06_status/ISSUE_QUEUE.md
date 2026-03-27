@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 1 | 0 | 1 | 0 | 8 |
+| `lane:codex` | 0 | 1 | 1 | 0 | 8 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 6 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 3 |
 
@@ -271,22 +271,25 @@ Contract RATIFIED: `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` (2026
 | **ID** | UTV2-44 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M7 |
 | **Area** | `area:discord-bot` `area:operator-web` |
-| **Blocked by** | — (UTV2-43 DONE ✅) |
-| **Branch** | — |
-| **PR** | — |
+| **Blocked by** | — |
+| **Branch** | (local, verified) |
+| **PR** | pending |
 
-#### Acceptance Criteria
+#### Review Verdict (2026-03-27) — SOFT BLOCK
 
-See `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md`. Summary:
-- [ ] `GET /api/operator/leaderboard` returns ranked `LeaderboardResponse` with winRate/roiPct/streak
-- [ ] Ranking: winRate DESC, roiPct DESC tiebreaker; filtered by `minPicks` (default 3)
-- [ ] `?last=99` → HTTP 400
-- [ ] `/leaderboard [window] [sport] [limit]` registered in Discord
-- [ ] Embed renders ranked entries with streak icons
-- [ ] ≥8 net-new tests; `pnpm verify` exits 0; total ≥ 606
+9/10 ACs pass. 608/608 tests. One gap blocks closure:
+
+**Gap:** `router.ts` calls `deferReply({ ephemeral: true })` before `execute()`. Leaderboard embeds are invisible to other server members — contradicts contract §4.2 "non-ephemeral — leaderboard is a public social surface."
+
+**Exact fix (3 lines, no behavior change to other commands):**
+1. `command-registry.ts` — add `ephemeral?: boolean` to `CommandHandler`
+2. `router.ts:50` — `deferReply({ ephemeral: command.ephemeral !== false })`
+3. `leaderboard.ts` — add `ephemeral: false` to returned object
+
+Re-submit after fix. All other ACs satisfied.
 
 ---
 
@@ -358,7 +361,7 @@ UTV2-40  T1  codex     DONE         ← MERGED: PR #17 (2026-03-27). Live proof:
 UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health contract RATIFIED
 UTV2-42  T2  codex     DONE         ← MERGED: PR #19 (2026-03-27). Live proof: 46 events, 535 players.
 UTV2-43  DOC claude    DONE         ← CLOSED: /leaderboard contract RATIFIED (2026-03-27)
-UTV2-44  T2  codex     READY        ← Contract live. Implement /leaderboard. Baseline: 598. Target: ≥606.
+UTV2-44  T2  codex     IN_REVIEW    ← SOFT BLOCK: ephemeral reply contradicts §4.2. 608/608 tests. Fix: 3 lines.
 UTV2-45  T3  augment   DONE         ← MERGED: committed to main (2026-03-27). 12/12 smart-form tests.
 UTV2-46  T2  codex     READY        ← CLV wiring contract RATIFIED. Wire computeAndAttachCLV. Baseline: 598. Target: ≥602.
 ```
