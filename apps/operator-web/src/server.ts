@@ -182,6 +182,28 @@ export interface OperatorStatsProvider {
   getStats(query: OperatorStatsQuery): Promise<CapperStatsResponse>;
 }
 
+export interface CapperRecapPick {
+  market: string;
+  selection: string;
+  result: 'win' | 'loss' | 'push';
+  profitLossUnits: number;
+  settledAt: string;
+}
+
+export interface CapperRecapResponse {
+  submittedBy: string;
+  picks: CapperRecapPick[];
+}
+
+export interface OperatorCapperRecapQuery {
+  submittedBy: string;
+  limit: number;
+}
+
+export interface OperatorCapperRecapProvider {
+  getCapperRecap(query: OperatorCapperRecapQuery): Promise<CapperRecapResponse>;
+}
+
 export interface LeaderboardEntry {
   rank: number;
   capper: string;
@@ -218,6 +240,7 @@ export interface OperatorServerOptions {
   provider?: OperatorSnapshotProvider;
   statsProvider?: OperatorStatsProvider;
   leaderboardProvider?: OperatorLeaderboardProvider;
+  capperRecapProvider?: OperatorCapperRecapProvider;
 }
 
 export function createOperatorServer(options: OperatorServerOptions = {}) {
@@ -225,6 +248,8 @@ export function createOperatorServer(options: OperatorServerOptions = {}) {
   const statsProvider = options.statsProvider ?? createOperatorStatsProvider();
   const leaderboardProvider =
     options.leaderboardProvider ?? createOperatorLeaderboardProvider();
+  const capperRecapProvider =
+    options.capperRecapProvider ?? createOperatorCapperRecapProvider();
 
   return http.createServer(async (request, response) => {
     await routeOperatorRequest(
@@ -233,6 +258,7 @@ export function createOperatorServer(options: OperatorServerOptions = {}) {
       provider,
       statsProvider,
       leaderboardProvider,
+      capperRecapProvider,
     );
   });
 }
@@ -243,6 +269,7 @@ export async function routeOperatorRequest(
   provider: OperatorSnapshotProvider,
   statsProvider: OperatorStatsProvider,
   leaderboardProvider: OperatorLeaderboardProvider,
+  capperRecapProvider: OperatorCapperRecapProvider,
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -332,6 +359,22 @@ export async function routeOperatorRequest(
 
     const leaderboard = await leaderboardProvider.getLeaderboard(leaderboardQuery);
     return writeJson(response, 200, { ok: true, data: leaderboard });
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/capper-recap') {
+    const capperRecapQuery = parseCapperRecapQuery(url);
+    if ('error' in capperRecapQuery) {
+      return writeJson(response, 400, {
+        ok: false,
+        error: {
+          code: 'INVALID_QUERY',
+          message: capperRecapQuery.error,
+        },
+      });
+    }
+
+    const recap = await capperRecapProvider.getCapperRecap(capperRecapQuery);
+    return writeJson(response, 200, { ok: true, data: recap });
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/participants') {
@@ -765,6 +808,80 @@ export function createOperatorLeaderboardProvider(): OperatorLeaderboardProvider
     return {
       async getLeaderboard(query: OperatorLeaderboardQuery) {
         return createEmptyLeaderboardResponse(query);
+      },
+    };
+  }
+}
+
+export function createOperatorCapperRecapProvider(): OperatorCapperRecapProvider {
+  try {
+    const env = loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    const client = createDatabaseClientFromConnection(connection);
+
+    return {
+      async getCapperRecap(query: OperatorCapperRecapQuery) {
+        const candidateSettlementsResult = await client
+          .from('settlement_records')
+          .select('*')
+          .eq('source', 'grading')
+          .in('result', ['win', 'loss', 'push']);
+
+        if (candidateSettlementsResult.error) {
+          throw candidateSettlementsResult.error;
+        }
+
+        const candidateSettlements = candidateSettlementsResult.data ?? [];
+        if (candidateSettlements.length === 0) {
+          return createEmptyCapperRecapResponse(query);
+        }
+
+        const pickIds = uniqueStrings(candidateSettlements.map((row) => row.pick_id));
+        const [allSettlementsResult, picksResult] = await Promise.all([
+          client
+            .from('settlement_records')
+            .select('*')
+            .eq('source', 'grading')
+            .in('pick_id', pickIds),
+          client.from('picks').select('*').in('id', pickIds),
+        ]);
+
+        if (allSettlementsResult.error) {
+          throw allSettlementsResult.error;
+        }
+        if (picksResult.error) {
+          throw picksResult.error;
+        }
+
+        const picks = picksResult.data ?? [];
+        const submissionIds = uniqueStrings(
+          picks
+            .map((row) => row.submission_id)
+            .filter((value): value is string => typeof value === 'string' && value.length > 0),
+        );
+
+        const submissionsResult =
+          submissionIds.length > 0
+            ? await client.from('submissions').select('*').in('id', submissionIds)
+            : { data: [] as SubmissionRecord[], error: null };
+
+        if (submissionsResult.error) {
+          throw submissionsResult.error;
+        }
+
+        const statsRows = createStatsRows({
+          settlements: allSettlementsResult.data ?? [],
+          picks,
+          submissions: submissionsResult.data ?? [],
+        });
+
+        return buildCapperRecapResponse(query, statsRows);
+      },
+    };
+  } catch {
+    return {
+      async getCapperRecap(query: OperatorCapperRecapQuery) {
+        return createEmptyCapperRecapResponse(query);
       },
     };
   }
@@ -1712,6 +1829,49 @@ export function createEmptyStatsResponse(query: OperatorStatsQuery): CapperStats
   };
 }
 
+export function buildCapperRecapResponse(
+  query: OperatorCapperRecapQuery,
+  rows: StatsRow[],
+): CapperRecapResponse {
+  const filtered: Array<StatsRow & { settlement: EffectiveSettlement & { result: 'win' | 'loss' | 'push' } }> = rows
+    .filter((row) => {
+      if (!matchesCapperName(row.submission?.submitted_by, query.submittedBy)) {
+        return false;
+      }
+
+      return isSettledResult(row.settlement.result);
+    }) as Array<StatsRow & { settlement: EffectiveSettlement & { result: 'win' | 'loss' | 'push' } }>
+    ;
+
+  const limited = filtered
+    .sort((left, right) => right.settlement.settled_at.localeCompare(left.settlement.settled_at))
+    .slice(0, query.limit);
+
+  if (limited.length === 0) {
+    return createEmptyCapperRecapResponse(query);
+  }
+
+  return {
+    submittedBy: query.submittedBy,
+    picks: limited.map((row) => ({
+      market: row.pick.market,
+      selection: row.pick.selection,
+      result: row.settlement.result,
+      profitLossUnits: computeProfitLossUnits(row),
+      settledAt: row.settlement.settled_at,
+    })),
+  };
+}
+
+export function createEmptyCapperRecapResponse(
+  query: OperatorCapperRecapQuery,
+): CapperRecapResponse {
+  return {
+    submittedBy: query.submittedBy,
+    picks: [],
+  };
+}
+
 export function buildLeaderboardResponse(
   query: OperatorLeaderboardQuery,
   rows: StatsRow[],
@@ -1860,6 +2020,22 @@ export function parseLeaderboardQuery(
   };
 }
 
+export function parseCapperRecapQuery(
+  url: URL,
+): OperatorCapperRecapQuery | { error: string } {
+  const submittedBy = normalizeOptionalQueryValue(url.searchParams.get('submittedBy'));
+  if (!submittedBy) {
+    return { error: 'Query parameter "submittedBy" is required.' };
+  }
+
+  const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '10', 10);
+
+  return {
+    submittedBy,
+    limit: Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 10,
+  };
+}
+
 function isAllowedStatsWindow(value: number): value is StatsWindowDays {
   return value === 7 || value === 14 || value === 30 || value === 90;
 }
@@ -1960,6 +2136,20 @@ function matchesStatsWindow(row: StatsRow, sinceIso: string) {
 
 function matchesCapperName(submittedBy: string | null | undefined, requestedCapper: string) {
   return (submittedBy ?? '').trim().toLowerCase() === requestedCapper.trim().toLowerCase();
+}
+
+function computeProfitLossUnits(row: StatsRow) {
+  const stakeUnits =
+    typeof row.pick.stake_units === 'number' && Number.isFinite(row.pick.stake_units)
+      ? row.pick.stake_units
+      : 0;
+  if (row.settlement.result === 'win') {
+    return stakeUnits;
+  }
+  if (row.settlement.result === 'loss') {
+    return stakeUnits * -1;
+  }
+  return 0;
 }
 
 function normalizeCapperDisplayName(submittedBy: string | null | undefined) {

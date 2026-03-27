@@ -23,6 +23,7 @@ import { ApiClientError, createApiClient, type ApiClient } from './api-client.js
 import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
+import { createRecapCommand } from './commands/recap.js';
 import { buildStatsEmbed, createStatsCommand, type CapperStatsResponse } from './commands/stats.js';
 import {
   buildLeaderboardEmbed,
@@ -30,6 +31,7 @@ import {
   type LeaderboardResponse,
 } from './commands/leaderboard.js';
 import { createHelpCommand } from './commands/help.js';
+import { buildRecapEmbedData } from './embeds/recap-embed.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -265,6 +267,28 @@ function makeLeaderboardResponse(): LeaderboardResponse {
   };
 }
 
+function makeRecapResponse() {
+  return {
+    submittedBy: 'Griff Display',
+    picks: [
+      {
+        market: 'NBA points',
+        selection: 'Over 24.5',
+        result: 'win' as const,
+        profitLossUnits: 1,
+        settledAt: '2026-03-27T12:00:00.000Z',
+      },
+      {
+        market: 'NBA assists',
+        selection: 'Over 8.5',
+        result: 'loss' as const,
+        profitLossUnits: -1,
+        settledAt: '2026-03-26T12:00:00.000Z',
+      },
+    ],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // parseBotConfig tests
 // ---------------------------------------------------------------------------
@@ -477,6 +501,34 @@ test('loadCommandRegistry also loads the leaderboard command from the commands d
   );
 });
 
+test('loadCommandRegistry also loads the recap command from the commands directory', async () => {
+  await withEnvVars(
+    {
+      NODE_ENV: 'test',
+      UNIT_TALK_APP_ENV: 'local',
+      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+      LINEAR_TEAM_KEY: 'UTV2',
+      LINEAR_TEAM_NAME: 'unit-talk-v2',
+      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+      DISCORD_BOT_TOKEN: 'test-token',
+      DISCORD_CLIENT_ID: 'test-client-id',
+      DISCORD_GUILD_ID: '1284478946171293736',
+      DISCORD_CAPPER_ROLE_ID: 'role-capper',
+      UNIT_TALK_API_URL: 'http://localhost:4000',
+    },
+    async () => {
+      const registry = await loadCommandRegistry();
+      const command = registry.get('recap');
+      assert.ok(command);
+      assert.equal(command?.data.name, 'recap');
+      assert.equal(command?.responseVisibility, 'private');
+      assert.equal(command?.data.toJSON().options?.length, 1);
+    },
+  );
+});
+
 test('/stats embed omits CLV fields when picksWithClv is zero', () => {
   const embed = buildStatsEmbed({
     ...makeStatsResponse(),
@@ -531,6 +583,94 @@ test('/stats command calls the operator endpoint with the requested filters', as
   assert.ok(Array.isArray(edited[0]?.embeds));
 });
 
+test('/recap command calls the operator recap endpoint and renders settled picks', async () => {
+  let requestedPath = '';
+  const apiClient: ApiClient = {
+    async get<T>(path: string) {
+      requestedPath = path;
+      return { ok: true, data: makeRecapResponse() } as T;
+    },
+    async post<T>() {
+      return {} as T;
+    },
+  };
+
+  const command = createRecapCommand(apiClient);
+  const edited: Array<{ embeds?: Array<{ toJSON(): Record<string, unknown> }>; content?: string }> =
+    [];
+
+  await command.execute({
+    options: {
+      getInteger(name: string) {
+        return name === 'limit' ? 2 : null;
+      },
+    },
+    member: {
+      displayName: 'Griff Display',
+    },
+    user: {
+      username: 'griff843',
+    },
+    editReply: async (payload: {
+      embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+      content?: string;
+    }) => {
+      edited.push(payload);
+    },
+  } as never);
+
+  assert.equal(
+    requestedPath,
+    '/api/operator/capper-recap?submittedBy=Griff+Display&limit=2',
+  );
+  assert.equal(edited.length, 1);
+  assert.equal(edited[0]?.content, '');
+  const embed = edited[0]?.embeds?.[0]?.toJSON();
+  assert.equal(embed?.title, 'Griff Display · Last 2 Settled Picks');
+  assert.equal((embed?.fields as unknown[])?.length, 2);
+});
+
+test('/recap command returns an empty-state message when no settled picks exist', async () => {
+  const apiClient: ApiClient = {
+    async get<T>() {
+      return {
+        ok: true,
+        data: {
+          submittedBy: 'Griff Display',
+          picks: [],
+        },
+      } as T;
+    },
+    async post<T>() {
+      return {} as T;
+    },
+  };
+
+  const command = createRecapCommand(apiClient);
+  const edited: Array<{ embeds?: unknown[]; content?: string }> = [];
+
+  await command.execute({
+    options: {
+      getInteger() {
+        return null;
+      },
+    },
+    member: {
+      displayName: 'Griff Display',
+    },
+    user: {
+      username: 'griff843',
+    },
+    editReply: async (payload: { embeds?: unknown[]; content?: string }) => {
+      edited.push(payload);
+    },
+  } as never);
+
+  assert.equal(edited.length, 1);
+  assert.equal(edited[0]?.content, 'No settled picks found.');
+  assert.deepEqual(edited[0]?.embeds, []);
+});
+
 test('/leaderboard command registers the expected public options', () => {
   const apiClient: ApiClient = {
     get: async <T>() => ({ ok: true, data: makeLeaderboardResponse() } as T),
@@ -559,6 +699,33 @@ test('/leaderboard embed renders rank, record, roi, and streak format', () => {
   assert.equal(embed.fields?.[1]?.name, '#2 Casey');
   assert.equal(embed.fields?.[1]?.value, '2–2–0  50.0%  0.0% ROI  🧊2');
   assert.match(embed.footer?.text ?? '', /Min 3 settled picks/);
+});
+
+test('recap embed renders win result, units, and CLV fields', () => {
+  const embed = buildRecapEmbedData({
+    market: 'points-all-game-ou',
+    selection: 'Over 24.5',
+    result: 'win',
+    stakeUnits: 1,
+    profitLossUnits: 1,
+    clvPercent: 3.8,
+    submittedBy: 'griff843',
+  });
+
+  assert.equal(embed.title, 'Pick Recap');
+  assert.equal(embed.color, 0x22c55e);
+  assert.deepEqual(
+    embed.fields?.map((field) => [field.name, field.value]),
+    [
+      ['Market', 'points-all-game-ou'],
+      ['Selection', 'Over 24.5'],
+      ['Result', 'Win'],
+      ['P/L', '+1.0u'],
+      ['CLV%', '+3.8%'],
+      ['Capper', 'griff843'],
+      ['Stake', '1.0u'],
+    ],
+  );
 });
 
 // ---------------------------------------------------------------------------

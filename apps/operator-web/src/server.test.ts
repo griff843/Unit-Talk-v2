@@ -3,11 +3,13 @@ import test from 'node:test';
 import { request } from 'node:http';
 import type { SystemRunRecord } from '@unit-talk/db';
 import {
+  buildCapperRecapResponse,
   buildLeaderboardResponse,
   buildCapperStatsResponse,
   createOperatorServer,
   createSnapshotFromRows,
   createStatsRows,
+  type OperatorCapperRecapProvider,
   type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
   type OperatorSnapshotProvider,
@@ -1582,6 +1584,68 @@ test('GET /api/operator/stats returns 400 when last is invalid', async () => {
   assert.match(response.body, /must be one of 7, 14, 30, 90/);
 });
 
+test('GET /api/operator/capper-recap returns the latest settled picks for the requested capper', async () => {
+  const provider = createStaticProvider();
+  const capperRecapProvider = createStaticCapperRecapProvider();
+  const server = createOperatorServer({ provider, capperRecapProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(
+    address.port,
+    '/api/operator/capper-recap?submittedBy=Griff&limit=2',
+  );
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      submittedBy: string;
+      picks: Array<{
+        market: string;
+        selection: string;
+        result: string;
+        profitLossUnits: number;
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.submittedBy, 'Griff');
+  assert.equal(body.data.picks.length, 2);
+  assert.equal(body.data.picks[0]?.result, 'win');
+  assert.equal(body.data.picks[0]?.profitLossUnits, 1);
+  assert.equal(body.data.picks[1]?.result, 'loss');
+  assert.equal(body.data.picks[1]?.profitLossUnits, -1);
+});
+
+test('GET /api/operator/capper-recap returns 400 when submittedBy is missing', async () => {
+  const provider = createStaticProvider();
+  const capperRecapProvider = createStaticCapperRecapProvider();
+  const server = createOperatorServer({ provider, capperRecapProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/capper-recap?limit=2');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.body, /submittedBy/);
+});
+
 test('GET /api/operator/leaderboard returns ranked entries with streaks', async () => {
   const provider = createStaticProvider();
   const leaderboardProvider = createStaticLeaderboardProvider();
@@ -2169,6 +2233,14 @@ function createStaticStatsProvider(): OperatorStatsProvider {
             (row.pick.metadata as { sport?: string }).sport === 'NBA',
         ),
       );
+    },
+  };
+}
+
+function createStaticCapperRecapProvider(): OperatorCapperRecapProvider {
+  return {
+    async getCapperRecap(query) {
+      return buildCapperRecapResponse(query, createStatsRows(makeStatsFixture()));
     },
   };
 }
