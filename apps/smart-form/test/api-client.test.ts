@@ -8,8 +8,57 @@ import test, { describe, beforeEach, afterEach } from 'node:test';
 import { getCatalog, submitPick } from '../lib/api-client.ts';
 import { buildSubmissionPayload } from '../lib/form-utils.ts';
 import type { BetFormValues } from '../lib/form-schema.ts';
+import {
+  buildParticipantSearchUrl,
+  normalizeParticipantSearchResults,
+} from '../lib/participant-search.ts';
 
 type FetchFn = typeof globalThis.fetch;
+
+describe('participant autocomplete helpers', () => {
+  test('buildParticipantSearchUrl targets OPERATOR_WEB_URL (port 4200), limit=10, trims query', () => {
+    const url = buildParticipantSearchUrl('  Jalen Brunson  ', 'player', 'NBA');
+    assert.equal(
+      url,
+      'http://127.0.0.1:4200/api/operator/participants?q=Jalen+Brunson&type=player&limit=10&sport=NBA',
+    );
+  });
+
+  test('buildParticipantSearchUrl omits sport param when sport is blank', () => {
+    const url = buildParticipantSearchUrl('Lakers', 'team', '');
+    assert.ok(url.startsWith('http://127.0.0.1:4200/api/operator/participants?'), `unexpected base: ${url}`);
+    assert.ok(!url.includes('sport='), `sport param should be absent when blank, got: ${url}`);
+    assert.ok(url.includes('limit=10'), `limit should be 10, got: ${url}`);
+  });
+
+  test('buildParticipantSearchUrl omits sport param when sport is undefined', () => {
+    const url = buildParticipantSearchUrl('Brunson', 'player');
+    assert.ok(!url.includes('sport='), `sport param should be absent when undefined, got: ${url}`);
+  });
+
+  test('normalizeParticipantSearchResults filters by type, de-dupes case-insensitively, and sorts', () => {
+    const results = normalizeParticipantSearchResults(
+      {
+        participants: [
+          { displayName: 'New York Knicks', participantType: 'team' },
+          { displayName: ' new york knicks ', participantType: 'team' },
+          { displayName: 'Jalen Brunson', participantType: 'player' },
+          { displayName: '', participantType: 'team' },
+          { participantType: 'team' },
+        ],
+      },
+      'team',
+    );
+
+    assert.deepEqual(results, [{ displayName: 'New York Knicks', participantType: 'team' }]);
+  });
+
+  test('normalizeParticipantSearchResults returns empty array for non-object payload', () => {
+    assert.deepEqual(normalizeParticipantSearchResults(null, 'player'), []);
+    assert.deepEqual(normalizeParticipantSearchResults('bad', 'player'), []);
+    assert.deepEqual(normalizeParticipantSearchResults({ participants: 'not-array' }, 'player'), []);
+  });
+});
 
 // --- getCatalog ---
 

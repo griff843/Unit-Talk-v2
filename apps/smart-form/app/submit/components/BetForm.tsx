@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useForm } from 'react-hook-form';
+import { useEffect, useState } from 'react';
+import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { CatalogData } from '@/lib/catalog';
 import {
@@ -26,11 +26,175 @@ import { betFormSchema, type BetFormValues, type MarketTypeId } from '@/lib/form
 import { getMarketTypesForSport, getStatTypesForSport, buildSubmissionPayload } from '@/lib/form-utils';
 import { submitPick, getCatalog, type SubmitPickResult } from '@/lib/api-client';
 import { MarketTypeGrid } from './MarketTypeGrid';
-import { BetDetailsSection } from './BetDetailsSection';
 import { BetSlipPanel } from './BetSlipPanel';
 import { SuccessReceipt } from './SuccessReceipt';
+import {
+  buildParticipantSearchUrl,
+  normalizeParticipantSearchResults,
+  type ParticipantSuggestion,
+  type ParticipantSearchType,
+} from '@/lib/participant-search';
+
+export { buildParticipantSearchUrl, normalizeParticipantSearchResults };
 
 const TODAY = new Date().toISOString().slice(0, 10);
+const PARTICIPANT_QUERY_MIN = 2;
+
+type ParticipantFieldName = 'playerName' | 'team';
+
+interface ParticipantAutocompleteFieldProps {
+  form: UseFormReturn<BetFormValues>;
+  name: ParticipantFieldName;
+  label: string;
+  placeholder: string;
+  searchType: ParticipantSearchType;
+  sport: string;
+}
+
+function ParticipantAutocompleteField({
+  form,
+  name,
+  label,
+  placeholder,
+  searchType,
+  sport,
+}: ParticipantAutocompleteFieldProps) {
+  const value = useWatch({ control: form.control, name }) ?? '';
+  const [isFocused, setIsFocused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasSearched, setHasSearched] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const [suggestions, setSuggestions] = useState<ParticipantSuggestion[]>([]);
+
+  useEffect(() => {
+    const query = value.trim();
+    if (!sport || query.length < PARTICIPANT_QUERY_MIN) {
+      setSuggestions([]);
+      setHasSearched(false);
+      setSearchError(null);
+      setIsLoading(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    const timeoutId = window.setTimeout(async () => {
+      setIsLoading(true);
+      setHasSearched(false);
+      setSearchError(null);
+
+      try {
+        const response = await fetch(buildParticipantSearchUrl(query, searchType, sport), {
+          signal: controller.signal,
+        });
+        let json: unknown = null;
+
+        try {
+          json = await response.json();
+        } catch {
+          json = null;
+        }
+
+        if (!response.ok) {
+          const message = isRecord(json) && isRecord(json.error) && typeof json.error.message === 'string'
+            ? json.error.message
+            : 'Participant search unavailable';
+          throw new Error(message);
+        }
+
+        setSuggestions(normalizeParticipantSearchResults(json, searchType));
+        setHasSearched(true);
+      } catch (error) {
+        if ((error as Error).name === 'AbortError') {
+          return;
+        }
+
+        setSuggestions([]);
+        setHasSearched(true);
+        setSearchError(error instanceof Error ? error.message : 'Participant search unavailable');
+      } finally {
+        setIsLoading(false);
+      }
+    }, 250);
+
+    return () => {
+      controller.abort();
+      window.clearTimeout(timeoutId);
+    };
+  }, [form.control, name, searchType, sport, value]);
+
+  const shouldShowMenu =
+    isFocused &&
+    value.trim().length >= PARTICIPANT_QUERY_MIN &&
+    (isLoading || hasSearched || searchError !== null);
+
+  return (
+    <FormField
+      control={form.control}
+      name={name}
+      render={({ field }) => (
+        <FormItem className="relative">
+          <FormLabel>{label}</FormLabel>
+          <FormControl>
+            <Input
+              {...field}
+              autoComplete="off"
+              placeholder={placeholder}
+              value={field.value ?? ''}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => {
+                window.setTimeout(() => setIsFocused(false), 120);
+              }}
+              onChange={(event) => {
+                field.onChange(event.target.value);
+                setSearchError(null);
+              }}
+            />
+          </FormControl>
+          {shouldShowMenu ? (
+            <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-md border border-border bg-background shadow-lg">
+              {isLoading ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground">Searching participants...</div>
+              ) : null}
+              {!isLoading && searchError ? (
+                <div className="px-3 py-2 text-sm text-destructive">{searchError}</div>
+              ) : null}
+              {!isLoading && !searchError && hasSearched && suggestions.length === 0 ? (
+                <div className="px-3 py-2 text-sm text-muted-foreground">No matching participants found.</div>
+              ) : null}
+              {!isLoading && !searchError && suggestions.length > 0 ? (
+                <div className="py-1">
+                  {suggestions.map((suggestion) => (
+                    <button
+                      key={`${suggestion.participantType}:${suggestion.displayName}`}
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      type="button"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        form.setValue(name, suggestion.displayName, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                        form.clearErrors(name);
+                        setIsFocused(false);
+                      }}
+                    >
+                      <span>{suggestion.displayName}</span>
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {suggestion.participantType}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+            </div>
+          ) : null}
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
 
 export function BetForm() {
   const { toast } = useToast();
@@ -156,9 +320,322 @@ export function BetForm() {
     ? getStatTypesForSport(catalog, selectedSport)
     : [];
 
-  const availableTeams = selectedSport
-    ? (catalog.sports.find((s) => s.id === selectedSport)?.teams ?? [])
-    : [];
+  function renderBetDetailsSection() {
+    if (!selectedMarketType) {
+      return null;
+    }
+
+    if (selectedMarketType === 'player-prop') {
+      return (
+        <div className="space-y-4">
+          <ParticipantAutocompleteField
+            form={form}
+            name="playerName"
+            label="Player Name"
+            placeholder="Type a player name"
+            searchType="player"
+            sport={selectedSport}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="eventName"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Matchup</FormLabel>
+                  <FormControl>
+                    <Input placeholder="e.g. Knicks vs Heat" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="statType"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Stat Type</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select stat" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {availableStatTypes.map((statType) => (
+                        <SelectItem key={statType} value={statType}>
+                          {statType}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="direction"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Over / Under</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Over or Under" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="over">Over</SelectItem>
+                      <SelectItem value="under">Under</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="line"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Line</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      placeholder="e.g. 24.5"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedMarketType === 'moneyline') {
+      return (
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="eventName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Matchup</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <ParticipantAutocompleteField
+            form={form}
+            name="team"
+            label="Team to Win"
+            placeholder="Type a team name"
+            searchType="team"
+            sport={selectedSport}
+          />
+        </div>
+      );
+    }
+
+    if (selectedMarketType === 'spread') {
+      return (
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="eventName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Matchup</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <ParticipantAutocompleteField
+              form={form}
+              name="team"
+              label="Team"
+              placeholder="Type a team name"
+              searchType="team"
+              sport={selectedSport}
+            />
+            <FormField
+              control={form.control}
+              name="line"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Spread</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      placeholder="e.g. -3.5"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedMarketType === 'total') {
+      return (
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="eventName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Matchup</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <FormField
+              control={form.control}
+              name="direction"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Over / Under</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Over or Under" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="over">Over</SelectItem>
+                      <SelectItem value="under">Under</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="line"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Total</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.5"
+                      placeholder="e.g. 220.5"
+                      {...field}
+                      value={field.value ?? ''}
+                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    if (selectedMarketType === 'team-total') {
+      return (
+        <div className="space-y-4">
+          <FormField
+            control={form.control}
+            name="eventName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Matchup</FormLabel>
+                <FormControl>
+                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <div className="grid grid-cols-2 gap-3">
+            <ParticipantAutocompleteField
+              form={form}
+              name="team"
+              label="Team"
+              placeholder="Type a team name"
+              searchType="team"
+              sport={selectedSport}
+            />
+            <FormField
+              control={form.control}
+              name="direction"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Over / Under</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Over or Under" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="over">Over</SelectItem>
+                      <SelectItem value="under">Under</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <FormField
+            control={form.control}
+            name="line"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Team Total</FormLabel>
+                <FormControl>
+                  <Input
+                    type="number"
+                    step="0.5"
+                    placeholder="e.g. 112.5"
+                    {...field}
+                    value={field.value ?? ''}
+                    onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                  />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+      );
+    }
+
+    return null;
+  }
 
   return (
     <Form {...form}>
@@ -244,11 +721,7 @@ export function BetForm() {
                               <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                                 Bet Details
                               </h2>
-                              <BetDetailsSection
-                                marketType={selectedMarketType}
-                                statTypes={availableStatTypes}
-                                teams={availableTeams}
-                              />
+                              {renderBetDetailsSection()}
                             </section>
 
                             <Separator className="bg-border/50" />

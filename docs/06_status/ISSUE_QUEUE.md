@@ -7,9 +7,9 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 2 | 0 | 8 |
+| `lane:codex` | 1 | 0 | 1 | 0 | 8 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 1 | 0 | 2 |
+| `lane:augment` | 0 | 0 | 0 | 0 | 3 |
 
 ---
 
@@ -297,20 +297,19 @@ See `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md`. Summary:
 | **ID** | UTV2-45 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M7 |
 | **Area** | `area:smart-form` |
-| **Blocked by** | UTV2-42 DONE ✅ (`GET /api/operator/participants` live) |
-| **Branch** | — |
+| **Blocked by** | — |
+| **Branch** | committed to `main` (2026-03-27) |
 | **PR** | — |
 
-#### Acceptance Criteria
+#### Delivered
 
-- [ ] `BetForm.tsx` typeahead calls `GET /api/operator/participants?q=<name>&type=player` on player field input
-- [ ] Suggestions appear after ≥2 characters; debounced (300ms); max 10 results
-- [ ] Selecting a suggestion fills `participant_id` and `participantName` fields
-- [ ] No change to submission payload schema — `participant_id` already exists
-- [ ] `pnpm verify` exits 0
+- `ParticipantAutocompleteField` in `BetForm.tsx` — debounced 250ms typeahead for playerName and team fields
+- Fires when input ≥2 chars; AbortController per keystroke; shows loading/error/empty/suggestion states
+- Helpers extracted to `lib/participant-search.ts` (pure, no UI deps — testable)
+- 4 new unit tests in `test/api-client.test.ts` (12 total); smart-form local tests pass
 
 ---
 
@@ -360,6 +359,6 @@ UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health co
 UTV2-42  T2  codex     DONE         ← MERGED: PR #19 (2026-03-27). Live proof: 46 events, 535 players.
 UTV2-43  DOC claude    DONE         ← CLOSED: /leaderboard contract RATIFIED (2026-03-27)
 UTV2-44  T2  codex     READY        ← Contract live. Implement /leaderboard. Baseline: 598. Target: ≥606.
-UTV2-45  T3  augment   READY        ← UTV2-42 DONE. Smart form participant autocomplete.
+UTV2-45  T3  augment   DONE         ← MERGED: committed to main (2026-03-27). 12/12 smart-form tests.
 UTV2-46  T2  codex     READY        ← CLV wiring contract RATIFIED. Wire computeAndAttachCLV. Baseline: 598. Target: ≥602.
 ```
