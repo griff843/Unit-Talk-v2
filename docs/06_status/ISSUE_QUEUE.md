@@ -7,9 +7,9 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 1 | 2 | 1 | 0 | 2 |
+| `lane:codex` | 2 | 1 | 0 | 0 | 3 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 3 |
-| `lane:augment` | 1 | 0 | 0 | 0 | 1 |
+| `lane:augment` | 1 | 0 | 0 | 0 | 2 |
 
 ---
 
@@ -69,13 +69,13 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **ID** | UTV2-30 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M5 |
 | **Area** | `area:ingestor` `area:db` |
 | **Blocked by** | — |
 | **Unlocks** | — |
 | **Branch** | `codex/UTV2-42-sgo-results-ingest` |
-| **PR** | #3 — **APPROVED** ✅ (ready to merge) |
+| **PR** | #3 — **MERGED** ✅ (2026-03-26) |
 
 #### Acceptance Criteria
 
@@ -90,7 +90,7 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 
 Branch clean (3 commits, all UTV2-42 scoped). `pnpm verify` exit 0 in isolated worktree (534/534 pass). Live proof complete and credible. One non-blocking warning (76ers team match) noted.
 
-**Next action:** Human merge PR #3 into main.
+**Merged:** PR #3 merged to main 2026-03-26. Merge commit resolved conflicts in repositories.ts, runtime-repositories.ts, types.ts.
 
 ---
 
@@ -172,7 +172,7 @@ When Codex marks PR #5 ready, Claude review will check: `pnpm verify` exit 0, �
 | **Blocked by** | — |
 | **Unlocks** | — |
 | **Branch** | `augment/UTV2-34-v4` |
-| **PR** | #8 — **APPROVED** ✅ (ready to merge) |
+| **PR** | #8 — **MERGED** ✅ (2026-03-26) |
 
 #### Acceptance Criteria
 
@@ -226,10 +226,10 @@ Contract RATIFIED: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md`.
 | **Status** | **IN_REVIEW** |
 | **Milestone** | M5 |
 | **Area** | `area:tooling` |
-| **Blocked by** | Awaiting human merge of PR #3 + PR #8 before rebase |
+| **Blocked by** | — (PR #3 + PR #8 now merged) |
 | **Unlocks** | persistent loop automation |
 | **Branch** | `codex/UTV2-36-queue-tooling` |
-| **PR** | #9 — **BLOCKED** (rebase onto main after PR #3 + #8 merge) |
+| **PR** | #9 — **READY TO REBASE** (PR #3 + #8 merged 2026-03-26) |
 
 #### Acceptance Criteria
 
@@ -239,11 +239,19 @@ Contract RATIFIED: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md`.
 - [x] Cannot claim from a stacked branch (guard: base must be main)
 - [ ] `pnpm verify` exits 0 on clean branch after rebase
 
-#### Claude Review Note (2026-03-26) — BLOCKED
+#### Claude Review Note (2026-03-26) — UNBLOCKED
 
-Core tooling functional (scripts verified, verify passes). Branch includes out-of-scope files from UTV2-30 and UTV2-34 (approved, unmerged) — required to make type-check pass. Also included uncommitted `settlement-service.ts` which has now been committed to main directly.
+PR #3 + PR #8 merged to main 2026-03-26. Codex must now rebase `codex/UTV2-36-queue-tooling` onto main, verify, and re-push.
 
-**Unblock:** Human merges PR #3 + PR #8 → Codex rebases → diff shrinks to tooling files only → re-push → re-submit.
+**Next action (Codex):**
+```bash
+git fetch origin
+git checkout codex/UTV2-36-queue-tooling
+git rebase origin/main
+pnpm verify
+git push --force-with-lease origin codex/UTV2-36-queue-tooling
+```
+Then update PR #9 to READY FOR REVIEW.
 
 ---
 
@@ -292,12 +300,12 @@ Do not touch ISSUE_QUEUE.md or PROGRAM_STATUS.md on this branch.
 ```
 UTV2-28  T1  codex     DONE         ← CLOSED: live proof WIN. Migrations 012+013 committed to main.
 UTV2-29  DOC claude    DONE         ← CLOSED: MLB ratification complete; contract RATIFIED
-UTV2-30  T2  codex     IN_REVIEW    ← APPROVED: pnpm verify ✅, live proof ✅; awaiting human merge of PR #3
+UTV2-30  T2  codex     DONE         ← MERGED: PR #3 merged to main 2026-03-26
 UTV2-31  T2  codex     IN_PROGRESS  ← Draft PR #7 opened; not yet in review
 UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
 UTV2-33  T2  codex     IN_PROGRESS  ← Draft PR #5 opened; not yet in review
-UTV2-34  T3  augment   DONE         ← APPROVED: PR #8 clean branch, pnpm verify ✅, deploy-commands runs; awaiting human merge
+UTV2-34  T3  augment   DONE         ← MERGED: PR #8 merged to main 2026-03-26
 UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
-UTV2-36  T3  codex     IN_REVIEW    ← BLOCKED: tooling good, branch has out-of-scope files; unblocks after PR #3 + #8 merge + rebase
+UTV2-36  T3  codex     IN_REVIEW    ← UNBLOCKED: rebase onto main, re-verify, re-push PR #9
 UTV2-37  T3  augment   IN_PROGRESS  ← REJECTED (×4): still stacked on UTV2-34; cherry-pick 051d9bc from origin/main
 ```
