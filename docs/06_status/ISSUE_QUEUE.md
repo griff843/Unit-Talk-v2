@@ -268,31 +268,23 @@ Do NOT cherry-pick `9d80365` (ISSUE_QUEUE.md commit). Then re-submit PR #9.
 | **Area** | `area:tooling` `area:db` |
 | **Blocked by** | — (UTV2-28 DONE ✅) |
 | **Unlocks** | — |
-| **Branch** | `augment/UTV2-37-v2` (latest attempt) |
-| **PR** | #10 — **REJECTED** (×4): stacked on UTV2-34 commits at branch base |
+| **Branch** | `augment/UTV2-37-v3` (clean — pushed 2026-03-27) |
+| **PR** | #10 — **CLOSED** (stale); new PR needed from `augment/UTV2-37-v3` |
 
 #### Acceptance Criteria
 
-- [ ] Branch clean — only `051d9bc` (seed script + proof) beyond main
-- [ ] `pnpm verify` exits 0 on clean branch
-- [ ] `--help` prints usage and exits 0
-- [ ] Seed run inserts `game_results` row, ID documented
-- [ ] Proof doc at `docs/06_status/grading_seed_proof.md`
-- [ ] No ISSUE_QUEUE.md or PROGRAM_STATUS.md changes on feature branch
+- [x] Branch clean — only `053379a` (seed script + proof) beyond main
+- [ ] `pnpm verify` exits 0 — CI pending
+- [x] `--help` prints usage and exits 0 (in commit message)
+- [x] Seed run inserts `game_results` row, ID documented (`398d34b4`)
+- [x] Proof doc at `docs/06_status/grading_seed_proof.md`
+- [x] No ISSUE_QUEUE.md or PROGRAM_STATUS.md changes on feature branch
 
-#### Claude Review Note (2026-03-26) — REJECTED (×4)
+#### Claude Review Note (2026-03-27) — BRANCH CLEAN, AWAITING PR
 
-`augment/UTV2-37-v2` has 5 commits, still stacked on 2 UTV2-34 commits at the base (`a8521be`, `715acad`). Additionally includes 2 queue-file commits that should not be on feature branches.
+`augment/UTV2-37-v3` is now correct: 1 commit (`053379a`) ahead of main, touching only `scripts/seed-game-result.ts` and `docs/06_status/grading_seed_proof.md`. No queue files.
 
-**Fix (exact commands):**
-```bash
-git fetch origin
-git checkout origin/main -b augment/UTV2-37-v3
-git cherry-pick 051d9bc
-pnpm verify
-git push origin augment/UTV2-37-v3
-```
-Do not touch ISSUE_QUEUE.md or PROGRAM_STATUS.md on this branch.
+**Next action (Augment):** Open new PR from `augment/UTV2-37-v3` → main. Claude will review when ready.
 
 ---
 
@@ -308,5 +300,5 @@ UTV2-33  T2  codex     IN_PROGRESS  ← Draft PR #5 opened; not yet in review
 UTV2-34  T3  augment   DONE         ← MERGED: PR #8 merged to main 2026-03-26
 UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
 UTV2-36  T3  codex     IN_REVIEW    ← REJECTED (×1): branch not rebased, ISSUE_QUEUE.md on branch. reset --hard origin/main && cherry-pick 5da8df7
-UTV2-37  T3  augment   IN_PROGRESS  ← REJECTED (×4): still stacked on UTV2-34; cherry-pick 051d9bc from origin/main
+UTV2-37  T3  augment   IN_PROGRESS  ← BRANCH CLEAN (augment/UTV2-37-v3, 1 commit). Open new PR → main.
 ```
