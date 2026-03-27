@@ -1,10 +1,10 @@
 # T1 Contract: Smart Form V1 — Capper Conviction Input
 
 > Tier: T1 (user-facing submission surface + promotion scoring path)
-> Contract status: **CLOSED — SMART_FORM_V1_CLOSED** (2026-03-26)
+> Contract status: **RATIFIED** (corrected 2026-03-26 — prior CLOSED status was premature; capperConviction field is NOT implemented in apps/smart-form as of 2026-03-26)
 > Produced: 2026-03-25
 > Ratified: 2026-03-26 — T1 Provider Ingestion closed; no prior active T1 lane
-> Closed: 2026-03-26 — All AC met. Root verify 548/548. Smart Form package 112/112. Conviction tests present (AC-1 through AC-8 all pass). AC-10 amended — see note in §10.
+> Implementation issue: UTV2-40 (lane:codex)
 > Supersedes: none
 > Depends on: existing `apps/smart-form`, `apps/api`, `@unit-talk/domain` promotion scoring
 

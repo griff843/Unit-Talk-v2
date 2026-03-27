@@ -1,10 +1,10 @@
 # T2 Contract: Operator Entity & Ingest Health Surface
 
 > Tier: T2 (read-only operator surface extension — no migrations, no write paths, no cross-package type changes)
-> Contract status: **CLOSED — OPERATOR_ENTITY_INGEST_HEALTH_CLOSED** (2026-03-26)
-> Closed: 2026-03-26 — 586/586 tests. entityHealth on snapshot, participant search route, 3 HTML dashboard sections. All ACs satisfied.
+> Contract status: **RATIFIED** (corrected 2026-03-26 — prior CLOSED status was premature; entityHealth, participant route, and HTML sections are NOT implemented in apps/operator-web as of 2026-03-26)
 > Ratified: 2026-03-26 — T1 Feed Entity Resolution CLOSED (all ACs verified); T2 Discord Bot Foundation CLOSED; dependency satisfied
 > Produced: 2026-03-26
+> Implementation issue: UTV2-42 (lane:codex)
 > Depends on: T1 Feed Entity Resolution — CLOSED (AC-1 through AC-9 all verified)
 > Authority: `docs/06_status/PROGRAM_STATUS.md` wins on conflict
 > Implementation owner: Codex

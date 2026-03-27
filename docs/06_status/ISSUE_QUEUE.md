@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 2 | 1 | 0 | 0 | 3 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 3 |
+| `lane:codex` | 2 | 1 | 1 | 2 | 3 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 5 |
 | `lane:augment` | 1 | 0 | 0 | 0 | 2 |
 
 ---
@@ -112,7 +112,29 @@ Branch clean (3 commits, all UTV2-42 scoped). `pnpm verify` exit 0 in isolated w
 #### Notes
 
 Contract: `docs/05_operations/T2_DISCORD_STATS_CONTRACT.md` — RATIFIED.
-When Codex marks PR #7 ready, Claude review will check: `pnpm verify` exit 0, ≥6 net-new tests, total ≥748.
+When Codex marks PR #7 ready, Claude review will check: `pnpm verify` exit 0, ≥8 net-new tests wired into `pnpm test` (≥6 operator-web stats tests + discord-bot tests wired into `test:apps`), total ≥590.
+
+#### ⚠️ Branch Warning (2026-03-26) — STALE BASE
+
+`codex/UTV2-43-discord-stats` is based on old main and deletes production code: `apps/api/src/clv-service.ts`, `apps/api/src/grading-service.ts`, `apps/ingestor/`, all contracts. **Do not submit PR #7 until the branch is rebuilt from clean main.**
+
+**Fix (exact commands):**
+```bash
+# Save the good implementation files first — reference them from the old branch
+git fetch origin
+git checkout codex/UTV2-43-discord-stats
+# Copy stats.ts to a safe location or note the implementation
+git checkout -b codex/UTV2-31-discord-stats-v2 origin/main
+# Implement /stats from scratch on clean main — add only these files:
+#   apps/discord-bot/src/commands/stats.ts  (from old branch reference)
+#   apps/operator-web/src/server.ts         (add GET /api/operator/stats only)
+#   apps/operator-web/src/server.test.ts    (add ≥6 new tests)
+#   apps/discord-bot/src/discord-bot-foundation.test.ts  (add ≥2 new tests)
+#   package.json: add discord-bot tests to test:apps (do NOT remove clv-service or grading-service)
+pnpm verify
+git push -u origin codex/UTV2-31-discord-stats-v2
+```
+Do NOT delete `clv-service.test.ts`, `grading-service.test.ts`, or anything in `apps/ingestor/`. Create a new PR from the v2 branch; close PR #7.
 
 ---
 
@@ -155,7 +177,27 @@ Contract RATIFIED: `docs/05_operations/T2_DISCORD_STATS_CONTRACT.md`.
 #### Notes
 
 Contract: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md` — RATIFIED.
-When Codex marks PR #5 ready, Claude review will check: `pnpm verify` exit 0, ≥6 net-new tests, total ≥746.
+When Codex marks PR #5 ready, Claude review will check: `pnpm verify` exit 0, ≥6 net-new tests, total ≥557.
+
+#### ⚠️ Branch Warning (2026-03-26) — STALE BASE
+
+`codex/UTV2-45-market-key-normalization` is based on old main and deletes production code: `apps/api/src/clv-service.ts`, `apps/api/src/grading-service.ts`, `apps/ingestor/`, all contracts. **Do not submit PR #5 until the branch is rebuilt from clean main.**
+
+**Fix (exact commands):**
+```bash
+git fetch origin
+git checkout codex/UTV2-45-market-key-normalization
+# Reference the implementation files before switching
+git checkout -b codex/UTV2-33-market-keys-v2 origin/main
+# Implement market key normalization from scratch on clean main — add only these files:
+#   packages/domain/src/market-key.ts       (new file with MARKET_KEY_MAP + normalizeMarketKey)
+#   packages/domain/src/market-key.test.ts  (≥4 tests)
+#   apps/api/src/submission-service.ts      (wire normalizeMarketKey into processSubmission)
+#   apps/api/src/submission-service.test.ts (add ≥2 tests)
+pnpm verify
+git push -u origin codex/UTV2-33-market-keys-v2
+```
+Do NOT delete any existing files. Create a new PR from the v2 branch; close PR #5.
 
 ---
 
@@ -284,7 +326,150 @@ Do NOT cherry-pick `9d80365` (ISSUE_QUEUE.md commit). Then re-submit PR #9.
 
 `augment/UTV2-37-v3` is now correct: 1 commit (`053379a`) ahead of main, touching only `scripts/seed-game-result.ts` and `docs/06_status/grading_seed_proof.md`. No queue files.
 
-**Next action (Augment):** Open new PR from `augment/UTV2-37-v3` → main. Claude will review when ready.
+**Next action (Augment):** Rebase onto current main first (lockfile fix landed in `3d2a685` — branch may have old lockfile), then open new PR → main. Claude will review when ready.
+
+```bash
+git fetch origin
+git checkout augment/UTV2-37-v3
+git rebase origin/main
+git push --force-with-lease origin augment/UTV2-37-v3
+# Then open new PR from augment/UTV2-37-v3 → main
+```
+
+---
+
+---
+
+### UTV2-38 — T3 Board Cap Lifecycle Filter
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-38 |
+| **Tier** | T3 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M6 |
+| **Area** | `area:api` `area:db` |
+| **Blocked by** | — |
+| **Unlocks** | Promotion qualification for picks after board saturates with settled history |
+| **Branch** | — |
+| **PR** | — |
+
+#### Acceptance Criteria
+
+- [ ] `getPromotionBoardState` in `packages/db/src/runtime-repositories.ts` filters board count to picks with `status NOT IN ('settled', 'voided')` — only active picks (queued/posted) count toward board cap
+- [ ] Same filter applied to `sameGameCount`, `sameSportCount`, and `duplicateCount` queries
+- [ ] `pnpm verify` exits 0; test count does not decrease
+- [ ] New test: board state returns 0 for a pick whose board slot is fully settled
+
+#### Notes
+
+Known open risk (PROGRAM_STATUS.md): after 5+ test runs, boards saturate because `getPromotionBoardState` counts ALL picks with `promotion_status IN ('qualified', 'promoted')` including settled/historical. Fix: filter to `lifecycle_state NOT IN ('settled', 'voided')` (or equivalently `status NOT IN ('settled', 'voided')` per schema — `picks.status` = lifecycle state). This is a pure query fix — no migration.
+
+---
+
+### UTV2-39 — DOC Smart Form V1 Contract Reactivation
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-39 |
+| **Tier** | DOC |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M6 |
+| **Area** | `area:contracts` |
+| **Blocked by** | — |
+| **Unlocks** | UTV2-40 |
+| **Branch** | — |
+| **PR** | — |
+
+#### Notes
+
+`docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` was prematurely marked CLOSED — `capperConviction` field is NOT implemented in `apps/smart-form`. Contract corrected to RATIFIED. Implementation issue UTV2-40 now READY.
+
+---
+
+### UTV2-40 — T1 Smart Form V1 Conviction Field
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-40 |
+| **Tier** | T1 |
+| **Lane** | `lane:codex` |
+| **Status** | **BLOCKED** |
+| **Milestone** | M6 |
+| **Area** | `area:smart-form` |
+| **Blocked by** | UTV2-39 (DONE ✅) |
+| **Unlocks** | Smart Form picks become promotion-eligible (currently all score 61.5 < 70) |
+| **Branch** | — |
+| **PR** | — |
+
+#### Acceptance Criteria
+
+See `docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` for full AC. Summary:
+- [ ] `capperConviction` (1–10) added to `betFormSchema` in `apps/smart-form/lib/form-schema.ts`
+- [ ] `buildSubmissionPayload` maps `capperConviction * 10` → `metadata.promotionScores.trust`
+- [ ] Conviction input rendered in `BetForm.tsx` (Stake section) with inline help text
+- [ ] `BetSlipPanel` and `SuccessReceipt` display conviction rating
+- [ ] ≥6 new tests (schema validation + payload mapping + E2E assertion)
+- [ ] `pnpm verify` exits 0; test count does not decrease
+
+#### Notes
+
+Contract: `docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` — RATIFIED (corrected 2026-03-26).
+T1 tier: requires proof bundle after merge (submit a pick via Smart Form, confirm `promotionScores.trust` populated in DB).
+
+---
+
+### UTV2-41 — DOC Operator Entity Ingest Health Contract Reactivation
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-41 |
+| **Tier** | DOC |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M6 |
+| **Area** | `area:contracts` |
+| **Blocked by** | — |
+| **Unlocks** | UTV2-42 |
+| **Branch** | — |
+| **PR** | — |
+
+#### Notes
+
+`docs/05_operations/T2_OPERATOR_ENTITY_INGEST_HEALTH_CONTRACT.md` was prematurely marked CLOSED — `entityHealth`, participant route, and HTML sections are NOT implemented in `apps/operator-web`. Contract corrected to RATIFIED. Implementation issue UTV2-42 now READY.
+
+---
+
+### UTV2-42 — T2 Operator Entity Ingest Health
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-42 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **BLOCKED** |
+| **Milestone** | M6 |
+| **Area** | `area:operator-web` |
+| **Blocked by** | UTV2-41 (DONE ✅) |
+| **Unlocks** | Entity data operator-visible; unblocks Smart Form participant autocomplete |
+| **Branch** | — |
+| **PR** | — |
+
+#### Acceptance Criteria
+
+See `docs/05_operations/T2_OPERATOR_ENTITY_INGEST_HEALTH_CONTRACT.md` for full AC. Summary:
+- [ ] `GET /api/operator/snapshot` includes `entityHealth` (resolved events, players, teams counts)
+- [ ] HTML dashboard: "Upcoming Events" mini-table, "Entity Catalog" health card, "Last Ingest Cycle" section
+- [ ] `GET /api/operator/participants` route (type/sport/q/limit filters)
+- [ ] ≥6 new tests; `pnpm verify` exits 0; test count does not decrease
+
+#### Notes
+
+Contract: `docs/05_operations/T2_OPERATOR_ENTITY_INGEST_HEALTH_CONTRACT.md` — RATIFIED (corrected 2026-03-26).
+File scope: `apps/operator-web/src/server.ts` + `apps/operator-web/src/server.test.ts` only.
+When Codex marks PR ready, Claude review checks: `pnpm verify` exit 0, ≥6 net-new tests, `entityHealth` in snapshot response, participant route returns 200.
 
 ---
 
@@ -294,11 +479,16 @@ Do NOT cherry-pick `9d80365` (ISSUE_QUEUE.md commit). Then re-submit PR #9.
 UTV2-28  T1  codex     DONE         ← CLOSED: live proof WIN. Migrations 012+013 committed to main.
 UTV2-29  DOC claude    DONE         ← CLOSED: MLB ratification complete; contract RATIFIED
 UTV2-30  T2  codex     DONE         ← MERGED: PR #3 merged to main 2026-03-26
-UTV2-31  T2  codex     IN_PROGRESS  ← Draft PR #7 opened; not yet in review
+UTV2-31  T2  codex     IN_PROGRESS  ← ⚠️ STALE BRANCH (codex/UTV2-43): deletes production code. Rebuild from main as codex/UTV2-31-discord-stats-v2.
 UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
-UTV2-33  T2  codex     IN_PROGRESS  ← Draft PR #5 opened; not yet in review
+UTV2-33  T2  codex     IN_PROGRESS  ← ⚠️ STALE BRANCH (codex/UTV2-45): deletes production code. Rebuild from main as codex/UTV2-33-market-keys-v2.
 UTV2-34  T3  augment   DONE         ← MERGED: PR #8 merged to main 2026-03-26
 UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
 UTV2-36  T3  codex     IN_REVIEW    ← REJECTED (×1): branch not rebased, ISSUE_QUEUE.md on branch. reset --hard origin/main && cherry-pick 5da8df7
-UTV2-37  T3  augment   IN_PROGRESS  ← BRANCH CLEAN (augment/UTV2-37-v3, 1 commit). Open new PR → main.
+UTV2-37  T3  augment   IN_PROGRESS  ← BRANCH CLEAN (augment/UTV2-37-v3, 1 commit). Rebase onto main (lockfile fix 3d2a685), open new PR → main.
+UTV2-38  T3  codex     READY        ← Board cap lifecycle filter. No contract needed. Start immediately.
+UTV2-39  DOC claude    DONE         ← CLOSED: Smart Form V1 contract corrected to RATIFIED.
+UTV2-40  T1  codex     BLOCKED      ← Blocked by UTV2-39 (DONE). Now READY. Implement Smart Form conviction field.
+UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health contract corrected to RATIFIED.
+UTV2-42  T2  codex     BLOCKED      ← Blocked by UTV2-41 (DONE). Now READY. Implement operator entity health.
 ```

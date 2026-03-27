@@ -157,7 +157,7 @@ If API call fails (network error or non-200): reply with ephemeral "Stats are te
 - [ ] AC-7: `/stats` embed renders correct color (green/yellow/red/gray) based on sample size + win rate
 - [ ] AC-8: `/stats` embed omits CLV fields when `picksWithClv = 0`
 - [ ] AC-9: No role gate — any server member can invoke `/stats`
-- [ ] AC-10: `pnpm verify` exits 0; ≥8 net-new tests; total ≥ 748
+- [ ] AC-10: `pnpm verify` exits 0; ≥8 net-new tests wired into `pnpm test` (discord-bot tests added to `test:apps`; clv-service.test.ts and grading-service.test.ts must NOT be removed); total ≥ 590
 
 ## 6. Tests Required
 
@@ -177,7 +177,7 @@ If API call fails (network error or non-200): reply with ephemeral "Stats are te
 
 ## 7. Proof Requirements
 
-- [ ] `pnpm verify` exits 0; test count ≥ 748
+- [ ] `pnpm verify` exits 0; test count ≥ 590 (baseline 551 + 31 discord-bot foundation wired + ≥8 net-new)
 - [ ] `GET /api/operator/stats` returns correct response for at least one capper with graded picks in live DB
 - [ ] `/stats` shows in Discord command list after `pnpm --filter @unit-talk/discord-bot deploy-commands`
 - [ ] Embed renders in Discord with correct color and CLV fields (or omission if no CLV data)

@@ -127,7 +127,7 @@ No schema changes. No migration. The `picks.market` column type remains `text` �
 - [ ] AC-3: All 16 entries in the mapping table produce the correct canonical key
 - [ ] AC-4: Picks submitted via `processSubmission()` with a known market string store the canonical key in `picks.market`
 - [ ] AC-5: Picks submitted with an unknown market string store the original string unchanged
-- [ ] AC-6: `pnpm verify` exits 0; ≥6 net-new tests; total ≥ 746
+- [ ] AC-6: `pnpm verify` exits 0; ≥6 net-new tests; total ≥ 557 (baseline 551 + ≥6 net-new)
 
 ## 6. Tests Required
 
@@ -145,7 +145,7 @@ No schema changes. No migration. The `picks.market` column type remains `text` �
 
 ## 7. Proof Requirements
 
-- [ ] `pnpm verify` exits 0; test count ≥ 746
+- [ ] `pnpm verify` exits 0; test count ≥ 557
 - [ ] Submit a `/pick` via the smart form or API with `market: 'NBA points'` — confirm `picks.market = 'points-all-game-ou'` in live DB
 - [ ] Call `POST /api/grading/run` — pick with canonical market key resolves `game_result_not_found` only if no game_result exists (not due to key mismatch)
 
