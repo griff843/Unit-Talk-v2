@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 12 |
+| `lane:codex` | 0 | 1 | 1 | 0 | 12 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 7 |
 | `lane:augment` | 0 | 1 | 0 | 0 | 6 |
 
@@ -24,12 +24,12 @@
 | **ID** | UTV2-53 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M9 |
 | **Area** | `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-53-discord-pick-command` |
+| **PR** | [#29](https://github.com/griff843/Unit-Talk-v2/pull/29) |
 
 #### Scope
 
@@ -59,6 +59,48 @@ Source is hardcoded to `'discord-bot'`. `submittedBy` is the Discord username of
 - Do not add a new route to `apps/api` — use existing `POST /api/submissions`
 - Do not touch `apps/smart-form`, `apps/operator-web`, `apps/api/src`
 - `ApiClient` in `apps/discord-bot` must call the API, not import from `apps/api` directly
+
+---
+
+### UTV2-55 — T2 Qualified Pick Re-queue Endpoint
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-55 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M9 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+6 qualified picks are orphaned in `validated` status with no `distribution_outbox` row — the submit controller catches enqueue failures silently. Add `POST /api/picks/:id/requeue` to recover them. Also add a worker guard to skip delivery for already-settled picks (stale outbox entry exists for pick `2783c8e2`).
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `POST /api/picks/:id/requeue` route registered on API server
+- [ ] AC-2: Returns 422 if `promotion_status !== 'qualified'`
+- [ ] AC-3: Returns 409 if outbox row already exists (pending or sent)
+- [ ] AC-4: Returns 409 if pick is `settled` or `voided`
+- [ ] AC-5: On success: enqueues to `distribution_outbox`, returns 200 `{ outboxId, target, pickId }`
+- [ ] AC-6: Worker skips delivery for settled/voided picks; logs reason; outbox row marked complete
+- [ ] AC-7: `pnpm verify` exits 0; test count ≥ current baseline + 3
+- [ ] AC-8: At least 3 new tests: success, 422 (not qualified), 409 (already queued)
+
+#### Constraints
+
+- Do not change `submit-pick-controller.ts` error handling
+- Do not change `enqueueDistributionWithRunTracking` signature
+- Permitted files: `apps/api/src/server.ts`, new `apps/api/src/controllers/requeue-controller.ts`, test file, `apps/worker/src/distribution-worker.ts`
+- Do not touch `apps/ingestor`, `apps/operator-web`, `apps/smart-form`
+
+#### Contract Authority
+
+`docs/05_operations/UTV2-55_REQUEUE_CONTRACT.md` (status: RATIFIED)
 
 ---
 
