@@ -266,6 +266,79 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
   assert.equal(deviggingResult?.overround, 1.04762);
 });
 
+test('processSubmission attaches kellySizing when deviggingResult exists and odds are finite', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-1',
+      providerMarketKey: 'assists-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 7.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T16:00:00.000Z',
+      idempotencyKey: 'offer-new',
+    },
+  ]);
+
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+      odds: 150,
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  const kellySizing = metadata.kellySizing as Record<string, unknown> | undefined;
+
+  assert.ok(kellySizing);
+  assert.equal(kellySizing?.has_edge, true);
+  assert.equal(kellySizing?.capped, false);
+  assert.equal(kellySizing?.recommended_fraction, 0.041667);
+  assert.equal(kellySizing?.recommended_units, 41.67);
+});
+
+test('processSubmission stores null kellySizing when odds are missing', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-1',
+      providerMarketKey: 'assists-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 7.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T16:00:00.000Z',
+      idempotencyKey: 'offer-new',
+    },
+  ]);
+
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata.kellySizing, null);
+});
+
 test('processSubmission leaves deviggingResult absent when no matching market offer exists', async () => {
   const repositories = createInMemoryRepositoryBundle();
 

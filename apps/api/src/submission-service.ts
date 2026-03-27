@@ -19,8 +19,11 @@ import {
 } from '@unit-talk/db';
 import {
   americanToImplied,
+  americanToDecimal,
   createCanonicalPickFromSubmission,
   createValidatedSubmission,
+  computeKellySize,
+  DEFAULT_BANKROLL_CONFIG,
   applyDevig as devig,
   normalizeMarketKey,
 } from '@unit-talk/domain';
@@ -67,6 +70,11 @@ export async function processSubmission(
     normalizedMarketKey,
     repositories.providerOffers,
   );
+  const kellySizing = resolveKellySizing(
+    deviggingResult,
+    materialized.pick.odds,
+    normalizedMarketKey,
+  );
 
   const enrichedMetadata = enrichMetadataWithDomainAnalysis(
     materialized.pick.metadata,
@@ -74,12 +82,11 @@ export async function processSubmission(
   );
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
-    metadata: deviggingResult
-      ? {
-          ...enrichedMetadata,
-          deviggingResult,
-        }
-      : enrichedMetadata,
+    metadata: {
+      ...enrichedMetadata,
+      ...(deviggingResult ? { deviggingResult } : {}),
+      kellySizing,
+    },
   };
 
   // Step 1: persist the submission row — submission_events and pick_lifecycle
@@ -177,7 +184,48 @@ async function findLatestMatchingOffer(
   providerOffers: ProviderOfferRepository,
 ): Promise<ProviderOfferRecord | null> {
   const offers = await providerOffers.listByProvider('sgo');
-  return (
-    offers.find((offer) => offer.provider_market_key === normalizedMarketKey) ?? null
-  );
+  const latestOffer = [...offers]
+    .sort((left, right) => {
+      const snapshotCompare = right.snapshot_at.localeCompare(left.snapshot_at);
+      if (snapshotCompare !== 0) {
+        return snapshotCompare;
+      }
+
+      const createdCompare = right.created_at.localeCompare(left.created_at);
+      if (createdCompare !== 0) {
+        return createdCompare;
+      }
+
+      return right.id.localeCompare(left.id);
+    })
+    .find((offer) => offer.provider_market_key === normalizedMarketKey);
+
+  return latestOffer ?? null;
+}
+
+function resolveKellySizing(
+  deviggingResult:
+    | {
+        overFair: number;
+        providerMarketKey: string;
+      }
+    | null,
+  odds: number | undefined,
+  normalizedMarketKey: string,
+) {
+  if (!deviggingResult || !Number.isFinite(odds)) {
+    return null;
+  }
+
+  try {
+    return computeKellySize(
+      deviggingResult.overFair,
+      americanToDecimal(odds as number),
+      DEFAULT_BANKROLL_CONFIG,
+    );
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    console.warn(`Kelly sizing skipped for market ${normalizedMarketKey}: ${reason}`);
+    return null;
+  }
 }
