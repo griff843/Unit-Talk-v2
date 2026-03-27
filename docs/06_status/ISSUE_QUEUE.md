@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 11 |
+| `lane:codex` | 0 | 1 | 0 | 0 | 11 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 6 |
 | `lane:augment` | 0 | 1 | 1 | 0 | 4 |
 
@@ -24,12 +24,12 @@
 | **ID** | UTV2-52 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M8 |
 | **Area** | `area:ingestor` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-52-ingestor-integration` |
+| **PR** | [#27](https://github.com/griff843/Unit-Talk-v2/pull/27) |
 
 #### Scope
 
