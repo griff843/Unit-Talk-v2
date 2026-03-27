@@ -62,6 +62,19 @@ test('GET /api/operator/snapshot returns recent operational rows', async () => {
         result: string | null;
         corrects_id: string | null;
       }>;
+      entityHealth: {
+        resolvedEventsCount: number;
+        upcomingEventsCount: number;
+        resolvedPlayersCount: number;
+        resolvedTeamsWithExternalIdCount: number;
+        totalTeamsCount: number;
+      };
+      upcomingEvents: Array<{
+        id: string;
+        eventName: string;
+        teams: string[];
+        playerCount: number;
+      }>;
       canary: { target: string; latestMessageId: string | null };
       bestBets: { target: string; latestMessageId: string | null; activationHealthy: boolean };
       traderInsights: { target: string; latestMessageId: string | null; activationHealthy: boolean };
@@ -77,6 +90,14 @@ test('GET /api/operator/snapshot returns recent operational rows', async () => {
   assert.equal(body.data.recentSettlements[0]?.id, 'settlement-1');
   assert.equal(body.data.recentSettlements[0]?.status, 'settled');
   assert.equal(body.data.recentSettlements[0]?.corrects_id, null);
+  assert.equal(body.data.entityHealth.resolvedEventsCount, 10);
+  assert.equal(body.data.entityHealth.upcomingEventsCount, 3);
+  assert.equal(body.data.entityHealth.resolvedPlayersCount, 84);
+  assert.equal(body.data.entityHealth.resolvedTeamsWithExternalIdCount, 8);
+  assert.equal(body.data.entityHealth.totalTeamsCount, 124);
+  assert.equal(body.data.upcomingEvents[0]?.id, 'event-1');
+  assert.equal(body.data.upcomingEvents[0]?.teams[0], 'New York Knicks');
+  assert.equal(body.data.upcomingEvents[0]?.playerCount, 18);
   assert.equal(body.data.canary.target, 'discord:canary');
   assert.equal(body.data.canary.latestMessageId, 'discord-message-1');
   assert.equal(body.data.bestBets.target, 'discord:best-bets');
@@ -96,6 +117,116 @@ test('GET /api/operator/snapshot returns recent operational rows', async () => {
     body.data.picksPipeline.recentPicks.some((row) => row.settlementResult === 'win'),
     true,
   );
+});
+
+test('GET /api/operator/participants returns participant list', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/participants');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    participants: Array<{ displayName: string; participantType: string }>;
+    total: number;
+    observedAt: string;
+  };
+  assert.equal(body.total, 4);
+  assert.equal(body.participants.length, 4);
+  assert.equal(body.participants[0]?.displayName, 'Boston Celtics');
+  assert.equal(body.participants.some((row) => row.participantType === 'player'), true);
+  assert.match(body.observedAt, /^20/);
+});
+
+test('GET /api/operator/participants filters to player participants', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/participants?type=player');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    participants: Array<{ displayName: string; participantType: string }>;
+    total: number;
+  };
+  assert.equal(body.total, 2);
+  assert.deepEqual(
+    body.participants.map((row) => row.participantType),
+    ['player', 'player'],
+  );
+  assert.equal(body.participants.some((row) => row.displayName === 'Jalen Brunson'), true);
+});
+
+test('GET /api/operator/participants filters case-insensitively by q', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/participants?q=BRUNSON');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    participants: Array<{ displayName: string }>;
+    total: number;
+  };
+  assert.equal(body.total, 1);
+  assert.deepEqual(body.participants.map((row) => row.displayName), ['Jalen Brunson']);
+});
+
+test('GET /api/operator/participants returns empty results when provider has no participant search', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'demo',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/participants?type=team&q=knicks');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    participants: unknown[];
+    total: number;
+    observedAt: string;
+  };
+  assert.deepEqual(body.participants, []);
+  assert.equal(body.total, 0);
+  assert.match(body.observedAt, /^20/);
 });
 
 test('createSnapshotFromRows uses effective corrected settlement result in picks pipeline', () => {
@@ -200,6 +331,92 @@ test('GET / returns an html dashboard', async () => {
   assert.match(response.body, /discord:trader-insights/);
   assert.match(response.body, /Picks Pipeline/);
   assert.match(response.body, /pick-2/);
+});
+
+test('GET / renders Upcoming Events section with seeded event rows', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Upcoming Events/);
+  assert.match(response.body, /Knicks vs\. Celtics/);
+  assert.match(response.body, /New York Knicks, Boston Celtics/);
+  assert.match(response.body, /18/);
+});
+
+test('GET / renders Entity Catalog health card with resolved counts', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Entity Catalog/);
+  assert.match(response.body, /Events resolved/);
+  assert.match(response.body, /10 \(3 upcoming\)/);
+  assert.match(response.body, /Players resolved/);
+  assert.match(response.body, /84/);
+  assert.match(response.body, /Teams with SGO ID/);
+  assert.match(response.body, /8 \/ 124/);
+});
+
+test('GET / renders Last Ingest Cycle section from the latest ingestor run', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Last Ingest Cycle/);
+  assert.match(response.body, /succeeded/);
+  assert.match(response.body, /NBA/);
+  assert.match(response.body, /2026-03-21T14:00:00.000Z/);
+  assert.match(response.body, /150\.0s/);
+});
+
+test('createSnapshotFromRows defaults entity health counts to zero in demo mode', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.deepEqual(snapshot.entityHealth, {
+    resolvedEventsCount: 0,
+    upcomingEventsCount: 0,
+    resolvedPlayersCount: 0,
+    resolvedTeamsWithExternalIdCount: 0,
+    totalTeamsCount: 0,
+    observedAt: snapshot.entityHealth?.observedAt,
+  });
+  assert.deepEqual(snapshot.upcomingEvents, []);
 });
 
 test('GET / renders Trader Insights Health section', async () => {
@@ -1196,6 +1413,45 @@ test('buildCapperStatsResponse excludes picks outside the requested window', () 
 });
 
 function createStaticProvider(): OperatorSnapshotProvider {
+  const participants = [
+    {
+      id: 'participant-team-bos',
+      displayName: 'Boston Celtics',
+      participantType: 'team',
+      sport: 'nba',
+      league: 'NBA',
+      externalId: 'sgo-bos',
+      metadata: { teamCode: 'BOS' },
+    },
+    {
+      id: 'participant-player-brown',
+      displayName: 'Jaylen Brown',
+      participantType: 'player',
+      sport: 'nba',
+      league: 'NBA',
+      externalId: 'sgo-jbrown',
+      metadata: { teamCode: 'BOS' },
+    },
+    {
+      id: 'participant-player-brunson',
+      displayName: 'Jalen Brunson',
+      participantType: 'player',
+      sport: 'nba',
+      league: 'NBA',
+      externalId: 'sgo-jbrunson',
+      metadata: { teamCode: 'NYK' },
+    },
+    {
+      id: 'participant-team-nyk',
+      displayName: 'New York Knicks',
+      participantType: 'team',
+      sport: 'nba',
+      league: 'NBA',
+      externalId: 'sgo-nyk',
+      metadata: { teamCode: 'NYK' },
+    },
+  ];
+
   return {
     async getSnapshot(_filter?: OutboxFilter) {
       return createSnapshotFromRows({
@@ -1302,6 +1558,17 @@ function createStaticProvider(): OperatorSnapshotProvider {
         ],
         recentRuns: [
           {
+            id: 'run-ingestor-1',
+            run_type: 'ingestor.cycle',
+            status: 'succeeded',
+            started_at: '2026-03-21T14:00:00.000Z',
+            finished_at: '2026-03-21T14:02:30.000Z',
+            actor: 'ingestor',
+            details: { league: 'NBA' },
+            created_at: '2026-03-21T14:00:00.000Z',
+            idempotency_key: 'ingestor-cycle-1',
+          },
+          {
             id: 'run-1',
             run_type: 'distribution.process',
             status: 'succeeded',
@@ -1405,7 +1672,49 @@ function createStaticProvider(): OperatorSnapshotProvider {
             created_at: '2026-03-20T12:01:02.000Z',
           },
         ],
+        entityHealth: {
+          resolvedEventsCount: 10,
+          upcomingEventsCount: 3,
+          resolvedPlayersCount: 84,
+          resolvedTeamsWithExternalIdCount: 8,
+          totalTeamsCount: 124,
+          observedAt: '2026-03-21T14:03:00.000Z',
+        },
+        upcomingEvents: [
+          {
+            id: 'event-1',
+            eventName: 'Knicks vs. Celtics',
+            eventDate: '2026-03-22',
+            sport: 'nba',
+            teams: ['New York Knicks', 'Boston Celtics'],
+            playerCount: 18,
+          },
+          {
+            id: 'event-2',
+            eventName: 'Lakers vs. Suns',
+            eventDate: '2026-03-23',
+            sport: 'nba',
+            teams: ['Los Angeles Lakers', 'Phoenix Suns'],
+            playerCount: 16,
+          },
+        ],
       });
+    },
+    async getParticipants(filter) {
+      const filtered = participants
+        .filter((row) => (filter?.type ? row.participantType === filter.type : true))
+        .filter((row) => (filter?.sport ? row.sport === filter.sport : true))
+        .filter((row) =>
+          filter?.q ? row.displayName.toLowerCase().includes(filter.q.toLowerCase()) : true,
+        )
+        .sort((left, right) => left.displayName.localeCompare(right.displayName));
+      const limit = filter?.limit ?? 20;
+
+      return {
+        participants: filtered.slice(0, limit),
+        total: filtered.length,
+        observedAt: '2026-03-21T14:03:00.000Z',
+      };
     },
   };
 }
