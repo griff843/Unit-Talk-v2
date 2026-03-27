@@ -129,12 +129,12 @@ UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSett
 | **ID** | UTV2-51 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M8 |
 | **Area** | `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `augment/UTV2-51-operator-clv-display` |
+| **PR** | [#26](https://github.com/griff843/Unit-Talk-v2/pull/26) |
 
 #### Scope
 
