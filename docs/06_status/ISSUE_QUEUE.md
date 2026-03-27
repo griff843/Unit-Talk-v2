@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 3 | 0 | 0 | 5 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 5 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 8 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 6 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 2 |
 
 ---
@@ -26,17 +26,10 @@
 | **Lane** | `lane:codex` |
 | **Status** | **DONE** |
 | **Milestone** | M4 |
-| **Area** | `area:api` `area:db` |
-| **Blocked by** | — |
 | **Branch** | committed directly to `main` |
 | **PR** | — |
 
-#### Live Proof
-
-- `POST /api/grading/run`: `attempted=4, graded=1, skipped=3, errors=0`
-- Settlement `1c9d8581` written with `source='grading'`
-- Migration 013 applied: `settlement_records_source_check` extended to include `'grading'`
-- Idempotent: second run `graded=0`
+Live proof: `POST /api/grading/run` → `attempted=4, graded=1, skipped=3, errors=0`. Settlement `1c9d8581`. Idempotent.
 
 ---
 
@@ -49,14 +42,8 @@
 | **Lane** | `lane:claude` |
 | **Status** | **DONE** |
 | **Milestone** | M4 |
-| **Area** | `area:contracts` |
-| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
-
-#### Notes
-
-MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 
 ---
 
@@ -69,8 +56,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:codex` |
 | **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:ingestor` `area:db` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-42-sgo-results-ingest` |
 | **PR** | #3 — **MERGED** ✅ (2026-03-26) |
 
@@ -85,14 +70,8 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:codex` |
 | **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:discord-bot` `area:operator-web` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-31-discord-stats-v2` |
 | **PR** | #13 — **MERGED** ✅ (2026-03-27) |
-
-#### Notes
-
-1 commit (`9614698`) vs origin/main. Files: `apps/operator-web/src/server.ts`, `apps/operator-web/src/server.test.ts`, `apps/discord-bot/src/commands/stats.ts`, `apps/discord-bot/src/discord-bot-foundation.test.ts`, `package.json`. `pnpm verify` exits 0: **591/591**. Meets ≥590 target.
 
 ---
 
@@ -105,10 +84,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:claude` |
 | **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:contracts` |
-| **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
 
 ---
 
@@ -119,16 +94,17 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **ID** | UTV2-33 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:api` `area:domain` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-33-market-keys-v3` |
-| **PR** | #18 — **OPEN** |
+| **PR** | #18 — **MERGED** ✅ (2026-03-27) |
 
-#### Claude Review Note (2026-03-27) — APPROVED ✅
+#### Live Proof (2026-03-27) — VERIFIED ✅
 
-2 commits vs origin/main. Files: `packages/domain/src/market-key.ts`, `packages/domain/src/market-key.test.ts`, `packages/domain/src/index.ts`, `apps/api/src/submission-service.ts`, `apps/api/src/submission-service.test.ts`, `package.json`. `pnpm verify` exits 0: **598/598** (592 baseline + 4 domain + 2 submission). All 16 mapping entries present. Board-cap test updated to use canonical key (correct — normalization applied at submission time). Meets ≥597 target.
+- `market: 'NBA points'` submitted → stored as `'points-all-game-ou'` (pick `d00954ec`)
+- `market: 'MLB batting hits'` submitted → stored as `'batting-hits-all-game-ou'` (pick `306deff8`)
+- `market: 'exotic custom market'` submitted → stored unchanged (pick `3b5d9e84`)
+- All 3 proof assertions pass against live Supabase DB
 
 ---
 
@@ -141,8 +117,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:augment` |
 | **Status** | **DONE** |
 | **Milestone** | M4 |
-| **Area** | `area:discord-bot` |
-| **Blocked by** | — |
 | **Branch** | `augment/UTV2-34-v4` |
 | **PR** | #8 — **MERGED** ✅ (2026-03-26) |
 
@@ -157,10 +131,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:claude` |
 | **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:contracts` |
-| **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
 
 ---
 
@@ -173,8 +143,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:codex` |
 | **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:tooling` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-36-queue-tooling` |
 | **PR** | #9 — **MERGED** ✅ (2026-03-27) |
 
@@ -189,14 +157,8 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:augment` |
 | **Status** | **DONE** |
 | **Milestone** | M5 |
-| **Area** | `area:tooling` `area:db` |
-| **Blocked by** | — |
 | **Branch** | `augment/UTV2-37-v3` |
 | **PR** | #11 — **MERGED** ✅ (2026-03-27) |
-
-#### Notes
-
-1 commit (`43f0751`), 2 files: `scripts/seed-game-result.ts` + `docs/06_status/grading_seed_proof.md`. `--help` implemented. Proof doc documents row ID `398d34b4`.
 
 ---
 
@@ -209,14 +171,8 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:codex` |
 | **Status** | **DONE** |
 | **Milestone** | M6 |
-| **Area** | `area:api` `area:db` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-38-board-cap-filter` |
 | **PR** | #12 — **MERGED** ✅ (2026-03-27) |
-
-#### Notes
-
-1 commit (`c43e298`), 2 files: `packages/db/src/runtime-repositories.ts` + `apps/api/src/submission-service.test.ts`. Filter applied to all 4 count functions. `pnpm verify` exits 0: **552/552**.
 
 ---
 
@@ -229,14 +185,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:claude` |
 | **Status** | **DONE** |
 | **Milestone** | M6 |
-| **Area** | `area:contracts` |
-| **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
-
-#### Notes
-
-`docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` corrected to RATIFIED (2026-03-26).
 
 ---
 
@@ -247,18 +195,18 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **ID** | UTV2-40 |
 | **Tier** | T1 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M6 |
-| **Area** | `area:smart-form` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-40-smart-form-conviction-v2` |
-| **PR** | #17 — **OPEN** |
+| **PR** | #17 — **MERGED** ✅ (2026-03-27) |
 
-#### Claude Review Note (2026-03-27) — APPROVED ✅
+#### Live Proof (2026-03-27) — VERIFIED ✅
 
-1 commit (`3152196`) vs origin/main. Files: 7 `apps/smart-form/` files only. No queue/status files. `pnpm verify` exits 0: **592/592** root. `pnpm --filter @unit-talk/smart-form test` exits 0: **111/111**. All contract ACs met (conviction field, schema validation, trust mapping, UI integration). Replaces rejected PR #14.
-
-**Post-merge:** T1 proof bundle required. Submit a Smart Form pick with conviction=8, confirm `metadata.promotionScores.trust = 80` in DB via Supabase MCP or `GET /api/operator/picks/:id`.
+- conviction=8 → `metadata.promotionScores.trust = 80` stored in `picks` (pick `b902dcb6`, source=`smart-form`)
+- conviction=10 → trust=100 (pick `d77a35b3`)
+- conviction=4 → trust=40, `promotionStatus = 'not_eligible'` (composite < 70) (pick `a3494404`)
+- conviction=9 → trust=90 stored; meets Trader Insights `minimumTrust: 85` threshold (pick `9d1265e4`)
+- All 4 proof assertions pass against live Supabase DB
 
 ---
 
@@ -271,14 +219,6 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **Lane** | `lane:claude` |
 | **Status** | **DONE** |
 | **Milestone** | M6 |
-| **Area** | `area:contracts` |
-| **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
-
-#### Notes
-
-`docs/05_operations/T2_OPERATOR_ENTITY_INGEST_HEALTH_CONTRACT.md` corrected to RATIFIED (2026-03-26).
 
 ---
 
@@ -289,35 +229,85 @@ MLB ratification complete. Contract RATIFIED in `docs/05_operations/`.
 | **ID** | UTV2-42 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M6 |
-| **Area** | `area:operator-web` |
-| **Blocked by** | — |
 | **Branch** | `codex/UTV2-42-operator-entity-health-v2` |
-| **PR** | #19 — **OPEN** |
+| **PR** | #19 — **MERGED** ✅ (2026-03-27) |
 
-#### Claude Review Note (2026-03-27) — APPROVED ✅
+#### Live Proof (2026-03-27) — VERIFIED ✅ (DB counts)
 
-1 commit (`60bfe72`) vs origin/main. Files: `apps/operator-web/src/server.ts` + `apps/operator-web/src/server.test.ts` only. `pnpm verify` exits 0: **600/600** (192+8 test:apps). Conflict with PR #13 (stats route) resolved cleanly — both routes co-exist. All 3 HTML sections present, `entityHealth` in snapshot, participants route wired. Meets ≥557 target. Replaces rejected PR #15.
+- `events WHERE external_id IS NOT NULL`: **46** rows
+- `participants WHERE participant_type = 'player'`: **535** rows
+- `participants WHERE participant_type = 'team'`: **124** rows
+- Upcoming events (±7 days): Chicago Bulls vs OKC Thunder (2026-03-28), Jazz vs Nuggets (2026-03-28), Clippers vs Pacers (2026-03-27), and others
+- `entityHealth` and `/api/operator/participants` route live in `apps/operator-web` (600/600 tests)
+
+---
+
+### UTV2-43 — DOC Discord /leaderboard Contract
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-43 |
+| **Tier** | DOC |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M7 |
+| **Area** | `area:contracts` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Notes
+
+Contract RATIFIED: `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` (2026-03-27). Unlocks UTV2-44 implementation.
+
+---
+
+### UTV2-44 — T2 Discord /leaderboard Command
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-44 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M7 |
+| **Area** | `area:discord-bot` `area:operator-web` |
+| **Blocked by** | — (UTV2-43 DONE ✅) |
+| **Branch** | — |
+| **PR** | — |
+
+#### Acceptance Criteria
+
+See `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md`. Summary:
+- [ ] `GET /api/operator/leaderboard` returns ranked `LeaderboardResponse` with winRate/roiPct/streak
+- [ ] Ranking: winRate DESC, roiPct DESC tiebreaker; filtered by `minPicks` (default 3)
+- [ ] `?last=99` → HTTP 400
+- [ ] `/leaderboard [window] [sport] [limit]` registered in Discord
+- [ ] Embed renders ranked entries with streak icons
+- [ ] ≥8 net-new tests; `pnpm verify` exits 0; total ≥ 606
 
 ---
 
 ## Queue State Reference
 
 ```
-UTV2-28  T1  codex     DONE         ← CLOSED: live proof WIN. Migrations 012+013 committed to main.
-UTV2-29  DOC claude    DONE         ← CLOSED: MLB ratification complete; contract RATIFIED
-UTV2-30  T2  codex     DONE         ← MERGED: PR #3 merged to main 2026-03-26
-UTV2-31  T2  codex     DONE         ← MERGED: PR #13 merged to main 2026-03-27. 591/591.
+UTV2-28  T1  codex     DONE         ← CLOSED: live proof WIN
+UTV2-29  DOC claude    DONE         ← CLOSED: MLB ratification RATIFIED
+UTV2-30  T2  codex     DONE         ← MERGED: PR #3 (2026-03-26)
+UTV2-31  T2  codex     DONE         ← MERGED: PR #13 (2026-03-27). 591/591.
 UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
-UTV2-33  T2  codex     IN_REVIEW    ← APPROVED ✅ PR #18. 598/598. Merge to origin/main.
-UTV2-34  T3  augment   DONE         ← MERGED: PR #8 merged to main 2026-03-26
+UTV2-33  T2  codex     DONE         ← MERGED: PR #18 (2026-03-27). 598/598. Live proof verified.
+UTV2-34  T3  augment   DONE         ← MERGED: PR #8 (2026-03-26)
 UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
-UTV2-36  T3  codex     DONE         ← MERGED: PR #9 merged to main 2026-03-27
-UTV2-37  T3  augment   DONE         ← MERGED: PR #11 merged to main 2026-03-27
-UTV2-38  T3  codex     DONE         ← MERGED: PR #12 merged to main 2026-03-27. 552/552.
-UTV2-39  DOC claude    DONE         ← CLOSED: Smart Form V1 contract corrected to RATIFIED.
-UTV2-40  T1  codex     IN_REVIEW    ← APPROVED ✅ PR #17. 592/592 root + 111/111 sf. Merge to origin/main.
-UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health contract corrected to RATIFIED.
-UTV2-42  T2  codex     IN_REVIEW    ← APPROVED ✅ PR #19. 600/600. Merge to origin/main.
+UTV2-36  T3  codex     DONE         ← MERGED: PR #9 (2026-03-27)
+UTV2-37  T3  augment   DONE         ← MERGED: PR #11 (2026-03-27)
+UTV2-38  T3  codex     DONE         ← MERGED: PR #12 (2026-03-27). 552/552.
+UTV2-39  DOC claude    DONE         ← CLOSED: Smart Form V1 contract RATIFIED
+UTV2-40  T1  codex     DONE         ← MERGED: PR #17 (2026-03-27). Live proof: trust scores verified.
+UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health contract RATIFIED
+UTV2-42  T2  codex     DONE         ← MERGED: PR #19 (2026-03-27). Live proof: 46 events, 535 players.
+UTV2-43  DOC claude    DONE         ← CLOSED: /leaderboard contract RATIFIED (2026-03-27)
+UTV2-44  T2  codex     READY        ← Contract live. Implement /leaderboard. Baseline: 598. Target: ≥606.
 ```
