@@ -1,5 +1,11 @@
 import { resolveOutcome } from '@unit-talk/domain';
-import type { EventRow, PickRecord, RepositoryBundle } from '@unit-talk/db';
+import type {
+  EventRow,
+  PickRecord,
+  RepositoryBundle,
+  SettlementRecord,
+} from '@unit-talk/db';
+import { buildRecapEmbedData } from '@unit-talk/discord-bot';
 import { recordGradedSettlement } from './settlement-service.js';
 
 export interface GradingPickResult {
@@ -18,7 +24,7 @@ export interface GradingPassResult {
 }
 
 export interface RunGradingPassOptions {
-  logger?: Pick<Console, 'error'>;
+  logger?: Pick<Console, 'error' | 'warn'>;
 }
 
 export async function runGradingPass(
@@ -32,6 +38,8 @@ export async function runGradingPass(
     | 'participants'
     | 'events'
     | 'eventParticipants'
+    | 'outbox'
+    | 'receipts'
   >,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
@@ -118,7 +126,7 @@ export async function runGradingPass(
           : invertOutcome(resolveOutcome(gameResult.actual_value, pick.line as number)),
       );
 
-      await recordGradedSettlement(
+      const settlementResult = await recordGradedSettlement(
         pick.id,
         gradedResult,
         {
@@ -128,6 +136,13 @@ export async function runGradingPass(
           gameResultId: gameResult.id,
         },
         repositories,
+      );
+
+      await postSettlementRecapIfPossible(
+        pick,
+        settlementResult.settlementRecord,
+        repositories,
+        options,
       );
 
       details.push({
@@ -153,6 +168,87 @@ export async function runGradingPass(
     errors: details.filter((detail) => detail.outcome === 'error').length,
     details,
   };
+}
+
+async function postSettlementRecapIfPossible(
+  pick: PickRecord,
+  settlementRecord: SettlementRecord,
+  repositories: Pick<RepositoryBundle, 'outbox' | 'receipts'>,
+  options: RunGradingPassOptions,
+) {
+  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+  if (!botToken) {
+    return;
+  }
+
+  const resolution = await resolveRecapChannel(pick.id, repositories);
+  if (!resolution.ok) {
+    options.logger?.warn?.(`Skipping recap for pick ${pick.id}: ${resolution.reason}`);
+    return;
+  }
+
+  const response = await fetch(
+    `https://discord.com/api/v10/channels/${resolution.channelId}/messages`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bot ${botToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        embeds: [
+          buildRecapEmbedData({
+            market: pick.market,
+            selection: pick.selection,
+            result: normalizeSettlementResult(settlementRecord.result),
+            stakeUnits: readStakeUnits(pick),
+            profitLossUnits: computeProfitLossUnits(
+              normalizeSettlementResult(settlementRecord.result),
+              readStakeUnits(pick),
+              pick.odds,
+            ),
+            clvPercent: readClvPercent(settlementRecord.payload),
+            submittedBy: readSubmittedBy(pick),
+          }),
+        ],
+      }),
+    },
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    options.logger?.warn?.(
+      `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
+    );
+  }
+}
+
+async function resolveRecapChannel(
+  pickId: string,
+  repositories: Pick<RepositoryBundle, 'outbox' | 'receipts'>,
+): Promise<{ ok: true; channelId: string } | { ok: false; reason: string }> {
+  const outboxRecord = await repositories.outbox.findLatestByPick(pickId, ['sent']);
+  if (!outboxRecord) {
+    return { ok: false, reason: 'no_sent_distribution_outbox' };
+  }
+
+  const receipt = await repositories.receipts.findLatestByOutboxId(
+    outboxRecord.id,
+    'discord.message',
+  );
+  if (receipt?.channel) {
+    const receiptChannelId = normalizeDiscordChannelId(receipt.channel);
+    if (receiptChannelId) {
+      return { ok: true, channelId: receiptChannelId };
+    }
+  }
+
+  const fallbackChannelId = normalizeDiscordChannelId(outboxRecord.target);
+  if (fallbackChannelId) {
+    return { ok: true, channelId: fallbackChannelId };
+  }
+
+  return { ok: false, reason: 'no_receipt_channel_or_resolvable_outbox_target' };
 }
 
 async function resolvePickEvent(
@@ -241,6 +337,87 @@ function mapOutcomeToSettlementResult(outcome: 'WIN' | 'LOSS' | 'PUSH') {
     return 'loss' as const;
   }
   return 'push' as const;
+}
+
+function normalizeSettlementResult(result: string | null) {
+  if (result === 'win' || result === 'loss' || result === 'push') {
+    return result;
+  }
+
+  throw new Error(`Unsupported settlement result for recap: ${String(result)}`);
+}
+
+function normalizeDiscordChannelId(value: string) {
+  const direct = value.replace(/^discord:/, '').trim();
+  if (/^\d+$/.test(direct)) {
+    return direct;
+  }
+
+  const mapped = readDiscordTargetMap()[value];
+  if (mapped && /^\d+$/.test(mapped)) {
+    return mapped;
+  }
+
+  return null;
+}
+
+function readDiscordTargetMap() {
+  const raw = process.env.UNIT_TALK_DISCORD_TARGET_MAP?.trim();
+  if (!raw) {
+    return {} as Record<string, string>;
+  }
+
+  try {
+    return JSON.parse(raw) as Record<string, string>;
+  } catch {
+    return {};
+  }
+}
+
+function readClvPercent(payload: unknown) {
+  const record = asRecord(payload);
+  const clvPercent = record?.['clvPercent'];
+  return typeof clvPercent === 'number' && Number.isFinite(clvPercent) ? clvPercent : null;
+}
+
+function readSubmittedBy(pick: PickRecord) {
+  const metadata = asRecord(pick.metadata);
+  const capper =
+    typeof metadata?.['capper'] === 'string'
+      ? metadata['capper']
+      : typeof metadata?.['submittedBy'] === 'string'
+        ? metadata['submittedBy']
+        : null;
+
+  return capper?.trim() || 'Unit Talk';
+}
+
+function readStakeUnits(pick: PickRecord) {
+  return typeof pick.stake_units === 'number' && Number.isFinite(pick.stake_units)
+    ? pick.stake_units
+    : null;
+}
+
+function computeProfitLossUnits(
+  result: 'win' | 'loss' | 'push',
+  stakeUnits: number | null,
+  odds: number | null,
+) {
+  const stake = stakeUnits ?? 1;
+
+  if (result === 'push') {
+    return 0;
+  }
+
+  if (result === 'loss') {
+    return -stake;
+  }
+
+  if (typeof odds !== 'number' || !Number.isFinite(odds) || odds === 0) {
+    return stake;
+  }
+
+  return odds > 0 ? stake * (odds / 100) : stake * (100 / Math.abs(odds));
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

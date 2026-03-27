@@ -73,6 +73,17 @@ class FakeOutboxRepository implements OutboxRepository {
     );
   }
 
+  async findLatestByPick(
+    pickId: string,
+    statuses: readonly string[] = ['sent'],
+  ): Promise<OutboxRecord | null> {
+    return (
+      [...this.entries]
+        .filter((entry) => entry.pick_id === pickId && statuses.includes(entry.status))
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null
+    );
+  }
+
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
     const entry = this.entries.find(
       (candidate) =>
@@ -149,6 +160,21 @@ class FakeReceiptRepository implements ReceiptRepository {
 
     this.records.push(record);
     return record;
+  }
+
+  async findLatestByOutboxId(
+    outboxId: string,
+    receiptType?: string | undefined,
+  ): Promise<ReceiptRecord | null> {
+    return (
+      [...this.records]
+        .filter(
+          (record) =>
+            record.outbox_id === outboxId &&
+            (receiptType === undefined || record.receipt_type === receiptType),
+        )
+        .sort((left, right) => right.recorded_at.localeCompare(left.recorded_at))[0] ?? null
+    );
   }
 }
 
