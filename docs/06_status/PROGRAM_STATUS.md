@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — rebuilt from repo truth after stale-authority drift (prior version was 2026-03-23, 534/534, Smart Form V1 as next milestone — all three claims wrong)
+2026-03-27 — UTV2-44 CLOSED (PR #21 merged). 617/617 tests on main. M7 one lane remaining (UTV2-46).
 
 ---
 
@@ -16,12 +16,11 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests (main, verified 2026-03-27) | **606/606 passing** — 0 failures, all 6 groups clean |
-| Tests (pending UTV2-44 merge) | 617 — Codex's leaderboard + ephemeral fix uncommitted |
+| Tests (main, verified 2026-03-27) | **617/617 passing** — 0 failures, all 6 groups clean |
 | Gates | All gates PASS on current main. `pnpm verify` exits 0. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Active lanes | UTV2-44 IN_REVIEW (soft block, ephemeral fix applied by Codex); UTV2-46 READY |
-| Milestone | M7 — Discord social surfaces + CLV wiring |
+| Active lanes | UTV2-46 READY (CLV wiring — sole remaining M7 lane) |
+| Milestone | M7 — Discord social surfaces + CLV wiring (1/2 lanes closed) |
 
 ## Gate Notes (2026-03-27)
 
@@ -31,7 +30,7 @@
 | `pnpm lint` | PASS | 0 errors. `.next/**` in eslint ignores. Radix UI components exempt from `no-explicit-any`/`no-empty-object-type`. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 606/606. 6 bounded groups chained with `&&`. Verified 2026-03-27. |
+| `pnpm test` | PASS | **617/617**. 6 bounded groups chained with `&&`. Verified 2026-03-27 after UTV2-44 merge. |
 | `pnpm verify` (full chain) | PASS | Exit 0. |
 
 ### Runner Architecture
@@ -68,8 +67,8 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 | ID | Item | Tier | Status | Notes |
 |----|------|------|--------|-------|
-| UTV2-44 | Discord /leaderboard + GET /api/operator/leaderboard | T2 | **IN_REVIEW** | SOFT BLOCK: ephemeral fix applied by Codex, awaiting re-review and PR. Contract: `T2_DISCORD_LEADERBOARD_CONTRACT.md`. |
-| UTV2-46 | CLV settlement wiring (computeAndAttachCLV) | T2 | READY | Contract: `T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`. Opens after UTV2-44 merges or in parallel. |
+| UTV2-44 | Discord /leaderboard + GET /api/operator/leaderboard | T2 | **CLOSED** | PR #21 merged. 617/617. |
+| UTV2-46 | CLV settlement wiring (computeAndAttachCLV) | T2 | **READY** | Contract: `T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`. Sole remaining M7 lane. |
 
 ---
 
@@ -79,6 +78,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 | Sprint | Issue | Tier | Status | Summary |
 |--------|-------|------|--------|---------|
+| Discord /leaderboard Command | UTV2-44 | T2 | **CLOSED** 2026-03-27 | `GET /api/operator/leaderboard` ranked response; Discord `/leaderboard` public embed (responseVisibility:'public' + fail-closed router); 617/617 tests (+11 net-new). PR #21 merged. |
 | Smart Form Participant Autocomplete | UTV2-45 | T3 | **CLOSED** 2026-03-27 | `ParticipantAutocompleteField` debounced typeahead in BetForm; helpers in `lib/participant-search.ts` (pure, testable); 12/12 smart-form tests. PR #20 merged. |
 | Operator Entity Ingest Health | UTV2-42 | T2 | **CLOSED** 2026-03-27 | `entityHealth` in operator snapshot; `/api/operator/participants` endpoint; HTML dashboard sections (Upcoming Events, Entity Catalog, Last Ingest Cycle). Live proof: 46 events, 535 players, 124 teams. PR #19 merged. |
 | Smart Form Conviction Field | UTV2-40 | T1 | **CLOSED** 2026-03-27 | conviction=1–10 → trust 10–100 in `metadata.promotionScores`. Live proof: 4 picks verified. PR #17 merged. |
@@ -192,7 +192,7 @@ M7 closes when UTV2-44 and UTV2-46 both merge. M8 has no ratified contract yet.
 ### Operator surface
 - `GET /api/operator/snapshot` — health, outbox, runs, settlements, entity health
 - `GET /api/operator/stats` — capper win rate / ROI (avgClvPct null until UTV2-46)
-- `GET /api/operator/leaderboard` — in review (UTV2-44)
+- `GET /api/operator/leaderboard` — live (UTV2-44 CLOSED); avgClvPct null until UTV2-46 lands
 - `GET /api/operator/participants` — player/team search
 - `GET /api/operator/events` — upcoming events
 - `GET /api/operator/recap` — settlement summary via domain
@@ -204,7 +204,7 @@ M7 closes when UTV2-44 and UTV2-46 both merge. M8 has no ratified contract yet.
 ### Discord bot
 - Foundation: client, router, role-guard, api-client, command registry
 - `/stats @capper` live
-- `/leaderboard` in review (UTV2-44)
+- `/leaderboard` live (UTV2-44 CLOSED)
 - `deploy-commands` script works; CLIENT_ID mismatch prevents real guild deployment (see Risks)
 
 ### Smart Form
