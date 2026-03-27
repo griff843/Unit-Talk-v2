@@ -7,9 +7,9 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 19 |
+| `lane:codex` | 0 | 0 | 2 | 0 | 19 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 10 |
-| `lane:augment` | 0 | 0 | 2 | 0 | 9 |
+| `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
 
@@ -60,12 +60,12 @@ Fix `findLatestMatchingOffer` sort order (snapshot_at DESC). Wire `computeKellyS
 | **ID** | UTV2-66 |
 | **Tier** | T2 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `augment/UTV2-66-bot-startup` |
+| **PR** | [#38](https://github.com/griff843/Unit-Talk-v2/pull/38) — **MERGED** ✅ (2026-03-27) |
 
 Create `apps/discord-bot/src/main.ts` — wires `createDiscordClient`, `loadCommandRegistry`, `createInteractionHandler`, `client.login`. Update `dev` script. Contract: `docs/05_operations/UTV2-66_BOT_STARTUP_CONTRACT.md`
 
@@ -95,7 +95,7 @@ At submission time, look up `provider_offers` for the pick's market key, call `d
 |---|---|
 | **ID** | UTV2-63 |
 | **Tier** | T3 |
-| **Lane** | `lane:augment` |
+| **Lane** | `lane:codex` |
 | **Status** | **READY** |
 | **Milestone** | M11 |
 | **Area** | `area:operator-web` |
