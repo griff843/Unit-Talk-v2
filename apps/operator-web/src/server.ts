@@ -24,6 +24,47 @@ export interface OperatorHealthSignal {
   detail: string;
 }
 
+export interface OperatorEntityHealth {
+  resolvedEventsCount: number;
+  upcomingEventsCount: number;
+  resolvedPlayersCount: number;
+  resolvedTeamsWithExternalIdCount: number;
+  totalTeamsCount: number;
+  observedAt: string;
+}
+
+export interface OperatorUpcomingEventSummary {
+  id: string;
+  eventName: string;
+  eventDate: string;
+  sport: string;
+  teams: string[];
+  playerCount: number;
+}
+
+export interface OperatorParticipantRow {
+  id: string;
+  displayName: string;
+  participantType: string;
+  sport: string | null;
+  league: string | null;
+  externalId: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface OperatorParticipantsResponse {
+  participants: OperatorParticipantRow[];
+  total: number;
+  observedAt: string;
+}
+
+export interface OperatorParticipantsFilter {
+  type?: 'player' | 'team';
+  sport?: string;
+  q?: string;
+  limit?: number;
+}
+
 export interface OperatorSnapshot {
   observedAt: string;
   persistenceMode: 'database' | 'demo';
@@ -40,6 +81,8 @@ export interface OperatorSnapshot {
   recentRuns: SystemRunRecord[];
   recentPicks: PickRecord[];
   recentAudit: AuditLogRow[];
+  entityHealth?: OperatorEntityHealth;
+  upcomingEvents: OperatorUpcomingEventSummary[];
   bestBets: ChannelHealthSummary;
   traderInsights: ChannelHealthSummary;
   canary: {
@@ -101,6 +144,7 @@ export interface PicksPipelineSummary {
 
 export interface OperatorSnapshotProvider {
   getSnapshot(filter?: OutboxFilter): Promise<OperatorSnapshot>;
+  getParticipants?(filter?: OperatorParticipantsFilter): Promise<OperatorParticipantsResponse>;
 }
 
 export interface OperatorServerOptions {
@@ -178,6 +222,26 @@ export async function routeOperatorRequest(
     return writeJson(response, 200, { ok: true, data: snapshot.recap });
   }
 
+  if (method === 'GET' && url.pathname === '/api/operator/participants') {
+    const type = url.searchParams.get('type');
+    const sport = normalizeOptionalQueryValue(url.searchParams.get('sport'));
+    const q = normalizeOptionalQueryValue(url.searchParams.get('q'));
+    const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '20', 10);
+    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
+    const participants = await provider.getParticipants?.({
+      ...(type === 'player' || type === 'team' ? { type } : {}),
+      ...(sport ? { sport } : {}),
+      ...(q ? { q } : {}),
+      limit,
+    });
+
+    return writeJson(
+      response,
+      200,
+      participants ?? { participants: [], total: 0, observedAt: new Date().toISOString() },
+    );
+  }
+
   if (method === 'GET' && url.pathname === '/') {
     const snapshot = await provider.getSnapshot();
     return writeHtml(response, 200, renderOperatorDashboard(snapshot));
@@ -200,6 +264,8 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
 
     return {
       async getSnapshot(filter?: OutboxFilter) {
+        const today = new Date().toISOString().slice(0, 10);
+        const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
         const [
           outboxResult,
           receiptsResult,
@@ -211,6 +277,12 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           queuedCountResult,
           postedCountResult,
           settledCountResult,
+          resolvedEventsCountResult,
+          upcomingEventsCountResult,
+          resolvedPlayersCountResult,
+          resolvedTeamsWithExternalIdCountResult,
+          totalTeamsCountResult,
+          upcomingEventsResult,
         ] = await Promise.all([
           (() => {
             let q = client.from('distribution_outbox').select('*');
@@ -245,6 +317,32 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
           client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'posted'),
           client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'settled'),
+          client.from('events').select('id', { count: 'exact', head: true }).not('external_id', 'is', null),
+          client
+            .from('events')
+            .select('id', { count: 'exact', head: true })
+            .gte('event_date', today)
+            .lte('event_date', nextWeek),
+          client
+            .from('participants')
+            .select('id', { count: 'exact', head: true })
+            .eq('participant_type', 'player'),
+          client
+            .from('participants')
+            .select('id', { count: 'exact', head: true })
+            .eq('participant_type', 'team')
+            .not('external_id', 'is', null),
+          client
+            .from('participants')
+            .select('id', { count: 'exact', head: true })
+            .eq('participant_type', 'team'),
+          client
+            .from('events')
+            .select('id,event_name,event_date,sport_id')
+            .gte('event_date', today)
+            .lte('event_date', nextWeek)
+            .order('event_date', { ascending: true })
+            .limit(5),
         ]);
 
         if (outboxResult.error) {
@@ -270,10 +368,18 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           queuedCountResult,
           postedCountResult,
           settledCountResult,
+          resolvedEventsCountResult,
+          upcomingEventsCountResult,
+          resolvedPlayersCountResult,
+          resolvedTeamsWithExternalIdCountResult,
+          totalTeamsCountResult,
         ]) {
           if (result.error) {
             throw result.error;
           }
+        }
+        if (upcomingEventsResult.error) {
+          throw upcomingEventsResult.error;
         }
 
         const recentOutbox = outboxResult.data ?? [];
@@ -282,6 +388,16 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
         const recentRuns = runsResult.data ?? [];
         const recentPicks = picksResult.data ?? [];
         const recentAudit = auditResult.data ?? [];
+        const upcomingEvents = upcomingEventsResult.data ?? [];
+        const eventIds = upcomingEvents.map((row) => row.id as string);
+        const eventParticipants =
+          eventIds.length > 0
+            ? await loadEventParticipants(client, eventIds)
+            : [];
+        const participants =
+          eventParticipants.length > 0
+            ? await loadParticipantsForEvents(client, eventParticipants)
+            : [];
 
         return createSnapshotFromRows({
           persistenceMode: 'database',
@@ -291,6 +407,24 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           recentRuns,
           recentPicks,
           recentAudit,
+          entityHealth: {
+            resolvedEventsCount: resolvedEventsCountResult.count ?? 0,
+            upcomingEventsCount: upcomingEventsCountResult.count ?? 0,
+            resolvedPlayersCount: resolvedPlayersCountResult.count ?? 0,
+            resolvedTeamsWithExternalIdCount: resolvedTeamsWithExternalIdCountResult.count ?? 0,
+            totalTeamsCount: totalTeamsCountResult.count ?? 0,
+            observedAt: new Date().toISOString(),
+          },
+          upcomingEvents: mapUpcomingEvents(
+            upcomingEvents as Array<{
+              id: string;
+              event_name: string;
+              event_date: string;
+              sport_id: string;
+            }>,
+            eventParticipants,
+            participants,
+          ),
           picksPipelineCounts: {
             validated: validatedCountResult.count ?? 0,
             queued: queuedCountResult.count ?? 0,
@@ -304,6 +438,45 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           },
         });
       },
+      async getParticipants(filter?: OperatorParticipantsFilter) {
+        let query = client
+          .from('participants')
+          .select('id,display_name,participant_type,sport,league,external_id,metadata', {
+            count: 'exact',
+          });
+
+        if (filter?.type) {
+          query = query.eq('participant_type', filter.type);
+        }
+        if (filter?.sport) {
+          query = query.eq('sport', filter.sport);
+        }
+        if (filter?.q) {
+          query = query.ilike('display_name', `%${filter.q}%`);
+        }
+
+        const { data, error, count } = await query
+          .order('display_name', { ascending: true })
+          .limit(filter?.limit ?? 20);
+
+        if (error) {
+          throw error;
+        }
+
+        return {
+          participants: (data ?? []).map((row) => ({
+            id: row.id as string,
+            displayName: row.display_name as string,
+            participantType: row.participant_type as string,
+            sport: (row.sport as string | null) ?? null,
+            league: (row.league as string | null) ?? null,
+            externalId: (row.external_id as string | null) ?? null,
+            metadata: readJsonObject(row.metadata) ?? {},
+          })),
+          total: count ?? data?.length ?? 0,
+          observedAt: new Date().toISOString(),
+        };
+      },
     };
   } catch {
     return {
@@ -316,7 +489,12 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
           recentRuns: [],
           recentPicks: [],
           recentAudit: [],
+          entityHealth: createEmptyEntityHealth(),
+          upcomingEvents: [],
         });
+      },
+      async getParticipants(_filter?: OperatorParticipantsFilter) {
+        return { participants: [], total: 0, observedAt: new Date().toISOString() };
       },
     };
   }
@@ -330,6 +508,8 @@ export function createSnapshotFromRows(input: {
   recentRuns: SystemRunRecord[];
   recentPicks: PickRecord[];
   recentAudit: AuditLogRow[];
+  entityHealth?: OperatorEntityHealth;
+  upcomingEvents?: OperatorUpcomingEventSummary[];
   picksPipelineCounts?: PicksPipelineSummary['counts'];
 }): OperatorSnapshot {
   const counts = {
@@ -376,6 +556,8 @@ export function createSnapshotFromRows(input: {
     recentRuns: input.recentRuns,
     recentPicks: input.recentPicks,
     recentAudit: input.recentAudit,
+    entityHealth: input.entityHealth ?? createEmptyEntityHealth(),
+    upcomingEvents: input.upcomingEvents ?? [],
     bestBets: summarizeChannelLane('discord:best-bets', outboxRowsToChannelId('discord:best-bets'), input.recentOutbox, input.recentReceipts),
     traderInsights: summarizeChannelLane(
       'discord:trader-insights',
@@ -608,6 +790,15 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       </article>`,
     )
     .join('');
+  const entityCatalogCard = snapshot.entityHealth
+    ? `
+      <article class="card">
+        <h2>Entity Catalog</h2>
+        <p>Events resolved: ${escapeHtml(String(snapshot.entityHealth.resolvedEventsCount))} (${escapeHtml(String(snapshot.entityHealth.upcomingEventsCount))} upcoming)</p>
+        <p>Players resolved: ${escapeHtml(String(snapshot.entityHealth.resolvedPlayersCount))}</p>
+        <p>Teams with SGO ID: ${escapeHtml(String(snapshot.entityHealth.resolvedTeamsWithExternalIdCount))} / ${escapeHtml(String(snapshot.entityHealth.totalTeamsCount))}</p>
+      </article>`
+    : '';
 
   const countCards = [
     ['pending outbox', snapshot.counts.pendingOutbox],
@@ -623,6 +814,50 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       </article>`,
     )
     .join('');
+  const upcomingEventRows = renderTableRows(
+    snapshot.upcomingEvents,
+    (row) => [
+      row.eventName,
+      row.eventDate,
+      row.sport,
+      row.teams.join(', ') || 'n/a',
+      String(row.playerCount),
+    ],
+    5,
+  );
+  const latestIngestRun = snapshot.recentRuns.find((row) => row.run_type === 'ingestor.cycle');
+  const ingestDuration = latestIngestRun?.finished_at
+    ? `${Math.max(
+        0,
+        (new Date(latestIngestRun.finished_at).getTime() - new Date(latestIngestRun.started_at).getTime()) /
+          1000,
+      ).toFixed(1)}s`
+    : 'n/a';
+  const ingestLeague = readJsonObject(latestIngestRun?.details)?.['league'];
+  const lastIngestCycleSection = latestIngestRun
+    ? `<section>
+        <h2>Last Ingest Cycle</h2>
+        <table>
+          <thead><tr><th>Status</th><th>League</th><th>Started</th><th>Duration</th></tr></thead>
+          <tbody><tr>
+            <td><code>${escapeHtml(latestIngestRun.status)}</code></td>
+            <td><code>${escapeHtml(typeof ingestLeague === 'string' ? ingestLeague : 'n/a')}</code></td>
+            <td><code>${escapeHtml(latestIngestRun.started_at)}</code></td>
+            <td><code>${escapeHtml(ingestDuration)}</code></td>
+          </tr></tbody>
+        </table>
+      </section>`
+    : `<section>
+        <h2>Last Ingest Cycle</h2>
+        <div class="card"><p>No recent ingest cycles.</p></div>
+      </section>`;
+  const upcomingEventsSection = `<section>
+        <h2>Upcoming Events</h2>
+        <table>
+          <thead><tr><th>Event</th><th>Date</th><th>Sport</th><th>Teams</th><th>Player Count</th></tr></thead>
+          <tbody>${upcomingEventRows}</tbody>
+        </table>
+      </section>`;
 
   const failedOutbox = snapshot.recentOutbox.filter(
     (row) => row.status === 'failed' || row.status === 'dead_letter',
@@ -954,9 +1189,11 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${incidentBanner}
       ${incidentTriageSection}
       <section>
-        <div class="grid health-grid">${healthCards}</div>
+        <div class="grid health-grid">${healthCards}${entityCatalogCard}</div>
         <div class="grid count-grid">${countCards}</div>
       </section>
+      ${upcomingEventsSection}
+      ${lastIngestCycleSection}
       ${canaryReadinessSection}
       ${bestBetsHealthSection}
       ${traderInsightsHealthSection}
@@ -1040,6 +1277,107 @@ function formatSettlementStatusLabel(row: SettlementRecord) {
   }
 
   return row.status;
+}
+
+function createEmptyEntityHealth(): OperatorEntityHealth {
+  return {
+    resolvedEventsCount: 0,
+    upcomingEventsCount: 0,
+    resolvedPlayersCount: 0,
+    resolvedTeamsWithExternalIdCount: 0,
+    totalTeamsCount: 0,
+    observedAt: new Date().toISOString(),
+  };
+}
+
+async function loadEventParticipants(
+  client: ReturnType<typeof createDatabaseClientFromConnection>,
+  eventIds: string[],
+) {
+  const { data, error } = await client
+    .from('event_participants')
+    .select('event_id,participant_id,role')
+    .in('event_id', eventIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as Array<{ event_id: string; participant_id: string; role: string }>;
+}
+
+async function loadParticipantsForEvents(
+  client: ReturnType<typeof createDatabaseClientFromConnection>,
+  eventParticipants: Array<{ event_id: string; participant_id: string; role: string }>,
+) {
+  const participantIds = [...new Set(eventParticipants.map((row) => row.participant_id))];
+  const { data, error } = await client
+    .from('participants')
+    .select('id,display_name,participant_type')
+    .in('id', participantIds);
+
+  if (error) {
+    throw error;
+  }
+
+  return (data ?? []) as Array<{ id: string; display_name: string; participant_type: string }>;
+}
+
+function mapUpcomingEvents(
+  events: Array<{ id: string; event_name: string; event_date: string; sport_id: string }>,
+  eventParticipants: Array<{ event_id: string; participant_id: string; role: string }>,
+  participants: Array<{ id: string; display_name: string; participant_type: string }>,
+): OperatorUpcomingEventSummary[] {
+  const participantById = new Map(participants.map((row) => [row.id, row] as const));
+
+  return events.map((event) => {
+    const related = eventParticipants.filter((row) => row.event_id === event.id);
+    const teams = related
+      .filter((row) => row.role.includes('team'))
+      .map((row) => participantById.get(row.participant_id)?.display_name ?? null)
+      .filter((value): value is string => value !== null);
+    const playerCount = related.filter((row) => {
+      const participant = participantById.get(row.participant_id);
+      return participant?.participant_type === 'player';
+    }).length;
+
+    return {
+      id: event.id,
+      eventName: event.event_name,
+      eventDate: event.event_date,
+      sport: event.sport_id,
+      teams,
+      playerCount,
+    };
+  });
+}
+
+function normalizeOptionalQueryValue(value: string | null): string | undefined {
+  if (value === null) {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
+function readJsonObject(value: unknown): Record<string, unknown> | null {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value) as unknown;
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        return parsed as Record<string, unknown>;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown) {
