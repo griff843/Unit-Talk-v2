@@ -12,7 +12,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
     "deploy-commands": "tsx scripts/deploy-commands.ts",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx src/main.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
