@@ -167,28 +167,32 @@ export async function processNextDistributionWork(
       run: completedRun,
     };
   } catch (error) {
-    const failed = await repositories.outbox.markFailed(
-      claimed.id,
-      error instanceof Error ? error.message : 'unknown delivery error',
-    );
+    const errorMessage = error instanceof Error ? error.message : 'unknown delivery error';
+    const failed = await repositories.outbox.markFailed(claimed.id, errorMessage);
+    const shouldDeadLetter = failed.attempt_count >= 3;
+    const finalOutbox = shouldDeadLetter
+      ? await repositories.outbox.markDeadLetter(claimed.id, errorMessage)
+      : failed;
     const completedRun = await repositories.runs.completeRun({
       runId: run.id,
       status: 'failed',
       details: {
         outboxId: claimed.id,
         target,
-        error: error instanceof Error ? error.message : 'unknown delivery error',
+        error: errorMessage,
+        deadLettered: shouldDeadLetter,
       },
     });
     await recordWorkerAudit(repositories.audit, {
       entityType: 'distribution_outbox',
       entityId: claimed.id,
-      action: 'distribution.failed',
+      action: shouldDeadLetter ? 'distribution.dead_lettered' : 'distribution.failed',
       actor: workerId,
       payload: {
         outboxId: claimed.id,
         target,
-        error: error instanceof Error ? error.message : 'unknown delivery error',
+        error: errorMessage,
+        deadLettered: shouldDeadLetter,
       },
     });
 
@@ -196,7 +200,7 @@ export async function processNextDistributionWork(
       status: 'failed',
       target,
       workerId,
-      outbox: failed,
+      outbox: finalOutbox,
       run: completedRun,
     };
   }

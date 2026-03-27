@@ -404,6 +404,24 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     existing.updated_at = new Date().toISOString();
     return existing;
   }
+
+  async markDeadLetter(
+    outboxId: string,
+    errorMessage: string,
+  ): Promise<OutboxRecord> {
+    const existing = this.entries.find((entry) => entry.id === outboxId);
+    if (!existing) {
+      throw new Error(`Outbox record not found: ${outboxId}`);
+    }
+
+    existing.status = 'dead_letter';
+    existing.last_error = errorMessage;
+    existing.next_attempt_at = null;
+    existing.claimed_at = null;
+    existing.claimed_by = null;
+    existing.updated_at = new Date().toISOString();
+    return existing;
+  }
 }
 
 export class InMemoryReceiptRepository implements ReceiptRepository {
@@ -1344,6 +1362,42 @@ export class DatabaseOutboxRepository implements OutboxRepository {
 
     if (error || !data) {
       throw new Error(`Failed to mark outbox failed: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as OutboxRecord;
+  }
+
+  async markDeadLetter(
+    outboxId: string,
+    errorMessage: string,
+  ): Promise<OutboxRecord> {
+    const { data: existing, error: existingError } = await this.client
+      .from('distribution_outbox')
+      .select()
+      .eq('id', outboxId)
+      .single();
+
+    if (existingError || !existing) {
+      throw new Error(
+        `Failed to load outbox record for dead-letter update: ${existingError?.message ?? 'unknown error'}`,
+      );
+    }
+
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .update({
+        status: 'dead_letter',
+        last_error: errorMessage,
+        next_attempt_at: null,
+        claimed_at: null,
+        claimed_by: null,
+      })
+      .eq('id', outboxId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to mark outbox dead_letter: ${error?.message ?? 'unknown error'}`);
     }
 
     return data as OutboxRecord;
