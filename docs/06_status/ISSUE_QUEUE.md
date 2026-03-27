@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 13 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 14 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 7 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 7 |
 
@@ -69,12 +69,12 @@ Source is hardcoded to `'discord-bot'`. `submittedBy` is the Discord username of
 | **ID** | UTV2-55 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M9 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-55-requeue-endpoint` |
+| **PR** | [#30](https://github.com/griff843/Unit-Talk-v2/pull/30) — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
