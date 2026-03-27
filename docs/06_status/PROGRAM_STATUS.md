@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — M7 CLOSED. UTV2-44 (PR #21) + UTV2-46 (PR #22) merged. No active lanes.
+2026-03-27 — M9 CLOSED. UTV2-53 (PR #29) + UTV2-54 (cherry-pick) + UTV2-55 (PR #30) merged. Orphan recovery complete.
 
 ---
 
@@ -16,21 +16,21 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | Run `pnpm test` for current count. Last verified 2026-03-27: 621 tests, 0 failures. |
-| Gates | `pnpm verify` exits 0 on current main. |
+| Tests | Run `pnpm test` for current count. Last verified 2026-03-27: 251 tests (server.test.ts + worker-runtime.test.ts); full suite ~650+. |
+| Gates | `pnpm verify` exits 0 on current main (last confirmed at PR #30 merge). |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M7 CLOSED** 2026-03-27 — Discord social surfaces + CLV wiring. M8 not yet planned. |
+| Milestone | **M9 CLOSED** 2026-03-27 — Discord /pick, ingestor health card, requeue endpoint, orphan recovery. M10 not yet planned. |
 
 ## Gate Notes (last verified 2026-03-27)
 
 | Gate | Status | Notes |
 |------|--------|-------|
 | `pnpm env:check` | PASS | |
-| `pnpm lint` | PASS | 0 errors. `.next/**` in eslint ignores. Radix UI components exempt from `no-explicit-any`/`no-empty-object-type`. |
+| `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 6 bounded groups chained with `&&`. Run `pnpm test` for current count. Last verified 2026-03-27: 621 tests, 0 failures. |
-| `pnpm verify` (full chain) | PASS | Exit 0. |
+| `pnpm test` | PASS | Confirmed at PR #30 merge. Run `pnpm test` for current count. |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed at PR #30 merge. |
 
 ### Runner Architecture
 
@@ -62,19 +62,18 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Next Milestone (M8 — not yet planned)
+## Next Milestone (M10 — not yet planned)
 
-**Do not open without a ratified M8 contract.**
+**Do not open without a ratified M10 contract.**
 
 | Item | Expected Tier | Rationale |
 |------|---------------|-----------|
-| CLV wiring live proof | T1 verify | Confirm `/stats` and `/leaderboard` avgClvPct non-null in live DB after UTV2-46 |
-| Discord CLIENT_ID fix | T3 | `DiscordAPIError[20012]` — CLIENT_ID in `local.env` doesn't match bot token owner; blocks `deploy-commands` |
-| Smart Form `confidence` field | T2 | Without it, all Smart Form submissions score 61.5, below best-bets threshold (70) |
-| Offer Fetch service wrapper | T2 | Multi-book consensus at submission |
+| Discord `/pick` guild deployment | T2 | UTV2-53 merged but `deploy-commands` needs verification against live guild with correct CLIENT_ID |
+| Discord `/recap` command | T2 | RecapAgent not implemented; high capper value |
+| Offer Fetch service wrapper | T2 | Multi-book consensus at submission time |
 | DeviggingService integration | T2 | Service wrapper around existing pure-computation devig |
 | Risk Engine integration | T2 | Bankroll-aware sizing service wrapper |
-| Discord `/recap` command | T2 | RecapAgent not implemented; deferred |
+| Worker delivery proof (AC-3/AC-4) | T1 verify | Start worker, confirm requeued picks delivered + stale settled guard fires |
 
 ---
 
@@ -91,8 +90,8 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 | Risk | Severity | Status |
 |------|----------|--------|
-| Discord CLIENT_ID mismatch — `deploy-commands` fails with `DiscordAPIError[20012]` | Medium | **Open** — CLIENT_ID `1045344984280346674` in `local.env` does not match the application owning the bot token. Fix: verify correct APPLICATION_ID in Discord Developer Portal. Script is correct; credentials are wrong. |
-| Smart Form `confidence` field missing — all submissions score 61.5 | Medium | **Open** — `buildSubmissionPayload()` does not include `confidence`. All Smart Form picks ineligible for best-bets (threshold 70). |
+| Discord CLIENT_ID mismatch — `deploy-commands` may fail | Low | **Partially resolved** — UTV2-47 fixed `local.env`. Guild deployment not yet re-verified post UTV2-53 `/pick` command addition. |
+| Smart Form `confidence` field missing | Resolved | **CLOSED** — UTV2-49 merged. `confidence = capperConviction / 10` wired. Score avg lifted ~20pts. |
 | Board caps (perSlate=5) may re-saturate | Low | **Partially resolved** — lifecycle filter fix (UTV2-38) counts only queued/posted picks. Monitor after next full test run. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
 | API process requires manual restart for new code in dev | Low | Open |
@@ -138,8 +137,10 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 - Foundation: client, router, role-guard, api-client, command registry
 - `/stats @capper` live
 - `/leaderboard` live
+- `/pick` submission command live (UTV2-53)
+- `/help` command live (UTV2-50)
 - `responseVisibility` flag on `CommandHandler` — fail-closed (private unless explicitly `'public'`)
-- `deploy-commands` script works; CLIENT_ID mismatch prevents real guild deployment (see Risks)
+- `deploy-commands` script works; guild re-deployment needed after `/pick` addition
 
 ### Smart Form
 - Browser submission surface live (Next.js 14)
