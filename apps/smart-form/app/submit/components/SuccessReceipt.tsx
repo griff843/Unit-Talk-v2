@@ -50,6 +50,7 @@ export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: Suc
         {v.sportsbook && <Row label="Sportsbook" value={v.sportsbook} />}
         <Row label="Odds" value={oddsDisplay} />
         <Row label="Units" value={unitsDisplay} />
+        <Row label="Conviction" value={`${v.capperConviction}/10`} />
         <Row label="Date" value={v.gameDate} />
       </div>
 
