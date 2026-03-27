@@ -7,13 +7,165 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 14 |
-| `lane:claude` | 0 | 0 | 1 | 0 | 7 |
-| `lane:augment` | 0 | 0 | 0 | 0 | 7 |
+| `lane:codex` | 0 | 0 | 2 | 0 | 14 |
+| `lane:claude` | 0 | 0 | 2 | 0 | 7 |
+| `lane:augment` | 0 | 0 | 1 | 0 | 7 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-60 — T1 Worker Delivery Proof (AC-3/AC-4 from UTV2-56)
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-60 |
+| **Tier** | T1 (verify) |
+| **Lane** | `lane:claude` |
+| **Status** | **READY** |
+| **Milestone** | M10 |
+| **Area** | `area:worker` |
+| **Blocked by** | Worker running (`pnpm install` must succeed first) |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+Two deferred checks from UTV2-56 that require the distribution worker to be running. Independent verification only — no code changes.
+
+- AC-3 from UTV2-56: stale outbox entry for settled pick `2783c8e2` (status=pending, target=`discord:trader-insights`). Worker should claim it, detect pick is settled, mark outbox row sent, write `distribution.skipped` audit entry, NOT deliver to Discord.
+- AC-4 from UTV2-56: at least one of the 6 requeued picks (`d77a35b3`, `3b5d9e84`, `306deff8`, `d00954ec`, `4701f767`, `3ec17a5e`) gets a `distribution_receipts` row after worker runs.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: Worker starts successfully and polls `distribution_outbox`
+- [ ] AC-2: Stale outbox row for pick `2783c8e2` (settled): status transitions to `sent`, `distribution.skipped` audit entry written, no Discord delivery
+- [ ] AC-3: At least one of the 6 requeued outbox rows gets a `distribution_receipts` row with `status = 'sent'`
+- [ ] AC-4: All delivered picks: `distribution_receipts.status = 'sent'`, `channel` field populated
+
+#### Constraints
+
+- Do not change any runtime code — verification only
+- If worker fails to start: document blocker and exit
+
+#### Contract Authority
+
+`docs/05_operations/UTV2-60_WORKER_DELIVERY_PROOF_CONTRACT.md` (status: RATIFIED)
+
+---
+
+### UTV2-59 — T3 /pick Guild Deployment Verification
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-59 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **READY** |
+| **Milestone** | M10 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+UTV2-53 added the `/pick` command to the codebase but `deploy-commands` has not been re-run to register it with the Discord guild. Verify the command is live in the guild. No runtime code changes — ops verification task only.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `pnpm --filter @unit-talk/discord-bot deploy-commands` exits 0
+- [ ] AC-2: No `DiscordAPIError[20012]` or similar
+- [ ] AC-3: `/pick` command visible in Discord guild slash command list (screenshot or bot response confirms)
+- [ ] AC-4: `/stats`, `/leaderboard`, `/help` also confirmed still registered
+
+#### Constraints
+
+- No changes to any `src/` files
+- Only permitted git-tracked change: `.env.example` comment update if needed
+
+#### Contract Authority
+
+`docs/05_operations/UTV2-59_PICK_GUILD_DEPLOY_CONTRACT.md` (status: RATIFIED)
+
+---
+
+### UTV2-58 — T2 Discord /recap Slash Command (Capper Self-Service)
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-58 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M10 |
+| **Area** | `area:discord-bot` `area:api` |
+| **Blocked by** | UTV2-57 (uses same embed builder) |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+Add a `/recap` slash command to the Discord bot. Capper runs `/recap [limit]` to see their last N settled picks (default 10, max 20) with results. Calls `GET /api/operator/capper-recap?submittedBy=X&limit=N`. Response is ephemeral.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `/recap` command registered with optional `limit` option (default 10, max 20)
+- [ ] AC-2: Returns ephemeral embed with capper's last N settled picks (market, selection, result, P&L)
+- [ ] AC-3: Returns ephemeral `"No settled picks found."` when capper has no settled picks
+- [ ] AC-4: `submittedBy` resolved from Discord interaction user (displayName preferred, username fallback)
+- [ ] AC-5: `pnpm verify` exits 0; test count >= baseline + 2
+- [ ] AC-6: At least 2 new tests: success with results, empty state
+
+#### Constraints
+
+- Response must be ephemeral (`responseVisibility: 'private'`)
+- Permitted files: `apps/discord-bot/src/commands/recap.ts` (new), `apps/discord-bot/src/discord-bot-foundation.test.ts`, `apps/api/src/server.ts` (new route), `apps/api/src/server.test.ts`
+- Do NOT touch: `apps/operator-web`, `apps/smart-form`, `apps/ingestor`, `apps/worker`
+
+#### Contract Authority
+
+`docs/05_operations/UTV2-58_RECAP_COMMAND_CONTRACT.md` (status: RATIFIED)
+
+---
+
+### UTV2-57 — T2 Settlement-Triggered Discord Recap Embed
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-57 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M10 |
+| **Area** | `area:api` `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+After a pick is settled (grading run writes to `settlement_records`), automatically post a recap embed to the same Discord channel the pick was originally delivered to. Event-driven — triggered at the end of `runGradingPass()` in `grading-service.ts`.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: After grading run, each newly settled pick triggers a Discord embed post to the pick's original delivery channel
+- [ ] AC-2: Embed shows: market, selection, result (Win/Loss/Push), profit/loss units, CLV% (or `—` if absent), capper username
+- [ ] AC-3: If pick has no delivery receipt/target: skip silently, log reason, do not throw
+- [ ] AC-4: `pnpm verify` exits 0; test count >= baseline + 2
+- [ ] AC-5: At least 2 new tests: embed built correctly for win with CLV, embed skipped when no receipt
+
+#### Constraints
+
+- Do not change `settlement_records` schema
+- Permitted files: `apps/api/src/grading-service.ts`, `apps/api/src/server.ts` (if new route needed), new `apps/discord-bot/src/embeds/recap-embed.ts`, `apps/api/src/server.test.ts` or `apps/api/src/grading-service.test.ts`
+- Do NOT touch: `apps/worker`, `apps/operator-web`, `apps/smart-form`, `apps/ingestor`
+
+#### Contract Authority
+
+`docs/05_operations/UTV2-57_SETTLEMENT_RECAP_CONTRACT.md` (status: RATIFIED)
 
 ---
 
