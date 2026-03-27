@@ -944,6 +944,89 @@ test('createSnapshotFromRows marks worker degraded when most recent run is cance
   assert.match(workerSignal?.detail ?? '', /cancelled/);
 });
 
+test('createSnapshotFromRows includes ingestorHealth with status and lastRunAt when ingestor run exists', () => {
+  const ingestorRun: SystemRunRecord = {
+    id: 'run-ingestor-unit-1',
+    run_type: 'ingestor.cycle',
+    status: 'succeeded',
+    started_at: '2026-03-27T10:00:00.000Z',
+    finished_at: '2026-03-27T10:01:00.000Z',
+    actor: 'ingestor',
+    details: { league: 'NBA' },
+    created_at: '2026-03-27T10:00:00.000Z',
+    idempotency_key: null,
+  };
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [ingestorRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+  assert.equal(snapshot.ingestorHealth.status, 'succeeded');
+  assert.equal(snapshot.ingestorHealth.lastRunAt, '2026-03-27T10:00:00.000Z');
+  assert.equal(snapshot.ingestorHealth.runCount, 1);
+});
+
+test('createSnapshotFromRows returns ingestorHealth status=unknown and lastRunAt=null when no ingestor runs', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+  assert.equal(snapshot.ingestorHealth.status, 'unknown');
+  assert.equal(snapshot.ingestorHealth.lastRunAt, null);
+  assert.equal(snapshot.ingestorHealth.runCount, 0);
+});
+
+test('GET / renders Ingestor health card with status and last run when ingestor run exists', async () => {
+  const ingestorRun: SystemRunRecord = {
+    id: 'run-ingestor-card-1',
+    run_type: 'ingestor.cycle',
+    status: 'succeeded',
+    started_at: '2026-03-27T10:00:00.000Z',
+    finished_at: '2026-03-27T10:01:00.000Z',
+    actor: 'ingestor',
+    details: { league: 'NBA' },
+    created_at: '2026-03-27T10:00:00.000Z',
+    idempotency_key: null,
+  };
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [ingestorRun],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const { port } = server.address() as import('node:net').AddressInfo;
+
+  const response = await makeRequest(port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Ingestor/);
+  assert.match(response.body, /succeeded/);
+  assert.match(response.body, /2026-03-27T10:00:00\.000Z/);
+  assert.match(response.body, /Run count/);
+});
+
 test('GET /api/operator/snapshot?outboxStatus filters recentOutbox by status', async () => {
   const allOutbox = [
     {

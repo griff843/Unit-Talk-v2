@@ -97,6 +97,11 @@ export interface OperatorSnapshot {
     graduationReady: boolean;
     blockers: string[];
   };
+  ingestorHealth: {
+    status: string;
+    lastRunAt: string | null;
+    runCount: number;
+  };
   picksPipeline: PicksPipelineSummary;
   recap: SettlementSummary;
 }
@@ -786,6 +791,13 @@ export function createSnapshotFromRows(input: {
 
   const mostRecentRun = input.recentRuns[0];
   const workerStatus = inferWorkerStatus(mostRecentRun, counts);
+  const ingestorRuns = input.recentRuns.filter((row) => row.run_type.startsWith('ingestor'));
+  const latestIngestorRun = ingestorRuns[0];
+  const ingestorHealth = {
+    status: latestIngestorRun?.status ?? 'unknown',
+    lastRunAt: latestIngestorRun?.started_at ?? null,
+    runCount: ingestorRuns.length,
+  };
   const distributionStatus =
     counts.failedOutbox > 0
       ? {
@@ -831,6 +843,7 @@ export function createSnapshotFromRows(input: {
       input.recentReceipts,
     ),
     canary: summarizeCanaryLane(input.recentOutbox, input.recentReceipts),
+    ingestorHealth,
     picksPipeline: summarizePicksPipeline(
       input.recentPicks,
       input.recentSettlements ?? [],
@@ -1064,6 +1077,14 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
         <p>Teams with SGO ID: ${escapeHtml(String(snapshot.entityHealth.resolvedTeamsWithExternalIdCount))} / ${escapeHtml(String(snapshot.entityHealth.totalTeamsCount))}</p>
       </article>`
     : '';
+
+  const ingestorCard = `
+      <article class="card">
+        <h2>Ingestor</h2>
+        <p>Status: <strong>${escapeHtml(snapshot.ingestorHealth.status)}</strong></p>
+        <p>Last run: ${escapeHtml(snapshot.ingestorHealth.lastRunAt ?? '\u2014')}</p>
+        <p>Run count: ${escapeHtml(String(snapshot.ingestorHealth.runCount))}</p>
+      </article>`;
 
   const countCards = [
     ['pending outbox', snapshot.counts.pendingOutbox],
@@ -1456,7 +1477,7 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${incidentBanner}
       ${incidentTriageSection}
       <section>
-        <div class="grid health-grid">${healthCards}${entityCatalogCard}</div>
+        <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}</div>
         <div class="grid count-grid">${countCards}</div>
       </section>
       ${upcomingEventsSection}
