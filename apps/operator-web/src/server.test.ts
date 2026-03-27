@@ -423,6 +423,41 @@ test('createSnapshotFromRows defaults entity health counts to zero in demo mode'
   assert.deepEqual(snapshot.upcomingEvents, []);
 });
 
+test('createSnapshotFromRows counts dead-letter outbox rows and degrades distribution health', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-dead-letter',
+        pick_id: 'pick-dead-letter',
+        target: 'discord:canary',
+        status: 'dead_letter',
+        attempt_count: 3,
+        next_attempt_at: null,
+        last_error: 'delivery permanently failed',
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: 'pick-dead-letter:discord:canary:distribution',
+        created_at: '2026-03-22T12:00:00.000Z',
+        updated_at: '2026-03-22T12:05:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.counts.deadLetterOutbox, 1);
+  assert.equal(snapshot.health.find((signal) => signal.component === 'distribution')?.status, 'degraded');
+  assert.match(
+    snapshot.health.find((signal) => signal.component === 'distribution')?.detail ?? '',
+    /dead-letter outbox/i,
+  );
+});
+
 test('GET / renders Trader Insights Health section', async () => {
   const provider = createStaticProvider();
   const server = createOperatorServer({ provider });
@@ -442,6 +477,54 @@ test('GET / renders Trader Insights Health section', async () => {
   assert.match(response.body, /Trader Insights Health/);
   assert.match(response.body, /discord:trader-insights/);
   assert.match(response.body, /discord-message-trader-insights/);
+});
+
+test('GET / renders dead-letter outbox count in the operator dashboard', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [
+          {
+            id: 'outbox-dead-letter',
+            pick_id: 'pick-dead-letter',
+            target: 'discord:canary',
+            status: 'dead_letter',
+            attempt_count: 3,
+            next_attempt_at: null,
+            last_error: 'delivery permanently failed',
+            payload: {},
+            claimed_at: null,
+            claimed_by: null,
+            idempotency_key: 'pick-dead-letter:discord:canary:distribution',
+            created_at: '2026-03-22T12:00:00.000Z',
+            updated_at: '2026-03-22T12:05:00.000Z',
+          },
+        ],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /dead-letter outbox/i);
+  assert.match(response.body, /<h2>dead-letter outbox<\/h2>[\s\S]*?<p class="stat-value">1<\/p>/i);
 });
 
 test('createSnapshotFromRows marks trader-insights healthy when sent rows exist with no failures', () => {

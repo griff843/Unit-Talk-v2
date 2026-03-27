@@ -74,6 +74,7 @@ export interface OperatorSnapshot {
     pendingOutbox: number;
     processingOutbox: number;
     failedOutbox: number;
+    deadLetterOutbox: number;
     sentOutbox: number;
   };
   recentOutbox: OutboxRecord[];
@@ -905,6 +906,7 @@ export function createSnapshotFromRows(input: {
     pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
     processingOutbox: input.recentOutbox.filter((row) => row.status === 'processing').length,
     failedOutbox: input.recentOutbox.filter((row) => row.status === 'failed').length,
+    deadLetterOutbox: input.recentOutbox.filter((row) => row.status === 'dead_letter').length,
     sentOutbox: input.recentOutbox.filter((row) => row.status === 'sent').length,
   };
 
@@ -918,11 +920,16 @@ export function createSnapshotFromRows(input: {
     runCount: ingestorRuns.length,
   };
   const distributionStatus =
-    counts.failedOutbox > 0
+    counts.failedOutbox > 0 || counts.deadLetterOutbox > 0
       ? {
           component: 'distribution' as const,
           status: 'degraded' as const,
-          detail: `${counts.failedOutbox} failed outbox item(s) need attention`,
+          detail:
+            counts.failedOutbox > 0 && counts.deadLetterOutbox > 0
+              ? `${counts.failedOutbox} failed and ${counts.deadLetterOutbox} dead-letter outbox item(s) need attention`
+              : counts.failedOutbox > 0
+                ? `${counts.failedOutbox} failed outbox item(s) need attention`
+                : `${counts.deadLetterOutbox} dead-letter outbox item(s) need attention`,
         }
       : {
           component: 'distribution' as const,
@@ -1209,6 +1216,7 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
     ['pending outbox', snapshot.counts.pendingOutbox],
     ['processing outbox', snapshot.counts.processingOutbox],
     ['failed outbox', snapshot.counts.failedOutbox],
+    ['dead-letter outbox', snapshot.counts.deadLetterOutbox],
     ['sent outbox', snapshot.counts.sentOutbox],
   ]
     .map(
