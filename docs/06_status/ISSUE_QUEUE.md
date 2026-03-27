@@ -189,9 +189,7 @@ Branch clean. Real-repo lint exit 0. Type-check exit 0. 551/551 tests pass. depl
 
 **Scope note accepted:** `packages/config/src/env.ts` changes (10 missing env vars restored) technically exceed T3 scope but were required for deploy-commands to load config at all.
 
-**Next action for human:** Verify `DISCORD_CLIENT_ID` in `local.env` matches the Application ID in Discord Developer Portal → Applications → General Information. Then re-run `pnpm --filter @unit-talk/discord-bot deploy-commands` to confirm full success.
-
-**Next action:** Human merge PR #8 into main.
+**DISCORD_CLIENT_ID verified and updated (2026-03-27).** Deploy-commands confirmed operational end-to-end.
 
 ---
 
@@ -237,21 +235,24 @@ Contract RATIFIED: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md`.
 - [x] `scripts/submit-issue.mjs <issue-id>` — opens PR, updates queue status to IN_REVIEW
 - [x] Branch naming enforced: `{lane}/{linear-id}-{slug}`
 - [x] Cannot claim from a stacked branch (guard: base must be main)
-- [ ] `pnpm verify` exits 0 on clean branch after rebase
+- [ ] `pnpm verify` exits 0 on clean branch after reset+cherry-pick
 
-#### Claude Review Note (2026-03-26) — UNBLOCKED
+#### Claude Review Note (2026-03-27) — REJECTED (×1)
 
-PR #3 + PR #8 merged to main 2026-03-26. Codex must now rebase `codex/UTV2-36-queue-tooling` onto main, verify, and re-push.
+Branch was NOT rebased. Codex added 2 commits on top of old base `f3457b2` (pre-merge). Diff vs current main shows 14 out-of-scope files (DB layer, contracts, settlement-service, ISSUE_QUEUE.md). Also: commit `9d80365` modifies ISSUE_QUEUE.md on the feature branch — queue files are Claude lane only.
 
-**Next action (Codex):**
+CI passes, tooling code (`5da8df7`) looks correct. Only hygiene issue.
+
+**Fix (exact commands):**
 ```bash
 git fetch origin
 git checkout codex/UTV2-36-queue-tooling
-git rebase origin/main
+git reset --hard origin/main
+git cherry-pick 5da8df7
 pnpm verify
 git push --force-with-lease origin codex/UTV2-36-queue-tooling
 ```
-Then update PR #9 to READY FOR REVIEW.
+Do NOT cherry-pick `9d80365` (ISSUE_QUEUE.md commit). Then re-submit PR #9.
 
 ---
 
@@ -306,6 +307,6 @@ UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
 UTV2-33  T2  codex     IN_PROGRESS  ← Draft PR #5 opened; not yet in review
 UTV2-34  T3  augment   DONE         ← MERGED: PR #8 merged to main 2026-03-26
 UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
-UTV2-36  T3  codex     IN_REVIEW    ← UNBLOCKED: rebase onto main, re-verify, re-push PR #9
+UTV2-36  T3  codex     IN_REVIEW    ← REJECTED (×1): branch not rebased, ISSUE_QUEUE.md on branch. reset --hard origin/main && cherry-pick 5da8df7
 UTV2-37  T3  augment   IN_PROGRESS  ← REJECTED (×4): still stacked on UTV2-34; cherry-pick 051d9bc from origin/main
 ```
