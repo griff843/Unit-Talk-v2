@@ -254,7 +254,7 @@ Contract RATIFIED: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md`.
 | **Blocked by** | — (UTV2-28 DONE ✅) |
 | **Unlocks** | — |
 | **Branch** | `augment/UTV2-37-v2` |
-| **PR** | #9 — open |
+| **PR** | #10 — open |
 
 #### Acceptance Criteria
 
