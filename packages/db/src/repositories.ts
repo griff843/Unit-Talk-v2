@@ -145,6 +145,10 @@ export interface OutboxRepository {
     errorMessage: string,
     nextAttemptAt?: string | undefined,
   ): Promise<OutboxRecord>;
+  markDeadLetter(
+    outboxId: string,
+    errorMessage: string,
+  ): Promise<OutboxRecord>;
 }
 
 export interface ReceiptCreateInput {

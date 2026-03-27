@@ -124,6 +124,19 @@ class FakeOutboxRepository implements OutboxRepository {
     return entry;
   }
 
+  async markDeadLetter(
+    outboxId: string,
+    errorMessage: string,
+  ): Promise<OutboxRecord> {
+    const entry = this.requireEntry(outboxId);
+    entry.status = 'dead_letter';
+    entry.last_error = errorMessage;
+    entry.next_attempt_at = null;
+    entry.claimed_at = null;
+    entry.claimed_by = null;
+    return entry;
+  }
+
   private requireEntry(outboxId: string) {
     const entry = this.entries.find((candidate) => candidate.id === outboxId);
     if (!entry) {
@@ -478,16 +491,19 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
   };
 }
 
-function createOutboxRecord(target: string): OutboxRecord {
+function createOutboxRecord(
+  target: string,
+  overrides: Partial<Pick<OutboxRecord, 'status' | 'attempt_count' | 'last_error' | 'next_attempt_at'>> = {},
+): OutboxRecord {
   const now = new Date().toISOString();
   return {
     id: randomUUID(),
     pick_id: randomUUID(),
     target,
-    status: 'pending',
-    attempt_count: 0,
-    next_attempt_at: null,
-    last_error: null,
+    status: overrides.status ?? 'pending',
+    attempt_count: overrides.attempt_count ?? 0,
+    next_attempt_at: overrides.next_attempt_at ?? null,
+    last_error: overrides.last_error ?? null,
     payload: JSON.parse(
       JSON.stringify({
         market: 'Player points',
@@ -592,6 +608,79 @@ test('processNextDistributionWork marks work failed and records audit', async ()
     `finished_at must not be earlier than started_at (clock skew regression)`,
   );
   assert.equal(audit.records[0]?.action, 'distribution.failed');
+});
+
+test('processNextDistributionWork promotes the outbox row to dead_letter after the third failure', async () => {
+  const { repositories, audit } = createWorkerTestRepositories([
+    createOutboxRecord('discord:dead-letter', { attempt_count: 2 }),
+  ]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:dead-letter',
+    'worker-4',
+    async () => {
+      throw new Error('delivery exploded');
+    },
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'dead_letter');
+    assert.equal(result.outbox.attempt_count, 3);
+    assert.equal(result.outbox.last_error, 'delivery exploded');
+  }
+  assert.equal(audit.records[0]?.action, 'distribution.dead_lettered');
+  assert.equal(
+    (audit.records[0]?.payload as Record<string, unknown> | undefined)?.deadLettered,
+    true,
+  );
+});
+
+test('processNextDistributionWork keeps the row failed before the dead_letter threshold', async () => {
+  const { repositories, audit } = createWorkerTestRepositories([
+    createOutboxRecord('discord:retry', { attempt_count: 1 }),
+  ]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:retry',
+    'worker-5',
+    async () => {
+      throw new Error('retryable failure');
+    },
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'failed');
+    assert.equal(result.outbox.attempt_count, 2);
+    assert.equal(result.outbox.last_error, 'retryable failure');
+  }
+  assert.equal(audit.records[0]?.action, 'distribution.failed');
+});
+
+test('processNextDistributionWork marks dead_letter rows without delivering again once promotion occurs', async () => {
+  const { repositories } = createWorkerTestRepositories([
+    createOutboxRecord('discord:dead-letter-audit', { attempt_count: 2 }),
+  ]);
+
+  let deliverCalls = 0;
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:dead-letter-audit',
+    'worker-6',
+    async () => {
+      deliverCalls += 1;
+      throw new Error('delivery exploded again');
+    },
+  );
+
+  assert.equal(deliverCalls, 1);
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'dead_letter');
+  }
 });
 
 test('runWorkerCycles processes configured targets across cycles', async () => {
