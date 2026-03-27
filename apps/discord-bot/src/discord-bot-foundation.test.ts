@@ -1244,7 +1244,7 @@ test('/help command execute calls editReply with a single embed containing all c
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
   const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of ['pick', 'stats', 'leaderboard', 'help']) {
+  for (const name of ['pick', 'stats', 'leaderboard', 'help', 'recap']) {
     assert.ok(description.includes(`/${name}`), `embed description missing /${name}`);
   }
 });
