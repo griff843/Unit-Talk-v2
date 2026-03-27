@@ -58,6 +58,21 @@ class FakeOutboxRepository implements OutboxRepository {
     throw new Error('enqueue is not used in this test');
   }
 
+  async findByPickAndTarget(
+    pickId: string,
+    target: string,
+    statuses: readonly string[] = ['pending', 'processing', 'sent'],
+  ): Promise<OutboxRecord | null> {
+    return (
+      this.entries.find(
+        (entry) =>
+          entry.pick_id === pickId &&
+          entry.target === target &&
+          statuses.includes(entry.status),
+      ) ?? null
+    );
+  }
+
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
     const entry = this.entries.find(
       (candidate) =>
@@ -748,6 +763,34 @@ test('processNextDistributionWork receipt is linked to outbox and carries idempo
     `${outboxRecord.id}:discord:test-channel:receipt`,
     'idempotency key must be stored on the receipt',
   );
+});
+
+test('processNextDistributionWork skips terminal picks and completes outbox without delivery', async () => {
+  const outboxRecord = createOutboxRecord('discord:skip-terminal');
+  const { repositories, picks, receipts, runs, audit } = createWorkerTestRepositories([
+    outboxRecord,
+  ]);
+  await picks.updatePickLifecycleState(outboxRecord.pick_id, 'settled');
+
+  let deliverCalled = false;
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:skip-terminal',
+    'worker-skip',
+    async () => {
+      deliverCalled = true;
+      throw new Error('deliver must not run for settled picks');
+    },
+  );
+
+  assert.equal(result.status, 'skipped');
+  if (result.status === 'skipped') {
+    assert.equal(result.outbox.status, 'sent');
+  }
+  assert.equal(deliverCalled, false);
+  assert.equal(receipts.records.length, 0, 'no receipt should be recorded for skipped work');
+  assert.equal(runs.records[0]?.status, 'succeeded');
+  assert.equal(audit.records[0]?.action, 'distribution.skipped');
 });
 
 test('runWorkerCycles returns idle results when targets have no pending work', async () => {

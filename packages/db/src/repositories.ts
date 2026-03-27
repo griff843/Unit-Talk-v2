@@ -129,6 +129,11 @@ export interface OutboxCreateInput {
 
 export interface OutboxRepository {
   enqueue(input: OutboxCreateInput): Promise<OutboxRecord>;
+  findByPickAndTarget(
+    pickId: string,
+    target: string,
+    statuses?: readonly string[] | undefined,
+  ): Promise<OutboxRecord | null>;
   claimNext(target: string, workerId: string): Promise<OutboxRecord | null>;
   markSent(outboxId: string): Promise<OutboxRecord>;
   markFailed(

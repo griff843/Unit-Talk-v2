@@ -31,6 +31,14 @@ export interface WorkerProcessSuccessResult {
   run: SystemRunRecord;
 }
 
+export interface WorkerProcessSkippedResult {
+  status: 'skipped';
+  target: string;
+  workerId: string;
+  outbox: OutboxRecord;
+  run: SystemRunRecord;
+}
+
 export interface WorkerProcessFailureResult {
   status: 'failed';
   target: string;
@@ -42,6 +50,7 @@ export interface WorkerProcessFailureResult {
 export type WorkerProcessResult =
   | WorkerProcessIdleResult
   | WorkerProcessSuccessResult
+  | WorkerProcessSkippedResult
   | WorkerProcessFailureResult;
 
 export async function processNextDistributionWork(
@@ -71,6 +80,42 @@ export async function processNextDistributionWork(
   });
 
   try {
+    const pick = await repositories.picks.findPickById(claimed.pick_id);
+    if (pick?.status === 'settled' || pick?.status === 'voided') {
+      const skipped = await repositories.outbox.markSent(claimed.id);
+      const completedRun = await repositories.runs.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+          skipped: true,
+          reason: `pick is already ${pick.status}`,
+        },
+      });
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.skipped',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+          reason: `pick is already ${pick.status}`,
+        },
+      });
+
+      return {
+        status: 'skipped',
+        target,
+        workerId,
+        outbox: skipped,
+        run: completedRun,
+      };
+    }
+
     const delivery = await deliver(claimed);
     const sent = await repositories.outbox.markSent(claimed.id);
     const postedTransition = await transitionPickLifecycle(

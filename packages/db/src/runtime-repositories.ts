@@ -327,6 +327,21 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     return record;
   }
 
+  async findByPickAndTarget(
+    pickId: string,
+    target: string,
+    statuses: readonly string[] = ['pending', 'processing', 'sent'],
+  ): Promise<OutboxRecord | null> {
+    return (
+      this.entries.find(
+        (entry) =>
+          entry.pick_id === pickId &&
+          entry.target === target &&
+          statuses.includes(entry.status),
+      ) ?? null
+    );
+  }
+
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
     const next = this.entries.find(
       (entry) =>
@@ -1169,6 +1184,28 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     }
 
     return data as OutboxRecord;
+  }
+
+  async findByPickAndTarget(
+    pickId: string,
+    target: string,
+    statuses: readonly string[] = ['pending', 'processing', 'sent'],
+  ): Promise<OutboxRecord | null> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .select('*')
+      .eq('pick_id', pickId)
+      .eq('target', target)
+      .in('status', [...statuses])
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find outbox row by pick and target: ${error.message}`);
+    }
+
+    return (data as OutboxRecord | null) ?? null;
   }
 
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
