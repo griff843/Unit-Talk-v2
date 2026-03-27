@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — M9 CLOSED. UTV2-53 (PR #29) + UTV2-54 (cherry-pick) + UTV2-55 (PR #30) merged. Orphan recovery complete.
+2026-03-27 — M10 CLOSED. UTV2-57 (PR #31) + UTV2-58 (PR #33) + UTV2-50 (PR #32) + UTV2-59 merged. Settlement recap embed, /recap command, /help command, guild deploy (5 commands) complete. M11 queued.
 
 ---
 
@@ -19,7 +19,7 @@
 | Tests | Run `pnpm test` for current count. Last verified 2026-03-27: 251 tests (server.test.ts + worker-runtime.test.ts); full suite ~650+. |
 | Gates | `pnpm verify` exits 0 on current main (last confirmed at PR #30 merge). |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M9 CLOSED** 2026-03-27 — Discord /pick, ingestor health card, requeue endpoint, orphan recovery. M10 not yet planned. |
+| Milestone | **M10 CLOSED** 2026-03-27 — Settlement recap embed, /recap command, /help command, guild deploy (5 commands). M11 active. |
 
 ## Gate Notes (last verified 2026-03-27)
 
@@ -62,18 +62,15 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Next Milestone (M10 — not yet planned)
+## Next Milestone (M11 — ACTIVE)
 
-**Do not open without a ratified M10 contract.**
-
-| Item | Expected Tier | Rationale |
-|------|---------------|-----------|
-| Discord `/pick` guild deployment | T2 | UTV2-53 merged but `deploy-commands` needs verification against live guild with correct CLIENT_ID |
-| Discord `/recap` command | T2 | RecapAgent not implemented; high capper value |
-| Offer Fetch service wrapper | T2 | Multi-book consensus at submission time |
-| DeviggingService integration | T2 | Service wrapper around existing pure-computation devig |
-| Risk Engine integration | T2 | Bankroll-aware sizing service wrapper |
-| Worker delivery proof (AC-3/AC-4) | T1 verify | Start worker, confirm requeued picks delivered + stale settled guard fires |
+| Item | Tier | Lane | Status |
+|------|------|------|--------|
+| UTV2-61 Recap CLV/stake enrichment | T3 | codex | READY |
+| UTV2-62 Dead-letter outbox promotion | T2 | codex | READY |
+| UTV2-63 Dead-letter operator surface | T3 | augment | BLOCKED (on UTV2-62) |
+| UTV2-64 DeviggingService submission wiring | T2 | codex | READY |
+| UTV2-65 M10 closure verification | T1 | claude | DONE (this update) |
 
 ---
 
@@ -90,7 +87,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 | Risk | Severity | Status |
 |------|----------|--------|
-| Discord CLIENT_ID mismatch — `deploy-commands` may fail | Low | **Partially resolved** — UTV2-47 fixed `local.env`. Guild deployment not yet re-verified post UTV2-53 `/pick` command addition. |
+| Discord CLIENT_ID mismatch — `deploy-commands` may fail | Low | **CLOSED** — UTV2-59 verified 3 commands, UTV2-65 confirmed 5 commands (post /help + /recap). Guild deploy current. |
 | Smart Form `confidence` field missing | Resolved | **CLOSED** — UTV2-49 merged. `confidence = capperConviction / 10` wired. Score avg lifted ~20pts. |
 | Board caps (perSlate=5) may re-saturate | Low | **Partially resolved** — lifecycle filter fix (UTV2-38) counts only queued/posted picks. Monitor after next full test run. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
@@ -139,8 +136,14 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 - `/leaderboard` live
 - `/pick` submission command live (UTV2-53)
 - `/help` command live (UTV2-50)
+- `/recap` capper self-service settled picks command live (UTV2-58); calls `GET /api/operator/capper-recap`
 - `responseVisibility` flag on `CommandHandler` — fail-closed (private unless explicitly `'public'`)
-- `deploy-commands` script works; guild re-deployment needed after `/pick` addition
+- Guild deploy current: 5 commands registered as of 2026-03-27 (UTV2-65 confirmed)
+
+### Settlement recap
+- `postSettlementRecapIfPossible()` in `grading-service.ts` — fires after each newly graded pick (UTV2-57)
+- Posts embed to pick's original Discord delivery channel; channel resolved from `distribution_receipts` → outbox target → `UNIT_TALK_DISCORD_TARGET_MAP`
+- No-ops if `DISCORD_BOT_TOKEN` absent or no delivery receipt found
 
 ### Smart Form
 - Browser submission surface live (Next.js 14)
