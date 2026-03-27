@@ -777,6 +777,147 @@ test('GET / renders manual review and correction labels in recent settlements', 
   assert.match(response.body, /settlement-original/);
 });
 
+test('GET / renders CLV% and Beats Line columns in settlements table when payload has CLV data', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [
+          {
+            id: 'settlement-clv',
+            pick_id: 'pick-clv',
+            status: 'settled',
+            result: 'win',
+            source: 'grading',
+            confidence: 'confirmed',
+            evidence_ref: null,
+            notes: null,
+            review_reason: null,
+            settled_by: 'grading',
+            settled_at: '2026-03-27T10:00:00.000Z',
+            corrects_id: null,
+            payload: { clvPercent: 3.2, beatsClosingLine: true },
+            created_at: '2026-03-27T10:00:00.000Z',
+          },
+        ],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const { port } = server.address() as import('node:net').AddressInfo;
+
+  const response = await makeRequest(port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  // CLV% column: 3.2 → "3.2%"
+  assert.match(response.body, /3\.2%/);
+  // Beats Line column: true → "✓"
+  assert.match(response.body, /✓/);
+});
+
+test('GET / renders Beats Line as ✗ and CLV% when beatsClosingLine is false', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [
+          {
+            id: 'settlement-clv-loss',
+            pick_id: 'pick-clv-loss',
+            status: 'settled',
+            result: 'loss',
+            source: 'grading',
+            confidence: 'confirmed',
+            evidence_ref: null,
+            notes: null,
+            review_reason: null,
+            settled_by: 'grading',
+            settled_at: '2026-03-27T10:00:00.000Z',
+            corrects_id: null,
+            payload: { clvPercent: -1.5, beatsClosingLine: false },
+            created_at: '2026-03-27T10:00:00.000Z',
+          },
+        ],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const { port } = server.address() as import('node:net').AddressInfo;
+
+  const response = await makeRequest(port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /-1\.5%/);
+  assert.match(response.body, /✗/);
+});
+
+test('GET / renders — for CLV% and Beats Line when payload has no CLV data', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [
+          {
+            id: 'settlement-no-clv',
+            pick_id: 'pick-no-clv',
+            status: 'settled',
+            result: 'win',
+            source: 'operator',
+            confidence: 'confirmed',
+            evidence_ref: null,
+            notes: null,
+            review_reason: null,
+            settled_by: 'operator',
+            settled_at: '2026-03-27T10:00:00.000Z',
+            corrects_id: null,
+            payload: { evidence: 'manual' },
+            created_at: '2026-03-27T10:00:00.000Z',
+          },
+        ],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const { port } = server.address() as import('node:net').AddressInfo;
+
+  const response = await makeRequest(port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  // Both CLV columns should render the fallback dash character
+  const dashCount = (response.body.match(/—/g) ?? []).length;
+  assert.ok(dashCount >= 2, `expected at least 2 — chars for absent CLV, got ${dashCount}`);
+});
+
 test('createSnapshotFromRows marks worker degraded when most recent run is cancelled', () => {
   const run: SystemRunRecord = {
     id: 'run-1',
