@@ -18,6 +18,7 @@ import {
 import {
   createCanonicalPickFromSubmission,
   createValidatedSubmission,
+  normalizeMarketKey,
 } from '@unit-talk/domain';
 import {
   computeSubmissionDomainAnalysis,
@@ -47,7 +48,10 @@ export async function processSubmission(
     audit: AuditLogRepository;
   },
 ): Promise<SubmissionProcessingResult> {
-  const submission = createValidatedSubmission(nextSubmissionId(), payload);
+  const submission = createValidatedSubmission(nextSubmissionId(), {
+    ...payload,
+    market: normalizeMarketKey(payload.market),
+  });
   const materialized = createCanonicalPickFromSubmission(submission);
 
   // Domain analysis enrichment: compute implied probability, edge, and Kelly

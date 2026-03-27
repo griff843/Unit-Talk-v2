@@ -15,6 +15,7 @@ export * from './distribution.js';
 export * from './submission.js';
 export * from './picks.js';
 export * from './promotion.js';
+export * from './market-key.js';
 export * from './probability/index.js';
 export * from './outcomes/index.js';
 export * from './market/index.js';
