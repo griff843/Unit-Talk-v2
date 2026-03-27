@@ -7,9 +7,9 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 1 | 1 | 0 | 12 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 13 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 7 |
-| `lane:augment` | 0 | 1 | 0 | 0 | 6 |
+| `lane:augment` | 0 | 0 | 0 | 0 | 7 |
 
 ---
 
@@ -24,12 +24,12 @@
 | **ID** | UTV2-53 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M9 |
 | **Area** | `area:discord-bot` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-53-discord-pick-command` |
-| **PR** | [#29](https://github.com/griff843/Unit-Talk-v2/pull/29) |
+| **PR** | [#29](https://github.com/griff843/Unit-Talk-v2/pull/29) — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
@@ -111,12 +111,12 @@ Source is hardcoded to `'discord-bot'`. `submittedBy` is the Discord username of
 | **ID** | UTV2-54 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M9 |
 | **Area** | `area:operator-web` |
 | **Blocked by** | — |
 | **Branch** | `augment/UTV2-54-ingestor-health-card` |
-| **PR** | [#28](https://github.com/griff843/Unit-Talk-v2/pull/28) |
+| **PR** | #28 — closed (implementation cherry-picked to main as `a0f50f4`, 2026-03-27) |
 
 #### Scope
 
