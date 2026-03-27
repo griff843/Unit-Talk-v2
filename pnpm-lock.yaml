@@ -94,18 +94,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/db
 
-  apps/ingestor:
-    dependencies:
-      '@unit-talk/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@unit-talk/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@unit-talk/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-
   apps/operator-web:
     dependencies:
       '@unit-talk/config':

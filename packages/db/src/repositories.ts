@@ -14,7 +14,6 @@ import type {
   EventRow,
   EventStatus,
   GradeResultRecord,
-  ParticipantRecord,
   ParticipantRow,
   ParticipantType,
   PickRecord,

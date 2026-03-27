@@ -54,7 +54,6 @@ import type {
   EventParticipantRow,
   EventRow,
   GradeResultRecord,
-  ParticipantRecord,
   ParticipantRow,
   SystemRunRecord,
   OutboxRecord,
