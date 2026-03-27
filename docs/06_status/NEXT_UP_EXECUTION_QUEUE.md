@@ -1,8 +1,8 @@
 # Next Up Execution Queue
 
-> Purpose: near-term execution queue for Unit Talk V2.
-> This file is an operator handoff surface, not the canonical status authority.
-> On conflict, `docs/06_status/PROGRAM_STATUS.md` wins.
+> **STALE — DO NOT USE.** Last updated 2026-03-26. This file shows T1 Automated Grading as ACTIVE — that lane closed 2026-03-26, and 8+ more lanes have closed since.
+> **Use `docs/06_status/ISSUE_QUEUE.md` as the operational work queue.**
+> This file is preserved as historical record only.
 > Tier rules come from `docs/05_operations/SPRINT_MODEL_v2.md`.
 > Contracts/specs authorize implementation; this file only summarizes what is next.
 > Last updated: 2026-03-26 (T1 Automated Grading in progress — Codex; Augment seed script + SGO research delivered; T2 SGO Results Ingest contract 2/3 blockers resolved; `/stats` spec authored)

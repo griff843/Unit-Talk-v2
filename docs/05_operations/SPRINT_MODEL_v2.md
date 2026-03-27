@@ -36,7 +36,7 @@ Sprint ceremony scales with risk. High-risk changes get full governance. Low-ris
 | Proof bundle | Not required. Test results in commit suffice. |
 | Independent verification | Not required. `pnpm verify` passing is sufficient. |
 | Rollback plan | Not required (code is revertable via git). |
-| Status update | Update `PROGRAM_STATUS.md`. |
+| Status update | Update `ISSUE_QUEUE.md` (DONE) + update `PROGRAM_STATUS.md` capabilities/risks if behavior changed. |
 | Linear sync | Required at sprint close. |
 | Notion sync | Batched — sync at next T1 close or monthly. |
 | Test evidence | `pnpm verify` must pass. Test count must not decrease. |
@@ -53,7 +53,7 @@ Sprint ceremony scales with risk. High-risk changes get full governance. Low-ris
 | Proof bundle | Not required. |
 | Independent verification | Not required. |
 | Rollback plan | Not required. |
-| Status update | Update `PROGRAM_STATUS.md` sprint log only. |
+| Status update | Update `ISSUE_QUEUE.md` (DONE). No `PROGRAM_STATUS.md` update required. |
 | Linear sync | Batched — sync at next T2+ close. |
 | Notion sync | Batched — sync at next T1 close or monthly. |
 | Test evidence | `pnpm verify` must pass. Test count must not decrease. |
@@ -79,8 +79,9 @@ These are non-negotiable regardless of tier:
 
 | File | Purpose | Updated When |
 |------|---------|-------------|
-| `docs/06_status/PROGRAM_STATUS.md` | Canonical active program status | Every sprint close |
-| `docs/06_status/system_snapshot.md` | Runtime evidence and proof state | When runtime state changes (T1/T2) |
+| `docs/06_status/ISSUE_QUEUE.md` | Operational work queue — active/ready/blocked/done | Every lane state change |
+| `docs/06_status/PROGRAM_STATUS.md` | High-level program status — milestone, capabilities, risks | T1/T2 sprint close only |
+| `docs/06_status/system_snapshot.md` | Runtime evidence record — IDs, receipts, proof | When new T1 proof is captured |
 
 The following files are superseded (historical record only):
 - `docs/06_status/status_source_of_truth.md`
@@ -110,6 +111,7 @@ The sprint author classifies the tier at planning time. If uncertain, default to
 | Surface | T1 | T2 | T3 |
 |---------|-----|-----|-----|
 | Git commit + push | Yes | Yes | Yes |
-| `PROGRAM_STATUS.md` | Full update | Full update | Sprint log entry only |
+| `ISSUE_QUEUE.md` | Mark DONE | Mark DONE | Mark DONE |
+| `PROGRAM_STATUS.md` | Full update (capabilities, risks, milestone) | Update capabilities/risks if changed | No update required |
 | Linear | Sync at close | Sync at close | Batch into next T2+ |
 | Notion | Sync at close | Batch into next T1 or monthly | Batch into next T1 or monthly |

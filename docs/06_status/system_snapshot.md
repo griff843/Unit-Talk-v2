@@ -1,5 +1,10 @@
 # System Snapshot
 
+> **STALE as of 2026-03-21.** Current-state claims in this file are wrong. Snapshot date is Week 16 closeout.
+> **For current program state: `docs/06_status/PROGRAM_STATUS.md`**
+> **For current work queue: `docs/06_status/ISSUE_QUEUE.md`**
+> This file is an evidence record — specific IDs, receipts, and historical proof remain valid.
+
 This file is the current-state handoff for `unit-talk-v2`.
 
 Use it to bootstrap a new chat or agent without relying on prior thread memory.

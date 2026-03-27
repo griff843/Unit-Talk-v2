@@ -1,13 +1,13 @@
 # Program Status
 
-> Canonical active status authority for Unit Talk V2.
-> Adopted 2026-03-21. Replaces `status_source_of_truth.md`, `current_phase.md`, and `next_build_order.md` for active maintenance.
+> Canonical high-level status authority for Unit Talk V2.
+> Adopted 2026-03-21. Replaces `status_source_of_truth.md`, `current_phase.md`, and `next_build_order.md`.
 > Operating model: `docs/05_operations/SPRINT_MODEL_v2.md`
-> Issue queue: `docs/06_status/ISSUE_QUEUE.md`
+> **Operational work queue (active/ready/blocked/done): `docs/06_status/ISSUE_QUEUE.md`**
 
 ## Last Updated
 
-2026-03-27 — UTV2-46 CLOSED (PR #22 merged). 621/621 tests on main. M7 COMPLETE — all lanes closed.
+2026-03-27 — M7 CLOSED. UTV2-44 (PR #21) + UTV2-46 (PR #22) merged. No active lanes.
 
 ---
 
@@ -16,13 +16,12 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests (main, verified 2026-03-27) | **621/621 passing** — 0 failures, all 6 groups clean |
-| Gates | All gates PASS on current main. `pnpm verify` exits 0. |
+| Tests | Run `pnpm test` for current count. Last verified 2026-03-27: 621 tests, 0 failures. |
+| Gates | `pnpm verify` exits 0 on current main. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Active lanes | None — M7 COMPLETE |
-| Milestone | **M7 CLOSED** — Discord social surfaces + CLV wiring (all lanes closed 2026-03-27) |
+| Milestone | **M7 CLOSED** 2026-03-27 — Discord social surfaces + CLV wiring. M8 not yet planned. |
 
-## Gate Notes (2026-03-27)
+## Gate Notes (last verified 2026-03-27)
 
 | Gate | Status | Notes |
 |------|--------|-------|
@@ -30,7 +29,7 @@
 | `pnpm lint` | PASS | 0 errors. `.next/**` in eslint ignores. Radix UI components exempt from `no-explicit-any`/`no-empty-object-type`. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | **621/621**. 6 bounded groups chained with `&&`. Verified 2026-03-27 after UTV2-46 merge. |
+| `pnpm test` | PASS | 6 bounded groups chained with `&&`. Run `pnpm test` for current count. Last verified 2026-03-27: 621 tests, 0 failures. |
 | `pnpm verify` (full chain) | PASS | Exit 0. |
 
 ### Runner Architecture
@@ -46,7 +45,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 | `pnpm test:domain-signals` | 6 | domain/signals + bands + calibration + scoring |
 | `pnpm test:domain-analytics` | 9 | domain/outcomes + market + eval + edge + rollups + system-health + risk + strategy + market-key |
 
-**Note:** `apps/smart-form` tests run via `pnpm --filter @unit-talk/smart-form test` only — not in root `pnpm test`. 12/12 smart-form tests pass locally.
+**Note:** `apps/smart-form` tests run via `pnpm --filter @unit-talk/smart-form test` only — not in root `pnpm test`.
 
 ---
 
@@ -63,83 +62,19 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Active Lanes (as of 2026-03-27)
-
-| ID | Item | Tier | Status | Notes |
-|----|------|------|--------|-------|
-| UTV2-44 | Discord /leaderboard + GET /api/operator/leaderboard | T2 | **CLOSED** | PR #21 merged. 617/617. |
-| UTV2-46 | CLV settlement wiring (computeAndAttachCLV) | T2 | **CLOSED** | PR #22 merged. 621/621. M7 complete. |
-
-**M7 is closed. No active lanes. Next milestone requires a ratified M8 contract.**
-
----
-
-## Sprint Log
-
-> New entries prepended. Historical rows preserved.
-
-| Sprint | Issue | Tier | Status | Summary |
-|--------|-------|------|--------|---------|
-| CLV Settlement Wiring | UTV2-46 | T2 | **CLOSED** 2026-03-27 | `resolveClvPayload()` removed; `computeAndAttachCLV()` called in `recordGradedSettlement()`; `clvRaw`/`clvPercent`/`beatsClosingLine` written as top-level payload keys; keys omitted (not null) when no matching `provider_offers` row. 621/621 tests (+4 net-new). PR #22 merged. |
-| Discord /leaderboard Command | UTV2-44 | T2 | **CLOSED** 2026-03-27 | `GET /api/operator/leaderboard` ranked response; Discord `/leaderboard` public embed (responseVisibility:'public' + fail-closed router); 617/617 tests (+11 net-new). PR #21 merged. |
-| Smart Form Participant Autocomplete | UTV2-45 | T3 | **CLOSED** 2026-03-27 | `ParticipantAutocompleteField` debounced typeahead in BetForm; helpers in `lib/participant-search.ts` (pure, testable); 12/12 smart-form tests. PR #20 merged. |
-| Operator Entity Ingest Health | UTV2-42 | T2 | **CLOSED** 2026-03-27 | `entityHealth` in operator snapshot; `/api/operator/participants` endpoint; HTML dashboard sections (Upcoming Events, Entity Catalog, Last Ingest Cycle). Live proof: 46 events, 535 players, 124 teams. PR #19 merged. |
-| Smart Form Conviction Field | UTV2-40 | T1 | **CLOSED** 2026-03-27 | conviction=1–10 → trust 10–100 in `metadata.promotionScores`. Live proof: 4 picks verified. PR #17 merged. |
-| Market Key Normalization | UTV2-33 | T2 | **CLOSED** 2026-03-27 | `normalizeMarketKey()` at submission time; market stored as canonical key (e.g., `points-all-game-ou`). Live proof: 3 picks verified. PR #18 merged. 598 tests at merge. |
-| Board Cap Lifecycle Filter | UTV2-38 | T3 | **CLOSED** 2026-03-27 | `getPromotionBoardState` now filters to queued/posted only; saturated-board bug from test-run picks resolved. PR #12 merged. |
-| Queue Tooling | UTV2-36 | T3 | **CLOSED** 2026-03-27 | `scripts/claim-issue.mjs` + `scripts/submit-issue.mjs` claim/submit lane scripts. PR #9 merged. |
-| SGO Results Seed Proof | UTV2-37 | T3 | **CLOSED** 2026-03-27 | `scripts/seed-game-result.ts` proof seeder; 1 live grading proof produced. PR #11 merged. |
-| Discord /stats Command | UTV2-31 | T2 | **CLOSED** 2026-03-27 | `GET /api/operator/stats` + Discord `/stats @capper` command; capper win rate, ROI, CLV (null until UTV2-46 lands). PR #13 merged. 591 tests at merge. |
-| Discord Bot Deploy Commands Verify | UTV2-34 | T3 | **CLOSED** 2026-03-27 | `deploy-commands` script live; reaches Discord API. **KNOWN GAP**: `DiscordAPIError[20012]` — DISCORD_CLIENT_ID in `local.env` (`1045344984280346674`) does not match the application owning the bot token. Script correct; fix requires verifying CLIENT_ID in Discord Developer Portal. PR #8 merged. |
-| SGO Results Ingest | UTV2-30 | T2 | **CLOSED** 2026-03-26 | `apps/ingestor/` live; populates `provider_offers` and `game_results` from SGO feed. PR #3 merged. |
-| T1 Automated Grading | UTV2-28 | T1 | **CLOSED** 2026-03-26 | `POST /api/grading/run` live; grading-service evaluates picks against game_results; `recordGradedSettlement()` writes settlement records. Live proof: `attempted=4, graded=1, skipped=3, errors=0`. Settlement `1c9d8581`. Idempotent. |
-| Deploy Commands Verify | UTV2-34 | T3 | **CLOSED** 2026-03-26 | (see above) |
-| — | — | — | — | **— entries above this line added 2026-03-27; entries below from prior log —** |
-| UTV2-34 Deploy Commands Verify | — | T3 | **IN_REVIEW** *(stale — now CLOSED above)* | *(historical — see CLOSED row above)* |
-| Full Lifecycle Truth Verification | — | T1 | **CLOSED** | All 10 stages verified. Discord msgId 1485511171011514490. Settlement win, 90.9% ROI. 534/534 tests. Verdict: FULL_LIFECYCLE_VERIFIED. |
-| Smart Form Process Hardening | — | T1 | **CLOSED** | `scripts/kill-port.mjs` + `predev` hook. 534/534 tests. |
-| T1 Recap/Stats Consumer Buildout | — | T1 | **CLOSED** | `GET /api/operator/recap` live. 534/534 tests. |
-| T1 Full-Cycle Proof Rerun | — | T1 | **CLOSED** | 531/531 tests. Enqueue fix confirmed. |
-| T1 Enqueue Gap Fix | — | T1 | **CLOSED** | 531/531 tests. `outboxEnqueued:true` in API response. |
-| T1 Full-Cycle Runtime Proof | — | T1 | **CLOSED** | 528/528 tests. |
-| Runner Hardening | — | T1 | **CLOSED** | Split 40-file tsx into 6 bounded groups. 528/528 tests. |
-| Gate Recovery + Repo Truth | — | T1 | **CLOSED** | 528/528 tests. |
-| Promotion Scoring Enrichment | 21 | T3 | **CLOSED** | Domain-aware trust/readiness. 531/531 tests. |
-| E2E Platform Validation | 20 | T3 | **CLOSED** | All 9 surfaces validated. 515/515 tests. |
-| Promotion Edge Integration | 19 | T3 | **CLOSED** | Domain analysis edge in promotion. 515/515 tests. |
-| Domain Integration Layer | 18 | T2 | **CLOSED** | Submission-time domain analysis. 502/502 tests. |
-| Git Baseline Ratification | 17 | T2 | **CLOSED** | First commit. 491/491 tests. |
-| Settlement Downstream + Domain Salvage | 16 | T1 | **CLOSED** | Runtime integration + Batch 1-5. 491/491 tests. |
-| Probability/Devig Salvage | 15 | T2 | **CLOSED** | Pure math salvage. 128/128 tests. |
-| Verification Control Plane Salvage | 14 | T2 | **CLOSED** | Scenario registry, run history, archive. 100/100 tests. |
-| Operator Trader-Insights Health | 13 | T2 | **CLOSED** | Operator dashboard health sections. 87/87 tests. |
-| Settlement Hardening | 12 | T1 | **CLOSED** | Manual review, correction chains, operator history. 83/83 tests. |
-| Trader-Insights Activation | 11 | T1 | **CLOSED** | `discord:trader-insights` live. 72/72 tests. |
-| Operator Command Center | 10 | T2 | **CLOSED** | Picks pipeline, channel health, operator snapshot. 62/62 tests. |
-| Full Lifecycle Proof | 9 | T1 | **CLOSED** | Submission-to-settled proof. 23 fields verified. |
-| Settlement Runtime | 8 | T1 | **CLOSED** | Settlement schema + write path. |
-| Best Bets Activation | 7 | T1 | **CLOSED** | `discord:best-bets` live. |
-| Runtime Promotion Gate | 6 | T1 | **CLOSED** | Promotion persistence + routing. |
-
----
-
 ## Next Milestone (M8 — not yet planned)
 
-**M7 is CLOSED** (2026-03-27). UTV2-44 (PR #21) + UTV2-46 (PR #22) both merged. M8 has no ratified contract yet.
-
-**Candidate items for M8:**
+**Do not open without a ratified M8 contract.**
 
 | Item | Expected Tier | Rationale |
 |------|---------------|-----------|
-| CLV wiring live proof (after UTV2-46) | T1 verify | Confirm `/stats` and `/leaderboard` avgClvPct non-null in live DB |
-| Discord CLIENT_ID fix | T3 | `DiscordAPIError[20012]` — CLIENT_ID in `local.env` doesn't match bot token owner; blocks `deploy-commands` from deploying to real guild |
-| Smart Form `confidence` field | T2 | Without it, all Smart Form submissions score 61.5, below best-bets threshold (70); currently ineligible for promotion |
+| CLV wiring live proof | T1 verify | Confirm `/stats` and `/leaderboard` avgClvPct non-null in live DB after UTV2-46 |
+| Discord CLIENT_ID fix | T3 | `DiscordAPIError[20012]` — CLIENT_ID in `local.env` doesn't match bot token owner; blocks `deploy-commands` |
+| Smart Form `confidence` field | T2 | Without it, all Smart Form submissions score 61.5, below best-bets threshold (70) |
 | Offer Fetch service wrapper | T2 | Multi-book consensus at submission |
 | DeviggingService integration | T2 | Service wrapper around existing pure-computation devig |
 | Risk Engine integration | T2 | Bankroll-aware sizing service wrapper |
 | Discord `/recap` command | T2 | RecapAgent not implemented; deferred |
-
-**Do not open without a ratified M8 contract.**
 
 ---
 
@@ -157,17 +92,12 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 | Risk | Severity | Status |
 |------|----------|--------|
 | Discord CLIENT_ID mismatch — `deploy-commands` fails with `DiscordAPIError[20012]` | Medium | **Open** — CLIENT_ID `1045344984280346674` in `local.env` does not match the application owning the bot token. Fix: verify correct APPLICATION_ID in Discord Developer Portal. Script is correct; credentials are wrong. |
-| Smart Form `confidence` field missing — all submissions score 61.5 | Medium | **Open** — `buildSubmissionPayload()` does not include `confidence`. Domain analysis computes no edge. All Smart Form picks ineligible for best-bets (threshold 70). |
-| Board caps (perSlate=5) may re-saturate | Low | **PARTIALLY RESOLVED** — lifecycle filter fix (UTV2-38, PR #12) now counts only queued/posted picks. Historical saturation from test-run picks cleared by fix. Monitor after next full test run. |
-| `/stats` and `/leaderboard` avgClvPct always null | Medium | **CLOSED** — UTV2-46 (PR #22) wired `computeAndAttachCLV()`; `clvRaw`/`beatsClosingLine` now written top-level in graded settlement payloads. avgClvPct will populate for picks with matching `provider_offers` rows going forward. Live proof pending M8. |
+| Smart Form `confidence` field missing — all submissions score 61.5 | Medium | **Open** — `buildSubmissionPayload()` does not include `confidence`. All Smart Form picks ineligible for best-bets (threshold 70). |
+| Board caps (perSlate=5) may re-saturate | Low | **Partially resolved** — lifecycle filter fix (UTV2-38) counts only queued/posted picks. Monitor after next full test run. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
 | API process requires manual restart for new code in dev | Low | Open |
-| `NEXT_UP_EXECUTION_QUEUE.md` stale | High | **Stale** — last updated 2026-03-26; lists T1 Automated Grading as ACTIVE. That lane closed 2026-03-26. File is not currently maintained. Use `ISSUE_QUEUE.md` as the operative queue. |
-| `system_snapshot.md` stale | Medium | **Stale** — last updated 2026-03-21; refers to Week 7 state. Proof IDs still valid as historical record but current-state claims are wrong. |
-| Recap/downstream surfaces do not fully consume settlement truth | Low | **Partially resolved** — `GET /api/operator/recap` calls `computeSettlementSummary`. Full rollups/evaluation wiring deferred. |
-| Catalog endpoint | Low | **CLOSED** — Fixed in Full Lifecycle Truth Verification sprint (commit ce7577b). |
-| Smart Form zombie process | Low | **CLOSED** — `predev` hook + `scripts/kill-port.mjs` in `apps/smart-form/package.json`. |
-| Enqueue gap | Medium | **CLOSED** — verified in T1 Full-Cycle Proof Rerun (2026-03-23). |
+| `system_snapshot.md` stale | Low | Last updated 2026-03-21. Proof IDs still valid as historical record; current-state claims are wrong. Use `PROGRAM_STATUS.md`. |
+| `production_readiness_checklist.md` stale | Low | Last updated 2026-03-26. Use `ISSUE_QUEUE.md` for current lane state. |
 
 ---
 
@@ -195,7 +125,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 ### Operator surface
 - `GET /api/operator/snapshot` — health, outbox, runs, settlements, entity health
 - `GET /api/operator/stats` — capper win rate / ROI / avgClvPct (populates for picks with closing lines)
-- `GET /api/operator/leaderboard` — live (UTV2-44 CLOSED); avgClvPct populates for picks with closing lines
+- `GET /api/operator/leaderboard` — ranked capper leaderboard; avgClvPct populates for picks with closing lines
 - `GET /api/operator/participants` — player/team search
 - `GET /api/operator/events` — upcoming events
 - `GET /api/operator/recap` — settlement summary via domain
@@ -207,7 +137,8 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 ### Discord bot
 - Foundation: client, router, role-guard, api-client, command registry
 - `/stats @capper` live
-- `/leaderboard` live (UTV2-44 CLOSED)
+- `/leaderboard` live
+- `responseVisibility` flag on `CommandHandler` — fail-closed (private unless explicitly `'public'`)
 - `deploy-commands` script works; CLIENT_ID mismatch prevents real guild deployment (see Risks)
 
 ### Smart Form
@@ -233,6 +164,7 @@ These files are no longer maintained and should not be used as current-state tru
 | `docs/06_status/current_phase.md` | 2026-03-21 | Superseded by this file |
 | `docs/06_status/next_build_order.md` | 2026-03-21 | Superseded by this file |
 | `docs/04_roadmap/active_roadmap.md` | 2026-03-21 | Current roadmap |
+| `docs/06_status/production_readiness_checklist.md` | 2026-03-26 | Lane state (use `ISSUE_QUEUE.md`) |
 
 ---
 
@@ -240,8 +172,10 @@ These files are no longer maintained and should not be used as current-state tru
 
 | Purpose | File |
 |---------|------|
-| **Active issue queue** | `docs/06_status/ISSUE_QUEUE.md` |
+| **Operational work queue** | `docs/06_status/ISSUE_QUEUE.md` |
+| **Active program status** | this file |
 | Operating model | `docs/05_operations/SPRINT_MODEL_v2.md` |
+| Docs authority map | `docs/05_operations/docs_authority_map.md` |
 | Proof template (T1) | `docs/06_status/PROOF_TEMPLATE.md` |
 | Rollback template (T1) | `docs/06_status/ROLLBACK_TEMPLATE.md` |
 | /leaderboard contract | `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` |
@@ -253,6 +187,8 @@ These files are no longer maintained and should not be used as current-state tru
 
 ## Update Rule
 
-Update this file at every sprint close. For T3 sprints, only the sprint log and test count need a new row. For T1/T2 sprints, update: tests, active lanes, key capabilities, open risks.
+Update at **T1/T2 sprint close only**. Update: milestone summary, key capabilities, open risks.
 
-Do not let this file go more than 72 hours without a review against `ISSUE_QUEUE.md`.
+**T3 sprints:** update `ISSUE_QUEUE.md` (mark DONE) only. No `PROGRAM_STATUS.md` update required.
+
+Active lane state lives in `ISSUE_QUEUE.md`. Do not duplicate it here.

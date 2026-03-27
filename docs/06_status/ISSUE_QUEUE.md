@@ -334,26 +334,3 @@ All 10 ACs satisfied. 617/617 tests (606 baseline → +11 net-new; contract requ
 
 ---
 
-## Queue State Reference
-
-```
-UTV2-28  T1  codex     DONE         ← CLOSED: live proof WIN
-UTV2-29  DOC claude    DONE         ← CLOSED: MLB ratification RATIFIED
-UTV2-30  T2  codex     DONE         ← MERGED: PR #3 (2026-03-26)
-UTV2-31  T2  codex     DONE         ← MERGED: PR #13 (2026-03-27). 591/591.
-UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
-UTV2-33  T2  codex     DONE         ← MERGED: PR #18 (2026-03-27). 598/598. Live proof verified.
-UTV2-34  T3  augment   DONE         ← MERGED: PR #8 (2026-03-26)
-UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
-UTV2-36  T3  codex     DONE         ← MERGED: PR #9 (2026-03-27)
-UTV2-37  T3  augment   DONE         ← MERGED: PR #11 (2026-03-27)
-UTV2-38  T3  codex     DONE         ← MERGED: PR #12 (2026-03-27). 552/552.
-UTV2-39  DOC claude    DONE         ← CLOSED: Smart Form V1 contract RATIFIED
-UTV2-40  T1  codex     DONE         ← MERGED: PR #17 (2026-03-27). Live proof: trust scores verified.
-UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health contract RATIFIED
-UTV2-42  T2  codex     DONE         ← MERGED: PR #19 (2026-03-27). Live proof: 46 events, 535 players.
-UTV2-43  DOC claude    DONE         ← CLOSED: /leaderboard contract RATIFIED (2026-03-27)
-UTV2-44  T2  codex     DONE         ← MERGED: PR #21 (2026-03-27). 617/617 tests. responseVisibility flag added.
-UTV2-45  T3  augment   DONE         ← MERGED: committed to main (2026-03-27). 12/12 smart-form tests.
-UTV2-46  T2  codex     DONE         ← MERGED: PR #22 (2026-03-27). 621/621. computeAndAttachCLV wired; clvRaw/clvPercent/beatsClosingLine written top-level.
-```
