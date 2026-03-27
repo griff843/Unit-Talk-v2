@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 2 | 0 | 19 |
-| `lane:claude` | 0 | 0 | 1 | 0 | 10 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 21 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 11 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
@@ -24,14 +24,14 @@
 | **ID** | UTV2-65 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:docs` |
-| **Blocked by** | Augment Task A (deploy-commands re-run for /recap) |
+| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
 
-Independent verification of M10 deliverables. Produce proof artifact. Update `PROGRAM_STATUS.md` M10 CLOSED, M11 placeholder. Contract: `docs/05_operations/UTV2-65_M10_CLOSURE_VERIFICATION_CONTRACT.md`
+Independent verification of M10 deliverables. Produce proof artifact. Update `PROGRAM_STATUS.md` M10 CLOSED, M11 placeholder. Contract: `docs/05_operations/UTV2-65_M10_CLOSURE_VERIFICATION_CONTRACT.md`. Proof: `docs/06_status/UTV2-65_proof.md`.
 
 ---
 
@@ -42,14 +42,14 @@ Independent verification of M10 deliverables. Produce proof artifact. Update `PR
 | **ID** | UTV2-67 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-67-kelly-submission-wiring` |
+| **PR** | [#40](https://github.com/griff843/Unit-Talk-v2/pull/40) — **MERGED** ✅ (2026-03-27) |
 
-Fix `findLatestMatchingOffer` sort order (snapshot_at DESC). Wire `computeKellySizing()` after devig result — writes to `pick.metadata.kellySizing`. Fail-closed. Operator-visible only. Contract: `docs/05_operations/UTV2-67_KELLY_SUBMISSION_WIRING_CONTRACT.md`
+Fix `findLatestMatchingOffer` sort order (snapshot_at DESC). Wire `computeKellySize(overFair, americanToDecimal(odds), DEFAULT_BANKROLL_CONFIG)` after devig result — writes to `pick.metadata.kellySizing`. Fail-closed. Operator-visible only. Contract: `docs/05_operations/UTV2-67_KELLY_SUBMISSION_WIRING_CONTRACT.md`
 
 ---
 
@@ -96,14 +96,14 @@ At submission time, look up `provider_offers` for the pick's market key, call `d
 | **ID** | UTV2-63 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-63-dead-letter-surface` |
+| **PR** | [#39](https://github.com/griff843/Unit-Talk-v2/pull/39) — **MERGED** ✅ (2026-03-27) |
 
-Add `deadLetterCount` to `OperatorSnapshot` and HTML dashboard card. Contract: `docs/05_operations/UTV2-63_DEAD_LETTER_OPERATOR_SURFACE_CONTRACT.md`
+Add `deadLetterOutbox` to `OperatorSnapshot.counts`, distribution health degrades on dead-letter rows, HTML dashboard card rendered. Contract: `docs/05_operations/UTV2-63_DEAD_LETTER_OPERATOR_SURFACE_CONTRACT.md`
 
 ---
 
