@@ -8,12 +8,47 @@
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 0 | 0 | 14 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 7 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 7 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 7 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-56 — T1 M9 Closure Verification
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-56 |
+| **Tier** | T1 (verify) |
+| **Lane** | `lane:claude` |
+| **Status** | **READY** |
+| **Milestone** | M9 |
+| **Area** | `area:api` `area:worker` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+Independent verification of M9 deliverables: requeue endpoint (UTV2-55), worker guard, orphan recovery, and UTV2-53/54 delivery confirmation. Closes M9.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: All 6 orphaned picks have `distribution_outbox` rows — confirm via live DB query (pick IDs: `d77a35b3`, `3b5d9e84`, `306deff8`, `d00954ec`, `4701f767`, `3ec17a5e`)
+- [ ] AC-2: `POST /api/picks/:id/requeue` returns 409 `ALREADY_QUEUED` on second call for any of the 6 (idempotency confirmed)
+- [ ] AC-3: Stale outbox entry for settled pick `2783c8e2` — confirm worker guard fires: outbox row marked sent, `distribution.skipped` audit entry exists, no Discord delivery attempted
+- [ ] AC-4: Worker processes at least one of the 6 requeued picks — confirm `distribution_receipts` row exists and pick `status` transitions to `queued` or `posted`
+- [ ] AC-5: `pnpm verify` exits 0 on current main
+- [ ] AC-6: `PROGRAM_STATUS.md` updated — M9 CLOSED, M10 placeholder added
+
+#### Constraints
+
+- Do not change any runtime code — verification only
+- If AC-3 cannot be confirmed (worker not running), document as deferred with reason
+- If AC-4 cannot be confirmed (worker not running), document as deferred with reason
 
 ---
 
