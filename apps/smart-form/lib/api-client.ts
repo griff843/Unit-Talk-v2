@@ -10,6 +10,7 @@ export interface SubmitPickPayload {
   line?: number;
   odds?: number;
   stakeUnits?: number;
+  confidence?: number;
   eventName?: string;
   metadata?: Record<string, unknown>;
 }

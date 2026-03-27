@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 1 | 0 | 0 | 10 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 11 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 6 |
 | `lane:augment` | 0 | 1 | 1 | 0 | 4 |
 
@@ -24,12 +24,12 @@
 | **ID** | UTV2-49 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:smart-form` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-49-smart-form-confidence-field` |
-| **PR** | #25 (all ACs pass; rebase on main required before merge) |
+| **PR** | #25 — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
@@ -100,13 +100,13 @@ UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSett
 
 #### Scope
 
-UTV2-46 wired CLV data into `settlement_records.payload` as top-level keys (`clvRaw`, `clvPercent`, `beatsClosingLine`). The operator HTML dashboard settlement table does not display these fields. Add `CLV%` and `Beats Line` columns to the `recentSettlements` table in the operator HTML response. Display `—` when keys are absent. Read-only display change only — no new routes, no DB queries, no write surfaces.
+UTV2-46 wired CLV data into `settlement_records.payload` as top-level keys (`clvRaw`, `clvPercent`, `beatsClosingLine`). The operator HTML settlement table does not display these. Add `CLV%` and `Beats Line` columns. Display `—` when absent. Read-only display change — no new routes, no DB queries, no write surfaces.
 
 #### Acceptance Criteria
 
 - [ ] AC-1: `recentSettlements` HTML table gains `CLV%` and `Beats Line` columns
-- [ ] AC-2: When `clvPercent` present: display as `3.2%` (one decimal). When absent: `—`
-- [ ] AC-3: When `beatsClosingLine` present: display as `✓` (true) or `✗` (false). When absent: `—`
+- [ ] AC-2: `clvPercent` present → display as `3.2%` (one decimal); absent → `—`
+- [ ] AC-3: `beatsClosingLine` present → `✓` (true) or `✗` (false); absent → `—`
 - [ ] AC-4: `pnpm verify` exits 0; test count does not decrease
 - [ ] AC-5: At least 1 new test covering the CLV column rendering path
 
@@ -114,8 +114,8 @@ UTV2-46 wired CLV data into `settlement_records.payload` as top-level keys (`clv
 
 - Only modify `apps/operator-web/src/server.ts` and `server.test.ts`
 - Do not add new routes or DB queries
-- Do not touch `apps/smart-form/**` (active Codex scope — UTV2-49 in review)
-- Parallel-safe: no overlap with UTV2-49 or UTV2-48
+- Do not touch `apps/smart-form/**`
+- Parallel-safe: no overlap with UTV2-48 or any active Codex scope
 
 ---
 
@@ -126,12 +126,12 @@ UTV2-46 wired CLV data into `settlement_records.payload` as top-level keys (`clv
 | **ID** | UTV2-47 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **READY** |
 | **Milestone** | M8 |
 | **Area** | `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | `augment/UTV2-47-discord-application-id` |
-| **PR** | #23 |
+| **Branch** | — |
+| **PR** | — |
 
 #### Scope
 

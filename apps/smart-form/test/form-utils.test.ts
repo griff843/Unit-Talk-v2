@@ -264,14 +264,29 @@ describe('buildSubmissionPayload', () => {
     assert.equal(payload.metadata?.promotionScores?.trust, 80);
   });
 
+  test('conviction 8 maps to confidence 0.8', () => {
+    const payload = buildSubmissionPayload(playerPropValues());
+    assert.equal(payload.confidence, 0.8);
+  });
+
   test('conviction 1 maps to promotionScores.trust 10', () => {
     const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 1 }));
     assert.equal(payload.metadata?.promotionScores?.trust, 10);
   });
 
+  test('conviction 1 maps to confidence 0.1', () => {
+    const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 1 }));
+    assert.equal(payload.confidence, 0.1);
+  });
+
   test('conviction 10 maps to promotionScores.trust 100', () => {
     const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 10 }));
     assert.equal(payload.metadata?.promotionScores?.trust, 100);
+  });
+
+  test('conviction 10 maps to confidence 1.0', () => {
+    const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 10 }));
+    assert.equal(payload.confidence, 1.0);
   });
 
   test('metadata preserves submitted conviction value', () => {

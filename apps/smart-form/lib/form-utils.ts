@@ -76,6 +76,7 @@ export function buildSubmissionPayload(values: BetFormValues): SubmitPickPayload
     line: values.line,
     odds: values.odds,
     stakeUnits: values.units,
+    confidence: values.capperConviction / 10,
     eventName: values.eventName,
     metadata: {
       ticketType: 'single',
