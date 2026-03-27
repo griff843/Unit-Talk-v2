@@ -7,13 +7,51 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 1 | 0 | 0 | 10 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 11 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 1 | 0 | 4 |
+| `lane:augment` | 0 | 1 | 1 | 0 | 4 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-52 — T2 Ingestor App Monorepo Integration
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-52 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M8 |
+| **Area** | `area:ingestor` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+`apps/ingestor/` exists on disk with 21 passing tests but is untracked. It is a fully implemented SGO data ingestor with proper `tsconfig.json` (composite) and `package.json`. It is not in root `tsconfig.json` references and not committed. `packages/contracts/src/provider-offers.ts` is also untracked and may be required for the build.
+
+Wire the ingestor into the monorepo build without changing any implementation logic.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `apps/ingestor/` committed to repo (all source files tracked)
+- [ ] AC-2: `{ "path": "./apps/ingestor" }` added to root `tsconfig.json` references
+- [ ] AC-3: `pnpm type-check` exits 0
+- [ ] AC-4: `pnpm build` exits 0
+- [ ] AC-5: `tsx --test apps/ingestor/src/ingestor.test.ts` → 21 tests, 0 failures
+- [ ] AC-6: `pnpm verify` exits 0; total test count = prior baseline + 21
+
+#### Constraints
+
+- Do not change ingestor implementation logic
+- Do not add migrations
+- Do not touch `apps/api`, `apps/worker`, `apps/smart-form`, `apps/operator-web`, `apps/discord-bot`
+- If `packages/db` exports (`createDatabaseIngestorRepositoryBundle`, `createInMemoryIngestorRepositoryBundle`) are missing, add them — do not change existing exports
 
 ---
 
@@ -24,12 +62,12 @@
 | **ID** | UTV2-49 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:smart-form` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-49-smart-form-confidence-field` |
-| **PR** | [#25](https://github.com/griff843/Unit-Talk-v2/pull/25) |
+| **PR** | #25 — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
@@ -81,6 +119,41 @@ UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSett
 #### Contract Authority
 
 `docs/05_operations/T2_SMART_FORM_CONFIDENCE_CONTRACT.md §8`
+
+---
+
+### UTV2-51 — T3 Operator Web CLV Settlement Display
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-51 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **IN_REVIEW** |
+| **Milestone** | M8 |
+| **Area** | `area:operator-web` |
+| **Blocked by** | — |
+| **Branch** | `augment/UTV2-51-operator-clv-display` |
+| **PR** | [#26](https://github.com/griff843/Unit-Talk-v2/pull/26) |
+
+#### Scope
+
+UTV2-46 wired CLV data into `settlement_records.payload` as top-level keys (`clvRaw`, `clvPercent`, `beatsClosingLine`). The operator HTML settlement table does not display these. Add `CLV%` and `Beats Line` columns. Display `—` when absent. Read-only display change — no new routes, no DB queries, no write surfaces.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `recentSettlements` HTML table gains `CLV%` and `Beats Line` columns
+- [ ] AC-2: `clvPercent` present → display as `3.2%` (one decimal); absent → `—`
+- [ ] AC-3: `beatsClosingLine` present → `✓` (true) or `✗` (false); absent → `—`
+- [ ] AC-4: `pnpm verify` exits 0; test count does not decrease
+- [ ] AC-5: At least 1 new test covering the CLV column rendering path
+
+#### Constraints
+
+- Only modify `apps/operator-web/src/server.ts` and `server.test.ts`
+- Do not add new routes or DB queries
+- Do not touch `apps/smart-form/**`
+- Parallel-safe: no overlap with UTV2-48 or any active Codex scope
 
 ---
 

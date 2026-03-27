@@ -1312,7 +1312,9 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
     row.corrects_id ?? 'n/a',
     row.evidence_ref ?? 'n/a',
     row.settled_at,
-  ], 8);
+    formatClvPercent(row.payload),
+    formatBeatsLine(row.payload),
+  ], 10);
 
   return `<!doctype html>
 <html lang="en">
@@ -1481,7 +1483,7 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       <section>
         <h2>Recent Settlements</h2>
         <table>
-          <thead><tr><th>ID</th><th>Pick</th><th>Status</th><th>Result</th><th>Source</th><th>Corrects</th><th>Evidence</th><th>Settled</th></tr></thead>
+          <thead><tr><th>ID</th><th>Pick</th><th>Status</th><th>Result</th><th>Source</th><th>Corrects</th><th>Evidence</th><th>Settled</th><th>CLV%</th><th>Beats Line</th></tr></thead>
           <tbody>${settlementRows}</tbody>
         </table>
       </section>
@@ -1542,6 +1544,16 @@ function formatSettlementStatusLabel(row: SettlementRecord) {
   }
 
   return row.status;
+}
+
+function formatClvPercent(payload: unknown): string {
+  const v = readJsonObject(payload)?.['clvPercent'];
+  return typeof v === 'number' ? v.toFixed(1) + '%' : '—';
+}
+
+function formatBeatsLine(payload: unknown): string {
+  const v = readJsonObject(payload)?.['beatsClosingLine'];
+  return typeof v === 'boolean' ? (v ? '✓' : '✗') : '—';
 }
 
 export interface StatsRow {
