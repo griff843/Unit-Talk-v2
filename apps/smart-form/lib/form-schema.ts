@@ -42,6 +42,11 @@ export const betFormSchema = z
       .number({ invalid_type_error: 'Units must be a number' })
       .min(0.5, 'Units must be at least 0.5')
       .max(5.0, 'Units cannot exceed 5.0'),
+    capperConviction: z.coerce
+      .number({ invalid_type_error: 'Conviction must be a number' })
+      .int('Conviction must be a whole number')
+      .min(1, 'Conviction must be between 1 and 10')
+      .max(10, 'Conviction must be between 1 and 10'),
     capper: z.string().min(1, 'Capper is required'),
     gameDate: z.string().min(1, 'Date is required'),
   })

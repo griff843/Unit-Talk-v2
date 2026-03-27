@@ -64,6 +64,7 @@ describe('buildSelectionString', () => {
       sportsbook: 'DraftKings',
       odds: -110,
       units: 1.5,
+      capperConviction: 8,
       capper: 'griff843',
       gameDate: '2026-03-22',
       ...overrides,
@@ -120,7 +121,7 @@ describe('buildSelectionString', () => {
 // --- buildSubmissionPayload ---
 
 describe('buildSubmissionPayload', () => {
-  function playerPropValues(): BetFormValues {
+  function playerPropValues(overrides: Partial<BetFormValues> = {}): BetFormValues {
     return {
       sport: 'NBA',
       marketType: 'player-prop',
@@ -132,8 +133,10 @@ describe('buildSubmissionPayload', () => {
       sportsbook: 'DraftKings',
       odds: -110,
       units: 1.5,
+      capperConviction: 8,
       capper: 'griff843',
       gameDate: '2026-03-22',
+      ...overrides,
     };
   }
 
@@ -146,6 +149,7 @@ describe('buildSubmissionPayload', () => {
       sportsbook: 'FanDuel',
       odds: 150,
       units: 2.0,
+      capperConviction: 7,
       capper: 'griff843',
       gameDate: '2026-03-22',
     };
@@ -253,6 +257,31 @@ describe('buildSubmissionPayload', () => {
   test('metadata.eventName is set', () => {
     const payload = buildSubmissionPayload(playerPropValues());
     assert.equal(payload.metadata?.eventName, 'Knicks vs Heat');
+  });
+
+  test('conviction 8 maps to promotionScores.trust 80', () => {
+    const payload = buildSubmissionPayload(playerPropValues());
+    assert.equal(payload.metadata?.promotionScores?.trust, 80);
+  });
+
+  test('conviction 1 maps to promotionScores.trust 10', () => {
+    const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 1 }));
+    assert.equal(payload.metadata?.promotionScores?.trust, 10);
+  });
+
+  test('conviction 10 maps to promotionScores.trust 100', () => {
+    const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 10 }));
+    assert.equal(payload.metadata?.promotionScores?.trust, 100);
+  });
+
+  test('metadata preserves submitted conviction value', () => {
+    const payload = buildSubmissionPayload(playerPropValues({ capperConviction: 9 }));
+    assert.equal(payload.metadata?.capperConviction, 9);
+  });
+
+  test('promotionScores is present in submitted payload for valid conviction', () => {
+    const payload = buildSubmissionPayload(playerPropValues());
+    assert.deepEqual(payload.metadata?.promotionScores, { trust: 80 });
   });
 
   test('metadata does not contain legacy playerName key', () => {
