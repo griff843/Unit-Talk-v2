@@ -23,7 +23,7 @@ import { ApiClientError, createApiClient, type ApiClient } from './api-client.js
 import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
-import { createRecapCommand } from './commands/recap.js';
+import { buildCapperRecapEmbed, createRecapCommand } from './commands/recap.js';
 import { buildStatsEmbed, createStatsCommand, type CapperStatsResponse } from './commands/stats.js';
 import {
   buildLeaderboardEmbed,
@@ -276,6 +276,8 @@ function makeRecapResponse() {
         selection: 'Over 24.5',
         result: 'win' as const,
         profitLossUnits: 1,
+        clvPercent: 3.8,
+        stakeUnits: 1.5,
         settledAt: '2026-03-27T12:00:00.000Z',
       },
       {
@@ -283,6 +285,8 @@ function makeRecapResponse() {
         selection: 'Over 8.5',
         result: 'loss' as const,
         profitLossUnits: -1,
+        clvPercent: null,
+        stakeUnits: null,
         settledAt: '2026-03-26T12:00:00.000Z',
       },
     ],
@@ -625,9 +629,14 @@ test('/recap command calls the operator recap endpoint and renders settled picks
   );
   assert.equal(edited.length, 1);
   assert.equal(edited[0]?.content, '');
-  const embed = edited[0]?.embeds?.[0]?.toJSON();
+  const embed = edited[0]?.embeds?.[0]?.toJSON() as {
+    title?: string;
+    fields?: Array<{ value?: unknown }>;
+  };
   assert.equal(embed?.title, 'Griff Display · Last 2 Settled Picks');
-  assert.equal((embed?.fields as unknown[])?.length, 2);
+  assert.equal(embed?.fields?.length, 2);
+  assert.match(String(embed?.fields?.[0]?.value ?? ''), /CLV: \+3\.8%/);
+  assert.match(String(embed?.fields?.[0]?.value ?? ''), /Stake: 1\.5u/);
 });
 
 test('/recap command returns an empty-state message when no settled picks exist', async () => {
@@ -669,6 +678,18 @@ test('/recap command returns an empty-state message when no settled picks exist'
   assert.equal(edited.length, 1);
   assert.equal(edited[0]?.content, 'No settled picks found.');
   assert.deepEqual(edited[0]?.embeds, []);
+});
+
+test('buildCapperRecapEmbed renders CLV and stake details in the recap fields', () => {
+  const embed = buildCapperRecapEmbed(makeRecapResponse()).toJSON() as {
+    title?: string;
+    fields?: Array<{ value?: unknown }>;
+  };
+
+  assert.equal(embed.title, 'Griff Display · Last 2 Settled Picks');
+  assert.equal(embed.fields?.length, 2);
+  assert.match(String(embed.fields?.[0]?.value ?? ''), /CLV: \+3\.8%/);
+  assert.match(String(embed.fields?.[0]?.value ?? ''), /Stake: 1\.5u/);
 });
 
 test('/leaderboard command registers the expected public options', () => {

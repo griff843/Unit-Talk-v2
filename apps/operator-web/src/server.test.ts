@@ -1626,6 +1626,39 @@ test('GET /api/operator/capper-recap returns the latest settled picks for the re
   assert.equal(body.data.picks[1]?.profitLossUnits, -1);
 });
 
+test('GET /api/operator/capper-recap includes CLV% and stake units in the recap payload', async () => {
+  const provider = createStaticProvider();
+  const capperRecapProvider = createStaticCapperRecapProvider();
+  const server = createOperatorServer({ provider, capperRecapProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(
+    address.port,
+    '/api/operator/capper-recap?submittedBy=Griff&limit=1',
+  );
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    data: {
+      picks: Array<{
+        clvPercent: number | null;
+        stakeUnits: number | null;
+      }>;
+    };
+  };
+
+  assert.equal(body.data.picks[0]?.clvPercent, 3.2);
+  assert.equal(body.data.picks[0]?.stakeUnits, 1);
+});
+
 test('GET /api/operator/capper-recap returns 400 when submittedBy is missing', async () => {
   const provider = createStaticProvider();
   const capperRecapProvider = createStaticCapperRecapProvider();
@@ -2274,7 +2307,7 @@ function makeStatsFixture() {
         settled_by: 'grading',
         settled_at: '2026-03-21T12:00:00.000Z',
         corrects_id: null,
-        payload: { clvRaw: '2.5', beatsClosingLine: true },
+        payload: { clvRaw: '2.5', clvPercent: 3.2, beatsClosingLine: true },
         created_at: '2026-03-21T12:00:00.000Z',
       },
       {

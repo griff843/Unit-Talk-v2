@@ -14,6 +14,8 @@ export interface CapperRecapPick {
   selection: string;
   result: 'win' | 'loss' | 'push';
   profitLossUnits: number;
+  clvPercent: number | null;
+  stakeUnits: number | null;
   settledAt: string;
 }
 
@@ -112,9 +114,9 @@ function buildRecapField(pick: CapperRecapPick): APIEmbedField {
     market: pick.market,
     selection: pick.selection,
     result: pick.result,
-    stakeUnits: null,
+    stakeUnits: pick.stakeUnits,
     profitLossUnits: pick.profitLossUnits,
-    clvPercent: null,
+    clvPercent: pick.clvPercent,
     submittedBy: '',
   });
 
@@ -124,7 +126,13 @@ function buildRecapField(pick: CapperRecapPick): APIEmbedField {
 
   return {
     name: `${mapResultToToken(pick.result)} · ${fields.get('P/L') ?? '0.0u'} · ${formatSettledAt(pick.settledAt)}`,
-    value: `**${fields.get('Market') ?? pick.market}**\n${fields.get('Selection') ?? pick.selection}`,
+    value: [
+      `**${fields.get('Market') ?? pick.market}**`,
+      fields.get('Selection') ?? pick.selection,
+      `P/L: ${fields.get('P/L') ?? '0.0u'}`,
+      `CLV: ${fields.get('CLV%') ?? '—'}`,
+      `Stake: ${fields.get('Stake') ?? '—'}`,
+    ].join('\n'),
     inline: false,
   };
 }

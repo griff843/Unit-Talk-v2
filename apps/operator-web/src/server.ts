@@ -187,6 +187,8 @@ export interface CapperRecapPick {
   selection: string;
   result: 'win' | 'loss' | 'push';
   profitLossUnits: number;
+  clvPercent: number | null;
+  stakeUnits: number | null;
   settledAt: string;
 }
 
@@ -1858,6 +1860,11 @@ export function buildCapperRecapResponse(
       selection: row.pick.selection,
       result: row.settlement.result,
       profitLossUnits: computeProfitLossUnits(row),
+      clvPercent: readNumericPayloadValue(findSettlementRecordPayload(row, 'clvPercent')),
+      stakeUnits:
+        typeof row.pick.stake_units === 'number' && Number.isFinite(row.pick.stake_units)
+          ? row.pick.stake_units
+          : null,
       settledAt: row.settlement.settled_at,
     })),
   };
