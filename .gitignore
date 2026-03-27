@@ -14,6 +14,9 @@ out/
 supabase/.temp/
 # Next.js generated build
 .next/
+# Local bot management scripts (Augment-generated, not source-controlled)
+scripts/bot-*.ps1
+scripts/BOT_MANAGEMENT.md
 # Local tooling artifacts (IDE / Claude Code / Augment skills)
 .augment/
 .claude/skills/

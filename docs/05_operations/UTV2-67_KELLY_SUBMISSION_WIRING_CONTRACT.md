@@ -24,7 +24,7 @@ Two changes in one PR:
 
 **1. Fix `findLatestMatchingOffer`** — sort offers by `snapshot_at` DESC before returning the first match.
 
-**2. Wire Kelly sizing** — after `resolveDeviggingResult()` returns a result, call `computeKellySizing()` from `@unit-talk/domain` using the devigged fair probability and the pick's odds. Write to `pick.metadata.kellySizing`. Fail-closed.
+**2. Wire Kelly sizing** — after `resolveDeviggingResult()` returns a result, call `computeKellySize(winProbability, decimalOdds, bankroll)` from `@unit-talk/domain`. Pass `deviggingResult.overFair` as `winProbability`, `americanToDecimal(pick.odds)` as `decimalOdds` (convert American odds to decimal first), and `DEFAULT_BANKROLL_CONFIG` as `bankroll`. Write to `pick.metadata.kellySizing`. Fail-closed.
 
 **No schema changes. No new routes. No new packages.**
 
@@ -32,7 +32,7 @@ Two changes in one PR:
 
 ## Key Files to Read First
 
-- `packages/domain/src/risk/kelly-sizer.ts` — `computeKellySizing()` signature, `BankrollConfig`, `DEFAULT_BANKROLL_CONFIG`
+- `packages/domain/src/risk/kelly-sizer.ts` — `computeKellySize(winProbability, decimalOdds, bankroll)` signature, `americanToDecimal()`, `BankrollConfig`, `DEFAULT_BANKROLL_CONFIG`
 - `apps/api/src/submission-service.ts` — `resolveDeviggingResult()` and `findLatestMatchingOffer()` from UTV2-64
 
 ---
@@ -49,7 +49,7 @@ Two changes in one PR:
 ## Acceptance Criteria
 
 - [ ] AC-1: `findLatestMatchingOffer` sorts by `snapshot_at` DESC and returns the latest matching offer (not first-found)
-- [ ] AC-2: After devig result is written, `computeKellySizing()` is called with `overFair` from `deviggingResult` and `pick.odds`
+- [ ] AC-2: After devig result is written, `computeKellySize(deviggingResult.overFair, americanToDecimal(pick.odds), DEFAULT_BANKROLL_CONFIG)` is called — American odds converted to decimal via `americanToDecimal()` before passing
 - [ ] AC-3: Result written to `pick.metadata.kellySizing` (null if devig absent, sizing throws, or odds non-finite)
 - [ ] AC-4: Submission succeeds when Kelly sizing throws — fail-closed
 - [ ] AC-5: `pnpm verify` exits 0; test count >= baseline + 2
