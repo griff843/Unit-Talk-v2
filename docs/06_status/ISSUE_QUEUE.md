@@ -7,13 +7,51 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 11 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 11 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 6 |
 | `lane:augment` | 0 | 1 | 1 | 0 | 4 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-52 — T2 Ingestor App Monorepo Integration
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-52 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M8 |
+| **Area** | `area:ingestor` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+`apps/ingestor/` exists on disk with 21 passing tests but is untracked. It is a fully implemented SGO data ingestor with proper `tsconfig.json` (composite) and `package.json`. It is not in root `tsconfig.json` references and not committed. `packages/contracts/src/provider-offers.ts` is also untracked and may be required for the build.
+
+Wire the ingestor into the monorepo build without changing any implementation logic.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `apps/ingestor/` committed to repo (all source files tracked)
+- [ ] AC-2: `{ "path": "./apps/ingestor" }` added to root `tsconfig.json` references
+- [ ] AC-3: `pnpm type-check` exits 0
+- [ ] AC-4: `pnpm build` exits 0
+- [ ] AC-5: `tsx --test apps/ingestor/src/ingestor.test.ts` → 21 tests, 0 failures
+- [ ] AC-6: `pnpm verify` exits 0; total test count = prior baseline + 21
+
+#### Constraints
+
+- Do not change ingestor implementation logic
+- Do not add migrations
+- Do not touch `apps/api`, `apps/worker`, `apps/smart-form`, `apps/operator-web`, `apps/discord-bot`
+- If `packages/db` exports (`createDatabaseIngestorRepositoryBundle`, `createInMemoryIngestorRepositoryBundle`) are missing, add them — do not change existing exports
 
 ---
 
