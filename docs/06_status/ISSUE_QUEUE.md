@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 11 |
-| `lane:claude` | 0 | 0 | 0 | 1 | 6 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 12 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 6 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 6 |
 
 ---
@@ -24,12 +24,12 @@
 | **ID** | UTV2-52 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:ingestor` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-52-ingestor-integration` |
+| **PR** | #27 — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
@@ -97,10 +97,10 @@ Fix: add `confidence?: number` to `SubmitPickPayload` in `api-client.ts`; add `c
 | **ID** | UTV2-48 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **BLOCKED** |
+| **Status** | **READY** |
 | **Milestone** | M8 |
 | **Area** | `area:api` |
-| **Blocked by** | UTV2-52 (ingestor must run to populate `participants.external_id` in SGO format) |
+| **Blocked by** | — (UTV2-52 merged — unblocked) |
 | **Branch** | — |
 | **PR** | — |
 
@@ -108,18 +108,13 @@ Fix: add `confidence?: number` to `SubmitPickPayload` in `api-client.ts`; add `c
 
 UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSettlement()`. All 3 existing settlements predate the merge — no live proof exists. Trigger a grading run against a posted pick with a matching `provider_offers` row. Verify `settlement_records.payload` contains top-level `clvRaw`, `clvPercent`, `beatsClosingLine` keys.
 
-#### Findings (2026-03-27)
-
-- [x] AC-5 CONFIRMED: All 10 settlements have `clvRaw` key absent (not null) — omit path verified
-- [ ] AC-4 BLOCKED: `participants.external_id` has no values matching `provider_offers.provider_participant_id` (SGO format: `JALEN_BRUNSON_1_NBA`). Entity resolution exits at first guard. Code is correct; data gap requires ingestor sync (UTV2-52).
-
 #### Acceptance Criteria
 
 - [ ] AC-1: Submit and post a pick with finite odds and a selection containing "over" or "under"
-- [ ] AC-2: Confirm participant has a matching `provider_offers` row (requires UTV2-52 ingestor run first)
+- [ ] AC-2: Confirm participant has a matching `provider_offers` row
 - [ ] AC-3: Run `POST /api/grading/run` — confirm pick is graded
 - [ ] AC-4: Query resulting `settlement_records.payload` — confirm `clvRaw`, `clvPercent`, `beatsClosingLine` as top-level keys
-- [x] AC-5: CLV keys omitted (not null) confirmed — `[clv,correction,gradingContext]` keys only on all pre-merge settlements
+- [ ] AC-5: If no matching offer: confirm payload omits CLV keys (not null); document which path fired
 
 #### Contract Authority
 
