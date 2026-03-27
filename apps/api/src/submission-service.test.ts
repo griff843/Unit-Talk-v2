@@ -173,10 +173,42 @@ test('processSubmission materializes canonical records and submission event', as
 
   assert.equal(result.submissionRecord.status, 'validated');
   assert.equal(result.submissionEventRecord.event_name, 'submission.accepted');
+  assert.equal(result.pickRecord.market, 'assists-all-game-ou');
   assert.equal(result.pickRecord.approval_status, 'approved');
   assert.equal(result.pickRecord.promotion_status, 'not_eligible');
   assert.equal(result.pickRecord.status, 'validated');
   assert.equal(result.lifecycleEventRecord.to_state, 'validated');
+});
+
+test('processSubmission normalizes known market keys before persisting the pick', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'MLB batting hits',
+      selection: 'Player Over 1.5',
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.market, 'batting-hits-all-game-ou');
+  assert.equal(result.pickRecord.market, 'batting-hits-all-game-ou');
+  assert.equal(result.submission.payload.market, 'batting-hits-all-game-ou');
+});
+
+test('processSubmission leaves unknown market keys unchanged', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'exotic market type',
+      selection: 'Player Over 1.5',
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.market, 'exotic market type');
+  assert.equal(result.pickRecord.market, 'exotic market type');
 });
 
 test('transitionPickLifecycle allows valid transitions', async () => {
@@ -1219,7 +1251,7 @@ test('settled best-bets picks do not consume board capacity', async () => {
     target: 'best-bets',
     sport: 'NBA',
     eventName: 'Late Game',
-    market: 'NBA rebounds',
+    market: 'rebounds-all-game-ou',
     selection: 'Player Over 9.5',
   });
 
