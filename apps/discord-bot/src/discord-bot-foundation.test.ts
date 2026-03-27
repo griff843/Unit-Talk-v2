@@ -23,6 +23,7 @@ import { ApiClientError, createApiClient, type ApiClient } from './api-client.js
 import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
+import { buildStatsEmbed, createStatsCommand, type CapperStatsResponse } from './commands/stats.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -196,6 +197,25 @@ function makeRegistry(commands: CommandHandler[]): CommandRegistry {
   return registry;
 }
 
+function makeStatsResponse(): CapperStatsResponse {
+  return {
+    scope: 'capper',
+    capper: 'Griff',
+    window: 30,
+    sport: 'NBA',
+    picks: 19,
+    wins: 12,
+    losses: 6,
+    pushes: 1,
+    winRate: 12 / 18,
+    roiPct: 33.3,
+    avgClvPct: 2.1,
+    beatsLine: 0.71,
+    picksWithClv: 14,
+    lastFive: ['W', 'W', 'L', 'W', 'W'],
+  };
+}
+
 // ---------------------------------------------------------------------------
 // parseBotConfig tests
 // ---------------------------------------------------------------------------
@@ -350,6 +370,87 @@ test('loadCommandRegistry loads the pick command from the commands directory', a
       assert.ok(registry.get('pick'));
     },
   );
+});
+
+test('loadCommandRegistry also loads the stats command from the commands directory', async () => {
+  await withEnvVars(
+    {
+      NODE_ENV: 'test',
+      UNIT_TALK_APP_ENV: 'local',
+      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+      LINEAR_TEAM_KEY: 'UTV2',
+      LINEAR_TEAM_NAME: 'unit-talk-v2',
+      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+      DISCORD_BOT_TOKEN: 'test-token',
+      DISCORD_CLIENT_ID: 'test-client-id',
+      DISCORD_GUILD_ID: '1284478946171293736',
+      DISCORD_CAPPER_ROLE_ID: 'role-capper',
+      UNIT_TALK_API_URL: 'http://localhost:4000',
+    },
+    async () => {
+      const registry = await loadCommandRegistry();
+      const command = registry.get('stats');
+      assert.ok(command);
+      assert.equal(command?.data.name, 'stats');
+      assert.equal(command?.data.toJSON().options?.length, 3);
+    },
+  );
+});
+
+test('/stats embed omits CLV fields when picksWithClv is zero', () => {
+  const embed = buildStatsEmbed({
+    ...makeStatsResponse(),
+    picksWithClv: 0,
+    avgClvPct: null,
+    beatsLine: null,
+  }).toJSON();
+
+  assert.equal(embed.fields?.some((field) => field.name === 'Avg CLV%'), false);
+  assert.equal(embed.fields?.some((field) => field.name === 'Beats Line'), false);
+});
+
+test('/stats command calls the operator endpoint with the requested filters', async () => {
+  let requestedPath = '';
+  const apiClient: ApiClient = {
+    async get<T>(path: string) {
+      requestedPath = path;
+      return { ok: true, data: makeStatsResponse() } as T;
+    },
+    async post<T>() {
+      return {} as T;
+    },
+  };
+
+  const command = createStatsCommand(apiClient);
+  const edited: Array<{ embeds?: unknown[]; content?: string }> = [];
+
+  await command.execute({
+    options: {
+      getUser(name: string) {
+        return name === 'capper'
+          ? { username: 'griff843', globalName: 'Griff' }
+          : null;
+      },
+      getMember() {
+        return { displayName: 'Griff' };
+      },
+      getInteger(name: string) {
+        return name === 'window' ? 30 : null;
+      },
+      getString(name: string) {
+        return name === 'sport' ? 'NBA' : null;
+      },
+    },
+    editReply: async (payload: { embeds?: unknown[]; content?: string }) => {
+      edited.push(payload);
+    },
+  } as never);
+
+  assert.equal(requestedPath, '/api/operator/stats?last=30&capper=Griff&sport=NBA');
+  assert.equal(edited.length, 1);
+  assert.ok(Array.isArray(edited[0]?.embeds));
 });
 
 // ---------------------------------------------------------------------------
