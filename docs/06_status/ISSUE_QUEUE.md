@@ -7,9 +7,9 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 3 | 1 | 16 |
-| `lane:claude` | 0 | 0 | 2 | 0 | 9 |
-| `lane:augment` | 0 | 0 | 1 | 1 | 9 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 19 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 10 |
+| `lane:augment` | 0 | 0 | 2 | 0 | 9 |
 
 ---
 
@@ -35,6 +35,24 @@ Independent verification of M10 deliverables. Produce proof artifact. Update `PR
 
 ---
 
+### UTV2-66 — T2 Discord Bot Startup Entry Point
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-66 |
+| **Tier** | T2 |
+| **Lane** | `lane:augment` |
+| **Status** | **READY** |
+| **Milestone** | M11 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Create `apps/discord-bot/src/main.ts` — wires `createDiscordClient`, `loadCommandRegistry`, `createInteractionHandler`, `client.login`. Update `dev` script. Contract: `docs/05_operations/UTV2-66_BOT_STARTUP_CONTRACT.md`
+
+---
+
 ### UTV2-64 — T2 DeviggingService Submission Wiring
 
 | Field | Value |
@@ -42,12 +60,12 @@ Independent verification of M10 deliverables. Produce proof artifact. Update `PR
 | **ID** | UTV2-64 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-64-devig-submission-wiring` |
+| **PR** | [#36](https://github.com/griff843/Unit-Talk-v2/pull/36) — **MERGED** ✅ (2026-03-27) |
 
 At submission time, look up `provider_offers` for the pick's market key, call `devig()` from `@unit-talk/domain`, write result to `pick.metadata.deviggingResult`. Fail-closed. Contract: `docs/05_operations/UTV2-64_DEVIG_SUBMISSION_WIRING_CONTRACT.md`
 
@@ -60,10 +78,10 @@ At submission time, look up `provider_offers` for the pick's market key, call `d
 | **ID** | UTV2-63 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **BLOCKED** |
+| **Status** | **READY** |
 | **Milestone** | M11 |
 | **Area** | `area:operator-web` |
-| **Blocked by** | UTV2-62 (dead_letter status must exist in worker) |
+| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
 
@@ -78,12 +96,12 @@ Add `deadLetterCount` to `OperatorSnapshot` and HTML dashboard card. Contract: `
 | **ID** | UTV2-62 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:worker` `area:db` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-62-dead-letter-promotion` |
+| **PR** | [#35](https://github.com/griff843/Unit-Talk-v2/pull/35) — **MERGED** ✅ (2026-03-27) |
 
 Add `markDeadLetter()` to `OutboxRepository`. Worker promotes to `dead_letter` after 3 consecutive failures. Contract: `docs/05_operations/UTV2-62_DEAD_LETTER_PROMOTION_CONTRACT.md`
 
@@ -96,12 +114,12 @@ Add `markDeadLetter()` to `OutboxRepository`. Worker promotes to `dead_letter` a
 | **ID** | UTV2-61 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M11 |
 | **Area** | `area:operator-web` `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-61-recap-clv-enrichment` |
+| **PR** | [#37](https://github.com/griff843/Unit-Talk-v2/pull/37) — **MERGED** ✅ (2026-03-27) |
 
 Add `clvPercent` and `stakeUnits` to `CapperRecapPick`; populate from existing settlement payload and picks row; surface in `/recap` embed. Contract: `docs/05_operations/UTV2-61_RECAP_CLV_ENRICHMENT_CONTRACT.md`
 
