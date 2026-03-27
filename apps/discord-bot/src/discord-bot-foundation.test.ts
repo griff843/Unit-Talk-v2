@@ -105,6 +105,7 @@ function makeCommandOptions(values: Record<string, string | number | undefined>)
 
 function makePickInteraction(values: Record<string, string | number | undefined>) {
   const edited: string[] = [];
+  const editedPayloads: Array<{ content?: string; embeds?: unknown[] }> = [];
   const interaction = {
     options: makeCommandOptions(values),
     user: {
@@ -114,14 +115,16 @@ function makePickInteraction(values: Record<string, string | number | undefined>
     member: {
       displayName: 'Griff Display',
     },
-    editReply: async ({ content }: { content: string }) => {
-      edited.push(content);
+    editReply: async (payload: { content?: string; embeds?: unknown[] }) => {
+      edited.push(payload.content ?? '');
+      editedPayloads.push(payload);
     },
   };
 
   return {
     interaction: interaction as unknown as ChatInputCommandInteraction,
     edited,
+    editedPayloads,
   };
 }
 
@@ -725,7 +728,7 @@ test('router dispatches to correct handler when multiple commands registered', a
 // /pick command tests
 // ---------------------------------------------------------------------------
 
-test('/pick command registers the expected name and capper role gate', () => {
+test('/pick command registers the required option contract and private visibility', () => {
   const apiClient: ApiClient = {
     get: async <T>() => ({} as T),
     post: async <T>() => ({
@@ -741,59 +744,55 @@ test('/pick command registers the expected name and capper role gate', () => {
     } as T),
   };
 
-  const command = createPickCommand(apiClient, 'role-capper');
+  const command = createPickCommand(apiClient);
+  const commandJson = command.data.toJSON();
 
   assert.equal(command.data.name, 'pick');
-  assert.deepEqual(command.requiredRoles, ['role-capper']);
+  assert.equal(command.requiredRoles, undefined);
+  assert.equal(command.responseVisibility, 'private');
+  assert.deepEqual(
+    commandJson.options?.map((option) => ({
+      name: option.name,
+      required: option.required,
+    })),
+    [
+      { name: 'market', required: true },
+      { name: 'selection', required: true },
+      { name: 'odds', required: true },
+      { name: 'stake_units', required: true },
+      { name: 'event_name', required: false },
+    ],
+  );
 });
 
 test('parsePickSubmission maps slash command values into the canonical submission payload', () => {
   const mock = makePickInteraction({
-    sport: 'NBA',
-    market_type: 'player-prop',
+    market: 'NBA - Player Prop',
     event_name: 'Lakers vs Celtics',
     selection: 'LeBron James Points O 27.5',
     odds: -110,
-    units: 2,
-    conviction: 8,
-    line: 27.5,
-    sportsbook: 'draftkings',
+    stake_units: 2,
   });
 
   const payload = parsePickSubmission(mock.interaction);
 
   assert.deepEqual(payload, {
     source: 'discord-bot',
-    submittedBy: 'Griff Display',
+    submittedBy: 'griff843',
     market: 'NBA - Player Prop',
     selection: 'LeBron James Points O 27.5',
-    line: 27.5,
     odds: -110,
     stakeUnits: 2,
     eventName: 'Lakers vs Celtics',
-    metadata: {
-      ticketType: 'single',
-      sport: 'NBA',
-      marketType: 'player-prop',
-      capper: 'Griff Display',
-      sportsbook: 'draftkings',
-      eventName: 'Lakers vs Celtics',
-      promotionScores: {
-        trust: 80,
-      },
-    },
   });
 });
 
 test('parsePickSubmission rejects invalid odds', () => {
   const mock = makePickInteraction({
-    sport: 'NBA',
-    market_type: 'moneyline',
-    event_name: 'Knicks vs Heat',
+    market: 'NBA - Moneyline',
     selection: 'Knicks',
     odds: -99,
-    units: 1,
-    conviction: 6,
+    stake_units: 1,
   });
 
   assert.throws(
@@ -802,24 +801,34 @@ test('parsePickSubmission rejects invalid odds', () => {
   );
 });
 
-test('parsePickSubmission rejects units outside the authorized range', () => {
+test('parsePickSubmission rejects non-positive stake units', () => {
   const mock = makePickInteraction({
-    sport: 'NBA',
-    market_type: 'spread',
-    event_name: 'Knicks vs Heat',
+    market: 'NBA - Spread',
     selection: 'Knicks -3.5',
     odds: -110,
-    units: 5.5,
-    conviction: 6,
+    stake_units: 0,
   });
 
   assert.throws(
     () => parsePickSubmission(mock.interaction),
-    /units must be between 0.5 and 5.0/,
+    /stake_units must be a positive number/,
   );
 });
 
-test('/pick command posts to /api/submissions and formats the success reply', async () => {
+test('parsePickSubmission omits eventName when not supplied', () => {
+  const mock = makePickInteraction({
+    market: 'NBA - Total',
+    selection: 'Over 228.5',
+    odds: -108,
+    stake_units: 1.25,
+  });
+
+  const payload = parsePickSubmission(mock.interaction);
+
+  assert.equal(payload.eventName, undefined);
+});
+
+test('/pick command posts to /api/submissions and replies with a success embed', async () => {
   let capturedPath = '';
   let capturedBody: unknown;
   const apiClient: ApiClient = {
@@ -832,24 +841,17 @@ test('/pick command posts to /api/submissions and formats the success reply', as
         data: {
           submissionId: 'sub-123',
           pickId: 'pick-456',
-          lifecycleState: 'validated',
-          promotionStatus: 'suppressed',
-          promotionTarget: null,
-          outboxEnqueued: false,
         },
       } as T;
     },
   };
-  const command = createPickCommand(apiClient, 'role-capper');
+  const command = createPickCommand(apiClient);
   const mock = makePickInteraction({
-    sport: 'NFL',
-    market_type: 'moneyline',
+    market: 'NFL - Moneyline',
     event_name: 'Bills vs Chiefs',
     selection: 'Bills',
     odds: 140,
-    units: 1.5,
-    conviction: 9,
-    sportsbook: 'circa',
+    stake_units: 1.5,
   });
 
   await command.execute(mock.interaction);
@@ -857,28 +859,26 @@ test('/pick command posts to /api/submissions and formats the success reply', as
   assert.equal(capturedPath, '/api/submissions');
   assert.deepEqual(capturedBody, {
     source: 'discord-bot',
-    submittedBy: 'Griff Display',
+    submittedBy: 'griff843',
     market: 'NFL - Moneyline',
     selection: 'Bills',
-    line: undefined,
     odds: 140,
     stakeUnits: 1.5,
     eventName: 'Bills vs Chiefs',
-    metadata: {
-      ticketType: 'single',
-      sport: 'NFL',
-      marketType: 'moneyline',
-      capper: 'Griff Display',
-      sportsbook: 'circa',
-      eventName: 'Bills vs Chiefs',
-      promotionScores: {
-        trust: 90,
-      },
-    },
   });
-  assert.match(mock.edited[0] ?? '', /Pick submitted\./);
-  assert.match(mock.edited[0] ?? '', /Submission ID: sub-123/);
-  assert.match(mock.edited[0] ?? '', /Pick ID: pick-456/);
+  assert.equal(mock.editedPayloads.length, 1);
+  assert.equal(mock.editedPayloads[0]?.content, '');
+  const embed = (mock.editedPayloads[0]?.embeds?.[0] as { toJSON(): Record<string, unknown> }).toJSON();
+  assert.equal(embed.title, 'Pick Submitted');
+  assert.deepEqual(
+    embed.fields,
+    [
+      { name: 'Submission ID', value: 'sub-123', inline: false },
+      { name: 'Pick ID', value: 'pick-456', inline: false },
+      { name: 'Market', value: 'NFL - Moneyline', inline: false },
+      { name: 'Selection', value: 'Bills', inline: false },
+    ],
+  );
 });
 
 test('/pick command surfaces API validation failures back to the user', async () => {
@@ -891,7 +891,6 @@ test('/pick command surfaces API validation failures back to the user', async ()
         JSON.stringify({
           ok: false,
           error: {
-            code: 'BAD_REQUEST',
             message: 'selection is required',
           },
         }),
@@ -899,15 +898,12 @@ test('/pick command surfaces API validation failures back to the user', async ()
       return {} as T;
     },
   };
-  const command = createPickCommand(apiClient, 'role-capper');
+  const command = createPickCommand(apiClient);
   const mock = makePickInteraction({
-    sport: 'NFL',
-    market_type: 'moneyline',
-    event_name: 'Bills vs Chiefs',
+    market: 'NFL - Moneyline',
     selection: 'Bills',
     odds: 140,
-    units: 1.5,
-    conviction: 9,
+    stake_units: 1.5,
   });
 
   await command.execute(mock.interaction);
@@ -923,15 +919,12 @@ test('/pick command returns service unavailable when the API cannot be reached',
       return {} as T;
     },
   };
-  const command = createPickCommand(apiClient, 'role-capper');
+  const command = createPickCommand(apiClient);
   const mock = makePickInteraction({
-    sport: 'NFL',
-    market_type: 'moneyline',
-    event_name: 'Bills vs Chiefs',
+    market: 'NFL - Moneyline',
     selection: 'Bills',
     odds: 140,
-    units: 1.5,
-    conviction: 9,
+    stake_units: 1.5,
   });
 
   await command.execute(mock.interaction);
