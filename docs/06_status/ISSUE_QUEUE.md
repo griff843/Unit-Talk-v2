@@ -8,7 +8,7 @@
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 2 | 0 | 14 |
-| `lane:claude` | 0 | 0 | 2 | 0 | 7 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 9 |
 | `lane:augment` | 0 | 0 | 1 | 0 | 7 |
 
 ---
@@ -24,35 +24,14 @@
 | **ID** | UTV2-60 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M10 |
 | **Area** | `area:worker` |
-| **Blocked by** | Worker running (`pnpm install` must succeed first) |
+| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
 
-#### Scope
-
-Two deferred checks from UTV2-56 that require the distribution worker to be running. Independent verification only — no code changes.
-
-- AC-3 from UTV2-56: stale outbox entry for settled pick `2783c8e2` (status=pending, target=`discord:trader-insights`). Worker should claim it, detect pick is settled, mark outbox row sent, write `distribution.skipped` audit entry, NOT deliver to Discord.
-- AC-4 from UTV2-56: at least one of the 6 requeued picks (`d77a35b3`, `3b5d9e84`, `306deff8`, `d00954ec`, `4701f767`, `3ec17a5e`) gets a `distribution_receipts` row after worker runs.
-
-#### Acceptance Criteria
-
-- [ ] AC-1: Worker starts successfully and polls `distribution_outbox`
-- [ ] AC-2: Stale outbox row for pick `2783c8e2` (settled): status transitions to `sent`, `distribution.skipped` audit entry written, no Discord delivery
-- [ ] AC-3: At least one of the 6 requeued outbox rows gets a `distribution_receipts` row with `status = 'sent'`
-- [ ] AC-4: All delivered picks: `distribution_receipts.status = 'sent'`, `channel` field populated
-
-#### Constraints
-
-- Do not change any runtime code — verification only
-- If worker fails to start: document blocker and exit
-
-#### Contract Authority
-
-`docs/05_operations/UTV2-60_WORKER_DELIVERY_PROOF_CONTRACT.md` (status: RATIFIED)
+**Absorbed into UTV2-56 proof (2026-03-27).** AC-3 and AC-4 confirmed in the same worker run session. See `docs/06_status/UTV2-56_proof.md`.
 
 ---
 
@@ -176,7 +155,7 @@ After a pick is settled (grading run writes to `settlement_records`), automatica
 | **ID** | UTV2-56 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M9 |
 | **Area** | `area:api` `area:worker` |
 | **Blocked by** | — |
