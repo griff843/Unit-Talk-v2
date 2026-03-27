@@ -16,9 +16,13 @@ import {
 import type {
   AuditLogRecord,
   AuditLogRepository,
+  EventParticipantRepository,
+  EventRepository,
   PickLifecycleRecord,
   PickRecord,
   PickRepository,
+  ProviderOfferRepository,
+  ParticipantRepository,
   SettlementRecord,
   SettlementRepository,
 } from '@unit-talk/db';
@@ -90,6 +94,152 @@ export async function recordPickSettlement(
     'SETTLEMENT_NOT_ALLOWED',
     `Pick ${pickId} must be in posted or settled state; found ${pick.status}`,
   );
+}
+
+export async function recordGradedSettlement(
+  pickId: string,
+  result: 'win' | 'loss' | 'push',
+  gradingContext: {
+    actualValue: number;
+    marketKey: string;
+    eventId: string;
+    gameResultId: string;
+  },
+  repositories: {
+    picks: PickRepository;
+    settlements: SettlementRepository;
+    audit: AuditLogRepository;
+    providerOffers: ProviderOfferRepository;
+    participants: ParticipantRepository;
+    events: EventRepository;
+    eventParticipants: EventParticipantRepository;
+  },
+): Promise<RecordSettlementResult> {
+  const pick = await repositories.picks.findPickById(pickId);
+  if (!pick) {
+    throw new Error(`Pick not found for graded settlement: ${pickId}`);
+  }
+
+  if (pick.status !== 'posted') {
+    throw new Error(
+      `Pick ${pickId} must be in posted state for graded settlement; found ${pick.status}`,
+    );
+  }
+
+  const clv = await resolveClvPayload(pick, gradingContext, repositories);
+
+  const settledAt = new Date().toISOString();
+  const settlementRecord = await repositories.settlements.record({
+    pickId: pick.id,
+    status: 'settled',
+    result,
+    source: 'grading',
+    confidence: 'confirmed',
+    evidenceRef: `game-result:${gradingContext.gameResultId}`,
+    notes: null,
+    reviewReason: null,
+    settledBy: 'grading-service',
+    settledAt,
+    payload: {
+      gradingContext,
+      correction: false,
+      clv: clv ?? null,
+    },
+  });
+
+  const transitioned = await transitionPickLifecycle(
+    repositories.picks,
+    pick.id,
+    'settled',
+    'graded settlement recorded',
+    'settler',
+  );
+  const updatedPick = await repositories.picks.findPickById(pick.id);
+  if (!updatedPick) {
+    throw new Error(`Pick not found after graded settlement: ${pickId}`);
+  }
+
+  const downstream = await computeSettlementDownstreamBundle(
+    updatedPick,
+    repositories.settlements,
+  );
+
+  const audit = await repositories.audit.record({
+    entityType: 'settlement_records',
+    entityId: settlementRecord.id,
+    entityRef: pick.id,
+    action: 'settlement.graded',
+    actor: 'grading-service',
+    payload: {
+      pickId: pick.id,
+      settlementRecordId: settlementRecord.id,
+      result,
+      source: 'grading',
+      gradingContext,
+      settledLifecycleEventId: transitioned.lifecycleEvent.id,
+      downstream,
+    },
+  });
+
+  return {
+    pickRecord: updatedPick,
+    settlementRecord,
+    lifecycleEvent: transitioned.lifecycleEvent,
+    auditRecords: [audit],
+    finalLifecycleState: updatedPick.status,
+    downstream,
+  };
+}
+
+async function resolveClvPayload(
+  pick: PickRecord,
+  gradingContext: { marketKey: string; eventId: string },
+  repositories: {
+    providerOffers: ProviderOfferRepository;
+    participants: ParticipantRepository;
+    events: EventRepository;
+  },
+): Promise<Record<string, unknown> | null> {
+  if (!pick.participant_id) {
+    return null;
+  }
+
+  const [event, participant] = await Promise.all([
+    repositories.events.findById(gradingContext.eventId),
+    repositories.participants.findById(pick.participant_id),
+  ]);
+
+  if (!event || !participant) {
+    return null;
+  }
+
+  if (!event.external_id) {
+    return null;
+  }
+
+  const externalId = (participant as unknown as Record<string, unknown>).external_id;
+  const providerParticipantId = typeof externalId === 'string' ? externalId : null;
+
+  const eventStartTime = readEventStartTime(event);
+
+  const closingLine = await repositories.providerOffers.findClosingLine({
+    providerEventId: event.external_id,
+    providerMarketKey: gradingContext.marketKey,
+    providerParticipantId,
+    before: eventStartTime,
+  });
+
+  if (!closingLine) {
+    return null;
+  }
+
+  return {
+    providerKey: closingLine.provider_key,
+    line: closingLine.line,
+    overOdds: closingLine.over_odds,
+    underOdds: closingLine.under_odds,
+    snapshotAt: closingLine.snapshot_at,
+  };
 }
 
 async function recordManualReview(
@@ -386,4 +536,12 @@ function readNumber(value: unknown): number | null {
 
 function readBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
+}
+
+function readEventStartTime(event: { event_date: string; metadata: Record<string, unknown> | unknown }) {
+  const metadata = asRecord(event.metadata);
+  const startsAt = metadata?.starts_at;
+  return typeof startsAt === 'string' && startsAt.trim().length > 0
+    ? startsAt
+    : `${event.event_date}T23:59:59Z`;
 }

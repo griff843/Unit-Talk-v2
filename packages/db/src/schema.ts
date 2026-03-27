@@ -40,7 +40,7 @@ export const settlementResults = [
 
 export const settlementStatuses = ['settled', 'manual_review'] as const;
 
-export const settlementSources = ['operator', 'api', 'feed'] as const;
+export const settlementSources = ['operator', 'api', 'feed', 'grading'] as const;
 
 export const settlementConfidences = ['confirmed', 'estimated', 'pending'] as const;
 

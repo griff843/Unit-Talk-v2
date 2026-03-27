@@ -14,6 +14,7 @@ import {
   handleSettlePick,
   handleSubmitPick,
 } from './handlers/index.js';
+import { runGradingPass } from './grading-service.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -155,6 +156,11 @@ export async function routeRequest(
       runtime.repositories,
     );
     return writeJson(response, apiResponse.status, apiResponse.body);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/grading/run') {
+    const result = await runGradingPass(runtime.repositories);
+    return writeJson(response, 200, { ok: true, result });
   }
 
   return writeJson(response, 404, {

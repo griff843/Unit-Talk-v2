@@ -178,3 +178,46 @@ export interface EventParticipantRow {
   role: EventParticipantRole;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Provider offer types (not in generated database.types.ts — added by migration 009)
+// ---------------------------------------------------------------------------
+
+export interface ProviderOfferRow {
+  id: string;
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  sport_key: string | null;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  devig_mode: string;
+  is_opening: boolean;
+  is_closing: boolean;
+  snapshot_at: string;
+  idempotency_key: string;
+  created_at: string;
+}
+
+/** @see {@link ProviderOfferRow} */
+export type ProviderOfferRecord = ProviderOfferRow;
+
+// ---------------------------------------------------------------------------
+// Game result types (not in generated database.types.ts — added by migration 012)
+// ---------------------------------------------------------------------------
+
+export interface GradeResultRow {
+  id: string;
+  event_id: string;
+  participant_id: string | null;
+  market_key: string;
+  actual_value: number;
+  source: string;
+  sourced_at: string;
+  created_at: string;
+}
+
+/** @see {@link GradeResultRow} */
+export type GradeResultRecord = GradeResultRow;
