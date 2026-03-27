@@ -6,7 +6,7 @@ async function main() {
   const db = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY);
 
   const JB_PARTICIPANT_ID = '8c4d79d3-dbeb-41a6-a9cf-38724817012e';
-  const KNICKS_NETS_EVENT_ID = '1c582d4b-97af-4f62-9861-a5026a8ab258';
+  const _KNICKS_NETS_EVENT_ID = '1c582d4b-97af-4f62-9861-a5026a8ab258';
   const KNICKS_NETS_EXT_ID = 'eIhf34I2IG6xAxWn0OgM';
 
   // 1. Check provider_offers for Knicks vs Nets + Jalen Brunson

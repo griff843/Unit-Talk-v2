@@ -27,7 +27,7 @@ async function main() {
   const preGameOffers = (offers ?? []).filter(o => o.snapshot_at < eventStart);
   console.log(`\nPre-game offers (snapshot_at < ${eventStart}): ${preGameOffers.length}`);
 
-  const closingOffer = preGameOffers.find(o => o.is_closing && o.provider_market_key === 'assists-all-game-ou');
+  const _closingOffer = preGameOffers.find(o => o.is_closing && o.provider_market_key === 'assists-all-game-ou');
   const assistsOffer = preGameOffers.find(o => o.provider_market_key === 'assists-all-game-ou');
   console.log(`Assists-all-game-ou offer: ${assistsOffer ? `over=${assistsOffer.over_odds} under=${assistsOffer.under_odds} line=${assistsOffer.line}` : 'NONE'}`);
 
