@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 2 | 0 | 14 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 9 |
-| `lane:augment` | 0 | 0 | 0 | 0 | 8 |
+| `lane:augment` | 0 | 0 | 0 | 0 | 9 |
 
 ---
 
@@ -798,8 +798,8 @@ All 10 ACs satisfied. 617/617 tests (606 baseline → +11 net-new; contract requ
 | **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:discord-bot` |
-| **Branch** | `augment/UTV2-50-discord-help` |
-| **PR** | — (committed to `main` 2026-03-27) |
+| **Branch** | `augment/UTV2-50-discord-help-rebase` |
+| **PR** | [#32](https://github.com/griff843/Unit-Talk-v2/pull/32) — **MERGED** ✅ (2026-03-27) |
 
 #### Delivered
 
