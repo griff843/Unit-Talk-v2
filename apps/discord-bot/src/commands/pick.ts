@@ -1,37 +1,19 @@
 import {
+  EmbedBuilder,
   SlashCommandBuilder,
   type ChatInputCommandInteraction,
 } from 'discord.js';
-import {
-  V1_REFERENCE_DATA,
-  type MarketTypeId,
-} from '@unit-talk/contracts';
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import { createApiClient, ApiClientError, type ApiClient } from '../api-client.js';
 import { loadBotConfig } from '../config.js';
 import { UNAVAILABLE_REPLY } from '../router.js';
 import type { CommandHandler } from '../command-registry.js';
 
-const MARKET_TYPE_LABELS: Record<MarketTypeId, string> = {
-  'player-prop': 'Player Prop',
-  moneyline: 'Moneyline',
-  spread: 'Spread',
-  total: 'Total',
-  'team-total': 'Team Total',
-};
-
-const INVALID_PICK_REPLY_PREFIX = 'Pick submission failed:';
-const SUCCESS_PREFIX = 'Pick submitted.';
-
 interface SubmitPickApiResponse {
   ok: true;
   data: {
     submissionId: string;
     pickId: string;
-    lifecycleState: string;
-    promotionStatus: string;
-    promotionTarget: string | null;
-    outboxEnqueued: boolean;
   };
 }
 
@@ -42,47 +24,24 @@ interface ApiErrorShape {
   };
 }
 
-export function createPickCommand(
-  apiClient: ApiClient,
-  capperRoleId: string,
-): CommandHandler {
+type PickInteractionOptions = Pick<ChatInputCommandInteraction, 'options' | 'user'>;
+
+export function createPickCommand(apiClient: ApiClient): CommandHandler {
   return {
     data: new SlashCommandBuilder()
       .setName('pick')
-      .setDescription('Submit a capper pick through the canonical API path')
+      .setDescription('Submit a pick directly through the canonical API path')
       .addStringOption((option) =>
         option
-          .setName('sport')
-          .setDescription('Sport')
-          .setRequired(true)
-          .addChoices(...V1_REFERENCE_DATA.sports.map((sport) => ({
-            name: sport.name,
-            value: sport.id,
-          }))),
-      )
-      .addStringOption((option) =>
-        option
-          .setName('market_type')
-          .setDescription('Market type')
-          .setRequired(true)
-          .addChoices(
-            ...Object.entries(MARKET_TYPE_LABELS).map(([value, name]) => ({
-              name,
-              value,
-            })),
-          ),
-      )
-      .addStringOption((option) =>
-        option
-          .setName('event_name')
-          .setDescription('Matchup or event')
+          .setName('market')
+          .setDescription('Market label, e.g. NBA - Moneyline')
           .setRequired(true)
           .setMaxLength(100),
       )
       .addStringOption((option) =>
         option
           .setName('selection')
-          .setDescription('Selection text exactly as you want it submitted')
+          .setDescription('Selection text to submit')
           .setRequired(true)
           .setMaxLength(100),
       )
@@ -96,54 +55,36 @@ export function createPickCommand(
       )
       .addNumberOption((option) =>
         option
-          .setName('units')
+          .setName('stake_units')
           .setDescription('Stake in units')
           .setRequired(true)
-          .setMinValue(0.5)
-          .setMaxValue(5),
-      )
-      .addIntegerOption((option) =>
-        option
-          .setName('conviction')
-          .setDescription('Capper conviction from 1 to 10')
-          .setRequired(true)
-          .setMinValue(1)
-          .setMaxValue(10),
-      )
-      .addNumberOption((option) =>
-        option
-          .setName('line')
-          .setDescription('Optional line, e.g. 27.5 or -3.5')
-          .setRequired(false)
-          .setMinValue(-999.5)
-          .setMaxValue(999.5),
+          .setMinValue(0.01)
+          .setMaxValue(1000),
       )
       .addStringOption((option) =>
         option
-          .setName('sportsbook')
-          .setDescription('Optional sportsbook')
+          .setName('event_name')
+          .setDescription('Optional event or matchup label')
           .setRequired(false)
-          .addChoices(...V1_REFERENCE_DATA.sportsbooks.map((sportsbook) => ({
-            name: sportsbook.name,
-            value: sportsbook.id,
-          }))),
+          .setMaxLength(100),
       ),
-    requiredRoles: [capperRoleId],
+    responseVisibility: 'private',
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
-      const payload = parsePickSubmission(interaction);
-
       try {
+        const payload = parsePickSubmission(interaction);
         const response = await apiClient.post<SubmitPickApiResponse>(
           '/api/submissions',
           payload,
         );
 
         await interaction.editReply({
-          content: formatSuccessReply(response.data),
+          content: '',
+          embeds: [buildSuccessEmbed(response.data, payload)],
         });
       } catch (error) {
         await interaction.editReply({
           content: formatFailureReply(error),
+          embeds: [],
         });
       }
     },
@@ -153,44 +94,31 @@ export function createPickCommand(
 export function parsePickSubmission(
   interaction: PickInteractionOptions,
 ): SubmissionPayload {
-  const sport = readRequiredString(interaction, 'sport');
-  const marketType = readMarketType(interaction);
-  const eventName = readRequiredString(interaction, 'event_name');
-  const selection = readRequiredString(interaction, 'selection');
-  const odds = readOdds(interaction);
-  const units = readUnits(interaction);
-  const conviction = readConviction(interaction);
-  const line = readOptionalLine(interaction);
-  const sportsbook = readOptionalString(interaction, 'sportsbook');
-  const capper = resolveCapperName(interaction);
-
   return {
     source: 'discord-bot',
-    submittedBy: capper,
-    market: `${sport} - ${MARKET_TYPE_LABELS[marketType]}`,
-    selection,
-    line,
-    odds,
-    stakeUnits: units,
-    eventName,
-    metadata: {
-      ticketType: 'single',
-      sport,
-      marketType,
-      capper,
-      sportsbook,
-      eventName,
-      promotionScores: {
-        trust: conviction * 10,
-      },
-    },
+    submittedBy: interaction.user.username.trim(),
+    market: readRequiredString(interaction, 'market'),
+    selection: readRequiredString(interaction, 'selection'),
+    odds: readOdds(interaction),
+    stakeUnits: readStakeUnits(interaction),
+    eventName: readOptionalString(interaction, 'event_name'),
   };
 }
 
-type PickInteractionOptions = Pick<
-  ChatInputCommandInteraction,
-  'options' | 'user' | 'member'
->;
+function buildSuccessEmbed(
+  data: SubmitPickApiResponse['data'],
+  payload: SubmissionPayload,
+) {
+  return new EmbedBuilder()
+    .setTitle('Pick Submitted')
+    .setColor(0x22c55e)
+    .addFields(
+      { name: 'Submission ID', value: data.submissionId, inline: false },
+      { name: 'Pick ID', value: data.pickId, inline: false },
+      { name: 'Market', value: payload.market, inline: false },
+      { name: 'Selection', value: payload.selection, inline: false },
+    );
+}
 
 function readRequiredString(
   interaction: PickInteractionOptions,
@@ -217,15 +145,6 @@ function readOptionalString(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
-function readMarketType(interaction: PickInteractionOptions): MarketTypeId {
-  const marketType = readRequiredString(interaction, 'market_type');
-  if (!(marketType in MARKET_TYPE_LABELS)) {
-    throw new Error('market_type must be one of the supported V2 market types.');
-  }
-
-  return marketType as MarketTypeId;
-}
-
 function readOdds(interaction: PickInteractionOptions): number {
   const odds = interaction.options.getInteger('odds', true);
   if (odds === 0 || Math.abs(odds) < 100 || Math.abs(odds) > 50000) {
@@ -235,70 +154,13 @@ function readOdds(interaction: PickInteractionOptions): number {
   return odds;
 }
 
-function readUnits(interaction: PickInteractionOptions): number {
-  const units = interaction.options.getNumber('units', true);
-  if (units < 0.5 || units > 5) {
-    throw new Error('units must be between 0.5 and 5.0.');
+function readStakeUnits(interaction: PickInteractionOptions): number {
+  const stakeUnits = interaction.options.getNumber('stake_units', true);
+  if (!Number.isFinite(stakeUnits) || stakeUnits <= 0) {
+    throw new Error('stake_units must be a positive number.');
   }
 
-  return units;
-}
-
-function readConviction(interaction: PickInteractionOptions): number {
-  const conviction = interaction.options.getInteger('conviction', true);
-  if (conviction < 1 || conviction > 10) {
-    throw new Error('conviction must be between 1 and 10.');
-  }
-
-  return conviction;
-}
-
-function readOptionalLine(interaction: PickInteractionOptions): number | undefined {
-  const line = interaction.options.getNumber('line');
-  if (line == null) {
-    return undefined;
-  }
-
-  if (Math.abs(line) > 999.5) {
-    throw new Error('line must be between -999.5 and 999.5.');
-  }
-
-  return line;
-}
-
-function resolveCapperName(interaction: PickInteractionOptions): string {
-  const member = interaction.member;
-  if (
-    member &&
-    typeof member === 'object' &&
-    'displayName' in member &&
-    typeof member.displayName === 'string' &&
-    member.displayName.trim().length > 0
-  ) {
-    return member.displayName.trim();
-  }
-
-  const globalName = interaction.user.globalName?.trim();
-  if (globalName) {
-    return globalName;
-  }
-
-  return interaction.user.username.trim();
-}
-
-function formatSuccessReply(data: SubmitPickApiResponse['data']): string {
-  const target = data.promotionTarget ?? 'manual lane';
-  const enqueueState = data.outboxEnqueued ? 'yes' : 'no';
-
-  return [
-    SUCCESS_PREFIX,
-    `Submission ID: ${data.submissionId}`,
-    `Pick ID: ${data.pickId}`,
-    `Lifecycle: ${data.lifecycleState}`,
-    `Promotion: ${data.promotionStatus}`,
-    `Target: ${target}`,
-    `Outbox enqueued: ${enqueueState}`,
-  ].join('\n');
+  return stakeUnits;
 }
 
 function formatFailureReply(error: unknown): string {
@@ -309,14 +171,14 @@ function formatFailureReply(error: unknown): string {
 
     const apiMessage = extractApiErrorMessage(error.detail);
     if (apiMessage) {
-      return `${INVALID_PICK_REPLY_PREFIX} ${apiMessage}`;
+      return `Pick submission failed: ${apiMessage}`;
     }
 
-    return `${INVALID_PICK_REPLY_PREFIX} API returned ${error.status}.`;
+    return `Pick submission failed: API returned ${error.status}.`;
   }
 
   if (error instanceof Error) {
-    return `${INVALID_PICK_REPLY_PREFIX} ${error.message}`;
+    return `Pick submission failed: ${error.message}`;
   }
 
   return 'Pick submission failed. Please try again later.';
@@ -337,6 +199,5 @@ function extractApiErrorMessage(detail?: string): string | null {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  const apiClient = createApiClient(config.apiUrl);
-  return createPickCommand(apiClient, config.capperRoleId);
+  return createPickCommand(createApiClient(config.apiUrl));
 }
