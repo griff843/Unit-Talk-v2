@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 2 | 0 | 14 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 9 |
-| `lane:augment` | 0 | 0 | 1 | 0 | 7 |
+| `lane:augment` | 0 | 0 | 0 | 0 | 8 |
 
 ---
 
@@ -42,7 +42,7 @@
 | **ID** | UTV2-59 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M10 |
 | **Area** | `area:discord-bot` |
 | **Blocked by** | — |
