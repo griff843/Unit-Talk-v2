@@ -8,8 +8,8 @@
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 1 | 0 | 12 |
-| `lane:claude` | 0 | 0 | 1 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 1 | 0 | 6 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 7 |
+| `lane:augment` | 0 | 1 | 0 | 0 | 6 |
 
 ---
 
@@ -69,12 +69,12 @@ Source is hardcoded to `'discord-bot'`. `submittedBy` is the Discord username of
 | **ID** | UTV2-54 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M9 |
 | **Area** | `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `augment/UTV2-54-ingestor-health-card` |
+| **PR** | [#28](https://github.com/griff843/Unit-Talk-v2/pull/28) |
 
 #### Scope
 
@@ -176,10 +176,10 @@ Fix: add `confidence?: number` to `SubmitPickPayload` in `api-client.ts`; add `c
 | **ID** | UTV2-48 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:api` |
-| **Blocked by** | — (UTV2-52 merged — unblocked) |
+| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
 
@@ -189,11 +189,23 @@ UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSett
 
 #### Acceptance Criteria
 
-- [ ] AC-1: Submit and post a pick with finite odds and a selection containing "over" or "under"
-- [ ] AC-2: Confirm participant has a matching `provider_offers` row
-- [ ] AC-3: Run `POST /api/grading/run` — confirm pick is graded
-- [ ] AC-4: Query resulting `settlement_records.payload` — confirm `clvRaw`, `clvPercent`, `beatsClosingLine` as top-level keys
-- [ ] AC-5: If no matching offer: confirm payload omits CLV keys (not null); document which path fired
+- [x] AC-1: Submit and post a pick with finite odds and a selection containing "over" or "under"
+- [x] AC-2: Confirm participant has a matching `provider_offers` row
+- [x] AC-3: Run grading pass — pick `3f8e9119` graded: `win`
+- [x] AC-4: Settlement `5d6a6dcd` payload: `clvRaw=0.03774`, `clvPercent=3.774`, `beatsClosingLine=true` — all three top-level keys confirmed
+- [x] AC-5: Pre-merge settlements omit `clvRaw` key entirely (not null) — omit path confirmed
+
+#### Proof
+
+- Participant: Jalen Brunson (`JALEN_BRUNSON_1_NBA`)
+- Event: New York Knicks vs. Charlotte Hornets (2026-03-26)
+- Market: `assists-all-game-ou` line=6.5
+- Pick: Over 6.5 @-139 | Actual: 8 assists → **win**
+- Closing line (SGO): over=-139 / under=+105 | snapshot_at=2026-03-26T20:22:19
+- CLV: `clvRaw=0.03774` (3.774%) — pick beats fair closing line ✓
+- Settlement ID: `5d6a6dcd-653d-4ba0-8795-bd08c6f4fd38`
+- Pick ID: `3f8e9119-5a7a-40dd-abae-360a33348920`
+- Proof scripts: `scripts/clv-proof.ts`, `scripts/clv-grade.ts`
 
 #### Contract Authority
 
