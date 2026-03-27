@@ -29,7 +29,7 @@
 | **Area** | `area:smart-form` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-49-smart-form-confidence-field` |
-| **PR** | — |
+| **PR** | [#25](https://github.com/griff843/Unit-Talk-v2/pull/25) |
 
 #### Scope
 
