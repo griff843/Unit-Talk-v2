@@ -13,7 +13,7 @@
 | **ID** | UTV2-N |
 | **Tier** | T1 / T2 / T3 / DOCS |
 | **Lane** | `lane:codex` / `lane:claude` / `lane:augment` |
-| **Status** | READY / BLOCKED / DEFERRED |
+| **Status** | READY / BLOCKED / IN_PROGRESS / IN_REVIEW / DONE |
 | **Milestone** | M1–M8 or — |
 | **Area** | `area:api` / `area:discord-bot` / `area:operator-web` / `area:ingestor` / `area:db` / `area:domain` / `area:contracts` / `area:governance` / `area:tooling` |
 | **Blocked by** | UTV2-N (or —) |
