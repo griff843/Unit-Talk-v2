@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 19 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 19 |
 | `lane:claude` | 0 | 0 | 1 | 0 | 10 |
 | `lane:augment` | 0 | 0 | 2 | 0 | 9 |
 
@@ -32,6 +32,24 @@
 | **PR** | — |
 
 Independent verification of M10 deliverables. Produce proof artifact. Update `PROGRAM_STATUS.md` M10 CLOSED, M11 placeholder. Contract: `docs/05_operations/UTV2-65_M10_CLOSURE_VERIFICATION_CONTRACT.md`
+
+---
+
+### UTV2-67 — T2 Kelly Sizing at Submission
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-67 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M11 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Fix `findLatestMatchingOffer` sort order (snapshot_at DESC). Wire `computeKellySizing()` after devig result — writes to `pick.metadata.kellySizing`. Fail-closed. Operator-visible only. Contract: `docs/05_operations/UTV2-67_KELLY_SUBMISSION_WIRING_CONTRACT.md`
 
 ---
 
