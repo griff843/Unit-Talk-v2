@@ -1,26 +1,70 @@
-import type { ChatInputCommandInteraction, SlashCommandBuilder } from 'discord.js';
-import { createPickCommand } from './commands/pick.js';
-import { createApiClient } from './api-client.js';
-import { loadEnvironment } from '@unit-talk/config';
-import { parseBotConfig } from './config.js';
+import type {
+  SlashCommandBuilder,
+  SlashCommandOptionsOnlyBuilder,
+  ChatInputCommandInteraction,
+} from 'discord.js';
+import { readdir } from 'node:fs/promises';
+import { join } from 'node:path';
+import { pathToFileURL, fileURLToPath } from 'node:url';
 
+/**
+ * Typed contract that every command module must satisfy.
+ * Command handlers are loaded from ./commands/ at startup.
+ * The registry is immutable at runtime.
+ */
 export interface CommandHandler {
-  data: SlashCommandBuilder;
+  /** discord.js builder - name, description, options */
+  data: SlashCommandBuilder | SlashCommandOptionsOnlyBuilder;
+  /** Interaction handler. deferReply() must already be called by the router. */
   execute(interaction: ChatInputCommandInteraction): Promise<void>;
-  requiredRoles?: string[];
+  /** Discord role IDs. If present, role guard runs before execute(). */
+  requiredRoles?: string[] | undefined;
 }
 
+/** Keyed by slash command name. Immutable after startup. */
 export type CommandRegistry = Map<string, CommandHandler>;
 
-export async function loadCommandRegistry(): Promise<CommandRegistry> {
-  const env = loadEnvironment();
-  const config = parseBotConfig(env);
-  const apiClient = createApiClient(config.apiUrl);
+interface CommandModule {
+  default?: CommandHandler;
+  createDefaultCommand?: (rootDir?: string) => CommandHandler;
+}
 
-  const registry: CommandRegistry = new Map();
+/**
+ * Loads all command modules from the ./commands/ directory relative to this
+ * file and returns an immutable Map keyed by command name.
+ *
+ * Handles the empty-directory case gracefully (returns empty registry).
+ * Loads .ts modules under tsx-driven source execution and .js modules after build.
+ */
+export async function loadCommandRegistry(rootDir?: string): Promise<CommandRegistry> {
+  const registry = new Map<string, CommandHandler>();
+  const thisDir = fileURLToPath(new URL('.', import.meta.url));
+  const commandsDir = join(thisDir, 'commands');
 
-  const pickCommand = createPickCommand(apiClient, config.capperRoleId);
-  registry.set(pickCommand.data.name, pickCommand);
+  let files: string[];
+  try {
+    files = await readdir(commandsDir);
+  } catch {
+    // commands/ directory missing or unreadable - valid at foundation stage
+    return registry;
+  }
+
+  const commandFiles = files.filter((file) => {
+    if (file.endsWith('.d.ts') || file.endsWith('.map')) {
+      return false;
+    }
+
+    return file.endsWith('.js') || file.endsWith('.ts');
+  });
+
+  for (const file of commandFiles) {
+    const filePath = join(commandsDir, file);
+    const module = (await import(pathToFileURL(filePath).href)) as CommandModule;
+    const handler = module.default ?? module.createDefaultCommand?.(rootDir);
+    if (handler?.data?.name) {
+      registry.set(handler.data.name, handler);
+    }
+  }
 
   return registry;
 }

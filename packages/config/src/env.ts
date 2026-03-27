@@ -1,4 +1,4 @@
-﻿import fs from 'node:fs';
+import fs from 'node:fs';
 import path from 'node:path';
 export interface AppEnv {
   NODE_ENV: 'development' | 'test' | 'production';
@@ -21,6 +21,14 @@ export interface AppEnv {
   UNIT_TALK_INGESTOR_MAX_CYCLES?: string | undefined;
   UNIT_TALK_INGESTOR_AUTORUN?: string | undefined;
   UNIT_TALK_INGESTOR_SKIP_RESULTS?: string | undefined;
+  UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS?: string | undefined;
+  UNIT_TALK_WORKER_ID?: string | undefined;
+  UNIT_TALK_DISTRIBUTION_TARGETS?: string | undefined;
+  UNIT_TALK_DISCORD_TARGET_MAP?: string | undefined;
+  UNIT_TALK_WORKER_POLL_MS?: string | undefined;
+  UNIT_TALK_WORKER_MAX_CYCLES?: string | undefined;
+  UNIT_TALK_WORKER_DRY_RUN?: string | undefined;
+  UNIT_TALK_WORKER_AUTORUN?: string | undefined;
   DISCORD_BOT_TOKEN?: string | undefined;
   DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
@@ -99,6 +107,14 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_INGESTOR_MAX_CYCLES: optionalEnv('UNIT_TALK_INGESTOR_MAX_CYCLES', merged),
     UNIT_TALK_INGESTOR_AUTORUN: optionalEnv('UNIT_TALK_INGESTOR_AUTORUN', merged),
     UNIT_TALK_INGESTOR_SKIP_RESULTS: optionalEnv('UNIT_TALK_INGESTOR_SKIP_RESULTS', merged),
+    UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS: optionalEnv('UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS', merged),
+    UNIT_TALK_WORKER_ID: optionalEnv('UNIT_TALK_WORKER_ID', merged),
+    UNIT_TALK_DISTRIBUTION_TARGETS: optionalEnv('UNIT_TALK_DISTRIBUTION_TARGETS', merged),
+    UNIT_TALK_DISCORD_TARGET_MAP: optionalEnv('UNIT_TALK_DISCORD_TARGET_MAP', merged),
+    UNIT_TALK_WORKER_POLL_MS: optionalEnv('UNIT_TALK_WORKER_POLL_MS', merged),
+    UNIT_TALK_WORKER_MAX_CYCLES: optionalEnv('UNIT_TALK_WORKER_MAX_CYCLES', merged),
+    UNIT_TALK_WORKER_DRY_RUN: optionalEnv('UNIT_TALK_WORKER_DRY_RUN', merged),
+    UNIT_TALK_WORKER_AUTORUN: optionalEnv('UNIT_TALK_WORKER_AUTORUN', merged),
     DISCORD_BOT_TOKEN: optionalEnv('DISCORD_BOT_TOKEN', merged),
     DISCORD_CLIENT_ID: optionalEnv('DISCORD_CLIENT_ID', merged),
     DISCORD_GUILD_ID: optionalEnv('DISCORD_GUILD_ID', merged),
