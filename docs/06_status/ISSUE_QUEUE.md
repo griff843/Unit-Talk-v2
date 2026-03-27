@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 1 | 0 | 11 |
 | `lane:claude` | 0 | 0 | 0 | 1 | 6 |
-| `lane:augment` | 0 | 1 | 1 | 0 | 4 |
+| `lane:augment` | 0 | 0 | 1 | 0 | 5 |
 
 ---
 
@@ -169,12 +169,12 @@ UTV2-46 wired CLV data into `settlement_records.payload` as top-level keys (`clv
 | **ID** | UTV2-47 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `augment/UTV2-47-discord-application-id` |
+| **PR** | #23 — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
