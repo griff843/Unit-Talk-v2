@@ -16,3 +16,4 @@ export * from './picks.js';
 export * from './promotion.js';
 export * from './settlement.js';
 export * from './reference-data.js';
+export * from './provider-offers.js';

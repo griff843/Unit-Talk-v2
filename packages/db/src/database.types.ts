@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.4"
-  }
   public: {
     Tables: {
       audit_log: {
@@ -44,6 +39,33 @@ export type Database = {
           entity_type?: string
           id?: string
           payload?: Json
+        }
+        Relationships: []
+      }
+      cappers: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          metadata?: Json
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          updated_at?: string
         }
         Relationships: []
       }
@@ -143,6 +165,137 @@ export type Database = {
             columns: ["outbox_id"]
             isOneToOne: false
             referencedRelation: "distribution_outbox"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      event_participants: {
+        Row: {
+          created_at: string
+          event_id: string
+          id: string
+          participant_id: string
+          role: string
+        }
+        Insert: {
+          created_at?: string
+          event_id: string
+          id?: string
+          participant_id: string
+          role: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string
+          id?: string
+          participant_id?: string
+          role?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "event_participants_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "event_participants_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      events: {
+        Row: {
+          created_at: string
+          event_date: string
+          event_name: string
+          external_id: string | null
+          id: string
+          metadata: Json
+          sport_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_date: string
+          event_name: string
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          sport_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_date?: string
+          event_name?: string
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          sport_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      game_results: {
+        Row: {
+          actual_value: number
+          created_at: string
+          event_id: string
+          id: string
+          market_key: string
+          participant_id: string | null
+          source: string
+          sourced_at: string
+        }
+        Insert: {
+          actual_value: number
+          created_at?: string
+          event_id: string
+          id?: string
+          market_key: string
+          participant_id?: string | null
+          source?: string
+          sourced_at: string
+        }
+        Update: {
+          actual_value?: number
+          created_at?: string
+          event_id?: string
+          id?: string
+          market_key?: string
+          participant_id?: string | null
+          source?: string
+          sourced_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "game_results_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "game_results_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
             referencedColumns: ["id"]
           },
         ]
@@ -421,6 +574,68 @@ export type Database = {
           },
         ]
       }
+      provider_offers: {
+        Row: {
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_offers_provider_key_fkey"
+            columns: ["provider_key"]
+            isOneToOne: false
+            referencedRelation: "sportsbooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       settlement_records: {
         Row: {
           confidence: string
@@ -483,6 +698,133 @@ export type Database = {
             columns: ["pick_id"]
             isOneToOne: false
             referencedRelation: "picks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sport_market_types: {
+        Row: {
+          created_at: string
+          id: string
+          market_type: string
+          sort_order: number
+          sport_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          market_type: string
+          sort_order?: number
+          sport_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          market_type?: string
+          sort_order?: number
+          sport_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sport_market_types_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sports: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sportsbooks: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      stat_types: {
+        Row: {
+          active: boolean
+          created_at: string
+          id: string
+          name: string
+          sort_order: number
+          sport_id: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name: string
+          sort_order?: number
+          sport_id: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          id?: string
+          name?: string
+          sort_order?: number
+          sport_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stat_types_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
             referencedColumns: ["id"]
           },
         ]
@@ -729,3 +1071,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

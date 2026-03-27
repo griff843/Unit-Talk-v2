@@ -255,6 +255,13 @@ class FakePickRepository implements PickRepository {
     return this.picks.get(pickId) ?? null;
   }
 
+  async listByLifecycleState(
+    _lifecycleState: CanonicalPick['lifecycleState'],
+    _limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    return [];
+  }
+
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
@@ -414,8 +421,14 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       outbox,
       receipts,
       settlements: {} as RepositoryBundle['settlements'],
+      providerOffers: {} as RepositoryBundle['providerOffers'],
+      participants: {} as RepositoryBundle['participants'],
+      events: {} as RepositoryBundle['events'],
+      eventParticipants: {} as RepositoryBundle['eventParticipants'],
+      gradeResults: {} as RepositoryBundle['gradeResults'],
       runs,
       audit,
+      referenceData: {} as RepositoryBundle['referenceData'],
     },
     picks,
     receipts,

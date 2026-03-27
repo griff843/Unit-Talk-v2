@@ -68,6 +68,7 @@ export type SystemRunRow = Tables<'system_runs'>;
 export type AuditLogRow = Tables<'audit_log'>;
 export type ParticipantRow = Tables<'participants'>;
 export type ParticipantMembershipRow = Tables<'participant_memberships'>;
+export type GradeResultRow = Tables<'game_results'>;
 
 // ---------------------------------------------------------------------------
 // Record aliases (backward-compatible names used by existing application code)
@@ -94,6 +95,9 @@ export type OutboxRecord = DistributionOutboxRow;
 /** @see {@link DistributionReceiptRow} */
 export type ReceiptRecord = DistributionReceiptRow;
 
+/** @see {@link ProviderOfferRow} */
+export type ProviderOfferRecord = ProviderOfferRow;
+
 /** @see {@link SettlementRecordRow} */
 export type SettlementRecord = SettlementRecordRow;
 
@@ -109,6 +113,9 @@ export type ParticipantRecord = ParticipantRow;
 /** @see {@link ParticipantMembershipRow} */
 export type ParticipantMembershipRecord = ParticipantMembershipRow;
 
+/** @see {@link GradeResultRow} */
+export type GradeResultRecord = GradeResultRow;
+
 // ---------------------------------------------------------------------------
 // Reference data types (not generated — tables added in migration 008)
 // ---------------------------------------------------------------------------
@@ -122,6 +129,12 @@ export interface SportRow {
   created_at: string;
   updated_at: string;
 }
+
+// Generated type widens devig_mode to string (Supabase does not narrow CHECK constraints).
+// We re-narrow here because the CHECK constraint and application code both enforce the union.
+export type ProviderOfferRow = Omit<Tables<'provider_offers'>, 'devig_mode'> & {
+  devig_mode: 'PAIRED' | 'FALLBACK_SINGLE_SIDED';
+};
 
 export interface SportMarketTypeRow {
   id: string;
@@ -179,45 +192,3 @@ export interface EventParticipantRow {
   created_at: string;
 }
 
-// ---------------------------------------------------------------------------
-// Provider offer types (not in generated database.types.ts — added by migration 009)
-// ---------------------------------------------------------------------------
-
-export interface ProviderOfferRow {
-  id: string;
-  provider_key: string;
-  provider_event_id: string;
-  provider_market_key: string;
-  provider_participant_id: string | null;
-  sport_key: string | null;
-  line: number | null;
-  over_odds: number | null;
-  under_odds: number | null;
-  devig_mode: string;
-  is_opening: boolean;
-  is_closing: boolean;
-  snapshot_at: string;
-  idempotency_key: string;
-  created_at: string;
-}
-
-/** @see {@link ProviderOfferRow} */
-export type ProviderOfferRecord = ProviderOfferRow;
-
-// ---------------------------------------------------------------------------
-// Game result types (not in generated database.types.ts — added by migration 012)
-// ---------------------------------------------------------------------------
-
-export interface GradeResultRow {
-  id: string;
-  event_id: string;
-  participant_id: string | null;
-  market_key: string;
-  actual_value: number;
-  source: string;
-  sourced_at: string;
-  created_at: string;
-}
-
-/** @see {@link GradeResultRow} */
-export type GradeResultRecord = GradeResultRow;

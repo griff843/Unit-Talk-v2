@@ -99,7 +99,7 @@ export const marketTypes = [
 export interface TableDefinition {
   name: string;
   purpose: string;
-  owner: 'api' | 'worker' | 'operator-web' | 'smart-form' | 'discord-bot' | 'platform';
+  owner: 'api' | 'worker' | 'operator-web' | 'smart-form' | 'discord-bot' | 'platform' | 'ingestor';
 }
 
 export const canonicalSchema: TableDefinition[] = [
@@ -184,6 +184,11 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'platform',
   },
   {
+    name: 'provider_offers',
+    purpose: 'Stores normalized external provider odds snapshots for market intelligence.',
+    owner: 'ingestor',
+  },
+  {
     name: 'cappers',
     purpose: 'Registered cappers authorized to submit picks.',
     owner: 'platform',
@@ -196,6 +201,11 @@ export const canonicalSchema: TableDefinition[] = [
   {
     name: 'event_participants',
     purpose: 'Links participants to events with role designation.',
+    owner: 'api',
+  },
+  {
+    name: 'game_results',
+    purpose: 'Stores final stat values used by the automated grading lane.',
     owner: 'api',
   },
 ];
