@@ -3,8 +3,11 @@ import test from 'node:test';
 import { request } from 'node:http';
 import type { SystemRunRecord } from '@unit-talk/db';
 import {
+  buildCapperStatsResponse,
   createOperatorServer,
   createSnapshotFromRows,
+  createStatsRows,
+  type OperatorStatsProvider,
   type OperatorSnapshotProvider,
   type OutboxFilter,
 } from './server.js';
@@ -1072,6 +1075,126 @@ test('GET / renders Settlement Recap section', async () => {
   assert.match(response.body, /flat-bet ROI %/);
 });
 
+test('GET /api/operator/stats returns capper stats payload', async () => {
+  const provider = createStaticProvider();
+  const statsProvider = createStaticStatsProvider();
+  const server = createOperatorServer({ provider, statsProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(
+    address.port,
+    '/api/operator/stats?capper=Griff&last=30&sport=NBA',
+  );
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      scope: string;
+      capper: string | null;
+      picks: number;
+      wins: number;
+      losses: number;
+      pushes: number;
+      picksWithClv: number;
+      lastFive: string[];
+    };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(body.data.scope, 'capper');
+  assert.equal(body.data.capper, 'Griff');
+  assert.equal(body.data.picks, 2);
+  assert.equal(body.data.wins, 2);
+  assert.equal(body.data.losses, 0);
+  assert.equal(body.data.pushes, 0);
+  assert.equal(body.data.picksWithClv, 2);
+  assert.deepEqual(body.data.lastFive, ['W', 'W']);
+});
+
+test('GET /api/operator/stats returns 400 when last is invalid', async () => {
+  const provider = createStaticProvider();
+  const statsProvider = createStaticStatsProvider();
+  const server = createOperatorServer({ provider, statsProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/stats?last=99');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.body, /must be one of 7, 14, 30, 90/);
+});
+
+test('buildCapperStatsResponse returns zero stats when capper has no picks in window', () => {
+  const rows = createStatsRows(makeStatsFixture());
+  const stats = buildCapperStatsResponse(
+    { capper: 'Nobody', window: 30 },
+    rows.filter((row) => row.settlement.settled_at >= '2026-02-24T00:00:00.000Z'),
+  );
+
+  assert.equal(stats.picks, 0);
+  assert.equal(stats.capper, 'Nobody');
+  assert.equal(stats.winRate, null);
+  assert.equal(stats.roiPct, null);
+  assert.equal(stats.avgClvPct, null);
+  assert.equal(stats.beatsLine, null);
+});
+
+test('buildCapperStatsResponse filters by sport correctly', () => {
+  const rows = createStatsRows(makeStatsFixture());
+  const stats = buildCapperStatsResponse(
+    { capper: 'Griff', window: 30, sport: 'MLB' },
+    rows.filter((row) => row.settlement.settled_at >= '2026-02-24T00:00:00.000Z'),
+  );
+
+  assert.equal(stats.picks, 1);
+  assert.equal(stats.wins, 0);
+  assert.equal(stats.losses, 1);
+  assert.equal(stats.pushes, 0);
+});
+
+test('buildCapperStatsResponse omits CLV metrics when no picks carry CLV data', () => {
+  const fixture = makeStatsFixture();
+  fixture.settlements = fixture.settlements.map((row) => ({
+    ...row,
+    payload: {},
+  }));
+
+  const stats = buildCapperStatsResponse(
+    { capper: 'Griff', window: 30 },
+    createStatsRows(fixture).filter((row) => row.settlement.settled_at >= '2026-02-24T00:00:00.000Z'),
+  );
+
+  assert.equal(stats.picksWithClv, 0);
+  assert.equal(stats.avgClvPct, null);
+  assert.equal(stats.beatsLine, null);
+});
+
+test('buildCapperStatsResponse excludes picks outside the requested window', () => {
+  const rows = createStatsRows(makeStatsFixture());
+  const stats = buildCapperStatsResponse(
+    { capper: 'Griff', window: 7 },
+    rows.filter((row) => row.settlement.settled_at >= '2026-03-19T00:00:00.000Z'),
+  );
+
+  assert.equal(stats.picks, 2);
+  assert.deepEqual(stats.lastFive, ['L', 'W']);
+});
+
 function createStaticProvider(): OperatorSnapshotProvider {
   return {
     async getSnapshot(_filter?: OutboxFilter) {
@@ -1284,6 +1407,148 @@ function createStaticProvider(): OperatorSnapshotProvider {
         ],
       });
     },
+  };
+}
+
+function createStaticStatsProvider(): OperatorStatsProvider {
+  return {
+    async getStats() {
+      return buildCapperStatsResponse(
+        { capper: 'Griff', window: 30, sport: 'NBA' },
+        createStatsRows(makeStatsFixture()).filter(
+          (row) =>
+            row.settlement.settled_at >= '2026-02-24T00:00:00.000Z' &&
+            row.submission?.submitted_by?.toLowerCase() === 'griff' &&
+            (row.pick.metadata as { sport?: string }).sport === 'NBA',
+        ),
+      );
+    },
+  };
+}
+
+function makeStatsFixture() {
+  return {
+    settlements: [
+      {
+        id: 'settlement-stats-1',
+        pick_id: 'pick-stats-1',
+        status: 'settled',
+        result: 'win',
+        source: 'grading',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        notes: null,
+        review_reason: null,
+        settled_by: 'grading',
+        settled_at: '2026-03-21T12:00:00.000Z',
+        corrects_id: null,
+        payload: { clvRaw: '2.5', beatsClosingLine: true },
+        created_at: '2026-03-21T12:00:00.000Z',
+      },
+      {
+        id: 'settlement-stats-2',
+        pick_id: 'pick-stats-2',
+        status: 'settled',
+        result: 'loss',
+        source: 'grading',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        notes: null,
+        review_reason: null,
+        settled_by: 'grading',
+        settled_at: '2026-03-20T12:00:00.000Z',
+        corrects_id: null,
+        payload: {},
+        created_at: '2026-03-20T12:00:00.000Z',
+      },
+      {
+        id: 'settlement-stats-3',
+        pick_id: 'pick-stats-3',
+        status: 'settled',
+        result: 'win',
+        source: 'grading',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        notes: null,
+        review_reason: null,
+        settled_by: 'grading',
+        settled_at: '2026-03-12T12:00:00.000Z',
+        corrects_id: null,
+        payload: { clvRaw: 1.5, beatsClosingLine: false },
+        created_at: '2026-03-12T12:00:00.000Z',
+      },
+      {
+        id: 'settlement-stats-4',
+        pick_id: 'pick-stats-4',
+        status: 'settled',
+        result: 'push',
+        source: 'grading',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        notes: null,
+        review_reason: null,
+        settled_by: 'grading',
+        settled_at: '2026-02-01T12:00:00.000Z',
+        corrects_id: null,
+        payload: {},
+        created_at: '2026-02-01T12:00:00.000Z',
+      },
+    ],
+    picks: [
+      makeStatsPick('pick-stats-1', 'submission-stats-1', 'NBA'),
+      makeStatsPick('pick-stats-2', 'submission-stats-2', 'MLB'),
+      makeStatsPick('pick-stats-3', 'submission-stats-3', 'NBA'),
+      makeStatsPick('pick-stats-4', 'submission-stats-4', 'NBA'),
+    ],
+    submissions: [
+      makeStatsSubmission('submission-stats-1', 'Griff'),
+      makeStatsSubmission('submission-stats-2', 'Griff'),
+      makeStatsSubmission('submission-stats-3', 'Griff'),
+      makeStatsSubmission('submission-stats-4', 'Other'),
+    ],
+  };
+}
+
+function makeStatsPick(id: string, submissionId: string, sport: string) {
+  return {
+    id,
+    submission_id: submissionId,
+    participant_id: null,
+    market: 'points-all-game-ou',
+    selection: 'Over 20.5',
+    line: 20.5,
+    odds: -110,
+    stake_units: 1,
+    confidence: 0.8,
+    source: 'api',
+    approval_status: 'approved',
+    promotion_status: 'qualified',
+    promotion_target: null,
+    promotion_score: null,
+    promotion_reason: null,
+    promotion_version: null,
+    promotion_decided_at: null,
+    promotion_decided_by: null,
+    status: 'settled',
+    posted_at: '2026-03-20T11:00:00.000Z',
+    settled_at: '2026-03-20T12:00:00.000Z',
+    metadata: { sport },
+    created_at: '2026-03-20T11:00:00.000Z',
+    updated_at: '2026-03-20T12:00:00.000Z',
+  };
+}
+
+function makeStatsSubmission(id: string, submittedBy: string) {
+  return {
+    id,
+    external_id: null,
+    source: 'discord-bot',
+    submitted_by: submittedBy,
+    payload: {},
+    status: 'validated',
+    received_at: '2026-03-20T11:00:00.000Z',
+    created_at: '2026-03-20T11:00:00.000Z',
+    updated_at: '2026-03-20T11:00:00.000Z',
   };
 }
 
