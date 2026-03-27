@@ -1,8 +1,8 @@
 # Production Readiness Checklist
 
-> Living document. Update at every sprint close or whenever a checklist item changes state.
-> Authority: `docs/06_status/PROGRAM_STATUS.md` wins on conflict for current sprint state.
-> Last updated: 2026-03-26 (Discord Bot `/pick` CLOSED — DISCORD_PICK_COMMAND_CLOSED; 719/719 tests; `pnpm verify` exit 0)
+> **STALE — DO NOT USE for lane state.** Last updated 2026-03-26; test count and lane statuses are wrong.
+> **Use `docs/06_status/ISSUE_QUEUE.md` for current lane state.**
+> This file is preserved as a structural template and historical record.
 
 ## Legend
 

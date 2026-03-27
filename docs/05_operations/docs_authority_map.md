@@ -70,21 +70,23 @@ When documents conflict:
 
 | File | Purpose | Authority Within Tier |
 |---|---|---|
-| `docs/06_status/status_source_of_truth.md` | Single authoritative program state, kill conditions, routing state, blockers | Primary |
-| `docs/06_status/system_snapshot.md` | Detailed handoff with IDs and evidence | Evidence record |
-| `docs/06_status/week_7_artifact_index.md` | Proof artifact location and naming convention for Week 7 | Artifact index |
-| `docs/06_status/current_phase.md` | Current phase summary and next actions | Summary only |
-| `docs/06_status/next_build_order.md` | Immediate next priorities in order | Sequence only |
-| `docs/06_status/week_16_proof_template.md` | Week 16 independent verification template | Closeout template |
-| `docs/06_status/week_16_failure_note_template.md` | Week 16 failed verification record | Failure record |
-| `docs/06_status/week_16_closeout_checklist.md` | Week 16 closure checklist after PASS | Closure checklist |
+| `docs/06_status/PROGRAM_STATUS.md` | Canonical active program status — milestone, capabilities, risks | **Primary — high-level** |
+| `docs/06_status/ISSUE_QUEUE.md` | Operational work queue — active/ready/blocked/done per lane | **Primary — work state** |
+| `docs/06_status/system_snapshot.md` | Evidence record — specific IDs, receipts, historical proof | Evidence record (STALE as of 2026-03-21 for current state) |
+| `docs/06_status/PROOF_TEMPLATE.md` | Reusable T1 independent verification template | Closeout template |
+| `docs/06_status/ROLLBACK_TEMPLATE.md` | Reusable T1 rollback template | Rollback template |
+| `docs/06_status/status_source_of_truth.md` | **SUPERSEDED 2026-03-21** — historical record through Week 21 | Historical only |
+| `docs/06_status/current_phase.md` | **SUPERSEDED 2026-03-21** — historical record | Historical only |
+| `docs/06_status/next_build_order.md` | **SUPERSEDED 2026-03-21** — historical record | Historical only |
+| `docs/06_status/week_*` templates | Per-week proof/rollback/closeout templates (Weeks 7-16) | Historical only |
 
 ## Conflict Rules
 
 1. Tier 5 never overrides Tier 2 or Tier 3.
 2. Operational docs must not contradict principles, contracts, or product identity.
-3. `docs/06_status/status_source_of_truth.md` is authoritative for current runtime state only.
-4. Legacy repo references never override V2 docs; see `docs/05_operations/legacy_repo_reference_boundary.md`.
+3. `docs/06_status/PROGRAM_STATUS.md` is authoritative for current milestone and capability state.
+4. `docs/06_status/ISSUE_QUEUE.md` is authoritative for current work lane state.
+5. Legacy repo references never override V2 docs; see `docs/05_operations/legacy_repo_reference_boundary.md`.
 
 ## Doc Lifecycle
 

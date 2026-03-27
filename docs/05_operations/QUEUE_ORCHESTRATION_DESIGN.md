@@ -445,6 +445,19 @@ Claude does not implement. If Claude modifies a runtime file during a governance
 8. Mark issue `IN_REVIEW`
 9. Stop — Claude reviews
 
+### Augment Anti-Idle Rule (Parallel Queuing Obligation)
+
+**Claude must queue at least one `lane:augment` READY issue at the same time a Codex T2/T1 lane is opened or ratified.**
+
+| Rule | Detail |
+|------|--------|
+| Timing | Augment issue is queued in `ISSUE_QUEUE.md` simultaneously with Codex issue being set to READY — not after Augment is observed idle |
+| Parallel-safe | Augment issue must not touch files in the active Codex lane's contract scope |
+| Mechanism | Queue only — verbal or reactive assignment is a process violation |
+| No work identified | If no parallel-safe T3 work exists, Claude notes this explicitly in the queue comment; Augment remains idle by documented decision, not by default |
+
+**Rationale:** Augment idles when no queued issue exists to pull. Reactive assignment after noticing idleness wastes a full implementation cycle. Pre-loading one Augment issue per Codex lane open eliminates the gap with zero coordination overhead.
+
 ---
 
 ## 11. Fail-Closed Rules

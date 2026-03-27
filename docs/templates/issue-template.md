@@ -49,3 +49,17 @@
 | DOCS | Governance/spec only. No runtime change. No branch required. |
 
 Status lifecycle: BLOCKED → READY → IN_PROGRESS → IN_REVIEW → DONE
+
+---
+
+## Surface-Specific Engineering Constraints
+
+### apps/smart-form (Next.js surface)
+
+Two rules apply to all T3/Augment lanes on this surface. Violating either has caused post-hoc fixes (UTV2-45).
+
+**1. Helper placement:** Pure helpers must live in `apps/smart-form/lib/`, not in component files under `apps/smart-form/app/**/*.tsx`. Component files transitively import Next.js UI deps that `tsx --test` cannot resolve.
+
+**2. Verification gate:** If delivered helpers will be imported by `tsx --test` consumers, run `tsx --test apps/smart-form/test/<file>.test.ts` directly — not just `pnpm --filter @unit-talk/smart-form test`. Jest passes even for helpers in component files because it resolves `@/` aliases. `tsx --test` does not.
+
+Full rules and the correct/wrong pattern example: **`docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` §16**.

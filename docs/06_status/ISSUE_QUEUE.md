@@ -7,13 +7,118 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 9 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 0 | 0 | 3 |
+| `lane:codex` | 0 | 1 | 0 | 0 | 10 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 6 |
+| `lane:augment` | 0 | 0 | 1 | 0 | 4 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-49 — T2 Smart Form Confidence Field
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-49 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **IN_REVIEW** |
+| **Milestone** | M8 |
+| **Area** | `area:smart-form` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-49-smart-form-confidence-field` |
+| **PR** | [#25](https://github.com/griff843/Unit-Talk-v2/pull/25) |
+
+#### Scope
+
+`buildSubmissionPayload()` omits the top-level `confidence` field (0–1 float). Domain analysis uses `pick.confidence` for edge computation. Without it, all Smart Form picks score ~61.5 composite — below best-bets threshold of 70. No Smart Form pick has ever reached `discord:best-bets`.
+
+Fix: add `confidence?: number` to `SubmitPickPayload` in `api-client.ts`; add `confidence: values.capperConviction / 10` to `buildSubmissionPayload()` in `form-utils.ts`.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `SubmitPickPayload.confidence?: number` added to `api-client.ts`
+- [ ] AC-2: `buildSubmissionPayload()` sets `confidence = capperConviction / 10`
+- [ ] AC-3: conviction=1 → 0.1; conviction=8 → 0.8; conviction=10 → 1.0
+- [ ] AC-4: `metadata.promotionScores.trust` unchanged (`capperConviction * 10`)
+- [ ] AC-5: `pnpm verify` exits 0; test count ≥ 624
+- [ ] AC-6: `tsx --test apps/smart-form/test/form-utils.test.ts` exits 0
+
+#### Contract Authority
+
+`docs/05_operations/T2_SMART_FORM_CONFIDENCE_CONTRACT.md` (status: RATIFIED)
+
+---
+
+### UTV2-48 — T1 CLV Wiring Live Proof
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-48 |
+| **Tier** | T1 (verify) |
+| **Lane** | `lane:claude` |
+| **Status** | **READY** |
+| **Milestone** | M8 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSettlement()`. All 3 existing settlements predate the merge — no live proof exists. Trigger a grading run against a posted pick with a matching `provider_offers` row. Verify `settlement_records.payload` contains top-level `clvRaw`, `clvPercent`, `beatsClosingLine` keys.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: Submit and post a pick with finite odds and a selection containing "over" or "under"
+- [ ] AC-2: Confirm participant has a matching `provider_offers` row
+- [ ] AC-3: Run `POST /api/grading/run` — confirm pick is graded
+- [ ] AC-4: Query resulting `settlement_records.payload` — confirm `clvRaw`, `clvPercent`, `beatsClosingLine` as top-level keys
+- [ ] AC-5: If no matching offer: confirm payload omits CLV keys (not null); document which path fired
+
+#### Contract Authority
+
+`docs/05_operations/T2_SMART_FORM_CONFIDENCE_CONTRACT.md §8`
+
+---
+
+### UTV2-47 — T3 Discord APPLICATION_ID Fix
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-47 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **READY** |
+| **Milestone** | M8 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+`deploy-commands` fails with `DiscordAPIError[20012]`. The `DISCORD_CLIENT_ID=1045344984280346674` in `local.env` does not match the application that owns the bot token. The script and the bot token are both correct — the credential value is wrong.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: Identify the correct APPLICATION_ID from the Discord Developer Portal (Applications → the application owning the bot token → copy Application ID)
+- [ ] AC-2: Update `DISCORD_CLIENT_ID` in `local.env` to the correct value
+- [ ] AC-3: Run `pnpm --filter @unit-talk/discord-bot deploy-commands` — confirm exit 0, no `DiscordAPIError[20012]`
+- [ ] AC-4: If `.env.example` `DISCORD_CLIENT_ID` comment or placeholder is incorrect, update it to reflect the correct application
+
+#### Constraints
+
+- `local.env` is gitignored — the credential fix is local only; nothing sensitive lands in git
+- Do not touch runtime code (`apps/discord-bot/src/**`)
+- Do not modify the deploy-commands script
+- Only permitted git-tracked change: `.env.example` comment update if needed
+
+#### Proof
+
+- [ ] `deploy-commands` stdout confirms command registration with no `DiscordAPIError[20012]`
 
 ---
 
@@ -311,6 +416,28 @@ All 10 ACs satisfied. 617/617 tests (606 baseline → +11 net-new; contract requ
 
 ---
 
+### UTV2-50 — T3 Discord /help Command
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-50 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **DONE** |
+| **Milestone** | M8 |
+| **Area** | `area:discord-bot` |
+| **Branch** | `augment/UTV2-50-discord-help` |
+| **PR** | — (committed to `main` 2026-03-27) |
+
+#### Delivered
+
+- `createHelpCommand()` + `createDefaultCommand()` in `apps/discord-bot/src/commands/help.ts`
+- Ephemeral embed listing /pick, /stats, /leaderboard, /help with descriptions
+- Auto-discovered by `loadCommandRegistry()` — no wiring changes required
+- 3 new tests (ok 156–158); 624/624 total; `pnpm type-check` exit 0
+
+---
+
 ### UTV2-46 — T2 CLV Settlement Wiring
 
 | Field | Value |
@@ -318,45 +445,19 @@ All 10 ACs satisfied. 617/617 tests (606 baseline → +11 net-new; contract requ
 | **ID** | UTV2-46 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M7 |
 | **Area** | `area:api` |
-| **Blocked by** | UTV2-28 DONE ✅, UTV2-30 DONE ✅ |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-46-clv-settlement-wiring` |
+| **PR** | #22 — **MERGED** ✅ (2026-03-27) |
 
-#### Acceptance Criteria
+#### Delivered
 
-See `docs/05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md`. Summary:
-- [ ] `recordGradedSettlement()` calls `computeAndAttachCLV` (replaces `resolveClvPayload`)
-- [ ] `payload.clvRaw` (number) written when closing line exists
-- [ ] `payload.beatsClosingLine` (boolean) written when closing line exists
-- [ ] `payload.clvPercent` (number) written when closing line exists
-- [ ] No CLV keys written when no matching closing line found
-- [ ] ≥4 net-new tests; `pnpm verify` exits 0; total ≥ 602
+- `resolveClvPayload()` removed; `computeAndAttachCLV()` called in `recordGradedSettlement()`
+- `payload.clvRaw`, `payload.clvPercent`, `payload.beatsClosingLine` written as top-level keys
+- Keys omitted (not null) when no matching `provider_offers` row
+- 4 new tests in `grading-service.test.ts`; 621/621 total; 0 failures
+- `avgClvPct` in `/stats` and `/leaderboard` will now populate for picks with closing lines
 
 ---
 
-## Queue State Reference
-
-```
-UTV2-28  T1  codex     DONE         ← CLOSED: live proof WIN
-UTV2-29  DOC claude    DONE         ← CLOSED: MLB ratification RATIFIED
-UTV2-30  T2  codex     DONE         ← MERGED: PR #3 (2026-03-26)
-UTV2-31  T2  codex     DONE         ← MERGED: PR #13 (2026-03-27). 591/591.
-UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
-UTV2-33  T2  codex     DONE         ← MERGED: PR #18 (2026-03-27). 598/598. Live proof verified.
-UTV2-34  T3  augment   DONE         ← MERGED: PR #8 (2026-03-26)
-UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
-UTV2-36  T3  codex     DONE         ← MERGED: PR #9 (2026-03-27)
-UTV2-37  T3  augment   DONE         ← MERGED: PR #11 (2026-03-27)
-UTV2-38  T3  codex     DONE         ← MERGED: PR #12 (2026-03-27). 552/552.
-UTV2-39  DOC claude    DONE         ← CLOSED: Smart Form V1 contract RATIFIED
-UTV2-40  T1  codex     DONE         ← MERGED: PR #17 (2026-03-27). Live proof: trust scores verified.
-UTV2-41  DOC claude    DONE         ← CLOSED: Operator Entity Ingest Health contract RATIFIED
-UTV2-42  T2  codex     DONE         ← MERGED: PR #19 (2026-03-27). Live proof: 46 events, 535 players.
-UTV2-43  DOC claude    DONE         ← CLOSED: /leaderboard contract RATIFIED (2026-03-27)
-UTV2-44  T2  codex     DONE         ← MERGED: PR #21 (2026-03-27). 617/617 tests. responseVisibility flag added.
-UTV2-45  T3  augment   DONE         ← MERGED: committed to main (2026-03-27). 12/12 smart-form tests.
-UTV2-46  T2  codex     READY        ← CLV wiring contract RATIFIED. Wire computeAndAttachCLV. Baseline: 598. Target: ≥602.
-```
