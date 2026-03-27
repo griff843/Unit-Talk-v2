@@ -7,9 +7,9 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 16 |
-| `lane:claude` | 0 | 0 | 1 | 0 | 9 |
-| `lane:augment` | 0 | 0 | 0 | 0 | 9 |
+| `lane:codex` | 0 | 0 | 3 | 1 | 16 |
+| `lane:claude` | 0 | 0 | 2 | 0 | 9 |
+| `lane:augment` | 0 | 0 | 1 | 1 | 9 |
 
 ---
 
@@ -17,7 +17,97 @@
 
 ---
 
-### UTV2-60 — T1 Worker Delivery Proof (AC-3/AC-4 from UTV2-56)
+### UTV2-65 — T1 M10 Closure Verification
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-65 |
+| **Tier** | T1 (verify) |
+| **Lane** | `lane:claude` |
+| **Status** | **READY** |
+| **Milestone** | M11 |
+| **Area** | `area:docs` |
+| **Blocked by** | Augment Task A (deploy-commands re-run for /recap) |
+| **Branch** | — |
+| **PR** | — |
+
+Independent verification of M10 deliverables. Produce proof artifact. Update `PROGRAM_STATUS.md` M10 CLOSED, M11 placeholder. Contract: `docs/05_operations/UTV2-65_M10_CLOSURE_VERIFICATION_CONTRACT.md`
+
+---
+
+### UTV2-64 — T2 DeviggingService Submission Wiring
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-64 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M11 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+At submission time, look up `provider_offers` for the pick's market key, call `devig()` from `@unit-talk/domain`, write result to `pick.metadata.deviggingResult`. Fail-closed. Contract: `docs/05_operations/UTV2-64_DEVIG_SUBMISSION_WIRING_CONTRACT.md`
+
+---
+
+### UTV2-63 — T3 Dead-Letter Operator Surface
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-63 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **BLOCKED** |
+| **Milestone** | M11 |
+| **Area** | `area:operator-web` |
+| **Blocked by** | UTV2-62 (dead_letter status must exist in worker) |
+| **Branch** | — |
+| **PR** | — |
+
+Add `deadLetterCount` to `OperatorSnapshot` and HTML dashboard card. Contract: `docs/05_operations/UTV2-63_DEAD_LETTER_OPERATOR_SURFACE_CONTRACT.md`
+
+---
+
+### UTV2-62 — T2 Dead-Letter Promotion for Failed Outbox Rows
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-62 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M11 |
+| **Area** | `area:worker` `area:db` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Add `markDeadLetter()` to `OutboxRepository`. Worker promotes to `dead_letter` after 3 consecutive failures. Contract: `docs/05_operations/UTV2-62_DEAD_LETTER_PROMOTION_CONTRACT.md`
+
+---
+
+### UTV2-61 — T3 Recap CLV and Stake Enrichment
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-61 |
+| **Tier** | T3 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M11 |
+| **Area** | `area:operator-web` `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Add `clvPercent` and `stakeUnits` to `CapperRecapPick`; populate from existing settlement payload and picks row; surface in `/recap` embed. Contract: `docs/05_operations/UTV2-61_RECAP_CLV_ENRICHMENT_CONTRACT.md`
+
+---
+
+### UTV2-60 — T1 Worker Delivery Proof (AC-3/AC-4 from UTV2-56) — T1 Worker Delivery Proof (AC-3/AC-4 from UTV2-56)
 
 | Field | Value |
 |---|---|
