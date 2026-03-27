@@ -12,6 +12,7 @@ const COMMAND_ENTRIES: ReadonlyArray<{ name: string; description: string }> = [
   { name: 'stats',       description: 'Show settled pick performance for a capper or the full server' },
   { name: 'leaderboard', description: 'Show the top cappers in the selected settled-pick window' },
   { name: 'help',        description: 'Show all available commands and their descriptions' },
+  { name: 'recap',       description: 'Show your last settled picks' },
 ];
 
 export function createHelpCommand(): CommandHandler {
