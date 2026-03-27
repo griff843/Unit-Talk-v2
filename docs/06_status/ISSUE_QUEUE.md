@@ -9,7 +9,7 @@
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 1 | 0 | 11 |
 | `lane:claude` | 0 | 0 | 0 | 1 | 6 |
-| `lane:augment` | 0 | 0 | 1 | 0 | 5 |
+| `lane:augment` | 0 | 0 | 0 | 0 | 6 |
 
 ---
 
@@ -134,12 +134,12 @@ UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSett
 | **ID** | UTV2-51 |
 | **Tier** | T3 |
 | **Lane** | `lane:augment` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M8 |
 | **Area** | `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `augment/UTV2-51-operator-clv-display` |
+| **PR** | #26 — **MERGED** ✅ (2026-03-27) |
 
 #### Scope
 
