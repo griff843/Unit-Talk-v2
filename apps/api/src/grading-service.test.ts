@@ -340,6 +340,152 @@ test('recordGradedSettlement enriches the grading settlement payload with CLV wh
   assert.equal(result.finalLifecycleState, 'settled');
 });
 
+test('recordGradedSettlement writes clvRaw and clvPercent as top-level payload keys', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -105,
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+    eventExternalId: 'evt-clv-top-level',
+    participantExternalId: 'PLAYER_CLV_TOP_LEVEL',
+  });
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedClosingLine(repositories, {
+    providerEventId: 'evt-clv-top-level',
+    providerParticipantId: 'PLAYER_CLV_TOP_LEVEL',
+    marketKey: 'points-all-game-ou',
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(typeof payload.clvRaw, 'number');
+  assert.equal(typeof payload.clvPercent, 'number');
+});
+
+test('recordGradedSettlement writes beatsClosingLine true when the pick beats the closing line', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -105,
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+    eventExternalId: 'evt-clv-true',
+    participantExternalId: 'PLAYER_CLV_TRUE',
+  });
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedClosingLine(repositories, {
+    providerEventId: 'evt-clv-true',
+    providerParticipantId: 'PLAYER_CLV_TRUE',
+    marketKey: 'points-all-game-ou',
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload.beatsClosingLine, true);
+});
+
+test('recordGradedSettlement writes beatsClosingLine false when the pick misses the closing line', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: 150,
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+    eventExternalId: 'evt-clv-false',
+    participantExternalId: 'PLAYER_CLV_FALSE',
+  });
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await seedClosingLine(repositories, {
+    providerEventId: 'evt-clv-false',
+    providerParticipantId: 'PLAYER_CLV_FALSE',
+    marketKey: 'points-all-game-ou',
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload.beatsClosingLine, false);
+});
+
+test('recordGradedSettlement omits top-level CLV keys when no closing line exists', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -105,
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+    eventExternalId: 'evt-clv-none',
+    participantExternalId: 'PLAYER_CLV_NONE',
+  });
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal('clvRaw' in payload, false);
+  assert.equal('clvPercent' in payload, false);
+  assert.equal('beatsClosingLine' in payload, false);
+});
+
 test('runGradingPass writes settlement.graded audit rows with gradingContext payload', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
   const { participant, event } = await attachPlayerEventContext(repositories, pickId, {

@@ -28,6 +28,7 @@ import type {
 } from '@unit-talk/db';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { ApiError } from './errors.js';
+import { computeAndAttachCLV } from './clv-service.js';
 
 export interface RecordSettlementResult {
   pickRecord: PickRecord;
@@ -126,7 +127,18 @@ export async function recordGradedSettlement(
     );
   }
 
-  const clv = await resolveClvPayload(pick, gradingContext, repositories);
+  const clv = await computeAndAttachCLV(pick, repositories);
+  const payload: Record<string, unknown> = {
+    gradingContext,
+    correction: false,
+    clv: clv ?? null,
+  };
+
+  if (clv) {
+    payload['clvRaw'] = clv.clvRaw;
+    payload['clvPercent'] = clv.clvPercent;
+    payload['beatsClosingLine'] = clv.beatsClosingLine;
+  }
 
   const settledAt = new Date().toISOString();
   const settlementRecord = await repositories.settlements.record({
@@ -140,11 +152,7 @@ export async function recordGradedSettlement(
     reviewReason: null,
     settledBy: 'grading-service',
     settledAt,
-    payload: {
-      gradingContext,
-      correction: false,
-      clv: clv ?? null,
-    },
+    payload,
   });
 
   const transitioned = await transitionPickLifecycle(
@@ -188,57 +196,6 @@ export async function recordGradedSettlement(
     auditRecords: [audit],
     finalLifecycleState: updatedPick.status,
     downstream,
-  };
-}
-
-async function resolveClvPayload(
-  pick: PickRecord,
-  gradingContext: { marketKey: string; eventId: string },
-  repositories: {
-    providerOffers: ProviderOfferRepository;
-    participants: ParticipantRepository;
-    events: EventRepository;
-  },
-): Promise<Record<string, unknown> | null> {
-  if (!pick.participant_id) {
-    return null;
-  }
-
-  const [event, participant] = await Promise.all([
-    repositories.events.findById(gradingContext.eventId),
-    repositories.participants.findById(pick.participant_id),
-  ]);
-
-  if (!event || !participant) {
-    return null;
-  }
-
-  if (!event.external_id) {
-    return null;
-  }
-
-  const externalId = (participant as unknown as Record<string, unknown>).external_id;
-  const providerParticipantId = typeof externalId === 'string' ? externalId : null;
-
-  const eventStartTime = readEventStartTime(event);
-
-  const closingLine = await repositories.providerOffers.findClosingLine({
-    providerEventId: event.external_id,
-    providerMarketKey: gradingContext.marketKey,
-    providerParticipantId,
-    before: eventStartTime,
-  });
-
-  if (!closingLine) {
-    return null;
-  }
-
-  return {
-    providerKey: closingLine.provider_key,
-    line: closingLine.line,
-    overOdds: closingLine.over_odds,
-    underOdds: closingLine.under_odds,
-    snapshotAt: closingLine.snapshot_at,
   };
 }
 
@@ -538,10 +495,3 @@ function readBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
 }
 
-function readEventStartTime(event: { event_date: string; metadata: Record<string, unknown> | unknown }) {
-  const metadata = asRecord(event.metadata);
-  const startsAt = metadata?.starts_at;
-  return typeof startsAt === 'string' && startsAt.trim().length > 0
-    ? startsAt
-    : `${event.event_date}T23:59:59Z`;
-}
