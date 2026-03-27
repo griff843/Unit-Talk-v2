@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — M10 CLOSED. UTV2-57 (PR #31) + UTV2-58 (PR #33) + UTV2-50 (PR #32) + UTV2-59 merged. Settlement recap embed, /recap command, /help command, guild deploy (5 commands) complete. M11 queued.
+2026-03-27 — M11 CLOSED. UTV2-61 (PR #37) + UTV2-62 (PR #35) + UTV2-63 (PR #39) + UTV2-64 (PR #36) + UTV2-66 (PR #38) + UTV2-67 (PR #40) merged. Recap CLV/stake enrichment, dead-letter promotion + surface, devig wiring, bot startup, Kelly sizing at submission complete. 678/678 tests. M12 queued.
 
 ---
 
@@ -16,10 +16,10 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | Run `pnpm test` for current count. Last verified 2026-03-27: 251 tests (server.test.ts + worker-runtime.test.ts); full suite ~650+. |
-| Gates | `pnpm verify` exits 0 on current main (last confirmed at PR #30 merge). |
+| Tests | 678/678 pass. Last verified 2026-03-27 at main `1bab4d8`. |
+| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-27 (M11 closure). |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M10 CLOSED** 2026-03-27 — Settlement recap embed, /recap command, /help command, guild deploy (5 commands). M11 active. |
+| Milestone | **M11 CLOSED** 2026-03-27 — Recap CLV/stake, dead-letter promotion + surface, devig wiring, bot startup, Kelly sizing. M12 queued. |
 
 ## Gate Notes (last verified 2026-03-27)
 
@@ -29,8 +29,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | Confirmed at PR #30 merge. Run `pnpm test` for current count. |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed at PR #30 merge. |
+| `pnpm test` | PASS | 678/678 — confirmed 2026-03-27 at main `1bab4d8`. |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-27 at main `1bab4d8` (M11 closure). |
 
 ### Runner Architecture
 
@@ -62,15 +62,19 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Next Milestone (M11 — ACTIVE)
+## Next Milestone (M12 — QUEUED)
+
+M11 closed 2026-03-27. M12 scope TBD — no active contract yet. Do not start M12 work without a ratified contract.
 
 | Item | Tier | Lane | Status |
 |------|------|------|--------|
-| UTV2-61 Recap CLV/stake enrichment | T3 | codex | READY |
-| UTV2-62 Dead-letter outbox promotion | T2 | codex | READY |
-| UTV2-63 Dead-letter operator surface | T3 | augment | BLOCKED (on UTV2-62) |
-| UTV2-64 DeviggingService submission wiring | T2 | codex | READY |
-| UTV2-65 M10 closure verification | T1 | claude | DONE (this update) |
+| M11 UTV2-61 Recap CLV/stake enrichment | T3 | codex | DONE PR #37 |
+| M11 UTV2-62 Dead-letter outbox promotion | T2 | codex | DONE PR #35 |
+| M11 UTV2-63 Dead-letter operator surface | T3 | codex | DONE PR #39 |
+| M11 UTV2-64 DeviggingService submission wiring | T2 | codex | DONE PR #36 |
+| M11 UTV2-65 M10 closure verification | T1 | claude | DONE |
+| M11 UTV2-66 Discord bot startup entry point | T2 | augment | DONE PR #38 |
+| M11 UTV2-67 Kelly sizing at submission | T2 | codex | DONE PR #40 |
 
 ---
 
@@ -97,20 +101,23 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Key Capabilities (current as of 2026-03-27)
+## Key Capabilities (current as of 2026-03-27, M11 CLOSED)
 
 ### Submission and lifecycle
 - Canonical submission intake live (API + Smart Form)
 - Lifecycle transitions enforced (single-writer discipline)
 - Market key normalization at submission time (`normalizeMarketKey()`)
 - Conviction field → trust score in `metadata.promotionScores`
-- Domain analysis at submission time (implied probability, edge, Kelly fraction)
+- Domain analysis at submission time: implied probability, edge, devig (`metadata.deviggingResult`), Kelly sizing (`metadata.kellySizing`) — all fail-closed (UTV2-64, UTV2-67)
+- `findLatestMatchingOffer()` sorts by `snapshot_at` DESC — always uses most recent offer (UTV2-67)
 
 ### Promotion and delivery
 - Promotion evaluation: best-bets policy (min score 70) + trader-insights policy (min score 80)
 - Promotion scoring consumes domain analysis for edge, trust, and readiness
 - Distribution outbox, worker delivery, receipts, and audit logs live
 - 3 live Discord targets: canary, best-bets, trader-insights
+- Dead-letter promotion: `attempt_count >= 3` consecutive failures → `dead_letter` status via `markDeadLetter()` (UTV2-62)
+- Dead-letter visible in operator snapshot: `counts.deadLetterOutbox`; distribution health degrades when > 0 (UTV2-63)
 
 ### Grading and settlement
 - `POST /api/grading/run` — automated grading against `game_results`; idempotent
@@ -132,11 +139,13 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ### Discord bot
 - Foundation: client, router, role-guard, api-client, command registry
+- Process entry point live: `apps/discord-bot/src/main.ts` — connects client, loads registry, attaches handler, calls `client.login()` (UTV2-66)
+- Bot confirmed live: `Ready as Unit Talk#9476`
 - `/stats @capper` live
 - `/leaderboard` live
 - `/pick` submission command live (UTV2-53)
 - `/help` command live (UTV2-50)
-- `/recap` capper self-service settled picks command live (UTV2-58); calls `GET /api/operator/capper-recap`
+- `/recap` capper self-service settled picks command live (UTV2-58); CLV% and stake units in embed (UTV2-61)
 - `responseVisibility` flag on `CommandHandler` — fail-closed (private unless explicitly `'public'`)
 - Guild deploy current: 5 commands registered as of 2026-03-27 (UTV2-65 confirmed)
 
