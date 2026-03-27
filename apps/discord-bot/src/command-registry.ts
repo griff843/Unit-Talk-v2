@@ -19,6 +19,8 @@ export interface CommandHandler {
   execute(interaction: ChatInputCommandInteraction): Promise<void>;
   /** Discord role IDs. If present, role guard runs before execute(). */
   requiredRoles?: string[] | undefined;
+  /** Response visibility. Defaults to private/ephemeral when omitted. */
+  responseVisibility?: 'private' | 'public' | undefined;
 }
 
 /** Keyed by slash command name. Immutable after startup. */

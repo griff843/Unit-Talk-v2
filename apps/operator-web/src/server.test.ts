@@ -3,10 +3,12 @@ import test from 'node:test';
 import { request } from 'node:http';
 import type { SystemRunRecord } from '@unit-talk/db';
 import {
+  buildLeaderboardResponse,
   buildCapperStatsResponse,
   createOperatorServer,
   createSnapshotFromRows,
   createStatsRows,
+  type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
   type OperatorSnapshotProvider,
   type OutboxFilter,
@@ -1356,6 +1358,218 @@ test('GET /api/operator/stats returns 400 when last is invalid', async () => {
   assert.match(response.body, /must be one of 7, 14, 30, 90/);
 });
 
+test('GET /api/operator/leaderboard returns ranked entries with streaks', async () => {
+  const provider = createStaticProvider();
+  const leaderboardProvider = createStaticLeaderboardProvider();
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/leaderboard?last=30');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      window: number;
+      minPicks: number;
+      entries: Array<{
+        rank: number;
+        capper: string;
+        wins: number;
+        losses: number;
+        pushes: number;
+        streak: number;
+      }>;
+    };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(body.data.window, 30);
+  assert.equal(body.data.minPicks, 3);
+  assert.deepEqual(
+    body.data.entries.map((entry) => ({
+      rank: entry.rank,
+      capper: entry.capper,
+      wins: entry.wins,
+      losses: entry.losses,
+      pushes: entry.pushes,
+      streak: entry.streak,
+    })),
+    [
+      { rank: 1, capper: 'Casey', wins: 2, losses: 0, pushes: 1, streak: 1 },
+      { rank: 2, capper: 'Vintage', wins: 3, losses: 0, pushes: 0, streak: 3 },
+      { rank: 3, capper: 'Ace', wins: 2, losses: 1, pushes: 0, streak: 2 },
+      { rank: 4, capper: 'Blake', wins: 1, losses: 2, pushes: 0, streak: -2 },
+    ],
+  );
+});
+
+test('GET /api/operator/leaderboard returns empty entries when all cappers fall below minPicks', async () => {
+  const provider = createStaticProvider();
+  const leaderboardProvider = createStaticLeaderboardProvider();
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(
+    address.port,
+    '/api/operator/leaderboard?last=30&minPicks=4&sport=MLB',
+  );
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: { entries: unknown[] };
+  };
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.data.entries, []);
+});
+
+test('GET /api/operator/leaderboard returns 400 when last is invalid', async () => {
+  const provider = createStaticProvider();
+  const leaderboardProvider = createStaticLeaderboardProvider();
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/leaderboard?last=99');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 400);
+  assert.match(response.body, /must be one of 7, 14, 30, 90/);
+});
+
+test('GET /api/operator/leaderboard filters entries by sport', async () => {
+  const provider = createStaticProvider();
+  const leaderboardProvider = createStaticLeaderboardProvider();
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(
+    address.port,
+    '/api/operator/leaderboard?last=30&sport=NBA',
+  );
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: { entries: Array<{ capper: string }> };
+  };
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.data.entries.map((entry) => entry.capper), ['Vintage', 'Ace', 'Blake']);
+});
+
+test('GET /api/operator/leaderboard ranks higher win-rate cappers above lower win-rate cappers', async () => {
+  const provider = createStaticProvider();
+  const leaderboardProvider = createStaticLeaderboardProvider();
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/leaderboard?last=30&sport=NBA');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: { entries: Array<{ capper: string }> };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(body.data.entries[0]?.capper, 'Vintage');
+  assert.equal(body.data.entries[body.data.entries.length - 1]?.capper, 'Blake');
+});
+
+test('GET /api/operator/leaderboard excludes picks outside the requested window', async () => {
+  const provider = createStaticProvider();
+  const leaderboardProvider = createStaticLeaderboardProvider();
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/leaderboard?last=7&sport=NBA');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: { entries: Array<{ capper: string }> };
+  };
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.data.entries.map((entry) => entry.capper), ['Ace', 'Blake']);
+});
+
+test('GET /api/operator/leaderboard clamps limit instead of erroring', async () => {
+  const provider = createStaticProvider();
+  let capturedLimit = 0;
+  const leaderboardProvider: OperatorLeaderboardProvider = {
+    async getLeaderboard(query) {
+      capturedLimit = query.limit;
+      return {
+        window: query.window,
+        sport: query.sport ?? null,
+        minPicks: query.minPicks,
+        entries: [],
+        observedAt: '2026-03-27T12:00:00.000Z',
+      };
+    },
+  };
+  const server = createOperatorServer({ provider, leaderboardProvider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/leaderboard?last=30&limit=99');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.equal(capturedLimit, 25);
+});
+
 test('buildCapperStatsResponse returns zero stats when capper has no picks in window', () => {
   const rows = createStatsRows(makeStatsFixture());
   const stats = buildCapperStatsResponse(
@@ -1735,6 +1949,19 @@ function createStaticStatsProvider(): OperatorStatsProvider {
   };
 }
 
+function createStaticLeaderboardProvider(): OperatorLeaderboardProvider {
+  return {
+    async getLeaderboard(query) {
+      const rows = createStatsRows(makeLeaderboardFixture()).filter((row) => {
+        const since = createWindowSinceIso(query.window);
+        return row.settlement.settled_at >= since;
+      });
+
+      return buildLeaderboardResponse(query, rows);
+    },
+  };
+}
+
 function makeStatsFixture() {
   return {
     settlements: [
@@ -1818,6 +2045,59 @@ function makeStatsFixture() {
   };
 }
 
+function makeLeaderboardFixture() {
+  return {
+    settlements: [
+      makeLeaderboardSettlement('settlement-leaderboard-1', 'pick-leaderboard-1', 'win', '2026-03-26T12:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-2', 'pick-leaderboard-2', 'win', '2026-03-25T12:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-3', 'pick-leaderboard-3', 'loss', '2026-03-24T12:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-4', 'pick-leaderboard-4', 'loss', '2026-03-26T13:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-5', 'pick-leaderboard-5', 'loss', '2026-03-25T13:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-6', 'pick-leaderboard-6', 'win', '2026-03-24T13:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-7', 'pick-leaderboard-7', 'win', '2026-03-26T14:00:00.000Z', { clvRaw: '1.4' }),
+      makeLeaderboardSettlement('settlement-leaderboard-8', 'pick-leaderboard-8', 'push', '2026-03-25T14:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-9', 'pick-leaderboard-9', 'win', '2026-03-24T14:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-10', 'pick-leaderboard-10', 'win', '2026-03-10T12:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-11', 'pick-leaderboard-11', 'win', '2026-03-09T12:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-12', 'pick-leaderboard-12', 'win', '2026-03-08T12:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-13', 'pick-leaderboard-13', 'win', '2026-03-26T15:00:00.000Z'),
+      makeLeaderboardSettlement('settlement-leaderboard-14', 'pick-leaderboard-14', 'loss', '2026-03-24T15:00:00.000Z'),
+    ],
+    picks: [
+      makeStatsPick('pick-leaderboard-1', 'submission-leaderboard-1', 'NBA'),
+      makeStatsPick('pick-leaderboard-2', 'submission-leaderboard-2', 'NBA'),
+      makeStatsPick('pick-leaderboard-3', 'submission-leaderboard-3', 'NBA'),
+      makeStatsPick('pick-leaderboard-4', 'submission-leaderboard-4', 'NBA'),
+      makeStatsPick('pick-leaderboard-5', 'submission-leaderboard-5', 'NBA'),
+      makeStatsPick('pick-leaderboard-6', 'submission-leaderboard-6', 'NBA'),
+      makeStatsPick('pick-leaderboard-7', 'submission-leaderboard-7', 'MLB'),
+      makeStatsPick('pick-leaderboard-8', 'submission-leaderboard-8', 'MLB'),
+      makeStatsPick('pick-leaderboard-9', 'submission-leaderboard-9', 'MLB'),
+      makeStatsPick('pick-leaderboard-10', 'submission-leaderboard-10', 'NBA'),
+      makeStatsPick('pick-leaderboard-11', 'submission-leaderboard-11', 'NBA'),
+      makeStatsPick('pick-leaderboard-12', 'submission-leaderboard-12', 'NBA'),
+      makeStatsPick('pick-leaderboard-13', 'submission-leaderboard-13', 'NBA'),
+      makeStatsPick('pick-leaderboard-14', 'submission-leaderboard-14', 'NBA'),
+    ],
+    submissions: [
+      makeStatsSubmission('submission-leaderboard-1', 'Ace'),
+      makeStatsSubmission('submission-leaderboard-2', 'Ace'),
+      makeStatsSubmission('submission-leaderboard-3', 'Ace'),
+      makeStatsSubmission('submission-leaderboard-4', 'Blake'),
+      makeStatsSubmission('submission-leaderboard-5', 'Blake'),
+      makeStatsSubmission('submission-leaderboard-6', 'Blake'),
+      makeStatsSubmission('submission-leaderboard-7', 'Casey'),
+      makeStatsSubmission('submission-leaderboard-8', 'Casey'),
+      makeStatsSubmission('submission-leaderboard-9', 'Casey'),
+      makeStatsSubmission('submission-leaderboard-10', 'Vintage'),
+      makeStatsSubmission('submission-leaderboard-11', 'Vintage'),
+      makeStatsSubmission('submission-leaderboard-12', 'Vintage'),
+      makeStatsSubmission('submission-leaderboard-13', 'Tiny'),
+      makeStatsSubmission('submission-leaderboard-14', 'Tiny'),
+    ],
+  };
+}
+
 function makeStatsPick(id: string, submissionId: string, sport: string) {
   return {
     id,
@@ -1859,6 +2139,36 @@ function makeStatsSubmission(id: string, submittedBy: string) {
     created_at: '2026-03-20T11:00:00.000Z',
     updated_at: '2026-03-20T11:00:00.000Z',
   };
+}
+
+function makeLeaderboardSettlement(
+  id: string,
+  pickId: string,
+  result: 'win' | 'loss' | 'push',
+  settledAt: string,
+  payload: Record<string, unknown> = {},
+) {
+  return {
+    id,
+    pick_id: pickId,
+    status: 'settled',
+    result,
+    source: 'grading',
+    confidence: 'confirmed',
+    evidence_ref: null,
+    notes: null,
+    review_reason: null,
+    settled_by: 'grading',
+    settled_at: settledAt,
+    corrects_id: null,
+    payload: payload as never,
+    created_at: settledAt,
+  };
+}
+
+function createWindowSinceIso(window: 7 | 14 | 30 | 90) {
+  const anchor = new Date('2026-03-27T00:00:00.000Z').getTime();
+  return new Date(anchor - window * 24 * 60 * 60 * 1000).toISOString();
 }
 
 function createCanaryOutbox(id: string, status: 'sent' | 'failed' | 'dead_letter', updatedAt: string) {

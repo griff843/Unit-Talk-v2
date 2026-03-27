@@ -18,7 +18,7 @@ export { UNAVAILABLE_REPLY };
  *      -> not found: reply ephemeral 'Unknown command'
  *   3. Run role guard if command.requiredRoles is defined
  *      -> guard fails: reply ephemeral access denied
- *   4. deferReply({ ephemeral: true }) <- MUST happen before any I/O
+ *   4. deferReply({ ephemeral }) <- MUST happen before any I/O
  *   5. command.execute(interaction)
  *   6. On uncaught error: editReply generic message + log full error
  *
@@ -46,8 +46,10 @@ export function createInteractionHandler(
       return;
     }
 
+    const isEphemeral = command.responseVisibility !== 'public';
+
     // deferReply MUST happen before any async work (ack-within-3s discipline)
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ ephemeral: isEphemeral });
 
     try {
       await command.execute(interaction as ChatInputCommandInteraction);

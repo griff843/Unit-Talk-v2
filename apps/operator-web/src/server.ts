@@ -177,17 +177,58 @@ export interface OperatorStatsProvider {
   getStats(query: OperatorStatsQuery): Promise<CapperStatsResponse>;
 }
 
+export interface LeaderboardEntry {
+  rank: number;
+  capper: string;
+  picks: number;
+  wins: number;
+  losses: number;
+  pushes: number;
+  winRate: number | null;
+  roiPct: number | null;
+  avgClvPct: number | null;
+  streak: number;
+}
+
+export interface LeaderboardResponse {
+  window: StatsWindowDays;
+  sport: string | null;
+  minPicks: number;
+  entries: LeaderboardEntry[];
+  observedAt: string;
+}
+
+export interface OperatorLeaderboardQuery {
+  window: StatsWindowDays;
+  sport?: string;
+  limit: number;
+  minPicks: number;
+}
+
+export interface OperatorLeaderboardProvider {
+  getLeaderboard(query: OperatorLeaderboardQuery): Promise<LeaderboardResponse>;
+}
+
 export interface OperatorServerOptions {
   provider?: OperatorSnapshotProvider;
   statsProvider?: OperatorStatsProvider;
+  leaderboardProvider?: OperatorLeaderboardProvider;
 }
 
 export function createOperatorServer(options: OperatorServerOptions = {}) {
   const provider = options.provider ?? createOperatorSnapshotProvider();
   const statsProvider = options.statsProvider ?? createOperatorStatsProvider();
+  const leaderboardProvider =
+    options.leaderboardProvider ?? createOperatorLeaderboardProvider();
 
   return http.createServer(async (request, response) => {
-    await routeOperatorRequest(request, response, provider, statsProvider);
+    await routeOperatorRequest(
+      request,
+      response,
+      provider,
+      statsProvider,
+      leaderboardProvider,
+    );
   });
 }
 
@@ -196,6 +237,7 @@ export async function routeOperatorRequest(
   response: ServerResponse,
   provider: OperatorSnapshotProvider,
   statsProvider: OperatorStatsProvider,
+  leaderboardProvider: OperatorLeaderboardProvider,
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -269,6 +311,22 @@ export async function routeOperatorRequest(
 
     const stats = await statsProvider.getStats(statsQuery);
     return writeJson(response, 200, { ok: true, data: stats });
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/leaderboard') {
+    const leaderboardQuery = parseLeaderboardQuery(url);
+    if ('error' in leaderboardQuery) {
+      return writeJson(response, 400, {
+        ok: false,
+        error: {
+          code: 'INVALID_QUERY',
+          message: leaderboardQuery.error,
+        },
+      });
+    }
+
+    const leaderboard = await leaderboardProvider.getLeaderboard(leaderboardQuery);
+    return writeJson(response, 200, { ok: true, data: leaderboard });
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/participants') {
@@ -623,6 +681,85 @@ export function createOperatorStatsProvider(): OperatorStatsProvider {
     return {
       async getStats(query: OperatorStatsQuery) {
         return createEmptyStatsResponse(query);
+      },
+    };
+  }
+}
+
+export function createOperatorLeaderboardProvider(): OperatorLeaderboardProvider {
+  try {
+    const env = loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    const client = createDatabaseClientFromConnection(connection);
+
+    return {
+      async getLeaderboard(query: OperatorLeaderboardQuery) {
+        const sinceIso = createStatsSinceIso(query.window);
+        const candidateSettlementsResult = await client
+          .from('settlement_records')
+          .select('*')
+          .eq('source', 'grading')
+          .gte('settled_at', sinceIso)
+          .in('result', ['win', 'loss', 'push']);
+
+        if (candidateSettlementsResult.error) {
+          throw candidateSettlementsResult.error;
+        }
+
+        const candidateSettlements = candidateSettlementsResult.data ?? [];
+        if (candidateSettlements.length === 0) {
+          return createEmptyLeaderboardResponse(query);
+        }
+
+        const pickIds = uniqueStrings(candidateSettlements.map((row) => row.pick_id));
+        const [allSettlementsResult, picksResult] = await Promise.all([
+          client
+            .from('settlement_records')
+            .select('*')
+            .eq('source', 'grading')
+            .in('pick_id', pickIds),
+          client.from('picks').select('*').in('id', pickIds),
+        ]);
+
+        if (allSettlementsResult.error) {
+          throw allSettlementsResult.error;
+        }
+        if (picksResult.error) {
+          throw picksResult.error;
+        }
+
+        const picks = picksResult.data ?? [];
+        const submissionIds = uniqueStrings(
+          picks
+            .map((row) => row.submission_id)
+            .filter((value): value is string => typeof value === 'string' && value.length > 0),
+        );
+
+        const submissionsResult =
+          submissionIds.length > 0
+            ? await client.from('submissions').select('*').in('id', submissionIds)
+            : { data: [] as SubmissionRecord[], error: null };
+
+        if (submissionsResult.error) {
+          throw submissionsResult.error;
+        }
+
+        const statsRows = createStatsRows({
+          settlements: allSettlementsResult.data ?? [],
+          picks,
+          submissions: submissionsResult.data ?? [],
+        });
+
+        return buildLeaderboardResponse(
+          query,
+          statsRows.filter((row) => matchesStatsWindow(row, sinceIso)),
+        );
+      },
+    };
+  } catch {
+    return {
+      async getLeaderboard(query: OperatorLeaderboardQuery) {
+        return createEmptyLeaderboardResponse(query);
       },
     };
   }
@@ -1542,6 +1679,115 @@ export function createEmptyStatsResponse(query: OperatorStatsQuery): CapperStats
   };
 }
 
+export function buildLeaderboardResponse(
+  query: OperatorLeaderboardQuery,
+  rows: StatsRow[],
+): LeaderboardResponse {
+  const filtered = rows.filter((row) => {
+    if (!isSettledResult(row.settlement.result)) {
+      return false;
+    }
+
+    if (query.sport && !matchesSport(row.pick, query.sport)) {
+      return false;
+    }
+
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    return createEmptyLeaderboardResponse(query);
+  }
+
+  const grouped = new Map<
+    string,
+    {
+      capper: string;
+      rows: StatsRow[];
+    }
+  >();
+
+  for (const row of filtered) {
+    const capper = normalizeCapperDisplayName(row.submission?.submitted_by);
+    const key = capper.toLowerCase();
+    const existing = grouped.get(key);
+    if (existing) {
+      existing.rows.push(row);
+    } else {
+      grouped.set(key, { capper, rows: [row] });
+    }
+  }
+
+  const entries = [...grouped.values()]
+    .map(({ capper, rows: capperRows }) => {
+      const settledRows = [...capperRows].sort((left, right) =>
+        left.settlement.settled_at.localeCompare(right.settlement.settled_at),
+      );
+      const wins = settledRows.filter((row) => row.settlement.result === 'win').length;
+      const losses = settledRows.filter((row) => row.settlement.result === 'loss').length;
+      const pushes = settledRows.filter((row) => row.settlement.result === 'push').length;
+      const decidedPicks = wins + losses;
+      const clvValues = settledRows
+        .map((row) => readNumericPayloadValue(findSettlementRecordPayload(row, 'clvRaw')))
+        .filter((value): value is number => value !== null);
+
+      return {
+        rank: 0,
+        capper,
+        picks: settledRows.length,
+        wins,
+        losses,
+        pushes,
+        winRate: decidedPicks > 0 ? roundTo4(wins / decidedPicks) : null,
+        roiPct: decidedPicks > 0 ? roundTo2(((wins - losses) / decidedPicks) * 100) : null,
+        avgClvPct:
+          clvValues.length > 0
+            ? roundTo2(clvValues.reduce((sum, value) => sum + value, 0) / clvValues.length)
+            : null,
+        streak: computeStreak(settledRows),
+      } satisfies LeaderboardEntry;
+    })
+    .filter((entry) => entry.picks >= query.minPicks)
+    .sort((left, right) => {
+      const byWinRate = compareNullableDescending(left.winRate, right.winRate);
+      if (byWinRate !== 0) {
+        return byWinRate;
+      }
+
+      const byRoi = compareNullableDescending(left.roiPct, right.roiPct);
+      if (byRoi !== 0) {
+        return byRoi;
+      }
+
+      return left.capper.localeCompare(right.capper);
+    })
+    .slice(0, query.limit)
+    .map((entry, index) => ({
+      ...entry,
+      rank: index + 1,
+    }));
+
+  return {
+    window: query.window,
+    sport: query.sport ?? null,
+    minPicks: query.minPicks,
+    entries,
+    observedAt: new Date().toISOString(),
+  };
+}
+
+export function createEmptyLeaderboardResponse(
+  query: OperatorLeaderboardQuery,
+): LeaderboardResponse {
+  return {
+    window: query.window,
+    sport: query.sport ?? null,
+    minPicks: query.minPicks,
+    entries: [],
+    observedAt: new Date().toISOString(),
+  };
+}
+
 export function parseStatsQuery(url: URL): OperatorStatsQuery | { error: string } {
   const requestedWindow = url.searchParams.get('last');
   const parsedWindow = requestedWindow === null ? 30 : Number.parseInt(requestedWindow, 10);
@@ -1556,6 +1802,28 @@ export function parseStatsQuery(url: URL): OperatorStatsQuery | { error: string 
     ...(capper ? { capper } : {}),
     ...(sport ? { sport } : {}),
     window: parsedWindow,
+  };
+}
+
+export function parseLeaderboardQuery(
+  url: URL,
+): OperatorLeaderboardQuery | { error: string } {
+  const requestedWindow = url.searchParams.get('last');
+  const parsedWindow = requestedWindow === null ? 30 : Number.parseInt(requestedWindow, 10);
+  if (!isAllowedStatsWindow(parsedWindow)) {
+    return { error: 'Query parameter "last" must be one of 7, 14, 30, 90.' };
+  }
+
+  const sport = normalizeOptionalQueryValue(url.searchParams.get('sport'));
+  const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '10', 10);
+  const requestedMinPicks = Number.parseInt(url.searchParams.get('minPicks') ?? '3', 10);
+
+  return {
+    ...(sport ? { sport } : {}),
+    window: parsedWindow,
+    limit: Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 25) : 10,
+    minPicks:
+      Number.isFinite(requestedMinPicks) && requestedMinPicks > 0 ? requestedMinPicks : 3,
   };
 }
 
@@ -1661,6 +1929,11 @@ function matchesCapperName(submittedBy: string | null | undefined, requestedCapp
   return (submittedBy ?? '').trim().toLowerCase() === requestedCapper.trim().toLowerCase();
 }
 
+function normalizeCapperDisplayName(submittedBy: string | null | undefined) {
+  const trimmed = (submittedBy ?? '').trim();
+  return trimmed.length > 0 ? trimmed : 'Unknown';
+}
+
 function matchesSport(pick: PickRecord, requestedSport: string) {
   const metadata = readJsonObject(pick.metadata);
   const sport = metadata?.['sport'];
@@ -1734,6 +2007,41 @@ function roundTo2(value: number) {
 
 function roundTo4(value: number) {
   return Number(value.toFixed(4));
+}
+
+function compareNullableDescending(left: number | null, right: number | null) {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  return right - left;
+}
+
+function computeStreak(rows: StatsRow[]) {
+  const descending = [...rows].sort((left, right) =>
+    right.settlement.settled_at.localeCompare(left.settlement.settled_at),
+  );
+
+  const firstResult = descending[0]?.settlement.result;
+  if (firstResult !== 'win' && firstResult !== 'loss') {
+    return 0;
+  }
+
+  let streak = 0;
+  for (const row of descending) {
+    if (row.settlement.result !== firstResult) {
+      break;
+    }
+
+    streak += 1;
+  }
+
+  return firstResult === 'win' ? streak : -streak;
 }
 
 function writeJson(response: ServerResponse, status: number, body: unknown) {
