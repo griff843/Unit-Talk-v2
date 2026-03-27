@@ -7,13 +7,80 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 10 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 6 |
-| `lane:augment` | 0 | 0 | 1 | 0 | 3 |
+| `lane:codex` | 0 | 1 | 0 | 0 | 10 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 6 |
+| `lane:augment` | 0 | 0 | 1 | 0 | 4 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-49 — T2 Smart Form Confidence Field
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-49 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **IN_REVIEW** |
+| **Milestone** | M8 |
+| **Area** | `area:smart-form` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-49-smart-form-confidence-field` |
+| **PR** | — |
+
+#### Scope
+
+`buildSubmissionPayload()` omits the top-level `confidence` field (0–1 float). Domain analysis uses `pick.confidence` for edge computation. Without it, all Smart Form picks score ~61.5 composite — below best-bets threshold of 70. No Smart Form pick has ever reached `discord:best-bets`.
+
+Fix: add `confidence?: number` to `SubmitPickPayload` in `api-client.ts`; add `confidence: values.capperConviction / 10` to `buildSubmissionPayload()` in `form-utils.ts`.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: `SubmitPickPayload.confidence?: number` added to `api-client.ts`
+- [ ] AC-2: `buildSubmissionPayload()` sets `confidence = capperConviction / 10`
+- [ ] AC-3: conviction=1 → 0.1; conviction=8 → 0.8; conviction=10 → 1.0
+- [ ] AC-4: `metadata.promotionScores.trust` unchanged (`capperConviction * 10`)
+- [ ] AC-5: `pnpm verify` exits 0; test count ≥ 624
+- [ ] AC-6: `tsx --test apps/smart-form/test/form-utils.test.ts` exits 0
+
+#### Contract Authority
+
+`docs/05_operations/T2_SMART_FORM_CONFIDENCE_CONTRACT.md` (status: RATIFIED)
+
+---
+
+### UTV2-48 — T1 CLV Wiring Live Proof
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-48 |
+| **Tier** | T1 (verify) |
+| **Lane** | `lane:claude` |
+| **Status** | **READY** |
+| **Milestone** | M8 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+#### Scope
+
+UTV2-46 (merged 2026-03-27) wired `computeAndAttachCLV()` into `recordGradedSettlement()`. All 3 existing settlements predate the merge — no live proof exists. Trigger a grading run against a posted pick with a matching `provider_offers` row. Verify `settlement_records.payload` contains top-level `clvRaw`, `clvPercent`, `beatsClosingLine` keys.
+
+#### Acceptance Criteria
+
+- [ ] AC-1: Submit and post a pick with finite odds and a selection containing "over" or "under"
+- [ ] AC-2: Confirm participant has a matching `provider_offers` row
+- [ ] AC-3: Run `POST /api/grading/run` — confirm pick is graded
+- [ ] AC-4: Query resulting `settlement_records.payload` — confirm `clvRaw`, `clvPercent`, `beatsClosingLine` as top-level keys
+- [ ] AC-5: If no matching offer: confirm payload omits CLV keys (not null); document which path fired
+
+#### Contract Authority
+
+`docs/05_operations/T2_SMART_FORM_CONFIDENCE_CONTRACT.md §8`
 
 ---
 
@@ -346,6 +413,28 @@ All 10 ACs satisfied. 617/617 tests (606 baseline → +11 net-new; contract requ
 - Fires when input ≥2 chars; AbortController per keystroke; shows loading/error/empty/suggestion states
 - Helpers extracted to `lib/participant-search.ts` (pure, no UI deps — testable)
 - 4 new unit tests in `test/api-client.test.ts` (12 total); smart-form local tests pass
+
+---
+
+### UTV2-50 — T3 Discord /help Command
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-50 |
+| **Tier** | T3 |
+| **Lane** | `lane:augment` |
+| **Status** | **DONE** |
+| **Milestone** | M8 |
+| **Area** | `area:discord-bot` |
+| **Branch** | `augment/UTV2-50-discord-help` |
+| **PR** | — (committed to `main` 2026-03-27) |
+
+#### Delivered
+
+- `createHelpCommand()` + `createDefaultCommand()` in `apps/discord-bot/src/commands/help.ts`
+- Ephemeral embed listing /pick, /stats, /leaderboard, /help with descriptions
+- Auto-discovered by `loadCommandRegistry()` — no wiring changes required
+- 3 new tests (ok 156–158); 624/624 total; `pnpm type-check` exit 0
 
 ---
 
