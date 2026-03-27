@@ -24,6 +24,11 @@ import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
 import { buildStatsEmbed, createStatsCommand, type CapperStatsResponse } from './commands/stats.js';
+import {
+  buildLeaderboardEmbed,
+  createLeaderboardCommand,
+  type LeaderboardResponse,
+} from './commands/leaderboard.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -132,6 +137,7 @@ function makeMockInteraction(opts: {
   interaction: Interaction;
   replies: string[];
   deferred: boolean;
+  deferredOptions: unknown[];
   edited: string[];
   deferOrder: number;
   executeOrder: number;
@@ -139,6 +145,7 @@ function makeMockInteraction(opts: {
 } {
   const replies: string[] = [];
   const edited: string[] = [];
+  const deferredOptions: unknown[] = [];
   let deferred = false;
   let deferOrder = -1;
   let executeOrder = -1;
@@ -159,8 +166,9 @@ function makeMockInteraction(opts: {
     reply: async (options: { content: string }) => {
       replies.push(options.content);
     },
-    deferReply: async (_opts: unknown) => {
+    deferReply: async (opts: unknown) => {
       deferred = true;
+      deferredOptions.push(opts);
       deferOrder = step++;
       callOrder.push(deferOrder);
     },
@@ -173,6 +181,7 @@ function makeMockInteraction(opts: {
     interaction: mock as unknown as Interaction,
     replies,
     edited,
+    deferredOptions,
     get deferred() { return deferred; },
     get deferOrder() { return deferOrder; },
     get executeOrder() { return executeOrder; },
@@ -182,6 +191,7 @@ function makeMockInteraction(opts: {
     interaction: Interaction;
     replies: string[];
     deferred: boolean;
+    deferredOptions: unknown[];
     edited: string[];
     deferOrder: number;
     executeOrder: number;
@@ -213,6 +223,41 @@ function makeStatsResponse(): CapperStatsResponse {
     beatsLine: 0.71,
     picksWithClv: 14,
     lastFive: ['W', 'W', 'L', 'W', 'W'],
+  };
+}
+
+function makeLeaderboardResponse(): LeaderboardResponse {
+  return {
+    window: 30,
+    sport: 'NBA',
+    minPicks: 3,
+    observedAt: '2026-03-27T12:00:00.000Z',
+    entries: [
+      {
+        rank: 1,
+        capper: 'Griff',
+        picks: 5,
+        wins: 4,
+        losses: 1,
+        pushes: 0,
+        winRate: 0.8,
+        roiPct: 60,
+        avgClvPct: 2.4,
+        streak: 5,
+      },
+      {
+        rank: 2,
+        capper: 'Casey',
+        picks: 4,
+        wins: 2,
+        losses: 2,
+        pushes: 0,
+        winRate: 0.5,
+        roiPct: 0,
+        avgClvPct: 0.4,
+        streak: -2,
+      },
+    ],
   };
 }
 
@@ -399,6 +444,35 @@ test('loadCommandRegistry also loads the stats command from the commands directo
   );
 });
 
+test('loadCommandRegistry also loads the leaderboard command from the commands directory', async () => {
+  await withEnvVars(
+    {
+      NODE_ENV: 'test',
+      UNIT_TALK_APP_ENV: 'local',
+      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+      LINEAR_TEAM_KEY: 'UTV2',
+      LINEAR_TEAM_NAME: 'unit-talk-v2',
+      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+      DISCORD_BOT_TOKEN: 'test-token',
+      DISCORD_CLIENT_ID: 'test-client-id',
+      DISCORD_GUILD_ID: '1284478946171293736',
+      DISCORD_CAPPER_ROLE_ID: 'role-capper',
+      UNIT_TALK_API_URL: 'http://localhost:4000',
+    },
+    async () => {
+      const registry = await loadCommandRegistry();
+      const command = registry.get('leaderboard');
+      assert.ok(command);
+      assert.equal(command?.data.name, 'leaderboard');
+      assert.equal(command?.requiredRoles, undefined);
+      assert.equal(command?.responseVisibility, 'public');
+      assert.equal(command?.data.toJSON().options?.length, 3);
+    },
+  );
+});
+
 test('/stats embed omits CLV fields when picksWithClv is zero', () => {
   const embed = buildStatsEmbed({
     ...makeStatsResponse(),
@@ -451,6 +525,36 @@ test('/stats command calls the operator endpoint with the requested filters', as
   assert.equal(requestedPath, '/api/operator/stats?last=30&capper=Griff&sport=NBA');
   assert.equal(edited.length, 1);
   assert.ok(Array.isArray(edited[0]?.embeds));
+});
+
+test('/leaderboard command registers the expected public options', () => {
+  const apiClient: ApiClient = {
+    get: async <T>() => ({ ok: true, data: makeLeaderboardResponse() } as T),
+    post: async <T>() => ({} as T),
+  };
+
+  const command = createLeaderboardCommand(apiClient);
+  const commandJson = command.data.toJSON();
+
+  assert.equal(command.data.name, 'leaderboard');
+  assert.equal(command.requiredRoles, undefined);
+  assert.equal(command.responseVisibility, 'public');
+  assert.deepEqual(
+    commandJson.options?.map((option) => option.name),
+    ['window', 'sport', 'limit'],
+  );
+});
+
+test('/leaderboard embed renders rank, record, roi, and streak format', () => {
+  const embed = buildLeaderboardEmbed(makeLeaderboardResponse()).toJSON();
+
+  assert.equal(embed.color, 0xffd700);
+  assert.match(embed.title ?? '', /Leaderboard/);
+  assert.equal(embed.fields?.[0]?.name, '#1 Griff');
+  assert.equal(embed.fields?.[0]?.value, '4–1–0  80.0%  +60.0% ROI  🔥5');
+  assert.equal(embed.fields?.[1]?.name, '#2 Casey');
+  assert.equal(embed.fields?.[1]?.value, '2–2–0  50.0%  0.0% ROI  🧊2');
+  assert.match(embed.footer?.text ?? '', /Min 3 settled picks/);
 });
 
 // ---------------------------------------------------------------------------
@@ -541,7 +645,24 @@ test('router calls deferReply and passes interaction to execute when command fou
   await handler(mock.interaction);
 
   assert.equal(mock.deferred, true, 'deferReply must be called');
+  assert.deepEqual(mock.deferredOptions[0], { ephemeral: true });
   assert.ok(receivedInteraction !== null, 'execute must receive the interaction');
+});
+
+test('router makes leaderboard replies public when command visibility is public', async () => {
+  const fakeCommand: CommandHandler = {
+    data: { name: 'leaderboard', toJSON: () => ({}) } as unknown as import('discord.js').SlashCommandBuilder,
+    responseVisibility: 'public',
+    execute: async () => {},
+  };
+  const registry = makeRegistry([fakeCommand]);
+  const handler = createInteractionHandler(registry);
+  const mock = makeMockInteraction({ commandName: 'leaderboard', roles: null });
+
+  await handler(mock.interaction);
+
+  assert.equal(mock.deferred, true);
+  assert.deepEqual(mock.deferredOptions[0], { ephemeral: false });
 });
 
 test('router catches execute errors and edits reply with generic message', async () => {
