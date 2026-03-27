@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 1 | 1 | 2 | 0 | 2 |
+| `lane:codex` | 1 | 2 | 1 | 0 | 2 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 3 |
 | `lane:augment` | 1 | 0 | 0 | 0 | 1 |
 
@@ -223,21 +223,27 @@ Contract RATIFIED: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md`.
 | **ID** | UTV2-36 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M5 |
 | **Area** | `area:tooling` |
-| **Blocked by** | — |
+| **Blocked by** | Awaiting human merge of PR #3 + PR #8 before rebase |
 | **Unlocks** | persistent loop automation |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-36-queue-tooling` |
+| **PR** | #9 — **BLOCKED** (rebase onto main after PR #3 + #8 merge) |
 
 #### Acceptance Criteria
 
-- [ ] `scripts/claim-issue.mjs <issue-id>` — creates branch from main, updates queue status to IN_PROGRESS
-- [ ] `scripts/submit-issue.mjs <issue-id>` — opens PR, updates queue status to IN_REVIEW
-- [ ] Branch naming enforced: `{lane}/{linear-id}-{slug}`
-- [ ] Cannot claim from a stacked branch (guard: base must be main)
-- [ ] `pnpm verify` exits 0
+- [x] `scripts/claim-issue.mjs <issue-id>` — creates branch from main, updates queue status to IN_PROGRESS
+- [x] `scripts/submit-issue.mjs <issue-id>` — opens PR, updates queue status to IN_REVIEW
+- [x] Branch naming enforced: `{lane}/{linear-id}-{slug}`
+- [x] Cannot claim from a stacked branch (guard: base must be main)
+- [ ] `pnpm verify` exits 0 on clean branch after rebase
+
+#### Claude Review Note (2026-03-26) — BLOCKED
+
+Core tooling functional (scripts verified, verify passes). Branch includes out-of-scope files from UTV2-30 and UTV2-34 (approved, unmerged) — required to make type-check pass. Also included uncommitted `settlement-service.ts` which has now been committed to main directly.
+
+**Unblock:** Human merges PR #3 + PR #8 → Codex rebases → diff shrinks to tooling files only → re-push → re-submit.
 
 ---
 
@@ -253,27 +259,31 @@ Contract RATIFIED: `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md`.
 | **Area** | `area:tooling` `area:db` |
 | **Blocked by** | — (UTV2-28 DONE ✅) |
 | **Unlocks** | — |
-| **Branch** | `augment/UTV2-37-sgo-results-seed-proof` |
-| **PR** | #6 — **REJECTED** (branch stacked: 3 foreign commits) |
+| **Branch** | `augment/UTV2-37-v2` (latest attempt) |
+| **PR** | #10 — **REJECTED** (×4): stacked on UTV2-34 commits at branch base |
 
 #### Acceptance Criteria
 
-- [ ] Branch clean — only commit `11f7793` beyond main
+- [ ] Branch clean — only `051d9bc` (seed script + proof) beyond main
 - [ ] `pnpm verify` exits 0 on clean branch
 - [ ] `--help` prints usage and exits 0
 - [ ] Seed run inserts `game_results` row, ID documented
 - [ ] Proof doc at `docs/06_status/grading_seed_proof.md`
+- [ ] No ISSUE_QUEUE.md or PROGRAM_STATUS.md changes on feature branch
 
-#### Claude Review Note (2026-03-26) — REJECTED (third)
+#### Claude Review Note (2026-03-26) — REJECTED (×4)
 
-Branch still stacked on 3 foreign commits:
-- `2f574e2` — UTV2-42 ingestor (UTV2-30 work)
-- `7ef7e8c` — UTV2-34 stale doc
-- `3e115d0` — linear smoke test
+`augment/UTV2-37-v2` has 5 commits, still stacked on 2 UTV2-34 commits at the base (`a8521be`, `715acad`). Additionally includes 2 queue-file commits that should not be on feature branches.
 
-Commit `11f7793` contains the correct UTV2-37 work. Cherry-pick it onto a fresh branch from main.
-
-**Fix:** `git checkout main && git checkout -b augment/UTV2-37-v2 && git cherry-pick 11f7793 && pnpm verify && git push`
+**Fix (exact commands):**
+```bash
+git fetch origin
+git checkout origin/main -b augment/UTV2-37-v3
+git cherry-pick 051d9bc
+pnpm verify
+git push origin augment/UTV2-37-v3
+```
+Do not touch ISSUE_QUEUE.md or PROGRAM_STATUS.md on this branch.
 
 ---
 
@@ -288,6 +298,6 @@ UTV2-32  DOC claude    DONE         ← CLOSED: /stats contract RATIFIED
 UTV2-33  T2  codex     IN_PROGRESS  ← Draft PR #5 opened; not yet in review
 UTV2-34  T3  augment   DONE         ← APPROVED: PR #8 clean branch, pnpm verify ✅, deploy-commands runs; awaiting human merge
 UTV2-35  DOC claude    DONE         ← CLOSED: market key normalization contract RATIFIED
-UTV2-36  T3  codex     READY        ← Queue tooling scripts — no branch yet
-UTV2-37  T3  augment   IN_PROGRESS  ← REJECTED (×3): branch stacked; cherry-pick 11f7793 onto clean branch
+UTV2-36  T3  codex     IN_REVIEW    ← BLOCKED: tooling good, branch has out-of-scope files; unblocks after PR #3 + #8 merge + rebase
+UTV2-37  T3  augment   IN_PROGRESS  ← REJECTED (×4): still stacked on UTV2-34; cherry-pick 051d9bc from origin/main
 ```
