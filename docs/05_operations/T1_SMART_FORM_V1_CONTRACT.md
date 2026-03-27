@@ -256,6 +256,66 @@ Before Claude closes this sprint, the following must be demonstrated:
 
 ---
 
+## 16. T3 Lane Engineering Constraints (Smart Form Surface)
+
+These constraints apply to all future T3 (and Augment-lane) work touching `apps/smart-form`, regardless of whether a separate T3 contract exists. They are not T1-specific — they govern the surface.
+
+### Rule 1 — Pure Helper Placement
+
+**Helpers that must be importable outside the Next.js component runtime must live in `apps/smart-form/lib/`, not in component files.**
+
+Component files under `apps/smart-form/app/**/*.tsx` (e.g., `BetForm.tsx`, `BetSlipPanel.tsx`) transitively import Next.js UI dependencies (`@/components/ui/*`, `next/*`, `react-hook-form`) that cannot be resolved by `tsx --test` or the root `pnpm test` runner. Exporting a helper from one of these files silently breaks any consumer that runs outside the Next.js Jest environment — even if the package-local jest suite passes.
+
+A "helper importable outside Next.js component runtime" is any function that:
+- is tested by `tsx --test` (any file in the root test suite)
+- is imported by another package
+- is referenced in integration test assertions
+
+### Rule 2 — Test Runner Verification
+
+**Package-local jest (`pnpm --filter @unit-talk/smart-form test`) is not sufficient proof for helpers that tsx --test consumers will import.**
+
+The package-local jest runs under the Next.js jest config which resolves `@/` aliases and mocks Next.js internals. It will pass for helpers exported from component files. The root runner (`tsx --test`) does not resolve these aliases and will fail at import.
+
+Required gate for smart-form T3 lanes that deliver helpers:
+
+```bash
+# Verify helper is importable by tsx --test (root integration surface)
+tsx --test apps/smart-form/test/<test-file>.test.ts
+
+# Then verify package-local suite still passes
+pnpm --filter @unit-talk/smart-form test
+```
+
+Both must pass. Jest alone is not sufficient where tsx --test compatibility matters.
+
+### Correct vs Incorrect Pattern
+
+```
+CORRECT (UTV2-45 post-fix):
+  lib/participant-search.ts  ← pure helper, no UI deps
+  test/api-client.test.ts    ← imports from lib/participant-search.ts
+  Gate: tsx --test apps/smart-form/test/api-client.test.ts  ✅
+
+WRONG (UTV2-45 original Augment submission):
+  app/submit/components/BetForm.tsx  ← helper exported from component file
+  test/api-client.test.ts            ← imports from BetForm.tsx
+  Gate: pnpm --filter @unit-talk/smart-form test  ✅ (misleading — jest resolves @/ aliases)
+  Gate: tsx --test apps/smart-form/test/api-client.test.ts  ❌ (cannot find @/components/ui/form)
+```
+
+### Where to put new helpers
+
+| Helper type | Location |
+|-------------|----------|
+| Pure business logic (URL builders, data normalizers, validators) | `apps/smart-form/lib/` |
+| Form schema | `apps/smart-form/lib/form-schema.ts` |
+| Form-to-payload mapping | `apps/smart-form/lib/form-utils.ts` |
+| API client calls | `apps/smart-form/lib/api-client.ts` |
+| UI-only logic (render, state, event handlers with no external consumers) | Component file — OK, but do not export for external use |
+
+---
+
 ## 15. Deferred Items (Do Not Include in V1)
 
 | Item | When |
