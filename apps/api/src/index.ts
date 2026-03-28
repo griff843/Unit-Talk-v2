@@ -1,4 +1,5 @@
 import { createApiServer, createApiRuntimeDependencies } from './server.js';
+import { startAlertAgent } from './alert-agent.js';
 import { startRecapScheduler } from './recap-scheduler.js';
 
 const defaultPort = 4000;
@@ -6,10 +7,12 @@ const port = normalizePort(process.env.PORT);
 const runtime = createApiRuntimeDependencies();
 const server = createApiServer({ runtime });
 let stopRecapScheduler: (() => void) | null = null;
+let stopAlertAgent: (() => void) | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
   stopRecapScheduler = startRecapScheduler(runtime.repositories);
+  stopAlertAgent = startAlertAgent(runtime.repositories);
 
   console.log(
     JSON.stringify(
@@ -20,6 +23,7 @@ server.listen(port, () => {
         port,
         routes: [
           'GET /health',
+          'GET /api/alerts/line-movements',
           'POST /api/submissions',
           'POST /api/grading/run',
           'POST /api/recap/post',
@@ -61,6 +65,8 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   shuttingDown = true;
   stopRecapScheduler?.();
   stopRecapScheduler = null;
+  stopAlertAgent?.();
+  stopAlertAgent = null;
 
   server.close(() => {
     process.exit(0);
