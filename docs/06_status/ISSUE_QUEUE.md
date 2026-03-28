@@ -8,12 +8,48 @@
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 0 | 0 | 24 |
-| `lane:claude` | 0 | 0 | 1 | 0 | 11 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 14 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-102 — T2 Recap Runtime Hardening
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-102 |
+| **Tier** | T2 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — (direct to main) |
+| **PR** | — (commit `4b5ccd7`) |
+
+Hardened `recap-scheduler.ts`: structured error logging on tick failures, injectable `clock` for deterministic testing, idempotency boundary documented, 11AM-for-all schedule ratified. +1 new test (tick containment). 692/692 tests pass.
+
+---
+
+### UTV2-103 — T1 Full Lifecycle Proof Refresh
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-103 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api`, `area:operator-web`, `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Full lifecycle proof PASS 2026-03-28. Pick `46c14cf5` submitted, domain analysis enriched (edge=0.245, Kelly=0.05), promotion evaluated (76.85, board-capped). Grading route functional (skips due to participant gap). Recap daily+weekly both posted ok. Operator snapshot live (12 picks, 11 settlements). Two runtime gaps documented: worker not running, participant linkage for grading. Proof: `out/sprints/M13/2026-03-28/utv2-103-lifecycle-proof.md`.
 
 ---
 
@@ -78,14 +114,14 @@ In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass(
 | **ID** | UTV2-71 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M12 |
 | **Area** | `area:docs` |
-| **Blocked by** | — (UTV2-68 ✅, UTV2-69 ✅, UTV2-70 ✅) |
+| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
 
-Independent verification of M12 deliverables. Produce proof artifact. Update `PROGRAM_STATUS.md` M12 CLOSED, M13 placeholder.
+M12 closure proof PASS 2026-03-28. 691/691 tests. All gates green. Proof: `out/sprints/M12/2026-03-28/m12_closure_proof.md`. Grading cron standalone gap documented → UTV2-102.
 
 ---
 

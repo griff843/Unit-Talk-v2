@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — M12 ACTIVE. Contracts ratified: UTV2-68 (SGO results ingest), UTV2-69 (grading cron), UTV2-70 (RecapAgent). M11 CLOSED at 678/678 tests.
+2026-03-28 — M12 CLOSED; M13 ACTIVE. UTV2-101 (M12 closure PASS). UTV2-102 (recap hardening DONE, 692/692 tests). UTV2-103 (lifecycle proof PASS — pick `46c14cf5`, domain analysis ✓, promotion ✓, recap daily+weekly posted ✓, operator snapshot ✓).
 
 ---
 
@@ -16,12 +16,12 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | 678/678 pass. Last verified 2026-03-27 at main `1bab4d8`. |
-| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-27 (M11 closure). |
+| Tests | 692/692 pass. Last verified 2026-03-28 at main `4b5ccd7`. |
+| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-28 (UTV2-102 hardening). |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M12 ACTIVE** — SGO results ingest (UTV2-68), grading cron (UTV2-69), RecapAgent (UTV2-70). M11 CLOSED 2026-03-27. |
+| Milestone | **M13 ACTIVE** — Recap runtime hardening (UTV2-102), full lifecycle proof refresh (UTV2-103). M12 CLOSED 2026-03-28. |
 
-## Gate Notes (last verified 2026-03-27)
+## Gate Notes (last verified 2026-03-28)
 
 | Gate | Status | Notes |
 |------|--------|-------|
@@ -29,8 +29,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 678/678 — confirmed 2026-03-27 at main `1bab4d8`. |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-27 at main `1bab4d8` (M11 closure). |
+| `pnpm test` | PASS | 692/692 — confirmed 2026-03-28 at main `4b5ccd7`. |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-28 at main `4b5ccd7` (UTV2-102 hardening). |
 
 ### Runner Architecture
 
@@ -62,16 +62,23 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Current Milestone (M12 — ACTIVE)
+## Current Milestone (M13 — ACTIVE)
 
-M11 closed 2026-03-27. M12 ACTIVE 2026-03-27. All contracts ratified. Codex dispatched for UTV2-68 and UTV2-69; UTV2-70 unblocks after UTV2-68 merges.
+M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_closure_proof.md`.
+
+| Item | Tier | Lane | Status |
+|------|------|------|--------|
+| M13 UTV2-102 Recap runtime hardening | T2 | claude | DONE commit `4b5ccd7` |
+| M13 UTV2-103 Full lifecycle proof refresh | T1 | claude | DONE 2026-03-28 |
+
+### M12 Items (CLOSED 2026-03-28)
 
 | Item | Tier | Lane | Status |
 |------|------|------|--------|
 | M12 UTV2-68 SGO results auto-ingest | T2 | codex | DONE (already implemented) |
 | M12 UTV2-69 Grading cron | T3 | codex | DONE PR #41 |
 | M12 UTV2-70 RecapAgent scheduled Discord posts | T2 | codex | DONE PR #42 |
-| M12 UTV2-71 M12 closure verification | T1 | claude | READY |
+| M12 UTV2-71/UTV2-101 M12 closure verification | T1 | claude | DONE 2026-03-28 |
 
 ### M11 Items (CLOSED)
 
