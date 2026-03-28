@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 2 | 1 | 21 |
+| `lane:codex` | 0 | 1 | 1 | 0 | 22 |
 | `lane:claude` | 0 | 0 | 0 | 1 | 11 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
@@ -24,14 +24,14 @@
 | **ID** | UTV2-68 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M12 |
 | **Area** | `area:ingestor` |
-| **Blocked by** | — (T1 Automated Grading CLOSED ✅) |
-| **Branch** | `codex/UTV2-68-sgo-results-ingest` |
-| **PR** | — |
+| **Blocked by** | — |
+| **Branch** | — (already implemented) |
+| **PR** | — (no code change required) |
 
-Extend ingestor to fetch SGO final results after events complete, populate `game_results` table. Contract: `docs/05_operations/T2_SGO_RESULTS_INGEST_CONTRACT.md` (RATIFIED 2026-03-26).
+Already implemented — ingestor was already populating `game_results` from SGO. Verified 2026-03-27, no code changes needed. Contract: `docs/05_operations/T2_SGO_RESULTS_INGEST_CONTRACT.md`.
 
 ---
 
@@ -42,12 +42,12 @@ Extend ingestor to fetch SGO final results after events complete, populate `game
 | **ID** | UTV2-69 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **IN_REVIEW** |
 | **Milestone** | M12 |
 | **Area** | `area:api` |
-| **Blocked by** | UTV2-68 (production only — code can be implemented in parallel) |
+| **Blocked by** | — |
 | **Branch** | `codex/UTV2-69-grading-cron` |
-| **PR** | — |
+| **PR** | [#41](https://github.com/griff843/Unit-Talk-v2/pull/41) |
 
 In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass()`. No new route. No external cron. Contract: `docs/05_operations/UTV2-69_GRADING_CRON_CONTRACT.md`.
 
@@ -60,10 +60,10 @@ In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass(
 | **ID** | UTV2-70 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **BLOCKED** |
+| **Status** | **READY** |
 | **Milestone** | M12 |
 | **Area** | `area:api` |
-| **Blocked by** | UTV2-68 (recap only meaningful once settlement data is auto-populated) |
+| **Blocked by** | — (UTV2-68 DONE ✅) |
 | **Branch** | `codex/UTV2-70-recap-agent` |
 | **PR** | — |
 
