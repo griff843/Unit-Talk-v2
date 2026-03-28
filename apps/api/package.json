@@ -9,11 +9,12 @@
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
     "dev": "tsx src/index.ts",
+    "grading:cron": "tsx src/grading-cron.ts",
     "runs:failures": "tsx src/scripts/query-runs.ts --failures",
     "runs:recent": "tsx src/scripts/query-runs.ts --recent",
     "runs:summary": "tsx src/scripts/query-runs.ts --summary",
     "test:db": "tsx --test src/database-smoke.test.ts",
-    "test": "tsx --test src/submission-service.test.ts src/server.test.ts",
+    "test": "tsx --test src/submission-service.test.ts src/server.test.ts src/grading-cron.test.ts src/recap-service.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

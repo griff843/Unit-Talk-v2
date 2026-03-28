@@ -483,6 +483,157 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
   }
 });
 
+test('POST /api/recap/post returns ok true and posts a recap embed when settled picks exist', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledRecapPick(repositories, {
+    settledAt: buildYesterdayMiddayIso(),
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+  });
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const previousFetch = globalThis.fetch;
+  let capturedUrl = '';
+  let capturedBody = '';
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:best-bets': '1296531122234327100',
+  });
+  globalThis.fetch = async (input, init) => {
+    capturedUrl = String(input);
+    capturedBody = String(init?.body ?? '');
+    return new Response(JSON.stringify({ id: 'message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await previousFetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ period: 'daily' }),
+    });
+    const body = (await response.json()) as {
+      ok: boolean;
+      postsCount?: number;
+      channel?: string;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.postsCount, 1);
+    assert.equal(body.channel, 'discord:best-bets');
+    assert.equal(
+      capturedUrl,
+      'https://discord.com/api/v10/channels/1296531122234327100/messages',
+    );
+
+    const payload = JSON.parse(capturedBody) as {
+      embeds?: Array<{ title?: string; fields?: Array<{ name: string; value: string }> }>;
+    };
+    assert.equal(payload.embeds?.[0]?.title?.startsWith('Daily Recap - '), true);
+    assert.ok(
+      payload.embeds?.[0]?.fields?.some((field) => field.name === 'Record' && field.value === '1-0-0'),
+    );
+  } finally {
+    server.close();
+    globalThis.fetch = previousFetch;
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+  }
+});
+
+test('POST /api/recap/post returns no settled picks reason when the requested window is empty', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ period: 'daily' }),
+    });
+    const body = (await response.json()) as { ok: boolean; reason?: string };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, false);
+    assert.equal(body.reason, 'no settled picks in window');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks exist but token is absent', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledRecapPick(repositories, {
+    settledAt: buildYesterdayMiddayIso(),
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: -110,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+  });
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  delete process.env.DISCORD_BOT_TOKEN;
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ period: 'daily' }),
+    });
+    const body = (await response.json()) as { ok: boolean; reason?: string };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, false);
+    assert.equal(body.reason, 'DISCORD_BOT_TOKEN not configured');
+  } finally {
+    server.close();
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+  }
+});
+
 async function createQualifiedPick(
   repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
 ) {
@@ -506,4 +657,52 @@ async function createQualifiedPick(
     },
     repositories,
   );
+}
+
+async function createSettledRecapPick(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  input: {
+    settledAt: string;
+    selection: string;
+    market: string;
+    odds: number;
+    stakeUnits: number;
+    submittedBy: string;
+    result: 'win' | 'loss' | 'push';
+  },
+) {
+  const created = await processSubmission(
+    {
+      source: 'server-test',
+      market: input.market,
+      selection: input.selection,
+      odds: input.odds,
+      stakeUnits: input.stakeUnits,
+      submittedBy: input.submittedBy,
+      metadata: {
+        submittedBy: input.submittedBy,
+      },
+    },
+    repositories,
+  );
+
+  await repositories.settlements.record({
+    pickId: created.pick.id,
+    status: 'settled',
+    result: input.result,
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: `server-test://${created.pick.id}`,
+    settledBy: 'server-test',
+    settledAt: input.settledAt,
+    payload: {},
+  });
+
+  return created.pick.id;
+}
+
+function buildYesterdayMiddayIso(now: Date = new Date()) {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0, 0),
+  ).toISOString();
 }
