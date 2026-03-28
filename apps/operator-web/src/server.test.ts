@@ -1125,7 +1125,24 @@ test('createSnapshotFromRows includes ingestorHealth with status and lastRunAt w
     started_at: '2026-03-27T10:00:00.000Z',
     finished_at: '2026-03-27T10:01:00.000Z',
     actor: 'ingestor',
-    details: { league: 'NBA' },
+    details: {
+      league: 'NBA',
+      quota: {
+        provider: 'sgo',
+        requestCount: 2,
+        successfulRequests: 2,
+        creditsUsed: 0,
+        limit: 100,
+        remaining: 98,
+        resetAt: '2026-03-27T11:00:00.000Z',
+        lastStatus: 200,
+        rateLimitHitCount: 0,
+        backoffCount: 0,
+        backoffMs: 0,
+        throttled: false,
+        headersSeen: true,
+      },
+    },
     created_at: '2026-03-27T10:00:00.000Z',
     idempotency_key: null,
   };
@@ -1141,6 +1158,9 @@ test('createSnapshotFromRows includes ingestorHealth with status and lastRunAt w
   assert.equal(snapshot.ingestorHealth.status, 'succeeded');
   assert.equal(snapshot.ingestorHealth.lastRunAt, '2026-03-27T10:00:00.000Z');
   assert.equal(snapshot.ingestorHealth.runCount, 1);
+  assert.equal(snapshot.quotaSummary.providers[0]?.provider, 'sgo');
+  assert.equal(snapshot.quotaSummary.providers[0]?.requestCount, 2);
+  assert.equal(snapshot.quotaSummary.providers[0]?.remaining, 98);
 });
 
 test('createSnapshotFromRows returns ingestorHealth status=unknown and lastRunAt=null when no ingestor runs', () => {
@@ -1156,6 +1176,84 @@ test('createSnapshotFromRows returns ingestorHealth status=unknown and lastRunAt
   assert.equal(snapshot.ingestorHealth.status, 'unknown');
   assert.equal(snapshot.ingestorHealth.lastRunAt, null);
   assert.equal(snapshot.ingestorHealth.runCount, 0);
+  assert.deepEqual(snapshot.quotaSummary.providers, []);
+});
+
+test('createSnapshotFromRows aggregates quota telemetry across recent ingestor runs', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [
+      {
+        id: 'run-ingestor-quota-1',
+        run_type: 'ingestor.cycle',
+        status: 'succeeded',
+        started_at: '2026-03-27T10:00:00.000Z',
+        finished_at: '2026-03-27T10:01:00.000Z',
+        actor: 'ingestor',
+        details: {
+          league: 'NBA',
+          quota: {
+            provider: 'sgo',
+            requestCount: 3,
+            successfulRequests: 2,
+            creditsUsed: 0,
+            limit: 100,
+            remaining: 97,
+            resetAt: '2026-03-27T11:00:00.000Z',
+            lastStatus: 200,
+            rateLimitHitCount: 1,
+            backoffCount: 1,
+            backoffMs: 2000,
+            throttled: true,
+            headersSeen: true,
+          },
+        },
+        created_at: '2026-03-27T10:00:00.000Z',
+        idempotency_key: null,
+      },
+      {
+        id: 'run-ingestor-quota-2',
+        run_type: 'ingestor.cycle',
+        status: 'succeeded',
+        started_at: '2026-03-27T11:00:00.000Z',
+        finished_at: '2026-03-27T11:01:00.000Z',
+        actor: 'ingestor',
+        details: {
+          league: 'MLB',
+          quota: {
+            provider: 'sgo',
+            requestCount: 2,
+            successfulRequests: 2,
+            creditsUsed: 0,
+            limit: 100,
+            remaining: 95,
+            resetAt: '2026-03-27T12:00:00.000Z',
+            lastStatus: 200,
+            rateLimitHitCount: 0,
+            backoffCount: 0,
+            backoffMs: 0,
+            throttled: false,
+            headersSeen: true,
+          },
+        },
+        created_at: '2026-03-27T11:00:00.000Z',
+        idempotency_key: null,
+      },
+    ],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.quotaSummary.providers[0]?.provider, 'sgo');
+  assert.equal(snapshot.quotaSummary.providers[0]?.runCount, 2);
+  assert.equal(snapshot.quotaSummary.providers[0]?.requestCount, 5);
+  assert.equal(snapshot.quotaSummary.providers[0]?.successfulRequests, 4);
+  assert.equal(snapshot.quotaSummary.providers[0]?.rateLimitHitCount, 1);
+  assert.equal(snapshot.quotaSummary.providers[0]?.backoffMs, 2000);
+  assert.equal(snapshot.quotaSummary.providers[0]?.remaining, 95);
 });
 
 test('GET / renders Ingestor health card with status and last run when ingestor run exists', async () => {
@@ -1166,7 +1264,24 @@ test('GET / renders Ingestor health card with status and last run when ingestor 
     started_at: '2026-03-27T10:00:00.000Z',
     finished_at: '2026-03-27T10:01:00.000Z',
     actor: 'ingestor',
-    details: { league: 'NBA' },
+    details: {
+      league: 'NBA',
+      quota: {
+        provider: 'sgo',
+        requestCount: 2,
+        successfulRequests: 2,
+        creditsUsed: 0,
+        limit: 100,
+        remaining: 98,
+        resetAt: '2026-03-27T11:00:00.000Z',
+        lastStatus: 200,
+        rateLimitHitCount: 0,
+        backoffCount: 0,
+        backoffMs: 0,
+        throttled: false,
+        headersSeen: true,
+      },
+    },
     created_at: '2026-03-27T10:00:00.000Z',
     idempotency_key: null,
   };
@@ -1198,6 +1313,9 @@ test('GET / renders Ingestor health card with status and last run when ingestor 
   assert.match(response.body, /succeeded/);
   assert.match(response.body, /2026-03-27T10:00:00\.000Z/);
   assert.match(response.body, /Run count/);
+  assert.match(response.body, /API Quota/);
+  assert.match(response.body, /sgo/);
+  assert.match(response.body, /98/);
 });
 
 test('GET / renders Worker Runtime card with drain state and timestamps', async () => {
