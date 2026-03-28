@@ -12,6 +12,8 @@
 // =============================================================================
 
 import {
+  alertDetectionMarketTypes,
+  alertDetectionTiers,
   approvalStatuses,
   eventParticipantRoles,
   eventStatuses,
@@ -46,6 +48,8 @@ export type PromotionTarget = (typeof promotionTargets)[number];
 export type PromotionOverrideAction = (typeof promotionOverrideActions)[number];
 export type WriterRole = (typeof writerRoles)[number];
 export type OutboxStatus = (typeof outboxStatuses)[number];
+export type AlertDetectionTier = (typeof alertDetectionTiers)[number];
+export type AlertDetectionMarketType = (typeof alertDetectionMarketTypes)[number];
 export type SettlementStatus = (typeof settlementStatuses)[number];
 export type SettlementResult = (typeof settlementResults)[number];
 export type SettlementSource = (typeof settlementSources)[number];
@@ -63,6 +67,7 @@ export type PickLifecycleRow = Tables<'pick_lifecycle'>;
 export type PickPromotionHistoryRow = Tables<'pick_promotion_history'>;
 export type DistributionOutboxRow = Tables<'distribution_outbox'>;
 export type DistributionReceiptRow = Tables<'distribution_receipts'>;
+export type AlertDetectionRow = Tables<'alert_detections'>;
 export type SettlementRecordRow = Tables<'settlement_records'>;
 export type SystemRunRow = Tables<'system_runs'>;
 export type AuditLogRow = Tables<'audit_log'>;
@@ -94,6 +99,9 @@ export type OutboxRecord = DistributionOutboxRow;
 
 /** @see {@link DistributionReceiptRow} */
 export type ReceiptRecord = DistributionReceiptRow;
+
+/** @see {@link AlertDetectionRow} */
+export type AlertDetectionRecord = AlertDetectionRow;
 
 /** @see {@link ProviderOfferRow} */
 export type ProviderOfferRecord = ProviderOfferRow;

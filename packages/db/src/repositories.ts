@@ -7,6 +7,9 @@ import type {
 } from '@unit-talk/contracts';
 import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
+  AlertDetectionMarketType,
+  AlertDetectionRecord,
+  AlertDetectionTier,
   ApprovalStatus,
   AuditLogRow,
   EventParticipantRole,
@@ -151,6 +154,45 @@ export interface OutboxRepository {
   ): Promise<OutboxRecord>;
 }
 
+export interface AlertDetectionCreateInput {
+  idempotencyKey: string;
+  eventId: string;
+  participantId?: string | null | undefined;
+  marketKey: string;
+  bookmakerKey: string;
+  baselineSnapshotAt: string;
+  currentSnapshotAt: string;
+  oldLine: number;
+  newLine: number;
+  lineChange: number;
+  lineChangeAbs: number;
+  velocity?: number | null | undefined;
+  timeElapsedMinutes: number;
+  direction: 'up' | 'down';
+  marketType: AlertDetectionMarketType;
+  tier: AlertDetectionTier;
+  notified?: boolean | undefined;
+  notifiedAt?: string | null | undefined;
+  notifiedChannels?: string[] | null | undefined;
+  cooldownExpiresAt?: string | null | undefined;
+  metadata: Record<string, unknown>;
+}
+
+export interface AlertCooldownQuery {
+  eventId: string;
+  participantId?: string | null | undefined;
+  marketKey: string;
+  bookmakerKey: string;
+  tier: AlertDetectionTier;
+  now: string;
+}
+
+export interface AlertDetectionRepository {
+  saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null>;
+  findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null>;
+  listRecent(limit?: number | undefined): Promise<AlertDetectionRecord[]>;
+}
+
 export interface ReceiptCreateInput {
   outboxId: string;
   receiptType: string;
@@ -231,6 +273,7 @@ export interface ClosingLineLookupCriteria {
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
   findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
+  listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
 }
 
@@ -350,6 +393,7 @@ export interface RepositoryBundle {
   submissions: SubmissionRepository;
   picks: PickRepository;
   outbox: OutboxRepository;
+  alertDetections: AlertDetectionRepository;
   receipts: ReceiptRepository;
   settlements: SettlementRepository;
   providerOffers: ProviderOfferRepository;

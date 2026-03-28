@@ -241,3 +241,4 @@ function writeJson(response: ServerResponse, status: number, body: unknown) {
   setCorsHeaders(response);
   response.end(JSON.stringify(body));
 }
+

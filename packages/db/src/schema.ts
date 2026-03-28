@@ -30,6 +30,15 @@ export const outboxStatuses = [
   'dead_letter',
 ] as const;
 
+export const alertDetectionTiers = ['watch', 'notable', 'alert-worthy'] as const;
+
+export const alertDetectionMarketTypes = [
+  'spread',
+  'total',
+  'moneyline',
+  'player_prop',
+] as const;
+
 export const settlementResults = [
   'win',
   'loss',
@@ -152,6 +161,11 @@ export const canonicalSchema: TableDefinition[] = [
     name: 'audit_log',
     purpose: 'Stores durable audit events for sensitive actions.',
     owner: 'platform',
+  },
+  {
+    name: 'alert_detections',
+    purpose: 'Stores classified AlertAgent line movement detections and notification state.',
+    owner: 'api',
   },
   {
     name: 'participants',
