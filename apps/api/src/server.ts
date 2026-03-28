@@ -16,6 +16,7 @@ import {
 } from './handlers/index.js';
 import { requeuePickController } from './controllers/requeue-controller.js';
 import { runGradingPass } from './grading-service.js';
+import { postRecapSummary } from './recap-service.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -175,6 +176,35 @@ export async function routeRequest(
   if (method === 'POST' && url.pathname === '/api/grading/run') {
     const result = await runGradingPass(runtime.repositories);
     return writeJson(response, 200, { ok: true, result });
+  }
+
+  if (method === 'POST' && url.pathname === '/api/recap/post') {
+    const body = await readJsonBody(request);
+    const period = body.period;
+    const channel = typeof body.channel === 'string' ? body.channel : undefined;
+
+    if (period !== 'daily' && period !== 'weekly' && period !== 'monthly') {
+      return writeJson(response, 400, {
+        ok: false,
+        error: {
+          code: 'INVALID_RECAP_PERIOD',
+          message: 'period must be one of daily, weekly, or monthly',
+        },
+      });
+    }
+
+    const result = await postRecapSummary(period, runtime.repositories, {
+      ...(channel ? { channel } : {}),
+    });
+    if (!result.ok) {
+      return writeJson(response, 200, result);
+    }
+
+    return writeJson(response, 200, {
+      ok: true,
+      postsCount: result.postsCount,
+      channel: result.channel,
+    });
   }
 
   return writeJson(response, 404, {
