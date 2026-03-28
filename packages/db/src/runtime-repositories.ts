@@ -12,6 +12,7 @@ import type {
   AlertCooldownQuery,
   AlertDetectionCreateInput,
   AlertDetectionRepository,
+  AlertNotificationUpdateInput,
   AuditLogCreateInput,
   AuditLogRepository,
   ClosingLineLookupCriteria,
@@ -491,6 +492,21 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
     return Array.from(this.records.values())
       .sort((left, right) => right.created_at.localeCompare(left.created_at))
       .slice(0, limit);
+  }
+
+  async updateNotified(input: AlertNotificationUpdateInput): Promise<void> {
+    for (const [key, record] of this.records.entries()) {
+      if (record.id === input.id) {
+        this.records.set(key, {
+          ...record,
+          notified: true,
+          notified_at: input.notifiedAt,
+          notified_channels: input.notifiedChannels,
+          cooldown_expires_at: input.cooldownExpiresAt,
+        });
+        return;
+      }
+    }
   }
 }
 
@@ -1561,6 +1577,22 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     }
 
     return data ?? [];
+  }
+
+  async updateNotified(input: AlertNotificationUpdateInput): Promise<void> {
+    const { error } = await this.client
+      .from('alert_detections')
+      .update({
+        notified: true,
+        notified_at: input.notifiedAt,
+        notified_channels: input.notifiedChannels,
+        cooldown_expires_at: input.cooldownExpiresAt,
+      })
+      .eq('id', input.id);
+
+    if (error) {
+      throw new Error(`Failed to update alert notification state: ${error.message}`);
+    }
   }
 }
 

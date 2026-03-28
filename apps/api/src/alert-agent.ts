@@ -4,6 +4,7 @@ import {
   runAlertDetectionPass,
   type AlertAgentConfig,
 } from './alert-agent-service.js';
+import { runAlertNotificationPass } from './alert-notification-service.js';
 
 const ALERT_AGENT_INTERVAL_MS = 60_000;
 
@@ -30,20 +31,38 @@ export function startAlertAgent(
 
   const interval = setInterval(() => {
     runAlertDetectionPass(repositories, resolvedConfig)
-      .then((result) => {
+      .then(async (detectionResult) => {
         logger.info(
           JSON.stringify({
             service: 'alert-agent',
             event: 'detection.pass.completed',
             result: {
-              evaluatedGroups: result.evaluatedGroups,
-              detections: result.detections,
-              persisted: result.persisted,
-              duplicateSignals: result.duplicateSignals,
-              belowMinTier: result.belowMinTier,
-              unresolvedEvents: result.unresolvedEvents,
-              shouldNotifyCount: result.shouldNotifyCount,
+              evaluatedGroups: detectionResult.evaluatedGroups,
+              detections: detectionResult.detections,
+              persisted: detectionResult.persisted,
+              duplicateSignals: detectionResult.duplicateSignals,
+              belowMinTier: detectionResult.belowMinTier,
+              unresolvedEvents: detectionResult.unresolvedEvents,
+              shouldNotifyCount: detectionResult.shouldNotifyCount,
             },
+          }),
+        );
+
+        if (detectionResult.persistedSignals.length === 0) {
+          return;
+        }
+
+        const notificationResult = await runAlertNotificationPass(
+          detectionResult.persistedSignals,
+          repositories.alertDetections,
+          { dryRun: resolvedConfig.dryRun },
+        );
+
+        logger.info(
+          JSON.stringify({
+            service: 'alert-agent',
+            event: 'notification.pass.completed',
+            result: notificationResult,
           }),
         );
       })
