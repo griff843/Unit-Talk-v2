@@ -139,7 +139,7 @@ In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass(
 | **Branch** | `codex/UTV2-70-recap-agent` |
 | **PR** | [#42](https://github.com/griff843/Unit-Talk-v2/pull/42) — **MERGED** ✅ (2026-03-28) |
 
-`POST /api/recap/post` + `recap-service.ts` + `recap-scheduler.ts`. Daily/weekly/monthly Discord embed posts to `discord:best-bets`. In-process 60-second loop. Contract: `docs/05_operations/UTV2-70_RECAP_AGENT_CONTRACT.md`. Independent verification PASS 2026-03-27 — all 9 ACs pass; 13 new tests.
+`POST /api/recap/post` + `recap-service.ts` + `recap-scheduler.ts`. Daily/weekly/monthly Discord embed posts to the dedicated `discord:recaps` channel. In-process 60-second loop. Contract: `docs/05_operations/UTV2-70_RECAP_AGENT_CONTRACT.md`; activation authority: `docs/05_operations/T1_DISCORDRECAPS_ACTIVATION_CONTRACT.md`.
 
 ---
 

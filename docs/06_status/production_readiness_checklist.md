@@ -172,7 +172,7 @@ Operational scaling. Required once pipeline complexity exceeds synchronous/manua
 | 6.6 | `discord:strategy-room` | 🔒 Blocked | DM routing not implemented |
 | 6.7 | `discord:free-daily-picks` | 🔒 Blocked | Not ratified in V2 target map |
 | 6.8 | `discord:strategy-lab` | 🔒 Blocked | Not in V2 target map |
-| 6.9 | `discord:recaps` | 🔒 Blocked | Depends on RecapAgent (5.1) |
+| 6.9 | `discord:recaps` | ✅ LIVE | Dedicated recap destination via `recap-service.ts` default target + canonical target map |
 
 ---
 

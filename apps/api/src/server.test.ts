@@ -502,7 +502,7 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
   let capturedBody = '';
   process.env.DISCORD_BOT_TOKEN = 'test-token';
   process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
-    'discord:best-bets': '1296531122234327100',
+    'discord:recaps': '1300411261854547968',
   });
   globalThis.fetch = async (input, init) => {
     capturedUrl = String(input);
@@ -535,10 +535,10 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.postsCount, 1);
-    assert.equal(body.channel, 'discord:best-bets');
+    assert.equal(body.channel, 'discord:recaps');
     assert.equal(
       capturedUrl,
-      'https://discord.com/api/v10/channels/1296531122234327100/messages',
+      'https://discord.com/api/v10/channels/1300411261854547968/messages',
     );
 
     const payload = JSON.parse(capturedBody) as {
@@ -604,7 +604,11 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
   });
 
   const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
   delete process.env.DISCORD_BOT_TOKEN;
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:recaps': '1300411261854547968',
+  });
 
   const server = createApiServer({ repositories });
   server.listen(0);
@@ -630,6 +634,11 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
       delete process.env.DISCORD_BOT_TOKEN;
     } else {
       process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
     }
   }
 });

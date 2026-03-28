@@ -6,6 +6,7 @@ import {
   computeRecapSummary,
   detectRecapCollision,
   getRecapWindow,
+  postRecapSummary,
 } from './recap-service.js';
 import {
   checkAndPostRecapsForTests,
@@ -125,6 +126,116 @@ test('computeRecapSummary returns null when no settlements land inside the reque
   assert.equal(summary, null);
 });
 
+test('postRecapSummary defaults recap posts to discord:recaps', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const previousDryRun = process.env.RECAP_DRY_RUN;
+  let capturedUrl = '';
+
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.RECAP_DRY_RUN = 'false';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:recaps': '1300411261854547968',
+  });
+
+  try {
+    const result = await postRecapSummary('daily', repositories, {
+      now: new Date('2026-03-28T11:00:00.000Z'),
+      fetchImpl: async (input) => {
+        capturedUrl = String(input);
+        return new Response(JSON.stringify({ id: 'message-1' }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.ok ? result.channel : null, 'discord:recaps');
+    assert.equal(result.ok ? result.dryRun : null, false);
+    assert.equal(
+      capturedUrl,
+      'https://discord.com/api/v10/channels/1300411261854547968/messages',
+    );
+  } finally {
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+    if (previousDryRun === undefined) {
+      delete process.env.RECAP_DRY_RUN;
+    } else {
+      process.env.RECAP_DRY_RUN = previousDryRun;
+    }
+  }
+});
+
+test('postRecapSummary dry run computes recap without posting to Discord', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+
+  const previousDryRun = process.env.RECAP_DRY_RUN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  let fetchCalled = false;
+
+  process.env.RECAP_DRY_RUN = 'true';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:recaps': '1300411261854547968',
+  });
+
+  try {
+    const result = await postRecapSummary('daily', repositories, {
+      now: new Date('2026-03-28T11:00:00.000Z'),
+      fetchImpl: async () => {
+        fetchCalled = true;
+        throw new Error('dry run must not call fetch');
+      },
+    });
+
+    assert.equal(result.ok, true);
+    assert.equal(result.ok ? result.channel : null, 'discord:recaps');
+    assert.equal(result.ok ? result.postsCount : null, 0);
+    assert.equal(result.ok ? result.dryRun : null, true);
+    assert.equal(fetchCalled, false);
+  } finally {
+    if (previousDryRun === undefined) {
+      delete process.env.RECAP_DRY_RUN;
+    } else {
+      process.env.RECAP_DRY_RUN = previousDryRun;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+  }
+});
+
 test('shouldPostRecap suppresses reposts after the current window is marked as posted', () => {
   resetRecapSchedulerStateForTests();
   const now = new Date('2026-06-09T11:00:00.000Z');
@@ -166,6 +277,59 @@ test('checkAndPostRecaps logs structured error when postRecapSummary throws, doe
     String(parsed['event']).startsWith('tick.'),
     `expected tick.* event, got: ${parsed['event']}`,
   );
+});
+
+test('checkAndPostRecaps dry run logs summary and does not set the idempotency mark', async () => {
+  resetRecapSchedulerStateForTests();
+
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-06-08T04:00:00.000Z',
+  });
+
+  const previousDryRun = process.env.RECAP_DRY_RUN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const infoLogs: string[] = [];
+  const logger = {
+    error: (_msg: string) => {},
+    info: (msg: string) => {
+      infoLogs.push(msg);
+    },
+  };
+  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+
+  process.env.RECAP_DRY_RUN = 'true';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:recaps': '1300411261854547968',
+  });
+
+  try {
+    await checkAndPostRecapsForTests(repositories, logger, () => postingTime);
+
+    assert.equal(infoLogs.length, 1);
+    const parsed = JSON.parse(infoLogs[0] as string) as Record<string, unknown>;
+    assert.equal(parsed['service'], 'recap-scheduler');
+    assert.equal(parsed['event'], 'tick.dry_run');
+    assert.equal(parsed['period'], 'daily');
+    assert.equal(shouldPostRecap(postingTime), 'daily');
+  } finally {
+    if (previousDryRun === undefined) {
+      delete process.env.RECAP_DRY_RUN;
+    } else {
+      process.env.RECAP_DRY_RUN = previousDryRun;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+  }
 });
 
 test('startRecapScheduler registers a 60 second polling interval and cleanup clears it', () => {
