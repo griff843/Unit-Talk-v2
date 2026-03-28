@@ -123,6 +123,7 @@ test('shouldNotify returns false when a matching notified row is still in cooldo
   await repositories.alertDetections.saveDetection({
     idempotencyKey: 'cooldown-1',
     eventId: 'event-uuid-1',
+    participantId: 'player-1',
     marketKey: 'spread',
     bookmakerKey: 'sgo',
     baselineSnapshotAt: '2026-03-28T10:00:00.000Z',
@@ -188,14 +189,12 @@ test('runAlertDetectionPass persists rows and deduplicates on repeated passes', 
 
   const first = await runAlertDetectionPass(repositories, {
     enabled: true,
-    providerKey: 'sgo',
     lookbackMinutes: 60,
     minTier: 'watch',
     now: '2026-03-28T10:30:00.000Z',
   });
   const second = await runAlertDetectionPass(repositories, {
     enabled: true,
-    providerKey: 'sgo',
     lookbackMinutes: 60,
     minTier: 'watch',
     now: '2026-03-28T10:30:00.000Z',
@@ -251,7 +250,6 @@ test('runAlertDetectionPass uses earliest baseline within the lookback window', 
 
   const result = await runAlertDetectionPass(repositories, {
     enabled: true,
-    providerKey: 'sgo',
     lookbackMinutes: 60,
     minTier: 'watch',
     now: '2026-03-28T10:30:00.000Z',
@@ -261,6 +259,111 @@ test('runAlertDetectionPass uses earliest baseline within the lookback window', 
   const row = result.persistedSignals[0];
   assert.equal(row?.baseline_snapshot_at, '2026-03-28T09:00:00.000Z');
   assert.equal(row?.line_change, 1.5);
+});
+
+test('runAlertDetectionPass persists separate signals for distinct bookmaker tuples', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-3',
+    sportId: 'NBA',
+    eventName: 'Bucks vs Bulls',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {},
+  });
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-3',
+      providerKey: 'draftkings',
+      providerMarketKey: 'spread',
+      line: 4.5,
+      snapshotAt: '2026-03-28T09:00:00.000Z',
+      idempotencyKey: 'evt-3:spread:draftkings:player-1:4.5:0900',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-3',
+      providerKey: 'draftkings',
+      providerMarketKey: 'spread',
+      line: 6.5,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'evt-3:spread:draftkings:player-1:6.5:1000',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-3',
+      providerKey: 'fanduel',
+      providerMarketKey: 'spread',
+      line: 3.5,
+      snapshotAt: '2026-03-28T09:00:00.000Z',
+      idempotencyKey: 'evt-3:spread:fanduel:player-1:3.5:0900',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-3',
+      providerKey: 'fanduel',
+      providerMarketKey: 'spread',
+      line: 5.5,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'evt-3:spread:fanduel:player-1:5.5:1000',
+    }),
+  ]);
+
+  const result = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-03-28T10:30:00.000Z',
+  });
+
+  assert.equal(result.persisted, 2);
+  const rows = await repositories.alertDetections.listRecent();
+  assert.deepEqual(
+    rows.map((row) => row.bookmaker_key).sort(),
+    ['draftkings', 'fanduel'],
+  );
+});
+
+test('shouldNotify scopes cooldown by participant identity as well as market tuple', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.alertDetections.saveDetection({
+    idempotencyKey: 'cooldown-entity-1',
+    eventId: 'event-uuid-2',
+    participantId: 'player-1',
+    marketKey: 'player_points',
+    bookmakerKey: 'draftkings',
+    baselineSnapshotAt: '2026-03-28T10:00:00.000Z',
+    currentSnapshotAt: '2026-03-28T10:15:00.000Z',
+    oldLine: 24.5,
+    newLine: 25,
+    lineChange: 0.5,
+    lineChangeAbs: 0.5,
+    velocity: 0.0333,
+    timeElapsedMinutes: 15,
+    direction: 'up',
+    marketType: 'player_prop',
+    tier: 'notable',
+    notified: true,
+    notifiedAt: '2026-03-28T10:15:00.000Z',
+    cooldownExpiresAt: '2026-03-28T10:45:00.000Z',
+    notifiedChannels: ['discord:canary'],
+    metadata: {},
+  });
+
+  const signal = classifyMovement({
+    ...baseDetection(),
+    participantId: 'player-2',
+    marketKey: 'player_points',
+    bookmakerKey: 'draftkings',
+    marketType: 'player_prop',
+    lineChange: 0.5,
+    lineChangeAbs: 0.5,
+  });
+
+  assert.equal(
+    await shouldNotify(signal!, repositories.alertDetections, {
+      eventId: 'event-uuid-2',
+      now: '2026-03-28T10:30:00.000Z',
+    }),
+    true,
+  );
 });
 
 function baseDetection() {

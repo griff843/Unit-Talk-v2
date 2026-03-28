@@ -157,6 +157,7 @@ export interface OutboxRepository {
 export interface AlertDetectionCreateInput {
   idempotencyKey: string;
   eventId: string;
+  participantId?: string | null | undefined;
   marketKey: string;
   bookmakerKey: string;
   baselineSnapshotAt: string;
@@ -179,6 +180,7 @@ export interface AlertDetectionCreateInput {
 
 export interface AlertCooldownQuery {
   eventId: string;
+  participantId?: string | null | undefined;
   marketKey: string;
   bookmakerKey: string;
   tier: AlertDetectionTier;
@@ -271,6 +273,7 @@ export interface ClosingLineLookupCriteria {
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
   findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
+  listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
 }
 

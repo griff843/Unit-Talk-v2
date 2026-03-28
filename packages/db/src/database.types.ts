@@ -63,6 +63,7 @@ export type Database = {
           notified_at: string | null
           notified_channels: string[] | null
           old_line: number
+          participant_id: string | null
           tier: string
           time_elapsed_minutes: number
           velocity: number | null
@@ -87,6 +88,7 @@ export type Database = {
           notified_at?: string | null
           notified_channels?: string[] | null
           old_line: number
+          participant_id?: string | null
           tier: string
           time_elapsed_minutes: number
           velocity?: number | null
@@ -111,6 +113,7 @@ export type Database = {
           notified_at?: string | null
           notified_channels?: string[] | null
           old_line?: number
+          participant_id?: string | null
           tier?: string
           time_elapsed_minutes?: number
           velocity?: number | null

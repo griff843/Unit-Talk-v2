@@ -10,9 +10,7 @@ import type {
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
-const DEFAULT_PROVIDER_KEY = 'sgo';
 const DEFAULT_LOOKBACK_MINUTES = 60;
-const DEFAULT_RECENT_LIMIT = 20;
 const IDENTITY_BUCKET_MS = 5 * 60 * 1000;
 
 const tierRank: Record<AlertDetectionTier, number> = {
@@ -58,7 +56,6 @@ export interface AlertAgentConfig {
   lookbackMinutes: number;
   dryRun: boolean;
   minTier: AlertDetectionTier;
-  providerKey: string;
   now?: string;
 }
 
@@ -82,7 +79,6 @@ export function loadAlertAgentConfig(env: NodeJS.ProcessEnv = process.env): Aler
     ),
     dryRun: env.ALERT_DRY_RUN !== 'false',
     minTier: normalizeTier(env.ALERT_MIN_TIER),
-    providerKey: env.ALERT_PROVIDER_KEY?.trim() || DEFAULT_PROVIDER_KEY,
   };
 }
 
@@ -222,6 +218,7 @@ export async function shouldNotify(
     eventId,
     marketKey: signal.marketKey,
     bookmakerKey: signal.bookmakerKey,
+    participantId: signal.participantId,
     tier: signal.tier,
     now,
   });
@@ -259,7 +256,7 @@ export async function runAlertDetectionPass(
   }
 
   const nowIso = resolved.now ?? new Date().toISOString();
-  const offers = await repositories.providerOffers.listByProvider(resolved.providerKey);
+  const offers = await repositories.providerOffers.listAll();
   const offerGroups = groupOffersByTuple(offers);
   const persistedSignals: AlertDetectionRecord[] = [];
   let detections = 0;
@@ -331,14 +328,6 @@ export async function runAlertDetectionPass(
   };
 }
 
-export async function listRecentAlertDetections(
-  repositories: Pick<{ alertDetections: AlertDetectionRepository }, 'alertDetections'>,
-  options: { limit?: number } = {},
-) {
-  const limit = normalizePositiveInteger(options.limit, DEFAULT_RECENT_LIMIT);
-  return repositories.alertDetections.listRecent(limit);
-}
-
 function buildAlertDetectionCreateInput(
   eventId: string,
   signal: AlertSignal,
@@ -347,6 +336,7 @@ function buildAlertDetectionCreateInput(
   return {
     idempotencyKey,
     eventId,
+    participantId: signal.participantId,
     marketKey: signal.marketKey,
     bookmakerKey: signal.bookmakerKey,
     baselineSnapshotAt: signal.baselineSnapshotAt,
@@ -370,6 +360,7 @@ function buildIdempotencyKey(eventId: string, signal: AlertSignal) {
     .update(
       [
         eventId,
+        signal.participantId ?? 'all',
         signal.marketKey,
         signal.bookmakerKey,
         signal.tier,

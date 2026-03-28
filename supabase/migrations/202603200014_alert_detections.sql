@@ -6,6 +6,7 @@ CREATE TABLE public.alert_detections (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   idempotency_key text NOT NULL UNIQUE,
   event_id uuid NOT NULL REFERENCES public.events(id),
+  participant_id text NULL,
   market_key text NOT NULL,
   bookmaker_key text NOT NULL,
   baseline_snapshot_at timestamptz NOT NULL,

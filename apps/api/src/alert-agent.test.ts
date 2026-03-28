@@ -28,7 +28,6 @@ test('runAlertDetectionPassForTests persists a detection row for a qualifying mo
 
   const result = await runAlertDetectionPassForTests(repositories, {
     enabled: true,
-    providerKey: 'sgo',
     lookbackMinutes: 60,
     minTier: 'watch',
     now: '2026-03-28T10:30:00.000Z',
@@ -63,7 +62,6 @@ test('runAlertDetectionPassForTests respects ALERT_MIN_TIER semantics', async ()
 
   const result = await runAlertDetectionPassForTests(repositories, {
     enabled: true,
-    providerKey: 'sgo',
     lookbackMinutes: 60,
     minTier: 'notable',
     now: '2026-03-28T10:30:00.000Z',

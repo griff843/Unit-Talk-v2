@@ -441,6 +441,7 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
       id: crypto.randomUUID(),
       idempotency_key: input.idempotencyKey,
       event_id: input.eventId,
+      participant_id: input.participantId ?? null,
       market_key: input.marketKey,
       bookmaker_key: input.bookmakerKey,
       baseline_snapshot_at: input.baselineSnapshotAt,
@@ -472,6 +473,7 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
         .filter(
           (record) =>
             record.event_id === input.eventId &&
+            (record.participant_id ?? null) === (input.participantId ?? null) &&
             record.market_key === input.marketKey &&
             record.bookmaker_key === input.bookmakerKey &&
             record.tier === input.tier &&
@@ -668,6 +670,12 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     return Array.from(this.offers.values())
       .filter((offer) => offer.provider_key === providerKey)
       .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at));
+  }
+
+  async listAll(): Promise<ProviderOfferRecord[]> {
+    return Array.from(this.offers.values()).sort(
+      (left, right) => right.snapshot_at.localeCompare(left.snapshot_at),
+    );
   }
 
   async findClosingLine(
@@ -1485,6 +1493,7 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
       .insert({
         idempotency_key: input.idempotencyKey,
         event_id: input.eventId,
+        participant_id: input.participantId ?? null,
         market_key: input.marketKey,
         bookmaker_key: input.bookmakerKey,
         baseline_snapshot_at: input.baselineSnapshotAt,
@@ -1523,6 +1532,7 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
       .from('alert_detections')
       .select('*')
       .eq('event_id', input.eventId)
+      .eq('participant_id', input.participantId ?? null)
       .eq('market_key', input.marketKey)
       .eq('bookmaker_key', input.bookmakerKey)
       .eq('tier', input.tier)
@@ -1899,6 +1909,19 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .from('provider_offers')
       .select('*')
       .eq('provider_key', providerKey)
+      .order('snapshot_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to list provider offers: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listAll(): Promise<ProviderOfferRecord[]> {
+    const { data, error } = await this.client
+      .from('provider_offers')
+      .select('*')
       .order('snapshot_at', { ascending: false });
 
     if (error) {
