@@ -58,7 +58,8 @@ export async function runGradingPass(
         continue;
       }
 
-      if (!pick.participant_id) {
+      const resolvedParticipantId = await resolvePickParticipantId(pick, repositories);
+      if (!resolvedParticipantId) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
@@ -76,7 +77,7 @@ export async function runGradingPass(
         continue;
       }
 
-      const event = await resolvePickEvent(pick, repositories);
+      const event = await resolvePickEvent(pick, resolvedParticipantId, repositories);
       if (!event) {
         details.push({
           pickId: pick.id,
@@ -97,7 +98,7 @@ export async function runGradingPass(
 
       const gameResult = await repositories.gradeResults.findResult({
         eventId: event.id,
-        participantId: pick.participant_id,
+        participantId: resolvedParticipantId,
         marketKey: pick.market,
       });
 
@@ -253,13 +254,10 @@ async function resolveRecapChannel(
 
 async function resolvePickEvent(
   pick: PickRecord,
+  participantId: string,
   repositories: Pick<RepositoryBundle, 'events' | 'eventParticipants'>,
 ): Promise<EventRow | null> {
-  if (!pick.participant_id) {
-    return null;
-  }
-
-  const links = await repositories.eventParticipants.listByParticipant(pick.participant_id);
+  const links = await repositories.eventParticipants.listByParticipant(participantId);
   if (links.length === 0) {
     return null;
   }
@@ -273,6 +271,29 @@ async function resolvePickEvent(
   }
 
   return chooseEventForPick(pick, candidateEvents);
+}
+
+async function resolvePickParticipantId(
+  pick: PickRecord,
+  repositories: Pick<RepositoryBundle, 'participants'>,
+): Promise<string | null> {
+  if (pick.participant_id) {
+    return pick.participant_id;
+  }
+
+  const metadata = asRecord(pick.metadata);
+  const playerName = typeof metadata?.player === 'string' ? metadata.player.trim() : '';
+  if (!playerName) {
+    return null;
+  }
+
+  const sport = typeof metadata?.sport === 'string' ? metadata.sport.trim() : undefined;
+  const candidates = await repositories.participants.listByType('player', sport);
+  const matches = candidates.filter(
+    (candidate) => normalizeName(candidate.display_name) === normalizeName(playerName),
+  );
+
+  return matches.length === 1 ? (matches[0]?.id ?? null) : null;
 }
 
 function chooseEventForPick(pick: PickRecord, events: EventRow[]): EventRow | null {
@@ -424,4 +445,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function normalizeName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
