@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 1 | 1 | 0 | 22 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 23 |
 | `lane:claude` | 0 | 0 | 0 | 1 | 11 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
@@ -42,12 +42,12 @@ Already implemented — ingestor was already populating `game_results` from SGO.
 | **ID** | UTV2-69 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **IN_REVIEW** |
+| **Status** | **DONE** |
 | **Milestone** | M12 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-69-grading-cron` |
-| **PR** | [#41](https://github.com/griff843/Unit-Talk-v2/pull/41) |
+| **PR** | [#41](https://github.com/griff843/Unit-Talk-v2/pull/41) — **MERGED** ✅ (2026-03-27) |
 
 In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass()`. No new route. No external cron. Contract: `docs/05_operations/UTV2-69_GRADING_CRON_CONTRACT.md`.
 

@@ -69,9 +69,9 @@ M11 closed 2026-03-27. M12 ACTIVE 2026-03-27. All contracts ratified. Codex disp
 | Item | Tier | Lane | Status |
 |------|------|------|--------|
 | M12 UTV2-68 SGO results auto-ingest | T2 | codex | DONE (already implemented) |
-| M12 UTV2-69 Grading cron | T3 | codex | IN_REVIEW PR #41 |
+| M12 UTV2-69 Grading cron | T3 | codex | DONE PR #41 |
 | M12 UTV2-70 RecapAgent scheduled Discord posts | T2 | codex | READY |
-| M12 UTV2-71 M12 closure verification | T1 | claude | BLOCKED on UTV2-69/70 |
+| M12 UTV2-71 M12 closure verification | T1 | claude | BLOCKED on UTV2-70 |
 
 ### M11 Items (CLOSED)
 
