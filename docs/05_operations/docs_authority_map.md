@@ -66,6 +66,7 @@ When documents conflict:
 | `docs/05_operations/week_14_verification_control_plane_salvage_contract.md` | Week 14 selective salvage scope and close criteria | Architecture |
 | `docs/05_operations/week_15_probability_devig_salvage_contract.md` | Week 15 probability/devig math salvage scope and close criteria | Architecture |
 | `docs/05_operations/week_16_settlement_downstream_loss_attribution_contract.md` | Week 16 runtime integration and accepted foundation scope | Architecture |
+| `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md` | Worker runtime ownership, healthy execution definition, operator proof expectations | Architecture |
 
 ## Tier 5 - Current Status
 

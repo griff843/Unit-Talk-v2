@@ -8,7 +8,7 @@
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 0 | 0 | 24 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 15 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 16 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
@@ -50,6 +50,24 @@ Hardened `recap-scheduler.ts`: structured error logging on tick failures, inject
 | **PR** | — |
 
 New `docs/05_operations/AGENT_OPERATING_MODEL.md` — Linear-first model, explicit role boundaries, anti-orchestration rules. Supersedes `agent_delegation_policy.md`. Authority map updated.
+
+---
+
+### UTV2-106 — T1 Worker Runtime Authority and Execution Contract
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-106 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:worker` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Ratified `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md` — canonical worker runtime ownership (separate process, `UNIT_TALK_WORKER_AUTORUN=true` required), healthy execution definition (outbox draining, receipts written, no dead-letter), operator proof expectations, minimal startup model, explicit out-of-scope boundaries for Codex. Authority map updated.
 
 ---
 
