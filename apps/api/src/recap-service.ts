@@ -37,6 +37,7 @@ export interface PostRecapOptions {
   channel?: string;
   now?: Date;
   fetchImpl?: typeof fetch;
+  dryRun?: boolean;
 }
 
 export type PostRecapResult =
@@ -45,6 +46,7 @@ export type PostRecapResult =
       postsCount: number;
       channel: string;
       summary: RecapSummary;
+      dryRun: boolean;
     }
   | {
       ok: false;
@@ -247,15 +249,26 @@ export async function postRecapSummary(
     return { ok: false, reason: 'no settled picks in window' };
   }
 
-  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
-  if (!botToken) {
-    return { ok: false, reason: 'DISCORD_BOT_TOKEN not configured' };
-  }
-
-  const channel = options.channel?.trim() || 'discord:best-bets';
+  const dryRun = options.dryRun ?? readRecapDryRun();
+  const channel = options.channel?.trim() || 'discord:recaps';
   const channelId = resolveDiscordChannelId(channel);
   if (!channelId) {
     return { ok: false, reason: 'channel target could not be resolved' };
+  }
+
+  if (dryRun) {
+    return {
+      ok: true,
+      postsCount: 0,
+      channel,
+      summary,
+      dryRun: true,
+    };
+  }
+
+  const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+  if (!botToken) {
+    return { ok: false, reason: 'DISCORD_BOT_TOKEN not configured' };
   }
 
   const response = await (options.fetchImpl ?? fetch)(
@@ -281,6 +294,7 @@ export async function postRecapSummary(
     postsCount: 1,
     channel,
     summary,
+    dryRun: false,
   };
 }
 
@@ -382,6 +396,10 @@ function resolveDiscordChannelId(value: string) {
   } catch {
     return null;
   }
+}
+
+export function readRecapDryRun() {
+  return process.env.RECAP_DRY_RUN?.trim().toLowerCase() === 'true';
 }
 
 function readStakeUnits(pick: PickRecord) {

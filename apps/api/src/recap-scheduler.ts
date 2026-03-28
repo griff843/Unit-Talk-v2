@@ -1,5 +1,6 @@
 import type { RepositoryBundle } from '@unit-talk/db';
 import {
+  readRecapDryRun,
   getRecapWindow,
   postRecapSummary,
   type RecapPeriod,
@@ -16,6 +17,7 @@ const RECAP_INTERVAL_MS = 60_000;
  * instance deployment. Multi-instance deployments require a DB-backed lock.
  */
 const lastPostedAt: Partial<Record<RecapPeriod, string>> = {};
+type RecapSchedulerLogger = Pick<Console, 'error'> & Partial<Pick<Console, 'info'>>;
 
 export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
   const collision = detectRecapTrigger(now);
@@ -49,7 +51,7 @@ export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
  */
 export function startRecapScheduler(
   repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
-  logger: Pick<Console, 'error'> = console,
+  logger: RecapSchedulerLogger = console,
   clock: () => Date = () => new Date(),
 ) {
   const interval = setInterval(() => {
@@ -81,7 +83,7 @@ export function markRecapPostedForTests(period: RecapPeriod, now: Date) {
 
 export async function checkAndPostRecapsForTests(
   repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
-  logger: Pick<Console, 'error'>,
+  logger: RecapSchedulerLogger,
   clock: () => Date,
 ) {
   return checkAndPostRecaps(repositories, logger, clock);
@@ -89,7 +91,7 @@ export async function checkAndPostRecapsForTests(
 
 async function checkAndPostRecaps(
   repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
-  logger: Pick<Console, 'error'>,
+  logger: RecapSchedulerLogger,
   clock: () => Date,
 ) {
   const now = clock();
@@ -103,7 +105,22 @@ async function checkAndPostRecaps(
 
   for (const period of periods) {
     try {
-      const result = await postRecapSummary(period, repositories, { now });
+      const result = await postRecapSummary(period, repositories, {
+        now,
+        dryRun: readRecapDryRun(),
+      });
+      if (result.ok && result.dryRun) {
+        logger.info?.(
+          JSON.stringify({
+            service: 'recap-scheduler',
+            event: 'tick.dry_run',
+            period,
+            summary: result.summary,
+          }),
+        );
+        continue;
+      }
+
       if (result.ok || result.reason === 'no settled picks in window') {
         markPosted(period, now);
       } else {
