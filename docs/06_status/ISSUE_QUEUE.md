@@ -7,13 +7,247 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 24 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 16 |
+| `lane:codex` | 0 | 0 | 2 | 0 | 30 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 21 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-87 — T1 discord:exclusive-insights Channel Activation
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-87 |
+| **Tier** | T1 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M13 |
+| **Area** | `area:api`, `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Contract ratified PR #56. Third pick delivery tier: score ≥90 / edge ≥90 / trust ≥88. Requires migration (add `'exclusive-insights'` to CHECK constraints), `exclusiveInsightsPromotionPolicy`, and priority ordering (exclusive > trader > best-bets). Contract: `docs/05_operations/T1_EXCLUSIVE_INSIGHTS_ACTIVATION_CONTRACT.md`.
+
+---
+
+### UTV2-69 — T2 Hedge Detection
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-69 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M13 |
+| **Area** | `area:api`, `area:db` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+Contract ratified PR #56. Cross-bookmaker arbitrage/middle/hedge detection from `provider_offers`. New `hedge_opportunities` table, detection algorithm, notification routing via UTV2-114 infrastructure. Contract: `docs/05_operations/T2_HEDGE_DETECTION_CONTRACT.md`. *(Note: identifier previously used for M12 grading cron — see M12 section below.)*
+
+---
+
+### UTV2-114 — T2 AlertAgent Notification Layer
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-114 |
+| **Tier** | T2 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | `claude/UTV2-59b-alert-notification` |
+| **PR** | [#55](https://github.com/griff843/Unit-Talk-v2/pull/55) — **MERGED** ✅ (2026-03-28) |
+
+`runAlertNotificationPass()`: DB-backed cooldown, tier routing (notable→canary 30min; alert-worthy→canary+trader-insights 15min), `ALERT_DRY_RUN` kill switch. `buildAlertEmbed()`, `resolveDiscordChannelId()`. 16 tests. 722/722 total tests. Wired into `alert-agent.ts` scheduler tick after detection pass.
+
+---
+
+### UTV2-113 — T1 discord:recaps Activation Contract
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-113 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api`, `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | [#50](https://github.com/griff843/Unit-Talk-v2/pull/50) — **MERGED** ✅ (2026-03-28) |
+
+Ratified T1 activation contract for `discord:recaps`. Channel ID `1300411261854547968`. Activation decision, `RECAP_DRY_RUN` spec, UTV2-90 implementation scope, micro-recap out-of-scope decision. Contract: `docs/05_operations/T1_DISCORDRECAPS_ACTIVATION_CONTRACT.md`.
+
+---
+
+### UTV2-90 — T2 discord:recaps Runtime Activation
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-90 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | [#53](https://github.com/griff843/Unit-Talk-v2/pull/53) — **MERGED** ✅ (2026-03-28) |
+
+Activated `discord:recaps` as live delivery target. Channel `1300411261854547968` wired. Recap posts route to real channel.
+
+---
+
+### UTV2-26 — T1 Incident/Rollback Plan
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-26 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:governance` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | [#52](https://github.com/griff843/Unit-Talk-v2/pull/52) — **MERGED** ✅ (2026-03-28) |
+
+Full rewrite of `migration_cutover_plan.md` (incident ownership matrix, kill-switch table, 11-gate cutover checklist) and `risk_register.md` (11 open risks R-01..R-11, 7 closed risks R-C01..R-C07).
+
+---
+
+### UTV2-112 — T1 AlertAgent Line Movement Contract
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-112 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | `claude/UTV2-112-alertagent-line-movement-contract` |
+| **PR** | [#47](https://github.com/griff843/Unit-Talk-v2/pull/47) — **MERGED** ✅ (2026-03-28) |
+
+Ratified T1 contract for AlertAgent line movement detection: tier taxonomy (`watch`/`notable`/`alert-worthy`), thresholds, DB persistence model, cooldown rules. Contract: `docs/05_operations/T1_ALERTAGENT_LINE_MOVEMENT_CONTRACT.md`.
+
+---
+
+### UTV2-59 — T2 AlertAgent Line Movement Detection
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-59 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-59-alertagent-line-movement-detection` |
+| **PR** | [#48](https://github.com/griff843/Unit-Talk-v2/pull/48) — **MERGED** ✅ (2026-03-28) |
+
+`runAlertDetectionPass()`: scans `provider_offers` snapshots, computes velocity + magnitude, classifies signals by tier, persists to `alert_detections` with idempotency key. Alert-agent scheduler loop.
+
+---
+
+### UTV2-74 — T2 API Quota Tracking
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-74 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:ingestor`, `area:operator-web` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-74-api-quota-tracking-credit-logging` |
+| **PR** | [#54](https://github.com/griff843/Unit-Talk-v2/pull/54) — **MERGED** ✅ (2026-03-28) |
+
+Quota telemetry added to operator snapshot. SGO historical backfill (bounded). Credit logging wired.
+
+---
+
+### UTV2-109 — T2 Worker Runtime Visibility
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-109 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:operator-web` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-109-worker-runtime-visibility` |
+| **PR** | [#45](https://github.com/griff843/Unit-Talk-v2/pull/45) — **MERGED** ✅ (2026-03-28) |
+
+`workerRuntime` health signal in operator snapshot: last-run summary, outbox drain rate, health indicator.
+
+---
+
+### UTV2-107 — T2 Worker Runtime Activation
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-107 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:worker` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-107-worker-runtime-activation` |
+| **PR** | [#44](https://github.com/griff843/Unit-Talk-v2/pull/44) — **MERGED** ✅ (2026-03-28) |
+
+Worker process activated. `UNIT_TALK_WORKER_AUTORUN=true` required. Outbox drain proof functional. Contract: `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md`.
+
+---
+
+### UTV2-108 — T1 M13 Status Authority Refresh
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-108 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:docs` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — (commit `f92f52e`) |
+
+ISSUE_QUEUE and PROGRAM_STATUS updated to M13 reality. Status authority docs refreshed.
+
+---
+
+### UTV2-105 — T2 Grading Participant Linkage
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-105 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:api` |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-105-grading-participant-linkage` |
+| **PR** | [#43](https://github.com/griff843/Unit-Talk-v2/pull/43) — **MERGED** ✅ (2026-03-28) |
+
+Grading participant linkage fallback: resolves participant when direct linkage fails in grading pass.
 
 ---
 
@@ -107,21 +341,21 @@ Already implemented — ingestor was already populating `game_results` from SGO.
 
 ---
 
-### UTV2-69 — T3 Grading Cron
+### UTV2-69 — T3 Grading Cron (M12 historical — see M13 entry above for current T2 Hedge Detection)
 
 | Field | Value |
 |---|---|
-| **ID** | UTV2-69 |
+| **ID** | UTV2-69 (M12 grading cron work) |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **DONE** |
+| **Status** | **DONE** (M12 impl) |
 | **Milestone** | M12 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
 | **Branch** | `codex/UTV2-69-grading-cron` |
 | **PR** | [#41](https://github.com/griff843/Unit-Talk-v2/pull/41) — **MERGED** ✅ (2026-03-27) |
 
-In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass()`. No new route. No external cron. Contract: `docs/05_operations/UTV2-69_GRADING_CRON_CONTRACT.md`.
+In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass()`. No new route. No external cron. Contract: `docs/05_operations/UTV2-69_GRADING_CRON_CONTRACT.md`. *Linear issue repurposed to T2 Hedge Detection (M13) — see READY entry above.*
 
 ---
 

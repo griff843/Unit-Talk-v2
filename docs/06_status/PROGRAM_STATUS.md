@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-28 — M12 CLOSED; M13 ACTIVE. UTV2-101 (M12 closure PASS). UTV2-102 (recap hardening DONE, 692/692 tests). UTV2-103 (lifecycle proof PASS — pick `46c14cf5`, domain analysis ✓, promotion ✓, recap daily+weekly posted ✓, operator snapshot ✓).
+2026-03-28 — M13 ACTIVE. Contracts ratified: UTV2-87 (exclusive-insights, PR #56), UTV2-69 (hedge detection, PR #56). AlertAgent notification layer DONE (UTV2-114, PR #55, 722/722 tests). UTV2-90 recaps runtime DONE (PR #53). UTV2-59 detection DONE (PR #48). Worker runtime activated (UTV2-107 PR #44), visibility (UTV2-109 PR #45). Grading linkage fixed (UTV2-105 PR #43). Incident/rollback plan ratified (UTV2-26 PR #52).
 
 ---
 
@@ -16,8 +16,8 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | 692/692 pass. Last verified 2026-03-28 at main `4b5ccd7`. |
-| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-28 (UTV2-102 hardening). |
+| Tests | 722/722 pass. Last verified 2026-03-28 at main `6231672` (PR #55). |
+| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-28 at `6231672` (UTV2-114 alert notification). |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **M13 ACTIVE** — Recap runtime hardening (UTV2-102), full lifecycle proof refresh (UTV2-103). M12 CLOSED 2026-03-28. |
 
@@ -29,8 +29,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 692/692 — confirmed 2026-03-28 at main `4b5ccd7`. |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-28 at main `4b5ccd7` (UTV2-102 hardening). |
+| `pnpm test` | PASS | 722/722 — confirmed 2026-03-28 at main `6231672` (PR #55). |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-28 at `6231672` (UTV2-114 notification layer). |
 
 ### Runner Architecture
 
@@ -56,7 +56,8 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 | `discord:canary` | **LIVE** | Permanent control lane. Never removed. |
 | `discord:best-bets` | **LIVE** | Real channel `1288613037539852329`. |
 | `discord:trader-insights` | **LIVE** | Real channel `1356613995175481405`. |
-| `discord:exclusive-insights` | Blocked | Not implemented. |
+| `discord:recaps` | **LIVE** | Real channel `1300411261854547968`. Daily/weekly recap posts. |
+| `discord:exclusive-insights` | Blocked | Contract ratified (UTV2-87 READY). Not yet implemented. |
 | `discord:game-threads` | Blocked | Thread routing not implemented. |
 | `discord:strategy-room` | Blocked | DM routing not implemented. |
 
@@ -70,6 +71,21 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 |------|------|------|--------|
 | M13 UTV2-102 Recap runtime hardening | T2 | claude | DONE commit `4b5ccd7` |
 | M13 UTV2-103 Full lifecycle proof refresh | T1 | claude | DONE 2026-03-28 |
+| M13 UTV2-104 Agent operating model refresh | T1 | claude | DONE commit `8311cd9` |
+| M13 UTV2-105 Grading participant linkage | T2 | codex | DONE PR #43 |
+| M13 UTV2-106 Worker runtime authority contract | T1 | claude | DONE commit `b403e98` |
+| M13 UTV2-107 Worker runtime activation | T2 | codex | DONE PR #44 |
+| M13 UTV2-108 Status authority refresh | T1 | claude | DONE commit `f92f52e` |
+| M13 UTV2-109 Worker runtime visibility | T2 | codex | DONE PR #45 |
+| M13 UTV2-112 AlertAgent line movement contract | T1 | claude | DONE PR #47 |
+| M13 UTV2-59 AlertAgent line movement detection | T2 | codex | DONE PR #48 |
+| M13 UTV2-113 discord:recaps activation contract | T1 | claude | DONE PR #50 |
+| M13 UTV2-26 Incident/rollback plan | T1 | claude | DONE PR #52 |
+| M13 UTV2-90 discord:recaps runtime activation | T2 | codex | DONE PR #53 |
+| M13 UTV2-74 API quota tracking | T2 | codex | DONE PR #54 |
+| M13 UTV2-114 AlertAgent notification layer | T2 | claude | DONE PR #55 |
+| M13 UTV2-87 exclusive-insights contract | T1 | claude | DONE PR #56 → UTV2-87 READY (codex) |
+| M13 UTV2-69 Hedge detection contract | T2 | claude | DONE PR #56 → UTV2-69 READY (codex) |
 
 ### M12 Items (CLOSED 2026-03-28)
 
@@ -117,7 +133,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ---
 
-## Key Capabilities (current as of 2026-03-27, M11 CLOSED)
+## Key Capabilities (current as of 2026-03-28, M13 ACTIVE)
 
 ### Submission and lifecycle
 - Canonical submission intake live (API + Smart Form)
@@ -164,6 +180,16 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - `/recap` capper self-service settled picks command live (UTV2-58); CLV% and stake units in embed (UTV2-61)
 - `responseVisibility` flag on `CommandHandler` — fail-closed (private unless explicitly `'public'`)
 - Guild deploy current: 5 commands registered as of 2026-03-27 (UTV2-65 confirmed)
+
+### Alert agent
+- Line movement detection: `runAlertDetectionPass()` — scans `provider_offers` snapshots, classifies `watch`/`notable`/`alert-worthy` by velocity + magnitude (UTV2-59 PR #48)
+- Notification layer: `runAlertNotificationPass()` — DB-backed cooldown, tier-based Discord routing: `notable`→canary (30min), `alert-worthy`→canary+trader-insights (15min), `ALERT_DRY_RUN` kill switch (UTV2-114 PR #55)
+- Both passes run in `alert-agent.ts` scheduler tick; fail independently
+- Hedge detection contract ratified (UTV2-69 READY); exclusive-insights activation contract ratified (UTV2-87 READY)
+
+### Worker runtime
+- Worker process activated: `UNIT_TALK_WORKER_AUTORUN=true`, healthy = outbox draining, receipts written, no dead-letter (UTV2-107 PR #44)
+- Worker runtime visibility in operator snapshot: `workerRuntime` health signal, last-run summary, outbox drain rate (UTV2-109 PR #45)
 
 ### Settlement recap
 - `postSettlementRecapIfPossible()` in `grading-service.ts` — fires after each newly graded pick (UTV2-57)
