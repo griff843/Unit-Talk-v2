@@ -77,7 +77,11 @@ export const promotionStatuses = [
   'expired',
 ] as const;
 
-export const promotionTargets = ['best-bets', 'trader-insights'] as const;
+export const promotionTargets = [
+  'best-bets',
+  'trader-insights',
+  'exclusive-insights',
+] as const;
 
 export const promotionOverrideActions = [
   'force_promote',

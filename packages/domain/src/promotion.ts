@@ -7,10 +7,7 @@ import {
   type PromotionScoreBreakdown,
 } from '@unit-talk/contracts';
 
-export {
-  bestBetsPromotionPolicy,
-  traderInsightsPromotionPolicy,
-} from '@unit-talk/contracts';
+export { bestBetsPromotionPolicy, exclusiveInsightsPromotionPolicy, traderInsightsPromotionPolicy } from '@unit-talk/contracts';
 
 export function evaluatePromotionEligibility(
   input: BoardPromotionEvaluationInput,

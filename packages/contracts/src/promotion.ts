@@ -1,6 +1,10 @@
 import type { CanonicalPick } from './picks.js';
 
-export const promotionTargets = ['best-bets', 'trader-insights'] as const;
+export const promotionTargets = [
+  'best-bets',
+  'trader-insights',
+  'exclusive-insights',
+] as const;
 export type PromotionTarget = (typeof promotionTargets)[number];
 
 export const approvalStatuses = [
@@ -156,4 +160,18 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
     perGame: 1,
   },
   version: 'trader-insights-v1',
+};
+
+export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
+  target: 'exclusive-insights',
+  minimumScore: 90,
+  minimumEdge: 90,
+  minimumTrust: 88,
+  confidenceFloor: 0.6,
+  boardCaps: {
+    perSlate: 5,
+    perSport: 3,
+    perGame: 1,
+  },
+  version: 'exclusive-insights-v1',
 };

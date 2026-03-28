@@ -132,10 +132,10 @@ test('domain analysis edge is used when promotionScores.edge is absent and odds 
     repositories,
   );
 
-  // Domain-derived edge=100, trust=90 → both clear ti thresholds (85).
-  // Overall score with edge=100: 100*0.35 + 90*0.25 + 88*0.2 + 84*0.1 + 89*0.1 = 35+22.5+17.6+8.4+8.9 = 92.4 ≥ 80
-  // → trader-insights qualifies
-  assert.equal(result.pick.promotionTarget, 'trader-insights');
+  // Domain-derived edge=100, trust=90 → clears the exclusive-insights thresholds.
+  // Overall score with edge=100: 100*0.35 + 90*0.25 + 88*0.2 + 84*0.1 + 89*0.1 = 35+22.5+17.6+8.4+8.9 = 92.4 ≥ 90
+  // → exclusive-insights qualifies
+  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');
 });
 

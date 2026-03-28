@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateSubmissionPayload } from '@unit-talk/contracts';
+import type { CanonicalPick } from '@unit-talk/contracts';
+import {
+  evaluatePromotionEligibility,
+  exclusiveInsightsPromotionPolicy,
+} from '@unit-talk/domain';
 import { handleSubmitPick } from './handlers/index.js';
 import { applyPromotionOverride } from './promotion-service.js';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
@@ -1555,6 +1560,195 @@ test('dual-qualifying pick routes exclusively to trader-insights and is blocked 
       ),
     /Best Bets routing is blocked/,
   );
+});
+
+test('exclusive-insights qualifies at its minimum threshold', () => {
+  const pick: CanonicalPick = {
+    id: 'pick-exclusive-threshold',
+    submissionId: 'submission-exclusive-threshold',
+    market: 'NBA points',
+    selection: 'Player Over 30.5',
+    confidence: 0.95,
+    source: 'test',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'validated',
+    metadata: {},
+    createdAt: '2026-03-28T00:00:00.000Z',
+  };
+
+  const decision = evaluatePromotionEligibility(
+    {
+      target: 'exclusive-insights',
+      pick,
+      approvalStatus: pick.approvalStatus,
+      hasRequiredFields: true,
+      isStale: false,
+      withinPostingWindow: true,
+      marketStillValid: true,
+      riskBlocked: false,
+      scoreInputs: {
+        edge: 90,
+        trust: 90,
+        readiness: 90,
+        uniqueness: 90,
+        boardFit: 90,
+      },
+      minimumScore: exclusiveInsightsPromotionPolicy.minimumScore,
+      confidenceFloor: exclusiveInsightsPromotionPolicy.confidenceFloor,
+      boardCaps: exclusiveInsightsPromotionPolicy.boardCaps,
+      boardState: {
+        currentBoardCount: 0,
+        sameSportCount: 0,
+        sameGameCount: 0,
+        duplicateCount: 0,
+      },
+      decidedAt: '2026-03-28T00:00:00.000Z',
+      decidedBy: 'test',
+      version: exclusiveInsightsPromotionPolicy.version,
+    },
+    exclusiveInsightsPromotionPolicy,
+  );
+
+  assert.equal(decision.status, 'qualified');
+  assert.equal(decision.qualified, true);
+  assert.equal(decision.target, 'exclusive-insights');
+});
+
+test('exclusive-insights rejects picks below its score threshold', () => {
+  const pick: CanonicalPick = {
+    id: 'pick-exclusive-below-threshold',
+    submissionId: 'submission-exclusive-below-threshold',
+    market: 'NBA points',
+    selection: 'Player Over 30.5',
+    confidence: 0.95,
+    source: 'test',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'validated',
+    metadata: {},
+    createdAt: '2026-03-28T00:00:00.000Z',
+  };
+
+  const decision = evaluatePromotionEligibility(
+    {
+      target: 'exclusive-insights',
+      pick,
+      approvalStatus: pick.approvalStatus,
+      hasRequiredFields: true,
+      isStale: false,
+      withinPostingWindow: true,
+      marketStillValid: true,
+      riskBlocked: false,
+      scoreInputs: {
+        edge: 90,
+        trust: 88,
+        readiness: 85,
+        uniqueness: 85,
+        boardFit: 85,
+      },
+      minimumScore: exclusiveInsightsPromotionPolicy.minimumScore,
+      confidenceFloor: exclusiveInsightsPromotionPolicy.confidenceFloor,
+      boardCaps: exclusiveInsightsPromotionPolicy.boardCaps,
+      boardState: {
+        currentBoardCount: 0,
+        sameSportCount: 0,
+        sameGameCount: 0,
+        duplicateCount: 0,
+      },
+      decidedAt: '2026-03-28T00:00:00.000Z',
+      decidedBy: 'test',
+      version: exclusiveInsightsPromotionPolicy.version,
+    },
+    exclusiveInsightsPromotionPolicy,
+  );
+
+  assert.equal(decision.status, 'suppressed');
+  assert.equal(decision.qualified, false);
+  assert.equal(decision.target, undefined);
+});
+
+test('exclusive-insights outranks trader-insights in eager evaluation', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA points',
+      selection: 'Player Over 31.5',
+      confidence: 0.96,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Celtics',
+        promotionScores: {
+          edge: 95,
+          trust: 92,
+          readiness: 94,
+          uniqueness: 91,
+          boardFit: 93,
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+
+  await assert.rejects(
+    () =>
+      enqueueDistributionWithRunTracking(
+        result.pick,
+        'discord:trader-insights',
+        'api',
+        repositories.picks,
+        repositories.outbox,
+        repositories.runs,
+        repositories.audit,
+      ),
+    /Trader Insights routing is blocked/,
+  );
+});
+
+test('distribution gate accepts discord:exclusive-insights for qualified picks', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA assists',
+      selection: 'Player Over 11.5',
+      confidence: 0.95,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Warriors vs Suns',
+        promotionScores: {
+          edge: 92,
+          trust: 90,
+          readiness: 92,
+          uniqueness: 91,
+          boardFit: 94,
+        },
+      },
+    },
+    repositories,
+  );
+
+  const tracked = await enqueueDistributionWork(
+    result.pick,
+    repositories.outbox,
+    'discord:exclusive-insights',
+  );
+
+  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+  assert.equal(tracked.target, 'discord:exclusive-insights');
+
+  const claimed = await claimDistributionWork(
+    repositories.outbox,
+    'discord:exclusive-insights',
+    'test-worker-exclusive',
+  );
+  assert.ok(claimed.outboxRecord);
+  assert.equal(claimed.outboxRecord?.pick_id, result.pick.id);
 });
 
 // A3: best-bets with absent/null edge+trust scores still qualifies (thresholds are 0)
