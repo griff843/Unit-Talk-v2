@@ -8,6 +8,7 @@ import {
   getRecapWindow,
 } from './recap-service.js';
 import {
+  checkAndPostRecapsForTests,
   markRecapPostedForTests,
   resetRecapSchedulerStateForTests,
   shouldPostRecap,
@@ -134,6 +135,37 @@ test('shouldPostRecap suppresses reposts after the current window is marked as p
 
   assert.equal(first, 'daily');
   assert.equal(second, null);
+});
+
+test('checkAndPostRecaps logs structured error when postRecapSummary throws, does not propagate', async () => {
+  resetRecapSchedulerStateForTests();
+
+  const errorLogs: string[] = [];
+  const logger = { error: (msg: string) => { errorLogs.push(msg); } };
+
+  const brokenRepositories = {
+    settlements: {
+      listRecent: () => Promise.reject(new Error('db connection lost')),
+    },
+    picks: { findPickById: () => Promise.resolve(null) },
+  } as unknown as ReturnType<typeof createInMemoryRepositoryBundle>;
+
+  // Use a time that triggers daily recap so shouldPostRecap returns 'daily'
+  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+
+  // Must not throw
+  await checkAndPostRecapsForTests(brokenRepositories, logger, () => postingTime);
+
+  assert.ok(
+    errorLogs.length > 0,
+    'expected at least one error log entry',
+  );
+  const parsed = JSON.parse(errorLogs[0] as string) as Record<string, unknown>;
+  assert.equal(parsed['service'], 'recap-scheduler');
+  assert.ok(
+    String(parsed['event']).startsWith('tick.'),
+    `expected tick.* event, got: ${parsed['event']}`,
+  );
 });
 
 test('startRecapScheduler registers a 60 second polling interval and cleanup clears it', () => {

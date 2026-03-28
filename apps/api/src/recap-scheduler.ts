@@ -7,6 +7,14 @@ import {
 
 const RECAP_INTERVAL_MS = 60_000;
 
+/**
+ * In-memory idempotency guard. Keyed by window `endsAt` ISO string.
+ *
+ * Boundary: guards against duplicate posts within a single API process lifetime.
+ * If the process restarts while a posting window is open (11:00–11:01 UTC), a
+ * second post is possible. This is an accepted low-frequency risk for a single-
+ * instance deployment. Multi-instance deployments require a DB-backed lock.
+ */
 const lastPostedAt: Partial<Record<RecapPeriod, string>> = {};
 
 export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
@@ -24,11 +32,36 @@ export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
   return hasAlreadyPosted(collision, now) ? null : collision;
 }
 
+/**
+ * Starts the recap scheduler loop. Fires once per minute; posts recap embeds
+ * at the ratified UTC schedule:
+ *
+ *   Daily:          11:00 AM UTC every day
+ *   Weekly:         11:00 AM UTC every Monday
+ *   Monthly:        11:00 AM UTC on the first day of the month
+ *   Combined:       11:00 AM UTC on the first Monday of the month
+ *
+ * Note: the original `discord_embed_system_spec.md` specified weekly/monthly at
+ * 5:00 PM UTC. V2 ratifies 11:00 AM for all periods (simpler, consistent with
+ * daily). The spec reference is intentionally superseded here.
+ *
+ * Returns a cleanup function that stops the interval (called on SIGINT/SIGTERM).
+ */
 export function startRecapScheduler(
   repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  logger: Pick<Console, 'error'> = console,
+  clock: () => Date = () => new Date(),
 ) {
   const interval = setInterval(() => {
-    void checkAndPostRecaps(repositories);
+    checkAndPostRecaps(repositories, logger, clock).catch((err: unknown) => {
+      logger.error(
+        JSON.stringify({
+          service: 'recap-scheduler',
+          event: 'tick.unhandled_error',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    });
   }, RECAP_INTERVAL_MS);
 
   return () => {
@@ -46,10 +79,20 @@ export function markRecapPostedForTests(period: RecapPeriod, now: Date) {
   markPosted(period, now);
 }
 
+export async function checkAndPostRecapsForTests(
+  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  logger: Pick<Console, 'error'>,
+  clock: () => Date,
+) {
+  return checkAndPostRecaps(repositories, logger, clock);
+}
+
 async function checkAndPostRecaps(
   repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  logger: Pick<Console, 'error'>,
+  clock: () => Date,
 ) {
-  const now = new Date();
+  const now = clock();
   const due = shouldPostRecap(now);
   if (!due) {
     return;
@@ -59,9 +102,29 @@ async function checkAndPostRecaps(
     due === 'combined' ? ['weekly', 'monthly'] : [due];
 
   for (const period of periods) {
-    const result = await postRecapSummary(period, repositories, { now });
-    if (result.ok || result.reason === 'no settled picks in window') {
-      markPosted(period, now);
+    try {
+      const result = await postRecapSummary(period, repositories, { now });
+      if (result.ok || result.reason === 'no settled picks in window') {
+        markPosted(period, now);
+      } else {
+        logger.error(
+          JSON.stringify({
+            service: 'recap-scheduler',
+            event: 'tick.post_failed',
+            period,
+            reason: result.reason,
+          }),
+        );
+      }
+    } catch (err: unknown) {
+      logger.error(
+        JSON.stringify({
+          service: 'recap-scheduler',
+          event: 'tick.period_error',
+          period,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
     }
   }
 }
