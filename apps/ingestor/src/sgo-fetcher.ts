@@ -21,6 +21,8 @@ export interface SGOResultsFetchOptions {
   apiKey: string;
   league: string;
   snapshotAt: string;
+  startsAfter?: string;
+  startsBefore?: string;
   lookbackHours?: number;
   fetchImpl?: typeof fetch;
 }
@@ -177,10 +179,11 @@ export async function fetchSGOResults(
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
-  url.searchParams.set('startsBefore', options.snapshotAt);
+  url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
   url.searchParams.set(
     'startsAfter',
-    subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
+    options.startsAfter ??
+      subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
   );
 
   const response = await fetchImpl(url.toString(), {
