@@ -9,7 +9,10 @@ const ALERT_AGENT_INTERVAL_MS = 60_000;
 const emittedSignalIds = new Set<string>();
 
 export function startAlertAgent(
-  repositories: Pick<RepositoryBundle, 'providerOffers'>,
+  repositories: Pick<
+    RepositoryBundle,
+    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
+  >,
   logger: Pick<Console, 'error' | 'info'> = console,
   options: {
     listOptions?: ListLineMovementAlertsOptions;
@@ -38,7 +41,10 @@ export function resetAlertAgentStateForTests() {
 }
 
 export async function checkAndEmitLineMovementAlertsForTests(
-  repositories: Pick<RepositoryBundle, 'providerOffers'>,
+  repositories: Pick<
+    RepositoryBundle,
+    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
+  >,
   logger: Pick<Console, 'error' | 'info'>,
   options: {
     listOptions?: ListLineMovementAlertsOptions;
@@ -49,7 +55,10 @@ export async function checkAndEmitLineMovementAlertsForTests(
 }
 
 async function checkAndEmitLineMovementAlerts(
-  repositories: Pick<RepositoryBundle, 'providerOffers'>,
+  repositories: Pick<
+    RepositoryBundle,
+    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
+  >,
   logger: Pick<Console, 'error' | 'info'>,
   options: {
     listOptions?: ListLineMovementAlertsOptions;

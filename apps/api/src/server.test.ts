@@ -485,6 +485,53 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
 
 test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async () => {
   const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'player-1',
+    displayName: 'Player One',
+    participantType: 'player',
+    sport: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'event-1',
+    sportId: 'NBA',
+    eventName: 'Suns vs Nuggets',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {},
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'away',
+  });
+  await repositories.picks.savePick({
+    id: 'pick-alert-1',
+    submissionId: 'submission-alert-1',
+    market: 'points-all-game-ou',
+    selection: 'Over 27.5',
+    line: 27.5,
+    odds: -110,
+    stakeUnits: 1,
+    confidence: 0.8,
+    source: 'discord',
+    approvalStatus: 'approved',
+    promotionStatus: 'qualified',
+    promotionTarget: 'trader-insights',
+    promotionScore: 92,
+    promotionReason: 'fixture',
+    promotionVersion: 'test-v1',
+    promotionDecidedAt: '2026-03-28T10:00:00.000Z',
+    promotionDecidedBy: 'system',
+    lifecycleState: 'posted',
+    metadata: {
+      submittedBy: 'griff843',
+      eventName: 'Suns vs Nuggets',
+      player: 'Player One',
+      sport: 'NBA',
+    },
+    createdAt: '2026-03-28T09:30:00.000Z',
+  });
   await repositories.providerOffers.upsertBatch([
     {
       providerKey: 'sgo',
@@ -533,6 +580,7 @@ test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async (
       data?: {
         alerts: Array<{
           kind: string;
+          pickId: string;
           providerEventId: string;
           lineDelta: number;
         }>;
@@ -543,6 +591,7 @@ test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async (
     assert.equal(body.ok, true);
     assert.equal(body.data?.alerts.length, 1);
     assert.equal(body.data?.alerts[0]?.kind, 'line_movement');
+    assert.equal(body.data?.alerts[0]?.pickId, 'pick-alert-1');
     assert.equal(body.data?.alerts[0]?.providerEventId, 'event-1');
     assert.equal(body.data?.alerts[0]?.lineDelta, 1.5);
   } finally {
