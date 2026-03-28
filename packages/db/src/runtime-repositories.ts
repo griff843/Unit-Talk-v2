@@ -9,6 +9,9 @@ import type {
   LifecycleEvent,
 } from '@unit-talk/contracts';
 import type {
+  AlertCooldownQuery,
+  AlertDetectionCreateInput,
+  AlertDetectionRepository,
   AuditLogCreateInput,
   AuditLogRepository,
   ClosingLineLookupCriteria,
@@ -50,6 +53,7 @@ import type {
   TeamSearchResult,
 } from './repositories.js';
 import type {
+  AlertDetectionRecord,
   AuditLogRow,
   EventParticipantRow,
   EventRow,
@@ -421,6 +425,70 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     existing.claimed_by = null;
     existing.updated_at = new Date().toISOString();
     return existing;
+  }
+}
+
+export class InMemoryAlertDetectionRepository implements AlertDetectionRepository {
+  private readonly records = new Map<string, AlertDetectionRecord>();
+
+  async saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null> {
+    const existing = this.records.get(input.idempotencyKey);
+    if (existing) {
+      return null;
+    }
+
+    const record: AlertDetectionRecord = {
+      id: crypto.randomUUID(),
+      idempotency_key: input.idempotencyKey,
+      event_id: input.eventId,
+      market_key: input.marketKey,
+      bookmaker_key: input.bookmakerKey,
+      baseline_snapshot_at: input.baselineSnapshotAt,
+      current_snapshot_at: input.currentSnapshotAt,
+      old_line: input.oldLine,
+      new_line: input.newLine,
+      line_change: input.lineChange,
+      line_change_abs: input.lineChangeAbs,
+      velocity: input.velocity ?? null,
+      time_elapsed_minutes: input.timeElapsedMinutes,
+      direction: input.direction,
+      market_type: input.marketType,
+      tier: input.tier,
+      notified: input.notified ?? false,
+      notified_at: input.notifiedAt ?? null,
+      notified_channels: input.notifiedChannels ?? null,
+      cooldown_expires_at: input.cooldownExpiresAt ?? null,
+      metadata: toJsonObject(input.metadata),
+      created_at: new Date().toISOString(),
+    };
+
+    this.records.set(record.idempotency_key, record);
+    return record;
+  }
+
+  async findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null> {
+    return (
+      Array.from(this.records.values())
+        .filter(
+          (record) =>
+            record.event_id === input.eventId &&
+            record.market_key === input.marketKey &&
+            record.bookmaker_key === input.bookmakerKey &&
+            record.tier === input.tier &&
+            record.notified === true &&
+            typeof record.cooldown_expires_at === 'string' &&
+            record.cooldown_expires_at > input.now,
+        )
+        .sort((left, right) =>
+          (right.notified_at ?? '').localeCompare(left.notified_at ?? ''),
+        )[0] ?? null
+    );
+  }
+
+  async listRecent(limit = 20): Promise<AlertDetectionRecord[]> {
+    return Array.from(this.records.values())
+      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .slice(0, limit);
   }
 }
 
@@ -1404,6 +1472,88 @@ export class DatabaseOutboxRepository implements OutboxRepository {
   }
 }
 
+export class DatabaseAlertDetectionRepository implements AlertDetectionRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null> {
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .insert({
+        idempotency_key: input.idempotencyKey,
+        event_id: input.eventId,
+        market_key: input.marketKey,
+        bookmaker_key: input.bookmakerKey,
+        baseline_snapshot_at: input.baselineSnapshotAt,
+        current_snapshot_at: input.currentSnapshotAt,
+        old_line: input.oldLine,
+        new_line: input.newLine,
+        line_change: input.lineChange,
+        line_change_abs: input.lineChangeAbs,
+        velocity: input.velocity ?? null,
+        time_elapsed_minutes: input.timeElapsedMinutes,
+        direction: input.direction,
+        market_type: input.marketType,
+        tier: input.tier,
+        notified: input.notified ?? false,
+        notified_at: input.notifiedAt ?? null,
+        notified_channels: input.notifiedChannels ?? null,
+        cooldown_expires_at: input.cooldownExpiresAt ?? null,
+        metadata: toJsonObject(input.metadata),
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return null;
+      }
+
+      throw new Error(`Failed to save alert detection: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null> {
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .select('*')
+      .eq('event_id', input.eventId)
+      .eq('market_key', input.marketKey)
+      .eq('bookmaker_key', input.bookmakerKey)
+      .eq('tier', input.tier)
+      .eq('notified', true)
+      .gt('cooldown_expires_at', input.now)
+      .order('notified_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to read active alert cooldown: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async listRecent(limit = 20): Promise<AlertDetectionRecord[]> {
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list alert detections: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+}
+
 export class DatabaseReceiptRepository implements ReceiptRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -2189,6 +2339,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     submissions: new InMemorySubmissionRepository(),
     picks: new InMemoryPickRepository(),
     outbox: new InMemoryOutboxRepository(),
+    alertDetections: new InMemoryAlertDetectionRepository(),
     receipts: new InMemoryReceiptRepository(),
     settlements: new InMemorySettlementRepository(),
     providerOffers,
@@ -2209,6 +2360,7 @@ export function createDatabaseRepositoryBundle(
     submissions: new DatabaseSubmissionRepository(connection),
     picks: new DatabasePickRepository(connection),
     outbox: new DatabaseOutboxRepository(connection),
+    alertDetections: new DatabaseAlertDetectionRepository(connection),
     receipts: new DatabaseReceiptRepository(connection),
     settlements: new DatabaseSettlementRepository(connection),
     providerOffers: new DatabaseProviderOfferRepository(connection),

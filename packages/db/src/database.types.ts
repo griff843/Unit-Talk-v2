@@ -42,6 +42,89 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_detections: {
+        Row: {
+          baseline_snapshot_at: string
+          bookmaker_key: string
+          cooldown_expires_at: string | null
+          created_at: string
+          current_snapshot_at: string
+          direction: string
+          event_id: string
+          id: string
+          idempotency_key: string
+          line_change: number
+          line_change_abs: number
+          market_key: string
+          market_type: string
+          metadata: Json
+          new_line: number
+          notified: boolean
+          notified_at: string | null
+          notified_channels: string[] | null
+          old_line: number
+          tier: string
+          time_elapsed_minutes: number
+          velocity: number | null
+        }
+        Insert: {
+          baseline_snapshot_at: string
+          bookmaker_key: string
+          cooldown_expires_at?: string | null
+          created_at?: string
+          current_snapshot_at: string
+          direction: string
+          event_id: string
+          id?: string
+          idempotency_key: string
+          line_change: number
+          line_change_abs: number
+          market_key: string
+          market_type: string
+          metadata?: Json
+          new_line: number
+          notified?: boolean
+          notified_at?: string | null
+          notified_channels?: string[] | null
+          old_line: number
+          tier: string
+          time_elapsed_minutes: number
+          velocity?: number | null
+        }
+        Update: {
+          baseline_snapshot_at?: string
+          bookmaker_key?: string
+          cooldown_expires_at?: string | null
+          created_at?: string
+          current_snapshot_at?: string
+          direction?: string
+          event_id?: string
+          id?: string
+          idempotency_key?: string
+          line_change?: number
+          line_change_abs?: number
+          market_key?: string
+          market_type?: string
+          metadata?: Json
+          new_line?: number
+          notified?: boolean
+          notified_at?: string | null
+          notified_channels?: string[] | null
+          old_line?: number
+          tier?: string
+          time_elapsed_minutes?: number
+          velocity?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "alert_detections_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cappers: {
         Row: {
           active: boolean

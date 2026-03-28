@@ -483,87 +483,34 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
   }
 });
 
-test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async () => {
+test('GET /api/alerts/line-movements returns recent persisted detections', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  const participant = await repositories.participants.upsertByExternalId({
-    externalId: 'player-1',
-    displayName: 'Player One',
-    participantType: 'player',
-    sport: 'NBA',
-    metadata: {},
-  });
   const event = await repositories.events.upsertByExternalId({
-    externalId: 'event-1',
+    externalId: 'evt-alerts-1',
     sportId: 'NBA',
     eventName: 'Suns vs Nuggets',
     eventDate: '2026-03-28',
     status: 'scheduled',
     metadata: {},
   });
-  await repositories.eventParticipants.upsert({
+  await repositories.alertDetections.saveDetection({
+    idempotencyKey: 'alert-server-1',
     eventId: event.id,
-    participantId: participant.id,
-    role: 'away',
+    marketKey: 'spread',
+    bookmakerKey: 'sgo',
+    baselineSnapshotAt: '2026-03-28T09:00:00.000Z',
+    currentSnapshotAt: '2026-03-28T10:00:00.000Z',
+    oldLine: 4.5,
+    newLine: 6.5,
+    lineChange: 2,
+    lineChangeAbs: 2,
+    velocity: 0.0667,
+    timeElapsedMinutes: 30,
+    direction: 'up',
+    marketType: 'spread',
+    tier: 'notable',
+    metadata: {},
   });
-  await repositories.picks.savePick({
-    id: 'pick-alert-1',
-    submissionId: 'submission-alert-1',
-    market: 'points-all-game-ou',
-    selection: 'Over 27.5',
-    line: 27.5,
-    odds: -110,
-    stakeUnits: 1,
-    confidence: 0.8,
-    source: 'discord',
-    approvalStatus: 'approved',
-    promotionStatus: 'qualified',
-    promotionTarget: 'trader-insights',
-    promotionScore: 92,
-    promotionReason: 'fixture',
-    promotionVersion: 'test-v1',
-    promotionDecidedAt: '2026-03-28T10:00:00.000Z',
-    promotionDecidedBy: 'system',
-    lifecycleState: 'posted',
-    metadata: {
-      submittedBy: 'griff843',
-      eventName: 'Suns vs Nuggets',
-      player: 'Player One',
-      sport: 'NBA',
-    },
-    createdAt: '2026-03-28T09:30:00.000Z',
-  });
-  await repositories.providerOffers.upsertBatch([
-    {
-      providerKey: 'sgo',
-      providerEventId: 'event-1',
-      providerMarketKey: 'points-all-game-ou',
-      providerParticipantId: 'player-1',
-      sportKey: 'NBA',
-      line: 27.5,
-      overOdds: -110,
-      underOdds: -110,
-      devigMode: 'PAIRED',
-      isOpening: false,
-      isClosing: false,
-      snapshotAt: '2026-03-28T09:00:00.000Z',
-      idempotencyKey: 'sgo:event-1:points-all-game-ou:player-1:27.5:false:false',
-    },
-    {
-      providerKey: 'sgo',
-      providerEventId: 'event-1',
-      providerMarketKey: 'points-all-game-ou',
-      providerParticipantId: 'player-1',
-      sportKey: 'NBA',
-      line: 29,
-      overOdds: -110,
-      underOdds: -110,
-      devigMode: 'PAIRED',
-      isOpening: false,
-      isClosing: false,
-      snapshotAt: '2026-03-28T10:00:00.000Z',
-      idempotencyKey: 'sgo:event-1:points-all-game-ou:player-1:29.0:false:false',
-    },
-  ]);
 
   const server = createApiServer({ repositories });
 
@@ -573,16 +520,15 @@ test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async (
   const address = server.address() as AddressInfo;
   try {
     const response = await fetch(
-      `http://127.0.0.1:${address.port}/api/alerts/line-movements?threshold=0.5`,
+      `http://127.0.0.1:${address.port}/api/alerts/line-movements?limit=5`,
     );
     const body = (await response.json()) as {
       ok: boolean;
       data?: {
         alerts: Array<{
-          kind: string;
-          pickId: string;
-          providerEventId: string;
-          lineDelta: number;
+          market_key: string;
+          tier: string;
+          line_change_abs: number;
         }>;
       };
     };
@@ -590,16 +536,15 @@ test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async (
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.data?.alerts.length, 1);
-    assert.equal(body.data?.alerts[0]?.kind, 'line_movement');
-    assert.equal(body.data?.alerts[0]?.pickId, 'pick-alert-1');
-    assert.equal(body.data?.alerts[0]?.providerEventId, 'event-1');
-    assert.equal(body.data?.alerts[0]?.lineDelta, 1.5);
+    assert.equal(body.data?.alerts[0]?.market_key, 'spread');
+    assert.equal(body.data?.alerts[0]?.tier, 'notable');
+    assert.equal(body.data?.alerts[0]?.line_change_abs, 2);
   } finally {
     server.close();
   }
 });
 
-test('GET /api/alerts/line-movements returns 400 for invalid threshold', async () => {
+test('GET /api/alerts/line-movements returns 400 for invalid limit', async () => {
   const server = createApiServer({
     repositories: createInMemoryRepositoryBundle(),
   });
@@ -610,7 +555,7 @@ test('GET /api/alerts/line-movements returns 400 for invalid threshold', async (
   const address = server.address() as AddressInfo;
   try {
     const response = await fetch(
-      `http://127.0.0.1:${address.port}/api/alerts/line-movements?threshold=0`,
+      `http://127.0.0.1:${address.port}/api/alerts/line-movements?limit=0`,
     );
     const body = (await response.json()) as {
       ok: boolean;
@@ -621,7 +566,7 @@ test('GET /api/alerts/line-movements returns 400 for invalid threshold', async (
 
     assert.equal(response.status, 400);
     assert.equal(body.ok, false);
-    assert.equal(body.error?.code, 'INVALID_ALERT_THRESHOLD');
+    assert.equal(body.error?.code, 'INVALID_ALERT_LIMIT');
   } finally {
     server.close();
   }

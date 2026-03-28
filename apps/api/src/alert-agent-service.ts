@@ -1,384 +1,519 @@
-import { computeMovementScore, type ProviderOfferSlim } from '@unit-talk/domain';
+import { createHash } from 'node:crypto';
 import type {
-  EventParticipantRepository,
+  AlertDetectionCreateInput,
+  AlertDetectionMarketType,
+  AlertDetectionRecord,
+  AlertDetectionRepository,
+  AlertDetectionTier,
   EventRepository,
-  ParticipantRepository,
-  PickRecord,
-  PickRepository,
   ProviderOfferRecord,
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
-export interface LineMovementAlertSignal {
-  kind: 'line_movement';
-  signalId: string;
-  pickId: string;
-  source: string;
-  submittedBy: string | null;
-  lifecycleState: PickRecord['status'];
-  promotionTarget: string | null;
-  providerKey: string;
-  providerEventId: string;
-  providerMarketKey: string;
-  providerParticipantId: string | null;
-  sportKey: string | null;
-  currentLine: number;
-  previousLine: number;
-  lineDelta: number;
-  absoluteLineDelta: number;
-  direction: 'up' | 'down';
-  movementScore: number;
-  threshold: number;
-  currentSnapshotAt: string;
-  previousSnapshotAt: string;
-  overOdds: number | null;
-  underOdds: number | null;
-}
-
-export interface ListLineMovementAlertsOptions {
-  providerKey?: string;
-  threshold?: number;
-  limit?: number;
-}
-
 const DEFAULT_PROVIDER_KEY = 'sgo';
-const DEFAULT_MOVEMENT_THRESHOLD = 0.5;
-const DEFAULT_LIMIT = 20;
+const DEFAULT_LOOKBACK_MINUTES = 60;
+const DEFAULT_RECENT_LIMIT = 20;
+const IDENTITY_BUCKET_MS = 5 * 60 * 1000;
 
-export async function listLineMovementAlerts(
+const tierRank: Record<AlertDetectionTier, number> = {
+  watch: 1,
+  notable: 2,
+  'alert-worthy': 3,
+};
+
+const tierThresholds: Record<
+  AlertDetectionMarketType,
+  { watch: number; notable: number; alertWorthy: number; velocityElevate: number }
+> = {
+  spread: { watch: 0.5, notable: 2.0, alertWorthy: 3.5, velocityElevate: 0.5 },
+  total: { watch: 0.5, notable: 1.5, alertWorthy: 3.0, velocityElevate: 0.5 },
+  moneyline: { watch: 5, notable: 10, alertWorthy: 20, velocityElevate: 10 },
+  player_prop: { watch: 0.25, notable: 0.5, alertWorthy: 1.5, velocityElevate: 0.25 },
+};
+
+export interface LineMovementDetection {
+  providerEventId: string;
+  participantId: string | null;
+  marketKey: string;
+  bookmakerKey: string;
+  marketType: AlertDetectionMarketType;
+  baselineSnapshotAt: string;
+  currentSnapshotAt: string;
+  oldLine: number;
+  newLine: number;
+  lineChange: number;
+  lineChangeAbs: number;
+  velocity: number | null;
+  timeElapsedMinutes: number;
+  direction: 'up' | 'down';
+  metadata: Record<string, unknown>;
+}
+
+export interface AlertSignal extends LineMovementDetection {
+  tier: AlertDetectionTier;
+}
+
+export interface AlertAgentConfig {
+  enabled: boolean;
+  lookbackMinutes: number;
+  dryRun: boolean;
+  minTier: AlertDetectionTier;
+  providerKey: string;
+  now?: string;
+}
+
+export interface RunAlertDetectionPassResult {
+  evaluatedGroups: number;
+  detections: number;
+  persisted: number;
+  duplicateSignals: number;
+  belowMinTier: number;
+  unresolvedEvents: number;
+  shouldNotifyCount: number;
+  persistedSignals: AlertDetectionRecord[];
+}
+
+export function loadAlertAgentConfig(env: NodeJS.ProcessEnv = process.env): AlertAgentConfig {
+  return {
+    enabled: env.ALERT_AGENT_ENABLED !== 'false',
+    lookbackMinutes: normalizePositiveInteger(
+      env.ALERT_LOOKBACK_MINUTES,
+      DEFAULT_LOOKBACK_MINUTES,
+    ),
+    dryRun: env.ALERT_DRY_RUN !== 'false',
+    minTier: normalizeTier(env.ALERT_MIN_TIER),
+    providerKey: env.ALERT_PROVIDER_KEY?.trim() || DEFAULT_PROVIDER_KEY,
+  };
+}
+
+export function detectLineMovement(
+  currentOffer: ProviderOfferRecord,
+  baselineOffer: ProviderOfferRecord,
+): LineMovementDetection | null {
+  if (
+    currentOffer.provider_event_id !== baselineOffer.provider_event_id ||
+    currentOffer.provider_market_key !== baselineOffer.provider_market_key ||
+    currentOffer.provider_key !== baselineOffer.provider_key ||
+    (currentOffer.provider_participant_id ?? null) !==
+      (baselineOffer.provider_participant_id ?? null)
+  ) {
+    return null;
+  }
+
+  const marketType = classifyMarketType(currentOffer.provider_market_key);
+  const timeElapsedMinutes = computeTimeElapsedMinutes(
+    baselineOffer.snapshot_at,
+    currentOffer.snapshot_at,
+  );
+
+  if (marketType === 'moneyline') {
+    const dominantSide = pickDominantMoneylineSide(currentOffer, baselineOffer);
+    if (!dominantSide) {
+      return null;
+    }
+
+    const lineChange = dominantSide.current - dominantSide.baseline;
+    const lineChangeAbs = Math.abs(lineChange);
+    return {
+      providerEventId: currentOffer.provider_event_id,
+      participantId: currentOffer.provider_participant_id,
+      marketKey: currentOffer.provider_market_key,
+      bookmakerKey: currentOffer.provider_key,
+      marketType,
+      baselineSnapshotAt: baselineOffer.snapshot_at,
+      currentSnapshotAt: currentOffer.snapshot_at,
+      oldLine: dominantSide.baseline,
+      newLine: dominantSide.current,
+      lineChange,
+      lineChangeAbs,
+      velocity:
+        timeElapsedMinutes > 0 ? roundTo(lineChangeAbs / Math.max(timeElapsedMinutes, 1), 4) : null,
+      timeElapsedMinutes,
+      direction: lineChange >= 0 ? 'up' : 'down',
+      metadata: {
+        dominantSide: dominantSide.side,
+        participantId: currentOffer.provider_participant_id,
+        sport: currentOffer.sport_key,
+      },
+    };
+  }
+
+  if (!Number.isFinite(currentOffer.line) || !Number.isFinite(baselineOffer.line)) {
+    return null;
+  }
+
+  const oldLine = baselineOffer.line as number;
+  const newLine = currentOffer.line as number;
+  const lineChange = roundTo(newLine - oldLine, 4);
+  const lineChangeAbs = Math.abs(lineChange);
+
+  return {
+    providerEventId: currentOffer.provider_event_id,
+    participantId: currentOffer.provider_participant_id,
+    marketKey: currentOffer.provider_market_key,
+    bookmakerKey: currentOffer.provider_key,
+    marketType,
+    baselineSnapshotAt: baselineOffer.snapshot_at,
+    currentSnapshotAt: currentOffer.snapshot_at,
+    oldLine,
+    newLine,
+    lineChange,
+    lineChangeAbs,
+    velocity:
+      timeElapsedMinutes > 0 ? roundTo(lineChangeAbs / Math.max(timeElapsedMinutes, 1), 4) : null,
+    timeElapsedMinutes,
+    direction: lineChange >= 0 ? 'up' : 'down',
+    metadata: {
+      participantId: currentOffer.provider_participant_id,
+      sport: currentOffer.sport_key,
+    },
+  };
+}
+
+export function classifyMovement(
+  detection: LineMovementDetection,
+): AlertSignal | null {
+  const thresholds = tierThresholds[detection.marketType];
+  let tier: AlertDetectionTier | null = null;
+
+  if (detection.lineChangeAbs >= thresholds.alertWorthy) {
+    tier = 'alert-worthy';
+  } else if (detection.lineChangeAbs >= thresholds.notable) {
+    tier = 'notable';
+  } else if (detection.lineChangeAbs >= thresholds.watch) {
+    tier = 'watch';
+  }
+
+  if (!tier) {
+    return null;
+  }
+
+  const velocityElevated =
+    tier === 'notable' &&
+    detection.timeElapsedMinutes <= 15 &&
+    detection.lineChangeAbs >= thresholds.velocityElevate;
+
+  return {
+    ...detection,
+    tier: velocityElevated ? 'alert-worthy' : tier,
+    metadata: {
+      ...detection.metadata,
+      velocityElevated,
+    },
+  };
+}
+
+export async function shouldNotify(
+  signal: AlertSignal,
+  repository: AlertDetectionRepository,
+  options: { eventId: string; now?: string } = { eventId: '' },
+): Promise<boolean> {
+  if (signal.tier === 'watch') {
+    return false;
+  }
+
+  const eventId = options.eventId;
+  if (!eventId) {
+    throw new Error('eventId is required to evaluate alert cooldowns');
+  }
+
+  const now = options.now ?? new Date().toISOString();
+  const activeCooldown = await repository.findActiveCooldown({
+    eventId,
+    marketKey: signal.marketKey,
+    bookmakerKey: signal.bookmakerKey,
+    tier: signal.tier,
+    now,
+  });
+
+  return activeCooldown === null;
+}
+
+export async function runAlertDetectionPass(
   repositories: Pick<
     {
-      picks: PickRepository;
       providerOffers: ProviderOfferRepository;
-      participants: ParticipantRepository;
+      alertDetections: AlertDetectionRepository;
       events: EventRepository;
-      eventParticipants: EventParticipantRepository;
     },
-    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
+    'alertDetections' | 'events' | 'providerOffers'
   >,
-  options: ListLineMovementAlertsOptions = {},
-): Promise<LineMovementAlertSignal[]> {
-  const providerKey = options.providerKey ?? DEFAULT_PROVIDER_KEY;
-  const threshold = normalizePositiveNumber(
-    options.threshold,
-    DEFAULT_MOVEMENT_THRESHOLD,
-  );
-  const limit = normalizePositiveInteger(options.limit, DEFAULT_LIMIT);
+  config: Partial<AlertAgentConfig> = {},
+): Promise<RunAlertDetectionPassResult> {
+  const resolved = {
+    ...loadAlertAgentConfig(),
+    ...config,
+  };
 
-  const offers = await repositories.providerOffers.listByProvider(providerKey);
-  const trackedPicks = await listTrackedPicks(repositories.picks);
-  const groupedOffers = new Map<string, ProviderOfferRecord[]>();
+  if (!resolved.enabled) {
+    return {
+      evaluatedGroups: 0,
+      detections: 0,
+      persisted: 0,
+      duplicateSignals: 0,
+      belowMinTier: 0,
+      unresolvedEvents: 0,
+      shouldNotifyCount: 0,
+      persistedSignals: [],
+    };
+  }
+
+  const nowIso = resolved.now ?? new Date().toISOString();
+  const offers = await repositories.providerOffers.listByProvider(resolved.providerKey);
+  const offerGroups = groupOffersByTuple(offers);
+  const persistedSignals: AlertDetectionRecord[] = [];
+  let detections = 0;
+  let persisted = 0;
+  let duplicateSignals = 0;
+  let belowMinTier = 0;
+  let unresolvedEvents = 0;
+  let shouldNotifyCount = 0;
+
+  for (const group of offerGroups.values()) {
+    const currentOffer = selectCurrentOffer(group, nowIso);
+    if (!currentOffer) {
+      continue;
+    }
+
+    const baselineOffer = selectBaselineOffer(group, currentOffer, resolved.lookbackMinutes);
+    if (!baselineOffer) {
+      continue;
+    }
+
+    const detection = detectLineMovement(currentOffer, baselineOffer);
+    if (!detection) {
+      continue;
+    }
+
+    const signal = classifyMovement(detection);
+    if (!signal) {
+      continue;
+    }
+
+    detections += 1;
+
+    if (tierRank[signal.tier] < tierRank[resolved.minTier]) {
+      belowMinTier += 1;
+      continue;
+    }
+
+    const event = await repositories.events.findByExternalId(signal.providerEventId);
+    if (!event) {
+      unresolvedEvents += 1;
+      continue;
+    }
+
+    const idempotencyKey = buildIdempotencyKey(event.id, signal);
+    const created = await repositories.alertDetections.saveDetection(
+      buildAlertDetectionCreateInput(event.id, signal, idempotencyKey),
+    );
+    if (!created) {
+      duplicateSignals += 1;
+      continue;
+    }
+
+    persisted += 1;
+    persistedSignals.push(created);
+    if (await shouldNotify(signal, repositories.alertDetections, { eventId: event.id, now: nowIso })) {
+      shouldNotifyCount += 1;
+    }
+  }
+
+  return {
+    evaluatedGroups: offerGroups.size,
+    detections,
+    persisted,
+    duplicateSignals,
+    belowMinTier,
+    unresolvedEvents,
+    shouldNotifyCount,
+    persistedSignals,
+  };
+}
+
+export async function listRecentAlertDetections(
+  repositories: Pick<{ alertDetections: AlertDetectionRepository }, 'alertDetections'>,
+  options: { limit?: number } = {},
+) {
+  const limit = normalizePositiveInteger(options.limit, DEFAULT_RECENT_LIMIT);
+  return repositories.alertDetections.listRecent(limit);
+}
+
+function buildAlertDetectionCreateInput(
+  eventId: string,
+  signal: AlertSignal,
+  idempotencyKey: string,
+): AlertDetectionCreateInput {
+  return {
+    idempotencyKey,
+    eventId,
+    marketKey: signal.marketKey,
+    bookmakerKey: signal.bookmakerKey,
+    baselineSnapshotAt: signal.baselineSnapshotAt,
+    currentSnapshotAt: signal.currentSnapshotAt,
+    oldLine: signal.oldLine,
+    newLine: signal.newLine,
+    lineChange: signal.lineChange,
+    lineChangeAbs: signal.lineChangeAbs,
+    velocity: signal.velocity,
+    timeElapsedMinutes: signal.timeElapsedMinutes,
+    direction: signal.direction,
+    marketType: signal.marketType,
+    tier: signal.tier,
+    metadata: signal.metadata,
+  };
+}
+
+function buildIdempotencyKey(eventId: string, signal: AlertSignal) {
+  const bucket = Math.floor(new Date(signal.currentSnapshotAt).getTime() / IDENTITY_BUCKET_MS);
+  return createHash('sha256')
+    .update(
+      [
+        eventId,
+        signal.marketKey,
+        signal.bookmakerKey,
+        signal.tier,
+        String(bucket),
+      ].join('|'),
+    )
+    .digest('hex')
+    .slice(0, 32);
+}
+
+function groupOffersByTuple(offers: ProviderOfferRecord[]) {
+  const groups = new Map<string, ProviderOfferRecord[]>();
 
   for (const offer of offers) {
     const key = [
       offer.provider_event_id,
       offer.provider_market_key,
+      offer.provider_key,
       offer.provider_participant_id ?? 'all',
     ].join(':');
-    const group = groupedOffers.get(key) ?? [];
+    const group = groups.get(key) ?? [];
     group.push(offer);
-    groupedOffers.set(key, group);
+    groups.set(key, group);
   }
 
-  const alerts: LineMovementAlertSignal[] = [];
-
-  for (const pick of trackedPicks) {
-    const trackedContext = await resolveTrackedPickContext(pick, repositories);
-    if (!trackedContext) {
-      continue;
-    }
-
-    const group = groupedOffers.get(trackedContext.groupKey);
-    if (!group) {
-      continue;
-    }
-
-    const latestTwo = group
-      .filter((offer) => offer.line !== null)
-      .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))
-      .slice(0, 2);
-
-    if (latestTwo.length < 2) {
-      continue;
-    }
-
-    const current = latestTwo[0];
-    const previous = latestTwo[1];
-
-    if (!current || !previous || current.line === null || previous.line === null) {
-      continue;
-    }
-
-    const lineDelta = roundToTenth(current.line - previous.line);
-    const absoluteLineDelta = Math.abs(lineDelta);
-    if (absoluteLineDelta < threshold) {
-      continue;
-    }
-
-    alerts.push({
-      kind: 'line_movement',
-      signalId: buildSignalId(pick, current),
-      pickId: pick.id,
-      source: pick.source,
-      submittedBy: trackedContext.submittedBy,
-      lifecycleState: pick.status,
-      promotionTarget: pick.promotion_target,
-      providerKey: current.provider_key,
-      providerEventId: current.provider_event_id,
-      providerMarketKey: current.provider_market_key,
-      providerParticipantId: current.provider_participant_id,
-      sportKey: current.sport_key,
-      currentLine: current.line,
-      previousLine: previous.line,
-      lineDelta,
-      absoluteLineDelta,
-      direction: lineDelta >= 0 ? 'up' : 'down',
-      movementScore: computeMovementScore(
-        [toProviderOfferSlim(previous)],
-        [toProviderOfferSlim(current)],
-      ),
-      threshold,
-      currentSnapshotAt: current.snapshot_at,
-      previousSnapshotAt: previous.snapshot_at,
-      overOdds: current.over_odds,
-      underOdds: current.under_odds,
-    });
-  }
-
-  return alerts
-    .sort((left, right) => {
-      if (right.absoluteLineDelta !== left.absoluteLineDelta) {
-        return right.absoluteLineDelta - left.absoluteLineDelta;
-      }
-      return right.currentSnapshotAt.localeCompare(left.currentSnapshotAt);
-    })
-    .slice(0, limit);
+  return groups;
 }
 
-async function listTrackedPicks(picks: PickRepository) {
-  const pickStates: Array<Parameters<PickRepository['listByLifecycleState']>[0]> = [
-    'validated',
-    'queued',
-    'posted',
-  ];
-  const results = await Promise.all(pickStates.map((state) => picks.listByLifecycleState(state)));
-  return results.flat();
+function selectCurrentOffer(offers: ProviderOfferRecord[], nowIso: string) {
+  return [...offers]
+    .filter((offer) => offer.snapshot_at <= nowIso)
+    .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null;
 }
 
-async function resolveTrackedPickContext(
-  pick: PickRecord,
-  repositories: Pick<
-    {
-      participants: ParticipantRepository;
-      events: EventRepository;
-      eventParticipants: EventParticipantRepository;
-    },
-    'eventParticipants' | 'events' | 'participants'
-  >,
+function selectBaselineOffer(
+  offers: ProviderOfferRecord[],
+  currentOffer: ProviderOfferRecord,
+  lookbackMinutes: number,
 ) {
-  const submittedBy = readSubmittedBy(pick);
-  if (pick.source !== 'system' && submittedBy === null) {
-    return null;
-  }
+  const lowerBound = new Date(
+    new Date(currentOffer.snapshot_at).getTime() - lookbackMinutes * 60 * 1000,
+  ).toISOString();
 
-  const providerMarketKey = readProviderMarketKey(pick) ?? pick.market;
-  const participantId = await resolvePickParticipantId(pick, repositories);
-  const participantExternalId = participantId
-    ? (await repositories.participants.findById(participantId))?.external_id ?? null
-    : null;
-  const event = await resolvePickEvent(pick, participantId, repositories);
-  if (!event?.external_id) {
-    return null;
-  }
-
-  return {
-    groupKey: [
-      event.external_id,
-      providerMarketKey,
-      participantExternalId ?? 'all',
-    ].join(':'),
-    submittedBy,
-  };
-}
-
-function buildSignalId(pick: PickRecord, offer: ProviderOfferRecord) {
-  return [
-    'line-movement',
-    pick.id,
-    offer.provider_key,
-    offer.provider_event_id,
-    offer.provider_market_key,
-    offer.provider_participant_id ?? 'all',
-    offer.snapshot_at,
-  ].join(':');
-}
-
-function toProviderOfferSlim(offer: ProviderOfferRecord): ProviderOfferSlim {
-  return {
-    provider: offer.provider_key,
-    line: offer.line,
-    over_odds: offer.over_odds,
-    under_odds: offer.under_odds,
-    snapshot_at: offer.snapshot_at,
-    is_opening: offer.is_opening,
-    is_closing: offer.is_closing,
-  };
-}
-
-async function resolvePickEvent(
-  pick: PickRecord,
-  participantId: string | null,
-  repositories: Pick<
-    {
-      events: EventRepository;
-      eventParticipants: EventParticipantRepository;
-    },
-    'eventParticipants' | 'events'
-  >,
-) {
-  const participantEvents = participantId
-    ? (
-        await Promise.all(
-          (await repositories.eventParticipants.listByParticipant(participantId)).map((link) =>
-            repositories.events.findById(link.event_id),
-          ),
-        )
-      ).filter(
-        (event): event is NonNullable<typeof event> =>
-          event !== null && typeof event.external_id === 'string' && event.external_id.length > 0,
+  return (
+    [...offers]
+      .filter(
+        (offer) =>
+          offer.snapshot_at >= lowerBound && offer.snapshot_at < currentOffer.snapshot_at,
       )
-    : [];
-
-  if (participantEvents.length > 0) {
-    return chooseEventForPick(pick, participantEvents);
-  }
-
-  const metadata = asRecord(pick.metadata);
-  const eventName = typeof metadata.eventName === 'string' ? metadata.eventName.trim() : '';
-  if (!eventName) {
-    return null;
-  }
-
-  const sport = typeof metadata.sport === 'string' ? metadata.sport.trim() : undefined;
-  const upcomingEvents = await repositories.events.listUpcoming(sport);
-  return (
-    upcomingEvents.find(
-      (event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
-    ) ?? null
+      .sort((left, right) => left.snapshot_at.localeCompare(right.snapshot_at))[0] ?? null
   );
 }
 
-async function resolvePickParticipantId(
-  pick: PickRecord,
-  repositories: Pick<{ participants: ParticipantRepository }, 'participants'>,
-): Promise<string | null> {
-  if (pick.participant_id) {
-    return pick.participant_id;
+function classifyMarketType(marketKey: string): AlertDetectionMarketType {
+  const normalized = marketKey.trim().toLowerCase();
+  if (
+    normalized.includes('spread') ||
+    normalized.includes('run_line') ||
+    normalized.includes('puck_line') ||
+    normalized.includes('handicap')
+  ) {
+    return 'spread';
   }
 
-  const metadata = asRecord(pick.metadata);
-  const playerName = typeof metadata.player === 'string' ? metadata.player.trim() : '';
-  if (!playerName) {
-    return null;
+  if (
+    normalized === 'total' ||
+    normalized.includes('totals') ||
+    normalized.includes('over_under') ||
+    normalized.includes('game_ou') ||
+    normalized.startsWith('total-') ||
+    normalized.includes('team-total')
+  ) {
+    return 'total';
   }
 
-  const sport = typeof metadata.sport === 'string' ? metadata.sport.trim() : undefined;
-  const candidates = await repositories.participants.listByType('player', sport);
-  const matches = candidates.filter(
-    (candidate) => normalizeName(candidate.display_name) === normalizeName(playerName),
-  );
+  if (
+    normalized.includes('moneyline') ||
+    normalized === 'h2h' ||
+    normalized.includes('1x2')
+  ) {
+    return 'moneyline';
+  }
 
-  return matches.length === 1 ? (matches[0]?.id ?? null) : null;
+  if (normalized.startsWith('player_')) {
+    return 'player_prop';
+  }
+
+  return 'player_prop';
 }
 
-function chooseEventForPick(
-  pick: PickRecord,
-  events: Array<{
-    event_name: string;
-    event_date: string;
-    external_id: string | null;
-    metadata: Record<string, unknown>;
-  }>,
+function pickDominantMoneylineSide(
+  currentOffer: ProviderOfferRecord,
+  baselineOffer: ProviderOfferRecord,
 ) {
-  const metadata = asRecord(pick.metadata);
-  const eventName = typeof metadata.eventName === 'string' ? metadata.eventName.trim() : null;
-  if (eventName) {
-    const namedMatch = events.find(
-      (event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
-    );
-    if (namedMatch) {
-      return namedMatch;
-    }
+  const candidates = [
+    {
+      side: 'over',
+      baseline: baselineOffer.over_odds,
+      current: currentOffer.over_odds,
+    },
+    {
+      side: 'under',
+      baseline: baselineOffer.under_odds,
+      current: currentOffer.under_odds,
+    },
+  ]
+    .filter(
+      (candidate): candidate is { side: 'over' | 'under'; baseline: number; current: number } =>
+        Number.isFinite(candidate.baseline) && Number.isFinite(candidate.current),
+    )
+    .map((candidate) => ({
+      ...candidate,
+      changeAbs: Math.abs(candidate.current - candidate.baseline),
+    }))
+    .sort((left, right) => right.changeAbs - left.changeAbs);
+
+  return candidates[0] ?? null;
+}
+
+function computeTimeElapsedMinutes(startIso: string, endIso: string) {
+  const elapsedMs = new Date(endIso).getTime() - new Date(startIso).getTime();
+  return elapsedMs <= 0 ? 0 : roundTo(elapsedMs / 60_000, 4);
+}
+
+function normalizePositiveInteger(rawValue: string | number | undefined, fallback: number) {
+  if (typeof rawValue === 'number') {
+    return Number.isFinite(rawValue) && rawValue > 0 ? Math.trunc(rawValue) : fallback;
   }
 
-  const pickCreatedAt = new Date(pick.created_at).getTime();
-  return (
-    [...events].sort((left, right) => {
-      const leftDistance = Math.abs(new Date(readEventStartTime(left)).getTime() - pickCreatedAt);
-      const rightDistance = Math.abs(
-        new Date(readEventStartTime(right)).getTime() - pickCreatedAt,
-      );
-      return leftDistance - rightDistance;
-    })[0] ?? null
-  );
-}
-
-function readEventStartTime(event: { event_date: string; metadata: Record<string, unknown> }) {
-  const metadata = asRecord(event.metadata);
-  const startsAt = metadata.starts_at;
-  return typeof startsAt === 'string' && startsAt.trim().length > 0
-    ? startsAt
-    : `${event.event_date}T23:59:59Z`;
-}
-
-function readProviderMarketKey(pick: PickRecord) {
-  const metadata = asRecord(pick.metadata);
-  const deviggingResult = asRecord(metadata.deviggingResult);
-  const providerMarketKey = deviggingResult.providerMarketKey;
-  return typeof providerMarketKey === 'string' && providerMarketKey.trim().length > 0
-    ? providerMarketKey.trim()
-    : null;
-}
-
-function readSubmittedBy(pick: PickRecord) {
-  const metadata = asRecord(pick.metadata);
-  const capper =
-    typeof metadata.capper === 'string'
-      ? metadata.capper
-      : typeof metadata.submittedBy === 'string'
-        ? metadata.submittedBy
-        : null;
-
-  const trimmed = capper?.trim() ?? '';
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizePositiveNumber(value: number | undefined, fallback: number) {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) {
+  if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
     return fallback;
   }
 
-  return value;
+  const parsed = Number.parseInt(rawValue, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function normalizePositiveInteger(value: number | undefined, fallback: number) {
-  if (value === undefined || !Number.isFinite(value) || value <= 0) {
-    return fallback;
-  }
-
-  return Math.trunc(value);
+function normalizeTier(rawValue: string | undefined): AlertDetectionTier {
+  return rawValue === 'notable' || rawValue === 'alert-worthy' || rawValue === 'watch'
+    ? rawValue
+    : 'watch';
 }
 
-function roundToTenth(value: number) {
-  return Math.round(value * 10) / 10;
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? (value as Record<string, unknown>)
-    : {};
-}
-
-function normalizeName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function roundTo(value: number, decimals: number) {
+  const multiplier = 10 ** decimals;
+  return Math.round(value * multiplier) / multiplier;
 }

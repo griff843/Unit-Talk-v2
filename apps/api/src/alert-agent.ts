@@ -1,34 +1,61 @@
 import type { RepositoryBundle } from '@unit-talk/db';
 import {
-  listLineMovementAlerts,
-  type LineMovementAlertSignal,
-  type ListLineMovementAlertsOptions,
+  loadAlertAgentConfig,
+  runAlertDetectionPass,
+  type AlertAgentConfig,
 } from './alert-agent-service.js';
 
 const ALERT_AGENT_INTERVAL_MS = 60_000;
-const emittedSignalIds = new Set<string>();
 
 export function startAlertAgent(
-  repositories: Pick<
-    RepositoryBundle,
-    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
-  >,
+  repositories: Pick<RepositoryBundle, 'alertDetections' | 'events' | 'providerOffers'>,
   logger: Pick<Console, 'error' | 'info'> = console,
-  options: {
-    listOptions?: ListLineMovementAlertsOptions;
-    onSignals?: (signals: LineMovementAlertSignal[]) => void | Promise<void>;
-  } = {},
+  config: Partial<AlertAgentConfig> = {},
 ) {
+  const resolvedConfig = {
+    ...loadAlertAgentConfig(),
+    ...config,
+  };
+
+  if (!resolvedConfig.enabled) {
+    logger.info(
+      JSON.stringify({
+        service: 'alert-agent',
+        event: 'disabled',
+      }),
+    );
+
+    return () => {};
+  }
+
   const interval = setInterval(() => {
-    checkAndEmitLineMovementAlerts(repositories, logger, options).catch((err: unknown) => {
-      logger.error(
-        JSON.stringify({
-          service: 'alert-agent',
-          event: 'tick.unhandled_error',
-          error: err instanceof Error ? err.message : String(err),
-        }),
-      );
-    });
+    runAlertDetectionPass(repositories, resolvedConfig)
+      .then((result) => {
+        logger.info(
+          JSON.stringify({
+            service: 'alert-agent',
+            event: 'detection.pass.completed',
+            result: {
+              evaluatedGroups: result.evaluatedGroups,
+              detections: result.detections,
+              persisted: result.persisted,
+              duplicateSignals: result.duplicateSignals,
+              belowMinTier: result.belowMinTier,
+              unresolvedEvents: result.unresolvedEvents,
+              shouldNotifyCount: result.shouldNotifyCount,
+            },
+          }),
+        );
+      })
+      .catch((err: unknown) => {
+        logger.error(
+          JSON.stringify({
+            service: 'alert-agent',
+            event: 'tick.unhandled_error',
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      });
   }, ALERT_AGENT_INTERVAL_MS);
 
   return () => {
@@ -36,56 +63,12 @@ export function startAlertAgent(
   };
 }
 
-export function resetAlertAgentStateForTests() {
-  emittedSignalIds.clear();
-}
-
-export async function checkAndEmitLineMovementAlertsForTests(
-  repositories: Pick<
-    RepositoryBundle,
-    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
-  >,
-  logger: Pick<Console, 'error' | 'info'>,
-  options: {
-    listOptions?: ListLineMovementAlertsOptions;
-    onSignals?: (signals: LineMovementAlertSignal[]) => void | Promise<void>;
-  } = {},
+export async function runAlertDetectionPassForTests(
+  repositories: Pick<RepositoryBundle, 'alertDetections' | 'events' | 'providerOffers'>,
+  config: Partial<AlertAgentConfig> = {},
 ) {
-  return checkAndEmitLineMovementAlerts(repositories, logger, options);
-}
-
-async function checkAndEmitLineMovementAlerts(
-  repositories: Pick<
-    RepositoryBundle,
-    'eventParticipants' | 'events' | 'participants' | 'picks' | 'providerOffers'
-  >,
-  logger: Pick<Console, 'error' | 'info'>,
-  options: {
-    listOptions?: ListLineMovementAlertsOptions;
-    onSignals?: (signals: LineMovementAlertSignal[]) => void | Promise<void>;
-  },
-) {
-  const alerts = await listLineMovementAlerts(repositories, options.listOptions);
-  const newSignals = alerts.filter((signal) => !emittedSignalIds.has(signal.signalId));
-
-  if (newSignals.length === 0) {
-    return [];
-  }
-
-  for (const signal of newSignals) {
-    emittedSignalIds.add(signal.signalId);
-    logger.info(
-      JSON.stringify({
-        service: 'alert-agent',
-        event: 'signal.line_movement',
-        signal,
-      }),
-    );
-  }
-
-  if (options.onSignals) {
-    await options.onSignals(newSignals);
-  }
-
-  return newSignals;
+  return runAlertDetectionPass(repositories, {
+    ...loadAlertAgentConfig(),
+    ...config,
+  });
 }

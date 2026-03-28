@@ -20,6 +20,7 @@ export const canonicalTables = [
   'events',
   'event_participants',
   'game_results',
+  'alert_detections',
 ] as const;
 
 export type CanonicalTable = (typeof canonicalTables)[number];
