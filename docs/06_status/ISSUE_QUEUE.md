@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 23 |
-| `lane:claude` | 0 | 0 | 0 | 1 | 11 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 24 |
+| `lane:claude` | 0 | 0 | 1 | 0 | 11 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
@@ -60,14 +60,14 @@ In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass(
 | **ID** | UTV2-70 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M12 |
 | **Area** | `area:api` |
 | **Blocked by** | — (UTV2-68 DONE ✅) |
 | **Branch** | `codex/UTV2-70-recap-agent` |
-| **PR** | — |
+| **PR** | [#42](https://github.com/griff843/Unit-Talk-v2/pull/42) — **MERGED** ✅ (2026-03-28) |
 
-`POST /api/recap/post` + `recap-service.ts` + `recap-scheduler.ts`. Daily/weekly/monthly Discord embed posts to `discord:best-bets`. In-process 60-second loop. Contract: `docs/05_operations/UTV2-70_RECAP_AGENT_CONTRACT.md`.
+`POST /api/recap/post` + `recap-service.ts` + `recap-scheduler.ts`. Daily/weekly/monthly Discord embed posts to `discord:best-bets`. In-process 60-second loop. Contract: `docs/05_operations/UTV2-70_RECAP_AGENT_CONTRACT.md`. Independent verification PASS 2026-03-27 — all 9 ACs pass; 13 new tests.
 
 ---
 
@@ -78,10 +78,10 @@ In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass(
 | **ID** | UTV2-71 |
 | **Tier** | T1 (verify) |
 | **Lane** | `lane:claude` |
-| **Status** | **BLOCKED** |
+| **Status** | **READY** |
 | **Milestone** | M12 |
 | **Area** | `area:docs` |
-| **Blocked by** | UTV2-68, UTV2-69, UTV2-70 (all must merge before closure proof) |
+| **Blocked by** | — (UTV2-68 ✅, UTV2-69 ✅, UTV2-70 ✅) |
 | **Branch** | — |
 | **PR** | — |
 
