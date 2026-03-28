@@ -187,10 +187,18 @@ export interface AlertCooldownQuery {
   now: string;
 }
 
+export interface AlertNotificationUpdateInput {
+  id: string;
+  notifiedAt: string;
+  notifiedChannels: string[];
+  cooldownExpiresAt: string;
+}
+
 export interface AlertDetectionRepository {
   saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null>;
   findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null>;
   listRecent(limit?: number | undefined): Promise<AlertDetectionRecord[]>;
+  updateNotified(input: AlertNotificationUpdateInput): Promise<void>;
 }
 
 export interface ReceiptCreateInput {
