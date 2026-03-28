@@ -1,6 +1,6 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import { resolveSgoEntities } from './entity-resolver.js';
-import { fetchSGOResults } from './results-fetcher.js';
+import { fetchSGOResultsWithTelemetry, type SGORequestTelemetry } from './sgo-fetcher.js';
 import { resolveAndInsertResults } from './results-resolver.js';
 import { fetchAndPairSGOProps, type SGOFetchOptions } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
@@ -14,7 +14,25 @@ export interface IngestLeagueOptions {
   resultsStartsBefore?: string;
   resultsLookbackHours?: number;
   skipResults?: boolean;
+  sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'warn' | 'info'>;
+}
+
+export interface IngestQuotaSummary {
+  provider: 'sgo';
+  requestCount: number;
+  successfulRequests: number;
+  creditsUsed: number;
+  limit: number | null;
+  remaining: number | null;
+  resetAt: string | null;
+  lastStatus: number | null;
+  rateLimitHitCount: number;
+  backoffCount: number;
+  backoffMs: number;
+  retryAfterMs: number | null;
+  throttled: boolean;
+  headersSeen: boolean;
 }
 
 export interface IngestLeagueSummary {
@@ -32,6 +50,7 @@ export interface IngestLeagueSummary {
   insertedResultsCount: number;
   skippedResultsCount: number;
   runId: string | null;
+  quota: IngestQuotaSummary;
 }
 
 export async function ingestLeague(
@@ -57,6 +76,7 @@ export async function ingestLeague(
       insertedResultsCount: 0,
       skippedResultsCount: 0,
       runId: null,
+      quota: createEmptyQuotaSummary(),
     };
   }
 
@@ -79,6 +99,7 @@ export async function ingestLeague(
       ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
       ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+      ...(options.sleep ? { sleep: options.sleep } : {}),
     });
 
     const resolved = await resolveSgoEntities(fetched.events, repositories, {
@@ -92,8 +113,8 @@ export async function ingestLeague(
     const upsert = await repositories.providerOffers.upsertBatch(normalized);
     const skippedCount = fetched.pairedProps.length - normalized.length;
     const fetchedResults = options.skipResults
-      ? []
-      : await fetchSGOResults({
+      ? { results: [], requestTelemetry: createEmptyRequestTelemetry('results') }
+      : await fetchSGOResultsWithTelemetry({
           apiKey,
           league,
           snapshotAt,
@@ -103,11 +124,12 @@ export async function ingestLeague(
             ? { lookbackHours: options.resultsLookbackHours }
             : {}),
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+          ...(options.sleep ? { sleep: options.sleep } : {}),
         });
 
-    const completedResultEvents = fetchedResults
+    const completedResultEvents = fetchedResults.results
       .map((result) => result.resolvedEvent)
-      .filter((event): event is NonNullable<(typeof fetchedResults)[number]['resolvedEvent']> =>
+      .filter((event): event is NonNullable<(typeof fetchedResults.results)[number]['resolvedEvent']> =>
         event !== null,
       );
 
@@ -125,7 +147,12 @@ export async function ingestLeague(
           skippedResults: 0,
           errors: 0,
         }
-      : await resolveAndInsertResults(fetchedResults, repositories, options.logger);
+      : await resolveAndInsertResults(fetchedResults.results, repositories, options.logger);
+
+    const quota = summarizeQuotaTelemetry([
+      fetched.requestTelemetry,
+      fetchedResults.requestTelemetry,
+    ]);
 
     await repositories.runs.completeRun({
       runId: run.id,
@@ -146,6 +173,7 @@ export async function ingestLeague(
         insertedResultsCount: resolvedResults.insertedResults,
         skippedResultsCount: resolvedResults.skippedResults,
         resultsErrorsCount: resolvedResults.errors,
+        quota,
       },
     });
 
@@ -164,6 +192,7 @@ export async function ingestLeague(
       insertedResultsCount: resolvedResults.insertedResults,
       skippedResultsCount: resolvedResults.skippedResults,
       runId: run.id,
+      quota,
     };
   } catch (error) {
     await repositories.runs.completeRun({
@@ -178,4 +207,56 @@ export async function ingestLeague(
     });
     throw error;
   }
+}
+
+function summarizeQuotaTelemetry(telemetry: SGORequestTelemetry[]): IngestQuotaSummary {
+  const meaningful = telemetry.filter((entry) => entry.requestCount > 0);
+  if (meaningful.length === 0) {
+    return createEmptyQuotaSummary();
+  }
+
+  return meaningful.reduce<IngestQuotaSummary>((summary, entry) => ({
+    provider: 'sgo',
+    requestCount: summary.requestCount + entry.requestCount,
+    successfulRequests: summary.successfulRequests + entry.successfulRequests,
+    creditsUsed: summary.creditsUsed + entry.creditsUsed,
+    limit: entry.limit ?? summary.limit,
+    remaining: entry.remaining ?? summary.remaining,
+    resetAt: entry.resetAt ?? summary.resetAt,
+    lastStatus: entry.lastStatus ?? summary.lastStatus,
+    rateLimitHitCount: summary.rateLimitHitCount + entry.rateLimitHitCount,
+    backoffCount: summary.backoffCount + entry.backoffCount,
+    backoffMs: summary.backoffMs + entry.backoffMs,
+    retryAfterMs: entry.retryAfterMs ?? summary.retryAfterMs,
+    throttled: summary.throttled || entry.throttled,
+    headersSeen: summary.headersSeen || entry.headersSeen,
+  }), createEmptyQuotaSummary());
+}
+
+function createEmptyQuotaSummary(): IngestQuotaSummary {
+  return {
+    provider: 'sgo',
+    requestCount: 0,
+    successfulRequests: 0,
+    creditsUsed: 0,
+    limit: null,
+    remaining: null,
+    resetAt: null,
+    lastStatus: null,
+    rateLimitHitCount: 0,
+    backoffCount: 0,
+    backoffMs: 0,
+    retryAfterMs: null,
+    throttled: false,
+    headersSeen: false,
+  };
+}
+
+function createEmptyRequestTelemetry(
+  endpoint: 'odds' | 'results',
+): SGORequestTelemetry {
+  return {
+    ...createEmptyQuotaSummary(),
+    endpoint,
+  };
 }

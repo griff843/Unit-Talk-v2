@@ -47,6 +47,7 @@ export async function runIngestorCycles(
         await ingestLeague(league, options.apiKey, options.repositories, {
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
+          ...(options.sleep ? { sleep: options.sleep } : {}),
           ...(options.logger ? { logger: options.logger } : {}),
         }),
       );

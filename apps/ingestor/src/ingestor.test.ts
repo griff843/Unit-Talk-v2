@@ -113,6 +113,8 @@ test('ingestLeague returns gracefully with empty API response', async () => {
   assert.equal(summary.updatedCount, 0);
   assert.equal(summary.skippedCount, 0);
   assert.equal(summary.insertedResultsCount, 0);
+  assert.equal(summary.quota.requestCount, 2);
+  assert.equal(summary.quota.successfulRequests, 2);
 });
 
 test('runIngestorCycles polls across cycles and leagues', async () => {
@@ -216,6 +218,67 @@ test('runIngestorCycles records a failed grading trigger without failing ingest 
   assert.equal(cycles[0]?.gradingTrigger.status, 'failed');
   assert.equal(cycles[0]?.gradingTrigger.reason, 'api unavailable');
   assert.equal(warnings.some((warning) => warning.includes('api unavailable')), true);
+});
+
+test('runIngestorCycles records rate limit backoff telemetry in quota summary', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const sleepCalls: number[] = [];
+  let oddsAttempt = 0;
+
+  const cycles = await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    sleep: async (ms) => {
+      sleepCalls.push(ms);
+    },
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('oddsAvailable=true')) {
+        oddsAttempt += 1;
+        if (oddsAttempt === 1) {
+          return new Response(JSON.stringify({ error: 'rate limited' }), {
+            status: 429,
+            headers: {
+              'content-type': 'application/json',
+              'retry-after': '2',
+              'x-ratelimit-limit': '100',
+              'x-ratelimit-remaining': '0',
+            },
+          });
+        }
+
+        return new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-ratelimit-limit': '100',
+            'x-ratelimit-remaining': '99',
+          },
+        });
+      }
+
+      return new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  assert.deepEqual(sleepCalls, [2000]);
+  assert.equal(cycles[0]?.results[0]?.quota.rateLimitHitCount, 1);
+  assert.equal(cycles[0]?.results[0]?.quota.backoffCount, 1);
+  assert.equal(cycles[0]?.results[0]?.quota.backoffMs, 2000);
+  assert.equal(cycles[0]?.results[0]?.quota.requestCount, 3);
+
+  const storedRuns = Array.from(
+    ((repositories.runs as unknown as { runs: Map<string, { details: unknown }> }).runs ?? new Map()).values(),
+  );
+  const storedQuota = (
+    (storedRuns[0]?.details ?? {}) as { quota?: { rateLimitHitCount?: number; backoffMs?: number } }
+  ).quota;
+  assert.equal(storedQuota?.rateLimitHitCount, 1);
+  assert.equal(storedQuota?.backoffMs, 2000);
 });
 
 test('mapSGOStatus marks completed and in-progress events from SGO booleans', () => {
@@ -338,6 +401,7 @@ test('ingestLeague includes resolved entity counts in cycle summary', async () =
   assert.equal(summary.resolvedEventsCount, 1);
   assert.equal(summary.resolvedParticipantsCount, 4);
   assert.equal(summary.insertedCount, 1);
+  assert.equal(summary.quota.provider, 'sgo');
 });
 
 test('fetchSGOResults returns player stat rows for completed events only', async () => {
@@ -447,6 +511,7 @@ test('runHistoricalBackfill walks an inclusive date range and passes bounded dai
         insertedResultsCount: 0,
         skippedResultsCount: 0,
         runId: null,
+        quota: createEmptyQuotaSummary(),
       };
     },
   });
@@ -617,6 +682,7 @@ test('ingestLeague can skip results phase without breaking offer/entity ingest',
   assert.equal(summary.resolvedEventsCount, 1);
   assert.equal(summary.insertedResultsCount, 0);
   assert.equal(summary.resultsEventsCount, 0);
+  assert.equal(summary.quota.requestCount, 1);
 });
 
 test('ingestLeague resolves completed result events before inserting game results', async () => {
@@ -636,6 +702,7 @@ test('ingestLeague resolves completed result events before inserting game result
   const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
   assert.equal(summary.resultsEventsCount, 1);
   assert.ok(summary.insertedResultsCount > 0);
+  assert.equal(summary.quota.requestCount, 2);
   assert.ok(results.length > 0);
 });
 
@@ -932,5 +999,24 @@ function createCompletedEventResult(): SGOEventResult {
         oddsAvailable: false,
       },
     }),
+  };
+}
+
+function createEmptyQuotaSummary() {
+  return {
+    provider: 'sgo' as const,
+    requestCount: 0,
+    successfulRequests: 0,
+    creditsUsed: 0,
+    limit: null,
+    remaining: null,
+    resetAt: null,
+    lastStatus: null,
+    rateLimitHitCount: 0,
+    backoffCount: 0,
+    backoffMs: 0,
+    retryAfterMs: null,
+    throttled: false,
+    headersSeen: false,
   };
 }

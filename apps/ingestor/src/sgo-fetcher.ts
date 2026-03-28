@@ -9,12 +9,14 @@ export interface SGOFetchOptions {
   startsAfter?: string;
   startsBefore?: string;
   fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
 }
 
 export interface SGOFetchResult {
   eventsCount: number;
   events: SGOResolvedEvent[];
   pairedProps: SGOPairedProp[];
+  requestTelemetry: SGORequestTelemetry;
 }
 
 export interface SGOResultsFetchOptions {
@@ -25,6 +27,25 @@ export interface SGOResultsFetchOptions {
   startsBefore?: string;
   lookbackHours?: number;
   fetchImpl?: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+}
+
+export interface SGORequestTelemetry {
+  provider: 'sgo';
+  endpoint: 'odds' | 'results';
+  requestCount: number;
+  successfulRequests: number;
+  creditsUsed: number;
+  limit: number | null;
+  remaining: number | null;
+  resetAt: string | null;
+  lastStatus: number | null;
+  rateLimitHitCount: number;
+  backoffCount: number;
+  backoffMs: number;
+  retryAfterMs: number | null;
+  throttled: boolean;
+  headersSeen: boolean;
 }
 
 export interface SGOResolvedTeam {
@@ -95,7 +116,6 @@ interface FlatSGOOddsRow {
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
 ): Promise<SGOFetchResult> {
-  const fetchImpl = options.fetchImpl ?? fetch;
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
@@ -107,18 +127,12 @@ export async function fetchAndPairSGOProps(
     options.startsBefore ?? addDaysToIso(options.snapshotAt, 7),
   );
 
-  const response = await fetchImpl(url.toString(), {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-    },
+  const { payload, telemetry } = await fetchSgoJson({
+    endpoint: 'odds',
+    url,
+    fetchImpl: options.fetchImpl ?? fetch,
+    ...(options.sleep ? { sleep: options.sleep } : {}),
   });
-
-  if (!response.ok) {
-    throw new Error(`SGO fetch failed: ${response.status} ${response.statusText}`);
-  }
-
-  const payload = (await response.json()) as unknown;
   const rawEvents = extractEvents(payload);
   const events = rawEvents
     .map(extractResolvedEvent)
@@ -133,6 +147,7 @@ export async function fetchAndPairSGOProps(
     eventsCount: rawEvents.length,
     events,
     pairedProps,
+    requestTelemetry: telemetry,
   };
 }
 
@@ -175,7 +190,6 @@ function extractResolvedEvent(event: Record<string, unknown>): SGOResolvedEvent 
 export async function fetchSGOResults(
   options: SGOResultsFetchOptions,
 ): Promise<SGOEventResult[]> {
-  const fetchImpl = options.fetchImpl ?? fetch;
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
@@ -186,23 +200,215 @@ export async function fetchSGOResults(
       subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
   );
 
-  const response = await fetchImpl(url.toString(), {
-    method: 'GET',
-    headers: {
-      accept: 'application/json',
-    },
+  const { payload } = await fetchSgoJson({
+    endpoint: 'results',
+    url,
+    fetchImpl: options.fetchImpl ?? fetch,
+    ...(options.sleep ? { sleep: options.sleep } : {}),
   });
-
-  if (!response.ok) {
-    throw new Error(`SGO results fetch failed: ${response.status} ${response.statusText}`);
-  }
-
-  const payload = (await response.json()) as unknown;
   const rawEvents = extractEvents(payload);
 
   return rawEvents
     .map(extractEventResult)
     .filter((event): event is SGOEventResult => event !== null);
+}
+
+export async function fetchSGOResultsWithTelemetry(
+  options: SGOResultsFetchOptions,
+): Promise<{ results: SGOEventResult[]; requestTelemetry: SGORequestTelemetry }> {
+  const url = new URL(SGO_EVENTS_ENDPOINT);
+  url.searchParams.set('apiKey', options.apiKey);
+  url.searchParams.set('leagueID', options.league);
+  url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
+  url.searchParams.set(
+    'startsAfter',
+    options.startsAfter ??
+      subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
+  );
+
+  const { payload, telemetry } = await fetchSgoJson({
+    endpoint: 'results',
+    url,
+    fetchImpl: options.fetchImpl ?? fetch,
+    ...(options.sleep ? { sleep: options.sleep } : {}),
+  });
+  const rawEvents = extractEvents(payload);
+
+  return {
+    results: rawEvents
+      .map(extractEventResult)
+      .filter((event): event is SGOEventResult => event !== null),
+    requestTelemetry: telemetry,
+  };
+}
+
+const MAX_RATE_LIMIT_RETRIES = 1;
+const DEFAULT_BACKOFF_MS = 60_000;
+
+async function fetchSgoJson(input: {
+  endpoint: 'odds' | 'results';
+  url: URL;
+  fetchImpl: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+}) {
+  const telemetry = createEmptyTelemetry(input.endpoint);
+  let lastStatusText = 'unknown';
+
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
+    const response = await input.fetchImpl(input.url.toString(), {
+      method: 'GET',
+      headers: {
+        accept: 'application/json',
+      },
+    });
+
+    telemetry.requestCount += 1;
+    telemetry.lastStatus = response.status;
+    lastStatusText = response.statusText;
+    applyTelemetryHeaders(telemetry, response.headers);
+
+    if (response.ok) {
+      telemetry.successfulRequests += 1;
+      return {
+        payload: (await response.json()) as unknown,
+        telemetry,
+      };
+    }
+
+    if (response.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
+      const backoffMs = resolveRetryAfterMs(response.headers) ?? DEFAULT_BACKOFF_MS;
+      telemetry.rateLimitHitCount += 1;
+      telemetry.backoffCount += 1;
+      telemetry.backoffMs += backoffMs;
+      telemetry.retryAfterMs = backoffMs;
+      telemetry.throttled = true;
+      await (input.sleep ?? defaultSleep)(backoffMs);
+      continue;
+    }
+
+    throw new Error(`SGO ${input.endpoint} fetch failed: ${response.status} ${lastStatusText}`);
+  }
+
+  throw new Error(`SGO ${input.endpoint} fetch failed: ${telemetry.lastStatus ?? 0} ${lastStatusText}`);
+}
+
+function createEmptyTelemetry(endpoint: 'odds' | 'results'): SGORequestTelemetry {
+  return {
+    provider: 'sgo',
+    endpoint,
+    requestCount: 0,
+    successfulRequests: 0,
+    creditsUsed: 0,
+    limit: null,
+    remaining: null,
+    resetAt: null,
+    lastStatus: null,
+    rateLimitHitCount: 0,
+    backoffCount: 0,
+    backoffMs: 0,
+    retryAfterMs: null,
+    throttled: false,
+    headersSeen: false,
+  };
+}
+
+function applyTelemetryHeaders(
+  telemetry: SGORequestTelemetry,
+  headers: Headers,
+) {
+  const limit = readHeaderNumber(headers, ['x-ratelimit-limit', 'ratelimit-limit']);
+  const remaining = readHeaderNumber(headers, ['x-ratelimit-remaining', 'ratelimit-remaining']);
+  const retryAfterMs = resolveRetryAfterMs(headers);
+  const creditsUsed = readHeaderNumber(headers, [
+    'x-api-credits-used',
+    'x-credits-used',
+    'x-ratelimit-cost',
+  ]);
+  const resetAt = resolveResetAt(headers);
+
+  if (limit !== null) {
+    telemetry.limit = limit;
+    telemetry.headersSeen = true;
+  }
+  if (remaining !== null) {
+    telemetry.remaining = remaining;
+    telemetry.headersSeen = true;
+  }
+  if (creditsUsed !== null) {
+    telemetry.creditsUsed += creditsUsed;
+    telemetry.headersSeen = true;
+  }
+  if (retryAfterMs !== null) {
+    telemetry.retryAfterMs = retryAfterMs;
+    telemetry.headersSeen = true;
+  }
+  if (resetAt !== null) {
+    telemetry.resetAt = resetAt;
+    telemetry.headersSeen = true;
+  }
+}
+
+function readHeaderNumber(headers: Headers, names: string[]) {
+  for (const name of names) {
+    const raw = headers.get(name);
+    if (!raw) {
+      continue;
+    }
+    const parsed = Number.parseFloat(raw);
+    if (Number.isFinite(parsed)) {
+      return parsed;
+    }
+  }
+  return null;
+}
+
+function resolveRetryAfterMs(headers: Headers) {
+  const retryAfter = headers.get('retry-after');
+  if (!retryAfter) {
+    return null;
+  }
+
+  const seconds = Number.parseFloat(retryAfter);
+  if (Number.isFinite(seconds)) {
+    return Math.max(0, Math.round(seconds * 1000));
+  }
+
+  const retryAt = Date.parse(retryAfter);
+  if (!Number.isFinite(retryAt)) {
+    return null;
+  }
+
+  return Math.max(0, retryAt - Date.now());
+}
+
+function resolveResetAt(headers: Headers) {
+  const raw =
+    headers.get('x-ratelimit-reset') ??
+    headers.get('ratelimit-reset') ??
+    headers.get('x-ratelimit-reset-after');
+  if (!raw) {
+    return null;
+  }
+
+  const numeric = Number.parseFloat(raw);
+  if (!Number.isFinite(numeric)) {
+    const parsed = Date.parse(raw);
+    return Number.isFinite(parsed) ? new Date(parsed).toISOString() : null;
+  }
+
+  if (numeric > 1_000_000_000_000) {
+    return new Date(numeric).toISOString();
+  }
+  if (numeric > 1_000_000_000) {
+    return new Date(numeric * 1000).toISOString();
+  }
+  return new Date(Date.now() + numeric * 1000).toISOString();
+}
+
+function defaultSleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }
 
 function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {

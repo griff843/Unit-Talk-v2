@@ -104,8 +104,32 @@ export interface OperatorSnapshot {
     lastRunAt: string | null;
     runCount: number;
   };
+  quotaSummary: OperatorQuotaSummary;
   picksPipeline: PicksPipelineSummary;
   recap: SettlementSummary;
+}
+
+export interface OperatorQuotaProviderSummary {
+  provider: string;
+  runCount: number;
+  requestCount: number;
+  successfulRequests: number;
+  creditsUsed: number;
+  limit: number | null;
+  remaining: number | null;
+  resetAt: string | null;
+  lastStatus: number | null;
+  rateLimitHitCount: number;
+  backoffCount: number;
+  backoffMs: number;
+  throttled: boolean;
+  headersSeen: boolean;
+  lastSeenAt: string | null;
+}
+
+export interface OperatorQuotaSummary {
+  observedAt: string;
+  providers: OperatorQuotaProviderSummary[];
 }
 
 export interface OutboxFilter {
@@ -935,6 +959,7 @@ export function createSnapshotFromRows(input: {
     lastRunAt: latestIngestorRun?.started_at ?? null,
     runCount: ingestorRuns.length,
   };
+  const quotaSummary = summarizeQuotaFromRuns(ingestorRuns);
   const distributionStatus =
     counts.failedOutbox > 0 || counts.deadLetterOutbox > 0
       ? {
@@ -987,6 +1012,7 @@ export function createSnapshotFromRows(input: {
     ),
     canary: summarizeCanaryLane(input.recentOutbox, input.recentReceipts),
     ingestorHealth,
+    quotaSummary,
     picksPipeline: summarizePicksPipeline(
       input.recentPicks,
       input.recentSettlements ?? [],
@@ -1159,6 +1185,65 @@ function summarizePicksPipeline(
   };
 }
 
+function summarizeQuotaFromRuns(recentRuns: SystemRunRecord[]): OperatorQuotaSummary {
+  const quotaByProvider = new Map<string, OperatorQuotaProviderSummary>();
+
+  for (const run of recentRuns) {
+    const details = readJsonObject(run.details);
+    const quota = details ? readJsonObject(details.quota) : null;
+    if (!quota) {
+      continue;
+    }
+
+    const provider = typeof quota.provider === 'string' ? quota.provider : null;
+    if (!provider) {
+      continue;
+    }
+
+    const summary = quotaByProvider.get(provider) ?? {
+      provider,
+      runCount: 0,
+      requestCount: 0,
+      successfulRequests: 0,
+      creditsUsed: 0,
+      limit: null,
+      remaining: null,
+      resetAt: null,
+      lastStatus: null,
+      rateLimitHitCount: 0,
+      backoffCount: 0,
+      backoffMs: 0,
+      throttled: false,
+      headersSeen: false,
+      lastSeenAt: null,
+    };
+
+    summary.runCount += 1;
+    summary.requestCount += readNumber(quota.requestCount);
+    summary.successfulRequests += readNumber(quota.successfulRequests);
+    summary.creditsUsed += readNumber(quota.creditsUsed);
+    summary.limit = readNullableNumber(quota.limit) ?? summary.limit;
+    summary.remaining = readNullableNumber(quota.remaining) ?? summary.remaining;
+    summary.resetAt = readNullableString(quota.resetAt) ?? summary.resetAt;
+    summary.lastStatus = readNullableNumber(quota.lastStatus) ?? summary.lastStatus;
+    summary.rateLimitHitCount += readNumber(quota.rateLimitHitCount);
+    summary.backoffCount += readNumber(quota.backoffCount);
+    summary.backoffMs += readNumber(quota.backoffMs);
+    summary.throttled = summary.throttled || quota.throttled === true;
+    summary.headersSeen = summary.headersSeen || quota.headersSeen === true;
+    summary.lastSeenAt = run.started_at ?? summary.lastSeenAt;
+
+    quotaByProvider.set(provider, summary);
+  }
+
+  return {
+    observedAt: new Date().toISOString(),
+    providers: Array.from(quotaByProvider.values()).sort((left, right) =>
+      left.provider.localeCompare(right.provider),
+    ),
+  };
+}
+
 function resolveAllEffectiveSettlements(settlements: SettlementRecord[]): EffectiveSettlement[] {
   const grouped = new Map<string, SettlementRecord[]>();
   for (const row of settlements) {
@@ -1292,6 +1377,33 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
         <p>Status: <strong>${escapeHtml(snapshot.ingestorHealth.status)}</strong></p>
         <p>Last run: ${escapeHtml(snapshot.ingestorHealth.lastRunAt ?? '\u2014')}</p>
         <p>Run count: ${escapeHtml(String(snapshot.ingestorHealth.runCount))}</p>
+      </article>`;
+  const quotaRows =
+    snapshot.quotaSummary.providers.length > 0
+      ? renderTableRows(snapshot.quotaSummary.providers, (row) => [
+          row.provider,
+          String(row.runCount),
+          String(row.requestCount),
+          String(row.successfulRequests),
+          String(row.creditsUsed),
+          row.remaining === null ? '—' : String(row.remaining),
+          row.limit === null ? '—' : String(row.limit),
+          String(row.rateLimitHitCount),
+          row.backoffMs === 0 ? '0 ms' : `${row.backoffMs} ms`,
+          row.lastStatus === null ? '—' : String(row.lastStatus),
+          row.resetAt ?? '—',
+        ], 11)
+      : '<tr><td colspan="11">No provider quota telemetry is visible in recent ingestor runs.</td></tr>';
+  const quotaCard = `
+      <article class="card">
+        <h2>API Quota</h2>
+        <p>Observed at: ${escapeHtml(snapshot.quotaSummary.observedAt)}</p>
+        <table>
+          <thead>
+            <tr><th>Provider</th><th>Runs</th><th>Requests</th><th>Success</th><th>Credits</th><th>Remaining</th><th>Limit</th><th>Rate limit hits</th><th>Backoff</th><th>Last status</th><th>Reset</th></tr>
+          </thead>
+          <tbody>${quotaRows}</tbody>
+        </table>
       </article>`;
   const workerRuntimeCard = `
       <article class="card">
@@ -1695,7 +1807,7 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${incidentBanner}
       ${incidentTriageSection}
       <section>
-        <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}${workerRuntimeCard}</div>
+        <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}${quotaCard}${workerRuntimeCard}</div>
         <div class="grid count-grid">${countCards}</div>
       </section>
       ${upcomingEventsSection}
@@ -2328,6 +2440,18 @@ function readJsonObject(value: unknown): Record<string, unknown> | null {
   }
 
   return null;
+}
+
+function readNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function readNullableNumber(value: unknown) {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readNullableString(value: unknown) {
+  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function roundTo2(value: number) {
