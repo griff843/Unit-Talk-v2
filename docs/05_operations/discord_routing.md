@@ -20,6 +20,7 @@ The worker resolves each string to a Discord channel ID via `UNIT_TALK_DISCORD_T
 | `discord:trader-insights` | `1356613995175481405` | plain channel post | Market movement, steam, sharp money alerts (VIP+). |
 | `discord:game-threads` | `1291234713213734912` | thread post, not plain channel | Live game discussion. See architectural gap below. |
 | `discord:strategy-room` | `1356624758485287105` | DM plus public acknowledgment | Personal AI coaching. See architectural gap below. |
+| `discord:recaps` | `1300411261854547968` | plain channel post | Dedicated scheduled recap destination (daily/weekly/monthly). Not for pick delivery. |
 
 ## Approved Target Map
 
@@ -32,7 +33,8 @@ Canonical value for `UNIT_TALK_DISCORD_TARGET_MAP`:
   "discord:exclusive-insights": "1288613114815840466",
   "discord:game-threads": "1291234713213734912",
   "discord:trader-insights": "1356613995175481405",
-  "discord:strategy-room": "1356624758485287105"
+  "discord:strategy-room": "1356624758485287105",
+  "discord:recaps": "1300411261854547968"
 }
 ```
 
