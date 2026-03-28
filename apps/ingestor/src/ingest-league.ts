@@ -10,6 +10,9 @@ export interface IngestLeagueOptions {
   snapshotAt?: string;
   startsAfter?: string;
   startsBefore?: string;
+  resultsStartsAfter?: string;
+  resultsStartsBefore?: string;
+  resultsLookbackHours?: number;
   skipResults?: boolean;
   logger?: Pick<Console, 'warn' | 'info'>;
 }
@@ -94,6 +97,11 @@ export async function ingestLeague(
           apiKey,
           league,
           snapshotAt,
+          ...(options.resultsStartsAfter ? { startsAfter: options.resultsStartsAfter } : {}),
+          ...(options.resultsStartsBefore ? { startsBefore: options.resultsStartsBefore } : {}),
+          ...(options.resultsLookbackHours !== undefined
+            ? { lookbackHours: options.resultsLookbackHours }
+            : {}),
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         });
 

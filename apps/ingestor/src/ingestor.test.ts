@@ -7,6 +7,7 @@ import {
   InMemoryProviderOfferRepository,
 } from '@unit-talk/db';
 import { mapSGOStatus, resolveSgoEntities } from './entity-resolver.js';
+import { runHistoricalBackfill } from './historical-backfill.js';
 import { ingestLeague } from './ingest-league.js';
 import { runIngestorCycles } from './ingestor-runner.js';
 import { fetchSGOResults, type SGOEventResult, type SGOResolvedEvent } from './sgo-fetcher.js';
@@ -364,6 +365,153 @@ test('fetchSGOResults returns player stat rows for completed events only', async
   assert.equal(results[0]?.playerStats.length, 2);
   assert.equal(results[0]?.playerStats[0]?.providerParticipantId, 'JALEN_BRUNSON_1_NBA');
   assert.equal(results[0]?.playerStats[0]?.stats.points, 31);
+});
+
+test('fetchSGOResults respects explicit historical window overrides', async () => {
+  let capturedUrl = '';
+
+  await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    startsAfter: '2026-03-20T00:00:00.000Z',
+    startsBefore: '2026-03-21T00:00:00.000Z',
+    fetchImpl: async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const url = new URL(capturedUrl);
+  assert.equal(url.searchParams.get('startsAfter'), '2026-03-20T00:00:00.000Z');
+  assert.equal(url.searchParams.get('startsBefore'), '2026-03-21T00:00:00.000Z');
+});
+
+test('runHistoricalBackfill walks an inclusive date range and passes bounded daily windows', async () => {
+  const calls: Array<{
+    league: string;
+    apiKey: string | undefined;
+    snapshotAt?: string;
+    startsAfter?: string;
+    startsBefore?: string;
+    resultsStartsAfter?: string;
+    resultsStartsBefore?: string;
+    resultsLookbackHours?: number;
+    skipResults?: boolean;
+  }> = [];
+
+  const summary = await runHistoricalBackfill({
+    repositories: createInMemoryIngestorRepositoryBundle(),
+    apiKey: 'test-key',
+    leagues: ['NBA', 'NHL'],
+    startDate: '2026-03-20',
+    endDate: '2026-03-21',
+    skipResults: true,
+    ingestLeagueImpl: async (league, apiKey, _repositories, options = {}) => {
+      const call: (typeof calls)[number] = {
+        league,
+        apiKey,
+      };
+
+      if (options.snapshotAt !== undefined) call.snapshotAt = options.snapshotAt;
+      if (options.startsAfter !== undefined) call.startsAfter = options.startsAfter;
+      if (options.startsBefore !== undefined) call.startsBefore = options.startsBefore;
+      if (options.resultsStartsAfter !== undefined) {
+        call.resultsStartsAfter = options.resultsStartsAfter;
+      }
+      if (options.resultsStartsBefore !== undefined) {
+        call.resultsStartsBefore = options.resultsStartsBefore;
+      }
+      if (options.resultsLookbackHours !== undefined) {
+        call.resultsLookbackHours = options.resultsLookbackHours;
+      }
+      if (options.skipResults !== undefined) call.skipResults = options.skipResults;
+
+      calls.push(call);
+
+      return {
+        league,
+        status: 'succeeded',
+        eventsCount: 0,
+        pairedCount: 0,
+        normalizedCount: 0,
+        insertedCount: 0,
+        updatedCount: 0,
+        skippedCount: 0,
+        resolvedEventsCount: 0,
+        resolvedParticipantsCount: 0,
+        resultsEventsCount: 0,
+        insertedResultsCount: 0,
+        skippedResultsCount: 0,
+        runId: null,
+      };
+    },
+  });
+
+  assert.equal(summary.days, 2);
+  assert.equal(summary.runs.length, 4);
+  assert.deepEqual(calls, [
+    {
+      league: 'NBA',
+      apiKey: 'test-key',
+      snapshotAt: '2026-03-21',
+      startsAfter: '2026-03-20T00:00:00.000Z',
+      startsBefore: '2026-03-21',
+      resultsStartsAfter: '2026-03-20T00:00:00.000Z',
+      resultsStartsBefore: '2026-03-21',
+      resultsLookbackHours: 24,
+      skipResults: true,
+    },
+    {
+      league: 'NHL',
+      apiKey: 'test-key',
+      snapshotAt: '2026-03-21',
+      startsAfter: '2026-03-20T00:00:00.000Z',
+      startsBefore: '2026-03-21',
+      resultsStartsAfter: '2026-03-20T00:00:00.000Z',
+      resultsStartsBefore: '2026-03-21',
+      resultsLookbackHours: 24,
+      skipResults: true,
+    },
+    {
+      league: 'NBA',
+      apiKey: 'test-key',
+      snapshotAt: '2026-03-22',
+      startsAfter: '2026-03-21T00:00:00.000Z',
+      startsBefore: '2026-03-22',
+      resultsStartsAfter: '2026-03-21T00:00:00.000Z',
+      resultsStartsBefore: '2026-03-22',
+      resultsLookbackHours: 24,
+      skipResults: true,
+    },
+    {
+      league: 'NHL',
+      apiKey: 'test-key',
+      snapshotAt: '2026-03-22',
+      startsAfter: '2026-03-21T00:00:00.000Z',
+      startsBefore: '2026-03-22',
+      resultsStartsAfter: '2026-03-21T00:00:00.000Z',
+      resultsStartsBefore: '2026-03-22',
+      resultsLookbackHours: 24,
+      skipResults: true,
+    },
+  ]);
+});
+
+test('runHistoricalBackfill rejects inverted date ranges', async () => {
+  await assert.rejects(
+    () =>
+      runHistoricalBackfill({
+        repositories: createInMemoryIngestorRepositoryBundle(),
+        leagues: ['NBA'],
+        startDate: '2026-03-22',
+        endDate: '2026-03-21',
+      }),
+    /startDate must be on or before endDate/,
+  );
 });
 
 test('resolveAndInsertResults inserts game results and remains idempotent', async () => {
