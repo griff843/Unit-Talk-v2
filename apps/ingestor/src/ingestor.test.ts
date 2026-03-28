@@ -131,7 +131,90 @@ test('runIngestorCycles polls across cycles and leagues', async () => {
   assert.equal(cycles.length, 2);
   assert.equal(cycles[0]?.results[0]?.status, 'skipped');
   assert.equal(cycles[1]?.results[0]?.status, 'skipped');
+  assert.equal(cycles[0]?.gradingTrigger.status, 'skipped');
+  assert.equal(cycles[0]?.gradingTrigger.reason, 'no_completed_results');
   assert.deepEqual(sleeps, [1234]);
+});
+
+test('runIngestorCycles triggers grading once per cycle when completed results are present', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const triggeredUrls: string[] = [];
+
+  const cycles = await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    apiUrl: 'http://127.0.0.1:3000',
+    triggerGradingRun: async (apiUrl) => {
+      triggeredUrls.push(apiUrl);
+    },
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('oddsAvailable=true')) {
+        return new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+
+      if (url.includes('/v2/events?')) {
+        return new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    },
+  });
+
+  assert.deepEqual(triggeredUrls, ['http://127.0.0.1:3000']);
+  assert.equal(cycles[0]?.gradingTrigger.status, 'triggered');
+  assert.equal(cycles[0]?.gradingTrigger.attempted, true);
+});
+
+test('runIngestorCycles records a failed grading trigger without failing ingest completion', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const warnings: string[] = [];
+
+  const cycles = await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    apiUrl: 'http://127.0.0.1:3000',
+    logger: {
+      info() {},
+      warn(message) {
+        warnings.push(message);
+      },
+    },
+    triggerGradingRun: async () => {
+      throw new Error('api unavailable');
+    },
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('oddsAvailable=true')) {
+        return new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+
+      if (url.includes('/v2/events?')) {
+        return new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+
+      throw new Error(`Unexpected fetch URL: ${url}`);
+    },
+  });
+
+  assert.equal(cycles[0]?.results[0]?.status, 'succeeded');
+  assert.equal(cycles[0]?.gradingTrigger.status, 'failed');
+  assert.equal(cycles[0]?.gradingTrigger.reason, 'api unavailable');
+  assert.equal(warnings.some((warning) => warning.includes('api unavailable')), true);
 });
 
 test('mapSGOStatus marks completed and in-progress events from SGO booleans', () => {
