@@ -7,17 +7,26 @@ export interface IngestorRunnerOptions {
   repositories: IngestorRepositoryBundle;
   leagues: string[];
   apiKey?: string;
+  apiUrl?: string;
   maxCycles?: number;
   sleep?: (ms: number) => Promise<void>;
   pollIntervalMs?: number;
   fetchImpl?: typeof fetch;
   skipResults?: boolean;
   logger?: Pick<Console, 'warn' | 'info'>;
+  triggerGradingRun?: typeof triggerGradingRun;
+}
+
+export interface IngestorGradingTriggerSummary {
+  attempted: boolean;
+  status: 'triggered' | 'skipped' | 'failed';
+  reason?: string;
 }
 
 export interface IngestorCycleSummary {
   cycle: number;
   results: IngestLeagueSummary[];
+  gradingTrigger: IngestorGradingTriggerSummary;
 }
 
 export async function runIngestorCycles(
@@ -43,7 +52,8 @@ export async function runIngestorCycles(
       );
     }
 
-    summaries.push({ cycle, results });
+    const gradingTrigger = await triggerGradingForCycle(results, options);
+    summaries.push({ cycle, results, gradingTrigger });
 
     if (cycle < maxCycles) {
       await sleep(pollIntervalMs);
@@ -51,6 +61,80 @@ export async function runIngestorCycles(
   }
 
   return summaries;
+}
+
+async function triggerGradingForCycle(
+  results: IngestLeagueSummary[],
+  options: IngestorRunnerOptions,
+): Promise<IngestorGradingTriggerSummary> {
+  if (options.skipResults) {
+    return {
+      attempted: false,
+      status: 'skipped',
+      reason: 'results_ingest_disabled',
+    };
+  }
+
+  if (!results.some((summary) => summary.resultsEventsCount > 0)) {
+    return {
+      attempted: false,
+      status: 'skipped',
+      reason: 'no_completed_results',
+    };
+  }
+
+  if (!options.apiUrl) {
+    return {
+      attempted: false,
+      status: 'skipped',
+      reason: 'api_url_not_configured',
+    };
+  }
+
+  const trigger = options.triggerGradingRun ?? triggerGradingRun;
+
+  try {
+    await trigger(options.apiUrl);
+    options.logger?.info?.(
+      `Triggered grading after ingest cycle for ${results
+        .map((summary) => summary.league)
+        .join(', ')}`,
+    );
+
+    return {
+      attempted: true,
+      status: 'triggered',
+    };
+  } catch (error) {
+    const reason =
+      error instanceof Error ? error.message : 'unknown grading trigger error';
+    options.logger?.warn?.(`Failed to trigger grading after ingest cycle: ${reason}`);
+
+    return {
+      attempted: true,
+      status: 'failed',
+      reason,
+    };
+  }
+}
+
+export async function triggerGradingRun(
+  apiUrl: string,
+  fetchImpl: typeof fetch = fetch,
+) {
+  const response = await fetchImpl(new URL('/api/grading/run', apiUrl), {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+    },
+    body: JSON.stringify({
+      source: 'ingestor.cycle',
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`grading trigger returned ${response.status}`);
+  }
 }
 
 export function parseConfiguredLeagues(value: string | undefined) {

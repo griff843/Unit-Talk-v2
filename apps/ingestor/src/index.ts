@@ -14,6 +14,7 @@ function createIngestorRuntimeDependencies() {
   const maxCycles = configuredMaxCycles === 0 ? undefined : configuredMaxCycles;
   const autorun = env.UNIT_TALK_INGESTOR_AUTORUN === 'true';
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
+  const apiUrl = env.UNIT_TALK_API_URL;
 
   try {
     const connection = createServiceRoleDatabaseConnectionConfig(env);
@@ -26,6 +27,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       apiKey: env.SGO_API_KEY,
+      apiUrl,
     };
   } catch {
     return {
@@ -37,6 +39,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       apiKey: env.SGO_API_KEY,
+      apiUrl,
     };
   }
 }
@@ -54,6 +57,7 @@ export function createIngestorRuntimeSummary() {
     autorun: runtime.autorun,
     skipResults: runtime.skipResults,
     apiKeyConfigured: Boolean(runtime.apiKey),
+    apiUrlConfigured: Boolean(runtime.apiUrl),
     nextStep: runtime.autorun
       ? 'ingestor cycles will execute with the configured SGO provider settings'
       : 'set UNIT_TALK_INGESTOR_AUTORUN=true to execute ingestor cycles',
@@ -67,6 +71,7 @@ if (runtime.autorun) {
     repositories: runtime.repositories,
     leagues: runtime.leagues,
     ...(runtime.apiKey ? { apiKey: runtime.apiKey } : {}),
+    ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
     ...(runtime.maxCycles !== undefined ? { maxCycles: runtime.maxCycles } : {}),
     skipResults: runtime.skipResults,
     pollIntervalMs: runtime.pollIntervalMs,
