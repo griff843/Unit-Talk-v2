@@ -483,6 +483,101 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
   }
 });
 
+test('GET /api/alerts/line-movements returns threshold-exceeded alerts', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'event-1',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'player-1',
+      sportKey: 'NBA',
+      line: 27.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-28T09:00:00.000Z',
+      idempotencyKey: 'sgo:event-1:points-all-game-ou:player-1:27.5:false:false',
+    },
+    {
+      providerKey: 'sgo',
+      providerEventId: 'event-1',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'player-1',
+      sportKey: 'NBA',
+      line: 29,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'sgo:event-1:points-all-game-ou:player-1:29.0:false:false',
+    },
+  ]);
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/alerts/line-movements?threshold=0.5`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: {
+        alerts: Array<{
+          kind: string;
+          providerEventId: string;
+          lineDelta: number;
+        }>;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data?.alerts.length, 1);
+    assert.equal(body.data?.alerts[0]?.kind, 'line_movement');
+    assert.equal(body.data?.alerts[0]?.providerEventId, 'event-1');
+    assert.equal(body.data?.alerts[0]?.lineDelta, 1.5);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/alerts/line-movements returns 400 for invalid threshold', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/alerts/line-movements?threshold=0`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: {
+        code: string;
+      };
+    };
+
+    assert.equal(response.status, 400);
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'INVALID_ALERT_THRESHOLD');
+  } finally {
+    server.close();
+  }
+});
+
 test('POST /api/recap/post returns ok true and posts a recap embed when settled picks exist', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await createSettledRecapPick(repositories, {

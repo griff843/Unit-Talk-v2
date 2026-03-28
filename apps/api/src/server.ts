@@ -14,6 +14,7 @@ import {
   handleSettlePick,
   handleSubmitPick,
 } from './handlers/index.js';
+import { listLineMovementAlerts } from './alert-agent-service.js';
 import { requeuePickController } from './controllers/requeue-controller.js';
 import { runGradingPass } from './grading-service.js';
 import { postRecapSummary } from './recap-service.js';
@@ -135,6 +136,48 @@ export async function routeRequest(
     return writeJson(response, apiResponse.status, apiResponse.body);
   }
 
+  if (method === 'GET' && url.pathname === '/api/alerts/line-movements') {
+    const thresholdParam = url.searchParams.get('threshold');
+    const limitParam = url.searchParams.get('limit');
+
+    if (thresholdParam !== null && !isValidPositiveNumber(thresholdParam)) {
+      return writeJson(response, 400, {
+        ok: false,
+        error: {
+          code: 'INVALID_ALERT_THRESHOLD',
+          message: 'threshold must be a positive number',
+        },
+      });
+    }
+
+    if (limitParam !== null && !isValidPositiveInteger(limitParam)) {
+      return writeJson(response, 400, {
+        ok: false,
+        error: {
+          code: 'INVALID_ALERT_LIMIT',
+          message: 'limit must be a positive integer',
+        },
+      });
+    }
+
+    const alertsOptions = {
+      ...(url.searchParams.get('provider')
+        ? { providerKey: url.searchParams.get('provider') as string }
+        : {}),
+      ...(thresholdParam ? { threshold: Number.parseFloat(thresholdParam) } : {}),
+      ...(limitParam ? { limit: Number.parseInt(limitParam, 10) } : {}),
+    };
+
+    const alerts = await listLineMovementAlerts(runtime.repositories, alertsOptions);
+
+    return writeJson(response, 200, {
+      ok: true,
+      data: {
+        alerts,
+      },
+    });
+  }
+
   if (method === 'POST' && url.pathname === '/api/submissions') {
     const body = await readJsonBody(request);
     const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
@@ -240,4 +283,14 @@ function writeJson(response: ServerResponse, status: number, body: unknown) {
   response.setHeader('content-type', 'application/json; charset=utf-8');
   setCorsHeaders(response);
   response.end(JSON.stringify(body));
+}
+
+function isValidPositiveNumber(raw: string) {
+  const parsed = Number.parseFloat(raw);
+  return Number.isFinite(parsed) && parsed > 0;
+}
+
+function isValidPositiveInteger(raw: string) {
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0;
 }

@@ -14,7 +14,7 @@
     "runs:recent": "tsx src/scripts/query-runs.ts --recent",
     "runs:summary": "tsx src/scripts/query-runs.ts --summary",
     "test:db": "tsx --test src/database-smoke.test.ts",
-    "test": "tsx --test src/submission-service.test.ts src/server.test.ts src/grading-cron.test.ts src/recap-service.test.ts",
+    "test": "tsx --test src/submission-service.test.ts src/server.test.ts src/grading-cron.test.ts src/recap-service.test.ts src/alert-agent-service.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
