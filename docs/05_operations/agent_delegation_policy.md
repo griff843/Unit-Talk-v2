@@ -1,8 +1,11 @@
 # Unit Talk V2 — Delegation & Parallel Work Policy
 
+> **SUPERSEDED 2026-03-28.** The active agent operating model is `docs/05_operations/AGENT_OPERATING_MODEL.md`.
+> This file is preserved as historical reference only. Do not use it to inform current agent behavior.
+
 > Version: v1.0
-> Status: Operating Policy — active
-> Authority: Workflow / execution policy
+> Status: **Superseded** — historical record only
+> Superseded by: `docs/05_operations/AGENT_OPERATING_MODEL.md`
 > Last updated: 2026-03-25
 
 ---

@@ -8,7 +8,7 @@
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
 | `lane:codex` | 0 | 0 | 0 | 0 | 24 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 14 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 15 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
@@ -32,6 +32,24 @@
 | **PR** | — (commit `4b5ccd7`) |
 
 Hardened `recap-scheduler.ts`: structured error logging on tick failures, injectable `clock` for deterministic testing, idempotency boundary documented, 11AM-for-all schedule ratified. +1 new test (tick containment). 692/692 tests pass.
+
+---
+
+### UTV2-104 — T1 Agent Operating Model Refresh
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-104 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:governance` |
+| **Blocked by** | — |
+| **Branch** | — |
+| **PR** | — |
+
+New `docs/05_operations/AGENT_OPERATING_MODEL.md` — Linear-first model, explicit role boundaries, anti-orchestration rules. Supersedes `agent_delegation_policy.md`. Authority map updated.
 
 ---
 
