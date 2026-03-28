@@ -83,7 +83,7 @@ All of the following must be true before cutover is considered open:
 | G6 — Operator surface live | `/api/operator/snapshot` reflects real system state | **PASS** — live |
 | G7 — Bot commands live | `/stats`, `/leaderboard`, `/pick`, `/help`, `/recap` | **PASS** — 5 commands registered |
 | G8 — Recap routing correct | Scheduled recaps posting to `discord:recaps` (not best-bets) | **OPEN** — pending UTV2-90 |
-| G9 — AlertAgent live | Line movement detection + notification layer | **OPEN** — pending UTV2-59 + 59b |
+| G9 — AlertAgent live | Line movement detection + notification layer | **OPEN** — detection done (UTV2-59); notification layer pending (UTV2-59b) |
 | G10 — Dead-letter health | No `dead_letter` rows in `distribution_outbox` | Monitor — acceptable if < 3 |
 | G11 — Rollback plan ratified | This document exists and is current | **PASS** — this document |
 

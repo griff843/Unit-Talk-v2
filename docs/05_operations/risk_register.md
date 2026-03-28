@@ -19,7 +19,7 @@ Update this file when risks are opened, escalated, mitigated, or closed. Do not 
 | R-05 | Board caps (`perSlate=5`) may re-saturate if pick volume spikes | Low | Platform ops | Partially mitigated | Lifecycle filter fix (UTV2-38) counts only queued/posted picks; monitor after high-volume sessions |
 | R-06 | In-memory recap idempotency lost on process restart | Low | Platform ops | Accepted | Single-instance deployment; restart within the 1-min posting window is low-frequency. DB-backed idempotency deferred to post-cutover contract |
 | R-07 | `discord:recaps` not yet live (UTV2-90 pending) | Medium | Platform ops | Open — gate G8 | Cutover gate G8 blocks until UTV2-90 ships; channel ID confirmed `1300411261854547968` |
-| R-08 | AlertAgent detection layer not live (UTV2-59 pending) | Medium | Platform ops | Open — not a cutover blocker | G9 is post-cutover hardening; canary-first proof required before live notifications |
+| R-08 | AlertAgent notification layer not live (UTV2-59b pending) | Medium | Platform ops | Open — not a cutover blocker | Detection layer done (UTV2-59, PR #48). Remaining: embed building, Discord delivery, canary proof (UTV2-59b); `/heat-signal` command (UTV2-59c). G9 is post-cutover hardening. |
 | R-09 | `discord:game-threads` delivery blocked | Low | Architecture | Open | Thread routing requires architectural work (worker posts to channel IDs only). No contract yet. Not a cutover blocker. |
 | R-10 | `discord:strategy-room` delivery blocked | Low | Architecture | Open | DM routing not implemented. No contract yet. Not a cutover blocker. |
 | R-11 | `discord:exclusive-insights` not routed | Low | Architecture | Open | Future-choice activation. Not a cutover blocker. |
