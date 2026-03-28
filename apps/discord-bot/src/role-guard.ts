@@ -1,4 +1,5 @@
-﻿import type { ChatInputCommandInteraction } from 'discord.js';
+import type { ChatInputCommandInteraction } from 'discord.js';
+import type { BotConfig } from './config.js';
 
 /**
  * Foundation-level role access gate.
@@ -35,4 +36,10 @@ export function checkRoles(
 
   const cache = (member.roles as { cache: { has(id: string): boolean } }).cache;
   return requiredRoles.some((roleId) => cache.has(roleId));
+}
+
+export function requireOperatorRole(
+  config: Pick<BotConfig, 'operatorRoleId'>,
+): string[] {
+  return config.operatorRoleId ? [config.operatorRoleId] : ['__operator_role_not_configured__'];
 }

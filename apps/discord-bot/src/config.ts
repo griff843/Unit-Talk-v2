@@ -6,6 +6,7 @@ export interface BotConfig {
   clientId: string;
   guildId: string;
   capperRoleId: string;
+  operatorRoleId?: string | undefined;
   apiUrl: string;
   appEnv: AppEnv['UNIT_TALK_APP_ENV'];
 }
@@ -20,6 +21,7 @@ export function parseBotConfig(env: AppEnv): BotConfig {
   const clientId = env.DISCORD_CLIENT_ID;
   const guildId = env.DISCORD_GUILD_ID;
   const capperRoleId = env.DISCORD_CAPPER_ROLE_ID;
+  const operatorRoleId = env.DISCORD_OPERATOR_ROLE_ID;
   const apiUrl = env.UNIT_TALK_API_URL;
 
   const missing: string[] = [];
@@ -40,6 +42,7 @@ export function parseBotConfig(env: AppEnv): BotConfig {
     clientId: clientId!,
     guildId: guildId!,
     capperRoleId: capperRoleId!,
+    operatorRoleId,
     apiUrl: apiUrl!,
     appEnv: env.UNIT_TALK_APP_ENV,
   };

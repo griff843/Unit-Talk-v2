@@ -14,6 +14,7 @@ import {
   handleSettlePick,
   handleSubmitPick,
 } from './handlers/index.js';
+import { getAlertStatus, getRecentAlerts } from './alert-query-service.js';
 import { requeuePickController } from './controllers/requeue-controller.js';
 import { runGradingPass } from './grading-service.js';
 import { postRecapSummary } from './recap-service.js';
@@ -135,6 +136,21 @@ export async function routeRequest(
     return writeJson(response, apiResponse.status, apiResponse.body);
   }
 
+  if (method === 'GET' && url.pathname === '/api/alerts/recent') {
+    const limit = readOptionalInteger(url.searchParams.get('limit'));
+    const minTier = url.searchParams.get('minTier');
+    const body = await getRecentAlerts(runtime.repositories.alertDetections, {
+      limit,
+      minTier: minTier === 'alert-worthy' ? 'alert-worthy' : 'notable',
+    });
+    return writeJson(response, 200, body);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/alerts/status') {
+    const body = await getAlertStatus(runtime.repositories.alertDetections, process.env);
+    return writeJson(response, 200, body);
+  }
+
   if (method === 'POST' && url.pathname === '/api/submissions') {
     const body = await readJsonBody(request);
     const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
@@ -240,5 +256,14 @@ function writeJson(response: ServerResponse, status: number, body: unknown) {
   response.setHeader('content-type', 'application/json; charset=utf-8');
   setCorsHeaders(response);
   response.end(JSON.stringify(body));
+}
+
+function readOptionalInteger(rawValue: string | null) {
+  if (!rawValue) {
+    return undefined;
+  }
+
+  const parsed = Number.parseInt(rawValue, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 

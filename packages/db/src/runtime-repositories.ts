@@ -11,7 +11,9 @@ import type {
 import type {
   AlertCooldownQuery,
   AlertDetectionCreateInput,
+  AlertDetectionListOptions,
   AlertDetectionRepository,
+  AlertDetectionStatusSummary,
   AlertNotificationUpdateInput,
   AuditLogCreateInput,
   AuditLogRepository,
@@ -488,10 +490,43 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
     );
   }
 
-  async listRecent(limit = 20): Promise<AlertDetectionRecord[]> {
+  async listRecent(
+    limit = 20,
+    options: AlertDetectionListOptions = {},
+  ): Promise<AlertDetectionRecord[]> {
     return Array.from(this.records.values())
-      .sort((left, right) => right.created_at.localeCompare(left.created_at))
+      .filter((record) => {
+        if (options.minTier === undefined) {
+          return true;
+        }
+
+        if (options.minTier === 'notable') {
+          return record.tier === 'notable' || record.tier === 'alert-worthy';
+        }
+
+        return record.tier === options.minTier;
+      })
+      .sort((left, right) => right.current_snapshot_at.localeCompare(left.current_snapshot_at))
       .slice(0, limit);
+  }
+
+  async getStatusSummary(windowStart: string): Promise<AlertDetectionStatusSummary> {
+    const records = Array.from(this.records.values());
+    const inWindow = records.filter((record) => record.current_snapshot_at > windowStart);
+
+    const lastDetectedAt =
+      records
+        .map((record) => record.current_snapshot_at)
+        .sort((left, right) => right.localeCompare(left))[0] ?? null;
+
+    return {
+      lastDetectedAt,
+      counts: {
+        notable: inWindow.filter((record) => record.tier === 'notable').length,
+        alertWorthy: inWindow.filter((record) => record.tier === 'alert-worthy').length,
+        notified: inWindow.filter((record) => record.notified === true).length,
+      },
+    };
   }
 
   async updateNotified(input: AlertNotificationUpdateInput): Promise<void> {
@@ -1565,18 +1600,83 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     return data;
   }
 
-  async listRecent(limit = 20): Promise<AlertDetectionRecord[]> {
-    const { data, error } = await this.client
+  async listRecent(
+    limit = 20,
+    options: AlertDetectionListOptions = {},
+  ): Promise<AlertDetectionRecord[]> {
+    let query = this.client
       .from('alert_detections')
       .select('*')
-      .order('created_at', { ascending: false })
+      .order('current_snapshot_at', { ascending: false })
       .limit(limit);
+
+    if (options.minTier) {
+      query =
+        options.minTier === 'notable'
+          ? query.in('tier', ['notable', 'alert-worthy'])
+          : query.eq('tier', options.minTier);
+    }
+
+    const { data, error } = await query;
 
     if (error) {
       throw new Error(`Failed to list alert detections: ${error.message}`);
     }
 
     return data ?? [];
+  }
+
+  async getStatusSummary(windowStart: string): Promise<AlertDetectionStatusSummary> {
+    const [lastDetectedResponse, notableResponse, alertWorthyResponse, notifiedResponse] =
+      await Promise.all([
+        this.client
+          .from('alert_detections')
+          .select('current_snapshot_at')
+          .order('current_snapshot_at', { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        this.client
+          .from('alert_detections')
+          .select('*', { count: 'exact', head: true })
+          .eq('tier', 'notable')
+          .gt('current_snapshot_at', windowStart),
+        this.client
+          .from('alert_detections')
+          .select('*', { count: 'exact', head: true })
+          .eq('tier', 'alert-worthy')
+          .gt('current_snapshot_at', windowStart),
+        this.client
+          .from('alert_detections')
+          .select('*', { count: 'exact', head: true })
+          .eq('notified', true)
+          .gt('current_snapshot_at', windowStart),
+      ]);
+
+    if (lastDetectedResponse.error) {
+      throw new Error(
+        `Failed to read latest alert detection timestamp: ${lastDetectedResponse.error.message}`,
+      );
+    }
+    if (notableResponse.error) {
+      throw new Error(`Failed to count notable alert detections: ${notableResponse.error.message}`);
+    }
+    if (alertWorthyResponse.error) {
+      throw new Error(
+        `Failed to count alert-worthy detections: ${alertWorthyResponse.error.message}`,
+      );
+    }
+    if (notifiedResponse.error) {
+      throw new Error(`Failed to count notified alert detections: ${notifiedResponse.error.message}`);
+    }
+
+    return {
+      lastDetectedAt: lastDetectedResponse.data?.current_snapshot_at ?? null,
+      counts: {
+        notable: notableResponse.count ?? 0,
+        alertWorthy: alertWorthyResponse.count ?? 0,
+        notified: notifiedResponse.count ?? 0,
+      },
+    };
   }
 
   async updateNotified(input: AlertNotificationUpdateInput): Promise<void> {
