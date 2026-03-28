@@ -83,6 +83,7 @@ export interface OperatorSnapshot {
   recentRuns: SystemRunRecord[];
   recentPicks: PickRecord[];
   recentAudit: AuditLogRow[];
+  workerRuntime: WorkerRuntimeSummary;
   entityHealth?: OperatorEntityHealth;
   upcomingEvents: OperatorUpcomingEventSummary[];
   bestBets: ChannelHealthSummary;
@@ -124,6 +125,16 @@ export interface ChannelHealthSummary {
   latestMessageId: string | null;
   activationHealthy: boolean;
   blockers: string[];
+}
+
+export interface WorkerRuntimeSummary {
+  drainState: 'idle' | 'draining' | 'stalled' | 'blocked';
+  detail: string;
+  latestDistributionRunStatus: string | null;
+  latestDistributionRunAt: string | null;
+  latestSuccessfulDistributionRunAt: string | null;
+  latestReceiptRecordedAt: string | null;
+  latestSentOutboxAt: string | null;
 }
 
 export interface PickPipelineRow {
@@ -912,6 +923,11 @@ export function createSnapshotFromRows(input: {
 
   const mostRecentRun = input.recentRuns[0];
   const workerStatus = inferWorkerStatus(mostRecentRun, counts);
+  const workerRuntime = summarizeWorkerRuntime(
+    input.recentRuns,
+    input.recentOutbox,
+    input.recentReceipts,
+  );
   const ingestorRuns = input.recentRuns.filter((row) => row.run_type.startsWith('ingestor'));
   const latestIngestorRun = ingestorRuns[0];
   const ingestorHealth = {
@@ -959,6 +975,7 @@ export function createSnapshotFromRows(input: {
     recentRuns: input.recentRuns,
     recentPicks: input.recentPicks,
     recentAudit: input.recentAudit,
+    workerRuntime,
     entityHealth: input.entityHealth ?? createEmptyEntityHealth(),
     upcomingEvents: input.upcomingEvents ?? [],
     bestBets: summarizeChannelLane('discord:best-bets', outboxRowsToChannelId('discord:best-bets'), input.recentOutbox, input.recentReceipts),
@@ -1036,6 +1053,71 @@ function summarizeChannelLane(
     latestMessageId: targetReceipts[0]?.external_id ?? null,
     activationHealthy: blockers.length === 0,
     blockers,
+  };
+}
+
+function summarizeWorkerRuntime(
+  recentRuns: SystemRunRecord[],
+  recentOutbox: OutboxRecord[],
+  recentReceipts: ReceiptRecord[],
+): WorkerRuntimeSummary {
+  const distributionRuns = recentRuns.filter((row) => row.run_type === 'distribution.process');
+  const latestDistributionRun = distributionRuns[0];
+  const latestSuccessfulDistributionRun = distributionRuns.find((row) => row.status === 'succeeded');
+  const latestReceipt = recentReceipts[0];
+  const latestSentOutbox = recentOutbox.find((row) => row.status === 'sent');
+  const pendingCount = recentOutbox.filter((row) => row.status === 'pending').length;
+  const processingCount = recentOutbox.filter((row) => row.status === 'processing').length;
+  const failedCount = recentOutbox.filter((row) => row.status === 'failed').length;
+  const deadLetterCount = recentOutbox.filter((row) => row.status === 'dead_letter').length;
+
+  const base = {
+    latestDistributionRunStatus: latestDistributionRun?.status ?? null,
+    latestDistributionRunAt: latestDistributionRun?.started_at ?? null,
+    latestSuccessfulDistributionRunAt: latestSuccessfulDistributionRun?.started_at ?? null,
+    latestReceiptRecordedAt: latestReceipt?.recorded_at ?? null,
+    latestSentOutboxAt: latestSentOutbox?.updated_at ?? null,
+  };
+
+  if (failedCount > 0 || deadLetterCount > 0) {
+    return {
+      drainState: 'blocked',
+      detail:
+        failedCount > 0 && deadLetterCount > 0
+          ? `${failedCount} failed and ${deadLetterCount} dead-letter outbox item(s) are blocking clean drain`
+          : failedCount > 0
+            ? `${failedCount} failed outbox item(s) are blocking clean drain`
+            : `${deadLetterCount} dead-letter outbox item(s) are blocking clean drain`,
+      ...base,
+    };
+  }
+
+  if (pendingCount === 0 && processingCount === 0) {
+    return {
+      drainState: 'idle',
+      detail: 'no pending or processing outbox items are visible',
+      ...base,
+    };
+  }
+
+  if (processingCount > 0 || latestDistributionRun?.status === 'running') {
+    return {
+      drainState: 'draining',
+      detail:
+        processingCount > 0
+          ? `${processingCount} outbox item(s) are actively processing`
+          : `${pendingCount} pending outbox item(s) are visible while the worker is running`,
+      ...base,
+    };
+  }
+
+  return {
+    drainState: 'stalled',
+    detail:
+      pendingCount > 0
+        ? `${pendingCount} pending outbox item(s) are queued without an active worker run`
+        : 'worker runtime is not actively draining visible outbox items',
+    ...base,
   };
 }
 
@@ -1210,6 +1292,15 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
         <p>Status: <strong>${escapeHtml(snapshot.ingestorHealth.status)}</strong></p>
         <p>Last run: ${escapeHtml(snapshot.ingestorHealth.lastRunAt ?? '\u2014')}</p>
         <p>Run count: ${escapeHtml(String(snapshot.ingestorHealth.runCount))}</p>
+      </article>`;
+  const workerRuntimeCard = `
+      <article class="card">
+        <h2>Worker Runtime</h2>
+        <p>Status: <strong>${escapeHtml(snapshot.workerRuntime.drainState)}</strong></p>
+        <p>${escapeHtml(snapshot.workerRuntime.detail)}</p>
+        <p>Last distribution run: ${escapeHtml(snapshot.workerRuntime.latestDistributionRunAt ?? '\u2014')}</p>
+        <p>Last successful drain: ${escapeHtml(snapshot.workerRuntime.latestSuccessfulDistributionRunAt ?? '\u2014')}</p>
+        <p>Last receipt: ${escapeHtml(snapshot.workerRuntime.latestReceiptRecordedAt ?? '\u2014')}</p>
       </article>`;
 
   const countCards = [
@@ -1604,7 +1695,7 @@ function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${incidentBanner}
       ${incidentTriageSection}
       <section>
-        <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}</div>
+        <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}${workerRuntimeCard}</div>
         <div class="grid count-grid">${countCards}</div>
       </section>
       ${upcomingEventsSection}
