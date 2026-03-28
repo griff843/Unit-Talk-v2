@@ -82,6 +82,11 @@ test('GET /api/operator/snapshot returns recent operational rows', async () => {
       canary: { target: string; latestMessageId: string | null };
       bestBets: { target: string; latestMessageId: string | null; activationHealthy: boolean };
       traderInsights: { target: string; latestMessageId: string | null; activationHealthy: boolean };
+      workerRuntime: {
+        drainState: string;
+        latestDistributionRunStatus: string | null;
+        latestSuccessfulDistributionRunAt: string | null;
+      };
       picksPipeline: {
         counts: { posted: number; settled: number; total: number };
         recentPicks: Array<{ id: string; promotionTarget: string | null; settlementResult: string | null }>;
@@ -110,6 +115,12 @@ test('GET /api/operator/snapshot returns recent operational rows', async () => {
   assert.equal(body.data.traderInsights.target, 'discord:trader-insights');
   assert.equal(body.data.traderInsights.latestMessageId, 'discord-message-trader-insights');
   assert.equal(body.data.traderInsights.activationHealthy, true);
+  assert.equal(body.data.workerRuntime.drainState, 'idle');
+  assert.equal(body.data.workerRuntime.latestDistributionRunStatus, 'succeeded');
+  assert.equal(
+    body.data.workerRuntime.latestSuccessfulDistributionRunAt,
+    '2026-03-20T12:00:30.000Z',
+  );
   assert.equal(body.data.picksPipeline.counts.posted, 2);
   assert.equal(body.data.picksPipeline.counts.settled, 1);
   assert.equal(body.data.picksPipeline.counts.total, 3);
@@ -1029,6 +1040,83 @@ test('createSnapshotFromRows marks worker degraded when most recent run is cance
   assert.match(workerSignal?.detail ?? '', /cancelled/);
 });
 
+test('createSnapshotFromRows summarizes worker runtime as stalled when pending outbox is queued without an active run', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-pending-1',
+        pick_id: 'pick-pending-1',
+        target: 'discord:best-bets',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-27T10:00:00.000Z',
+        updated_at: '2026-03-27T10:00:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.workerRuntime.drainState, 'stalled');
+  assert.match(snapshot.workerRuntime.detail, /pending outbox item\(s\) are queued without an active worker run/i);
+  assert.equal(snapshot.workerRuntime.latestDistributionRunStatus, null);
+});
+
+test('createSnapshotFromRows summarizes worker runtime as draining when a distribution run is active', () => {
+  const runningDistributionRun: SystemRunRecord = {
+    id: 'run-distribution-running-1',
+    run_type: 'distribution.process',
+    status: 'running',
+    started_at: '2026-03-27T10:05:00.000Z',
+    finished_at: null,
+    actor: 'worker-canary',
+    details: {},
+    created_at: '2026-03-27T10:05:00.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-pending-2',
+        pick_id: 'pick-pending-2',
+        target: 'discord:canary',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-27T10:04:00.000Z',
+        updated_at: '2026-03-27T10:04:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [runningDistributionRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.workerRuntime.drainState, 'draining');
+  assert.match(snapshot.workerRuntime.detail, /worker is running/i);
+  assert.equal(snapshot.workerRuntime.latestDistributionRunStatus, 'running');
+  assert.equal(snapshot.workerRuntime.latestDistributionRunAt, '2026-03-27T10:05:00.000Z');
+});
+
 test('createSnapshotFromRows includes ingestorHealth with status and lastRunAt when ingestor run exists', () => {
   const ingestorRun: SystemRunRecord = {
     id: 'run-ingestor-unit-1',
@@ -1110,6 +1198,60 @@ test('GET / renders Ingestor health card with status and last run when ingestor 
   assert.match(response.body, /succeeded/);
   assert.match(response.body, /2026-03-27T10:00:00\.000Z/);
   assert.match(response.body, /Run count/);
+});
+
+test('GET / renders Worker Runtime card with drain state and timestamps', async () => {
+  const distributionRun: SystemRunRecord = {
+    id: 'run-distribution-card-1',
+    run_type: 'distribution.process',
+    status: 'succeeded',
+    started_at: '2026-03-27T10:05:00.000Z',
+    finished_at: '2026-03-27T10:05:30.000Z',
+    actor: 'worker-best-bets',
+    details: {},
+    created_at: '2026-03-27T10:05:00.000Z',
+    idempotency_key: null,
+  };
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [
+          {
+            id: 'receipt-worker-card-1',
+            outbox_id: 'outbox-worker-card-1',
+            external_id: 'discord-message-worker-card-1',
+            idempotency_key: 'receipt-worker-card-1',
+            receipt_type: 'discord.message',
+            status: 'sent',
+            channel: 'discord:1288613037539852329',
+            payload: {},
+            recorded_at: '2026-03-27T10:05:31.000Z',
+          },
+        ],
+        recentSettlements: [],
+        recentRuns: [distributionRun],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const { port } = server.address() as import('node:net').AddressInfo;
+
+  const response = await makeRequest(port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Worker Runtime/);
+  assert.match(response.body, /Status: <strong>idle<\/strong>/);
+  assert.match(response.body, /Last distribution run: 2026-03-27T10:05:00\.000Z/);
+  assert.match(response.body, /Last receipt: 2026-03-27T10:05:31\.000Z/);
 });
 
 test('GET /api/operator/snapshot?outboxStatus filters recentOutbox by status', async () => {
