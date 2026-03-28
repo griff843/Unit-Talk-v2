@@ -7,13 +7,85 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 0 | 0 | 21 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 11 |
+| `lane:codex` | 0 | 0 | 2 | 1 | 21 |
+| `lane:claude` | 0 | 0 | 0 | 1 | 11 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
 
 ## Active Issues
+
+---
+
+### UTV2-68 — T2 SGO Results Auto-Ingest
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-68 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M12 |
+| **Area** | `area:ingestor` |
+| **Blocked by** | — (T1 Automated Grading CLOSED ✅) |
+| **Branch** | `codex/UTV2-68-sgo-results-ingest` |
+| **PR** | — |
+
+Extend ingestor to fetch SGO final results after events complete, populate `game_results` table. Contract: `docs/05_operations/T2_SGO_RESULTS_INGEST_CONTRACT.md` (RATIFIED 2026-03-26).
+
+---
+
+### UTV2-69 — T3 Grading Cron
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-69 |
+| **Tier** | T3 |
+| **Lane** | `lane:codex` |
+| **Status** | **READY** |
+| **Milestone** | M12 |
+| **Area** | `area:api` |
+| **Blocked by** | UTV2-68 (production only — code can be implemented in parallel) |
+| **Branch** | `codex/UTV2-69-grading-cron` |
+| **PR** | — |
+
+In-process 5-minute interval in `apps/api/src/index.ts` calling `runGradingPass()`. No new route. No external cron. Contract: `docs/05_operations/UTV2-69_GRADING_CRON_CONTRACT.md`.
+
+---
+
+### UTV2-70 — T2 RecapAgent: Scheduled Discord Recap Posts
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-70 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **BLOCKED** |
+| **Milestone** | M12 |
+| **Area** | `area:api` |
+| **Blocked by** | UTV2-68 (recap only meaningful once settlement data is auto-populated) |
+| **Branch** | `codex/UTV2-70-recap-agent` |
+| **PR** | — |
+
+`POST /api/recap/post` + `recap-service.ts` + `recap-scheduler.ts`. Daily/weekly/monthly Discord embed posts to `discord:best-bets`. In-process 60-second loop. Contract: `docs/05_operations/UTV2-70_RECAP_AGENT_CONTRACT.md`.
+
+---
+
+### UTV2-71 — T1 M12 Closure Verification
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-71 |
+| **Tier** | T1 (verify) |
+| **Lane** | `lane:claude` |
+| **Status** | **BLOCKED** |
+| **Milestone** | M12 |
+| **Area** | `area:docs` |
+| **Blocked by** | UTV2-68, UTV2-69, UTV2-70 (all must merge before closure proof) |
+| **Branch** | — |
+| **PR** | — |
+
+Independent verification of M12 deliverables. Produce proof artifact. Update `PROGRAM_STATUS.md` M12 CLOSED, M13 placeholder.
 
 ---
 

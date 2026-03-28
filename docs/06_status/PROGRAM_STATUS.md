@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-27 — M11 CLOSED. UTV2-61 (PR #37) + UTV2-62 (PR #35) + UTV2-63 (PR #39) + UTV2-64 (PR #36) + UTV2-66 (PR #38) + UTV2-67 (PR #40) merged. Recap CLV/stake enrichment, dead-letter promotion + surface, devig wiring, bot startup, Kelly sizing at submission complete. 678/678 tests. M12 queued.
+2026-03-27 — M12 ACTIVE. Contracts ratified: UTV2-68 (SGO results ingest), UTV2-69 (grading cron), UTV2-70 (RecapAgent). M11 CLOSED at 678/678 tests.
 
 ---
 
@@ -19,7 +19,7 @@
 | Tests | 678/678 pass. Last verified 2026-03-27 at main `1bab4d8`. |
 | Gates | `pnpm verify` exits 0. Last confirmed 2026-03-27 (M11 closure). |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M11 CLOSED** 2026-03-27 — Recap CLV/stake, dead-letter promotion + surface, devig wiring, bot startup, Kelly sizing. M12 queued. |
+| Milestone | **M12 ACTIVE** — SGO results ingest (UTV2-68), grading cron (UTV2-69), RecapAgent (UTV2-70). M11 CLOSED 2026-03-27. |
 
 ## Gate Notes (last verified 2026-03-27)
 
@@ -62,9 +62,18 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 
 ---
 
-## Next Milestone (M12 — QUEUED)
+## Current Milestone (M12 — ACTIVE)
 
-M11 closed 2026-03-27. M12 scope TBD — no active contract yet. Do not start M12 work without a ratified contract.
+M11 closed 2026-03-27. M12 ACTIVE 2026-03-27. All contracts ratified. Codex dispatched for UTV2-68 and UTV2-69; UTV2-70 unblocks after UTV2-68 merges.
+
+| Item | Tier | Lane | Status |
+|------|------|------|--------|
+| M12 UTV2-68 SGO results auto-ingest | T2 | codex | READY |
+| M12 UTV2-69 Grading cron | T3 | codex | READY |
+| M12 UTV2-70 RecapAgent scheduled Discord posts | T2 | codex | BLOCKED on UTV2-68 |
+| M12 UTV2-71 M12 closure verification | T1 | claude | BLOCKED on UTV2-68/69/70 |
+
+### M11 Items (CLOSED)
 
 | Item | Tier | Lane | Status |
 |------|------|------|--------|
