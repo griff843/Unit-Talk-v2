@@ -475,6 +475,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       outbox,
       receipts,
       alertDetections: {} as RepositoryBundle['alertDetections'],
+      hedgeOpportunities: {} as RepositoryBundle['hedgeOpportunities'],
       settlements: {} as RepositoryBundle['settlements'],
       providerOffers: {} as RepositoryBundle['providerOffers'],
       participants: {} as RepositoryBundle['participants'],

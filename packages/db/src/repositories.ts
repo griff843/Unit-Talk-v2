@@ -17,6 +17,9 @@ import type {
   EventRow,
   EventStatus,
   GradeResultRecord,
+  HedgeOpportunityPriority,
+  HedgeOpportunityRecord,
+  HedgeOpportunityType,
   ParticipantRow,
   ParticipantType,
   PickRecord,
@@ -199,6 +202,57 @@ export interface AlertDetectionRepository {
   findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null>;
   listRecent(limit?: number | undefined): Promise<AlertDetectionRecord[]>;
   updateNotified(input: AlertNotificationUpdateInput): Promise<void>;
+}
+
+export interface HedgeOpportunityCreateInput {
+  idempotencyKey: string;
+  eventId?: string | null | undefined;
+  participantId?: string | null | undefined;
+  marketKey: string;
+  type: HedgeOpportunityType;
+  priority: HedgeOpportunityPriority;
+  bookmakerA: string;
+  bookmakerB: string;
+  lineA: number;
+  lineB: number;
+  overOddsA: number;
+  underOddsB: number;
+  lineDiscrepancy: number;
+  impliedProbA: number;
+  impliedProbB: number;
+  totalImpliedProb: number;
+  arbitragePercentage: number;
+  profitPotential: number;
+  guaranteedProfit?: number | null | undefined;
+  middleGap?: number | null | undefined;
+  winProbability?: number | null | undefined;
+  notified?: boolean | undefined;
+  notifiedAt?: string | null | undefined;
+  notifiedChannels?: string[] | null | undefined;
+  cooldownExpiresAt?: string | null | undefined;
+  metadata: Record<string, unknown>;
+  detectedAt: string;
+}
+
+export interface HedgeOpportunityCooldownQuery {
+  eventId?: string | null | undefined;
+  marketKey: string;
+  type: HedgeOpportunityType;
+  now: string;
+}
+
+export interface HedgeOpportunityNotificationUpdateInput {
+  id: string;
+  notifiedAt: string;
+  notifiedChannels: string[];
+  cooldownExpiresAt: string;
+}
+
+export interface HedgeOpportunityRepository {
+  saveOpportunity(input: HedgeOpportunityCreateInput): Promise<HedgeOpportunityRecord | null>;
+  findActiveCooldown(input: HedgeOpportunityCooldownQuery): Promise<HedgeOpportunityRecord | null>;
+  listRecent(limit?: number | undefined): Promise<HedgeOpportunityRecord[]>;
+  updateNotified(input: HedgeOpportunityNotificationUpdateInput): Promise<void>;
 }
 
 export interface ReceiptCreateInput {
@@ -402,6 +456,7 @@ export interface RepositoryBundle {
   picks: PickRepository;
   outbox: OutboxRepository;
   alertDetections: AlertDetectionRepository;
+  hedgeOpportunities: HedgeOpportunityRepository;
   receipts: ReceiptRepository;
   settlements: SettlementRepository;
   providerOffers: ProviderOfferRepository;

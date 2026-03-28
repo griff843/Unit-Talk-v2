@@ -128,6 +128,117 @@ export type Database = {
           },
         ]
       }
+      hedge_opportunities: {
+        Row: {
+          arbitrage_percentage: number
+          bookmaker_a: string
+          bookmaker_b: string
+          cooldown_expires_at: string | null
+          created_at: string
+          detected_at: string
+          event_id: string | null
+          guaranteed_profit: number | null
+          id: string
+          idempotency_key: string
+          implied_prob_a: number
+          implied_prob_b: number
+          line_a: number
+          line_b: number
+          line_discrepancy: number
+          market_key: string
+          metadata: Json
+          middle_gap: number | null
+          notified: boolean
+          notified_at: string | null
+          notified_channels: string[] | null
+          over_odds_a: number
+          participant_id: string | null
+          priority: string
+          profit_potential: number
+          total_implied_prob: number
+          type: string
+          under_odds_b: number
+          win_probability: number | null
+        }
+        Insert: {
+          arbitrage_percentage: number
+          bookmaker_a: string
+          bookmaker_b: string
+          cooldown_expires_at?: string | null
+          created_at?: string
+          detected_at?: string
+          event_id?: string | null
+          guaranteed_profit?: number | null
+          id?: string
+          idempotency_key: string
+          implied_prob_a: number
+          implied_prob_b: number
+          line_a: number
+          line_b: number
+          line_discrepancy: number
+          market_key: string
+          metadata?: Json
+          middle_gap?: number | null
+          notified?: boolean
+          notified_at?: string | null
+          notified_channels?: string[] | null
+          over_odds_a: number
+          participant_id?: string | null
+          priority: string
+          profit_potential: number
+          total_implied_prob: number
+          type: string
+          under_odds_b: number
+          win_probability?: number | null
+        }
+        Update: {
+          arbitrage_percentage?: number
+          bookmaker_a?: string
+          bookmaker_b?: string
+          cooldown_expires_at?: string | null
+          created_at?: string
+          detected_at?: string
+          event_id?: string | null
+          guaranteed_profit?: number | null
+          id?: string
+          idempotency_key?: string
+          implied_prob_a?: number
+          implied_prob_b?: number
+          line_a?: number
+          line_b?: number
+          line_discrepancy?: number
+          market_key?: string
+          metadata?: Json
+          middle_gap?: number | null
+          notified?: boolean
+          notified_at?: string | null
+          notified_channels?: string[] | null
+          over_odds_a?: number
+          participant_id?: string | null
+          priority?: string
+          profit_potential?: number
+          total_implied_prob?: number
+          type?: string
+          under_odds_b?: number
+          win_probability?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hedge_opportunities_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hedge_opportunities_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       cappers: {
         Row: {
           active: boolean

@@ -1,24 +1,41 @@
-import type { RepositoryBundle } from '@unit-talk/db';
+import type {
+  AlertDetectionRecord,
+  HedgeOpportunityRecord,
+  RepositoryBundle,
+} from '@unit-talk/db';
 import {
   loadAlertAgentConfig,
   runAlertDetectionPass,
   type AlertAgentConfig,
 } from './alert-agent-service.js';
 import { runAlertNotificationPass } from './alert-notification-service.js';
+import {
+  type HedgeAgentConfig,
+  loadHedgeAgentConfig,
+  runHedgeDetectionPass,
+} from './hedge-detection-service.js';
+import { runHedgeNotificationPass } from './hedge-notification-service.js';
 
 const ALERT_AGENT_INTERVAL_MS = 60_000;
 
 export function startAlertAgent(
-  repositories: Pick<RepositoryBundle, 'alertDetections' | 'events' | 'providerOffers'>,
+  repositories: Pick<
+    RepositoryBundle,
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers'
+  >,
   logger: Pick<Console, 'error' | 'info'> = console,
-  config: Partial<AlertAgentConfig> = {},
+  config: Partial<AlertAgentConfig & HedgeAgentConfig> = {},
 ) {
-  const resolvedConfig = {
+  const resolvedAlertConfig = {
     ...loadAlertAgentConfig(),
     ...config,
   };
+  const resolvedHedgeConfig = {
+    ...loadHedgeAgentConfig(),
+    ...config,
+  };
 
-  if (!resolvedConfig.enabled) {
+  if (!resolvedAlertConfig.enabled && !resolvedHedgeConfig.enabled) {
     logger.info(
       JSON.stringify({
         service: 'alert-agent',
@@ -30,51 +47,12 @@ export function startAlertAgent(
   }
 
   const interval = setInterval(() => {
-    runAlertDetectionPass(repositories, resolvedConfig)
-      .then(async (detectionResult) => {
-        logger.info(
-          JSON.stringify({
-            service: 'alert-agent',
-            event: 'detection.pass.completed',
-            result: {
-              evaluatedGroups: detectionResult.evaluatedGroups,
-              detections: detectionResult.detections,
-              persisted: detectionResult.persisted,
-              duplicateSignals: detectionResult.duplicateSignals,
-              belowMinTier: detectionResult.belowMinTier,
-              unresolvedEvents: detectionResult.unresolvedEvents,
-              shouldNotifyCount: detectionResult.shouldNotifyCount,
-            },
-          }),
-        );
-
-        if (detectionResult.persistedSignals.length === 0) {
-          return;
-        }
-
-        const notificationResult = await runAlertNotificationPass(
-          detectionResult.persistedSignals,
-          repositories.alertDetections,
-          { dryRun: resolvedConfig.dryRun },
-        );
-
-        logger.info(
-          JSON.stringify({
-            service: 'alert-agent',
-            event: 'notification.pass.completed',
-            result: notificationResult,
-          }),
-        );
-      })
-      .catch((err: unknown) => {
-        logger.error(
-          JSON.stringify({
-            service: 'alert-agent',
-            event: 'tick.unhandled_error',
-            error: err instanceof Error ? err.message : String(err),
-          }),
-        );
-      });
+    void runAlertAgentTick(
+      repositories,
+      logger,
+      resolvedAlertConfig,
+      resolvedHedgeConfig,
+    );
   }, ALERT_AGENT_INTERVAL_MS);
 
   return () => {
@@ -90,4 +68,125 @@ export async function runAlertDetectionPassForTests(
     ...loadAlertAgentConfig(),
     ...config,
   });
+}
+
+async function runAlertAgentTick(
+  repositories: Pick<
+    RepositoryBundle,
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers'
+  >,
+  logger: Pick<Console, 'error' | 'info'>,
+  alertConfig: ReturnType<typeof loadAlertAgentConfig>,
+  hedgeConfig: ReturnType<typeof loadHedgeAgentConfig>,
+) {
+  let alertPersistedSignals: AlertDetectionRecord[] = [];
+  let hedgePersistedOpportunities: HedgeOpportunityRecord[] = [];
+
+  try {
+    const detectionResult = await runAlertDetectionPass(repositories, alertConfig);
+    alertPersistedSignals = detectionResult.persistedSignals;
+
+    logger.info(
+      JSON.stringify({
+        service: 'alert-agent',
+        event: 'detection.pass.completed',
+        result: {
+          evaluatedGroups: detectionResult.evaluatedGroups,
+          detections: detectionResult.detections,
+          persisted: detectionResult.persisted,
+          duplicateSignals: detectionResult.duplicateSignals,
+          belowMinTier: detectionResult.belowMinTier,
+          unresolvedEvents: detectionResult.unresolvedEvents,
+          shouldNotifyCount: detectionResult.shouldNotifyCount,
+        },
+      }),
+    );
+  } catch (err: unknown) {
+    logger.error(
+      JSON.stringify({
+        service: 'alert-agent',
+        event: 'alert_detection.tick_failed',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  try {
+    const hedgeDetectionResult = await runHedgeDetectionPass(repositories, hedgeConfig);
+    hedgePersistedOpportunities = hedgeDetectionResult.persistedOpportunities;
+
+    logger.info(
+      JSON.stringify({
+        service: 'alert-agent',
+        event: 'hedge_detection.pass.completed',
+        result: {
+          evaluatedGroups: hedgeDetectionResult.evaluatedGroups,
+          opportunities: hedgeDetectionResult.opportunities,
+          persisted: hedgeDetectionResult.persisted,
+          duplicateOpportunities: hedgeDetectionResult.duplicateOpportunities,
+          unresolvedEvents: hedgeDetectionResult.unresolvedEvents,
+        },
+      }),
+    );
+  } catch (err: unknown) {
+    logger.error(
+      JSON.stringify({
+        service: 'alert-agent',
+        event: 'hedge_detection.tick_failed',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  }
+
+  if (alertPersistedSignals.length > 0) {
+    try {
+      const notificationResult = await runAlertNotificationPass(
+        alertPersistedSignals,
+        repositories.alertDetections,
+        { dryRun: alertConfig.dryRun },
+      );
+
+      logger.info(
+        JSON.stringify({
+          service: 'alert-agent',
+          event: 'notification.pass.completed',
+          result: notificationResult,
+        }),
+      );
+    } catch (err: unknown) {
+      logger.error(
+        JSON.stringify({
+          service: 'alert-agent',
+          event: 'notification.tick_failed',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
+
+  if (hedgePersistedOpportunities.length > 0) {
+    try {
+      const notificationResult = await runHedgeNotificationPass(
+        hedgePersistedOpportunities,
+        repositories.hedgeOpportunities,
+        { dryRun: hedgeConfig.dryRun },
+      );
+
+      logger.info(
+        JSON.stringify({
+          service: 'alert-agent',
+          event: 'hedge_notification.pass.completed',
+          result: notificationResult,
+        }),
+      );
+    } catch (err: unknown) {
+      logger.error(
+        JSON.stringify({
+          service: 'alert-agent',
+          event: 'hedge_notification.tick_failed',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
 }
