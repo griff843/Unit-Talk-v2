@@ -2309,7 +2309,7 @@ export function readOperatorRuntimeMode(
   const appEnv =
     environment?.UNIT_TALK_APP_ENV ?? normalizeAppEnv(process.env.UNIT_TALK_APP_ENV);
 
-  return appEnv === 'local' ? 'fail_open' : 'fail_closed';
+  return appEnv === 'local' || appEnv === 'ci' ? 'fail_open' : 'fail_closed';
 }
 
 function handleOperatorProviderFailure(
