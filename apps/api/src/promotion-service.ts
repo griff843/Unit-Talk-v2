@@ -3,6 +3,7 @@ import {
   type BoardPromotionEvaluationInput,
   type CanonicalPick,
   type PickLifecycleState,
+  type PromotionDecisionSnapshot,
   type PromotionPolicy,
   type PromotionOverrideAction,
   type PromotionTarget,
@@ -28,6 +29,7 @@ export interface PromotionEvaluationResult {
   history: PromotionHistoryRecord;
   audit: AuditLogRecord;
   decision: BoardPromotionDecision;
+  snapshot: PromotionDecisionSnapshot;
 }
 
 export async function evaluateAndPersistBestBetsPromotion(
@@ -301,27 +303,69 @@ async function persistPromotionDecisionForPick(
     selection: canonicalPick.selection,
   });
   const scoreInputs = readPromotionScoreInputs(canonicalPick);
+  const isStale = readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false;
+  const withinPostingWindow = !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false);
+  const marketStillValid = readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true;
+  const riskBlocked = readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false;
+  const overrideState = mapOverrideState(override);
   const decision = evaluatePromotionEligibility({
     target: policy.target,
     pick: canonicalPick,
     approvalStatus: canonicalPick.approvalStatus,
     hasRequiredFields: hasRequiredFields(canonicalPick),
-    isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
-    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
-    marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
-    riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+    isStale,
+    withinPostingWindow,
+    marketStillValid,
+    riskBlocked,
     scoreInputs,
     minimumScore: policy.minimumScore,
     confidenceFloor: policy.confidenceFloor,
     boardCaps: policy.boardCaps,
     boardState,
-    override: mapOverrideState(override),
+    override: overrideState,
     decidedAt: new Date().toISOString(),
     decidedBy: actor,
     version: policy.version,
   }, policy);
 
   const reason = summarizePromotionReason(decision);
+
+  const snapshot: PromotionDecisionSnapshot = {
+    scoringProfile: activeScoringProfile.name,
+    policyVersion: policy.version,
+    scoreInputs: {
+      edge: scoreInputs.edge,
+      trust: scoreInputs.trust,
+      readiness: scoreInputs.readiness,
+      uniqueness: scoreInputs.uniqueness,
+      boardFit: scoreInputs.boardFit,
+    },
+    gateInputs: {
+      approvalStatus: canonicalPick.approvalStatus,
+      hasRequiredFields: hasRequiredFields(canonicalPick),
+      isStale,
+      withinPostingWindow,
+      marketStillValid,
+      riskBlocked,
+      confidenceFloor: policy.confidenceFloor ?? null,
+      pickConfidence: canonicalPick.confidence ?? null,
+    },
+    boardStateAtDecision: {
+      currentBoardCount: boardState.currentBoardCount,
+      sameSportCount: boardState.sameSportCount,
+      sameGameCount: boardState.sameGameCount,
+      duplicateCount: boardState.duplicateCount,
+    },
+    weightsUsed: {
+      edge: policy.weights.edge,
+      trust: policy.weights.trust,
+      readiness: policy.weights.readiness,
+      uniqueness: policy.weights.uniqueness,
+      boardFit: policy.weights.boardFit,
+    },
+    ...(overrideState !== undefined ? { override: overrideState } : {}),
+  };
+
   const persisted = await pickRepository.persistPromotionDecision({
     pickId,
     target: policy.target,
@@ -335,6 +379,7 @@ async function persistPromotionDecisionForPick(
     promotionDecidedBy: decision.decidedBy,
     overrideAction: override?.action ?? null,
     payload: {
+      ...snapshot,
       boardState,
       scoreInputs,
       policy,
@@ -363,6 +408,7 @@ async function persistPromotionDecisionForPick(
     history: persisted.history,
     audit,
     decision,
+    snapshot,
   };
 }
 

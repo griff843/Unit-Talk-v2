@@ -127,6 +127,50 @@ export interface BoardPromotionDecision {
   decidedBy: string;
 }
 
+/**
+ * Full input snapshot written to pick_promotion_history.metadata at decision time.
+ * Given this snapshot and the policy thresholds, the decision can be deterministically reproduced.
+ */
+export interface PromotionDecisionSnapshot {
+  scoringProfile: string;
+  policyVersion: string;
+  scoreInputs: {
+    edge: number;
+    trust: number;
+    readiness: number;
+    uniqueness: number;
+    boardFit: number;
+  };
+  gateInputs: {
+    approvalStatus: string;
+    hasRequiredFields: boolean;
+    isStale: boolean;
+    withinPostingWindow: boolean;
+    marketStillValid: boolean;
+    riskBlocked: boolean;
+    confidenceFloor: number | null;
+    pickConfidence: number | null;
+  };
+  boardStateAtDecision: {
+    currentBoardCount: number;
+    sameSportCount: number;
+    sameGameCount: number;
+    duplicateCount: number;
+  };
+  weightsUsed: {
+    edge: number;
+    trust: number;
+    readiness: number;
+    uniqueness: number;
+    boardFit: number;
+  };
+  override?: {
+    forcePromote?: boolean;
+    suppress?: boolean;
+    reason?: string;
+  };
+}
+
 export const bestBetsScoreWeights: PromotionScoreWeights = {
   edge: 0.35,
   trust: 0.25,

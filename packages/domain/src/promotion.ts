@@ -2,6 +2,8 @@ import {
   bestBetsPromotionPolicy,
   type BoardPromotionDecision,
   type BoardPromotionEvaluationInput,
+  type CanonicalPick,
+  type PromotionDecisionSnapshot,
   type PromotionPolicy,
   type PromotionScoreBreakdown,
   type PromotionScoreWeights,
@@ -204,4 +206,40 @@ function buildDecision(input: {
     decidedAt: input.decidedAt,
     decidedBy: input.decidedBy,
   };
+}
+
+/**
+ * Deterministically reproduces a promotion decision from a stored snapshot.
+ *
+ * Given the same snapshot and the same policy, this function produces the same
+ * BoardPromotionDecision that was recorded at decision time.
+ */
+export function replayPromotion(
+  snapshot: PromotionDecisionSnapshot,
+  policy: PromotionPolicy,
+  decidedAt?: string,
+): BoardPromotionDecision {
+  const input: BoardPromotionEvaluationInput = {
+    target: policy.target,
+    pick: {
+      confidence: snapshot.gateInputs.pickConfidence ?? undefined,
+    } as CanonicalPick,
+    approvalStatus: snapshot.gateInputs.approvalStatus as BoardPromotionEvaluationInput['approvalStatus'],
+    hasRequiredFields: snapshot.gateInputs.hasRequiredFields,
+    isStale: snapshot.gateInputs.isStale,
+    withinPostingWindow: snapshot.gateInputs.withinPostingWindow,
+    marketStillValid: snapshot.gateInputs.marketStillValid,
+    riskBlocked: snapshot.gateInputs.riskBlocked,
+    scoreInputs: snapshot.scoreInputs,
+    minimumScore: policy.minimumScore,
+    confidenceFloor: snapshot.gateInputs.confidenceFloor ?? undefined,
+    boardCaps: policy.boardCaps,
+    boardState: snapshot.boardStateAtDecision,
+    override: snapshot.override,
+    decidedAt: decidedAt ?? new Date().toISOString(),
+    decidedBy: 'replay',
+    version: snapshot.policyVersion,
+  };
+
+  return evaluatePromotionEligibility(input, policy);
 }
