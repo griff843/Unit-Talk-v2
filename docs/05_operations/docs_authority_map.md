@@ -86,6 +86,12 @@ When documents conflict:
 | `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md` | Deterministic promotion replay from stored snapshot | UTV2-145 |
 | `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` | `member_tiers` table + Discord role sync | UTV2-149 |
 | `docs/05_operations/PROMOTION_TARGET_REGISTRY_CONTRACT.md` | Runtime target enable/disable registry | UTV2-129 |
+| `docs/05_operations/UTV2-127_OPERATOR_WEB_ROUTE_MODULES_CONTRACT.md` | Refactor operator-web server.ts into route modules | UTV2-127 |
+| `docs/05_operations/UTV2-141_API_ROUTE_MODULES_CONTRACT.md` | Refactor API server.ts into route modules | UTV2-141 |
+| `docs/05_operations/UTV2-131_SNAPSHOT_PAGINATION_CONTRACT.md` | `?limit` + `?since` pagination on snapshot endpoint | UTV2-131 |
+| `docs/05_operations/UTV2-143_ALERT_AGENT_OBSERVABILITY_CONTRACT.md` | `system_runs` rows per alert detection/notification pass | UTV2-143 |
+| `docs/05_operations/UTV2-144_RECAP_GRADING_OBSERVABILITY_CONTRACT.md` | `system_runs` rows per grading/recap run | UTV2-144 |
+| `docs/05_operations/UTV2-130_TIER_AUTHORITY_DRIFT_DETECTION_CONTRACT.md` | Startup warn when env overrides defaultTargetRegistry-disabled target | UTV2-130 |
 
 ## Tier 5 - Current Status
 

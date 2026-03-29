@@ -157,7 +157,7 @@ Machine-enforceable runtime kill switch per delivery target. `defaultTargetRegis
 | **Branch** | — |
 | **PR** | — |
 
-Refactor `apps/operator-web/src/server.ts` (~700 lines) into route modules under `apps/operator-web/src/routes/`. `server.ts` becomes the wiring layer only. All existing tests pass unchanged. No behavior changes.
+Refactor `apps/operator-web/src/server.ts` (~2600 lines) into route modules under `apps/operator-web/src/routes/`. `server.ts` becomes the wiring layer only. All existing tests pass unchanged. No behavior changes. Contract: `docs/05_operations/UTV2-127_OPERATOR_WEB_ROUTE_MODULES_CONTRACT.md`.
 
 ---
 
@@ -175,7 +175,7 @@ Refactor `apps/operator-web/src/server.ts` (~700 lines) into route modules under
 | **Branch** | — |
 | **PR** | — |
 
-Refactor `apps/api/src/server.ts` into route modules under `apps/api/src/routes/`. `server.ts` becomes the wiring layer only. All existing tests pass unchanged. No behavior changes.
+Refactor `apps/api/src/server.ts` into route modules under `apps/api/src/routes/`. `server.ts` becomes the wiring layer only. All existing tests pass unchanged. No behavior changes. Contract: `docs/05_operations/UTV2-141_API_ROUTE_MODULES_CONTRACT.md`.
 
 ---
 
@@ -193,7 +193,7 @@ Refactor `apps/api/src/server.ts` into route modules under `apps/api/src/routes/
 | **Branch** | — |
 | **PR** | — |
 
-Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit 25, max 100. Response includes `pagination: { limit, hasMore }`. Caps unbounded `recentOutbox`, `recentSettlements`, `recentRuns` queries.
+Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit 25, max 100. Response includes `pagination: { limit, hasMore }`. Caps unbounded `recentOutbox`, `recentSettlements`, `recentRuns` queries. Contract: `docs/05_operations/UTV2-131_SNAPSHOT_PAGINATION_CONTRACT.md`.
 
 ---
 
@@ -211,7 +211,7 @@ Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit
 | **Branch** | — |
 | **PR** | — |
 
-`system_runs` row per `runAlertDetectionPass()` (`runType: 'alert.detection'`, details: signalsFound/alertWorthy/notable/watch) and per `runAlertNotificationPass()` (`runType: 'alert.notification'`, details: notified/suppressed). Operator snapshot `alertAgent` section with last-run summary.
+`system_runs` row per `runAlertDetectionPass()` (`runType: 'alert.detection'`, details: signalsFound/alertWorthy/notable/watch) and per `runAlertNotificationPass()` (`runType: 'alert.notification'`, details: notified/suppressed). Operator snapshot `alertAgent` section with last-run summary. Contract: `docs/05_operations/UTV2-143_ALERT_AGENT_OBSERVABILITY_CONTRACT.md`.
 
 ---
 
@@ -229,7 +229,7 @@ Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit
 | **Branch** | — |
 | **PR** | — |
 
-`system_runs` row per grading run (`runType: 'grading.run'`, details: picksGraded/failed) and per recap post (`runType: 'recap.post'`, details: channel/pickCount). Operator snapshot `gradingAgent` section with last-run summary.
+`system_runs` row per grading run (`runType: 'grading.run'`, details: picksGraded/failed) and per recap post (`runType: 'recap.post'`, details: channel/pickCount). Operator snapshot `gradingAgent` section with last-run summary. Contract: `docs/05_operations/UTV2-144_RECAP_GRADING_OBSERVABILITY_CONTRACT.md`.
 
 ---
 
@@ -319,7 +319,7 @@ Per-target in-process circuit breaker. After N consecutive failures (default 5),
 | **Branch** | — |
 | **PR** | — |
 
-Startup-time check: if `UNIT_TALK_ENABLED_TARGETS` env enables a target that `defaultTargetRegistry` has `enabled: false`, log a structured warning with target name and disabled reason. Fail-open (does not block startup).
+Startup-time check: if `UNIT_TALK_ENABLED_TARGETS` env enables a target that `defaultTargetRegistry` has `enabled: false`, log a structured warning with target name and disabled reason. Fail-open (does not block startup). Contract: `docs/05_operations/UTV2-130_TIER_AUTHORITY_DRIFT_DETECTION_CONTRACT.md`.
 
 ---
 
