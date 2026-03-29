@@ -50,11 +50,18 @@ export interface WorkerProcessFailureResult {
   run: SystemRunRecord;
 }
 
+export interface WorkerProcessTargetDisabledResult {
+  status: 'target-disabled';
+  target: string;
+  workerId: string;
+}
+
 export type WorkerProcessResult =
   | WorkerProcessIdleResult
   | WorkerProcessSuccessResult
   | WorkerProcessSkippedResult
-  | WorkerProcessFailureResult;
+  | WorkerProcessFailureResult
+  | WorkerProcessTargetDisabledResult;
 
 export async function processNextDistributionWork(
   repositories: RepositoryBundle,

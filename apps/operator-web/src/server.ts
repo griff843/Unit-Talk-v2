@@ -18,6 +18,7 @@ import {
   type EffectiveSettlement,
   type SettlementSummary,
 } from '@unit-talk/domain';
+import { resolveTargetRegistry } from '@unit-talk/contracts';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution';
@@ -107,6 +108,11 @@ export interface OperatorSnapshot {
   quotaSummary: OperatorQuotaSummary;
   picksPipeline: PicksPipelineSummary;
   recap: SettlementSummary;
+  targetRegistry: Array<{
+    target: string;
+    enabled: boolean;
+    disabledReason?: string | undefined;
+  }>;
 }
 
 export interface OperatorQuotaProviderSummary {
@@ -1041,6 +1047,7 @@ export function createSnapshotFromRows(input: {
       input.picksPipelineCounts,
     ),
     recap: computeSettlementSummary(resolveAllEffectiveSettlements(input.recentSettlements ?? [])),
+    targetRegistry: resolveTargetRegistry(),
   };
 }
 

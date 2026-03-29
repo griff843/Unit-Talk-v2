@@ -457,6 +457,7 @@ test('enqueueDistributionWork creates an outbox record with idempotency key', as
     'discord:free-picks',
   );
 
+  assert.ok(distribution.enqueued, 'expected distribution to be enqueued');
   assert.equal(distribution.outboxRecord.pick_id, result.pick.id);
   assert.equal(distribution.outboxRecord.target, 'discord:free-picks');
   assert.equal(distribution.outboxRecord.status, 'pending');
@@ -1736,12 +1737,21 @@ test('distribution gate accepts discord:exclusive-insights for qualified picks',
     repositories,
   );
 
+  // Pass explicit all-enabled registry to test the distribution gate independently of
+  // the defaultTargetRegistry (which has exclusive-insights disabled for safety).
+  const allEnabledRegistry = [
+    { target: 'best-bets' as const, enabled: true },
+    { target: 'trader-insights' as const, enabled: true },
+    { target: 'exclusive-insights' as const, enabled: true },
+  ];
   const tracked = await enqueueDistributionWork(
     result.pick,
     repositories.outbox,
     'discord:exclusive-insights',
+    allEnabledRegistry,
   );
 
+  assert.ok(tracked.enqueued, 'expected distribution to be enqueued');
   assert.equal(result.pick.promotionTarget, 'exclusive-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');
   assert.equal(tracked.target, 'discord:exclusive-insights');
@@ -1802,7 +1812,7 @@ test('best-bets qualified pick with absent edge and trust scores still qualifies
 test('conservativeScoringProfile produces different scores than defaultScoringProfile for same inputs', () => {
   const baseInput = {
     target: 'best-bets' as const,
-    pick: { id: 'test', lifecycleState: 'validated' as const, confidence: 0.8, market: 'test', selection: 'Over', source: 'test', submissionId: 'sub-1', approvalStatus: 'approved' as const, promotionStatus: 'eligible' as const },
+    pick: { id: 'test', lifecycleState: 'validated' as const, confidence: 0.8, market: 'test', selection: 'Over', source: 'test', submissionId: 'sub-1', approvalStatus: 'approved' as const, promotionStatus: 'eligible' as const, metadata: {}, createdAt: '2026-03-29T00:00:00.000Z' },
     approvalStatus: 'approved' as const,
     hasRequiredFields: true,
     isStale: false,

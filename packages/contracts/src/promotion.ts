@@ -255,3 +255,81 @@ export function resolveScoringProfile(name: string | undefined): ScoringProfile 
   }
   return profile;
 }
+
+// ---------------------------------------------------------------------------
+// Target Registry (UTV2-129)
+// ---------------------------------------------------------------------------
+
+export interface TargetRegistryEntry {
+  target: PromotionTarget;
+  /** Whether delivery to this target is permitted. false = skip without failing. */
+  enabled: boolean;
+  /** Human-readable reason if disabled. For operator surface / logs. */
+  disabledReason?: string | undefined;
+}
+
+/**
+ * Canonical target registry — the V2 source of truth for which targets are
+ * permitted to receive live deliveries.
+ *
+ * Enabled/disabled state is the runtime equivalent of the "Live / Blocked"
+ * table in CLAUDE.md. This registry makes that gate machine-enforceable.
+ *
+ * Override at startup via UNIT_TALK_ENABLED_TARGETS env var.
+ * Disabled targets are skipped by the distribution worker — outbox rows
+ * for a disabled target are left in 'pending' status and not failed.
+ */
+export const defaultTargetRegistry: TargetRegistryEntry[] = [
+  {
+    target: 'best-bets',
+    enabled: true,
+  },
+  {
+    target: 'trader-insights',
+    enabled: true,
+  },
+  {
+    target: 'exclusive-insights',
+    enabled: false,
+    disabledReason:
+      'Activation contract required before live delivery (see T1_EXCLUSIVE_INSIGHTS_ACTIVATION_CONTRACT.md)',
+  },
+];
+
+/**
+ * Returns the effective registry, applying UNIT_TALK_ENABLED_TARGETS override if set.
+ *
+ * UNIT_TALK_ENABLED_TARGETS is a comma-separated list of explicitly enabled targets.
+ * Targets NOT in the list are disabled, regardless of defaultTargetRegistry.
+ *
+ * If the env var is absent, defaultTargetRegistry is used as-is.
+ */
+export function resolveTargetRegistry(
+  env: { UNIT_TALK_ENABLED_TARGETS?: string | undefined } = process.env,
+): TargetRegistryEntry[] {
+  const raw = env.UNIT_TALK_ENABLED_TARGETS?.trim();
+  if (!raw) {
+    return defaultTargetRegistry;
+  }
+
+  const explicitlyEnabled = new Set(
+    raw.split(',').map((t) => t.trim()).filter(Boolean),
+  );
+
+  return promotionTargets.map((target) => ({
+    target,
+    enabled: explicitlyEnabled.has(target),
+    disabledReason: explicitlyEnabled.has(target)
+      ? undefined
+      : 'Not in UNIT_TALK_ENABLED_TARGETS',
+  }));
+}
+
+export function isTargetEnabled(
+  target: string,
+  registry: TargetRegistryEntry[],
+): boolean {
+  const entry = registry.find((e) => e.target === target);
+  // If target is not in the registry, it is not a governed promotion target — allow it.
+  return entry?.enabled ?? true;
+}

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
+import { resolveTargetRegistry } from '@unit-talk/contracts';
 import type {
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
@@ -1248,6 +1249,50 @@ test('createDiscordDeliveryAdapter renders trader-insights target-specific embed
     'Target: discord:trader-insights | Market-alerts lane preview',
   );
   assert.equal(body.embeds?.[0]?.fields?.[0]?.name, 'Trader Insights Purpose');
+});
+
+test('runWorkerCycles skips disabled targets and leaves outbox rows pending', async () => {
+  const outboxRecord = createOutboxRecord('exclusive-insights');
+  const { repositories, receipts } = createWorkerTestRepositories([outboxRecord]);
+
+  const disabledRegistry = [
+    { target: 'best-bets' as const, enabled: true },
+    { target: 'trader-insights' as const, enabled: true },
+    { target: 'exclusive-insights' as const, enabled: false, disabledReason: 'blocked' },
+  ];
+
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-disabled-target',
+    targets: ['exclusive-insights'],
+    deliver: createStubDeliveryAdapter(),
+    targetRegistry: disabledRegistry,
+    maxCycles: 1,
+  });
+
+  assert.equal(cycles[0]?.results.length, 1);
+  assert.equal(cycles[0]?.results[0]?.status, 'target-disabled');
+  assert.equal(receipts.records.length, 0, 'no receipts should be recorded for disabled target');
+  // Outbox row must remain pending — not failed
+  const outbox = await repositories.outbox.findByPickAndTarget(
+    outboxRecord.pick_id,
+    outboxRecord.target,
+    ['pending'],
+  );
+  assert.ok(outbox !== null, 'outbox row must remain pending when target is disabled');
+});
+
+test('resolveTargetRegistry with UNIT_TALK_ENABLED_TARGETS=best-bets disables all other targets', () => {
+  const registry = resolveTargetRegistry({ UNIT_TALK_ENABLED_TARGETS: 'best-bets' });
+
+  const bestBets = registry.find((e) => e.target === 'best-bets');
+  const traderInsights = registry.find((e) => e.target === 'trader-insights');
+  const exclusiveInsights = registry.find((e) => e.target === 'exclusive-insights');
+
+  assert.equal(bestBets?.enabled, true);
+  assert.equal(traderInsights?.enabled, false);
+  assert.equal(exclusiveInsights?.enabled, false);
+  assert.match(traderInsights?.disabledReason ?? '', /UNIT_TALK_ENABLED_TARGETS/);
 });
 
 function isGovernedTarget(target: string) {

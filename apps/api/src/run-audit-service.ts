@@ -70,6 +70,22 @@ export async function enqueueDistributionWithRunTracking(
       outboxRepository,
       target,
     );
+
+    if (!distribution.enqueued) {
+      const completedRun = await systemRunRepository.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: { pickId: pick.id, target, skipped: true, reason: distribution.reason },
+      });
+      const audit = await auditLogRepository.record({
+        entityType: 'distribution_outbox',
+        action: 'distribution.skipped',
+        actor,
+        payload: { pickId: pick.id, target, reason: distribution.reason },
+      });
+      return { run: completedRun, audit, target, pickId: pick.id };
+    }
+
     const completedRun = await systemRunRepository.completeRun({
       runId: run.id,
       status: 'succeeded',

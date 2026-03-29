@@ -1,5 +1,10 @@
 import type { OutboxRecord, RepositoryBundle } from '@unit-talk/db';
 import {
+  type TargetRegistryEntry,
+  isTargetEnabled,
+  resolveTargetRegistry,
+} from '@unit-talk/contracts';
+import {
   processNextDistributionWork,
   type DeliveryResult,
   type WorkerProcessResult,
@@ -12,6 +17,7 @@ export interface WorkerRunnerOptions {
   workerId: string;
   targets: string[];
   deliver: DeliveryAdapter;
+  targetRegistry?: TargetRegistryEntry[] | undefined;
   maxCycles?: number | undefined;
   sleep?: ((ms: number) => Promise<void>) | undefined;
   pollIntervalMs?: number | undefined;
@@ -35,11 +41,22 @@ export async function runWorkerCycles(
   const sleep = options.sleep ?? defaultSleep;
   const summaries: WorkerCycleSummary[] = [];
 
+  const registry = options.targetRegistry ?? resolveTargetRegistry();
+
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     const reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
     const results: WorkerProcessResult[] = [];
 
     for (const target of options.targets) {
+      // Registry entries use promotion target names ('best-bets'), not Discord target paths
+      const promotionTargetName = target.startsWith('discord:')
+        ? target.slice('discord:'.length)
+        : target;
+      if (!isTargetEnabled(promotionTargetName, registry)) {
+        results.push({ status: 'target-disabled', target, workerId: options.workerId });
+        continue;
+      }
+
       const result = await processNextDistributionWork(
         options.repositories,
         target,
