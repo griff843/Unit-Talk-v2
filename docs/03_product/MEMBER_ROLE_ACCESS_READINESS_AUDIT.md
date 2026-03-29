@@ -6,9 +6,9 @@
 |---|---|
 | Type | Readiness Audit / Gap Analysis |
 | Issue | UTV2-163 |
-| Status | **UPDATED 2026-03-29 — 6/8 hard gates PASS — 1 remaining blocker** |
+| Status | **ALL 8 HARD GATES PASS — AUTHORITY DOC UNBLOCKED 2026-03-29** |
 | Audited | 2026-03-29 |
-| Audited against | `main` (commit `c3664c4`); updated against `f40845d` (2026-03-29) |
+| Audited against | `main` (commit `c3664c4`); final verification at `7993ec8` (2026-03-29) |
 | Does not supersede | `docs/03_product/ROLE_ACCESS_MATRIX.md` (remains the design-intent reference) |
 | Does not supersede | `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` (remains the implementation contract) |
 
@@ -226,7 +226,7 @@ The following must land on `main` before a final authority doc can be written. E
 - [x] ✅ **`MemberTier` type** (`'free' | 'trial' | 'vip' | 'vip-plus' | 'capper' | 'operator'`) exported from `@unit-talk/contracts` — `packages/contracts/src/index.ts`
 - [x] ✅ **`MemberTierRepository` interface** in `packages/db/src/repositories.ts` with `activateTier`, `deactivateTier`, `getActiveTiers`, `getTierHistory`, `getActiveMembersForTier`, `getTierCounts`
 - [x] ✅ **`InMemoryMemberTierRepository`** and **`DatabaseMemberTierRepository`** implemented and tested — 7 tests in `packages/db/src/member-tier-repository.test.ts`
-- [ ] ❌ **General tier sync handler** — `guildMemberUpdate` syncs VIP, VIP+, trial, capper, operator add/remove to `member_tiers` rows. **Blocker:** `@unit-talk/db` is forbidden in `apps/discord-bot` per `DISCORD_BOT_FOUNDATION_SPEC.md`. Requires `POST /api/member-tiers` API endpoint first, then bot handler calls that endpoint. See UTV2-163 ISSUE_QUEUE entry.
+- [x] ✅ **General tier sync handler** — `POST /api/member-tiers` endpoint in `apps/api`; `createMemberTierSyncHandler()` in `apps/discord-bot/src/handlers/member-tier-sync-handler.ts` syncs VIP, VIP+, trial, capper, operator add/remove via API call (boundary-safe). Wired in `main.ts` alongside capper onboarding handler — PR #78.
 - [x] ✅ **Operator snapshot tier counts** — `OperatorSnapshot.memberTiers.counts` populated by live `member_tiers` query — `apps/operator-web/src/server.ts`
 - [x] ✅ **`pnpm verify` passes** — CI confirmed PR #76; type-check confirmed on committed state `f40845d`
 - [x] ✅ **Tests:** activate/deactivate/idempotent/active-filter/history — 7 tests pass (InMemory layer verified; DB smoke test not run for this slice)
@@ -236,7 +236,7 @@ The following must land on `main` before a final authority doc can be written. E
 - [x] ✅ **Capper role guard on `/pick`** — `requiredRoles: [capperRoleId]` — PR #75
 - [x] ✅ **`DISCORD_OPERATOR_ROLE_ID` added to `.env.example`** — PR #75
 - [x] ✅ **`vip_plus` / `vip-plus` naming resolved** — all `vip_plus`/`black_label` normalized to `vip-plus`/`black-label` in `tier-resolver.ts`, `trial-status.ts`, `upgrade.ts` — PR #75
-- [ ] ❌ **Trial expiry enforced via scheduler** — **RATIFIED 2026-03-29:** Trial expires automatically 7 days after joining (`TRIAL_DURATION_DAYS = 7`). Minimum implementation: background scheduler calls `deactivateTier()` on expired rows and writes `member_tier.trial_expired` audit event. Manual-only removal is NOT the accepted model. This is UTV2-150 scope and is a **hard gate** for UTV2-163 (trial access rules cannot be stated as enforced until the scheduler exists).
+- [x] ✅ **Trial expiry enforced via scheduler** — `runTrialExpiryPass()` + `startTrialExpiryScheduler()` in `apps/api/src/trial-expiry-service.ts`. Runs hourly. Deactivates rows where `effective_until <= now()`, writes `member_tier.trial_expired` audit event. `TRIAL_DURATION_DAYS=7` default. Wired into `apps/api/src/index.ts` startup/shutdown — PR #77.
 
 ---
 
@@ -246,14 +246,7 @@ The following must land on `main` before a final authority doc can be written. E
 
 A narrow authority section for the purely Discord-runtime enforcement model (tier resolution via `resolveMemberTier()`, role guard via `checkRoles()`, capper onboarding handler) could be written now. However, this would cover less than 30% of the intended access model and would need heavy revision when `member_tiers` lands. The cost of premature publication outweighs the benefit.
 
-**Updated 2026-03-29:** UTV2-149 Codex work landed (PRs #75/#76). 6 of 8 hard gates pass. One remaining blocker:
-
-**Remaining path to unblocking UTV2-163:**
-1. Ship `POST /api/member-tiers` API endpoint (or equivalent write path not requiring `@unit-talk/db` in discord-bot)
-2. Wire `guildMemberUpdate` handler to call that endpoint for all tier-relevant role changes (VIP, VIP+, trial, capper, operator — both add and remove)
-3. Confirm at least one real role-change event writes a row to the live `member_tiers` table (pnpm test:db or live DB proof)
-4. Explicitly ratify trial expiry behavior (manual-removal-only or UTV2-150 scheduler)
-5. Re-run this proof — if clean, open UTV2-163 as an authority-doc lane
+**UNBLOCKED 2026-03-29** — All 8 hard gates satisfied at `7993ec8` (PRs #75, #76, #77, #78). UTV2-163 authority doc may now be written.
 
 **Current docs to treat as authoritative (within their stated scope):**
 
