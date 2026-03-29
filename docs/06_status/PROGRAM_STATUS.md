@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-28 — M13 ACTIVE. Contracts ratified: UTV2-87 (exclusive-insights, PR #56), UTV2-69 (hedge detection, PR #56). AlertAgent notification layer DONE (UTV2-114, PR #55, 722/722 tests). UTV2-90 recaps runtime DONE (PR #53). UTV2-59 detection DONE (PR #48). Worker runtime activated (UTV2-107 PR #44), visibility (UTV2-109 PR #45). Grading linkage fixed (UTV2-105 PR #43). Incident/rollback plan ratified (UTV2-26 PR #52).
+2026-03-29 — Wave 1+2 Claude queues complete. Wave 1 Codex queue (10 tasks, UTV2-115–121/123/128/140) at Urgent/Ready. Wave 2 contracts ratified: DELIVERY_ADAPTER_HARDENING, DISCORD_CIRCUIT_BREAKER, MODEL_REGISTRY (fixes score weights bug), REPLAYABLE_SCORING, MEMBER_TIER_MODEL, PROMOTION_TARGET_REGISTRY. 14 stale docs deleted (UTV2-132). Proof bundle schema ratified (UTV2-157). Supabase hardening audit committed (UTV2-139). Score weights bug found: `calculateScore()` hardcoded `bestBetsScoreWeights` for all targets — UTV2-136 fixes this. 14 Wave 2 Codex items at Ready. 45 issues fully triaged.
 
 ---
 
@@ -16,10 +16,10 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | 722/722 pass. Last verified 2026-03-28 at main `6231672` (PR #55). |
-| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-28 at `6231672` (UTV2-114 alert notification). |
+| Tests | ≥722 pass. Verify with `pnpm test` — PRs #58–62 added tests since last count. |
+| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-28 at `6231672`. Re-verify after UTV2-56 merges. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 ACTIVE** — Recap runtime hardening (UTV2-102), full lifecycle proof refresh (UTV2-103). M12 CLOSED 2026-03-28. |
+| Milestone | **M13 ACTIVE** — Wave 1 T1/T2 hardening in progress (UTV2-115–140). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
 
 ## Gate Notes (last verified 2026-03-28)
 
@@ -107,6 +107,69 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | M11 UTV2-65 M10 closure verification | T1 | claude | DONE |
 | M11 UTV2-66 Discord bot startup entry point | T2 | augment | DONE PR #38 |
 | M11 UTV2-67 Kelly sizing at submission | T2 | codex | DONE PR #40 |
+
+---
+
+## Wave 1+2 Hardening (2026-03-29)
+
+45 issues created (UTV2-115–158). All triaged. Claude queues complete. Codex Wave 1 in progress.
+
+### Wave 1 Codex Queue (at Urgent/Ready — in progress)
+
+| Issue | Task | Status |
+|---|---|---|
+| UTV2-115 | Fail-closed API runtime mode | TODO |
+| UTV2-116 | Fail-closed operator-web runtime mode | TODO |
+| UTV2-117 | API request body size cap | TODO |
+| UTV2-118 | API submission rate limiting | TODO |
+| UTV2-119 | Worker stale-claim reaper | TODO |
+| UTV2-120 | Worker heartbeat / watchdog | TODO |
+| UTV2-121 | Smart-form into root pnpm verify | TODO |
+| UTV2-123 | Structured logging + correlation IDs | TODO |
+| UTV2-128 | HTTP-level integration test suite | TODO |
+| UTV2-140 | CI command manifest for Discord bot | TODO |
+
+### Wave 1 Claude Queue — ALL DONE
+
+| Issue | Task | Status |
+|---|---|---|
+| UTV2-138 | Status authority refresh | **DONE** 2026-03-29 |
+| UTV2-122 | PickMetadata contract | **DONE** 2026-03-29 — `PICK_METADATA_CONTRACT.md` |
+| UTV2-125 | Alert agent extraction contract | **DONE** 2026-03-29 — `ALERT_AGENT_EXTRACTION_CONTRACT.md` |
+| UTV2-147 | Runtime mode contract | **DONE** 2026-03-29 — `RUNTIME_MODE_CONTRACT.md` |
+| UTV2-139 | Supabase hardening audit | **DONE** 2026-03-29 — `supabase_hardening_audit_2026-03-29.md` |
+
+### Wave 2 Claude Queue — ALL DONE
+
+| Issue | Task | Status |
+|---|---|---|
+| UTV2-148 | Delivery adapter hardening contract | **DONE** 2026-03-29 — `DELIVERY_ADAPTER_HARDENING_CONTRACT.md` |
+| UTV2-124 | Discord circuit breaker contract | **DONE** 2026-03-29 — `DISCORD_CIRCUIT_BREAKER_CONTRACT.md` |
+| UTV2-136 | Model registry + score weights bug fix | **DONE** 2026-03-29 — `MODEL_REGISTRY_CONTRACT.md` |
+| UTV2-145 | Replayable scoring contract | **DONE** 2026-03-29 — `REPLAYABLE_SCORING_CONTRACT.md` |
+| UTV2-149 | Member tier model contract | **DONE** 2026-03-29 — `MEMBER_TIER_MODEL_CONTRACT.md` |
+| UTV2-129 | Promotion target registry contract | **DONE** 2026-03-29 — `PROMOTION_TARGET_REGISTRY_CONTRACT.md` |
+| UTV2-132 | Docs taxonomy cleanup | **DONE** 2026-03-29 — 14 files deleted, `docs_audit_2026-03-29.md` |
+| UTV2-157 | Proof bundle schema | **DONE** 2026-03-29 — `PROOF_BUNDLE_SCHEMA.md` |
+
+### Wave 2 Codex Queue — Ready (awaiting Wave 1 completion or independent)
+
+| Issue | Task | Tier | Blocked By |
+|---|---|---|---|
+| UTV2-148 | Delivery adapter hardening (impl) | T2 | — |
+| UTV2-124 | Discord circuit breaker (impl) | T1 | UTV2-148 |
+| UTV2-126 | Alert agent extraction (impl) | T2 | — |
+| UTV2-127 | Operator-web route modules | T2 | — |
+| UTV2-131 | Snapshot pagination | T2 | — |
+| UTV2-141 | API route modules | T2 | — |
+| UTV2-143 | Alert agent observability | T2 | — |
+| UTV2-144 | Recap/grading observability | T2 | — |
+| UTV2-145 | Replayable scoring (impl) | T2 | UTV2-136 impl |
+| UTV2-150 | Upgrade/trial audit trail | T2 | UTV2-149 impl |
+| UTV2-129 | Target registry (impl) | T2 | — |
+| UTV2-130 | Tier authority drift detection | T2 | UTV2-129 impl |
+| UTV2-134 | Portfolio/exposure tracking | T3 | — |
+| UTV2-158 | Repo map modernization | T3 | — |
 
 ---
 

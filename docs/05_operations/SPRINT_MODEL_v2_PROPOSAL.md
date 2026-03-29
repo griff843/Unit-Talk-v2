@@ -1,5 +1,7 @@
 # Sprint Model v2 — Proposal
 
+> **SUPERSEDED 2026-03-29.** This was the pre-ratification draft. The active sprint model is `docs/05_operations/SPRINT_MODEL_v2.md`.
+
 ## Problem
 
 The weekly cadence served the project well from Weeks 6-16 when each week had a distinct integration boundary with real operational risk (live channel activations, schema migrations, settlement truth changes). Starting around Week 17, the risk profile shifted: most remaining work is pure-computation wiring or service wrapper integration with no schema changes, no live routing changes, and no settlement truth changes.

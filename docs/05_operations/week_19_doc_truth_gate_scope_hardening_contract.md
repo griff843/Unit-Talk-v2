@@ -1,5 +1,7 @@
 # Week 19 Contract — Doc Truth Gate V1 Scope Hardening
 
+> **HISTORICAL — 2026-03-29.** This was an alternate Week 19 planning track for doc-truth gate scope hardening. The canonical Week 19 close is `week_19_promotion_edge_integration_contract.md`. This contract was not executed under the current sprint model. Not referenced in PROGRAM_STATUS.md or ISSUE_QUEUE.md.
+
 ## Objective
 
 Harden the existing doc-truth gate so its V1 release is truthful: workflow scope, skill description, and policy wording all match the checker's actual enforcement model (domain-analysis consumer claims only).
