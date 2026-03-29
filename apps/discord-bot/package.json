@@ -20,8 +20,7 @@
   "dependencies": {
     "@unit-talk/config": "workspace:*",
     "@unit-talk/contracts": "workspace:*",
-    "@unit-talk/db": "workspace:*",
-    "@unit-talk/events": "workspace:*",
+"@unit-talk/events": "workspace:*",
     "@unit-talk/observability": "workspace:*",
     "discord.js": "^14.25.1"
   }

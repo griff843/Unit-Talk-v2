@@ -2909,3 +2909,51 @@ function makeRequest(port: number, path: string) {
     req.end();
   });
 }
+
+// ---------------------------------------------------------------------------
+// memberTiers snapshot tests
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows includes memberTiers with zero counts when no rows provided', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.ok(snapshot.memberTiers, 'memberTiers should be present');
+  assert.equal(snapshot.memberTiers.counts['free'], 0);
+  assert.equal(snapshot.memberTiers.counts['vip'], 0);
+  assert.equal(snapshot.memberTiers.counts['vip-plus'], 0);
+  assert.equal(snapshot.memberTiers.counts['trial'], 0);
+  assert.equal(snapshot.memberTiers.counts['capper'], 0);
+  assert.equal(snapshot.memberTiers.counts['operator'], 0);
+});
+
+test('createSnapshotFromRows counts active member tier rows correctly', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    memberTierRows: [
+      { tier: 'vip' },
+      { tier: 'vip' },
+      { tier: 'vip-plus' },
+      { tier: 'trial' },
+      { tier: 'capper' },
+    ],
+  });
+
+  assert.equal(snapshot.memberTiers.counts['vip'], 2);
+  assert.equal(snapshot.memberTiers.counts['vip-plus'], 1);
+  assert.equal(snapshot.memberTiers.counts['trial'], 1);
+  assert.equal(snapshot.memberTiers.counts['capper'], 1);
+  assert.equal(snapshot.memberTiers.counts['free'], 0);
+  assert.equal(snapshot.memberTiers.counts['operator'], 0);
+});
