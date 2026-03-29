@@ -13,7 +13,7 @@ When documents conflict:
 | Owner | Program Owner |
 | Status | Ratified |
 | Ratified | 2026-03-20 |
-| Last Updated | 2026-03-21 |
+| Last Updated | 2026-03-29 |
 
 ## Tier 1 - Principles
 
@@ -53,6 +53,7 @@ When documents conflict:
 | `docs/05_operations/week_6_execution_contract.md` | Week 6 required deliverables and blockers | Program Owner |
 | `docs/05_operations/week_7_best_bets_activation.md` | Week 7 controlled activation procedure and rollback rules | Program Owner |
 | `docs/05_operations/AGENT_OPERATING_MODEL.md` | **Active** agent operating model — Linear-first, role boundaries, reporting rules | Program Owner |
+| `docs/05_operations/codex_wave_execution_playbook.md` | Default Codex wave execution model - issue triage, lane ownership, stacked PR discipline, and Linear update rules | Program Owner |
 | `docs/05_operations/delivery_operating_model.md` | Cross-tool sync rules and lane ownership | Program Owner |
 | `docs/05_operations/discord_routing.md` | Canonical Discord target taxonomy and routing rules | Platform |
 | `docs/05_operations/canary_graduation_criteria.md` | Criteria for Best Bets activation | Platform |

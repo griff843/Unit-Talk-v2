@@ -33,6 +33,7 @@ export interface AppEnv {
   UNIT_TALK_API_BODY_LIMIT_BYTES?: string | undefined;
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX?: string | undefined;
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS?: string | undefined;
+  UNIT_TALK_OPERATOR_RUNTIME_MODE?: string | undefined;
   DISCORD_BOT_TOKEN?: string | undefined;
   DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
@@ -134,6 +135,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
       'UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS',
       merged,
     ),
+    UNIT_TALK_OPERATOR_RUNTIME_MODE: optionalEnv('UNIT_TALK_OPERATOR_RUNTIME_MODE', merged),
     DISCORD_BOT_TOKEN: optionalEnv('DISCORD_BOT_TOKEN', merged),
     DISCORD_CLIENT_ID: optionalEnv('DISCORD_CLIENT_ID', merged),
     DISCORD_GUILD_ID: optionalEnv('DISCORD_GUILD_ID', merged),

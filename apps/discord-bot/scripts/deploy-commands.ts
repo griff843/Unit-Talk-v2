@@ -20,7 +20,7 @@ import { dirname, resolve } from 'node:path';
 import { REST, Routes } from 'discord.js';
 import { loadEnvironment } from '@unit-talk/config';
 import { parseBotConfig } from '../src/config.js';
-import { loadCommandRegistry } from '../src/command-registry.js';
+import { buildCommandManifest } from '../src/command-manifest.js';
 
 // Compute repo root from this script's location so deploy-commands works
 // regardless of the working directory (e.g., when run via `pnpm --filter`).
@@ -28,9 +28,7 @@ const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 
 async function deployCommands(): Promise<void> {
   const config = parseBotConfig(loadEnvironment(repoRoot));
-  const registry = await loadCommandRegistry(repoRoot);
-
-  const commandPayloads = [...registry.values()].map((cmd) => cmd.data.toJSON());
+  const commandPayloads = await buildCommandManifest(repoRoot);
 
   console.log(
     `[deploy-commands] Deploying ${commandPayloads.length} command(s) to guild ${config.guildId}...`,

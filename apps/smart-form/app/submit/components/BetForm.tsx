@@ -30,6 +30,7 @@ import { BetSlipPanel } from './BetSlipPanel';
 import { SuccessReceipt } from './SuccessReceipt';
 import {
   buildParticipantSearchUrl,
+  isRecord,
   normalizeParticipantSearchResults,
   type ParticipantSuggestion,
   type ParticipantSearchType,

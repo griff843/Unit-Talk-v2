@@ -6,6 +6,7 @@ import {
   buildCapperRecapResponse,
   buildLeaderboardResponse,
   buildCapperStatsResponse,
+  createOperatorSnapshotProvider,
   createOperatorServer,
   createSnapshotFromRows,
   createStatsRows,
@@ -15,6 +16,26 @@ import {
   type OperatorSnapshotProvider,
   type OutboxFilter,
 } from './server.js';
+
+test('createOperatorSnapshotProvider fails closed when database config is unavailable', () => {
+  assert.throws(
+    () =>
+      createOperatorSnapshotProvider({
+        environment: {
+          NODE_ENV: 'test',
+          UNIT_TALK_APP_ENV: 'ci',
+          UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+          UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+          LINEAR_TEAM_KEY: 'UNIT',
+          LINEAR_TEAM_NAME: 'Unit Talk',
+          NOTION_WORKSPACE_NAME: 'Unit Talk',
+          SLACK_WORKSPACE_NAME: 'Unit Talk',
+          UNIT_TALK_OPERATOR_RUNTIME_MODE: 'fail_closed',
+        },
+      }),
+    /fail_closed/i,
+  );
+});
 
 test('GET /health returns operator health payload', async () => {
   const provider = createStaticProvider();
