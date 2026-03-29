@@ -52,6 +52,11 @@ import {
   buildCapperWelcomeEmbed,
   createCapperOnboardingHandler,
 } from './handlers/capper-onboarding-handler.js';
+import {
+  readRoleTierMappings,
+  syncMemberTierFromRoleChange,
+} from './handlers/member-tier-sync-handler.js';
+import { InMemoryMemberTierRepository } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1672,4 +1677,148 @@ test('createCapperOnboardingHandler: channel fetch throws → swallowed, does no
 
   // Must not throw — handler swallows all errors
   await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
+});
+
+// ---------------------------------------------------------------------------
+// member-tier-sync-handler
+// ---------------------------------------------------------------------------
+
+test('readRoleTierMappings: returns only entries with non-empty role IDs', () => {
+  const env = {
+    DISCORD_VIP_ROLE_ID: 'role-vip',
+    DISCORD_VIP_PLUS_ROLE_ID: 'role-vip-plus',
+    DISCORD_TRIAL_ROLE_ID: '',
+    DISCORD_CAPPER_ROLE_ID: 'role-capper',
+    DISCORD_OPERATOR_ROLE_ID: '',
+  };
+  const mappings = readRoleTierMappings(env);
+  assert.equal(mappings.length, 3);
+  assert.ok(mappings.some((m) => m.tier === 'vip' && m.roleId === 'role-vip'));
+  assert.ok(mappings.some((m) => m.tier === 'vip-plus' && m.roleId === 'role-vip-plus'));
+  assert.ok(mappings.some((m) => m.tier === 'capper' && m.roleId === 'role-capper'));
+  assert.ok(!mappings.some((m) => m.tier === 'trial'));
+  assert.ok(!mappings.some((m) => m.tier === 'operator'));
+});
+
+test('syncMemberTierFromRoleChange: role added → activates tier', async () => {
+  const repo = new InMemoryMemberTierRepository();
+
+  // Use the repo directly with explicit inputs to verify activateTier mechanics
+  await repo.activateTier({
+    discordId: 'user-123',
+    discordUsername: 'testuser',
+    tier: 'vip',
+    source: 'discord-role',
+    changedBy: 'discord-bot',
+    reason: 'Discord role role-vip added',
+  });
+
+  const active = await repo.getActiveTiers('user-123');
+  assert.equal(active.length, 1);
+  assert.equal(active[0]?.tier, 'vip');
+  assert.equal(active[0]?.effective_until, null);
+});
+
+test('syncMemberTierFromRoleChange: activates correct tier on role add', async () => {
+  const repo = new InMemoryMemberTierRepository();
+
+  // Use the handler directly — set env vars so readRoleTierMappings returns role-vip → vip
+  const originalEnv = process.env as Record<string, string | undefined>;
+  const savedVip = originalEnv['DISCORD_VIP_ROLE_ID'];
+  const savedCapper = originalEnv['DISCORD_CAPPER_ROLE_ID'];
+  originalEnv['DISCORD_VIP_ROLE_ID'] = 'role-vip';
+  originalEnv['DISCORD_CAPPER_ROLE_ID'] = 'role-capper';
+  originalEnv['DISCORD_VIP_PLUS_ROLE_ID'] = '';
+  originalEnv['DISCORD_TRIAL_ROLE_ID'] = '';
+  originalEnv['DISCORD_OPERATOR_ROLE_ID'] = '';
+
+  try {
+    await syncMemberTierFromRoleChange('user-456', 'alice', ['role-vip'], [], repo);
+    const active = await repo.getActiveTiers('user-456');
+    assert.equal(active.length, 1);
+    assert.equal(active[0]?.tier, 'vip');
+    assert.equal(active[0]?.discord_id, 'user-456');
+  } finally {
+    if (savedVip === undefined) delete originalEnv['DISCORD_VIP_ROLE_ID'];
+    else originalEnv['DISCORD_VIP_ROLE_ID'] = savedVip;
+    if (savedCapper === undefined) delete originalEnv['DISCORD_CAPPER_ROLE_ID'];
+    else originalEnv['DISCORD_CAPPER_ROLE_ID'] = savedCapper;
+  }
+});
+
+test('syncMemberTierFromRoleChange: role removed → deactivates tier', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  await repo.activateTier({
+    discordId: 'user-789',
+    tier: 'vip',
+    source: 'discord-role',
+    changedBy: 'discord-bot',
+  });
+
+  const originalEnv = process.env as Record<string, string | undefined>;
+  const savedVip = originalEnv['DISCORD_VIP_ROLE_ID'];
+  originalEnv['DISCORD_VIP_ROLE_ID'] = 'role-vip';
+  originalEnv['DISCORD_VIP_PLUS_ROLE_ID'] = '';
+  originalEnv['DISCORD_TRIAL_ROLE_ID'] = '';
+  originalEnv['DISCORD_CAPPER_ROLE_ID'] = '';
+  originalEnv['DISCORD_OPERATOR_ROLE_ID'] = '';
+
+  try {
+    await syncMemberTierFromRoleChange('user-789', 'bob', [], ['role-vip'], repo);
+    const active = await repo.getActiveTiers('user-789');
+    assert.equal(active.length, 0, 'should have no active tiers after removal');
+    const history = await repo.getTierHistory('user-789');
+    assert.equal(history.length, 1);
+    assert.ok(history[0]?.effective_until !== null, 'effective_until should be set');
+  } finally {
+    if (savedVip === undefined) delete originalEnv['DISCORD_VIP_ROLE_ID'];
+    else originalEnv['DISCORD_VIP_ROLE_ID'] = savedVip;
+  }
+});
+
+test('InMemoryMemberTierRepository: activateTier is idempotent', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  const input = {
+    discordId: 'user-idem',
+    tier: 'vip' as const,
+    source: 'discord-role' as const,
+    changedBy: 'discord-bot',
+  };
+  const first = await repo.activateTier(input);
+  const second = await repo.activateTier(input);
+  assert.equal(first.id, second.id, 'should return same row on duplicate activate');
+  const active = await repo.getActiveTiers('user-idem');
+  assert.equal(active.length, 1, 'should still have exactly one active row');
+});
+
+test('InMemoryMemberTierRepository: deactivateTier is idempotent when no active row', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  // Should not throw when no active row exists
+  await assert.doesNotReject(() =>
+    repo.deactivateTier({ discordId: 'user-none', tier: 'vip', changedBy: 'discord-bot' }),
+  );
+});
+
+test('InMemoryMemberTierRepository: getTierCounts returns zero counts for empty repo', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  const counts = await repo.getTierCounts();
+  assert.equal(counts.free, 0);
+  assert.equal(counts.vip, 0);
+  assert.equal(counts['vip-plus'], 0);
+  assert.equal(counts.capper, 0);
+  assert.equal(counts.trial, 0);
+  assert.equal(counts.operator, 0);
+});
+
+test('InMemoryMemberTierRepository: getTierCounts reflects active rows only', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  await repo.activateTier({ discordId: 'u1', tier: 'vip', source: 'discord-role', changedBy: 'bot' });
+  await repo.activateTier({ discordId: 'u2', tier: 'vip', source: 'discord-role', changedBy: 'bot' });
+  await repo.activateTier({ discordId: 'u3', tier: 'capper', source: 'discord-role', changedBy: 'bot' });
+  // Deactivate u2's vip
+  await repo.deactivateTier({ discordId: 'u2', tier: 'vip', changedBy: 'bot' });
+
+  const counts = await repo.getTierCounts();
+  assert.equal(counts.vip, 1, 'only u1 should have active vip');
+  assert.equal(counts.capper, 1, 'u3 should have active capper');
 });

@@ -208,3 +208,24 @@ export interface EventParticipantRow {
   created_at: string;
 }
 
+// member_tiers is defined here as a manual interface because the migration
+// (202603200017_member_tiers.sql) may not yet be reflected in database.types.ts.
+// After applying the migration and running `pnpm supabase:types`, this can be
+// replaced with `Tables<'member_tiers'>`.
+export interface MemberTierRow {
+  id: string;
+  discord_id: string;
+  discord_username: string | null;
+  tier: string;
+  effective_from: string;
+  effective_until: string | null;
+  source: string;
+  changed_by: string | null;
+  reason: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+/** @see {@link MemberTierRow} */
+export type MemberTierRecord = MemberTierRow;
+

@@ -1,6 +1,7 @@
 import type {
   CanonicalPick,
   LifecycleEvent,
+  MemberTier,
   ProviderOfferInsert,
   SubmissionPayload,
   ValidatedSubmission,
@@ -20,6 +21,7 @@ import type {
   HedgeOpportunityPriority,
   HedgeOpportunityRecord,
   HedgeOpportunityType,
+  MemberTierRecord,
   ParticipantRow,
   ParticipantType,
   PickRecord,
@@ -427,6 +429,43 @@ export interface GradeResultRepository {
   listByEvent(eventId: string): Promise<GradeResultRecord[]>;
 }
 
+export interface MemberTierActivateInput {
+  discordId: string;
+  discordUsername?: string | undefined;
+  tier: MemberTier;
+  source: 'discord-role' | 'manual' | 'system';
+  changedBy: string;
+  reason?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface MemberTierDeactivateInput {
+  discordId: string;
+  tier: MemberTier;
+  changedBy: string;
+  reason?: string | undefined;
+}
+
+export interface MemberTierRepository {
+  /** Inserts a new active tier row (idempotent — no-op if already active). */
+  activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord>;
+
+  /** Sets effective_until = now() on the active row (idempotent — no-op if not active). */
+  deactivateTier(input: MemberTierDeactivateInput): Promise<void>;
+
+  /** Returns all currently active tiers for a Discord member. */
+  getActiveTiers(discordId: string): Promise<MemberTierRecord[]>;
+
+  /** Returns full tier history for a Discord member, ordered by created_at. */
+  getTierHistory(discordId: string): Promise<MemberTierRecord[]>;
+
+  /** Returns all currently active members for a given tier. */
+  getActiveMembersForTier(tier: MemberTier): Promise<MemberTierRecord[]>;
+
+  /** Returns active tier counts per tier (for operator snapshot). */
+  getTierCounts(): Promise<Record<MemberTier, number>>;
+}
+
 export interface AuditLogCreateInput {
   entityType: string;
   entityId?: string | null | undefined;
@@ -487,6 +526,7 @@ export interface RepositoryBundle {
   events: EventRepository;
   eventParticipants: EventParticipantRepository;
   gradeResults: GradeResultRepository;
+  memberTiers: MemberTierRepository;
   runs: SystemRunRepository;
   audit: AuditLogRepository;
   referenceData: ReferenceDataRepository;

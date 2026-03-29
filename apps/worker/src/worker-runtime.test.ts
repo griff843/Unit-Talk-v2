@@ -523,6 +523,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       events: {} as RepositoryBundle['events'],
       eventParticipants: {} as RepositoryBundle['eventParticipants'],
       gradeResults: {} as RepositoryBundle['gradeResults'],
+      memberTiers: {} as RepositoryBundle['memberTiers'],
       runs,
       audit,
       referenceData: {} as RepositoryBundle['referenceData'],

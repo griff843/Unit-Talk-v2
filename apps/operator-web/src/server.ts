@@ -18,7 +18,7 @@ import {
   type EffectiveSettlement,
   type SettlementSummary,
 } from '@unit-talk/domain';
-import { resolveTargetRegistry } from '@unit-talk/contracts';
+import { memberTiers, resolveTargetRegistry, type MemberTier } from '@unit-talk/contracts';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution';
@@ -113,6 +113,10 @@ export interface OperatorSnapshot {
     enabled: boolean;
     disabledReason?: string | undefined;
   }>;
+  memberTiers?: {
+    counts: Record<MemberTier, number>;
+    lastSyncedAt?: string | undefined;
+  } | undefined;
 }
 
 export interface OperatorQuotaProviderSummary {
@@ -604,6 +608,8 @@ export function createOperatorSnapshotProvider(
             ? await loadParticipantsForEvents(client, eventParticipants)
             : [];
 
+        const memberTierCounts = await queryMemberTierCounts(client);
+
         return createSnapshotFromRows({
           persistenceMode: 'database',
           recentOutbox,
@@ -641,6 +647,7 @@ export function createOperatorSnapshotProvider(
               (postedCountResult.count ?? 0) +
               (settledCountResult.count ?? 0),
           },
+          memberTierCounts: memberTierCounts ?? undefined,
         });
       },
       async getParticipants(filter?: OperatorParticipantsFilter) {
@@ -964,6 +971,7 @@ export function createSnapshotFromRows(input: {
   entityHealth?: OperatorEntityHealth;
   upcomingEvents?: OperatorUpcomingEventSummary[];
   picksPipelineCounts?: PicksPipelineSummary['counts'];
+  memberTierCounts?: Record<MemberTier, number> | undefined;
 }): OperatorSnapshot {
   const counts = {
     pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
@@ -1048,6 +1056,9 @@ export function createSnapshotFromRows(input: {
     ),
     recap: computeSettlementSummary(resolveAllEffectiveSettlements(input.recentSettlements ?? [])),
     targetRegistry: resolveTargetRegistry(),
+    memberTiers: input.memberTierCounts
+      ? { counts: input.memberTierCounts }
+      : undefined,
   };
 }
 
@@ -1312,6 +1323,27 @@ function mapSettlementRecordToInput(row: SettlementRecord): SettlementInput {
     corrects_id: row.corrects_id,
     settled_at: row.settled_at,
   };
+}
+
+async function queryMemberTierCounts(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+): Promise<Record<MemberTier, number> | null> {
+  try {
+    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
+    for (const tier of memberTiers) {
+      const { count, error } = await client
+        .from('member_tiers')
+        .select('id', { count: 'exact', head: true })
+        .eq('tier', tier)
+        .is('effective_until', null);
+      if (error) return null;
+      (counts[tier] as number) = count ?? 0;
+    }
+    return counts;
+  } catch {
+    return null;
+  }
 }
 
 function outboxRowsToChannelId(

@@ -4,9 +4,11 @@ import {
   type ProviderOfferInsert,
   type ReferenceDataCatalog,
 } from '@unit-talk/contracts';
-import type {
-  CanonicalPick,
-  LifecycleEvent,
+import {
+  memberTiers,
+  type CanonicalPick,
+  type LifecycleEvent,
+  type MemberTier,
 } from '@unit-talk/contracts';
 import type {
   AlertCooldownQuery,
@@ -30,6 +32,9 @@ import type {
   HedgeOpportunityCooldownQuery,
   HedgeOpportunityNotificationUpdateInput,
   HedgeOpportunityRepository,
+  MemberTierActivateInput,
+  MemberTierDeactivateInput,
+  MemberTierRepository,
   OutboxCreateInput,
   OutboxRepository,
   ParticipantRepository,
@@ -65,6 +70,7 @@ import type {
   EventParticipantRow,
   EventRow,
   GradeResultRecord,
+  MemberTierRecord,
   ParticipantRow,
   SystemRunRecord,
   OutboxRecord,
@@ -2807,6 +2813,191 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 }
 
+export class InMemoryMemberTierRepository implements MemberTierRepository {
+  private readonly rows: MemberTierRecord[] = [];
+
+  async activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord> {
+    const existing = this.rows.find(
+      (r) => r.discord_id === input.discordId && r.tier === input.tier && r.effective_until === null,
+    );
+    if (existing) {
+      return existing;
+    }
+    const now = new Date().toISOString();
+    const row: MemberTierRecord = {
+      id: crypto.randomUUID(),
+      discord_id: input.discordId,
+      discord_username: input.discordUsername ?? null,
+      tier: input.tier,
+      effective_from: now,
+      effective_until: null,
+      source: input.source,
+      changed_by: input.changedBy,
+      reason: input.reason ?? null,
+      metadata: input.metadata ?? {},
+      created_at: now,
+    };
+    this.rows.push(row);
+    return row;
+  }
+
+  async deactivateTier(input: MemberTierDeactivateInput): Promise<void> {
+    const row = this.rows.find(
+      (r) => r.discord_id === input.discordId && r.tier === input.tier && r.effective_until === null,
+    );
+    if (!row) return;
+    row.effective_until = new Date().toISOString();
+    row.changed_by = input.changedBy;
+    if (input.reason) row.reason = input.reason;
+  }
+
+  async getActiveTiers(discordId: string): Promise<MemberTierRecord[]> {
+    return this.rows.filter((r) => r.discord_id === discordId && r.effective_until === null);
+  }
+
+  async getTierHistory(discordId: string): Promise<MemberTierRecord[]> {
+    return this.rows
+      .filter((r) => r.discord_id === discordId)
+      .sort((a, b) => a.created_at.localeCompare(b.created_at));
+  }
+
+  async getActiveMembersForTier(tier: MemberTier): Promise<MemberTierRecord[]> {
+    return this.rows.filter((r) => r.tier === tier && r.effective_until === null);
+  }
+
+  async getTierCounts(): Promise<Record<MemberTier, number>> {
+    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
+    for (const row of this.rows) {
+      if (row.effective_until === null) {
+        const tier = row.tier as MemberTier;
+        if (tier in counts) {
+          (counts[tier] as number) += 1;
+        }
+      }
+    }
+    return counts;
+  }
+}
+
+export class DatabaseMemberTierRepository implements MemberTierRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private get db(): any {
+    return this.client;
+  }
+
+  async activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord> {
+    // Idempotent: check for existing active row first
+    const { data: existing } = await this.db
+      .from('member_tiers')
+      .select('*')
+      .eq('discord_id', input.discordId)
+      .eq('tier', input.tier)
+      .is('effective_until', null)
+      .maybeSingle();
+
+    if (existing) return existing as MemberTierRecord;
+
+    const { data, error } = await this.db
+      .from('member_tiers')
+      .insert({
+        discord_id: input.discordId,
+        discord_username: input.discordUsername ?? null,
+        tier: input.tier,
+        source: input.source,
+        changed_by: input.changedBy,
+        reason: input.reason ?? null,
+        metadata: input.metadata ?? {},
+      })
+      .select('*')
+      .single();
+
+    if (error) throw new Error(`Failed to activate tier: ${error.message}`);
+    return data as MemberTierRecord;
+  }
+
+  async deactivateTier(input: MemberTierDeactivateInput): Promise<void> {
+    const { data: existing } = await this.db
+      .from('member_tiers')
+      .select('id')
+      .eq('discord_id', input.discordId)
+      .eq('tier', input.tier)
+      .is('effective_until', null)
+      .maybeSingle();
+
+    if (!existing) return;
+
+    const { error } = await this.db
+      .from('member_tiers')
+      .update({
+        effective_until: new Date().toISOString(),
+        changed_by: input.changedBy,
+        reason: input.reason ?? null,
+      })
+      .eq('id', (existing as { id: string }).id);
+
+    if (error) throw new Error(`Failed to deactivate tier: ${error.message}`);
+  }
+
+  async getActiveTiers(discordId: string): Promise<MemberTierRecord[]> {
+    const { data, error } = await this.db
+      .from('member_tiers')
+      .select('*')
+      .eq('discord_id', discordId)
+      .is('effective_until', null)
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(`Failed to get active tiers: ${error.message}`);
+    return (data ?? []) as MemberTierRecord[];
+  }
+
+  async getTierHistory(discordId: string): Promise<MemberTierRecord[]> {
+    const { data, error } = await this.db
+      .from('member_tiers')
+      .select('*')
+      .eq('discord_id', discordId)
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(`Failed to get tier history: ${error.message}`);
+    return (data ?? []) as MemberTierRecord[];
+  }
+
+  async getActiveMembersForTier(tier: MemberTier): Promise<MemberTierRecord[]> {
+    const { data, error } = await this.db
+      .from('member_tiers')
+      .select('*')
+      .eq('tier', tier)
+      .is('effective_until', null)
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(`Failed to get active members for tier: ${error.message}`);
+    return (data ?? []) as MemberTierRecord[];
+  }
+
+  async getTierCounts(): Promise<Record<MemberTier, number>> {
+    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
+
+    for (const tier of memberTiers) {
+      const { count, error } = await this.db
+        .from('member_tiers')
+        .select('id', { count: 'exact', head: true })
+        .eq('tier', tier)
+        .is('effective_until', null);
+
+      if (!error) {
+        (counts[tier] as number) = count ?? 0;
+      }
+    }
+
+    return counts;
+  }
+}
+
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
   const providerOffers = new InMemoryProviderOfferRepository();
@@ -2826,6 +3017,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     events,
     eventParticipants,
     gradeResults: new InMemoryGradeResultRepository(),
+    memberTiers: new InMemoryMemberTierRepository(),
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
@@ -2848,6 +3040,7 @@ export function createDatabaseRepositoryBundle(
     events: new DatabaseEventRepository(connection),
     eventParticipants: new DatabaseEventParticipantRepository(connection),
     gradeResults: new DatabaseGradeResultRepository(connection),
+    memberTiers: new DatabaseMemberTierRepository(connection),
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
     referenceData: new DatabaseReferenceDataRepository(connection),

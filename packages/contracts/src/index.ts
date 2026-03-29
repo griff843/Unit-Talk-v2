@@ -11,6 +11,7 @@ export const writerRoles = [
 export type WriterRole = (typeof writerRoles)[number];
 
 export * from './distribution.js';
+export * from './members.js';
 export * from './submission.js';
 export * from './picks.js';
 export * from './promotion.js';
