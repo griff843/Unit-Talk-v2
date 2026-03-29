@@ -39,6 +39,15 @@ export const alertDetectionMarketTypes = [
   'player_prop',
 ] as const;
 
+export const hedgeOpportunityTypes = ['arbitrage', 'middle', 'hedge'] as const;
+
+export const hedgeOpportunityPriorities = [
+  'low',
+  'medium',
+  'high',
+  'critical',
+] as const;
+
 export const settlementResults = [
   'win',
   'loss',
@@ -169,6 +178,11 @@ export const canonicalSchema: TableDefinition[] = [
   {
     name: 'alert_detections',
     purpose: 'Stores classified AlertAgent line movement detections and notification state.',
+    owner: 'api',
+  },
+  {
+    name: 'hedge_opportunities',
+    purpose: 'Stores classified hedge, middle, and arbitrage opportunities.',
     owner: 'api',
   },
   {
