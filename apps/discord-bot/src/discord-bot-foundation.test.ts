@@ -506,13 +506,13 @@ test('resolveMemberTier returns trial when member holds the trial role', () => {
   assert.equal(context.isTrial, true);
 });
 
-test('resolveMemberTier returns vip_plus when member holds the highest active tier role', () => {
+test('resolveMemberTier returns vip-plus when member holds the highest active tier role', () => {
   const context = resolveMemberTier(
     makeMember(['role-vip', 'role-vip-plus']),
     parseBotConfig(makeMinimalEnv()),
   );
 
-  assert.equal(context.tier, 'vip_plus');
+  assert.equal(context.tier, 'vip-plus');
   assert.equal(context.isVip, true);
   assert.equal(context.isVipPlus, true);
 });
@@ -567,7 +567,7 @@ test('buildUpgradeEmbed shows the free-to-paid path', () => {
   assert.match(String(embed.description ?? ''), /\*\*VIP\+\*\*/);
 });
 
-test('/upgrade command short-circuits when the member is already vip_plus', async () => {
+test('/upgrade command short-circuits when the member is already vip-plus', async () => {
   const command = createUpgradeCommand(parseBotConfig(makeMinimalEnv()));
   const payloads: Array<{ content?: string; embeds?: unknown[] }> = [];
 
@@ -1086,11 +1086,11 @@ test('/pick command registers the required option contract and private visibilit
     } as T),
   };
 
-  const command = createPickCommand(apiClient);
+  const command = createPickCommand(apiClient, 'role-capper');
   const commandJson = command.data.toJSON();
 
   assert.equal(command.data.name, 'pick');
-  assert.equal(command.requiredRoles, undefined);
+  assert.deepEqual(command.requiredRoles, ['role-capper']);
   assert.equal(command.responseVisibility, 'private');
   assert.deepEqual(
     commandJson.options?.map((option) => ({
@@ -1187,7 +1187,7 @@ test('/pick command posts to /api/submissions and replies with a success embed',
       } as T;
     },
   };
-  const command = createPickCommand(apiClient);
+  const command = createPickCommand(apiClient, 'role-capper');
   const mock = makePickInteraction({
     market: 'NFL - Moneyline',
     event_name: 'Bills vs Chiefs',
@@ -1240,7 +1240,7 @@ test('/pick command surfaces API validation failures back to the user', async ()
       return {} as T;
     },
   };
-  const command = createPickCommand(apiClient);
+  const command = createPickCommand(apiClient, 'role-capper');
   const mock = makePickInteraction({
     market: 'NFL - Moneyline',
     selection: 'Bills',
@@ -1261,7 +1261,7 @@ test('/pick command returns service unavailable when the API cannot be reached',
       return {} as T;
     },
   };
-  const command = createPickCommand(apiClient);
+  const command = createPickCommand(apiClient, 'role-capper');
   const mock = makePickInteraction({
     market: 'NFL - Moneyline',
     selection: 'Bills',

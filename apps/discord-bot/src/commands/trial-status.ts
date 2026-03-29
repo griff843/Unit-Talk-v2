@@ -15,8 +15,8 @@ const TIER_COLORS = {
   free: 0x99aab5,
   trial: 0x57f287,
   vip: 0x5865f2,
-  vip_plus: 0xffd700,
-  black_label: 0x111111,
+  'vip-plus': 0xffd700,
+  'black-label': 0x111111,
 } as const;
 
 export function createTrialStatusCommand(
@@ -58,7 +58,7 @@ export function buildTrialStatusEmbed(context: MemberTierContext) {
 }
 
 function formatTierDisplay(tier: MemberTierContext['tier']) {
-  if (tier === 'vip_plus') {
+  if (tier === 'vip-plus') {
     return 'VIP+';
   }
   if (tier === 'vip') {
@@ -67,7 +67,7 @@ function formatTierDisplay(tier: MemberTierContext['tier']) {
   if (tier === 'trial') {
     return 'Trial';
   }
-  if (tier === 'black_label') {
+  if (tier === 'black-label') {
     return 'Black Label';
   }
   return 'Free';
@@ -79,9 +79,9 @@ function resolveTierDescription(tier: MemberTierContext['tier']) {
       return "You're on a trial. You have temporary VIP-level access. Upgrade before your trial ends to keep it.";
     case 'vip':
       return "You're a VIP member. You have access to Best Bets, recaps, and the full capper board.";
-    case 'vip_plus':
+    case 'vip-plus':
       return "You're VIP+. You have access to all VIP surfaces plus Trader Insights.";
-    case 'black_label':
+    case 'black-label':
       return "You're on a reserved tier.";
     case 'free':
     default:
