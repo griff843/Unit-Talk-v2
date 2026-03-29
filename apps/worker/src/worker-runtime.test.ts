@@ -525,6 +525,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       runs,
       audit,
       referenceData: {} as RepositoryBundle['referenceData'],
+      tiers: {} as RepositoryBundle['tiers'],
     },
     picks,
     receipts,

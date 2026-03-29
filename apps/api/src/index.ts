@@ -1,6 +1,7 @@
 import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { startAlertAgent } from './alert-agent.js';
 import { startRecapScheduler } from './recap-scheduler.js';
+import { startTrialExpiryScheduler } from './trial-expiry-service.js';
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -8,11 +9,16 @@ const runtime = createApiRuntimeDependencies();
 const server = createApiServer({ runtime });
 let stopRecapScheduler: (() => void) | null = null;
 let stopAlertAgent: (() => void) | null = null;
+let stopTrialExpiryScheduler: (() => void) | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
   stopRecapScheduler = startRecapScheduler(runtime.repositories);
   stopAlertAgent = startAlertAgent(runtime.repositories);
+  stopTrialExpiryScheduler = startTrialExpiryScheduler(
+    runtime.repositories.tiers,
+    runtime.repositories.audit,
+  );
 
   console.log(
     JSON.stringify(
@@ -69,6 +75,8 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   stopRecapScheduler = null;
   stopAlertAgent?.();
   stopAlertAgent = null;
+  stopTrialExpiryScheduler?.();
+  stopTrialExpiryScheduler = null;
 
   server.close(() => {
     process.exit(0);
