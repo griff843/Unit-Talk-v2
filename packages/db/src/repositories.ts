@@ -492,6 +492,7 @@ export interface RepositoryBundle {
   runs: SystemRunRepository;
   audit: AuditLogRepository;
   referenceData: ReferenceDataRepository;
+  tiers: MemberTierRepository;
 }
 
 export interface IngestorRepositoryBundle {
@@ -511,6 +512,8 @@ export interface MemberTierActivateInput {
   changedBy: string;
   reason?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
+  /** When set, persisted as effective_until on the tier row (e.g. trial expiry date). */
+  effectiveUntil?: Date | null | undefined;
 }
 
 export interface MemberTierDeactivateInput {
@@ -527,6 +530,8 @@ export interface MemberTierRepository {
   getTierHistory(discordId: string): Promise<MemberTierRecord[]>;
   getActiveMembersForTier(tier: MemberTier): Promise<MemberTierRecord[]>;
   getTierCounts(): Promise<Record<MemberTier, number>>;
+  /** Returns active trial rows whose effective_until is at or before the given timestamp. */
+  getExpiredTrials(now: string): Promise<MemberTierRecord[]>;
 }
 
 export function mapValidatedSubmissionToSubmissionCreateInput(

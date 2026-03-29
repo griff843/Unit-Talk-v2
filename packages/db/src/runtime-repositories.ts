@@ -2835,6 +2835,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     runs: new InMemorySystemRunRepository(),
     audit: new InMemoryAuditLogRepository(),
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
+    tiers: new InMemoryMemberTierRepository(),
   };
 }
 
@@ -2857,6 +2858,7 @@ export function createDatabaseRepositoryBundle(
     runs: new DatabaseSystemRunRepository(connection),
     audit: new DatabaseAuditLogRepository(connection),
     referenceData: new DatabaseReferenceDataRepository(connection),
+    tiers: new DatabaseMemberTierRepository(connection),
   };
 }
 
@@ -3025,22 +3027,26 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
   }
 
   async activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord> {
-    // Idempotent: if an active row already exists for (discordId, tier), return it
+    // Idempotent: if an active row already exists for (discordId, tier), return it.
+    // A row is considered active if effective_until is null or in the future.
+    const now = new Date().toISOString();
     const existing = this.rows.find(
-      (r) => r.discord_id === input.discordId && r.tier === input.tier && r.effective_until === null,
+      (r) =>
+        r.discord_id === input.discordId &&
+        r.tier === input.tier &&
+        (r.effective_until === null || r.effective_until > now),
     );
     if (existing) {
       return existing;
     }
 
-    const now = new Date().toISOString();
     const row: MemberTierRecord = {
       id: this.makeId(),
       discord_id: input.discordId,
       discord_username: input.discordUsername ?? null,
       tier: input.tier,
       effective_from: now,
-      effective_until: null,
+      effective_until: input.effectiveUntil ? input.effectiveUntil.toISOString() : null,
       source: input.source,
       changed_by: input.changedBy,
       reason: input.reason ?? null,
@@ -3053,13 +3059,17 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
   }
 
   async deactivateTier(input: MemberTierDeactivateInput): Promise<void> {
+    const now = new Date().toISOString();
     const row = this.rows.find(
-      (r) => r.discord_id === input.discordId && r.tier === input.tier && r.effective_until === null,
+      (r) =>
+        r.discord_id === input.discordId &&
+        r.tier === input.tier &&
+        (r.effective_until === null || r.effective_until > now),
     );
     if (!row) {
       return; // no-op
     }
-    row.effective_until = new Date().toISOString();
+    row.effective_until = now;
     row.changed_by = input.changedBy;
     if (input.reason) {
       row.reason = input.reason;
@@ -3067,8 +3077,11 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
   }
 
   async getActiveTiers(discordId: string): Promise<MemberTierRecord[]> {
+    const now = new Date().toISOString();
     return this.rows.filter(
-      (r) => r.discord_id === discordId && r.effective_until === null,
+      (r) =>
+        r.discord_id === discordId &&
+        (r.effective_until === null || r.effective_until > now),
     );
   }
 
@@ -3079,13 +3092,19 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
   }
 
   async getActiveMembersForTier(tier: MemberTier): Promise<MemberTierRecord[]> {
-    return this.rows.filter((r) => r.tier === tier && r.effective_until === null);
+    const now = new Date().toISOString();
+    return this.rows.filter(
+      (r) =>
+        r.tier === tier &&
+        (r.effective_until === null || r.effective_until > now),
+    );
   }
 
   async getTierCounts(): Promise<Record<MemberTier, number>> {
+    const now = new Date().toISOString();
     const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
     for (const row of this.rows) {
-      if (row.effective_until === null) {
+      if (row.effective_until === null || row.effective_until > now) {
         const t = row.tier as MemberTier;
         if (t in counts) {
           counts[t]++;
@@ -3093,6 +3112,15 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
       }
     }
     return counts;
+  }
+
+  async getExpiredTrials(now: string): Promise<MemberTierRecord[]> {
+    return this.rows.filter(
+      (r) =>
+        r.tier === 'trial' &&
+        r.effective_until !== null &&
+        r.effective_until <= now,
+    );
   }
 }
 
@@ -3127,6 +3155,9 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
         changed_by: input.changedBy,
         reason: input.reason ?? null,
         metadata: toJsonObject(input.metadata ?? {}),
+        ...(input.effectiveUntil != null
+          ? { effective_until: input.effectiveUntil.toISOString() }
+          : {}),
       })
       .select()
       .single();
@@ -3216,5 +3247,20 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
     }
 
     return counts;
+  }
+
+  async getExpiredTrials(now: string): Promise<MemberTierRecord[]> {
+    const { data, error } = await this.client
+      .from('member_tiers')
+      .select('*')
+      .eq('tier', 'trial')
+      .not('effective_until', 'is', null)
+      .lte('effective_until', now);
+
+    if (error) {
+      throw new Error(`Failed to get expired trials: ${error.message}`);
+    }
+
+    return (data ?? []) as MemberTierRecord[];
   }
 }
