@@ -1,20 +1,27 @@
-# System Snapshot
+# System Snapshot — Historical Evidence Record
 
-> **STALE as of 2026-03-21.** Current-state claims in this file are wrong. Snapshot date is Week 16 closeout.
-> **For current program state: `docs/06_status/PROGRAM_STATUS.md`**
-> **For current work queue: `docs/06_status/ISSUE_QUEUE.md`**
-> This file is an evidence record — specific IDs, receipts, and historical proof remain valid.
+> ## ⚠ NOT CURRENT STATE — DO NOT USE FOR ONBOARDING OR STATUS DECISIONS
+>
+> **Snapshot date:** 2026-03-21 (Week 16 closeout)
+> **Current program state:** [`docs/06_status/PROGRAM_STATUS.md`](./PROGRAM_STATUS.md)
+> **Current work queue:** [`docs/06_status/ISSUE_QUEUE.md`](./ISSUE_QUEUE.md)
+>
+> This file is a **historical evidence record**. The proof IDs, receipt IDs, Discord message IDs,
+> and DB row references below are permanent records from Weeks 6–7 (2026-03-20/21). They remain
+> valid as point-in-time proof artifacts.
+>
+> **Do not use this file for:**
+> - Current capability claims (use `PROGRAM_STATUS.md`)
+> - Current test counts or gate status (use `PROGRAM_STATUS.md`)
+> - Onboarding or agent context bootstrap (use `PROGRAM_STATUS.md` + `ISSUE_QUEUE.md`)
+> - Live routing policy (use `docs/05_operations/discord_routing.md`)
 
-This file is the current-state handoff for `unit-talk-v2`.
+## Historical Context
 
-Use it to bootstrap a new chat or agent without relying on prior thread memory.
+This snapshot was taken at Week 16 closeout (2026-03-21), capturing the first live `discord:best-bets`
+activation and the canary graduation proof. Platform has advanced significantly since this date.
 
-## Authority Note
-
-For current program state see:
-- `docs/06_status/PROGRAM_STATUS.md`
-
-This file is the evidence record: specific IDs, receipts, and historical proof.
+For authoritative current state, see `docs/06_status/PROGRAM_STATUS.md`.
 
 ## Snapshot Date
 
