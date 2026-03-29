@@ -1,12 +1,16 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { InMemoryAlertDetectionRepository } from '@unit-talk/db';
+import { InMemoryAlertDetectionRepository, InMemorySystemRunRepository } from '@unit-talk/db';
 import {
   buildAlertEmbed,
   resolveDiscordChannelId,
   runAlertNotificationPass,
 } from './alert-notification-service.js';
-import type { AlertDetectionRecord } from '@unit-talk/db';
+import type {
+  AlertDetectionRecord,
+  SystemRunStartInput,
+  SystemRunCompleteInput,
+} from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -500,4 +504,31 @@ test('runAlertNotificationPass — cooldown written after successful notify', as
       process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalMap;
     }
   }
+});
+
+// ---------------------------------------------------------------------------
+// system_runs instrumentation
+// ---------------------------------------------------------------------------
+
+test('runAlertNotificationPass calls startRun and completeRun with succeeded status', async () => {
+  const repo = new InMemoryAlertDetectionRepository();
+  const runsRepo = new InMemorySystemRunRepository();
+  const runCalls: Array<{ method: string; runType?: string; status?: string }> = [];
+
+  const spyRuns = {
+    async startRun(input: SystemRunStartInput) {
+      runCalls.push({ method: 'startRun', runType: input.runType });
+      return runsRepo.startRun(input);
+    },
+    async completeRun(input: SystemRunCompleteInput) {
+      runCalls.push({ method: 'completeRun', status: input.status });
+      return runsRepo.completeRun(input);
+    },
+  };
+
+  const detection = makeDetection({ tier: 'notable' });
+  await runAlertNotificationPass([detection], repo, { dryRun: true, runs: spyRuns });
+
+  assert.ok(runCalls.some((c) => c.method === 'startRun' && c.runType === 'alert.notification'));
+  assert.ok(runCalls.some((c) => c.method === 'completeRun' && c.status === 'succeeded'));
 });

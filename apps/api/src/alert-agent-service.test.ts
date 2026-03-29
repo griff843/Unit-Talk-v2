@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import type { ProviderOfferRecord } from '@unit-talk/db';
+import type { ProviderOfferRecord, SystemRunStartInput, SystemRunCompleteInput } from '@unit-talk/db';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
   classifyMovement,
@@ -8,6 +8,66 @@ import {
   runAlertDetectionPass,
   shouldNotify,
 } from './alert-agent-service.js';
+
+// ---------------------------------------------------------------------------
+// system_runs instrumentation
+// ---------------------------------------------------------------------------
+
+test('runAlertDetectionPass calls startRun and completeRun with succeeded status', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const runCalls: Array<{ method: string; runType?: string; status?: string }> = [];
+
+  const spyRuns = {
+    async startRun(input: SystemRunStartInput) {
+      runCalls.push({ method: 'startRun', runType: input.runType });
+      return repositories.runs.startRun(input);
+    },
+    async completeRun(input: SystemRunCompleteInput) {
+      runCalls.push({ method: 'completeRun', status: input.status });
+      return repositories.runs.completeRun(input);
+    },
+  };
+
+  await runAlertDetectionPass(
+    { ...repositories, runs: spyRuns },
+    { enabled: true, lookbackMinutes: 60, minTier: 'watch', now: '2026-03-29T10:45:00.000Z' },
+  );
+
+  assert.ok(runCalls.some((c) => c.method === 'startRun' && c.runType === 'alert.detection'));
+  assert.ok(runCalls.some((c) => c.method === 'completeRun' && c.status === 'succeeded'));
+});
+
+test('runAlertDetectionPass skips instrumentation on second call in same minute (idempotency)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const now = '2026-03-29T11:00:00.000Z';
+  let startCallCount = 0;
+
+  // The second startRun call with the same key is expected to throw (or be swallowed)
+  const spyRuns = {
+    async startRun(input: SystemRunStartInput) {
+      startCallCount += 1;
+      if (startCallCount > 1) {
+        throw new Error('idempotency_key already exists');
+      }
+      return repositories.runs.startRun(input);
+    },
+    async completeRun(input: SystemRunCompleteInput) {
+      return repositories.runs.completeRun(input);
+    },
+  };
+
+  await runAlertDetectionPass(
+    { ...repositories, runs: spyRuns },
+    { enabled: true, lookbackMinutes: 60, minTier: 'watch', now },
+  );
+  // Second call throws from startRun — should be swallowed, not propagate
+  await assert.doesNotReject(
+    runAlertDetectionPass(
+      { ...repositories, runs: spyRuns },
+      { enabled: true, lookbackMinutes: 60, minTier: 'watch', now },
+    ),
+  );
+});
 
 test('detectLineMovement computes change, velocity, direction, and market type for spreads', () => {
   const detection = detectLineMovement(

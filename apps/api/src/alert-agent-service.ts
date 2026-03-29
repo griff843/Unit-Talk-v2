@@ -8,6 +8,7 @@ import type {
   EventRepository,
   ProviderOfferRecord,
   ProviderOfferRepository,
+  SystemRunRepository,
 } from '@unit-talk/db';
 
 const DEFAULT_LOOKBACK_MINUTES = 60;
@@ -232,9 +233,10 @@ export async function runAlertDetectionPass(
       providerOffers: ProviderOfferRepository;
       alertDetections: AlertDetectionRepository;
       events: EventRepository;
+      runs?: SystemRunRepository;
     },
     'alertDetections' | 'events' | 'providerOffers'
-  >,
+  > & { runs?: SystemRunRepository },
   config: Partial<AlertAgentConfig> = {},
 ): Promise<RunAlertDetectionPassResult> {
   const resolved = {
@@ -242,7 +244,23 @@ export async function runAlertDetectionPass(
     ...config,
   };
 
+  const nowIsoForKey = resolved.now ?? new Date().toISOString();
+  const idempotencyKey = `alert.detection:${roundToMinute(nowIsoForKey)}`;
+
   if (!resolved.enabled) {
+    await repositories.runs?.startRun({
+      runType: 'alert.detection',
+      actor: 'alert-agent',
+      details: { skipped: true, reason: 'agent-disabled' },
+      idempotencyKey,
+    }).then((run) =>
+      repositories.runs?.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: { skipped: true, reason: 'agent-disabled' },
+      }),
+    ).catch(() => undefined);
+
     return {
       evaluatedGroups: 0,
       detections: 0,
@@ -253,6 +271,18 @@ export async function runAlertDetectionPass(
       shouldNotifyCount: 0,
       persistedSignals: [],
     };
+  }
+
+  let run: Awaited<ReturnType<SystemRunRepository['startRun']>> | undefined;
+  try {
+    run = await repositories.runs?.startRun({
+      runType: 'alert.detection',
+      actor: 'alert-agent',
+      details: {},
+      idempotencyKey,
+    });
+  } catch {
+    // Idempotency key collision (same minute) — continue without instrumentation
   }
 
   const nowIso = resolved.now ?? new Date().toISOString();
@@ -316,7 +346,7 @@ export async function runAlertDetectionPass(
     }
   }
 
-  return {
+  const result = {
     evaluatedGroups: offerGroups.size,
     detections,
     persisted,
@@ -326,6 +356,23 @@ export async function runAlertDetectionPass(
     shouldNotifyCount,
     persistedSignals,
   };
+
+  if (run) {
+    await repositories.runs?.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: {
+        evaluatedGroups: result.evaluatedGroups,
+        detections: result.detections,
+        signalsFound: result.persisted,
+        alertWorthy: result.shouldNotifyCount,
+        notable: result.persistedSignals.filter((s) => s.tier === 'notable').length,
+        watch: result.persistedSignals.filter((s) => s.tier === 'watch').length,
+      },
+    }).catch(() => undefined);
+  }
+
+  return result;
 }
 
 function buildAlertDetectionCreateInput(
@@ -507,4 +554,10 @@ function normalizeTier(rawValue: string | undefined): AlertDetectionTier {
 function roundTo(value: number, decimals: number) {
   const multiplier = 10 ** decimals;
   return Math.round(value * multiplier) / multiplier;
+}
+
+function roundToMinute(isoString: string): string {
+  const d = new Date(isoString);
+  d.setSeconds(0, 0);
+  return d.toISOString();
 }

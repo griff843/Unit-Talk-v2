@@ -3001,6 +3001,67 @@ test('createSnapshotFromRows hasMore true when any list hits limit', () => {
   assert.equal(snapshot.pagination?.hasMore, true);
 });
 
+// ---------------------------------------------------------------------------
+// alertAgent snapshot field
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows populates alertAgent from alert.detection and alert.notification runs', () => {
+  const detectionRun: SystemRunRecord = {
+    id: 'run-det-1',
+    run_type: 'alert.detection',
+    status: 'succeeded',
+    started_at: '2026-03-29T10:00:00.000Z',
+    finished_at: '2026-03-29T10:00:01.000Z',
+    actor: 'alert-agent',
+    details: {},
+    created_at: '2026-03-29T10:00:00.000Z',
+    idempotency_key: 'alert.detection:2026-03-29T10:00:00.000Z',
+  };
+  const notificationRun: SystemRunRecord = {
+    id: 'run-notif-1',
+    run_type: 'alert.notification',
+    status: 'succeeded',
+    started_at: '2026-03-29T10:01:00.000Z',
+    finished_at: '2026-03-29T10:01:01.000Z',
+    actor: 'alert-agent',
+    details: {},
+    created_at: '2026-03-29T10:01:00.000Z',
+    idempotency_key: 'alert.notification:2026-03-29T10:01:00.000Z',
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [notificationRun, detectionRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.alertAgent?.lastDetectionRunAt, '2026-03-29T10:00:00.000Z');
+  assert.equal(snapshot.alertAgent?.lastDetectionStatus, 'succeeded');
+  assert.equal(snapshot.alertAgent?.lastNotificationRunAt, '2026-03-29T10:01:00.000Z');
+  assert.equal(snapshot.alertAgent?.lastNotificationStatus, 'succeeded');
+});
+
+test('createSnapshotFromRows sets alertAgent fields to null when no relevant runs', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.alertAgent?.lastDetectionRunAt, null);
+  assert.equal(snapshot.alertAgent?.lastDetectionStatus, null);
+  assert.equal(snapshot.alertAgent?.lastNotificationRunAt, null);
+  assert.equal(snapshot.alertAgent?.lastNotificationStatus, null);
+});
+
 function makeRequest(port: number, path: string) {
   return new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
     const req = request(

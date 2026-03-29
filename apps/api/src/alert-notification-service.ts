@@ -2,6 +2,7 @@ import type {
   AlertDetectionRecord,
   AlertDetectionRepository,
   AlertDetectionTier,
+  SystemRunRepository,
 } from '@unit-talk/db';
 
 // Cooldown windows per tier (minutes) — per T1_ALERTAGENT_LINE_MOVEMENT_CONTRACT §6.2
@@ -31,6 +32,7 @@ export interface AlertNotificationPassOptions {
   dryRun?: boolean;
   now?: Date;
   fetchImpl?: typeof fetch;
+  runs?: SystemRunRepository;
 }
 
 /**
@@ -178,6 +180,19 @@ export async function runAlertNotificationPass(
   const fetchImpl = options.fetchImpl ?? fetch;
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
 
+  const idempotencyKey = `alert.notification:${roundToMinute(nowIso)}`;
+  let run: Awaited<ReturnType<SystemRunRepository['startRun']>> | undefined;
+  try {
+    run = await options.runs?.startRun({
+      runType: 'alert.notification',
+      actor: 'alert-agent',
+      details: {},
+      idempotencyKey,
+    });
+  } catch {
+    // Idempotency key collision — continue without instrumentation
+  }
+
   for (const detection of persistedSignals) {
     const tier = detection.tier as AlertDetectionTier;
 
@@ -251,6 +266,20 @@ export async function runAlertNotificationPass(
     result.notified++;
   }
 
+  if (run) {
+    await options.runs
+      ?.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: {
+          notified: result.notified,
+          suppressed: result.skippedWatch + result.failed,
+          cooldownBlocked: result.skippedCooldown,
+        },
+      })
+      .catch(() => undefined);
+  }
+
   return result;
 }
 
@@ -258,4 +287,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function roundToMinute(isoString: string): string {
+  const d = new Date(isoString);
+  d.setSeconds(0, 0);
+  return d.toISOString();
 }

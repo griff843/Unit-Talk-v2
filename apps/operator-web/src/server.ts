@@ -117,6 +117,7 @@ export interface OperatorSnapshot {
     counts: Record<MemberTier, number>;
     lastSyncedAt?: string | undefined;
   } | undefined;
+  alertAgent?: AlertAgentSummary | undefined;
   pagination?: SnapshotPagination | undefined;
 }
 
@@ -167,6 +168,13 @@ export interface ChannelHealthSummary {
   latestMessageId: string | null;
   activationHealthy: boolean;
   blockers: string[];
+}
+
+export interface AlertAgentSummary {
+  lastDetectionRunAt: string | null;
+  lastDetectionStatus: string | null;
+  lastNotificationRunAt: string | null;
+  lastNotificationStatus: string | null;
 }
 
 export interface WorkerRuntimeSummary {
@@ -1020,6 +1028,16 @@ export function createSnapshotFromRows(input: {
     lastRunAt: latestIngestorRun?.started_at ?? null,
     runCount: ingestorRuns.length,
   };
+  const alertDetectionRuns = input.recentRuns.filter((row) => row.run_type === 'alert.detection');
+  const alertNotificationRuns = input.recentRuns.filter(
+    (row) => row.run_type === 'alert.notification',
+  );
+  const alertAgent: AlertAgentSummary = {
+    lastDetectionRunAt: alertDetectionRuns[0]?.started_at ?? null,
+    lastDetectionStatus: alertDetectionRuns[0]?.status ?? null,
+    lastNotificationRunAt: alertNotificationRuns[0]?.started_at ?? null,
+    lastNotificationStatus: alertNotificationRuns[0]?.status ?? null,
+  };
   const quotaSummary = summarizeQuotaFromRuns(ingestorRuns);
   const distributionStatus =
     counts.failedOutbox > 0 || counts.deadLetterOutbox > 0
@@ -1084,6 +1102,7 @@ export function createSnapshotFromRows(input: {
     memberTiers: input.memberTierCounts
       ? { counts: input.memberTierCounts }
       : undefined,
+    alertAgent,
     pagination: input.pagination,
   };
 }
