@@ -12,18 +12,20 @@ import {
   getOrCreateCorrelationId,
   type Logger,
 } from '@unit-talk/observability';
+import { setCorsHeaders, writeJson, toApiFailure } from './http-utils.js';
+import { handleHealthRequest } from './routes/health.js';
 import {
-  handleGetCatalog,
-  handleListEvents,
-  handleSearchPlayers,
-  handleSearchTeams,
-  handleSettlePick,
-  handleSubmitPick,
-} from './handlers/index.js';
-import { getAlertStatus, getRecentAlerts } from './alert-query-service.js';
-import { requeuePickController } from './controllers/requeue-controller.js';
-import { runGradingPass } from './grading-service.js';
-import { postRecapSummary } from './recap-service.js';
+  handleReferenceDataCatalogRequest,
+  handleReferenceDataListEventsRequest,
+  handleReferenceDataSearchPlayersRequest,
+  handleReferenceDataSearchTeamsRequest,
+} from './routes/reference-data.js';
+import { handleAlertsRecentRequest, handleAlertsStatusRequest } from './routes/alerts.js';
+import { handleSubmissionsRequest } from './routes/submissions.js';
+import { handleSettlementsRequest } from './routes/settlements.js';
+import { handleRequeueRequest } from './routes/requeue.js';
+import { handleGradingRequest } from './routes/grading.js';
+import { handleRecapPostRequest } from './routes/recap.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -52,6 +54,10 @@ export interface ApiRuntimeDependencies {
   rateLimitStore: ApiRateLimitStore;
 }
 
+export interface ApiRouteDependencies extends ApiRuntimeDependencies {
+  requestLogger: Logger;
+}
+
 export interface ApiHealthResponse {
   ok: true;
   service: 'api';
@@ -77,7 +83,6 @@ export interface ApiRateLimitStore {
 const DEFAULT_BODY_LIMIT_BYTES = 64 * 1024;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 10;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
 
 export function createApiRuntimeDependencies(
   options: ApiServerOptions = {},
@@ -193,6 +198,7 @@ export async function routeRequest(
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const deps: ApiRouteDependencies = { ...runtime, requestLogger };
 
   if (method === 'OPTIONS') {
     setCorsHeaders(response);
@@ -203,84 +209,35 @@ export async function routeRequest(
   }
 
   if (method === 'GET' && url.pathname === '/health') {
-    return writeJson(response, 200, {
-      ok: true,
-      service: 'api',
-      persistenceMode: runtime.persistenceMode,
-      runtimeMode: runtime.runtimeMode,
-    } satisfies ApiHealthResponse);
+    return handleHealthRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/catalog') {
-    const apiResponse = await handleGetCatalog(runtime.repositories.referenceData);
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataCatalogRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/search/teams') {
-    const sport = url.searchParams.get('sport');
-    const q = url.searchParams.get('q');
-    const apiResponse = await handleSearchTeams(
-      { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
-      runtime.repositories.referenceData,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataSearchTeamsRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/search/players') {
-    const sport = url.searchParams.get('sport');
-    const q = url.searchParams.get('q');
-    const apiResponse = await handleSearchPlayers(
-      { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
-      runtime.repositories.referenceData,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataSearchPlayersRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/events') {
-    const sport = url.searchParams.get('sport');
-    const date = url.searchParams.get('date');
-    const apiResponse = await handleListEvents(
-      { ...(sport ? { sport } : {}), ...(date ? { date } : {}) },
-      runtime.repositories.referenceData,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataListEventsRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/alerts/recent') {
-    const limit = readOptionalInteger(url.searchParams.get('limit'));
-    const minTier = url.searchParams.get('minTier');
-    const body = await getRecentAlerts(runtime.repositories.alertDetections, {
-      limit,
-      minTier: minTier === 'alert-worthy' ? 'alert-worthy' : 'notable',
-    });
-    return writeJson(response, 200, body);
+    return handleAlertsRecentRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/alerts/status') {
-    const body = await getAlertStatus(runtime.repositories.alertDetections, process.env);
-    return writeJson(response, 200, body);
+    return handleAlertsStatusRequest(request, response, deps);
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {
-    const rateLimitResult = consumeSubmissionRateLimit(request, response, runtime);
-    if (rateLimitResult.exceeded) {
-      requestLogger.warn('submission rate limit exceeded', {
-        limit: rateLimitResult.limit,
-        remaining: rateLimitResult.remaining,
-        resetAt: new Date(rateLimitResult.resetAt).toISOString(),
-      });
-      return writeJson(response, 429, {
-        ok: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Submission rate limit exceeded. Try again shortly.',
-        },
-      });
-    }
-
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleSubmissionsRequest(request, response, deps);
   }
 
   const settleMatch =
@@ -289,17 +246,7 @@ export async function routeRequest(
       : null;
 
   if (settleMatch) {
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const apiResponse = await handleSettlePick(
-      {
-        params: {
-          pickId: settleMatch[1] ?? '',
-        },
-        body,
-      },
-      runtime.repositories,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleSettlementsRequest(request, response, deps, settleMatch[1] ?? '');
   }
 
   const requeueMatch =
@@ -308,48 +255,18 @@ export async function routeRequest(
       : null;
 
   if (requeueMatch) {
-    const apiResponse = await requeuePickController(
-      requeueMatch[1] ?? '',
-      runtime.repositories,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleRequeueRequest(request, response, deps, requeueMatch[1] ?? '');
   }
 
   if (method === 'POST' && url.pathname === '/api/grading/run') {
-    const result = await runGradingPass(runtime.repositories);
-    return writeJson(response, 200, { ok: true, result });
+    return handleGradingRequest(request, response, deps);
   }
 
   if (method === 'POST' && url.pathname === '/api/recap/post') {
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const period = body.period;
-    const channel = typeof body.channel === 'string' ? body.channel : undefined;
-
-    if (period !== 'daily' && period !== 'weekly' && period !== 'monthly') {
-      return writeJson(response, 400, {
-        ok: false,
-        error: {
-          code: 'INVALID_RECAP_PERIOD',
-          message: 'period must be one of daily, weekly, or monthly',
-        },
-      });
-    }
-
-    const result = await postRecapSummary(period, runtime.repositories, {
-      ...(channel ? { channel } : {}),
-    });
-    if (!result.ok) {
-      return writeJson(response, 200, result);
-    }
-
-    return writeJson(response, 200, {
-      ok: true,
-      postsCount: result.postsCount,
-      channel: result.channel,
-    });
+    return handleRecapPostRequest(request, response, deps);
   }
 
-  return writeJson(response, 404, {
+  writeJson(response, 404, {
     ok: false,
     error: {
       code: 'NOT_FOUND',
@@ -358,84 +275,8 @@ export async function routeRequest(
   });
 }
 
-export async function readJsonBody(
-  request: IncomingMessage,
-  bodyLimitBytes = DEFAULT_BODY_LIMIT_BYTES,
-) {
-  const declaredContentLength = Number.parseInt(request.headers['content-length'] ?? '', 10);
-  if (Number.isFinite(declaredContentLength) && declaredContentLength > bodyLimitBytes) {
-    throw new ApiRequestError(
-      413,
-      'REQUEST_BODY_TOO_LARGE',
-      `Request body exceeds ${bodyLimitBytes} bytes.`,
-    );
-  }
-
-  const chunks: Buffer[] = [];
-  let size = 0;
-
-  for await (const chunk of request) {
-    const buffer = typeof chunk === 'string' ? Buffer.from(chunk) : chunk;
-    size += buffer.byteLength;
-
-    if (size > bodyLimitBytes) {
-      throw new ApiRequestError(
-        413,
-        'REQUEST_BODY_TOO_LARGE',
-        `Request body exceeds ${bodyLimitBytes} bytes.`,
-      );
-    }
-
-    chunks.push(buffer);
-  }
-
-  if (chunks.length === 0) {
-    return {};
-  }
-
-  const rawBody = Buffer.concat(chunks).toString('utf8');
-  try {
-    return JSON.parse(rawBody) as Record<string, unknown>;
-  } catch {
-    throw new ApiRequestError(400, 'INVALID_JSON_BODY', 'Request body must be valid JSON.');
-  }
-}
-
-function consumeSubmissionRateLimit(
-  request: IncomingMessage,
-  response: ServerResponse,
-  runtime: ApiRuntimeDependencies,
-) {
-  const key = buildSubmissionRateLimitKey(request);
-  const result = runtime.rateLimitStore.consume(
-    key,
-    runtime.submissionRateLimit,
-    runtime.now(),
-  );
-
-  response.setHeader('X-RateLimit-Limit', String(result.limit));
-  response.setHeader('X-RateLimit-Remaining', String(result.remaining));
-  response.setHeader('X-RateLimit-Reset', new Date(result.resetAt).toISOString());
-
-  if (result.exceeded) {
-    response.setHeader(
-      'Retry-After',
-      String(Math.max(Math.ceil((result.resetAt - runtime.now()) / 1000), 0)),
-    );
-  }
-
-  return result;
-}
-
-function buildSubmissionRateLimitKey(request: IncomingMessage) {
-  const forwardedFor = request.headers['x-forwarded-for'];
-  const clientId =
-    typeof forwardedFor === 'string'
-      ? forwardedFor.split(',')[0]?.trim()
-      : request.socket.remoteAddress ?? 'unknown';
-
-  return `submission:${clientId ?? 'unknown'}`;
-}
+// Keep readJsonBody exported from server.ts for backward compatibility (tests use it)
+export { readJsonBody } from './http-utils.js';
 
 function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
   const configured = environment.UNIT_TALK_API_RUNTIME_MODE?.trim().toLowerCase();
@@ -476,65 +317,6 @@ function readSubmissionRateLimit(environment: AppEnv): ApiSubmissionRateLimit {
         ? windowMs
         : DEFAULT_RATE_LIMIT_WINDOW_MS,
   };
-}
-
-function setCorsHeaders(response: ServerResponse) {
-  response.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Correlation-Id, X-Request-Id');
-}
-
-function writeJson(response: ServerResponse, status: number, body: unknown) {
-  response.statusCode = status;
-  response.setHeader('content-type', 'application/json; charset=utf-8');
-  setCorsHeaders(response);
-  response.end(JSON.stringify(body));
-}
-
-function readOptionalInteger(rawValue: string | null) {
-  if (!rawValue) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(rawValue, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
-
-function toApiFailure(error: unknown) {
-  if (error instanceof ApiRequestError) {
-    return {
-      status: error.status,
-      body: {
-        ok: false,
-        error: {
-          code: error.code,
-          message: error.message,
-        },
-      },
-    };
-  }
-
-  return {
-    status: 500,
-    body: {
-      ok: false,
-      error: {
-        code: 'INTERNAL_SERVER_ERROR',
-        message: 'An unexpected error occurred.',
-      },
-    },
-  };
-}
-
-class ApiRequestError extends Error {
-  constructor(
-    readonly status: number,
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ApiRequestError';
-  }
 }
 
 class InMemoryApiRateLimitStore implements ApiRateLimitStore {
