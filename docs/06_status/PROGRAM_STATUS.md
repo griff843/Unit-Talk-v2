@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-29 — Wave 1+2 Claude queues complete. Wave 1 Codex queue (10 tasks, UTV2-115–121/123/128/140) at Urgent/Ready. Wave 2 contracts ratified: DELIVERY_ADAPTER_HARDENING, DISCORD_CIRCUIT_BREAKER, MODEL_REGISTRY (fixes score weights bug), REPLAYABLE_SCORING, MEMBER_TIER_MODEL, PROMOTION_TARGET_REGISTRY. 14 stale docs deleted (UTV2-132). Proof bundle schema ratified (UTV2-157). Supabase hardening audit committed (UTV2-139). Score weights bug found: `calculateScore()` hardcoded `bestBetsScoreWeights` for all targets — UTV2-136 fixes this. 14 Wave 2 Codex items at Ready. 45 issues fully triaged.
+2026-03-29 — Wave 1 Codex queue DONE (PRs #64–#67 merged). 773/773 tests. Wave 1+2 Claude queues complete. Wave 2 Codex queue fully unblocked (14 items at Ready). Drift audit complete (PR #68 merged): orphan docs classified, 14 stale files deleted, authority map updated.
 
 ---
 
@@ -16,10 +16,10 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | ≥722 pass. Verify with `pnpm test` — PRs #58–62 added tests since last count. |
-| Gates | `pnpm verify` exits 0. Last confirmed 2026-03-28 at `6231672`. Re-verify after UTV2-56 merges. |
+| Tests | **773/773 pass** — confirmed 2026-03-29 at main `ab37a8d` (Wave 1 PRs #64–#67 + PR #68 merged). |
+| Gates | `pnpm verify` exits 0. Confirmed 2026-03-29 at `ab37a8d`. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 ACTIVE** — Wave 1 T1/T2 hardening in progress (UTV2-115–140). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
+| Milestone | **M13 ACTIVE** — Wave 1 DONE. Wave 2 Codex queue unblocked (14 items Ready). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
 
 ## Gate Notes (last verified 2026-03-28)
 
@@ -29,8 +29,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | 722/722 — confirmed 2026-03-28 at main `6231672` (PR #55). |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-28 at `6231672` (UTV2-114 notification layer). |
+| `pnpm test` | PASS | **773/773** — confirmed 2026-03-29 at main `ab37a8d` (Wave 1 PRs #64–#67 + PR #68). |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-29 at `ab37a8d`. |
 
 ### Runner Architecture
 
@@ -112,22 +112,22 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ## Wave 1+2 Hardening (2026-03-29)
 
-45 issues created (UTV2-115–158). All triaged. Claude queues complete. Codex Wave 1 in progress.
+45 issues created (UTV2-115–158). All triaged. Claude queues complete. **Wave 1 Codex DONE** (PRs #64–#67 merged 2026-03-29). Wave 2 Codex queue fully unblocked.
 
-### Wave 1 Codex Queue (at Urgent/Ready — in progress)
+### Wave 1 Codex Queue — ALL DONE (PRs #64–#67, merged 2026-03-29)
 
-| Issue | Task | Status |
-|---|---|---|
-| UTV2-115 | Fail-closed API runtime mode | TODO |
-| UTV2-116 | Fail-closed operator-web runtime mode | TODO |
-| UTV2-117 | API request body size cap | TODO |
-| UTV2-118 | API submission rate limiting | TODO |
-| UTV2-119 | Worker stale-claim reaper | TODO |
-| UTV2-120 | Worker heartbeat / watchdog | TODO |
-| UTV2-121 | Smart-form into root pnpm verify | TODO |
-| UTV2-123 | Structured logging + correlation IDs | TODO |
-| UTV2-128 | HTTP-level integration test suite | TODO |
-| UTV2-140 | CI command manifest for Discord bot | TODO |
+| Issue | Task | PR | Status |
+|---|---|---|---|
+| UTV2-115 | Fail-closed API runtime mode | #65 | **DONE** |
+| UTV2-116 | Fail-closed operator-web runtime mode | #67 | **DONE** |
+| UTV2-117 | API request body size cap | #65 | **DONE** |
+| UTV2-118 | API submission rate limiting | #65 | **DONE** |
+| UTV2-119 | Worker stale-claim reaper | #66 | **DONE** |
+| UTV2-120 | Worker heartbeat / watchdog | #66 | **DONE** |
+| UTV2-121 | Smart-form into root pnpm verify | #67 | **DONE** |
+| UTV2-123 | Structured logging + correlation IDs | #64 | **DONE** |
+| UTV2-128 | HTTP-level integration test suite | #65 | **DONE** |
+| UTV2-140 | CI command manifest for Discord bot | #67 | **DONE** |
 
 ### Wave 1 Claude Queue — ALL DONE
 
