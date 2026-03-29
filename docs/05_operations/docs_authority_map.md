@@ -48,26 +48,41 @@ When documents conflict:
 
 | File | Purpose | Owner |
 |---|---|---|
-| `docs/04_roadmap/active_roadmap.md` | Current sequencing and weekly exit criteria | Program Owner |
-| `docs/04_roadmap/bootstrap_plan.md` | Initial bootstrap reference | Program Owner |
-| `docs/05_operations/week_6_execution_contract.md` | Week 6 required deliverables and blockers | Program Owner |
-| `docs/05_operations/week_7_best_bets_activation.md` | Week 7 controlled activation procedure and rollback rules | Program Owner |
+| `docs/04_roadmap/active_roadmap.md` | **SUPERSEDED 2026-03-21** — replaced by PROGRAM_STATUS.md | historical |
+| `docs/04_roadmap/bootstrap_plan.md` | Initial bootstrap reference (archive) | historical |
 | `docs/05_operations/AGENT_OPERATING_MODEL.md` | **Active** agent operating model — Linear-first, role boundaries, reporting rules | Program Owner |
-| `docs/05_operations/codex_wave_execution_playbook.md` | Default Codex wave execution model - issue triage, lane ownership, stacked PR discipline, and Linear update rules | Program Owner |
+| `docs/05_operations/codex_wave_execution_playbook.md` | Default Codex wave execution model — issue triage, lane ownership, stacked PR discipline, Linear update rules | Program Owner |
 | `docs/05_operations/delivery_operating_model.md` | Cross-tool sync rules and lane ownership | Program Owner |
 | `docs/05_operations/discord_routing.md` | Canonical Discord target taxonomy and routing rules | Platform |
 | `docs/05_operations/canary_graduation_criteria.md` | Criteria for Best Bets activation | Platform |
-| `docs/05_operations/settlement_planning.md` | Settlement target week, slices, and first proof definition | Architecture |
-| `docs/05_operations/week_8_settlement_readiness_review.md` | Week 8 entry-readiness review only | Architecture |
+| `docs/05_operations/trader_insights_graduation_criteria.md` | Criteria for Trader Insights activation | Platform |
 | `docs/05_operations/legacy_repo_reference_boundary.md` | Legacy repo usage boundary and non-authority rule | Program Owner |
 | `docs/05_operations/migration_ledger.md` | Repo-native ledger of deliberate legacy salvage into V2 | Program Owner |
 | `docs/05_operations/risk_register.md` | Open risks and mitigation state | Program Owner |
 | `docs/05_operations/migration_cutover_plan.md` | V1 to V2 cutover plan | Platform |
-| `docs/05_operations/docs_authority_map.md` | This file | Program Owner |
-| `docs/05_operations/week_14_verification_control_plane_salvage_contract.md` | Week 14 selective salvage scope and close criteria | Architecture |
-| `docs/05_operations/week_15_probability_devig_salvage_contract.md` | Week 15 probability/devig math salvage scope and close criteria | Architecture |
-| `docs/05_operations/week_16_settlement_downstream_loss_attribution_contract.md` | Week 16 runtime integration and accepted foundation scope | Architecture |
-| `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md` | Worker runtime ownership, healthy execution definition, operator proof expectations | Architecture |
+| `docs/05_operations/runtime_restart_and_deploy_sop.md` | Deploy and restart SOP | Platform |
+| `docs/05_operations/docs_authority_map.md` | This file — updated 2026-03-29 | Program Owner |
+| `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md` | Worker runtime ownership and operator proof expectations | Architecture |
+| `docs/05_operations/SPRINT_MODEL_v2.md` | Risk-tiered sprint model (T1/T2/T3) | Program Owner |
+
+### Wave 1 Hardening Contracts (ratified 2026-03-29)
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/PICK_METADATA_CONTRACT.md` | Typed `PickMetadata` interface replacing untyped blob | UTV2-122 |
+| `docs/05_operations/ALERT_AGENT_EXTRACTION_CONTRACT.md` | Extract alert agent from API process | UTV2-125 |
+| `docs/05_operations/RUNTIME_MODE_CONTRACT.md` | Fail-closed startup mode + `getRuntimeMode()` | UTV2-147 |
+
+### Wave 2 Hardening Contracts (ratified 2026-03-29)
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/DELIVERY_ADAPTER_HARDENING_CONTRACT.md` | Typed `DeliveryResult`, retry classification | UTV2-148 |
+| `docs/05_operations/DISCORD_CIRCUIT_BREAKER_CONTRACT.md` | Per-target circuit breaker for worker | UTV2-124 |
+| `docs/05_operations/MODEL_REGISTRY_CONTRACT.md` | Named scoring profiles + score weights bug fix | UTV2-136 |
+| `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md` | Deterministic promotion replay from stored snapshot | UTV2-145 |
+| `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` | `member_tiers` table + Discord role sync | UTV2-149 |
+| `docs/05_operations/PROMOTION_TARGET_REGISTRY_CONTRACT.md` | Runtime target enable/disable registry | UTV2-129 |
 
 ## Tier 5 - Current Status
 
