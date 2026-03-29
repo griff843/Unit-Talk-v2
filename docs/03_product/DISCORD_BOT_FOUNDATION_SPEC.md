@@ -382,8 +382,7 @@ Reviewed 2026-03-26. Gate state at lane open:
 
 | Document | Role |
 |---|---|
-| `docs/ai_context/v2_truth_pack/DISCORD_STATE_TRUTH.md` | Live routing state, channel IDs, architectural gaps |
-| `docs/05_operations/discord_routing.md` | Approved V2 target taxonomy and routing rules |
+| `docs/05_operations/discord_routing.md` | Live routing state, channel IDs, approved targets, architectural gaps |
 | `docs/03_product/ROLE_ACCESS_MATRIX.md` | Role model and access design principles |
 | `docs/02_architecture/contracts/writer_authority_contract.md` | Single-writer discipline — bot is a consumer, not a writer |
 | `docs/02_architecture/contracts/submission_contract.md` | Submission intake authority — bot submits through `apps/api` |
