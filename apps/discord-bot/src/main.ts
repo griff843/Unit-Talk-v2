@@ -2,6 +2,7 @@ import { createDiscordClient } from './client.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
 import { loadBotConfig } from './config.js';
+import { createCapperOnboardingHandler } from './handlers/capper-onboarding-handler.js';
 
 async function main() {
   let config;
@@ -20,6 +21,7 @@ async function main() {
   });
 
   client.on('interactionCreate', createInteractionHandler(registry));
+  client.on('guildMemberUpdate', createCapperOnboardingHandler(config, client));
 
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {

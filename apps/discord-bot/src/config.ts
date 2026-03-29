@@ -1,4 +1,4 @@
-﻿import { loadEnvironment } from '@unit-talk/config';
+import { loadEnvironment } from '@unit-talk/config';
 import type { AppEnv } from '@unit-talk/config';
 
 export interface BotConfig {
