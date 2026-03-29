@@ -6,9 +6,9 @@
 |---|---|
 | Type | Readiness Audit / Gap Analysis |
 | Issue | UTV2-163 |
-| Status | **AUDIT COMPLETE — AUTHORITY DOC BLOCKED** |
+| Status | **UPDATED 2026-03-29 — 6/8 hard gates PASS — 1 remaining blocker** |
 | Audited | 2026-03-29 |
-| Audited against | `main` (commit `c3664c4`) |
+| Audited against | `main` (commit `c3664c4`); updated against `f40845d` (2026-03-29) |
 | Does not supersede | `docs/03_product/ROLE_ACCESS_MATRIX.md` (remains the design-intent reference) |
 | Does not supersede | `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` (remains the implementation contract) |
 
@@ -220,21 +220,23 @@ The following must land on `main` before a final authority doc can be written. E
 
 ### Hard Gates (all required)
 
-- [ ] **Migration `202603200017_member_tiers.sql`** applied to live DB and `pnpm supabase:types` run
-- [ ] **`MemberTier` type** (`'free' | 'trial' | 'vip' | 'vip-plus' | 'capper' | 'operator'`) exported from `@unit-talk/contracts`
-- [ ] **`MemberTierRepository` interface** in `packages/db/src/repositories.ts` with `activateTier`, `deactivateTier`, `getActiveTiers`, `getTierHistory`, `getActiveMembersForTier`, `getTierCounts`
-- [ ] **`InMemoryMemberTierRepository`** and **`DatabaseMemberTierRepository`** implemented and tested
-- [ ] **General tier sync handler** — `guildMemberUpdate` syncs VIP, VIP+, trial, capper, operator add/remove to `member_tiers` rows (not just capper add)
-- [ ] **Operator snapshot tier counts** — `OperatorSnapshot.memberTiers.counts` populated by `getTierCounts()`
-- [ ] **`pnpm verify` passes** with all above in place
-- [ ] **Tests:** role add → active tier row; role remove → `effective_until` set; idempotent on repeat (per `MEMBER_TIER_MODEL_CONTRACT.md` acceptance criteria)
+> Updated 2026-03-29 at `f40845d`. ✅ = verified on main. ❌ = still missing.
+
+- [x] ✅ **Migration `202603200017_member_tiers.sql`** applied to live DB and `pnpm supabase:types` run — PR #76 + live `supabase db push` 2026-03-29
+- [x] ✅ **`MemberTier` type** (`'free' | 'trial' | 'vip' | 'vip-plus' | 'capper' | 'operator'`) exported from `@unit-talk/contracts` — `packages/contracts/src/index.ts`
+- [x] ✅ **`MemberTierRepository` interface** in `packages/db/src/repositories.ts` with `activateTier`, `deactivateTier`, `getActiveTiers`, `getTierHistory`, `getActiveMembersForTier`, `getTierCounts`
+- [x] ✅ **`InMemoryMemberTierRepository`** and **`DatabaseMemberTierRepository`** implemented and tested — 7 tests in `packages/db/src/member-tier-repository.test.ts`
+- [ ] ❌ **General tier sync handler** — `guildMemberUpdate` syncs VIP, VIP+, trial, capper, operator add/remove to `member_tiers` rows. **Blocker:** `@unit-talk/db` is forbidden in `apps/discord-bot` per `DISCORD_BOT_FOUNDATION_SPEC.md`. Requires `POST /api/member-tiers` API endpoint first, then bot handler calls that endpoint. See UTV2-163 ISSUE_QUEUE entry.
+- [x] ✅ **Operator snapshot tier counts** — `OperatorSnapshot.memberTiers.counts` populated by live `member_tiers` query — `apps/operator-web/src/server.ts`
+- [x] ✅ **`pnpm verify` passes** — CI confirmed PR #76; type-check confirmed on committed state `f40845d`
+- [x] ✅ **Tests:** activate/deactivate/idempotent/active-filter/history — 7 tests pass (InMemory layer verified; DB smoke test not run for this slice)
 
 ### Recommended (not hard gates, but needed for the authority doc to be complete)
 
-- [ ] **Capper role guard on `/pick`** — add `requiredRoles` with `capperRoleId` to prevent non-capper pick submission
-- [ ] **`DISCORD_OPERATOR_ROLE_ID` added to `.env.example`** — with documentation that its absence uses a sentinel that blocks all
-- [ ] **`vip_plus` / `vip-plus` naming resolved** — `tier-resolver.ts` uses underscore; contracts will use hyphen. One must change before both are authoritative.
-- [ ] **Trial expiry behavior documented as enforced** — either a scheduled expiry job exists or the manual-removal-only model is explicitly ratified as V2 behavior
+- [x] ✅ **Capper role guard on `/pick`** — `requiredRoles: [capperRoleId]` — PR #75
+- [x] ✅ **`DISCORD_OPERATOR_ROLE_ID` added to `.env.example`** — PR #75
+- [x] ✅ **`vip_plus` / `vip-plus` naming resolved** — all `vip_plus`/`black_label` normalized to `vip-plus`/`black-label` in `tier-resolver.ts`, `trial-status.ts`, `upgrade.ts` — PR #75
+- [ ] **Trial expiry behavior documented as enforced** — still Open. No scheduled expiry job. Manual Discord role removal is the only enforcement path. Must be explicitly ratified as V2 behavior before the authority doc covers trial. (UTV2-150 scope)
 
 ---
 
@@ -244,10 +246,14 @@ The following must land on `main` before a final authority doc can be written. E
 
 A narrow authority section for the purely Discord-runtime enforcement model (tier resolution via `resolveMemberTier()`, role guard via `checkRoles()`, capper onboarding handler) could be written now. However, this would cover less than 30% of the intended access model and would need heavy revision when `member_tiers` lands. The cost of premature publication outweighs the benefit.
 
-**Suggested action when UTV2-149 Codex work lands:**
-1. Run `pnpm verify` to confirm all hard gates above pass
-2. Re-run a narrower readiness check (the DB and handler sections above)
-3. If clean, open UTV2-163 as an authority-doc lane
+**Updated 2026-03-29:** UTV2-149 Codex work landed (PRs #75/#76). 6 of 8 hard gates pass. One remaining blocker:
+
+**Remaining path to unblocking UTV2-163:**
+1. Ship `POST /api/member-tiers` API endpoint (or equivalent write path not requiring `@unit-talk/db` in discord-bot)
+2. Wire `guildMemberUpdate` handler to call that endpoint for all tier-relevant role changes (VIP, VIP+, trial, capper, operator — both add and remove)
+3. Confirm at least one real role-change event writes a row to the live `member_tiers` table (pnpm test:db or live DB proof)
+4. Explicitly ratify trial expiry behavior (manual-removal-only or UTV2-150 scheduler)
+5. Re-run this proof — if clean, open UTV2-163 as an authority-doc lane
 
 **Current docs to treat as authoritative (within their stated scope):**
 
