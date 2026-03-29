@@ -11,6 +11,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
+    "test": "tsx --test src/index.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   }
 }
