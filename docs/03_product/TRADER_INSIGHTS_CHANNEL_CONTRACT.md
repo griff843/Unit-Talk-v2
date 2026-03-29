@@ -15,22 +15,24 @@
 
 ## Purpose
 
-`Trader Insights` is Unit Talk's sharp-money and edge-intelligence channel.
+`Trader Insights` is Unit Talk's sharp-money and edge-intelligence delivery surface.
 
-It serves members who want to understand market structure and directional conviction — not just the top plays, but the reasoning, edge quality, and market context behind them.
+It serves members who want to act on strong-edge, high-trust plays — signals with more market alignment and conviction than the baseline Best Bets board.
 
 Where Best Bets is an execution board (take it or leave it), Trader Insights is an intelligence board (understand why the signal is strong).
 
+> **Channel optionality note:** The long-term channel architecture has not been finalized. Unit Talk is a platform first. Discord channel structure follows product decisions, not the other way around. This contract governs what Trader Insights *is* and *requires* if it exists — not a commitment that it will exist permanently in its current form.
+
 ---
 
-## Trader Room Relationship
+## Current Positioning
 
-Within the Trader Room concept:
+Within the current Trader Room arrangement:
 
 - **Best Bets** = execution board — highest-conviction plays, minimal explanation needed
 - **Trader Insights** = edge and market-context board — strong-edge plays with implicit market intelligence
-- **Strategy Lab** = deeper research and pattern board (future)
-- **Cappers Space** = broader capper ecosystem
+
+Additional tiers (Exclusive Insights, Strategy Lab, Cappers Space) are defined separately in their own contracts or are future work.
 
 Trader Insights sits above Best Bets in selectivity. Not every Best Bets-eligible play belongs in Trader Insights. The bar is sharper: stronger edge, higher trust, tighter alignment with market direction.
 
@@ -38,9 +40,9 @@ Trader Insights sits above Best Bets in selectivity. Not every Best Bets-eligibl
 
 ## Access
 
-Trader Insights is a **VIP+ surface**.
+Trader Insights currently operates as a **higher-access surface**, positioned above standard VIP.
 
-It is not included in the standard VIP tier. The additional tier requirement is intentional: this channel carries more intelligence density and is designed for members who will act on edge signals, not just pick outcomes.
+The exact role gate is an operational decision that may evolve as the product tier model matures. This contract governs content and promotion rules — the access tier assignment is owned by the member tier and Discord role policies.
 
 ---
 

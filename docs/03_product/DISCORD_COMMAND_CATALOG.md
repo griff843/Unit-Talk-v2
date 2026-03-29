@@ -10,7 +10,7 @@
 | Bot | `Unit Talk#9476` |
 | Guild | `1284478946171293736` |
 | Deployment | Guild-scoped (not global) |
-| Commands registered | 5 (confirmed 2026-03-27) |
+| Commands registered | 9 (confirmed 2026-03-29) |
 
 This document is the authoritative registry of deployed Discord slash commands for Unit Talk V2. It defines the purpose, access, visibility, and behavioral rules for each command.
 
@@ -116,14 +116,52 @@ Fields displayed per pick: sport, market, result, stake units, CLV% (if availabl
 
 ---
 
-## Commands Not Yet Live
+### `/alerts-setup` — Alert Agent Status (Operator)
 
-| Command | Contract | Status |
-|---------|----------|--------|
-| `/alerts` | `docs/05_operations/T1_ALERT_COMMANDS_CONTRACT.md` | Ratified — not yet implemented |
-| `/trial` (management) | `docs/05_operations/T2_TRIAL_MANAGEMENT_COMMANDS_CONTRACT.md` | Ratified — not yet implemented |
+| Field | Value |
+|-------|-------|
+| Status | LIVE |
+| Access | Operator role required |
+| Visibility | Private (ephemeral) |
+| Contract | `docs/05_operations/T1_ALERT_COMMANDS_CONTRACT.md` |
 
-These commands have ratified contracts but are not yet deployed. Do not reference them as live.
+Displays current alert agent status: enabled/disabled, dry-run mode, minimum tier threshold, lookback window, and recent detection counts (notable, alert-worthy, notified). Operator-only surface — not visible to general members.
+
+---
+
+### `/heat-signal` — Recent Line Movement Signals
+
+| Field | Value |
+|-------|-------|
+| Status | LIVE |
+| Access | Tier-gated (per role guard configuration) |
+| Visibility | Private (ephemeral) |
+
+Shows recent notable line movement detections. Default: 5 most recent. Accepts `count` option (1–10). Each result shows detection classification and context.
+
+---
+
+### `/trial-status` — Current Access Tier View
+
+| Field | Value |
+|-------|-------|
+| Status | LIVE |
+| Access | Any member |
+| Visibility | Private (ephemeral) |
+
+Shows the invoking member's current access tier and what that tier includes. Designed for members to understand their current access level and what surfaces they can reach.
+
+---
+
+### `/upgrade` — Upgrade Path View
+
+| Field | Value |
+|-------|-------|
+| Status | LIVE |
+| Access | Any member |
+| Visibility | Private (ephemeral) |
+
+Shows the member's current tier and what higher tiers unlock. Conversion-oriented — surfaces the upgrade path without requiring a support interaction. Supports both access clarity and upgrade consideration.
 
 ---
 

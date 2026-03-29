@@ -36,9 +36,11 @@ There are two recap-related delivery flows in the system. They are different:
 
 ## Access
 
-`discord:recaps` is a **VIP+ or broader** surface.
+`discord:recaps` is an **all-tier surface** — visible to every member tier.
 
-Recap content is non-sensitive — it is settlement history, not forward-looking intelligence. Broad access is appropriate. The exact role gate is governed by the Discord role access policy, not this contract. This contract governs content and delivery rules only.
+Recap content is settlement history, not forward-looking intelligence. It is inherently transparent and community-facing. Every member, regardless of tier, should be able to see yesterday's results and the platform's track record.
+
+Restricting recaps to premium tiers would undermine the product's credibility and limit the surface that most naturally demonstrates platform value to prospective upgrades.
 
 ---
 
@@ -59,21 +61,33 @@ Recap content is non-sensitive — it is settlement history, not forward-looking
 
 ---
 
-## Content Rules
+## Content Standards
+
+Recap posts must feel elite. This channel is the platform's public track record. Every post should look like something you would be proud to show a prospect.
+
+### Required fields in a daily recap embed
+
+- **Record** — formatted as `W-L` or `W-L-P` (e.g., `3-1`, `5-2-1`)
+- **Capper attribution** — exact match to the capper who made the pick
+- **Units won/lost** — net units for the session (e.g., `+4.5u`, `-1.0u`)
+- **Pick-level breakdown** — each pick listed with result and stake units
+- **Date window** — clearly labeled (e.g., "Yesterday · March 29")
 
 ### Allowed
 
-- Daily recap embeds: slate results, win/loss/push, flat-bet ROI, CLV% summary
-- Weekly recap embeds: extended window, rolled stats
+- Daily recap embeds: previous day's results, exact picks by capper, record, units won/lost
+- Weekly recap embeds: extended window, rolled stats across the week
 - System-generated recap posts from `RecapAgent`
 
 ### Prohibited
 
 - Per-pick delivery embeds (those go to best-bets / trader-insights / etc.)
 - Ungraded picks or open positions
+- Partial-day recaps (must cover a complete settlement window)
 - Internal operator data not intended for member visibility
 - Debug output or system log excerpts
 - Manual capper commentary or human-authored posts (this is an automated channel)
+- Low-effort formatting — raw JSON, plain text dumps, or embeds that look unfinished
 
 ---
 

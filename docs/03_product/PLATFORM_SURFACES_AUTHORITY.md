@@ -10,7 +10,9 @@
 | Supersedes | `docs/03_product/program_surfaces.md` |
 | Last updated | 2026-03-29 |
 
-This document is the authoritative registry of Unit Talk V2 platform surfaces. It describes every surface, its role, its current live state, and its access model.
+Unit Talk is a full platform for pick submission, evaluation, distribution, and settlement. Discord is the primary delivery surface — not the product definition. The platform drives what Discord carries, not the other way around.
+
+This document is the authoritative registry of V2 platform surfaces. It describes every surface, its role, its current live state, and its access model.
 
 **Rule:** A surface is not a surface until it appears here and in `docs/05_operations/docs_authority_map.md`. Surfaces not listed here are not recognized for routing, promotion, or governance purposes.
 
@@ -85,7 +87,7 @@ Key endpoints:
 
 Browser intake form. Posts to `apps/api` via fetch. Source is hardcoded to `'smart-form'` regardless of form input. Body size capped at 64 KB. Includes participant autocomplete (debounced) and conviction field 1–10.
 
-Cappers who have direct form access use this as their primary submission path. It is the human-operated counterpart to the API's programmatic intake.
+Cappers are both internal operators of the platform machine and customer-facing talent and brands within the product. The Smart Form is their primary submission surface — the human-operated counterpart to the API's programmatic intake.
 
 ---
 
@@ -121,10 +123,13 @@ Ingests provider data from the SGO feed. Performs entity resolution for events, 
 
 | Field | Value |
 |-------|-------|
-| App | `apps/alert-agent` |
+| Process entry | `apps/alert-agent` |
+| Core logic | `apps/api/src/alert-agent.ts`, `alert-agent-service.ts`, `alert-notification-service.ts`, `alert-query-service.ts` |
 | State | **LIVE** |
 | Role | Line movement detection and tier-based notification routing |
 | Access | Internal (scheduler-driven) |
+
+The alert agent runs as a standalone process (`apps/alert-agent`). Its process entry point imports repository dependencies and the scheduler from `apps/api/src/` — the detection and notification logic lives there, not in the `apps/alert-agent` package itself.
 
 Runs two passes on a scheduler tick:
 1. **Detection pass** (`runAlertDetectionPass()`) — scans `provider_offers` snapshots, classifies `watch` / `notable` / `alert-worthy` by velocity and magnitude
