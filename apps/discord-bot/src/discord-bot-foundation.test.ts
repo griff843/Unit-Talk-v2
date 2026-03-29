@@ -48,6 +48,10 @@ import {
 } from './commands/heat-signal.js';
 import { buildRecapEmbedData } from './embeds/recap-embed.js';
 import { resolveMemberTier } from './tier-resolver.js';
+import {
+  buildCapperWelcomeEmbed,
+  createCapperOnboardingHandler,
+} from './handlers/capper-onboarding-handler.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1566,4 +1570,106 @@ test('loadCommandRegistry also loads the help command from the commands director
       assert.notEqual(command?.responseVisibility, 'public');
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// capper-onboarding-handler tests
+// ---------------------------------------------------------------------------
+
+test('buildCapperWelcomeEmbed renders correct title, color, and all four fields', () => {
+  const embed = buildCapperWelcomeEmbed('Griff').toJSON() as {
+    title?: string;
+    color?: number;
+    description?: string;
+    fields?: Array<{ name: string; value: string }>;
+    footer?: { text: string };
+  };
+
+  assert.equal(embed.title, '👋 Welcome to Unit Talk Cappers — Griff');
+  assert.equal(embed.color, 0x5865f2);
+  assert.ok(embed.description?.includes("You've been added as a Unit Talk Capper"));
+  assert.equal(embed.fields?.length, 4);
+  assert.equal(embed.fields?.[0]?.name, 'Submit a pick');
+  assert.equal(embed.fields?.[1]?.name, 'Your stats');
+  assert.equal(embed.fields?.[2]?.name, 'Your recap');
+  assert.equal(embed.fields?.[3]?.name, 'Questions');
+  assert.ok(embed.footer?.text.startsWith('Unit Talk · Capper Onboarding'));
+});
+
+test('createCapperOnboardingHandler: capper role added → posts welcome embed to channel', async () => {
+  const sent: Array<{ embeds: unknown[] }> = [];
+  const mockChannel = {
+    isTextBased: () => true,
+    send: async (payload: { embeds: unknown[] }) => { sent.push(payload); },
+  };
+  const mockClient = {
+    channels: {
+      cache: { get: () => mockChannel },
+      fetch: async () => mockChannel,
+    },
+  };
+
+  const config = { capperRoleId: 'role-capper', capperChannelId: 'channel-capper' };
+  const handler = createCapperOnboardingHandler(
+    config,
+    mockClient as never,
+  );
+
+  const oldMember = { roles: { cache: { keys: () => [].values() } }, displayName: 'Griff' };
+  const newMember = {
+    roles: { cache: { keys: () => ['role-capper'].values() } },
+    displayName: 'Griff',
+    user: { username: 'griff843' },
+  };
+
+  await handler(oldMember as never, newMember as never);
+
+  assert.equal(sent.length, 1);
+  assert.equal((sent[0]?.embeds ?? []).length, 1);
+});
+
+test('createCapperOnboardingHandler: non-capper role change → no-op, no channel fetch', async () => {
+  let channelFetched = false;
+  const mockClient = {
+    channels: {
+      cache: { get: () => { channelFetched = true; return undefined; } },
+      fetch: async () => { channelFetched = true; return null; },
+    },
+  };
+
+  const config = { capperRoleId: 'role-capper', capperChannelId: 'channel-capper' };
+  const handler = createCapperOnboardingHandler(config, mockClient as never);
+
+  const oldMember = { roles: { cache: { keys: () => [].values() } } };
+  const newMember = {
+    roles: { cache: { keys: () => ['role-other'].values() } },
+    displayName: 'Griff',
+    user: { username: 'griff843' },
+  };
+
+  await handler(oldMember as never, newMember as never);
+
+  assert.equal(channelFetched, false, 'channel should not be fetched for non-capper role change');
+});
+
+test('createCapperOnboardingHandler: channel fetch throws → swallowed, does not propagate', async () => {
+  const mockClient = {
+    channels: {
+      cache: { get: () => undefined },
+      fetch: async () => { throw new Error('channel not found'); },
+    },
+  };
+
+  const config = { capperRoleId: 'role-capper', capperChannelId: 'channel-capper' };
+  const handler = createCapperOnboardingHandler(config, mockClient as never);
+
+  const oldMember = { roles: { cache: { keys: () => [].values() } } };
+  const newMember = {
+    roles: { cache: { keys: () => ['role-capper'].values() } },
+    displayName: 'Griff',
+    user: { username: 'griff843' },
+  };
+
+  // Must not throw — handler swallows all errors
+  await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
 });
