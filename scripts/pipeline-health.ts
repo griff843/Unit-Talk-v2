@@ -1,5 +1,4 @@
 // Pipeline health check — run with: tsx scripts/pipeline-health.ts
-// @ts-nocheck
 import { createClient } from '@supabase/supabase-js'
 
 const url = process.env.SUPABASE_URL ?? ''
