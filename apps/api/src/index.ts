@@ -30,6 +30,7 @@ server.listen(port, () => {
           'POST /api/recap/post',
         ],
         persistenceMode: runtime.persistenceMode,
+        runtimeMode: runtime.runtimeMode,
       },
       null,
       2,
