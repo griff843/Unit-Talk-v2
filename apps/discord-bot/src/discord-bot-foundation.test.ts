@@ -20,7 +20,7 @@ import { checkRoles } from './role-guard.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
 import { ApiClientError, createApiClient, type ApiClient } from './api-client.js';
-import type { ChatInputCommandInteraction, Interaction } from 'discord.js';
+import type { ChatInputCommandInteraction, GuildMember, Interaction } from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
 import { buildCapperRecapEmbed, createRecapCommand } from './commands/recap.js';
@@ -36,9 +36,18 @@ import {
 } from './commands/alerts-setup.js';
 import { createHelpCommand } from './commands/help.js';
 import {
+  buildTrialStatusEmbed,
+  createTrialStatusCommand,
+} from './commands/trial-status.js';
+import {
+  buildUpgradeEmbed,
+  createUpgradeCommand,
+} from './commands/upgrade.js';
+import {
   createHeatSignalCommand,
 } from './commands/heat-signal.js';
 import { buildRecapEmbedData } from './embeds/recap-embed.js';
+import { resolveMemberTier } from './tier-resolver.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -58,10 +67,38 @@ function makeMinimalEnv(overrides?: Partial<AppEnv>): AppEnv {
     DISCORD_CLIENT_ID: 'test-client-id',
     DISCORD_GUILD_ID: '1284478946171293736',
     DISCORD_CAPPER_ROLE_ID: 'role-capper',
+    DISCORD_VIP_ROLE_ID: 'role-vip',
+    DISCORD_VIP_PLUS_ROLE_ID: 'role-vip-plus',
+    DISCORD_TRIAL_ROLE_ID: 'role-trial',
+    DISCORD_CAPPER_CHANNEL_ID: 'channel-capper',
     DISCORD_OPERATOR_ROLE_ID: 'role-operator',
     UNIT_TALK_API_URL: 'http://localhost:4000',
     ...overrides,
   } as AppEnv;
+}
+
+function makeRegistryEnv(overrides: Record<string, string> = {}): Record<string, string> {
+  return {
+    NODE_ENV: 'test',
+    UNIT_TALK_APP_ENV: 'local',
+    UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+    UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+    LINEAR_TEAM_KEY: 'UTV2',
+    LINEAR_TEAM_NAME: 'unit-talk-v2',
+    NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+    SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+    DISCORD_BOT_TOKEN: 'test-token',
+    DISCORD_CLIENT_ID: 'test-client-id',
+    DISCORD_GUILD_ID: '1284478946171293736',
+    DISCORD_CAPPER_ROLE_ID: 'role-capper',
+    DISCORD_VIP_ROLE_ID: 'role-vip',
+    DISCORD_VIP_PLUS_ROLE_ID: 'role-vip-plus',
+    DISCORD_TRIAL_ROLE_ID: 'role-trial',
+    DISCORD_CAPPER_CHANNEL_ID: 'channel-capper',
+    DISCORD_OPERATOR_ROLE_ID: 'role-operator',
+    UNIT_TALK_API_URL: 'http://localhost:4000',
+    ...overrides,
+  };
 }
 
 function withEnvVars<T>(values: Record<string, string>, callback: () => Promise<T>): Promise<T> {
@@ -221,6 +258,17 @@ function makeRegistry(commands: CommandHandler[]): CommandRegistry {
   return registry;
 }
 
+function makeMember(heldRoles: string[] = [], id = 'user-123'): Pick<GuildMember, 'id' | 'roles'> {
+  return {
+    id,
+    roles: {
+      cache: {
+        has: (roleId: string) => heldRoles.includes(roleId),
+      },
+    },
+  } as unknown as Pick<GuildMember, 'id' | 'roles'>;
+}
+
 function makeStatsResponse(): CapperStatsResponse {
   return {
     scope: 'capper',
@@ -313,6 +361,10 @@ test('parseBotConfig returns BotConfig when all required vars are present', () =
   assert.equal(config.clientId, 'test-client-id');
   assert.equal(config.guildId, '1284478946171293736');
   assert.equal(config.capperRoleId, 'role-capper');
+  assert.equal(config.vipRoleId, 'role-vip');
+  assert.equal(config.vipPlusRoleId, 'role-vip-plus');
+  assert.equal(config.trialRoleId, 'role-trial');
+  assert.equal(config.capperChannelId, 'channel-capper');
   assert.equal(config.operatorRoleId, 'role-operator');
   assert.equal(config.apiUrl, 'http://localhost:4000');
   assert.equal(config.appEnv, 'local');
@@ -366,10 +418,54 @@ test('parseBotConfig throws when DISCORD_CAPPER_ROLE_ID is missing', () => {
   );
 });
 
+test('parseBotConfig throws when DISCORD_VIP_ROLE_ID is missing', () => {
+  const env = makeMinimalEnv({ DISCORD_VIP_ROLE_ID: undefined });
+  assert.throws(
+    () => parseBotConfig(env),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('DISCORD_VIP_ROLE_ID'), err.message);
+      return true;
+    },
+  );
+});
+
+test('parseBotConfig throws when DISCORD_VIP_PLUS_ROLE_ID is missing', () => {
+  const env = makeMinimalEnv({ DISCORD_VIP_PLUS_ROLE_ID: undefined });
+  assert.throws(
+    () => parseBotConfig(env),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('DISCORD_VIP_PLUS_ROLE_ID'), err.message);
+      return true;
+    },
+  );
+});
+
+test('parseBotConfig throws when DISCORD_CAPPER_CHANNEL_ID is missing', () => {
+  const env = makeMinimalEnv({ DISCORD_CAPPER_CHANNEL_ID: undefined });
+  assert.throws(
+    () => parseBotConfig(env),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('DISCORD_CAPPER_CHANNEL_ID'), err.message);
+      return true;
+    },
+  );
+});
+
+test('parseBotConfig treats DISCORD_TRIAL_ROLE_ID as optional', () => {
+  const env = makeMinimalEnv({ DISCORD_TRIAL_ROLE_ID: undefined });
+  const config = parseBotConfig(env);
+
+  assert.equal(config.trialRoleId, null);
+});
+
 test('parseBotConfig error message lists all missing vars at once', () => {
   const env = makeMinimalEnv({
     DISCORD_BOT_TOKEN: undefined,
     DISCORD_CLIENT_ID: undefined,
+    DISCORD_VIP_ROLE_ID: undefined,
     UNIT_TALK_API_URL: undefined,
   });
   assert.throws(
@@ -378,10 +474,110 @@ test('parseBotConfig error message lists all missing vars at once', () => {
       assert.ok(err instanceof Error);
       assert.ok(err.message.includes('DISCORD_BOT_TOKEN'), err.message);
       assert.ok(err.message.includes('DISCORD_CLIENT_ID'), err.message);
+      assert.ok(err.message.includes('DISCORD_VIP_ROLE_ID'), err.message);
       assert.ok(err.message.includes('UNIT_TALK_API_URL'), err.message);
       return true;
     },
   );
+});
+
+// ---------------------------------------------------------------------------
+// tier resolver and trial management command tests
+// ---------------------------------------------------------------------------
+
+test('resolveMemberTier returns free when member has no paid roles', () => {
+  const context = resolveMemberTier(makeMember(), parseBotConfig(makeMinimalEnv()));
+
+  assert.equal(context.tier, 'free');
+  assert.equal(context.isTrial, false);
+  assert.equal(context.isVip, false);
+  assert.equal(context.isVipPlus, false);
+  assert.equal(context.isCapper, false);
+});
+
+test('resolveMemberTier returns trial when member holds the trial role', () => {
+  const context = resolveMemberTier(makeMember(['role-trial']), parseBotConfig(makeMinimalEnv()));
+
+  assert.equal(context.tier, 'trial');
+  assert.equal(context.isTrial, true);
+});
+
+test('resolveMemberTier returns vip_plus when member holds the highest active tier role', () => {
+  const context = resolveMemberTier(
+    makeMember(['role-vip', 'role-vip-plus']),
+    parseBotConfig(makeMinimalEnv()),
+  );
+
+  assert.equal(context.tier, 'vip_plus');
+  assert.equal(context.isVip, true);
+  assert.equal(context.isVipPlus, true);
+});
+
+test('buildTrialStatusEmbed includes capper guidance when the member is also a contributor', () => {
+  const embed = buildTrialStatusEmbed({
+    discordUserId: 'user-123',
+    tier: 'vip',
+    isCapper: true,
+    isVip: true,
+    isVipPlus: false,
+    isTrial: false,
+    resolvedAt: '2026-03-28T12:00:00.000Z',
+  }).toJSON();
+
+  assert.equal(embed.title, 'Your Unit Talk Access - VIP');
+  assert.equal(embed.color, 0x5865f2);
+  assert.equal(embed.fields?.[0]?.name, 'Capper Role');
+});
+
+test('/trial-status command replies privately with the resolved tier embed', async () => {
+  const command = createTrialStatusCommand(parseBotConfig(makeMinimalEnv()));
+  const payloads: Array<{ content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> }> = [];
+
+  await command.execute({
+    member: makeMember(['role-trial']) as unknown as GuildMember,
+    editReply: async (payload: { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> }) => {
+      payloads.push(payload);
+    },
+  } as never);
+
+  assert.equal(command.responseVisibility, 'private');
+  assert.equal(payloads.length, 1);
+  const embed = payloads[0]?.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  assert.equal(embed.title, 'Your Unit Talk Access - Trial');
+  assert.match(embed.description ?? '', /trial/i);
+});
+
+test('buildUpgradeEmbed shows the free-to-paid path', () => {
+  const embed = buildUpgradeEmbed({
+    discordUserId: 'user-123',
+    tier: 'free',
+    isCapper: false,
+    isVip: false,
+    isVipPlus: false,
+    isTrial: false,
+    resolvedAt: '2026-03-28T12:00:00.000Z',
+  }).toJSON();
+
+  assert.equal(embed.title, 'Upgrade Your Access');
+  assert.match(String(embed.description ?? ''), /\*\*VIP\*\*/);
+  assert.match(String(embed.description ?? ''), /\*\*VIP\+\*\*/);
+});
+
+test('/upgrade command short-circuits when the member is already vip_plus', async () => {
+  const command = createUpgradeCommand(parseBotConfig(makeMinimalEnv()));
+  const payloads: Array<{ content?: string; embeds?: unknown[] }> = [];
+
+  await command.execute({
+    member: makeMember(['role-vip-plus']) as unknown as GuildMember,
+    editReply: async (payload: { content?: string; embeds?: unknown[] }) => {
+      payloads.push(payload);
+    },
+  } as never);
+
+  assert.equal(command.responseVisibility, 'private');
+  assert.equal(payloads.length, 1);
+  assert.equal(payloads[0]?.content, "You're already on our highest active tier.");
+  assert.deepEqual(payloads[0]?.embeds, []);
 });
 
 // ---------------------------------------------------------------------------
@@ -435,21 +631,7 @@ test('checkRoles returns false when member lacks roles.cache', () => {
 
 test('loadCommandRegistry loads the pick command from the commands directory', async () => {
   await withEnvVars(
-    {
-      NODE_ENV: 'test',
-      UNIT_TALK_APP_ENV: 'local',
-      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
-      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-      LINEAR_TEAM_KEY: 'UTV2',
-      LINEAR_TEAM_NAME: 'unit-talk-v2',
-      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
-      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
-      DISCORD_BOT_TOKEN: 'test-token',
-      DISCORD_CLIENT_ID: 'test-client-id',
-      DISCORD_GUILD_ID: '1284478946171293736',
-      DISCORD_CAPPER_ROLE_ID: 'role-capper',
-      UNIT_TALK_API_URL: 'http://localhost:4000',
-    },
+    makeRegistryEnv(),
     async () => {
       const registry = await loadCommandRegistry();
       assert.equal(registry.has('pick'), true);
@@ -460,21 +642,7 @@ test('loadCommandRegistry loads the pick command from the commands directory', a
 
 test('loadCommandRegistry also loads the stats command from the commands directory', async () => {
   await withEnvVars(
-    {
-      NODE_ENV: 'test',
-      UNIT_TALK_APP_ENV: 'local',
-      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
-      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-      LINEAR_TEAM_KEY: 'UTV2',
-      LINEAR_TEAM_NAME: 'unit-talk-v2',
-      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
-      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
-      DISCORD_BOT_TOKEN: 'test-token',
-      DISCORD_CLIENT_ID: 'test-client-id',
-      DISCORD_GUILD_ID: '1284478946171293736',
-      DISCORD_CAPPER_ROLE_ID: 'role-capper',
-      UNIT_TALK_API_URL: 'http://localhost:4000',
-    },
+    makeRegistryEnv(),
     async () => {
       const registry = await loadCommandRegistry();
       const command = registry.get('stats');
@@ -487,21 +655,7 @@ test('loadCommandRegistry also loads the stats command from the commands directo
 
 test('loadCommandRegistry also loads the leaderboard command from the commands directory', async () => {
   await withEnvVars(
-    {
-      NODE_ENV: 'test',
-      UNIT_TALK_APP_ENV: 'local',
-      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
-      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-      LINEAR_TEAM_KEY: 'UTV2',
-      LINEAR_TEAM_NAME: 'unit-talk-v2',
-      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
-      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
-      DISCORD_BOT_TOKEN: 'test-token',
-      DISCORD_CLIENT_ID: 'test-client-id',
-      DISCORD_GUILD_ID: '1284478946171293736',
-      DISCORD_CAPPER_ROLE_ID: 'role-capper',
-      UNIT_TALK_API_URL: 'http://localhost:4000',
-    },
+    makeRegistryEnv(),
     async () => {
       const registry = await loadCommandRegistry();
       const command = registry.get('leaderboard');
@@ -516,21 +670,7 @@ test('loadCommandRegistry also loads the leaderboard command from the commands d
 
 test('loadCommandRegistry also loads the recap command from the commands directory', async () => {
   await withEnvVars(
-    {
-      NODE_ENV: 'test',
-      UNIT_TALK_APP_ENV: 'local',
-      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
-      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
-      LINEAR_TEAM_KEY: 'UTV2',
-      LINEAR_TEAM_NAME: 'unit-talk-v2',
-      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
-      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
-      DISCORD_BOT_TOKEN: 'test-token',
-      DISCORD_CLIENT_ID: 'test-client-id',
-      DISCORD_GUILD_ID: '1284478946171293736',
-      DISCORD_CAPPER_ROLE_ID: 'role-capper',
-      UNIT_TALK_API_URL: 'http://localhost:4000',
-    },
+    makeRegistryEnv(),
     async () => {
       const registry = await loadCommandRegistry();
       const command = registry.get('recap');
@@ -1253,7 +1393,7 @@ test('/help command execute calls editReply with a single embed containing all c
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
   const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of ['alerts-setup', 'heat-signal', 'pick', 'stats', 'leaderboard', 'help', 'recap']) {
+  for (const name of ['alerts-setup', 'heat-signal', 'pick', 'stats', 'leaderboard', 'trial-status', 'upgrade', 'help', 'recap']) {
     assert.ok(description.includes(`/${name}`), `embed description missing /${name}`);
   }
 });
@@ -1413,15 +1553,11 @@ test('buildAlertsSetupEmbed renders current status fields', () => {
 
 test('loadCommandRegistry also loads the help command from the commands directory', async () => {
   await withEnvVars(
-    {
-      NODE_ENV: 'test',
-      UNIT_TALK_APP_ENV: 'local',
-      DISCORD_BOT_TOKEN: 'test-token',
+    makeRegistryEnv({
       DISCORD_CLIENT_ID: '123',
       DISCORD_GUILD_ID: 'g123',
       DISCORD_CAPPER_ROLE_ID: 'r123',
-      UNIT_TALK_API_URL: 'http://localhost:4000',
-    },
+    }),
     async () => {
       const registry = await loadCommandRegistry();
       const command = registry.get('help');

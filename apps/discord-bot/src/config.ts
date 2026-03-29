@@ -6,6 +6,10 @@ export interface BotConfig {
   clientId: string;
   guildId: string;
   capperRoleId: string;
+  vipRoleId: string;
+  vipPlusRoleId: string;
+  trialRoleId: string | null;
+  capperChannelId: string;
   operatorRoleId?: string | undefined;
   apiUrl: string;
   appEnv: AppEnv['UNIT_TALK_APP_ENV'];
@@ -21,6 +25,10 @@ export function parseBotConfig(env: AppEnv): BotConfig {
   const clientId = env.DISCORD_CLIENT_ID;
   const guildId = env.DISCORD_GUILD_ID;
   const capperRoleId = env.DISCORD_CAPPER_ROLE_ID;
+  const vipRoleId = env.DISCORD_VIP_ROLE_ID;
+  const vipPlusRoleId = env.DISCORD_VIP_PLUS_ROLE_ID;
+  const trialRoleId = env.DISCORD_TRIAL_ROLE_ID ?? null;
+  const capperChannelId = env.DISCORD_CAPPER_CHANNEL_ID;
   const operatorRoleId = env.DISCORD_OPERATOR_ROLE_ID;
   const apiUrl = env.UNIT_TALK_API_URL;
 
@@ -29,6 +37,9 @@ export function parseBotConfig(env: AppEnv): BotConfig {
   if (!clientId) missing.push('DISCORD_CLIENT_ID');
   if (!guildId) missing.push('DISCORD_GUILD_ID');
   if (!capperRoleId) missing.push('DISCORD_CAPPER_ROLE_ID');
+  if (!vipRoleId) missing.push('DISCORD_VIP_ROLE_ID');
+  if (!vipPlusRoleId) missing.push('DISCORD_VIP_PLUS_ROLE_ID');
+  if (!capperChannelId) missing.push('DISCORD_CAPPER_CHANNEL_ID');
   if (!apiUrl) missing.push('UNIT_TALK_API_URL');
 
   if (missing.length > 0) {
@@ -42,6 +53,10 @@ export function parseBotConfig(env: AppEnv): BotConfig {
     clientId: clientId!,
     guildId: guildId!,
     capperRoleId: capperRoleId!,
+    vipRoleId: vipRoleId!,
+    vipPlusRoleId: vipPlusRoleId!,
+    trialRoleId,
+    capperChannelId: capperChannelId!,
     operatorRoleId,
     apiUrl: apiUrl!,
     appEnv: env.UNIT_TALK_APP_ENV,
