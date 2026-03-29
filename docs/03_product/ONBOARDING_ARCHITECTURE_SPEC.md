@@ -1,4 +1,7 @@
 # Unit Talk Onboarding Architecture Spec
+
+> **DRAFT — NOT IMPLEMENTED.** This is a pre-build design spec. The Discord onboarding flow described here has not been implemented in V2. The capper onboarding intent (separate from member onboarding) is partially real — cappers use Smart Form + Discord bot commands. Full automated member onboarding has not been built. Do not treat this as current-state truth.
+
 Version: Draft v1
 Status: Design Spec
 Scope: Discord product architecture

@@ -13,7 +13,7 @@ When documents conflict:
 | Owner | Program Owner |
 | Status | Ratified |
 | Ratified | 2026-03-20 |
-| Last Updated | 2026-03-29 |
+| Last Updated | 2026-03-29 (UTV2-159 T1 docs program — product tier rebuild) |
 
 ## Tier 1 - Principles
 
@@ -41,8 +41,60 @@ When documents conflict:
 
 | File | Purpose | Owner |
 |---|---|---|
+| `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md` | **Primary** — authoritative platform surface registry (all live surfaces and Discord channels) | Product |
 | `docs/03_product/best_bets_channel_contract.md` | Best Bets identity and qualification rules | Product |
-| `docs/03_product/program_surfaces.md` | Canonical surface definitions | Product |
+| `docs/03_product/TRADER_INSIGHTS_CHANNEL_CONTRACT.md` | Trader Insights identity, threshold, access, and routing rules | Product |
+| `docs/03_product/DISCORD_RECAPS_CHANNEL_CONTRACT.md` | Discord Recaps channel identity and delivery rules | Product |
+| `docs/03_product/DISCORD_COMMAND_CATALOG.md` | Authoritative registry of live Discord bot commands | Product |
+| `docs/03_product/program_surfaces.md` | **SUPERSEDED 2026-03-29** — replaced by PLATFORM_SURFACES_AUTHORITY.md | historical |
+
+### Product Docs — Classified (not in authority tier, informational only)
+
+| File | Class | Notes |
+|---|---|---|
+| `docs/03_product/COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md` | `active` | Operator-web implementation spec — accurate as of M10+; informational reference |
+| `docs/03_product/DISCORD_BOT_FOUNDATION_SPEC.md` | `archive` | Status CLOSED 2026-03-26 — bot foundation is live |
+| `docs/03_product/DISCORD_STATS_COMMAND_SPEC.md` | `archive` | Status updated to CLOSED — /stats command is live |
+| `docs/03_product/command_center_truth_surface_prd.md` | `superseded` | Pre-M10 PRD — superseded by live operator-web |
+| `docs/03_product/ROLE_ACCESS_MATRIX.md` | `draft` | Design spec — partially real (member_tiers ratified); not full V2 runtime truth |
+| `docs/03_product/ONBOARDING_ARCHITECTURE_SPEC.md` | `draft` | Design spec — not implemented in V2 |
+| `docs/03_product/SERVER_INFORMATION_ARCHITECTURE_SPEC.md` | `draft` | Design spec — not implemented in V2 |
+| `docs/03_product/ENTRY_PATH_INVITE_STRATEGY.md` | `draft` | Design spec — not implemented in V2 |
+| `docs/03_product/MEDIA_ENRICHMENT_SUPPORT_PACK.md` | `active` | T2/T3 support pack — feed entity resolution metadata enrichment reference |
+
+### Domain Consumer Contracts (docs/03_contracts/)
+
+| File | Purpose | Owner |
+|---|---|---|
+| `docs/03_contracts/consumer_classification_governance.md` | Domain consumer classification rules | Architecture |
+| `docs/03_contracts/domain_analysis_consumer_contract.md` | Domain analysis consumer contract | Architecture |
+
+### Discord Surface Docs (docs/discord/)
+
+| File | Class | Notes |
+|---|---|---|
+| `docs/discord/discord_embed_system_spec.md` | `active` | Discord embed formatting spec |
+| `docs/discord/discord_embed_system_spec_addendum_assets.md` | `active` | Embed asset extension |
+| `docs/discord/daily_cadence_spec.md` | `active` | Daily cadence specification |
+| `docs/discord/discord_message_contract_matrix.md` | `active` | Message contract matrix |
+| `docs/discord/pick_promotion_interim_policy.md` | `superseded` | Pre-Wave-1 interim policy — superseded by MODEL_REGISTRY_CONTRACT.md and live promotion policies |
+| `docs/discord/specs/DISCORD_LAUNCH_SURFACE_MAP.md` | `archive` | Pre-launch surface planning — historical |
+| `docs/discord/specs/ONBOARDING_CONTENT_ARCHITECTURE.md` | `draft` | Onboarding content design — not implemented |
+
+### AI Context Docs (docs/ai_context/)
+
+| File | Class | Notes |
+|---|---|---|
+| `docs/ai_context/v2_truth_pack/CURRENT_SYSTEM_TRUTH.md` | `superseded` | Replaced by `PROGRAM_STATUS.md` |
+| `docs/ai_context/v2_truth_pack/CANONICAL_DOC_INDEX.md` | `superseded` | Replaced by this authority map |
+| `docs/ai_context/v2_truth_pack/REPO_MAP.md` | `stale` | Repo structure snapshot — stale; defer to `PROGRAM_STATUS.md` + codebase |
+| `docs/ai_context/v2_truth_pack/PICK_LIFECYCLE_TRUTH.md` | `archive` | Pre-Wave-1 lifecycle truth capture; superseded by `pick_lifecycle_contract.md` |
+| `docs/ai_context/v2_truth_pack/DISCORD_STATE_TRUTH.md` | `archive` | Pre-Wave-1 Discord state capture; superseded by `discord_routing.md` |
+| `docs/ai_context/v2_truth_pack/LAUNCH_BLOCKERS.md` | `archive` | Pre-launch blockers list — historical |
+| `docs/ai_context/v2_truth_pack/HANDOFF_FOR_CHATGPT.md` | `archive` | One-time handoff doc — historical |
+| `docs/ai_context/PROVIDER_INGESTION_DECISIONS.md` | `archive` | Pre-T1-ingestion decisions — work complete |
+| `docs/ai_context/SGO_V2_AUDIT.md` | `archive` | Pre-ingestor audit — work complete |
+| `docs/ai_context/V2_AI_SETUP_AUDIT.md` | `archive` | Setup-era audit — historical |
 
 ## Tier 4 - Operational Docs
 

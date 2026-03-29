@@ -3,7 +3,12 @@
 ## Status
 
 **DESIGN CONTRACT — NOT YET CALIBRATED. NOT IMPLEMENTED IN V2 RUNTIME.**
-This document defines the tier system as a core evaluation layer. Mathematical weights, exact thresholds, and production calibration are explicitly deferred until the scoring rebuild is complete. The tier system described here does not currently exist in V2 code. For current-state scoring and promotion truth, see `docs/audits/v2_score_promotion_truth_audit.md` and `docs/discord/pick_promotion_interim_policy.md`.
+This document defines the tier system as a core evaluation layer. Mathematical weights, exact thresholds, and production calibration are explicitly deferred until the scoring rebuild is complete. The tier system described here does not currently exist in V2 code.
+
+For current-state scoring and promotion truth, see:
+- `docs/05_operations/MODEL_REGISTRY_CONTRACT.md` — named scoring profiles and score weights
+- `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md` — deterministic promotion replay from stored snapshot
+- `docs/05_operations/PICK_METADATA_CONTRACT.md` — typed `PickMetadata` interface including `promotionScores`
 
 ---
 

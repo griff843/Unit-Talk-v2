@@ -1,4 +1,7 @@
 # Unit Talk Server Information Architecture Spec
+
+> **DRAFT — NOT IMPLEMENTED.** This is a pre-build design spec for Discord server channel structure and information architecture. The channel taxonomy described here is directionally correct but has not been systematically implemented as described. For current live channel state, see `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md` (Discord Channel Registry section). For routing rules, see `docs/05_operations/discord_routing.md`.
+
 Version: Draft v1
 Status: Design Spec
 Scope: Discord server structure

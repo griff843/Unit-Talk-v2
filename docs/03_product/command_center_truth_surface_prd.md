@@ -1,11 +1,13 @@
 ---
 title: Command Center Truth Surface PRD
-status: draft
+status: superseded
 owner: product
 last_updated: 2026-03-22
 ---
 
 # Command Center Truth Surface PRD
+
+> **SUPERSEDED 2026-03-29.** The operator-web surface is now live and is fully documented in `PLATFORM_SURFACES_AUTHORITY.md` and `COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md`. This PRD was a pre-M10 planning doc and no longer reflects current reality. Do not use for current-state operator surface reference.
 
 ## Document Type
 
