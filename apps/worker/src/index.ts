@@ -14,6 +14,9 @@ export function createWorkerRuntimeSummary() {
     adapterKind: runtime.adapterKind,
     pollIntervalMs: runtime.pollIntervalMs,
     maxCyclesPerRun: runtime.maxCyclesPerRun,
+    staleClaimMs: runtime.staleClaimMs,
+    heartbeatMs: runtime.heartbeatMs,
+    watchdogMs: runtime.watchdogMs,
     dryRun: runtime.dryRun,
     autorun: runtime.autorun,
     nextStep: runtime.autorun
@@ -37,6 +40,9 @@ if (runtime.autorun) {
     deliver: deliveryAdapter,
     maxCycles: runtime.maxCyclesPerRun,
     pollIntervalMs: runtime.pollIntervalMs,
+    staleClaimMs: runtime.staleClaimMs,
+    heartbeatMs: runtime.heartbeatMs,
+    watchdogMs: runtime.watchdogMs,
   })
     .then((cycles) => {
       console.log(

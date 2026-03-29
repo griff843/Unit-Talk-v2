@@ -103,6 +103,46 @@ class FakeOutboxRepository implements OutboxRepository {
     return entry;
   }
 
+  async touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null> {
+    const entry = this.entries.find((candidate) => candidate.id === outboxId);
+
+    if (!entry || entry.status !== 'processing' || entry.claimed_by !== workerId) {
+      return null;
+    }
+
+    entry.claimed_at = new Date().toISOString();
+    return entry;
+  }
+
+  async reapStaleClaims(
+    target: string,
+    staleBefore: string,
+    reason: string,
+  ): Promise<OutboxRecord[]> {
+    const reaped: OutboxRecord[] = [];
+
+    for (const entry of this.entries) {
+      if (
+        entry.target !== target ||
+        entry.status !== 'processing' ||
+        entry.claimed_at === null ||
+        entry.claimed_at > staleBefore
+      ) {
+        continue;
+      }
+
+      entry.status = 'pending';
+      entry.attempt_count += 1;
+      entry.last_error = reason;
+      entry.next_attempt_at = null;
+      entry.claimed_at = null;
+      entry.claimed_by = null;
+      reaped.push(entry);
+    }
+
+    return reaped;
+  }
+
   async markSent(outboxId: string): Promise<OutboxRecord> {
     const entry = this.requireEntry(outboxId);
     entry.status = 'sent';
@@ -924,6 +964,85 @@ test('runWorkerCycles returns idle results when targets have no pending work', a
   assert.equal(cycles.length, 1);
   assert.equal(cycles[0]?.results.length, 1);
   assert.equal(cycles[0]?.results[0]?.status, 'idle');
+});
+
+test('runWorkerCycles reaps stale processing claims before claiming fresh work', async () => {
+  const staleClaimedAt = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const stale = createOutboxRecord('discord:stale', { status: 'processing', attempt_count: 1 });
+  stale.claimed_at = staleClaimedAt;
+  stale.claimed_by = 'worker-old';
+
+  const { repositories, audit } = createWorkerTestRepositories([stale]);
+
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-reaper',
+    targets: ['discord:stale'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    staleClaimMs: 60_000,
+  });
+
+  assert.equal(cycles[0]?.reapedOutboxIds.includes(stale.id), true);
+  assert.equal(cycles[0]?.results[0]?.status, 'sent');
+  assert.equal(audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'), true);
+});
+
+test('processNextDistributionWork heartbeats active claims during long delivery', async () => {
+  const outbox = createOutboxRecord('discord:heartbeat');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+
+  let touched = 0;
+  const originalTouchClaim = repositories.outbox.touchClaim.bind(repositories.outbox);
+  repositories.outbox.touchClaim = async (outboxId, workerId) => {
+    const row = await originalTouchClaim(outboxId, workerId);
+    if (row) {
+      touched += 1;
+    }
+    return row;
+  };
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:heartbeat',
+    'worker-heartbeat',
+    async () => {
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      return {
+        receiptType: 'discord.message',
+        status: 'sent',
+        payload: {},
+      };
+    },
+    {
+      heartbeatMs: 5,
+      watchdogMs: 100,
+    },
+  );
+
+  assert.equal(result.status, 'sent');
+  assert.equal(touched > 0, true);
+});
+
+test('processNextDistributionWork fails hung deliveries when watchdog expires', async () => {
+  const outbox = createOutboxRecord('discord:watchdog');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:watchdog',
+    'worker-watchdog',
+    async () => new Promise<never>(() => {}),
+    {
+      heartbeatMs: 5,
+      watchdogMs: 20,
+    },
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.match(result.outbox.last_error ?? '', /watchdog exceeded/i);
+  }
 });
 
 test('createDiscordDeliveryAdapter dry-run with mapped target uses discord:{channelId} channel format', async () => {

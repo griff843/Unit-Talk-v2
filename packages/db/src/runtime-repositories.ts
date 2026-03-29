@@ -386,6 +386,52 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     return next;
   }
 
+  async touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null> {
+    const existing = this.entries.find((entry) => entry.id === outboxId);
+    if (!existing) {
+      return null;
+    }
+
+    if (existing.status !== 'processing' || existing.claimed_by !== workerId) {
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    existing.claimed_at = now;
+    existing.updated_at = now;
+    return existing;
+  }
+
+  async reapStaleClaims(
+    target: string,
+    staleBefore: string,
+    reason: string,
+  ): Promise<OutboxRecord[]> {
+    const reaped: OutboxRecord[] = [];
+
+    for (const entry of this.entries) {
+      if (
+        entry.target !== target ||
+        entry.status !== 'processing' ||
+        entry.claimed_at === null ||
+        entry.claimed_at > staleBefore
+      ) {
+        continue;
+      }
+
+      entry.status = 'pending';
+      entry.attempt_count += 1;
+      entry.last_error = reason;
+      entry.next_attempt_at = null;
+      entry.claimed_at = null;
+      entry.claimed_by = null;
+      entry.updated_at = new Date().toISOString();
+      reaped.push(entry);
+    }
+
+    return reaped;
+  }
+
   async markSent(outboxId: string): Promise<OutboxRecord> {
     const existing = this.entries.find((entry) => entry.id === outboxId);
     if (!existing) {
@@ -1533,6 +1579,71 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     }
 
     return (data as OutboxRecord | null) ?? null;
+  }
+
+  async touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null> {
+    const now = new Date().toISOString();
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .update({
+        claimed_at: now,
+      })
+      .eq('id', outboxId)
+      .eq('status', 'processing')
+      .eq('claimed_by', workerId)
+      .select()
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to touch outbox claim: ${error.message}`);
+    }
+
+    return (data as OutboxRecord | null) ?? null;
+  }
+
+  async reapStaleClaims(
+    target: string,
+    staleBefore: string,
+    reason: string,
+  ): Promise<OutboxRecord[]> {
+    const { data: staleRows, error: staleError } = await this.client
+      .from('distribution_outbox')
+      .select()
+      .eq('target', target)
+      .eq('status', 'processing')
+      .lt('claimed_at', staleBefore);
+
+    if (staleError) {
+      throw new Error(`Failed to query stale outbox claims: ${staleError.message}`);
+    }
+
+    const reaped: OutboxRecord[] = [];
+    for (const row of staleRows ?? []) {
+      const { data, error } = await this.client
+        .from('distribution_outbox')
+        .update({
+          status: 'pending',
+          attempt_count: row.attempt_count + 1,
+          last_error: reason,
+          next_attempt_at: null,
+          claimed_at: null,
+          claimed_by: null,
+        })
+        .eq('id', row.id)
+        .eq('status', 'processing')
+        .select()
+        .maybeSingle();
+
+      if (error) {
+        throw new Error(`Failed to reap stale outbox claim: ${error.message}`);
+      }
+
+      if (data) {
+        reaped.push(data as OutboxRecord);
+      }
+    }
+
+    return reaped;
   }
 
   async markSent(outboxId: string): Promise<OutboxRecord> {

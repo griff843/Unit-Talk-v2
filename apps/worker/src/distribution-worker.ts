@@ -58,6 +58,10 @@ export async function processNextDistributionWork(
   target: string,
   workerId: string,
   deliver: (outbox: OutboxRecord) => Promise<DeliveryResult>,
+  options: {
+    heartbeatMs?: number;
+    watchdogMs?: number;
+  } = {},
 ): Promise<WorkerProcessResult> {
   const claimed = await repositories.outbox.claimNext(target, workerId);
 
@@ -116,7 +120,14 @@ export async function processNextDistributionWork(
       };
     }
 
-    const delivery = await deliver(claimed);
+    const delivery = await deliverWithHeartbeat({
+      repositories,
+      outbox: claimed,
+      workerId,
+      deliver,
+      ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
+      ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
+    });
     const sent = await repositories.outbox.markSent(claimed.id);
     const postedTransition = await transitionPickLifecycle(
       repositories.picks,
@@ -204,6 +215,53 @@ export async function processNextDistributionWork(
       run: completedRun,
     };
   }
+}
+
+async function deliverWithHeartbeat(input: {
+  repositories: RepositoryBundle;
+  outbox: OutboxRecord;
+  workerId: string;
+  deliver: (outbox: OutboxRecord) => Promise<DeliveryResult>;
+  heartbeatMs?: number;
+  watchdogMs?: number;
+}) {
+  let heartbeat: NodeJS.Timeout | undefined;
+
+  if ((input.heartbeatMs ?? 0) > 0) {
+    heartbeat = setInterval(() => {
+      void input.repositories.outbox.touchClaim(input.outbox.id, input.workerId).catch(() => {});
+    }, input.heartbeatMs);
+  }
+
+  try {
+    if ((input.watchdogMs ?? 0) > 0) {
+      return await withWatchdog(input.deliver(input.outbox), input.watchdogMs!);
+    }
+
+    return await input.deliver(input.outbox);
+  } finally {
+    if (heartbeat) {
+      clearInterval(heartbeat);
+    }
+  }
+}
+
+function withWatchdog<T>(promise: Promise<T>, watchdogMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      reject(new Error(`worker watchdog exceeded ${watchdogMs}ms`));
+    }, watchdogMs);
+
+    promise
+      .then((value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      })
+      .catch((error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      });
+  });
 }
 
 async function recordWorkerAudit(

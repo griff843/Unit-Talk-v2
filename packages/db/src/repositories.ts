@@ -145,6 +145,12 @@ export interface OutboxRepository {
     statuses?: readonly string[] | undefined,
   ): Promise<OutboxRecord | null>;
   claimNext(target: string, workerId: string): Promise<OutboxRecord | null>;
+  touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null>;
+  reapStaleClaims(
+    target: string,
+    staleBefore: string,
+    reason: string,
+  ): Promise<OutboxRecord[]>;
   markSent(outboxId: string): Promise<OutboxRecord>;
   markFailed(
     outboxId: string,

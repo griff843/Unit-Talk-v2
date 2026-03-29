@@ -14,6 +14,9 @@ export interface WorkerRuntimeDependencies {
   adapterKind: 'stub' | 'discord';
   pollIntervalMs: number;
   maxCyclesPerRun: number;
+  staleClaimMs: number;
+  heartbeatMs: number;
+  watchdogMs: number;
   dryRun: boolean;
   autorun: boolean;
 }
@@ -28,6 +31,9 @@ export function createWorkerRuntimeDependencies(): WorkerRuntimeDependencies {
       adapterKind: readAdapterKind(),
       pollIntervalMs: readPollIntervalMs(),
       maxCyclesPerRun: readMaxCyclesPerRun(),
+      staleClaimMs: readStaleClaimMs(),
+      heartbeatMs: readHeartbeatMs(),
+      watchdogMs: readWatchdogMs(),
       dryRun: readDryRun(),
       autorun: readAutorun(),
     };
@@ -44,6 +50,9 @@ export function createWorkerRuntimeDependencies(): WorkerRuntimeDependencies {
     adapterKind: readAdapterKind(),
     pollIntervalMs: readPollIntervalMs(),
     maxCyclesPerRun: readMaxCyclesPerRun(),
+    staleClaimMs: readStaleClaimMs(),
+    heartbeatMs: readHeartbeatMs(),
+    watchdogMs: readWatchdogMs(),
     dryRun: readDryRun(),
     autorun: readAutorun(),
   };
@@ -91,6 +100,36 @@ function readMaxCyclesPerRun() {
 
   if (Number.isNaN(parsed) || parsed <= 0) {
     return 1;
+  }
+
+  return parsed;
+}
+
+function readStaleClaimMs() {
+  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_STALE_CLAIM_MS ?? '300000', 10);
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 300000;
+  }
+
+  return parsed;
+}
+
+function readHeartbeatMs() {
+  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_HEARTBEAT_MS ?? '5000', 10);
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 5000;
+  }
+
+  return parsed;
+}
+
+function readWatchdogMs() {
+  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_WATCHDOG_MS ?? '30000', 10);
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 30000;
   }
 
   return parsed;
