@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-29 — Wave 1 Codex queue DONE (PRs #64–#67 merged). 773/773 tests. Wave 1+2 Claude queues complete. Wave 2 Codex queue fully unblocked (14 items at Ready). Drift audit complete (PR #68 merged): orphan docs classified, 14 stale files deleted, authority map updated.
+2026-03-29 — Wave 1 Codex queue DONE (PRs #64–#67 merged). 773/773 tests. Wave 1+2 Claude queues complete. Wave 2 Codex queue fully unblocked (14 items at Ready). Drift audit complete (PR #68 merged): orphan docs classified, 14 stale files deleted, authority map updated. UTV2-159 T1 docs program complete: 4 new product-tier docs written, 8 stale/draft docs bannered, authority map expanded with all unregistered directories.
 
 ---
 
@@ -294,6 +294,9 @@ These files are no longer maintained and should not be used as current-state tru
 | **Active program status** | this file |
 | Operating model | `docs/05_operations/SPRINT_MODEL_v2.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
+| Platform surfaces | `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md` |
+| Discord commands | `docs/03_product/DISCORD_COMMAND_CATALOG.md` |
+| Docs follow-on queue | `docs/06_status/T1_DOCS_FOLLOW_ON_QUEUE.md` |
 | Proof template (T1) | `docs/06_status/PROOF_TEMPLATE.md` |
 | Rollback template (T1) | `docs/06_status/ROLLBACK_TEMPLATE.md` |
 | /leaderboard contract | `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` |
