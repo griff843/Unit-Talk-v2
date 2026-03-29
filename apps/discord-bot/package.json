@@ -11,6 +11,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
+    "command-manifest:check": "tsx scripts/sync-command-manifest.ts --check",
+    "command-manifest:write": "tsx scripts/sync-command-manifest.ts",
     "deploy-commands": "tsx scripts/deploy-commands.ts",
     "dev": "tsx src/main.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"

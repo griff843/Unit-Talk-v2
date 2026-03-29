@@ -1,0 +1,190 @@
+[
+  {
+    "options": [],
+    "name": "alerts-setup",
+    "description": "Show alert agent status (operator only)",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "max_value": 10,
+        "min_value": 1,
+        "type": 4,
+        "name": "count",
+        "description": "Number of recent detections to show",
+        "required": false
+      }
+    ],
+    "name": "heat-signal",
+    "description": "Show recent notable line movement signals",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "help",
+    "description": "Show all available commands and their descriptions",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 4,
+        "choices": [
+          {
+            "name": "7 days",
+            "value": 7
+          },
+          {
+            "name": "14 days",
+            "value": 14
+          },
+          {
+            "name": "30 days",
+            "value": 30
+          },
+          {
+            "name": "90 days",
+            "value": 90
+          }
+        ],
+        "name": "window",
+        "description": "Trailing window in days",
+        "required": false
+      },
+      {
+        "type": 3,
+        "name": "sport",
+        "description": "Optional sport filter, e.g. NBA or MLB",
+        "required": false,
+        "max_length": 20
+      },
+      {
+        "max_value": 25,
+        "min_value": 1,
+        "type": 4,
+        "name": "limit",
+        "description": "Number of ranked cappers to show",
+        "required": false
+      }
+    ],
+    "name": "leaderboard",
+    "description": "Show the top cappers in the selected settled-pick window",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 3,
+        "name": "market",
+        "description": "Market label, e.g. NBA - Moneyline",
+        "required": true,
+        "max_length": 100
+      },
+      {
+        "type": 3,
+        "name": "selection",
+        "description": "Selection text to submit",
+        "required": true,
+        "max_length": 100
+      },
+      {
+        "max_value": 50000,
+        "min_value": -50000,
+        "type": 4,
+        "name": "odds",
+        "description": "American odds, e.g. -110 or 150",
+        "required": true
+      },
+      {
+        "max_value": 1000,
+        "min_value": 0.01,
+        "type": 10,
+        "name": "stake_units",
+        "description": "Stake in units",
+        "required": true
+      },
+      {
+        "type": 3,
+        "name": "event_name",
+        "description": "Optional event or matchup label",
+        "required": false,
+        "max_length": 100
+      }
+    ],
+    "name": "pick",
+    "description": "Submit a pick directly through the canonical API path",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "max_value": 20,
+        "min_value": 1,
+        "type": 4,
+        "name": "limit",
+        "description": "Number of settled picks to show",
+        "required": false
+      }
+    ],
+    "name": "recap",
+    "description": "Show your last settled picks",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "name": "capper",
+        "description": "Capper to evaluate",
+        "required": false,
+        "type": 6
+      },
+      {
+        "type": 4,
+        "choices": [
+          {
+            "name": "7 days",
+            "value": 7
+          },
+          {
+            "name": "14 days",
+            "value": 14
+          },
+          {
+            "name": "30 days",
+            "value": 30
+          },
+          {
+            "name": "90 days",
+            "value": 90
+          }
+        ],
+        "name": "window",
+        "description": "Trailing window in days",
+        "required": false
+      },
+      {
+        "type": 3,
+        "name": "sport",
+        "description": "Optional sport filter, e.g. NBA or MLB",
+        "required": false,
+        "max_length": 20
+      }
+    ],
+    "name": "stats",
+    "description": "Show settled pick performance for a capper or the full server",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "trial-status",
+    "description": "Show your current access tier and what it includes",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "upgrade",
+    "description": "See your upgrade path and what higher tiers unlock",
+    "type": 1
+  }
+]

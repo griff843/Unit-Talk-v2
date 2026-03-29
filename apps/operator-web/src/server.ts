@@ -10,7 +10,7 @@ import {
   type PickRecord,
   type AuditLogRow,
 } from '@unit-talk/db';
-import { loadEnvironment } from '@unit-talk/config';
+import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import {
   resolveEffectiveSettlement,
   computeSettlementSummary,
@@ -281,6 +281,8 @@ export interface OperatorServerOptions {
   capperRecapProvider?: OperatorCapperRecapProvider;
 }
 
+export type OperatorRuntimeMode = 'fail_open' | 'fail_closed';
+
 export function createOperatorServer(options: OperatorServerOptions = {}) {
   const provider = options.provider ?? createOperatorSnapshotProvider();
   const statsProvider = options.statsProvider ?? createOperatorStatsProvider();
@@ -449,10 +451,14 @@ export async function routeOperatorRequest(
   });
 }
 
-export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
+export function createOperatorSnapshotProvider(
+  options: { environment?: AppEnv } = {},
+): OperatorSnapshotProvider {
+  let environment = options.environment;
+
   try {
-    const env = loadEnvironment();
-    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    environment ??= loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
     return {
@@ -671,32 +677,19 @@ export function createOperatorSnapshotProvider(): OperatorSnapshotProvider {
         };
       },
     };
-  } catch {
-    return {
-      async getSnapshot(_filter?: OutboxFilter) {
-        return createSnapshotFromRows({
-          persistenceMode: 'demo',
-          recentOutbox: [],
-          recentReceipts: [],
-          recentSettlements: [],
-          recentRuns: [],
-          recentPicks: [],
-          recentAudit: [],
-          entityHealth: createEmptyEntityHealth(),
-          upcomingEvents: [],
-        });
-      },
-      async getParticipants(_filter?: OperatorParticipantsFilter) {
-        return { participants: [], total: 0, observedAt: new Date().toISOString() };
-      },
-    };
+  } catch (error) {
+    return handleOperatorProviderFailure(error, environment);
   }
 }
 
-export function createOperatorStatsProvider(): OperatorStatsProvider {
+export function createOperatorStatsProvider(
+  options: { environment?: AppEnv } = {},
+): OperatorStatsProvider {
+  let environment = options.environment;
+
   try {
-    const env = loadEnvironment();
-    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    environment ??= loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
     return {
@@ -763,7 +756,14 @@ export function createOperatorStatsProvider(): OperatorStatsProvider {
         );
       },
     };
-  } catch {
+  } catch (error) {
+    if (readOperatorRuntimeMode(environment) === 'fail_closed') {
+      throw new Error(
+        'operator-web runtime mode is fail_closed and stats provider configuration could not be loaded.',
+        { cause: error },
+      );
+    }
+
     return {
       async getStats(query: OperatorStatsQuery) {
         return createEmptyStatsResponse(query);
@@ -772,10 +772,14 @@ export function createOperatorStatsProvider(): OperatorStatsProvider {
   }
 }
 
-export function createOperatorLeaderboardProvider(): OperatorLeaderboardProvider {
+export function createOperatorLeaderboardProvider(
+  options: { environment?: AppEnv } = {},
+): OperatorLeaderboardProvider {
+  let environment = options.environment;
+
   try {
-    const env = loadEnvironment();
-    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    environment ??= loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
     return {
@@ -842,7 +846,14 @@ export function createOperatorLeaderboardProvider(): OperatorLeaderboardProvider
         );
       },
     };
-  } catch {
+  } catch (error) {
+    if (readOperatorRuntimeMode(environment) === 'fail_closed') {
+      throw new Error(
+        'operator-web runtime mode is fail_closed and leaderboard provider configuration could not be loaded.',
+        { cause: error },
+      );
+    }
+
     return {
       async getLeaderboard(query: OperatorLeaderboardQuery) {
         return createEmptyLeaderboardResponse(query);
@@ -851,10 +862,14 @@ export function createOperatorLeaderboardProvider(): OperatorLeaderboardProvider
   }
 }
 
-export function createOperatorCapperRecapProvider(): OperatorCapperRecapProvider {
+export function createOperatorCapperRecapProvider(
+  options: { environment?: AppEnv } = {},
+): OperatorCapperRecapProvider {
+  let environment = options.environment;
+
   try {
-    const env = loadEnvironment();
-    const connection = createServiceRoleDatabaseConnectionConfig(env);
+    environment ??= loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
     return {
@@ -916,7 +931,14 @@ export function createOperatorCapperRecapProvider(): OperatorCapperRecapProvider
         return buildCapperRecapResponse(query, statsRows);
       },
     };
-  } catch {
+  } catch (error) {
+    if (readOperatorRuntimeMode(environment) === 'fail_closed') {
+      throw new Error(
+        'operator-web runtime mode is fail_closed and capper recap provider configuration could not be loaded.',
+        { cause: error },
+      );
+    }
+
     return {
       async getCapperRecap(query: OperatorCapperRecapQuery) {
         return createEmptyCapperRecapResponse(query);
@@ -2267,6 +2289,66 @@ function createEmptyEntityHealth(): OperatorEntityHealth {
     totalTeamsCount: 0,
     observedAt: new Date().toISOString(),
   };
+}
+
+export function readOperatorRuntimeMode(
+  environment?: Pick<AppEnv, 'UNIT_TALK_APP_ENV' | 'UNIT_TALK_OPERATOR_RUNTIME_MODE'>,
+): OperatorRuntimeMode {
+  const configured =
+    environment?.UNIT_TALK_OPERATOR_RUNTIME_MODE ??
+    process.env.UNIT_TALK_OPERATOR_RUNTIME_MODE;
+
+  if (configured?.trim().toLowerCase() === 'fail_closed') {
+    return 'fail_closed';
+  }
+
+  if (configured?.trim().toLowerCase() === 'fail_open') {
+    return 'fail_open';
+  }
+
+  const appEnv =
+    environment?.UNIT_TALK_APP_ENV ?? normalizeAppEnv(process.env.UNIT_TALK_APP_ENV);
+
+  return appEnv === 'local' ? 'fail_open' : 'fail_closed';
+}
+
+function handleOperatorProviderFailure(
+  error: unknown,
+  environment?: AppEnv,
+): OperatorSnapshotProvider {
+  if (readOperatorRuntimeMode(environment) === 'fail_closed') {
+    throw new Error(
+      'operator-web runtime mode is fail_closed and snapshot provider configuration could not be loaded.',
+      { cause: error },
+    );
+  }
+
+  return {
+    async getSnapshot(_filter?: OutboxFilter) {
+      return createSnapshotFromRows({
+        persistenceMode: 'demo',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+        entityHealth: createEmptyEntityHealth(),
+        upcomingEvents: [],
+      });
+    },
+    async getParticipants(_filter?: OperatorParticipantsFilter) {
+      return { participants: [], total: 0, observedAt: new Date().toISOString() };
+    },
+  };
+}
+
+function normalizeAppEnv(value: string | undefined): AppEnv['UNIT_TALK_APP_ENV'] {
+  if (value === 'ci' || value === 'staging' || value === 'production') {
+    return value;
+  }
+
+  return 'local';
 }
 
 async function loadEventParticipants(
