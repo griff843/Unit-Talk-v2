@@ -25,7 +25,7 @@ export function createUpgradeCommand(
       const member = interaction.member as GuildMember;
       const context = resolveMemberTier(member, config);
 
-      if (context.tier === 'vip_plus') {
+      if (context.tier === 'vip-plus') {
         await interaction.editReply({
           content: HIGHEST_TIER_REPLY,
           embeds: [],
@@ -64,8 +64,8 @@ function resolveUpgradeDescription(tier: MemberTierContext['tier']) {
       ].join('\n');
     case 'vip':
       return '**VIP+** - Adds Trader Insights and higher-access surfaces to your current VIP access.';
-    case 'black_label':
-    case 'vip_plus':
+    case 'black-label':
+    case 'vip-plus':
       return HIGHEST_TIER_REPLY;
     case 'free':
     default:

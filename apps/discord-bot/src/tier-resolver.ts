@@ -3,7 +3,7 @@ import type { BotConfig } from './config.js';
 
 export interface MemberTierContext {
   discordUserId: string;
-  tier: 'free' | 'trial' | 'vip' | 'vip_plus' | 'black_label';
+  tier: 'free' | 'trial' | 'vip' | 'vip-plus' | 'black-label';
   isCapper: boolean;
   isVip: boolean;
   isVipPlus: boolean;
@@ -22,7 +22,7 @@ export function resolveMemberTier(
 
   return {
     discordUserId: member.id,
-    tier: isVipPlus ? 'vip_plus' : isVip ? 'vip' : isTrial ? 'trial' : 'free',
+    tier: isVipPlus ? 'vip-plus' : isVip ? 'vip' : isTrial ? 'trial' : 'free',
     isCapper,
     isVip,
     isVipPlus,

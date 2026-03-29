@@ -26,8 +26,9 @@ interface ApiErrorShape {
 
 type PickInteractionOptions = Pick<ChatInputCommandInteraction, 'options' | 'user'>;
 
-export function createPickCommand(apiClient: ApiClient): CommandHandler {
+export function createPickCommand(apiClient: ApiClient, capperRoleId: string): CommandHandler {
   return {
+    requiredRoles: [capperRoleId],
     data: new SlashCommandBuilder()
       .setName('pick')
       .setDescription('Submit a pick directly through the canonical API path')
@@ -199,5 +200,5 @@ function extractApiErrorMessage(detail?: string): string | null {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createPickCommand(createApiClient(config.apiUrl));
+  return createPickCommand(createApiClient(config.apiUrl), config.capperRoleId);
 }
