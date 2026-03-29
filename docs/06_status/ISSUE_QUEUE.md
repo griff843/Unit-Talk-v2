@@ -337,7 +337,7 @@ Startup-time check: if `UNIT_TALK_ENABLED_TARGETS` env enables a target that `de
 | **Branch** | — |
 | **PR** | — |
 
-Trial tier rows written with `effective_until = now() + TRIAL_DURATION_DAYS`. Background scheduler deactivates expired trials via `deactivateTier()`. Expiry events written to `audit_log` with `action = 'member_tier.trial_expired'`.
+Trial tier rows written with `effective_until = now() + TRIAL_DURATION_DAYS`. **Canonical default: `TRIAL_DURATION_DAYS = 7` (7 days after joining) — ratified 2026-03-29.** Background scheduler deactivates expired trials via `deactivateTier()`. Expiry events written to `audit_log` with `action = 'member_tier.trial_expired'`. **This is a hard gate for UTV2-163** — trial access rules cannot be stated as enforced in the authority doc until this scheduler exists.
 
 ---
 

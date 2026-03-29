@@ -273,6 +273,6 @@ DISCORD_OPERATOR_ROLE_ID=
 ## Out of Scope
 
 - Retroactive sync of existing Discord role state (first-run population is manual or a separate script)
-- Trial expiry enforcement (that is UTV2-150)
+- Trial expiry enforcement (that is UTV2-150) — **canonical duration ratified 2026-03-29: 7 days (`TRIAL_DURATION_DAYS = 7`). Auto/scheduled expiry is required; manual-only removal is not accepted.**
 - Full state machine enforcement (that is UTV2-155 — blocked on this contract)
 - Member tier API endpoints beyond the operator snapshot

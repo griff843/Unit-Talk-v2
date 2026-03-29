@@ -236,7 +236,7 @@ The following must land on `main` before a final authority doc can be written. E
 - [x] ✅ **Capper role guard on `/pick`** — `requiredRoles: [capperRoleId]` — PR #75
 - [x] ✅ **`DISCORD_OPERATOR_ROLE_ID` added to `.env.example`** — PR #75
 - [x] ✅ **`vip_plus` / `vip-plus` naming resolved** — all `vip_plus`/`black_label` normalized to `vip-plus`/`black-label` in `tier-resolver.ts`, `trial-status.ts`, `upgrade.ts` — PR #75
-- [ ] **Trial expiry behavior documented as enforced** — still Open. No scheduled expiry job. Manual Discord role removal is the only enforcement path. Must be explicitly ratified as V2 behavior before the authority doc covers trial. (UTV2-150 scope)
+- [ ] ❌ **Trial expiry enforced via scheduler** — **RATIFIED 2026-03-29:** Trial expires automatically 7 days after joining (`TRIAL_DURATION_DAYS = 7`). Minimum implementation: background scheduler calls `deactivateTier()` on expired rows and writes `member_tier.trial_expired` audit event. Manual-only removal is NOT the accepted model. This is UTV2-150 scope and is a **hard gate** for UTV2-163 (trial access rules cannot be stated as enforced until the scheduler exists).
 
 ---
 
