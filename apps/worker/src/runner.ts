@@ -1,5 +1,6 @@
 import type { OutboxRecord, RepositoryBundle } from '@unit-talk/db';
 import {
+  defaultTargetRegistry,
   type TargetRegistryEntry,
   isTargetEnabled,
   resolveTargetRegistry,
@@ -9,8 +10,16 @@ import {
   type DeliveryResult,
   type WorkerProcessResult,
 } from './distribution-worker.js';
+import type { DeliveryCircuitBreaker } from './circuit-breaker.js';
 
 export type DeliveryAdapter = (outbox: OutboxRecord) => Promise<DeliveryResult>;
+
+export interface WorkerProcessCircuitOpenResult {
+  status: 'circuit-open';
+  target: string;
+  workerId: string;
+  resumeAt: number | null;
+}
 
 export interface WorkerRunnerOptions {
   repositories: RepositoryBundle;
@@ -18,6 +27,7 @@ export interface WorkerRunnerOptions {
   targets: string[];
   deliver: DeliveryAdapter;
   targetRegistry?: TargetRegistryEntry[] | undefined;
+  circuitBreaker?: DeliveryCircuitBreaker | undefined;
   maxCycles?: number | undefined;
   sleep?: ((ms: number) => Promise<void>) | undefined;
   pollIntervalMs?: number | undefined;
@@ -29,7 +39,7 @@ export interface WorkerRunnerOptions {
 export interface WorkerCycleSummary {
   cycle: number;
   reapedOutboxIds: string[];
-  results: WorkerProcessResult[];
+  results: (WorkerProcessResult | WorkerProcessCircuitOpenResult)[];
 }
 
 export async function runWorkerCycles(
@@ -42,10 +52,12 @@ export async function runWorkerCycles(
   const summaries: WorkerCycleSummary[] = [];
 
   const registry = options.targetRegistry ?? resolveTargetRegistry();
+  checkTargetRegistryDrift(registry);
+  const cb = options.circuitBreaker;
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     const reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
-    const results: WorkerProcessResult[] = [];
+    const results: (WorkerProcessResult | WorkerProcessCircuitOpenResult)[] = [];
 
     for (const target of options.targets) {
       // Registry entries use promotion target names ('best-bets'), not Discord target paths
@@ -54,6 +66,17 @@ export async function runWorkerCycles(
         : target;
       if (!isTargetEnabled(promotionTargetName, registry)) {
         results.push({ status: 'target-disabled', target, workerId: options.workerId });
+        continue;
+      }
+
+      // Circuit breaker check — skip delivery if circuit is open
+      if (cb?.isOpen(target)) {
+        results.push({
+          status: 'circuit-open',
+          target,
+          workerId: options.workerId,
+          resumeAt: cb.resumeAt(target),
+        });
         continue;
       }
 
@@ -67,6 +90,36 @@ export async function runWorkerCycles(
           ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
         },
       );
+
+      // Update circuit breaker state based on result
+      if (cb) {
+        if (result.status === 'failed') {
+          const justOpened = cb.recordFailure(target);
+          if (justOpened) {
+            await options.repositories.runs.startRun({
+              runType: 'circuit-breaker.open',
+              actor: options.workerId,
+              details: { target, resumeAt: cb.resumeAt(target) },
+            });
+          }
+        } else if (result.status === 'sent') {
+          const wasClosed = cb.recordSuccess(target);
+          if (wasClosed) {
+            // Circuit was open and is now closing — record the close event
+            const closeRun = await options.repositories.runs.startRun({
+              runType: 'circuit-breaker.close',
+              actor: options.workerId,
+              details: { target },
+            });
+            await options.repositories.runs.completeRun({
+              runId: closeRun.id,
+              status: 'succeeded',
+              details: { target },
+            });
+          }
+        }
+      }
+
       results.push(result);
     }
 
@@ -118,6 +171,34 @@ async function reapStaleClaims(
   }
 
   return reaped;
+}
+
+/**
+ * Checks whether UNIT_TALK_ENABLED_TARGETS is overriding a target that is
+ * disabled in the canonical defaultTargetRegistry.
+ *
+ * Logs a structured warning for each such override — does NOT block startup.
+ */
+export function checkTargetRegistryDrift(
+  effectiveRegistry: TargetRegistryEntry[],
+): void {
+  for (const entry of effectiveRegistry) {
+    if (!entry.enabled) continue;
+
+    const defaultEntry = defaultTargetRegistry.find((d) => d.target === entry.target);
+    if (defaultEntry && !defaultEntry.enabled) {
+      console.warn(
+        JSON.stringify({
+          level: 'warn',
+          event: 'target-registry.drift-detected',
+          target: entry.target,
+          defaultDisabledReason: defaultEntry.disabledReason ?? 'no reason recorded',
+          override: 'UNIT_TALK_ENABLED_TARGETS',
+          message: `Target '${entry.target}' is disabled in defaultTargetRegistry but enabled via UNIT_TALK_ENABLED_TARGETS. Ensure activation contract is ratified.`,
+        }),
+      );
+    }
+  }
 }
 
 function defaultSleep(ms: number) {

@@ -28,7 +28,8 @@ import {
   createStubDeliveryAdapter,
 } from './delivery-adapters.js';
 import { processNextDistributionWork } from './distribution-worker.js';
-import { runWorkerCycles } from './runner.js';
+import { runWorkerCycles, checkTargetRegistryDrift } from './runner.js';
+import { DeliveryCircuitBreaker } from './circuit-breaker.js';
 
 interface CapturedRequest {
   url: string;
@@ -1315,3 +1316,148 @@ function parseDiscordRequestBody(value: string | undefined): DiscordRequestBody 
 
   return JSON.parse(value) as DiscordRequestBody;
 }
+
+// ---------------------------------------------------------------------------
+// DeliveryCircuitBreaker (UTV2-124)
+// ---------------------------------------------------------------------------
+
+test('DeliveryCircuitBreaker: starts closed', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 3, cooldownMs: 60000 });
+  assert.equal(cb.isOpen('discord:best-bets'), false);
+});
+
+test('DeliveryCircuitBreaker: opens after threshold failures', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 3, cooldownMs: 60000 });
+  assert.equal(cb.recordFailure('discord:best-bets'), false);
+  assert.equal(cb.recordFailure('discord:best-bets'), false);
+  const justOpened = cb.recordFailure('discord:best-bets');
+  assert.equal(justOpened, true, 'circuit should open on 3rd failure');
+  assert.equal(cb.isOpen('discord:best-bets'), true);
+});
+
+test('DeliveryCircuitBreaker: success resets failure count', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 3, cooldownMs: 60000 });
+  cb.recordFailure('discord:best-bets');
+  cb.recordFailure('discord:best-bets');
+  cb.recordSuccess('discord:best-bets');
+  // Should not open after 2 more failures (counter was reset)
+  cb.recordFailure('discord:best-bets');
+  cb.recordFailure('discord:best-bets');
+  assert.equal(cb.isOpen('discord:best-bets'), false);
+});
+
+test('DeliveryCircuitBreaker: auto-closes after cooldown', () => {
+  let fakeNow = 1000;
+  const cb = new DeliveryCircuitBreaker({ threshold: 1, cooldownMs: 5000, now: () => fakeNow });
+  cb.recordFailure('discord:best-bets');
+  assert.equal(cb.isOpen('discord:best-bets'), true);
+  fakeNow += 5001; // past cooldown
+  assert.equal(cb.isOpen('discord:best-bets'), false, 'circuit should auto-close after cooldown');
+});
+
+test('DeliveryCircuitBreaker: resumeAt returns cooldown deadline', () => {
+  let fakeNow = 1000;
+  const cb = new DeliveryCircuitBreaker({ threshold: 1, cooldownMs: 5000, now: () => fakeNow });
+  cb.recordFailure('discord:best-bets');
+  assert.equal(cb.resumeAt('discord:best-bets'), 6000);
+});
+
+test('DeliveryCircuitBreaker: openTargets lists open circuits', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 1, cooldownMs: 60000 });
+  cb.recordFailure('discord:best-bets');
+  cb.recordFailure('discord:canary');
+  const open = cb.openTargets();
+  assert.ok(open.includes('discord:best-bets'));
+  assert.ok(open.includes('discord:canary'));
+});
+
+test('runWorkerCycles skips targets with open circuit', async () => {
+  const { repositories } = createWorkerTestRepositories([]);
+  const cb = new DeliveryCircuitBreaker({ threshold: 1, cooldownMs: 60000 });
+  // Pre-open the circuit for discord:best-bets
+  cb.recordFailure('discord:best-bets');
+
+  let deliverCalled = false;
+  const summaries = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-test',
+    targets: ['discord:best-bets'],
+    deliver: async () => {
+      deliverCalled = true;
+      return { status: 'sent', receiptType: 'discord', payload: {} };
+    },
+    maxCycles: 1,
+    circuitBreaker: cb,
+  });
+
+  assert.equal(deliverCalled, false, 'deliver should not be called when circuit is open');
+  assert.equal(summaries[0]?.results[0]?.status, 'circuit-open');
+});
+
+// ---------------------------------------------------------------------------
+// checkTargetRegistryDrift (UTV2-130)
+// ---------------------------------------------------------------------------
+
+test('checkTargetRegistryDrift: warns when UNIT_TALK_ENABLED_TARGETS enables defaultRegistry-disabled target', () => {
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+
+  try {
+    // exclusive-insights is disabled in defaultTargetRegistry
+    const registry = [
+      { target: 'best-bets' as const, enabled: true },
+      { target: 'trader-insights' as const, enabled: true },
+      { target: 'exclusive-insights' as const, enabled: true }, // override
+    ];
+    checkTargetRegistryDrift(registry);
+    assert.equal(warnings.length, 1, 'should warn once for exclusive-insights');
+    assert.ok(warnings[0]?.includes('target-registry.drift-detected'), 'warning should include event name');
+    assert.ok(warnings[0]?.includes('exclusive-insights'), 'warning should include target name');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('checkTargetRegistryDrift: no warning when all targets are defaultRegistry-enabled', () => {
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+
+  try {
+    const registry = [
+      { target: 'best-bets' as const, enabled: true },
+      { target: 'trader-insights' as const, enabled: true },
+      { target: 'exclusive-insights' as const, enabled: false },
+    ];
+    checkTargetRegistryDrift(registry);
+    assert.equal(warnings.length, 0, 'should not warn when no drift');
+  } finally {
+    console.warn = originalWarn;
+  }
+});
+
+test('checkTargetRegistryDrift: no warning when all disabled targets remain disabled', () => {
+  const warnings: string[] = [];
+  const originalWarn = console.warn;
+  console.warn = (...args: unknown[]) => {
+    warnings.push(args.map(String).join(' '));
+  };
+
+  try {
+    // exclusive-insights stays disabled — no drift
+    const registry = [
+      { target: 'best-bets' as const, enabled: true },
+      { target: 'trader-insights' as const, enabled: true },
+      { target: 'exclusive-insights' as const, enabled: false },
+    ];
+    checkTargetRegistryDrift(registry);
+    assert.equal(warnings.length, 0, 'no warning when disabled targets are still disabled');
+  } finally {
+    console.warn = originalWarn;
+  }
+});

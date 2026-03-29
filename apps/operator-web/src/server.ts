@@ -117,6 +117,7 @@ export interface OperatorSnapshot {
     counts: Record<MemberTier, number>;
     lastSyncedAt?: string | undefined;
   } | undefined;
+  pagination?: SnapshotPagination | undefined;
 }
 
 export interface OperatorQuotaProviderSummary {
@@ -142,10 +143,17 @@ export interface OperatorQuotaSummary {
   providers: OperatorQuotaProviderSummary[];
 }
 
+export interface SnapshotPagination {
+  limit: number;
+  since: string | null;
+  hasMore: boolean;
+}
+
 export interface OutboxFilter {
   status?: string;
   target?: string;
   since?: string;
+  limit?: number;
   lifecycleState?: string;
 }
 
@@ -340,13 +348,17 @@ export async function routeOperatorRequest(
     const target = url.searchParams.get('target');
     const since = url.searchParams.get('since');
     const lifecycleState = url.searchParams.get('lifecycleState');
+    const rawLimit = url.searchParams.get('limit');
+    const parsedLimit = rawLimit !== null ? parseInt(rawLimit, 10) : NaN;
+    const limit = Number.isFinite(parsedLimit) ? Math.max(1, Math.min(100, parsedLimit)) : 25;
     const filter: OutboxFilter | undefined =
-      outboxStatus || target || since || lifecycleState
+      outboxStatus || target || since || lifecycleState || rawLimit
         ? {
             ...(outboxStatus !== null ? { status: outboxStatus } : {}),
             ...(target !== null ? { target } : {}),
             ...(since !== null ? { since } : {}),
             ...(lifecycleState !== null ? { lifecycleState } : {}),
+            limit,
           }
         : undefined;
     const snapshot = await provider.getSnapshot(filter);
@@ -494,11 +506,12 @@ export function createOperatorSnapshotProvider(
           upcomingEventsResult,
         ] = await Promise.all([
           (() => {
+            const rowLimit = filter?.limit ?? 25;
             let q = client.from('distribution_outbox').select('*');
             if (filter?.status) q = q.eq('status', filter.status);
             if (filter?.target) q = q.eq('target', filter.target);
             if (filter?.since) q = q.gte('created_at', filter.since);
-            return q.order('created_at', { ascending: false }).limit(filter ? 20 : 12);
+            return q.order('created_at', { ascending: false }).limit(rowLimit);
           })(),
           client
             .from('distribution_receipts')
@@ -509,11 +522,12 @@ export function createOperatorSnapshotProvider(
             .from('settlement_records')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(12),
+            .limit(filter?.limit ?? 25),
           (() => {
+            const rowLimit = filter?.limit ?? 25;
             let q = client.from('system_runs').select('*');
             if (filter?.since) q = q.gte('created_at', filter.since);
-            return q.order('created_at', { ascending: false }).limit(filter?.since ? 20 : 12);
+            return q.order('created_at', { ascending: false }).limit(rowLimit);
           })(),
           (() => {
             let q = client.from('picks').select('*');
@@ -609,6 +623,11 @@ export function createOperatorSnapshotProvider(
             : [];
 
         const memberTierCounts = await queryMemberTierCounts(client);
+        const paginationLimit = filter?.limit ?? 25;
+        const hasMore =
+          recentOutbox.length === paginationLimit ||
+          recentSettlements.length === paginationLimit ||
+          recentRuns.length === paginationLimit;
 
         return createSnapshotFromRows({
           persistenceMode: 'database',
@@ -648,6 +667,11 @@ export function createOperatorSnapshotProvider(
               (settledCountResult.count ?? 0),
           },
           memberTierCounts: memberTierCounts ?? undefined,
+          pagination: {
+            limit: paginationLimit,
+            since: filter?.since ?? null,
+            hasMore,
+          },
         });
       },
       async getParticipants(filter?: OperatorParticipantsFilter) {
@@ -972,6 +996,7 @@ export function createSnapshotFromRows(input: {
   upcomingEvents?: OperatorUpcomingEventSummary[];
   picksPipelineCounts?: PicksPipelineSummary['counts'];
   memberTierCounts?: Record<MemberTier, number> | undefined;
+  pagination?: SnapshotPagination | undefined;
 }): OperatorSnapshot {
   const counts = {
     pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
@@ -1059,6 +1084,7 @@ export function createSnapshotFromRows(input: {
     memberTiers: input.memberTierCounts
       ? { counts: input.memberTierCounts }
       : undefined,
+    pagination: input.pagination,
   };
 }
 

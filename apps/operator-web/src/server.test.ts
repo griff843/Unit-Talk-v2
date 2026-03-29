@@ -2882,6 +2882,125 @@ function createCanaryOutbox(id: string, status: 'sent' | 'failed' | 'dead_letter
   };
 }
 
+// ---------------------------------------------------------------------------
+// UTV2-131: Snapshot pagination
+// ---------------------------------------------------------------------------
+
+test('GET /api/operator/snapshot?limit passes limit filter to provider', async () => {
+  let capturedFilter: OutboxFilter | undefined;
+
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot(filter?: OutboxFilter) {
+      capturedFilter = filter;
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  await makeRequest(address.port, '/api/operator/snapshot?limit=50');
+  await new Promise<void>((resolve, reject) =>
+    server.close((err) => (err ? reject(err) : resolve())),
+  );
+
+  assert.equal(capturedFilter?.limit, 50);
+});
+
+test('GET /api/operator/snapshot?limit clamps invalid values to 1-100 range', async () => {
+  const capturedLimits: Array<number | undefined> = [];
+
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot(filter?: OutboxFilter) {
+      capturedLimits.push(filter?.limit);
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  // Over-limit → clamped to 100
+  await makeRequest(address.port, '/api/operator/snapshot?limit=999');
+  // Under-limit → clamped to 1
+  await makeRequest(address.port, '/api/operator/snapshot?limit=0');
+  // Non-integer → default 25
+  await makeRequest(address.port, '/api/operator/snapshot?limit=abc');
+
+  await new Promise<void>((resolve, reject) =>
+    server.close((err) => (err ? reject(err) : resolve())),
+  );
+
+  assert.equal(capturedLimits[0], 100, 'over-limit should be clamped to 100');
+  assert.equal(capturedLimits[1], 1, 'zero should be clamped to 1');
+  assert.equal(capturedLimits[2], 25, 'non-integer should use default 25');
+});
+
+test('createSnapshotFromRows includes pagination field when provided', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    pagination: { limit: 25, since: null, hasMore: false },
+  });
+
+  assert.ok(snapshot.pagination, 'pagination field should be present');
+  assert.equal(snapshot.pagination?.limit, 25);
+  assert.equal(snapshot.pagination?.since, null);
+  assert.equal(snapshot.pagination?.hasMore, false);
+});
+
+test('createSnapshotFromRows hasMore true when any list hits limit', () => {
+  const rows = Array.from({ length: 25 }, (_, i) => ({
+    id: `run-${i}`,
+    run_type: 'distribution',
+    status: 'succeeded' as const,
+    actor: null,
+    details: {},
+    started_at: new Date().toISOString(),
+    finished_at: null,
+    idempotency_key: null,
+    created_at: new Date().toISOString(),
+  }));
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: rows,
+    recentPicks: [],
+    recentAudit: [],
+    pagination: { limit: 25, since: null, hasMore: rows.length === 25 },
+  });
+
+  assert.equal(snapshot.pagination?.hasMore, true);
+});
+
 function makeRequest(port: number, path: string) {
   return new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
     const req = request(
