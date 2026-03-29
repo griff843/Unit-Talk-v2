@@ -8,6 +8,8 @@ import type { CommandHandler } from '../command-registry.js';
  * has no runtime dependency on the other command modules.
  */
 const COMMAND_ENTRIES: ReadonlyArray<{ name: string; description: string }> = [
+  { name: 'alerts-setup', description: 'Show alert agent status (operator only)' },
+  { name: 'heat-signal', description: 'Show recent notable line movement signals' },
   { name: 'pick',        description: 'Submit a capper pick through the canonical API path' },
   { name: 'stats',       description: 'Show settled pick performance for a capper or the full server' },
   { name: 'leaderboard', description: 'Show the top cappers in the selected settled-pick window' },

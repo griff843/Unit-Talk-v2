@@ -197,10 +197,27 @@ export interface AlertNotificationUpdateInput {
   cooldownExpiresAt: string;
 }
 
+export interface AlertDetectionListOptions {
+  minTier?: Exclude<AlertDetectionTier, 'watch'> | undefined;
+}
+
+export interface AlertDetectionStatusSummary {
+  lastDetectedAt: string | null;
+  counts: {
+    notable: number;
+    alertWorthy: number;
+    notified: number;
+  };
+}
+
 export interface AlertDetectionRepository {
   saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null>;
   findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null>;
-  listRecent(limit?: number | undefined): Promise<AlertDetectionRecord[]>;
+  listRecent(
+    limit?: number | undefined,
+    options?: AlertDetectionListOptions | undefined,
+  ): Promise<AlertDetectionRecord[]>;
+  getStatusSummary(windowStart: string): Promise<AlertDetectionStatusSummary>;
   updateNotified(input: AlertNotificationUpdateInput): Promise<void>;
 }
 

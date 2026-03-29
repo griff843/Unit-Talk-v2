@@ -33,6 +33,7 @@ export interface AppEnv {
   DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
   DISCORD_CAPPER_ROLE_ID?: string | undefined;
+  DISCORD_OPERATOR_ROLE_ID?: string | undefined;
   DISCORD_ANNOUNCEMENT_CHANNEL_ID?: string | undefined;
   UNIT_TALK_API_URL?: string | undefined;
   OPENAI_API_KEY?: string | undefined;
@@ -119,6 +120,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     DISCORD_CLIENT_ID: optionalEnv('DISCORD_CLIENT_ID', merged),
     DISCORD_GUILD_ID: optionalEnv('DISCORD_GUILD_ID', merged),
     DISCORD_CAPPER_ROLE_ID: optionalEnv('DISCORD_CAPPER_ROLE_ID', merged),
+    DISCORD_OPERATOR_ROLE_ID: optionalEnv('DISCORD_OPERATOR_ROLE_ID', merged),
     DISCORD_ANNOUNCEMENT_CHANNEL_ID: optionalEnv('DISCORD_ANNOUNCEMENT_CHANNEL_ID', merged),
     UNIT_TALK_API_URL: optionalEnv('UNIT_TALK_API_URL', merged),
     OPENAI_API_KEY: optionalEnv('OPENAI_API_KEY', merged),

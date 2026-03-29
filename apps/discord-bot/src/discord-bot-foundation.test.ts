@@ -30,7 +30,14 @@ import {
   createLeaderboardCommand,
   type LeaderboardResponse,
 } from './commands/leaderboard.js';
+import {
+  buildAlertsSetupEmbed,
+  createAlertsSetupCommand,
+} from './commands/alerts-setup.js';
 import { createHelpCommand } from './commands/help.js';
+import {
+  createHeatSignalCommand,
+} from './commands/heat-signal.js';
 import { buildRecapEmbedData } from './embeds/recap-embed.js';
 
 // ---------------------------------------------------------------------------
@@ -51,6 +58,7 @@ function makeMinimalEnv(overrides?: Partial<AppEnv>): AppEnv {
     DISCORD_CLIENT_ID: 'test-client-id',
     DISCORD_GUILD_ID: '1284478946171293736',
     DISCORD_CAPPER_ROLE_ID: 'role-capper',
+    DISCORD_OPERATOR_ROLE_ID: 'role-operator',
     UNIT_TALK_API_URL: 'http://localhost:4000',
     ...overrides,
   } as AppEnv;
@@ -305,6 +313,7 @@ test('parseBotConfig returns BotConfig when all required vars are present', () =
   assert.equal(config.clientId, 'test-client-id');
   assert.equal(config.guildId, '1284478946171293736');
   assert.equal(config.capperRoleId, 'role-capper');
+  assert.equal(config.operatorRoleId, 'role-operator');
   assert.equal(config.apiUrl, 'http://localhost:4000');
   assert.equal(config.appEnv, 'local');
 });
@@ -1244,9 +1253,162 @@ test('/help command execute calls editReply with a single embed containing all c
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
   const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of ['pick', 'stats', 'leaderboard', 'help', 'recap']) {
+  for (const name of ['alerts-setup', 'heat-signal', 'pick', 'stats', 'leaderboard', 'help', 'recap']) {
     assert.ok(description.includes(`/${name}`), `embed description missing /${name}`);
   }
+});
+
+test('/heat-signal command renders an embed for mixed-tier detections', async () => {
+  type HeatSignalPayload = {
+    content?: string;
+    embeds?: Array<{ toJSON(): Record<string, unknown> }>;
+  };
+  const apiClient: ApiClient = {
+    async get<T>() {
+      return {} as T;
+    },
+    async post<T>() {
+      return {} as T;
+    },
+    async getRecentAlerts() {
+      return {
+        total: 2,
+        detections: [
+          {
+            id: 'd1',
+            eventId: 'e1',
+            marketKey: 'spreads/nfl',
+            bookmakerKey: 'fanduel',
+            marketType: 'spread' as const,
+            direction: 'down' as const,
+            tier: 'alert-worthy' as const,
+            oldLine: -3,
+            newLine: -5.5,
+            lineChange: -2.5,
+            lineChangeAbs: 2.5,
+            velocity: 0.25,
+            timeElapsedMinutes: 10,
+            currentSnapshotAt: '2026-03-28T12:10:00.000Z',
+            notified: true,
+            cooldownExpiresAt: null,
+          },
+          {
+            id: 'd2',
+            eventId: 'e2',
+            marketKey: 'totals/nba',
+            bookmakerKey: 'draftkings',
+            marketType: 'total' as const,
+            direction: 'up' as const,
+            tier: 'notable' as const,
+            oldLine: 224.5,
+            newLine: 226,
+            lineChange: 1.5,
+            lineChangeAbs: 1.5,
+            velocity: 0.05,
+            timeElapsedMinutes: 30,
+            currentSnapshotAt: '2026-03-28T12:05:00.000Z',
+            notified: false,
+            cooldownExpiresAt: null,
+          },
+        ],
+      };
+    },
+  };
+  const command = createHeatSignalCommand(apiClient);
+  let payload: HeatSignalPayload | null = null;
+
+  await command.execute({
+    options: {
+      getInteger(name: string) {
+        return name === 'count' ? 2 : null;
+      },
+    },
+    editReply: async (next: HeatSignalPayload) => {
+      payload = next;
+    },
+  } as never);
+
+  assert.ok(payload);
+  const settledPayload = payload as HeatSignalPayload;
+  assert.equal(settledPayload.content, '');
+  const embed = settledPayload.embeds?.[0]?.toJSON() as {
+    title?: string;
+    description?: string;
+  };
+  assert.equal(embed.title, 'Heat Signal - Top 2 Line Movements');
+  assert.match(embed.description ?? '', /\[ALERT\].*spreads\/nfl/);
+  assert.match(embed.description ?? '', /\[NOTE\].*totals\/nba/);
+});
+
+test('/heat-signal command returns empty-state copy when no detections exist', async () => {
+  type EmptyHeatSignalPayload = {
+    content?: string;
+    embeds?: unknown[];
+  };
+  const apiClient: ApiClient = {
+    get: async <T>() => ({} as T),
+    post: async <T>() => ({} as T),
+    getRecentAlerts: async () => ({ detections: [], total: 0 }),
+  };
+  const command = createHeatSignalCommand(apiClient);
+  let payload: EmptyHeatSignalPayload | null = null;
+
+  await command.execute({
+    options: {
+      getInteger() {
+        return null;
+      },
+    },
+    editReply: async (next: EmptyHeatSignalPayload) => {
+      payload = next;
+    },
+  } as never);
+
+  assert.ok(payload);
+  const emptyPayload = payload as EmptyHeatSignalPayload;
+  assert.equal(emptyPayload.content, 'No notable line movements detected in the current window.');
+});
+
+test('/alerts-setup command requires operator role and registers private visibility', () => {
+  const apiClient: ApiClient = {
+    get: async <T>() => ({} as T),
+    post: async <T>() => ({} as T),
+    getAlertStatus: async () => ({
+      enabled: true,
+      dryRun: true,
+      minTier: 'notable',
+      lookbackMinutes: 60,
+      last1h: { notable: 0, alertWorthy: 0, notified: 0 },
+      lastDetectedAt: null,
+    }),
+  };
+
+  const command = createAlertsSetupCommand(apiClient, ['role-operator']);
+
+  assert.equal(command.data.name, 'alerts-setup');
+  assert.deepEqual(command.requiredRoles, ['role-operator']);
+  assert.equal(command.responseVisibility, 'private');
+});
+
+test('buildAlertsSetupEmbed renders current status fields', () => {
+  const embed = buildAlertsSetupEmbed({
+    enabled: true,
+    dryRun: false,
+    minTier: 'alert-worthy',
+    lookbackMinutes: 90,
+    last1h: {
+      notable: 4,
+      alertWorthy: 2,
+      notified: 1,
+    },
+    lastDetectedAt: '2026-03-28T12:10:00.000Z',
+  }).toJSON();
+
+  assert.equal(embed.title, 'Alert Agent Status');
+  assert.equal(embed.fields?.[0]?.name, 'Agent');
+  assert.equal(embed.fields?.[0]?.value, 'Enabled');
+  assert.equal(embed.fields?.[1]?.value, 'LIVE');
+  assert.equal(embed.fields?.[7]?.value, '2026-03-28T12:10:00.000Z');
 });
 
 test('loadCommandRegistry also loads the help command from the commands directory', async () => {

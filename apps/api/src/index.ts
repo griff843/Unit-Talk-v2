@@ -23,6 +23,8 @@ server.listen(port, () => {
         port,
         routes: [
           'GET /health',
+          'GET /api/alerts/recent',
+          'GET /api/alerts/status',
           'POST /api/submissions',
           'POST /api/grading/run',
           'POST /api/recap/post',

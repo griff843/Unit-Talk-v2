@@ -72,6 +72,100 @@ test('POST /api/submissions returns created submission payload', async () => {
   }
 });
 
+test('GET /api/alerts/recent returns empty state when no detections exist', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/recent`);
+    const body = (await response.json()) as {
+      detections: unknown[];
+      total: number;
+    };
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body, {
+      detections: [],
+      total: 0,
+    });
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/alerts/status returns env-backed status and recent counts', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const currentSnapshotAt = new Date().toISOString();
+  const baselineSnapshotAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  await repositories.alertDetections.saveDetection({
+    idempotencyKey: 'status-notable',
+    eventId: 'event-1',
+    participantId: null,
+    marketKey: 'totals/nba',
+    bookmakerKey: 'draftkings',
+    baselineSnapshotAt,
+    currentSnapshotAt,
+    oldLine: 224.5,
+    newLine: 226,
+    lineChange: 1.5,
+    lineChangeAbs: 1.5,
+    velocity: 0.05,
+    timeElapsedMinutes: 30,
+    direction: 'up',
+    marketType: 'total',
+    tier: 'notable',
+    metadata: {},
+  });
+
+  const previousEnabled = process.env.ALERT_AGENT_ENABLED;
+  const previousDryRun = process.env.ALERT_DRY_RUN;
+  const previousMinTier = process.env.ALERT_MIN_TIER;
+  const previousLookback = process.env.ALERT_LOOKBACK_MINUTES;
+  process.env.ALERT_AGENT_ENABLED = 'false';
+  process.env.ALERT_DRY_RUN = 'false';
+  process.env.ALERT_MIN_TIER = 'alert-worthy';
+  process.env.ALERT_LOOKBACK_MINUTES = '120';
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/status`);
+    const body = (await response.json()) as {
+      enabled: boolean;
+      dryRun: boolean;
+      minTier: string;
+      lookbackMinutes: number;
+      last1h: { notable: number; alertWorthy: number; notified: number };
+      lastDetectedAt: string | null;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.enabled, false);
+    assert.equal(body.dryRun, false);
+    assert.equal(body.minTier, 'alert-worthy');
+    assert.equal(body.lookbackMinutes, 120);
+    assert.equal(body.last1h.notable, 1);
+    assert.equal(body.last1h.alertWorthy, 0);
+    assert.equal(body.last1h.notified, 0);
+    assert.equal(body.lastDetectedAt, currentSnapshotAt);
+  } finally {
+    server.close();
+    restoreEnv('ALERT_AGENT_ENABLED', previousEnabled);
+    restoreEnv('ALERT_DRY_RUN', previousDryRun);
+    restoreEnv('ALERT_MIN_TIER', previousMinTier);
+    restoreEnv('ALERT_LOOKBACK_MINUTES', previousLookback);
+  }
+});
+
 test('POST /api/picks/:id/settle settles a posted pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
@@ -714,4 +808,13 @@ function buildYesterdayMiddayIso(now: Date = new Date()) {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0, 0),
   ).toISOString();
+}
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
 }

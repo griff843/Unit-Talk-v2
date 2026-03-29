@@ -13,9 +13,49 @@
 export interface ApiClient {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body: unknown): Promise<T>;
+  getRecentAlerts?(
+    limit?: number,
+    minTier?: 'notable' | 'alert-worthy',
+  ): Promise<AlertsRecentResponse>;
+  getAlertStatus?(): Promise<AlertStatusResponse>;
 }
 
 export type FetchImpl = typeof fetch;
+
+export interface AlertsRecentResponse {
+  detections: Array<{
+    id: string;
+    eventId: string;
+    marketKey: string;
+    bookmakerKey: string;
+    marketType: 'spread' | 'total' | 'moneyline' | 'player_prop';
+    direction: 'up' | 'down';
+    tier: 'notable' | 'alert-worthy';
+    oldLine: number;
+    newLine: number;
+    lineChange: number;
+    lineChangeAbs: number;
+    velocity: number | null;
+    timeElapsedMinutes: number;
+    currentSnapshotAt: string;
+    notified: boolean;
+    cooldownExpiresAt: string | null;
+  }>;
+  total: number;
+}
+
+export interface AlertStatusResponse {
+  enabled: boolean;
+  dryRun: boolean;
+  minTier: string;
+  lookbackMinutes: number;
+  last1h: {
+    notable: number;
+    alertWorthy: number;
+    notified: number;
+  };
+  lastDetectedAt: string | null;
+}
 
 export class ApiClientError extends Error {
   constructor(
@@ -62,6 +102,19 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchImpl = fetch): 
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(body),
       });
+    },
+    getRecentAlerts(
+      limit = 5,
+      minTier: 'notable' | 'alert-worthy' = 'notable',
+    ): Promise<AlertsRecentResponse> {
+      const params = new URLSearchParams({
+        limit: String(limit),
+        minTier,
+      });
+      return request<AlertsRecentResponse>(`/api/alerts/recent?${params.toString()}`);
+    },
+    getAlertStatus(): Promise<AlertStatusResponse> {
+      return request<AlertStatusResponse>('/api/alerts/status');
     },
   };
 }
