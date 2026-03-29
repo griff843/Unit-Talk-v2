@@ -22,6 +22,7 @@ export const canonicalTables = [
   'game_results',
   'alert_detections',
   'hedge_opportunities',
+  'member_tiers',
 ] as const;
 
 export type CanonicalTable = (typeof canonicalTables)[number];

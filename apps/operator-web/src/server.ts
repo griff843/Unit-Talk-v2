@@ -451,6 +451,9 @@ export async function routeOperatorRequest(
   });
 }
 
+// TODO(UTV2-165): Add member tier counts to OperatorSnapshot (deferred — separate slice).
+// When implemented: query member_tiers via MemberTierRepository.getTierCounts() and
+// include the result in the snapshot for the operator dashboard tier health card.
 export function createOperatorSnapshotProvider(
   options: { environment?: AppEnv } = {},
 ): OperatorSnapshotProvider {

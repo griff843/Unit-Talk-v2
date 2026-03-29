@@ -75,6 +75,9 @@ importers:
       '@unit-talk/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@unit-talk/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@unit-talk/events':
         specifier: workspace:*
         version: link:../../packages/events

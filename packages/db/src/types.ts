@@ -79,6 +79,7 @@ export type AuditLogRow = Tables<'audit_log'>;
 export type ParticipantRow = Tables<'participants'>;
 export type ParticipantMembershipRow = Tables<'participant_memberships'>;
 export type GradeResultRow = Tables<'game_results'>;
+export type MemberTierRow = Tables<'member_tiers'>;
 
 // ---------------------------------------------------------------------------
 // Record aliases (backward-compatible names used by existing application code)
@@ -131,6 +132,9 @@ export type ParticipantMembershipRecord = ParticipantMembershipRow;
 
 /** @see {@link GradeResultRow} */
 export type GradeResultRecord = GradeResultRow;
+
+/** @see {@link MemberTierRow} */
+export type MemberTierRecord = MemberTierRow;
 
 // ---------------------------------------------------------------------------
 // Reference data types (not generated — tables added in migration 008)

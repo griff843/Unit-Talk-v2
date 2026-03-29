@@ -1,3 +1,14 @@
+export const memberTiers = [
+  'free',
+  'trial',
+  'vip',
+  'vip-plus',
+  'capper',
+  'operator',
+] as const;
+
+export type MemberTier = (typeof memberTiers)[number];
+
 export const canonicalWriter = 'api' as const;
 
 export const writerRoles = [
