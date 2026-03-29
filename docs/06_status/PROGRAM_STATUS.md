@@ -190,7 +190,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | Smart Form `confidence` field missing | Resolved | **CLOSED** — UTV2-49 merged. `confidence = capperConviction / 10` wired. Score avg lifted ~20pts. |
 | Board caps (perSlate=5) may re-saturate | Low | **Partially resolved** — lifecycle filter fix (UTV2-38) counts only queued/posted picks. Monitor after next full test run. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
-| `database.types.ts` is hand-edited — migration 017 not yet applied to live DB | **Medium** | **Open** — requires `supabase db push` + `pnpm supabase:types` with `SUPABASE_DB_PASSWORD` set |
+| `database.types.ts` hand-edit gap | Medium | **CLOSED** — migrations 014-017 applied via `supabase db push`; real generated types committed 2026-03-29 |
 | Bot durable tier wiring not yet implemented | Low | Open — deferred, requires `POST /api/member-tiers` API endpoint |
 | API process requires manual restart for new code in dev | Low | Open |
 | `system_snapshot.md` stale | Low | Last updated 2026-03-21. Proof IDs still valid as historical record; current-state claims are wrong. Use `PROGRAM_STATUS.md`. |
@@ -239,7 +239,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - `MemberTier` type + `memberTiers` const exported from `@unit-talk/contracts`
 - `MemberTierRepository` interface + `InMemoryMemberTierRepository` + `DatabaseMemberTierRepository` in `@unit-talk/db`
 - Operator snapshot `memberTiers.counts`: live query, best-effort fallback on error
-- **Pending:** `supabase db push` + `pnpm supabase:types` to apply migration and regenerate types against live DB
+- **Live:** migrations 014-017 applied 2026-03-29; real generated types on main
 - **Deferred:** bot durable tier wiring — requires `POST /api/member-tiers` endpoint (boundary violation prevents `@unit-talk/db` in discord-bot)
 
 ### Discord bot
