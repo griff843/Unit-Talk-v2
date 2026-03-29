@@ -29,6 +29,10 @@ export interface AppEnv {
   UNIT_TALK_WORKER_MAX_CYCLES?: string | undefined;
   UNIT_TALK_WORKER_DRY_RUN?: string | undefined;
   UNIT_TALK_WORKER_AUTORUN?: string | undefined;
+  UNIT_TALK_API_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_API_BODY_LIMIT_BYTES?: string | undefined;
+  UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX?: string | undefined;
+  UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS?: string | undefined;
   DISCORD_BOT_TOKEN?: string | undefined;
   DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
@@ -120,6 +124,16 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_WORKER_MAX_CYCLES: optionalEnv('UNIT_TALK_WORKER_MAX_CYCLES', merged),
     UNIT_TALK_WORKER_DRY_RUN: optionalEnv('UNIT_TALK_WORKER_DRY_RUN', merged),
     UNIT_TALK_WORKER_AUTORUN: optionalEnv('UNIT_TALK_WORKER_AUTORUN', merged),
+    UNIT_TALK_API_RUNTIME_MODE: optionalEnv('UNIT_TALK_API_RUNTIME_MODE', merged),
+    UNIT_TALK_API_BODY_LIMIT_BYTES: optionalEnv('UNIT_TALK_API_BODY_LIMIT_BYTES', merged),
+    UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX: optionalEnv(
+      'UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX',
+      merged,
+    ),
+    UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS: optionalEnv(
+      'UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS',
+      merged,
+    ),
     DISCORD_BOT_TOKEN: optionalEnv('DISCORD_BOT_TOKEN', merged),
     DISCORD_CLIENT_ID: optionalEnv('DISCORD_CLIENT_ID', merged),
     DISCORD_GUILD_ID: optionalEnv('DISCORD_GUILD_ID', merged),
