@@ -152,7 +152,7 @@ Kill switch: `ALERT_DRY_RUN=true` suppresses all Discord delivery.
 | Canary | `discord:canary` | `1296531122234327100` | Internal / operator | Permanent integration test lane. Never removed. Not a member-facing channel. |
 | Best Bets | `discord:best-bets` | `1288613037539852329` | VIP | Primary premium execution board. High-signal plays. |
 | Trader Insights | `discord:trader-insights` | `1356613995175481405` | VIP+ | Edge and market-context board. Sharper threshold than Best Bets. |
-| Recaps | `discord:recaps` | `1300411261854547968` | VIP+ / broad | Aggregated daily/weekly settlement digest. RecapAgent automated posts only. |
+| Recaps | `discord:recaps` | `1300411261854547968` | All tiers | Aggregated daily/weekly settlement digest. RecapAgent automated posts only. Visible to every member tier. |
 
 ### Blocked Channels (not yet implemented)
 
