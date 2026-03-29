@@ -4,6 +4,7 @@ import type {
   PickRecord,
   RepositoryBundle,
   SettlementRecord,
+  SystemRunRepository,
 } from '@unit-talk/db';
 import { buildRecapEmbedData } from '@unit-talk/discord-bot';
 import { recordGradedSettlement } from './settlement-service.js';
@@ -40,9 +41,23 @@ export async function runGradingPass(
     | 'eventParticipants'
     | 'outbox'
     | 'receipts'
+    | 'runs'
   >,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
+  const idempotencyKey = `grading.run:${roundToMinute(new Date().toISOString())}`;
+  let run: Awaited<ReturnType<SystemRunRepository['startRun']>> | undefined;
+  try {
+    run = await repositories.runs.startRun({
+      runType: 'grading.run',
+      actor: 'grading-agent',
+      details: {},
+      idempotencyKey,
+    });
+  } catch {
+    // Idempotency key collision — continue without instrumentation
+  }
+
   const picks = await repositories.picks.listByLifecycleState('posted');
   const details: GradingPickResult[] = [];
 
@@ -162,13 +177,30 @@ export async function runGradingPass(
     }
   }
 
-  return {
+  const result = {
     attempted: picks.length,
     graded: details.filter((detail) => detail.outcome === 'graded').length,
     skipped: details.filter((detail) => detail.outcome === 'skipped').length,
     errors: details.filter((detail) => detail.outcome === 'error').length,
     details,
   };
+
+  if (run) {
+    await repositories.runs
+      .completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: {
+          picksEvaluated: result.attempted,
+          picksGraded: result.graded,
+          picksSkipped: result.skipped,
+          picksFailed: result.errors,
+        },
+      })
+      .catch(() => undefined);
+  }
+
+  return result;
 }
 
 async function postSettlementRecapIfPossible(
@@ -449,4 +481,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function normalizeName(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function roundToMinute(isoString: string): string {
+  const d = new Date(isoString);
+  d.setSeconds(0, 0);
+  return d.toISOString();
 }

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { SystemRunStartInput, SystemRunCompleteInput } from '@unit-talk/db';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
@@ -810,3 +811,28 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     ? (value as Record<string, unknown>)
     : null;
 }
+
+// ---------------------------------------------------------------------------
+// system_runs instrumentation
+// ---------------------------------------------------------------------------
+
+test('runGradingPass calls startRun and completeRun with grading.run type', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const runCalls: Array<{ method: string; runType?: string; status?: string }> = [];
+
+  const spyRuns = {
+    async startRun(input: SystemRunStartInput) {
+      runCalls.push({ method: 'startRun', runType: input.runType });
+      return repositories.runs.startRun(input);
+    },
+    async completeRun(input: SystemRunCompleteInput) {
+      runCalls.push({ method: 'completeRun', status: input.status });
+      return repositories.runs.completeRun(input);
+    },
+  };
+
+  await runGradingPass({ ...repositories, runs: spyRuns });
+
+  assert.ok(runCalls.some((c) => c.method === 'startRun' && c.runType === 'grading.run'));
+  assert.ok(runCalls.some((c) => c.method === 'completeRun' && c.status === 'succeeded'));
+});

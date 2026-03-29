@@ -50,7 +50,7 @@ export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
  * Returns a cleanup function that stops the interval (called on SIGINT/SIGTERM).
  */
 export function startRecapScheduler(
-  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  repositories: Pick<RepositoryBundle, 'settlements' | 'picks' | 'runs'>,
   logger: RecapSchedulerLogger = console,
   clock: () => Date = () => new Date(),
 ) {
@@ -82,7 +82,7 @@ export function markRecapPostedForTests(period: RecapPeriod, now: Date) {
 }
 
 export async function checkAndPostRecapsForTests(
-  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  repositories: Pick<RepositoryBundle, 'settlements' | 'picks' | 'runs'>,
   logger: RecapSchedulerLogger,
   clock: () => Date,
 ) {
@@ -90,7 +90,7 @@ export async function checkAndPostRecapsForTests(
 }
 
 async function checkAndPostRecaps(
-  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  repositories: Pick<RepositoryBundle, 'settlements' | 'picks' | 'runs'>,
   logger: RecapSchedulerLogger,
   clock: () => Date,
 ) {

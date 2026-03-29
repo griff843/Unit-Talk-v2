@@ -1,4 +1,4 @@
-import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
+import type { PickRecord, RepositoryBundle, SystemRunRepository } from '@unit-talk/db';
 
 export type RecapPeriod = 'daily' | 'weekly' | 'monthly';
 
@@ -241,11 +241,33 @@ export async function computeRecapSummary(
 
 export async function postRecapSummary(
   period: RecapPeriod,
-  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  repositories: Pick<RepositoryBundle, 'settlements' | 'picks' | 'runs'>,
   options: PostRecapOptions = {},
 ): Promise<PostRecapResult> {
+  const idempotencyKey = `recap.post:${period}:${roundToMinute(new Date().toISOString())}`;
+  let run: Awaited<ReturnType<SystemRunRepository['startRun']>> | undefined;
+  try {
+    run = await repositories.runs.startRun({
+      runType: 'recap.post',
+      actor: 'recap-agent',
+      details: { period },
+      idempotencyKey,
+    });
+  } catch {
+    // Idempotency key collision — continue without instrumentation
+  }
+
   const summary = await computeRecapSummary(period, repositories, options.now);
   if (!summary) {
+    if (run) {
+      await repositories.runs
+        .completeRun({
+          runId: run.id,
+          status: 'succeeded',
+          details: { skipped: true, reason: 'no settled picks in window', period },
+        })
+        .catch(() => undefined);
+    }
     return { ok: false, reason: 'no settled picks in window' };
   }
 
@@ -253,10 +275,28 @@ export async function postRecapSummary(
   const channel = options.channel?.trim() || 'discord:recaps';
   const channelId = resolveDiscordChannelId(channel);
   if (!channelId) {
+    if (run) {
+      await repositories.runs
+        .completeRun({
+          runId: run.id,
+          status: 'failed',
+          details: { reason: 'channel target could not be resolved', period },
+        })
+        .catch(() => undefined);
+    }
     return { ok: false, reason: 'channel target could not be resolved' };
   }
 
   if (dryRun) {
+    if (run) {
+      await repositories.runs
+        .completeRun({
+          runId: run.id,
+          status: 'succeeded',
+          details: { channel, pickCount: summary.settledCount, dryRun: true, period },
+        })
+        .catch(() => undefined);
+    }
     return {
       ok: true,
       postsCount: 0,
@@ -268,6 +308,15 @@ export async function postRecapSummary(
 
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
   if (!botToken) {
+    if (run) {
+      await repositories.runs
+        .completeRun({
+          runId: run.id,
+          status: 'failed',
+          details: { reason: 'DISCORD_BOT_TOKEN not configured', period },
+        })
+        .catch(() => undefined);
+    }
     return { ok: false, reason: 'DISCORD_BOT_TOKEN not configured' };
   }
 
@@ -286,7 +335,26 @@ export async function postRecapSummary(
   );
 
   if (!response.ok) {
+    if (run) {
+      await repositories.runs
+        .completeRun({
+          runId: run.id,
+          status: 'failed',
+          details: { reason: 'discord post failed', period },
+        })
+        .catch(() => undefined);
+    }
     return { ok: false, reason: 'discord post failed' };
+  }
+
+  if (run) {
+    await repositories.runs
+      .completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: { channel, pickCount: summary.settledCount, dryRun: false, period },
+      })
+      .catch(() => undefined);
   }
 
   return {
@@ -469,4 +537,10 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+function roundToMinute(isoString: string): string {
+  const d = new Date(isoString);
+  d.setSeconds(0, 0);
+  return d.toISOString();
 }

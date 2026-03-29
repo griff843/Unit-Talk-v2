@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import type { SystemRunStartInput, SystemRunCompleteInput } from '@unit-talk/db';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import {
@@ -402,3 +403,33 @@ async function createSettledPick(
 
   return created.pick.id;
 }
+
+// ---------------------------------------------------------------------------
+// system_runs instrumentation
+// ---------------------------------------------------------------------------
+
+test('postRecapSummary calls startRun and completeRun for skip path (no settled picks)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const startCalls: Array<{ runType: string }> = [];
+  const completeCalls: Array<{ status: string; details: Record<string, unknown> }> = [];
+
+  const spyRuns = {
+    async startRun(input: SystemRunStartInput) {
+      startCalls.push({ runType: input.runType });
+      return repositories.runs.startRun(input);
+    },
+    async completeRun(input: SystemRunCompleteInput) {
+      completeCalls.push({ status: input.status, details: input.details ?? {} });
+      return repositories.runs.completeRun(input);
+    },
+  };
+
+  // No picks — should skip
+  const result = await postRecapSummary('daily', { ...repositories, runs: spyRuns }, { dryRun: true });
+
+  assert.equal(result.ok, false);
+  assert.ok(startCalls.some((c) => c.runType === 'recap.post'));
+  assert.ok(completeCalls.length > 0, 'completeRun should be called');
+  assert.equal(completeCalls[0]?.status, 'succeeded');
+  assert.equal(completeCalls[0]?.details.skipped, true);
+});

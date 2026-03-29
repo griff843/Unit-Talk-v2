@@ -118,6 +118,7 @@ export interface OperatorSnapshot {
     lastSyncedAt?: string | undefined;
   } | undefined;
   alertAgent?: AlertAgentSummary | undefined;
+  gradingAgent?: GradingAgentSummary | undefined;
   pagination?: SnapshotPagination | undefined;
 }
 
@@ -175,6 +176,13 @@ export interface AlertAgentSummary {
   lastDetectionStatus: string | null;
   lastNotificationRunAt: string | null;
   lastNotificationStatus: string | null;
+}
+
+export interface GradingAgentSummary {
+  lastGradingRunAt: string | null;
+  lastGradingStatus: string | null;
+  lastRecapPostAt: string | null;
+  lastRecapStatus: string | null;
 }
 
 export interface WorkerRuntimeSummary {
@@ -1038,6 +1046,14 @@ export function createSnapshotFromRows(input: {
     lastNotificationRunAt: alertNotificationRuns[0]?.started_at ?? null,
     lastNotificationStatus: alertNotificationRuns[0]?.status ?? null,
   };
+  const gradingRuns = input.recentRuns.filter((row) => row.run_type === 'grading.run');
+  const recapRuns = input.recentRuns.filter((row) => row.run_type === 'recap.post');
+  const gradingAgent: GradingAgentSummary = {
+    lastGradingRunAt: gradingRuns[0]?.started_at ?? null,
+    lastGradingStatus: gradingRuns[0]?.status ?? null,
+    lastRecapPostAt: recapRuns[0]?.started_at ?? null,
+    lastRecapStatus: recapRuns[0]?.status ?? null,
+  };
   const quotaSummary = summarizeQuotaFromRuns(ingestorRuns);
   const distributionStatus =
     counts.failedOutbox > 0 || counts.deadLetterOutbox > 0
@@ -1103,6 +1119,7 @@ export function createSnapshotFromRows(input: {
       ? { counts: input.memberTierCounts }
       : undefined,
     alertAgent,
+    gradingAgent,
     pagination: input.pagination,
   };
 }

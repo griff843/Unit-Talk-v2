@@ -22,6 +22,7 @@ export interface GradingCronRunnerOptions {
     | 'eventParticipants'
     | 'outbox'
     | 'receipts'
+    | 'runs'
   >;
   maxCycles?: number;
   pollIntervalMs?: number;

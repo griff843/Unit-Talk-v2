@@ -3062,6 +3062,50 @@ test('createSnapshotFromRows sets alertAgent fields to null when no relevant run
   assert.equal(snapshot.alertAgent?.lastNotificationStatus, null);
 });
 
+// ---------------------------------------------------------------------------
+// gradingAgent snapshot field
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows populates gradingAgent from grading.run and recap.post runs', () => {
+  const gradingRun: SystemRunRecord = {
+    id: 'run-grading-1',
+    run_type: 'grading.run',
+    status: 'succeeded',
+    started_at: '2026-03-29T12:00:00.000Z',
+    finished_at: '2026-03-29T12:00:05.000Z',
+    actor: 'grading-agent',
+    details: { picksGraded: 3 },
+    created_at: '2026-03-29T12:00:00.000Z',
+    idempotency_key: 'grading.run:2026-03-29T12:00:00.000Z',
+  };
+  const recapRun: SystemRunRecord = {
+    id: 'run-recap-1',
+    run_type: 'recap.post',
+    status: 'succeeded',
+    started_at: '2026-03-29T11:00:00.000Z',
+    finished_at: '2026-03-29T11:00:02.000Z',
+    actor: 'recap-agent',
+    details: { channel: 'discord:recaps', pickCount: 5 },
+    created_at: '2026-03-29T11:00:00.000Z',
+    idempotency_key: 'recap.post:daily:2026-03-29T11:00:00.000Z',
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [gradingRun, recapRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.gradingAgent?.lastGradingRunAt, '2026-03-29T12:00:00.000Z');
+  assert.equal(snapshot.gradingAgent?.lastGradingStatus, 'succeeded');
+  assert.equal(snapshot.gradingAgent?.lastRecapPostAt, '2026-03-29T11:00:00.000Z');
+  assert.equal(snapshot.gradingAgent?.lastRecapStatus, 'succeeded');
+});
+
 function makeRequest(port: number, path: string) {
   return new Promise<{ statusCode: number; body: string }>((resolve, reject) => {
     const req = request(
