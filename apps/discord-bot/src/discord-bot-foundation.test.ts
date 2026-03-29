@@ -52,6 +52,7 @@ import {
   buildCapperWelcomeEmbed,
   createCapperOnboardingHandler,
 } from './handlers/capper-onboarding-handler.js';
+import { createMemberTierSyncHandler } from './handlers/member-tier-sync-handler.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1668,6 +1669,163 @@ test('createCapperOnboardingHandler: channel fetch throws → swallowed, does no
     roles: { cache: { keys: () => ['role-capper'].values() } },
     displayName: 'Griff',
     user: { username: 'griff843' },
+  };
+
+  // Must not throw — handler swallows all errors
+  await assert.doesNotReject(async () => handler(oldMember as never, newMember as never));
+});
+
+// ---------------------------------------------------------------------------
+// ApiClient.syncMemberTier tests
+// ---------------------------------------------------------------------------
+
+test('createApiClient.syncMemberTier calls POST /api/member-tiers with correct body', async () => {
+  let capturedUrl: string | undefined;
+  let capturedBody: unknown;
+
+  const mockFetch: typeof fetch = async (input, init) => {
+    capturedUrl = typeof input === 'string' ? input : (input as URL).toString();
+    capturedBody = init?.body ? JSON.parse(init.body as string) : undefined;
+    return new Response(JSON.stringify({ ok: true, tier: 'vip', action: 'activate' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  const client = createApiClient('http://localhost:4000', mockFetch);
+  await client.syncMemberTier?.({
+    discord_id: 'user-123',
+    tier: 'vip',
+    action: 'activate',
+    source: 'discord-role',
+  });
+
+  assert.equal(capturedUrl, 'http://localhost:4000/api/member-tiers');
+  assert.deepEqual(capturedBody, {
+    discord_id: 'user-123',
+    tier: 'vip',
+    action: 'activate',
+    source: 'discord-role',
+  });
+});
+
+test('createApiClient.syncMemberTier swallows errors and does not throw', async () => {
+  const mockFetch: typeof fetch = async () => {
+    return new Response('{"error":"server error"}', {
+      status: 500,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  };
+
+  const client = createApiClient('http://localhost:4000', mockFetch);
+  await assert.doesNotReject(async () => {
+    await client.syncMemberTier?.({
+      discord_id: 'user-123',
+      tier: 'vip',
+      action: 'activate',
+      source: 'discord-role',
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createMemberTierSyncHandler tests
+// ---------------------------------------------------------------------------
+
+test('createMemberTierSyncHandler activates tier when a tier-relevant role is added', async () => {
+  const synced: Array<{ discord_id: string; tier: string; action: string }> = [];
+  const mockApiClient: ApiClient = {
+    get: async () => ({}) as never,
+    post: async () => ({}) as never,
+    syncMemberTier: async (params) => {
+      synced.push({ discord_id: params.discord_id, tier: params.tier, action: params.action });
+    },
+  };
+
+  const config = parseBotConfig(makeMinimalEnv());
+  const handler = createMemberTierSyncHandler(config, mockApiClient);
+
+  const oldMember = { id: 'user-999', roles: { cache: { keys: () => [].values() } } };
+  const newMember = {
+    id: 'user-999',
+    roles: { cache: { keys: () => ['role-vip'].values() } },
+  };
+
+  await handler(oldMember as never, newMember as never);
+
+  assert.equal(synced.length, 1);
+  assert.equal(synced[0]?.discord_id, 'user-999');
+  assert.equal(synced[0]?.tier, 'vip');
+  assert.equal(synced[0]?.action, 'activate');
+});
+
+test('createMemberTierSyncHandler deactivates tier when a tier-relevant role is removed', async () => {
+  const synced: Array<{ discord_id: string; tier: string; action: string }> = [];
+  const mockApiClient: ApiClient = {
+    get: async () => ({}) as never,
+    post: async () => ({}) as never,
+    syncMemberTier: async (params) => {
+      synced.push({ discord_id: params.discord_id, tier: params.tier, action: params.action });
+    },
+  };
+
+  const config = parseBotConfig(makeMinimalEnv());
+  const handler = createMemberTierSyncHandler(config, mockApiClient);
+
+  const oldMember = { id: 'user-888', roles: { cache: { keys: () => ['role-vip-plus'].values() } } };
+  const newMember = {
+    id: 'user-888',
+    roles: { cache: { keys: () => [].values() } },
+  };
+
+  await handler(oldMember as never, newMember as never);
+
+  assert.equal(synced.length, 1);
+  assert.equal(synced[0]?.discord_id, 'user-888');
+  assert.equal(synced[0]?.tier, 'vip-plus');
+  assert.equal(synced[0]?.action, 'deactivate');
+});
+
+test('createMemberTierSyncHandler ignores roles not in the tier map', async () => {
+  const synced: Array<unknown> = [];
+  const mockApiClient: ApiClient = {
+    get: async () => ({}) as never,
+    post: async () => ({}) as never,
+    syncMemberTier: async (params) => {
+      synced.push(params);
+    },
+  };
+
+  const config = parseBotConfig(makeMinimalEnv());
+  const handler = createMemberTierSyncHandler(config, mockApiClient);
+
+  const oldMember = { id: 'user-777', roles: { cache: { keys: () => [].values() } } };
+  const newMember = {
+    id: 'user-777',
+    roles: { cache: { keys: () => ['role-unknown-xyz', 'role-other'].values() } },
+  };
+
+  await handler(oldMember as never, newMember as never);
+
+  assert.equal(synced.length, 0, 'No syncs for unrecognized roles');
+});
+
+test('createMemberTierSyncHandler swallows errors from apiClient.syncMemberTier', async () => {
+  const mockApiClient: ApiClient = {
+    get: async () => ({}) as never,
+    post: async () => ({}) as never,
+    syncMemberTier: async () => {
+      throw new Error('network failure');
+    },
+  };
+
+  const config = parseBotConfig(makeMinimalEnv());
+  const handler = createMemberTierSyncHandler(config, mockApiClient);
+
+  const oldMember = { id: 'user-555', roles: { cache: { keys: () => [].values() } } };
+  const newMember = {
+    id: 'user-555',
+    roles: { cache: { keys: () => ['role-vip'].values() } },
   };
 
   // Must not throw — handler swallows all errors

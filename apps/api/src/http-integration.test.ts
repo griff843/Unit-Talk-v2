@@ -212,3 +212,134 @@ async function listen(server: ReturnType<typeof createApiServer>) {
   await once(server, 'listening');
   testRateLimitBuckets.clear();
 }
+
+// ---------------------------------------------------------------------------
+// POST /api/member-tiers tests
+// ---------------------------------------------------------------------------
+
+test('POST /api/member-tiers activates a valid tier and returns 200', async () => {
+  const server = createApiServer({ runtime: createTestRuntime() });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        discord_id: 'user-123',
+        tier: 'vip',
+        action: 'activate',
+        source: 'discord-role',
+      }),
+    });
+    const body = (await response.json()) as { ok: boolean; tier: string; action: string };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.tier, 'vip');
+    assert.equal(body.action, 'activate');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/member-tiers deactivates a valid tier and returns 200', async () => {
+  const server = createApiServer({ runtime: createTestRuntime() });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        discord_id: 'user-456',
+        tier: 'trial',
+        action: 'deactivate',
+        source: 'discord-role',
+      }),
+    });
+    const body = (await response.json()) as { ok: boolean; tier: string; action: string };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.action, 'deactivate');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/member-tiers returns 400 for invalid tier', async () => {
+  const server = createApiServer({ runtime: createTestRuntime() });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        discord_id: 'user-789',
+        tier: 'super-premium-tier',
+        action: 'activate',
+        source: 'discord-role',
+      }),
+    });
+    const body = (await response.json()) as { error: string };
+
+    assert.equal(response.status, 400);
+    assert.ok(body.error, 'response should have an error field');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/member-tiers returns 400 for invalid action', async () => {
+  const server = createApiServer({ runtime: createTestRuntime() });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        discord_id: 'user-789',
+        tier: 'vip',
+        action: 'grant',
+        source: 'discord-role',
+      }),
+    });
+    const body = (await response.json()) as { error: string };
+
+    assert.equal(response.status, 400);
+    assert.ok(body.error, 'response should have an error field');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/member-tiers returns 400 when discord_id is missing', async () => {
+  const server = createApiServer({ runtime: createTestRuntime() });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        tier: 'vip',
+        action: 'activate',
+        source: 'discord-role',
+      }),
+    });
+    const body = (await response.json()) as { error: string };
+
+    assert.equal(response.status, 400);
+    assert.ok(body.error, 'response should have an error field');
+  } finally {
+    server.close();
+  }
+});

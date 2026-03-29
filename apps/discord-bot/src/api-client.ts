@@ -18,6 +18,12 @@ export interface ApiClient {
     minTier?: 'notable' | 'alert-worthy',
   ): Promise<AlertsRecentResponse>;
   getAlertStatus?(): Promise<AlertStatusResponse>;
+  syncMemberTier?(params: {
+    discord_id: string;
+    tier: string;
+    action: 'activate' | 'deactivate';
+    source: 'discord-role';
+  }): Promise<void>;
 }
 
 export type FetchImpl = typeof fetch;
@@ -115,6 +121,25 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchImpl = fetch): 
     },
     getAlertStatus(): Promise<AlertStatusResponse> {
       return request<AlertStatusResponse>('/api/alerts/status');
+    },
+    async syncMemberTier(params: {
+      discord_id: string;
+      tier: string;
+      action: 'activate' | 'deactivate';
+      source: 'discord-role';
+    }): Promise<void> {
+      try {
+        await request<unknown>('/api/member-tiers', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(params),
+        });
+      } catch (err) {
+        console.warn(
+          '[api-client] syncMemberTier failed (swallowed):',
+          err instanceof Error ? err.message : String(err),
+        );
+      }
     },
   };
 }
