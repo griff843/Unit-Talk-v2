@@ -7,12 +7,15 @@ import type {
 } from '@unit-talk/db';
 import { transitionPickLifecycle } from '@unit-talk/db';
 
+export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
+
 export interface DeliveryResult {
   receiptType: string;
-  status: string;
+  status: DeliveryOutcome;
   channel?: string | undefined;
   externalId?: string | undefined;
   idempotencyKey?: string | undefined;
+  reason?: string | undefined;
   payload: Record<string, unknown>;
 }
 
@@ -128,6 +131,70 @@ export async function processNextDistributionWork(
       ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
       ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
     });
+
+    if (delivery.status === 'terminal-failure') {
+      const errorMessage = delivery.reason ?? 'terminal failure';
+      await repositories.outbox.markFailed(claimed.id, errorMessage);
+      const finalOutbox = await repositories.outbox.markDeadLetter(claimed.id, errorMessage);
+      const completedRun = await repositories.runs.completeRun({
+        runId: run.id,
+        status: 'failed',
+        details: {
+          outboxId: claimed.id,
+          target,
+          error: errorMessage,
+          deadLettered: true,
+          terminalFailure: true,
+        },
+      });
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.dead_lettered',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          target,
+          error: errorMessage,
+          deadLettered: true,
+          terminalFailure: true,
+        },
+      });
+      return { status: 'failed', target, workerId, outbox: finalOutbox, run: completedRun };
+    }
+
+    if (delivery.status === 'retryable-failure') {
+      const errorMessage = delivery.reason ?? 'retryable failure';
+      const failed = await repositories.outbox.markFailed(claimed.id, errorMessage);
+      const shouldDeadLetter = failed.attempt_count >= 3;
+      const finalOutbox = shouldDeadLetter
+        ? await repositories.outbox.markDeadLetter(claimed.id, errorMessage)
+        : failed;
+      const completedRun = await repositories.runs.completeRun({
+        runId: run.id,
+        status: 'failed',
+        details: {
+          outboxId: claimed.id,
+          target,
+          error: errorMessage,
+          deadLettered: shouldDeadLetter,
+        },
+      });
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: shouldDeadLetter ? 'distribution.dead_lettered' : 'distribution.failed',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          target,
+          error: errorMessage,
+          deadLettered: shouldDeadLetter,
+        },
+      });
+      return { status: 'failed', target, workerId, outbox: finalOutbox, run: completedRun };
+    }
+
     const sent = await repositories.outbox.markSent(claimed.id);
     const postedTransition = await transitionPickLifecycle(
       repositories.picks,

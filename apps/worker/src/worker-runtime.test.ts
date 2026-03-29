@@ -1072,7 +1072,7 @@ test('createDiscordDeliveryAdapter resolves discord:<numericId> target directly 
   assert.equal(receipt.receiptType, 'discord.message');
 });
 
-test('createDiscordDeliveryAdapter throws descriptively on non-200 Discord response', async () => {
+test('createDiscordDeliveryAdapter returns terminal-failure for 4xx (non-429) Discord response', async () => {
   const outbox = createOutboxRecord('discord:canary');
   const adapter = createDiscordDeliveryAdapter({
     dryRun: false,
@@ -1085,7 +1085,110 @@ test('createDiscordDeliveryAdapter throws descriptively on non-200 Discord respo
       }),
   });
 
-  await assert.rejects(() => adapter(outbox), /Discord delivery failed: 403/);
+  const result = await adapter(outbox);
+  assert.equal(result.status, 'terminal-failure');
+  assert.match(result.reason ?? '', /HTTP 403/);
+});
+
+test('createDiscordDeliveryAdapter returns retryable-failure for 429 Discord response', async () => {
+  const outbox = createOutboxRecord('discord:canary');
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:canary': '1234567890' },
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ message: 'You are being rate limited.' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  const result = await adapter(outbox);
+  assert.equal(result.status, 'retryable-failure');
+  assert.match(result.reason ?? '', /HTTP 429/);
+});
+
+test('createDiscordDeliveryAdapter returns retryable-failure for 5xx Discord response', async () => {
+  const outbox = createOutboxRecord('discord:canary');
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:canary': '1234567890' },
+    fetchImpl: async () =>
+      new Response('Internal Server Error', { status: 500 }),
+  });
+
+  const result = await adapter(outbox);
+  assert.equal(result.status, 'retryable-failure');
+  assert.match(result.reason ?? '', /HTTP 500/);
+});
+
+test('createDiscordDeliveryAdapter returns retryable-failure on network error', async () => {
+  const outbox = createOutboxRecord('discord:canary');
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:canary': '1234567890' },
+    fetchImpl: async () => {
+      throw new Error('ECONNREFUSED');
+    },
+  });
+
+  const result = await adapter(outbox);
+  assert.equal(result.status, 'retryable-failure');
+  assert.match(result.reason ?? '', /ECONNREFUSED/);
+});
+
+test('processNextDistributionWork immediately dead-letters on terminal-failure', async () => {
+  const outboxRecord = createOutboxRecord('discord:terminal', { attempt_count: 0 });
+  const { repositories, audit } = createWorkerTestRepositories([outboxRecord]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:terminal',
+    'worker-terminal',
+    async () => ({
+      receiptType: 'discord.message',
+      status: 'terminal-failure',
+      reason: 'HTTP 403: Missing Access',
+      payload: {},
+    }),
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'dead_letter', 'terminal-failure must dead-letter immediately');
+    assert.equal(result.outbox.attempt_count, 1, 'attempt_count must be incremented once');
+  }
+  assert.equal(audit.records[0]?.action, 'distribution.dead_lettered');
+  assert.equal(
+    (audit.records[0]?.payload as Record<string, unknown> | undefined)?.terminalFailure,
+    true,
+  );
+});
+
+test('processNextDistributionWork uses normal retry path on retryable-failure', async () => {
+  const outboxRecord = createOutboxRecord('discord:retryable', { attempt_count: 1 });
+  const { repositories, audit } = createWorkerTestRepositories([outboxRecord]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:retryable',
+    'worker-retryable',
+    async () => ({
+      receiptType: 'discord.message',
+      status: 'retryable-failure',
+      reason: 'HTTP 429: rate limit',
+      payload: {},
+    }),
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'failed', 'retryable-failure must stay failed (not dead-letter) under threshold');
+    assert.equal(result.outbox.attempt_count, 2);
+  }
+  assert.equal(audit.records[0]?.action, 'distribution.failed');
 });
 
 test('buildDiscordMessagePayload omits content field for non-canary targets', async () => {

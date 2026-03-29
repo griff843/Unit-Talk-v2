@@ -1,5 +1,6 @@
 import type { OutboxRecord } from '@unit-talk/db';
 import type { DeliveryAdapter } from './runner.js';
+import type { DeliveryResult } from './distribution-worker.js';
 
 export interface DeliveryAdapterSelectionOptions {
   kind: 'stub' | 'discord';
@@ -63,18 +64,50 @@ export function createDiscordDeliveryAdapter(options?: {
         throw new Error('DISCORD_BOT_TOKEN is required for live Discord delivery.');
       }
 
-      const response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bot ${botToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(buildDiscordMessagePayload(outbox)),
-      });
+      let response: Response;
+      try {
+        response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildDiscordMessagePayload(outbox)),
+        });
+      } catch (networkError) {
+        const reason = networkError instanceof Error ? networkError.message : 'network error';
+        return {
+          receiptType: 'discord.message',
+          status: 'retryable-failure',
+          channel: `discord:${channelId}`,
+          reason,
+          payload: {
+            adapter: 'discord',
+            dryRun: false,
+            target: outbox.target,
+            outboxId: outbox.id,
+            channelId,
+          },
+        } satisfies DeliveryResult;
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
-        throw new Error(`Discord delivery failed: ${response.status} ${errorText}`);
+        const isTerminal = response.status >= 400 && response.status < 500 && response.status !== 429;
+        return {
+          receiptType: 'discord.message',
+          status: isTerminal ? 'terminal-failure' : 'retryable-failure',
+          channel: `discord:${channelId}`,
+          reason: `HTTP ${response.status}: ${errorText}`,
+          payload: {
+            adapter: 'discord',
+            dryRun: false,
+            target: outbox.target,
+            outboxId: outbox.id,
+            channelId,
+            httpStatus: response.status,
+          },
+        } satisfies DeliveryResult;
       }
 
       const body = (await response.json()) as { id: string };
