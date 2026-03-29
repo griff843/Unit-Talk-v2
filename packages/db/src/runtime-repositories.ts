@@ -24,6 +24,10 @@ import type {
   GradeResultInsertInput,
   GradeResultLookupCriteria,
   GradeResultRepository,
+  HedgeOpportunityCreateInput,
+  HedgeOpportunityCooldownQuery,
+  HedgeOpportunityNotificationUpdateInput,
+  HedgeOpportunityRepository,
   OutboxCreateInput,
   OutboxRepository,
   ParticipantRepository,
@@ -64,6 +68,7 @@ import type {
   OutboxRecord,
   PickRecord,
   PickLifecycleRecord,
+  HedgeOpportunityRecord,
   ProviderOfferRecord,
   PromotionHistoryRecord,
   ReceiptRecord,
@@ -495,6 +500,97 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
   }
 
   async updateNotified(input: AlertNotificationUpdateInput): Promise<void> {
+    for (const [key, record] of this.records.entries()) {
+      if (record.id === input.id) {
+        this.records.set(key, {
+          ...record,
+          notified: true,
+          notified_at: input.notifiedAt,
+          notified_channels: input.notifiedChannels,
+          cooldown_expires_at: input.cooldownExpiresAt,
+        });
+        return;
+      }
+    }
+  }
+}
+
+export class InMemoryHedgeOpportunityRepository
+  implements HedgeOpportunityRepository
+{
+  private readonly records = new Map<string, HedgeOpportunityRecord>();
+
+  async saveOpportunity(
+    input: HedgeOpportunityCreateInput,
+  ): Promise<HedgeOpportunityRecord | null> {
+    const existing = this.records.get(input.idempotencyKey);
+    if (existing) {
+      return null;
+    }
+
+    const record: HedgeOpportunityRecord = {
+      id: crypto.randomUUID(),
+      idempotency_key: input.idempotencyKey,
+      event_id: input.eventId ?? null,
+      participant_id: input.participantId ?? null,
+      market_key: input.marketKey,
+      type: input.type,
+      priority: input.priority,
+      bookmaker_a: input.bookmakerA,
+      line_a: input.lineA,
+      over_odds_a: input.overOddsA,
+      bookmaker_b: input.bookmakerB,
+      line_b: input.lineB,
+      under_odds_b: input.underOddsB,
+      line_discrepancy: input.lineDiscrepancy,
+      implied_prob_a: input.impliedProbA,
+      implied_prob_b: input.impliedProbB,
+      total_implied_prob: input.totalImpliedProb,
+      arbitrage_percentage: input.arbitragePercentage,
+      profit_potential: input.profitPotential,
+      guaranteed_profit: input.guaranteedProfit ?? null,
+      middle_gap: input.middleGap ?? null,
+      win_probability: input.winProbability ?? null,
+      notified: input.notified ?? false,
+      notified_at: input.notifiedAt ?? null,
+      notified_channels: input.notifiedChannels ?? null,
+      cooldown_expires_at: input.cooldownExpiresAt ?? null,
+      metadata: toJsonObject(input.metadata),
+      detected_at: input.detectedAt,
+      created_at: input.detectedAt,
+    };
+
+    this.records.set(record.idempotency_key, record);
+    return record;
+  }
+
+  async findActiveCooldown(
+    input: HedgeOpportunityCooldownQuery,
+  ): Promise<HedgeOpportunityRecord | null> {
+    return (
+      Array.from(this.records.values())
+        .filter(
+          (record) =>
+            (record.event_id ?? null) === (input.eventId ?? null) &&
+            record.market_key === input.marketKey &&
+            record.type === input.type &&
+            record.notified === true &&
+            typeof record.cooldown_expires_at === 'string' &&
+            record.cooldown_expires_at > input.now,
+        )
+        .sort((left, right) =>
+          (right.notified_at ?? '').localeCompare(left.notified_at ?? ''),
+        )[0] ?? null
+    );
+  }
+
+  async listRecent(limit = 20): Promise<HedgeOpportunityRecord[]> {
+    return Array.from(this.records.values())
+      .sort((left, right) => right.detected_at.localeCompare(left.detected_at))
+      .slice(0, limit);
+  }
+
+  async updateNotified(input: HedgeOpportunityNotificationUpdateInput): Promise<void> {
     for (const [key, record] of this.records.entries()) {
       if (record.id === input.id) {
         this.records.set(key, {
@@ -1596,6 +1692,122 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
   }
 }
 
+export class DatabaseHedgeOpportunityRepository
+  implements HedgeOpportunityRepository
+{
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async saveOpportunity(
+    input: HedgeOpportunityCreateInput,
+  ): Promise<HedgeOpportunityRecord | null> {
+    const { data, error } = await this.client
+      .from('hedge_opportunities')
+      .insert({
+        idempotency_key: input.idempotencyKey,
+        event_id: input.eventId ?? null,
+        participant_id: input.participantId ?? null,
+        market_key: input.marketKey,
+        type: input.type,
+        priority: input.priority,
+        bookmaker_a: input.bookmakerA,
+        line_a: input.lineA,
+        over_odds_a: input.overOddsA,
+        bookmaker_b: input.bookmakerB,
+        line_b: input.lineB,
+        under_odds_b: input.underOddsB,
+        line_discrepancy: input.lineDiscrepancy,
+        implied_prob_a: input.impliedProbA,
+        implied_prob_b: input.impliedProbB,
+        total_implied_prob: input.totalImpliedProb,
+        arbitrage_percentage: input.arbitragePercentage,
+        profit_potential: input.profitPotential,
+        guaranteed_profit: input.guaranteedProfit ?? null,
+        middle_gap: input.middleGap ?? null,
+        win_probability: input.winProbability ?? null,
+        notified: input.notified ?? false,
+        notified_at: input.notifiedAt ?? null,
+        notified_channels: input.notifiedChannels ?? null,
+        cooldown_expires_at: input.cooldownExpiresAt ?? null,
+        metadata: toJsonObject(input.metadata),
+        detected_at: input.detectedAt,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      if (error.code === '23505') {
+        return null;
+      }
+
+      throw new Error(`Failed to save hedge opportunity: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async findActiveCooldown(
+    input: HedgeOpportunityCooldownQuery,
+  ): Promise<HedgeOpportunityRecord | null> {
+    let query = this.client
+      .from('hedge_opportunities')
+      .select('*')
+      .eq('market_key', input.marketKey)
+      .eq('type', input.type)
+      .eq('notified', true)
+      .gt('cooldown_expires_at', input.now)
+      .order('notified_at', { ascending: false })
+      .limit(1);
+
+    if (input.eventId === undefined || input.eventId === null) {
+      query = query.is('event_id', null);
+    } else {
+      query = query.eq('event_id', input.eventId);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to read active hedge cooldown: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async listRecent(limit = 20): Promise<HedgeOpportunityRecord[]> {
+    const { data, error } = await this.client
+      .from('hedge_opportunities')
+      .select('*')
+      .order('detected_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list hedge opportunities: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async updateNotified(input: HedgeOpportunityNotificationUpdateInput): Promise<void> {
+    const { error } = await this.client
+      .from('hedge_opportunities')
+      .update({
+        notified: true,
+        notified_at: input.notifiedAt,
+        notified_channels: input.notifiedChannels,
+        cooldown_expires_at: input.cooldownExpiresAt,
+      })
+      .eq('id', input.id);
+
+    if (error) {
+      throw new Error(`Failed to update hedge notification state: ${error.message}`);
+    }
+  }
+}
+
 export class DatabaseReceiptRepository implements ReceiptRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -2395,6 +2607,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     picks: new InMemoryPickRepository(),
     outbox: new InMemoryOutboxRepository(),
     alertDetections: new InMemoryAlertDetectionRepository(),
+    hedgeOpportunities: new InMemoryHedgeOpportunityRepository(),
     receipts: new InMemoryReceiptRepository(),
     settlements: new InMemorySettlementRepository(),
     providerOffers,
@@ -2416,6 +2629,7 @@ export function createDatabaseRepositoryBundle(
     picks: new DatabasePickRepository(connection),
     outbox: new DatabaseOutboxRepository(connection),
     alertDetections: new DatabaseAlertDetectionRepository(connection),
+    hedgeOpportunities: new DatabaseHedgeOpportunityRepository(connection),
     receipts: new DatabaseReceiptRepository(connection),
     settlements: new DatabaseSettlementRepository(connection),
     providerOffers: new DatabaseProviderOfferRepository(connection),

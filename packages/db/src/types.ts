@@ -17,6 +17,8 @@ import {
   approvalStatuses,
   eventParticipantRoles,
   eventStatuses,
+  hedgeOpportunityPriorities,
+  hedgeOpportunityTypes,
   marketTypes,
   outboxStatuses,
   participantTypes,
@@ -50,6 +52,8 @@ export type WriterRole = (typeof writerRoles)[number];
 export type OutboxStatus = (typeof outboxStatuses)[number];
 export type AlertDetectionTier = (typeof alertDetectionTiers)[number];
 export type AlertDetectionMarketType = (typeof alertDetectionMarketTypes)[number];
+export type HedgeOpportunityType = (typeof hedgeOpportunityTypes)[number];
+export type HedgeOpportunityPriority = (typeof hedgeOpportunityPriorities)[number];
 export type SettlementStatus = (typeof settlementStatuses)[number];
 export type SettlementResult = (typeof settlementResults)[number];
 export type SettlementSource = (typeof settlementSources)[number];
@@ -68,6 +72,7 @@ export type PickPromotionHistoryRow = Tables<'pick_promotion_history'>;
 export type DistributionOutboxRow = Tables<'distribution_outbox'>;
 export type DistributionReceiptRow = Tables<'distribution_receipts'>;
 export type AlertDetectionRow = Tables<'alert_detections'>;
+export type HedgeOpportunityRow = Tables<'hedge_opportunities'>;
 export type SettlementRecordRow = Tables<'settlement_records'>;
 export type SystemRunRow = Tables<'system_runs'>;
 export type AuditLogRow = Tables<'audit_log'>;
@@ -102,6 +107,9 @@ export type ReceiptRecord = DistributionReceiptRow;
 
 /** @see {@link AlertDetectionRow} */
 export type AlertDetectionRecord = AlertDetectionRow;
+
+/** @see {@link HedgeOpportunityRow} */
+export type HedgeOpportunityRecord = HedgeOpportunityRow;
 
 /** @see {@link ProviderOfferRow} */
 export type ProviderOfferRecord = ProviderOfferRow;
