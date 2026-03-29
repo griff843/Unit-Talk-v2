@@ -1,10 +1,8 @@
 # Discord `/stats` Command Spec
 
-> **Status:** DRAFT — pending `/stats` contract ratification before implementation begins
+> **Status:** CLOSED — `/stats` command is LIVE as of M11. Contract: `docs/05_operations/T2_DISCORD_STATS_CONTRACT.md`. For the authoritative command registry, see `docs/03_product/DISCORD_COMMAND_CATALOG.md`.
 > **Tier:** T2 — additive; no new migration, no settlement path changes
-> **Authority:** This spec is a product surface definition. A ratified T2 contract in `docs/05_operations/` is required before implementation begins.
-> **Unlock condition:** T1 Automated Grading must be CLOSED; `settlement_records` must have meaningful graded records in production before this surface is useful.
-> **Last updated:** 2026-03-26
+> **Last updated:** 2026-03-29
 
 ---
 

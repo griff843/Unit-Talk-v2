@@ -1,4 +1,7 @@
 # Unit Talk Entry Path & Invite Strategy
+
+> **DRAFT — NOT IMPLEMENTED.** This is a pre-build design spec. The onboarding and invite entry path described here has not been built in V2. Do not treat this as current-state truth. When V2 implements an invite or entry path system, this doc should be re-evaluated as a starting point or replaced.
+
 Version: Draft v1
 Status: Design Spec
 Purpose: Define how different types of users enter Unit Talk and how onboarding should account for source and role.
