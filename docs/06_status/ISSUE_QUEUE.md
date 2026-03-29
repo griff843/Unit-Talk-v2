@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 14 | 4 | 30 |
-| `lane:claude` | 0 | 0 | 0 | 0 | 21 |
+| `lane:codex` | 0 | 0 | 13 | 4 | 36 |
+| `lane:claude` | 0 | 0 | 0 | 1 | 26 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
@@ -132,14 +132,14 @@ Machine-enforceable runtime kill switch per delivery target. `defaultTargetRegis
 | **ID** | UTV2-149 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:db`, `area:discord-bot`, `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `claude/UTV2-165-149-member-tiers-implementation` |
+| **PR** | #76 merged 2026-03-29 |
 
-`member_tiers` table as canonical DB source of truth for member tier state. Migration `202603200017_member_tiers.sql`. Append-only: end tier by setting `effective_until`, never delete. `syncMemberTierFromRoleChange()` wired into `guildMemberUpdate` handler. `MemberTierRepository` with `activateTier` / `deactivateTier` / `getActiveTiers`. Operator snapshot includes `memberTiers.counts`. Contract: `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md`.
+`member_tiers` table as canonical DB source of truth for member tier state. Migration `202603200017_member_tiers.sql`. Append-only: end tier by setting `effective_until`, never delete. `MemberTierRepository` interface + `InMemoryMemberTierRepository` + `DatabaseMemberTierRepository` in `@unit-talk/db`. `MemberTier` type + `memberTiers` const exported from `@unit-talk/contracts`. Operator snapshot includes `memberTiers.counts` (live query, best-effort). 7 tests. Contract: `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md`. **Note:** bot durable wiring (`syncMemberTierFromRoleChange`) deferred — boundary violation (`@unit-talk/db` forbidden in discord-bot per `DISCORD_BOT_FOUNDATION_SPEC.md`); requires future `POST /api/member-tiers` endpoint. `database.types.ts` is hand-edited pending `pnpm supabase:types` post-migration-apply.
 
 ---
 
@@ -330,14 +330,104 @@ Startup-time check: if `UNIT_TALK_ENABLED_TARGETS` env enables a target that `de
 | **ID** | UTV2-150 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **BLOCKED** |
+| **Status** | **READY** |
 | **Milestone** | M13 |
 | **Area** | `area:discord-bot`, `area:db` |
-| **Blocked by** | UTV2-149 |
+| **Blocked by** | — |
 | **Branch** | — |
 | **PR** | — |
 
 Trial tier rows written with `effective_until = now() + TRIAL_DURATION_DAYS`. Background scheduler deactivates expired trials via `deactivateTier()`. Expiry events written to `audit_log` with `action = 'member_tier.trial_expired'`.
+
+---
+
+### UTV2-167 — T1 Add DISCORD_OPERATOR_ROLE_ID to .env.example
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-167 |
+| **Tier** | T1 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | `claude/UTV2-164-166-167-discord-bot-access-fixes` |
+| **PR** | #75 merged 2026-03-29 |
+
+Added `DISCORD_OPERATOR_ROLE_ID=` to `.env.example` with comment: absence causes operator-gated commands to block all users (sentinel behavior).
+
+---
+
+### UTV2-166 — T2 vip_plus → vip-plus tier naming normalization
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-166 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | `claude/UTV2-164-166-167-discord-bot-access-fixes` |
+| **PR** | #75 merged 2026-03-29 |
+
+Normalized all `vip_plus`/`black_label` (underscore) to `vip-plus`/`black-label` (hyphen) in `tier-resolver.ts`, `trial-status.ts`, `upgrade.ts`, and foundation tests. Canonical values now match `MEMBER_TIER_MODEL_CONTRACT.md`. 66/66 discord-bot tests pass.
+
+---
+
+### UTV2-165 — T2 Member Tier Model Implementation
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-165 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:db`, `area:contracts`, `area:operator-web` |
+| **Blocked by** | — |
+| **Branch** | `claude/UTV2-165-149-member-tiers-implementation` |
+| **PR** | #76 merged 2026-03-29 |
+
+Migration 017, `MemberTier` type + `memberTiers` const in `@unit-talk/contracts`, `MemberTierRepository` interface + `InMemory` + `Database` implementations in `@unit-talk/db`, operator snapshot `memberTiers.counts`. 7 new tests. See UTV2-149 for scope boundaries and deferred items.
+
+---
+
+### UTV2-164 — T2 /pick capper role guard
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-164 |
+| **Tier** | T2 |
+| **Lane** | `lane:codex` |
+| **Status** | **DONE** |
+| **Milestone** | M13 |
+| **Area** | `area:discord-bot` |
+| **Blocked by** | — |
+| **Branch** | `claude/UTV2-164-166-167-discord-bot-access-fixes` |
+| **PR** | #75 merged 2026-03-29 |
+
+`createPickCommand(apiClient, capperRoleId)` now declares `requiredRoles: [capperRoleId]`. Only members with the capper Discord role can invoke `/pick`. `createDefaultCommand()` passes `config.capperRoleId` automatically. Test: `command.requiredRoles` asserted. 66/66 discord-bot tests pass.
+
+---
+
+### UTV2-163 — T1 Member Role Access Authority
+
+| Field | Value |
+|---|---|
+| **ID** | UTV2-163 |
+| **Tier** | T1 |
+| **Lane** | `lane:claude` |
+| **Status** | **BLOCKED** |
+| **Milestone** | M13 |
+| **Area** | `area:contracts`, `area:discord-bot`, `area:db` |
+| **Blocked by** | 8 hard gates — see `MEMBER_ROLE_ACCESS_READINESS_AUDIT.md` |
+| **Branch** | — |
+| **PR** | — |
+
+`MEMBER_ROLE_ACCESS_AUTHORITY.md` cannot be written until all 8 gates in `docs/03_product/MEMBER_ROLE_ACCESS_READINESS_AUDIT.md` are satisfied. Primary remaining blockers: migration applied to live DB + `pnpm supabase:types` regenerated, bot durable tier wiring via `POST /api/member-tiers`, UTV2-150 (trial expiry scheduler).
 
 ---
 

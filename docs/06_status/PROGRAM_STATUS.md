@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-29 — Wave 1 Codex queue DONE (PRs #64–#67 merged). 773/773 tests. Wave 1+2 Claude queues complete. Wave 2 Codex queue fully unblocked (14 items at Ready). Drift audit complete (PR #68 merged): orphan docs classified, 14 stale files deleted, authority map updated. UTV2-159 T1 docs program complete: 4 new product-tier docs written, 8 stale/draft docs bannered, authority map expanded with all unregistered directories.
+2026-03-29 — PRs #75 + #76 merged. UTV2-164/166/167 (discord-bot access fixes) DONE. UTV2-165/149 (member_tiers implementation) DONE. UTV2-150 (upgrade/trial audit trail) unblocked. UTV2-163 (member role access authority) BLOCKED pending 8 gates in readiness audit. **Post-merge manual steps required: `supabase db push` + `pnpm supabase:types`** (see open risks). ~782 tests (773 + 7 member-tier-repo + 2 operator-web; CI PASS confirmed).
 
 ---
 
@@ -16,8 +16,8 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **773/773 pass** — confirmed 2026-03-29 at main `ab37a8d` (Wave 1 PRs #64–#67 + PR #68 merged). |
-| Gates | `pnpm verify` exits 0. Confirmed 2026-03-29 at `ab37a8d`. |
+| Tests | **~782 pass** — 773 at `ab37a8d` + 7 (member-tier-repo) + 2 (operator-web) via PRs #75/#76. CI PASS confirmed 2026-03-29. |
+| Gates | `pnpm verify` exits 0. CI confirmed 2026-03-29 (PR #76). **`pnpm supabase:types` pending post-merge DB steps.** |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **M13 ACTIVE** — Wave 1 DONE. Wave 2 Codex queue unblocked (14 items Ready). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
 
@@ -29,8 +29,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | **773/773** — confirmed 2026-03-29 at main `ab37a8d` (Wave 1 PRs #64–#67 + PR #68). |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-29 at `ab37a8d`. |
+| `pnpm test` | PASS | **~782** — CI PASS confirmed 2026-03-29 (PR #76). |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-29 (PR #76 CI). `pnpm supabase:types` pending manual DB step. |
 
 ### Runner Architecture
 
@@ -165,7 +165,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | UTV2-143 | Alert agent observability | T2 | — |
 | UTV2-144 | Recap/grading observability | T2 | — |
 | UTV2-145 | Replayable scoring (impl) | T2 | UTV2-136 impl |
-| UTV2-150 | Upgrade/trial audit trail | T2 | UTV2-149 impl |
+| UTV2-150 | Upgrade/trial audit trail | T2 | — (**UTV2-149 DONE**) |
 | UTV2-129 | Target registry (impl) | T2 | — |
 | UTV2-130 | Tier authority drift detection | T2 | UTV2-129 impl |
 | UTV2-134 | Portfolio/exposure tracking | T3 | — |
@@ -190,6 +190,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | Smart Form `confidence` field missing | Resolved | **CLOSED** — UTV2-49 merged. `confidence = capperConviction / 10` wired. Score avg lifted ~20pts. |
 | Board caps (perSlate=5) may re-saturate | Low | **Partially resolved** — lifecycle filter fix (UTV2-38) counts only queued/posted picks. Monitor after next full test run. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
+| `database.types.ts` is hand-edited — migration 017 not yet applied to live DB | **Medium** | **Open** — requires `supabase db push` + `pnpm supabase:types` with `SUPABASE_DB_PASSWORD` set |
+| Bot durable tier wiring not yet implemented | Low | Open — deferred, requires `POST /api/member-tiers` API endpoint |
 | API process requires manual restart for new code in dev | Low | Open |
 | `system_snapshot.md` stale | Low | Last updated 2026-03-21. Proof IDs still valid as historical record; current-state claims are wrong. Use `PROGRAM_STATUS.md`. |
 | `production_readiness_checklist.md` stale | Low | Last updated 2026-03-26. Use `ISSUE_QUEUE.md` for current lane state. |
@@ -231,6 +233,14 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 ### Data ingestion
 - `apps/ingestor/` live — populates `provider_offers` and `game_results` from SGO feed
 - Entity resolution: events, participants, event_participants resolved from ingestor
+
+### Member tier model
+- `member_tiers` table: migration 017 on main. Append-only, `effective_until` null = active. Tier CHECK: `free | trial | vip | vip-plus | capper | operator` (hyphens canonical). Source CHECK: `discord-role | manual | system`.
+- `MemberTier` type + `memberTiers` const exported from `@unit-talk/contracts`
+- `MemberTierRepository` interface + `InMemoryMemberTierRepository` + `DatabaseMemberTierRepository` in `@unit-talk/db`
+- Operator snapshot `memberTiers.counts`: live query, best-effort fallback on error
+- **Pending:** `supabase db push` + `pnpm supabase:types` to apply migration and regenerate types against live DB
+- **Deferred:** bot durable tier wiring — requires `POST /api/member-tiers` endpoint (boundary violation prevents `@unit-talk/db` in discord-bot)
 
 ### Discord bot
 - Foundation: client, router, role-guard, api-client, command registry
