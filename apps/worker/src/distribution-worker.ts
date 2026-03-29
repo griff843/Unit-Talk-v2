@@ -9,12 +9,15 @@ import { transitionPickLifecycle } from '@unit-talk/db';
 
 export interface DeliveryResult {
   receiptType: string;
-  status: string;
+  status: DeliveryOutcome;
   channel?: string | undefined;
   externalId?: string | undefined;
   idempotencyKey?: string | undefined;
+  reason?: string | undefined;
   payload: Record<string, unknown>;
 }
+
+export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
 
 export interface WorkerProcessIdleResult {
   status: 'idle';
@@ -128,6 +131,30 @@ export async function processNextDistributionWork(
       ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
       ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
     });
+    if (delivery.status === 'terminal-failure') {
+      return handleFailedDelivery({
+        repositories,
+        runId: run.id,
+        claimed,
+        target,
+        workerId,
+        errorMessage: delivery.reason ?? 'terminal failure',
+        deadLetterImmediately: true,
+      });
+    }
+
+    if (delivery.status === 'retryable-failure') {
+      return handleFailedDelivery({
+        repositories,
+        runId: run.id,
+        claimed,
+        target,
+        workerId,
+        errorMessage: delivery.reason ?? 'retryable failure',
+        deadLetterImmediately: false,
+      });
+    }
+
     const sent = await repositories.outbox.markSent(claimed.id);
     const postedTransition = await transitionPickLifecycle(
       repositories.picks,
@@ -179,41 +206,15 @@ export async function processNextDistributionWork(
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'unknown delivery error';
-    const failed = await repositories.outbox.markFailed(claimed.id, errorMessage);
-    const shouldDeadLetter = failed.attempt_count >= 3;
-    const finalOutbox = shouldDeadLetter
-      ? await repositories.outbox.markDeadLetter(claimed.id, errorMessage)
-      : failed;
-    const completedRun = await repositories.runs.completeRun({
+    return handleFailedDelivery({
+      repositories,
       runId: run.id,
-      status: 'failed',
-      details: {
-        outboxId: claimed.id,
-        target,
-        error: errorMessage,
-        deadLettered: shouldDeadLetter,
-      },
-    });
-    await recordWorkerAudit(repositories.audit, {
-      entityType: 'distribution_outbox',
-      entityId: claimed.id,
-      action: shouldDeadLetter ? 'distribution.dead_lettered' : 'distribution.failed',
-      actor: workerId,
-      payload: {
-        outboxId: claimed.id,
-        target,
-        error: errorMessage,
-        deadLettered: shouldDeadLetter,
-      },
-    });
-
-    return {
-      status: 'failed',
+      claimed,
       target,
       workerId,
-      outbox: finalOutbox,
-      run: completedRun,
-    };
+      errorMessage,
+      deadLetterImmediately: false,
+    });
   }
 }
 
@@ -262,6 +263,57 @@ function withWatchdog<T>(promise: Promise<T>, watchdogMs: number): Promise<T> {
         reject(error);
       });
   });
+}
+
+async function handleFailedDelivery(input: {
+  repositories: RepositoryBundle;
+  runId: string;
+  claimed: OutboxRecord;
+  target: string;
+  workerId: string;
+  errorMessage: string;
+  deadLetterImmediately: boolean;
+}): Promise<WorkerProcessFailureResult> {
+  const failed = input.deadLetterImmediately
+    ? null
+    : await input.repositories.outbox.markFailed(input.claimed.id, input.errorMessage);
+  const shouldDeadLetter =
+    input.deadLetterImmediately || (failed?.attempt_count ?? 0) >= 3;
+  const finalOutbox = shouldDeadLetter
+    ? await input.repositories.outbox.markDeadLetter(input.claimed.id, input.errorMessage)
+    : failed!;
+  const completedRun = await input.repositories.runs.completeRun({
+    runId: input.runId,
+    status: 'failed',
+    details: {
+      outboxId: input.claimed.id,
+      target: input.target,
+      error: input.errorMessage,
+      deadLettered: shouldDeadLetter,
+      terminalFailure: input.deadLetterImmediately,
+    },
+  });
+  await recordWorkerAudit(input.repositories.audit, {
+    entityType: 'distribution_outbox',
+    entityId: input.claimed.id,
+    action: shouldDeadLetter ? 'distribution.dead_lettered' : 'distribution.failed',
+    actor: input.workerId,
+    payload: {
+      outboxId: input.claimed.id,
+      target: input.target,
+      error: input.errorMessage,
+      deadLettered: shouldDeadLetter,
+      terminalFailure: input.deadLetterImmediately,
+    },
+  });
+
+  return {
+    status: 'failed',
+    target: input.target,
+    workerId: input.workerId,
+    outbox: finalOutbox,
+    run: completedRun,
+  };
 }
 
 async function recordWorkerAudit(

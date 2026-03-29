@@ -63,37 +63,69 @@ export function createDiscordDeliveryAdapter(options?: {
         throw new Error('DISCORD_BOT_TOKEN is required for live Discord delivery.');
       }
 
-      const response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bot ${botToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(buildDiscordMessagePayload(outbox)),
-      });
+      try {
+        const response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
+          method: 'POST',
+          headers: {
+            Authorization: `Bot ${botToken}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(buildDiscordMessagePayload(outbox)),
+        });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`Discord delivery failed: ${response.status} ${errorText}`);
+        if (!response.ok) {
+          const errorText = await response.text();
+          const isTerminal =
+            response.status >= 400 && response.status < 500 && response.status !== 429;
+
+          return {
+            receiptType: 'discord.message',
+            status: isTerminal ? 'terminal-failure' : 'retryable-failure',
+            channel: `discord:${channelId}`,
+            reason: `HTTP ${response.status}: ${errorText}`,
+            payload: {
+              adapter: 'discord',
+              dryRun: false,
+              target: outbox.target,
+              outboxId: outbox.id,
+              channelId,
+              httpStatus: response.status,
+            },
+          };
+        }
+
+        const body = (await response.json()) as { id: string };
+
+        return {
+          receiptType: 'discord.message',
+          status: 'sent',
+          channel: `discord:${channelId}`,
+          externalId: body.id,
+          idempotencyKey: `${outbox.id}:discord:${channelId}:receipt`,
+          payload: {
+            adapter: 'discord',
+            dryRun: false,
+            target: outbox.target,
+            outboxId: outbox.id,
+            channelId,
+            messageId: body.id,
+          },
+        };
+      } catch (error) {
+        return {
+          receiptType: 'discord.message',
+          status: 'retryable-failure',
+          channel: `discord:${channelId}`,
+          reason: error instanceof Error ? error.message : 'network error',
+          payload: {
+            adapter: 'discord',
+            dryRun: false,
+            target: outbox.target,
+            outboxId: outbox.id,
+            channelId,
+          },
+        };
       }
-
-      const body = (await response.json()) as { id: string };
-
-      return {
-        receiptType: 'discord.message',
-        status: 'sent',
-        channel: `discord:${channelId}`,
-        externalId: body.id,
-        idempotencyKey: `${outbox.id}:discord:${channelId}:receipt`,
-        payload: {
-          adapter: 'discord',
-          dryRun: false,
-          target: outbox.target,
-          outboxId: outbox.id,
-          channelId,
-          messageId: body.id,
-        },
-      };
     }
 
     return {
