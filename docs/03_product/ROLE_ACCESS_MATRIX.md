@@ -1,6 +1,6 @@
 # Unit Talk Role & Access Matrix
 
-> **DRAFT — PARTIALLY IMPLEMENTED.** The role taxonomy (Free, Trial, VIP, VIP+, Black Label, Capper, Operator, Admin) is directionally correct and reflected in `MEMBER_TIER_MODEL_CONTRACT.md`. The `member_tiers` DB table and Discord role sync are ratified in UTV2-149. However, the full channel-level visibility matrix described in this doc has not been systematically enforced in V2. The access rules listed here are design intent, not current enforced state. Use `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` for current runtime tier truth.
+> **SUPERSEDED 2026-03-29.** This document has been demoted to historical reference. The authoritative product and business document for member tiers and access policy is now `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md`. The tier taxonomy here is directionally correct but the authority doc is what counts. The channel-level visibility matrix here is design intent only — use the enforced-vs-intent table in the authority doc for current state.
 
 Version: Draft v1
 Status: Design Spec
