@@ -80,10 +80,10 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       odds: 150,
       confidence: 0.65,
       promotionStatus: 'qualified',
-      promotionTarget: 'trader-insights',
+      promotionTarget: 'exclusive-insights',
       promotionScore: 92.4,
-      promotionReason: 'hard eligibility checks passed | promotion score 92.40 meets threshold 80.00',
-      promotionVersion: 'trader-insights-v1',
+      promotionReason: 'hard eligibility checks passed | promotion score 92.40 meets threshold 90.00',
+      promotionVersion: 'exclusive-insights-v1',
       metadata: {
         sport: 'NBA',
         eventName: 'Bulls vs Knicks',

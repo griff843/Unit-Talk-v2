@@ -9,6 +9,7 @@ import type {
 import type { CanonicalPick } from '@unit-talk/contracts';
 import {
   bestBetsPromotionPolicy,
+  exclusiveInsightsPromotionPolicy,
   traderInsightsPromotionPolicy,
 } from '@unit-talk/domain';
 import { enqueueDistributionWork } from './distribution-service.js';
@@ -109,11 +110,23 @@ export async function enqueueDistributionWithRunTracking(
   }
 }
 
-function isGovernedTarget(target: string): target is 'discord:best-bets' | 'discord:trader-insights' {
-  return target === 'discord:best-bets' || target === 'discord:trader-insights';
+function isGovernedTarget(
+  target: string,
+): target is 'discord:best-bets' | 'discord:trader-insights' | 'discord:exclusive-insights' {
+  return (
+    target === 'discord:best-bets' ||
+    target === 'discord:trader-insights' ||
+    target === 'discord:exclusive-insights'
+  );
 }
 
-function promotionPolicyForTarget(target: 'discord:best-bets' | 'discord:trader-insights') {
+function promotionPolicyForTarget(
+  target: 'discord:best-bets' | 'discord:trader-insights' | 'discord:exclusive-insights',
+) {
+  if (target === 'discord:exclusive-insights') {
+    return exclusiveInsightsPromotionPolicy;
+  }
+
   return target === 'discord:trader-insights'
     ? traderInsightsPromotionPolicy
     : bestBetsPromotionPolicy;

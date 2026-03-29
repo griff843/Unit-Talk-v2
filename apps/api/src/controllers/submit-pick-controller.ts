@@ -25,7 +25,7 @@ export async function submitPickController(
   }
 
   // Auto-enqueue qualified picks for distribution.
-  // promotionTarget is the short-form name ('best-bets', 'trader-insights').
+  // promotionTarget is the short-form name ('best-bets', 'trader-insights', 'exclusive-insights').
   // enqueueDistributionWithRunTracking expects the full target ('discord:best-bets', etc.).
   // It handles the validated → queued lifecycle transition internally.
   // If enqueue fails, the pick is still durable in the DB (promotionStatus=qualified).

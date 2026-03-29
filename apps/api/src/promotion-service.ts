@@ -10,6 +10,7 @@ import {
 import {
   bestBetsPromotionPolicy,
   evaluatePromotionEligibility,
+  exclusiveInsightsPromotionPolicy,
   traderInsightsPromotionPolicy,
 } from '@unit-talk/domain';
 import type {
@@ -61,25 +62,31 @@ export async function evaluateAndPersistPromotion(
 }
 
 export function activePromotionPolicies() {
-  return [bestBetsPromotionPolicy, traderInsightsPromotionPolicy] as const;
+  return [
+    exclusiveInsightsPromotionPolicy,
+    traderInsightsPromotionPolicy,
+    bestBetsPromotionPolicy,
+  ] as const;
 }
 
 export interface EagerPromotionAllPoliciesResult {
   pick: CanonicalPick;
   pickRecord: PickRecord;
   resolvedTarget: PromotionTarget | null;
+  exclusiveInsightsDecision: BoardPromotionDecision;
   traderInsightsDecision: BoardPromotionDecision;
   bestBetsDecision: BoardPromotionDecision;
 }
 
 /**
- * Eagerly evaluates all active promotion policies in priority order (trader-insights first,
- * then best-bets). Both `pick_promotion_history` rows are written regardless of outcome.
+ * Eagerly evaluates all active promotion policies in priority order (exclusive-insights first,
+ * then trader-insights, then best-bets). All `pick_promotion_history` rows are written regardless
+ * of outcome.
  * `picks.promotion_target` is set to the highest-priority qualified target, or null if
  * neither policy qualifies.
  *
- * Priority order: trader-insights > best-bets.
- * A pick that qualifies for both routes exclusively to trader-insights.
+ * Priority order: exclusive-insights > trader-insights > best-bets.
+ * A pick that qualifies for multiple routes exclusively routes to the highest-tier target.
  */
 export async function evaluateAllPoliciesEagerAndPersist(
   pickId: string,
@@ -94,30 +101,26 @@ export async function evaluateAllPoliciesEagerAndPersist(
 
   const canonicalPick = mapPickRecordToCanonicalPick(pickRecord);
 
-  // Get board states for both targets in parallel (each target has its own board).
-  const [tiBoardState, bbBoardState] = await Promise.all([
-    pickRepository.getPromotionBoardState({
-      target: 'trader-insights',
-      sport: readMetadataString(canonicalPick.metadata, 'sport'),
-      eventName: readMetadataString(canonicalPick.metadata, 'eventName'),
-      market: canonicalPick.market,
-      selection: canonicalPick.selection,
-    }),
-    pickRepository.getPromotionBoardState({
-      target: 'best-bets',
-      sport: readMetadataString(canonicalPick.metadata, 'sport'),
-      eventName: readMetadataString(canonicalPick.metadata, 'eventName'),
-      market: canonicalPick.market,
-      selection: canonicalPick.selection,
-    }),
-  ]);
+  const policies = activePromotionPolicies();
+  // Get board states for all targets in parallel (each target has its own board).
+  const boardStates = await Promise.all(
+    policies.map((policy) =>
+      pickRepository.getPromotionBoardState({
+        target: policy.target,
+        sport: readMetadataString(canonicalPick.metadata, 'sport'),
+        eventName: readMetadataString(canonicalPick.metadata, 'eventName'),
+        market: canonicalPick.market,
+        selection: canonicalPick.selection,
+      }),
+    ),
+  );
 
   const scoreInputs = readPromotionScoreInputs(canonicalPick);
   const decidedAt = new Date().toISOString();
 
   const makeInput = (
     policy: PromotionPolicy,
-    boardState: typeof tiBoardState,
+    boardState: (typeof boardStates)[number],
   ): BoardPromotionEvaluationInput => ({
     target: policy.target,
     pick: canonicalPick,
@@ -138,36 +141,24 @@ export async function evaluateAllPoliciesEagerAndPersist(
     version: policy.version,
   });
 
-  const tiDecision = evaluatePromotionEligibility(
-    makeInput(traderInsightsPromotionPolicy, tiBoardState),
-    traderInsightsPromotionPolicy,
+  const decisions = policies.map((policy, index) =>
+    evaluatePromotionEligibility(makeInput(policy, boardStates[index]!), policy),
   );
-  const bbDecision = evaluatePromotionEligibility(
-    makeInput(bestBetsPromotionPolicy, bbBoardState),
-    bestBetsPromotionPolicy,
+  const decisionByTarget = new Map(
+    policies.map((policy, index) => [policy.target, decisions[index]!] as const),
   );
 
-  // Priority order: trader-insights first.
-  // A dual-qualifying pick routes exclusively to trader-insights.
-  const resolvedTarget: PromotionTarget | null = tiDecision.qualified
-    ? 'trader-insights'
-    : bbDecision.qualified
-      ? 'best-bets'
-      : null;
-
-  // The "primary" result (winner or best-bets when neither qualifies) is persisted on the
-  // picks row via persistPromotionDecision. The other policy's result is recorded as a
-  // history-only row that does not update picks.promotion_target.
-  //
-  // Convention: if ti wins → persist ti on picks, bb goes to history-only.
-  //             otherwise  → persist bb on picks, ti goes to history-only.
-  const [winnerPolicy, winnerDecision, loserPolicy, loserDecision] =
-    tiDecision.qualified
-      ? ([traderInsightsPromotionPolicy, tiDecision, bestBetsPromotionPolicy, bbDecision] as const)
-      : ([bestBetsPromotionPolicy, bbDecision, traderInsightsPromotionPolicy, tiDecision] as const);
-
+  // First qualified policy in priority order wins. If none qualify, best-bets remains the
+  // persisted fallback row so the pick still carries the least-restrictive policy history.
+  const winnerIndex = decisions.findIndex((decision) => decision.qualified);
+  const resolvedIndex = winnerIndex >= 0 ? winnerIndex : policies.length - 1;
+  const winnerPolicy = policies[resolvedIndex]!;
+  const winnerDecision = decisions[resolvedIndex]!;
+  const winnerBoardState = boardStates[resolvedIndex]!;
+  const resolvedTarget: PromotionTarget | null = winnerDecision.qualified
+    ? winnerPolicy.target
+    : null;
   const winnerReason = summarizePromotionReason(winnerDecision);
-  const loserReason = summarizePromotionReason(loserDecision);
 
   // Persist winner: updates picks + inserts winner's history row.
   const persisted = await pickRepository.persistPromotionDecision({
@@ -183,7 +174,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: null,
     payload: {
-      boardState: tiDecision.qualified ? tiBoardState : bbBoardState,
+      boardState: winnerBoardState,
       scoreInputs,
       policy: winnerPolicy,
       explanation: winnerDecision.explanation,
@@ -205,46 +196,57 @@ export async function evaluateAllPoliciesEagerAndPersist(
     },
   });
 
-  // Insert loser's history row only (does not touch picks).
-  const loserHistory = await pickRepository.insertPromotionHistoryRow({
-    pickId,
-    target: loserPolicy.target,
-    promotionStatus: loserDecision.status,
-    promotionScore: loserDecision.score,
-    promotionReason: loserReason,
-    promotionVersion: loserDecision.version,
-    promotionDecidedAt: loserDecision.decidedAt,
-    promotionDecidedBy: loserDecision.decidedBy,
-    overrideAction: null,
-    payload: {
-      boardState: tiDecision.qualified ? bbBoardState : tiBoardState,
-      scoreInputs,
-      policy: loserPolicy,
-      explanation: loserDecision.explanation,
-    },
-  });
+  // Insert all non-winning policy history rows (does not touch picks).
+  for (let index = 0; index < policies.length; index += 1) {
+    if (index === resolvedIndex) {
+      continue;
+    }
 
-  await auditLogRepository.record({
-    entityType: 'pick_promotion_history',
-    entityId: loserHistory.id,
-    entityRef: pickId,
-    action: loserDecision.qualified ? 'promotion.qualified' : 'promotion.suppressed',
-    actor,
-    payload: {
+    const policy = policies[index]!;
+    const decision = decisions[index]!;
+    const boardState = boardStates[index]!;
+    const historyReason = summarizePromotionReason(decision);
+    const history = await pickRepository.insertPromotionHistoryRow({
       pickId,
-      target: loserPolicy.target,
-      status: loserDecision.status,
-      score: loserDecision.score,
-      resolvedTarget,
-    },
-  });
+      target: policy.target,
+      promotionStatus: decision.status,
+      promotionScore: decision.score,
+      promotionReason: historyReason,
+      promotionVersion: decision.version,
+      promotionDecidedAt: decision.decidedAt,
+      promotionDecidedBy: decision.decidedBy,
+      overrideAction: null,
+      payload: {
+        boardState,
+        scoreInputs,
+        policy,
+        explanation: decision.explanation,
+      },
+    });
+
+    await auditLogRepository.record({
+      entityType: 'pick_promotion_history',
+      entityId: history.id,
+      entityRef: pickId,
+      action: decision.qualified ? 'promotion.qualified' : 'promotion.suppressed',
+      actor,
+      payload: {
+        pickId,
+        target: policy.target,
+        status: decision.status,
+        score: decision.score,
+        resolvedTarget,
+      },
+    });
+  }
 
   return {
     pick: mapPickRecordToCanonicalPick(persisted.pick),
     pickRecord: persisted.pick,
     resolvedTarget,
-    traderInsightsDecision: tiDecision,
-    bestBetsDecision: bbDecision,
+    exclusiveInsightsDecision: decisionByTarget.get('exclusive-insights')!,
+    traderInsightsDecision: decisionByTarget.get('trader-insights')!,
+    bestBetsDecision: decisionByTarget.get('best-bets')!,
   };
 }
 
@@ -596,6 +598,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolvePromotionPolicyForTarget(target: PromotionTarget): PromotionPolicy {
+  if (target === 'exclusive-insights') {
+    return exclusiveInsightsPromotionPolicy;
+  }
+
   if (target === 'trader-insights') {
     return traderInsightsPromotionPolicy;
   }

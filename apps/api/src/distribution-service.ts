@@ -50,13 +50,25 @@ function parseGovernedPromotionTarget(target: string) {
   }
 
   const channelTarget = target.slice('discord:'.length);
-  if (channelTarget === 'best-bets' || channelTarget === 'trader-insights') {
+  if (
+    channelTarget === 'best-bets' ||
+    channelTarget === 'trader-insights' ||
+    channelTarget === 'exclusive-insights'
+  ) {
     return channelTarget;
   }
 
   return null;
 }
 
-function formatTargetLabel(target: 'best-bets' | 'trader-insights') {
-  return target === 'best-bets' ? 'Best Bets' : 'Trader Insights';
+function formatTargetLabel(target: 'best-bets' | 'trader-insights' | 'exclusive-insights') {
+  if (target === 'best-bets') {
+    return 'Best Bets';
+  }
+
+  if (target === 'trader-insights') {
+    return 'Trader Insights';
+  }
+
+  return 'Exclusive Insights';
 }

@@ -115,9 +115,9 @@ export async function processSubmission(
     materialized.lifecycleEvent,
   );
 
-  // Step 4: eager promotion evaluation — both policies evaluated in priority order.
+  // Step 4: eager promotion evaluation — all policies are evaluated in priority order.
   // picks.promotion_target is set to the highest-priority qualified target (or null).
-  // Two pick_promotion_history rows are written, one per policy.
+  // Three pick_promotion_history rows are written, one per policy.
   const eagerResult = await evaluateAllPoliciesEagerAndPersist(
     pickRecord.id,
     'system',
