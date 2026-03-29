@@ -15,10 +15,14 @@ export interface WorkerRunnerOptions {
   maxCycles?: number | undefined;
   sleep?: ((ms: number) => Promise<void>) | undefined;
   pollIntervalMs?: number | undefined;
+  staleClaimMs?: number | undefined;
+  heartbeatMs?: number | undefined;
+  watchdogMs?: number | undefined;
 }
 
 export interface WorkerCycleSummary {
   cycle: number;
+  reapedOutboxIds: string[];
   results: WorkerProcessResult[];
 }
 
@@ -27,10 +31,12 @@ export async function runWorkerCycles(
 ): Promise<WorkerCycleSummary[]> {
   const maxCycles = options.maxCycles ?? 1;
   const pollIntervalMs = options.pollIntervalMs ?? 5000;
+  const staleClaimMs = options.staleClaimMs ?? 300000;
   const sleep = options.sleep ?? defaultSleep;
   const summaries: WorkerCycleSummary[] = [];
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+    const reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
     const results: WorkerProcessResult[] = [];
 
     for (const target of options.targets) {
@@ -39,12 +45,17 @@ export async function runWorkerCycles(
         target,
         options.workerId,
         options.deliver,
+        {
+          ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
+          ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
+        },
       );
       results.push(result);
     }
 
     summaries.push({
       cycle,
+      reapedOutboxIds: reaped.map((row) => row.id),
       results,
     });
 
@@ -54,6 +65,42 @@ export async function runWorkerCycles(
   }
 
   return summaries;
+}
+
+async function reapStaleClaims(
+  repositories: RepositoryBundle,
+  targets: string[],
+  workerId: string,
+  staleClaimMs: number,
+) {
+  const staleBefore = new Date(Date.now() - staleClaimMs).toISOString();
+  const reaped: OutboxRecord[] = [];
+
+  for (const target of targets) {
+    const rows = await repositories.outbox.reapStaleClaims(
+      target,
+      staleBefore,
+      `stale claim reaped by ${workerId}`,
+    );
+
+    for (const row of rows) {
+      reaped.push(row);
+      await repositories.audit.record({
+        entityType: 'distribution_outbox',
+        entityId: row.id,
+        action: 'distribution.reaped_stale_claim',
+        actor: workerId,
+        payload: {
+          outboxId: row.id,
+          target: row.target,
+          attemptCount: row.attempt_count,
+          staleBefore,
+        },
+      });
+    }
+  }
+
+  return reaped;
 }
 
 function defaultSleep(ms: number) {
