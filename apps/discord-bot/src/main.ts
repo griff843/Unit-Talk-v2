@@ -3,6 +3,8 @@ import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
 import { loadBotConfig } from './config.js';
 import { createCapperOnboardingHandler } from './handlers/capper-onboarding-handler.js';
+import { createMemberTierSyncHandler } from './handlers/member-tier-sync-handler.js';
+import { createApiClient } from './api-client.js';
 
 async function main() {
   let config;
@@ -15,6 +17,7 @@ async function main() {
 
   const client = createDiscordClient();
   const registry = await loadCommandRegistry();
+  const apiClient = createApiClient(config.apiUrl);
 
   client.once('ready', (readyClient) => {
     console.log(`[discord-bot] Ready as ${readyClient.user.tag}`);
@@ -22,6 +25,7 @@ async function main() {
 
   client.on('interactionCreate', createInteractionHandler(registry));
   client.on('guildMemberUpdate', createCapperOnboardingHandler(config, client));
+  client.on('guildMemberUpdate', createMemberTierSyncHandler(config, apiClient));
 
   for (const signal of ['SIGTERM', 'SIGINT'] as const) {
     process.once(signal, () => {

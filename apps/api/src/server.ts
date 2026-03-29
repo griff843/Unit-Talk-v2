@@ -6,6 +6,7 @@ import {
   createServiceRoleDatabaseConnectionConfig,
   type RepositoryBundle,
 } from '@unit-talk/db';
+import { memberTiers, type MemberTier } from '@unit-talk/contracts';
 import {
   createLogger,
   createRequestLogFields,
@@ -347,6 +348,46 @@ export async function routeRequest(
       postsCount: result.postsCount,
       channel: result.channel,
     });
+  }
+
+  if (method === 'POST' && url.pathname === '/api/member-tiers') {
+    const body = await readJsonBody(request, runtime.bodyLimitBytes);
+    const discordId = typeof body.discord_id === 'string' ? body.discord_id : null;
+    const tier = typeof body.tier === 'string' ? body.tier : null;
+    const action = typeof body.action === 'string' ? body.action : null;
+    const source = typeof body.source === 'string' ? body.source : 'manual';
+
+    if (!discordId) {
+      return writeJson(response, 400, { error: 'discord_id is required' });
+    }
+    if (!tier || !(memberTiers as readonly string[]).includes(tier)) {
+      return writeJson(response, 400, { error: `tier must be one of: ${memberTiers.join(', ')}` });
+    }
+    if (action !== 'activate' && action !== 'deactivate') {
+      return writeJson(response, 400, { error: 'action must be activate or deactivate' });
+    }
+
+    const validSource =
+      source === 'discord-role' || source === 'manual' || source === 'system'
+        ? (source as 'discord-role' | 'manual' | 'system')
+        : 'manual';
+
+    if (action === 'activate') {
+      await runtime.repositories.tiers.activateTier({
+        discordId,
+        tier: tier as MemberTier,
+        source: validSource,
+        changedBy: validSource,
+      });
+    } else {
+      await runtime.repositories.tiers.deactivateTier({
+        discordId,
+        tier: tier as MemberTier,
+        changedBy: validSource,
+      });
+    }
+
+    return writeJson(response, 200, { ok: true, tier, action });
   }
 
   return writeJson(response, 404, {
