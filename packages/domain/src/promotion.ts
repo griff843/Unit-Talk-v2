@@ -1,10 +1,10 @@
 import {
   bestBetsPromotionPolicy,
-  bestBetsScoreWeights,
   type BoardPromotionDecision,
   type BoardPromotionEvaluationInput,
   type PromotionPolicy,
   type PromotionScoreBreakdown,
+  type PromotionScoreWeights,
 } from '@unit-talk/contracts';
 
 export { bestBetsPromotionPolicy, exclusiveInsightsPromotionPolicy, traderInsightsPromotionPolicy } from '@unit-talk/contracts';
@@ -59,7 +59,7 @@ export function evaluatePromotionEligibility(
     suppressionReasons.push(`pick confidence is below the ${policy.target} floor`);
   }
 
-  const breakdown = calculateScore(input);
+  const breakdown = calculateScore(input, policy.weights);
   const edgeScore = normalizeScore(input.scoreInputs.edge);
   const trustScore = normalizeScore(input.scoreInputs.trust);
 
@@ -83,6 +83,7 @@ export function evaluatePromotionEligibility(
       breakdown,
       reasons,
       suppressionReasons,
+      policyWeights: policy.weights,
       status: input.isStale || input.approvalStatus === 'expired' ? 'expired' : 'not_eligible',
       qualified: false,
     });
@@ -100,6 +101,7 @@ export function evaluatePromotionEligibility(
       breakdown,
       reasons,
       suppressionReasons,
+      policyWeights: policy.weights,
       status: 'qualified',
       qualified: true,
     });
@@ -117,6 +119,7 @@ export function evaluatePromotionEligibility(
       breakdown,
       reasons,
       suppressionReasons,
+      policyWeights: policy.weights,
       status: 'suppressed',
       qualified: false,
     });
@@ -134,6 +137,7 @@ export function evaluatePromotionEligibility(
     breakdown,
     reasons,
     suppressionReasons,
+    policyWeights: policy.weights,
     status: 'qualified',
     qualified: true,
   });
@@ -145,19 +149,22 @@ export function evaluateBestBetsPromotion(
   return evaluatePromotionEligibility(input, bestBetsPromotionPolicy);
 }
 
-function calculateScore(input: BoardPromotionEvaluationInput): PromotionScoreBreakdown {
+function calculateScore(
+  input: BoardPromotionEvaluationInput,
+  weights: PromotionScoreWeights,
+): PromotionScoreBreakdown {
+  const e = normalizeScore(input.scoreInputs.edge);
+  const t = normalizeScore(input.scoreInputs.trust);
+  const r = normalizeScore(input.scoreInputs.readiness);
+  const u = normalizeScore(input.scoreInputs.uniqueness);
+  const b = normalizeScore(input.scoreInputs.boardFit);
   return {
-    edge: normalizeScore(input.scoreInputs.edge) * bestBetsScoreWeights.edge,
-    trust: normalizeScore(input.scoreInputs.trust) * bestBetsScoreWeights.trust,
-    readiness: normalizeScore(input.scoreInputs.readiness) * bestBetsScoreWeights.readiness,
-    uniqueness: normalizeScore(input.scoreInputs.uniqueness) * bestBetsScoreWeights.uniqueness,
-    boardFit: normalizeScore(input.scoreInputs.boardFit) * bestBetsScoreWeights.boardFit,
-    total:
-      normalizeScore(input.scoreInputs.edge) * bestBetsScoreWeights.edge +
-      normalizeScore(input.scoreInputs.trust) * bestBetsScoreWeights.trust +
-      normalizeScore(input.scoreInputs.readiness) * bestBetsScoreWeights.readiness +
-      normalizeScore(input.scoreInputs.uniqueness) * bestBetsScoreWeights.uniqueness +
-      normalizeScore(input.scoreInputs.boardFit) * bestBetsScoreWeights.boardFit,
+    edge: e * weights.edge,
+    trust: t * weights.trust,
+    readiness: r * weights.readiness,
+    uniqueness: u * weights.uniqueness,
+    boardFit: b * weights.boardFit,
+    total: e * weights.edge + t * weights.trust + r * weights.readiness + u * weights.uniqueness + b * weights.boardFit,
   };
 }
 
@@ -177,6 +184,7 @@ function buildDecision(input: {
   breakdown: PromotionScoreBreakdown;
   reasons: string[];
   suppressionReasons: string[];
+  policyWeights: PromotionScoreWeights;
   status: BoardPromotionDecision['status'];
   qualified: boolean;
 }): BoardPromotionDecision {
@@ -190,7 +198,7 @@ function buildDecision(input: {
       target: input.input.target,
       reasons: input.reasons,
       suppressionReasons: input.suppressionReasons,
-      weights: bestBetsScoreWeights,
+      weights: input.policyWeights,
     },
     version: input.version,
     decidedAt: input.decidedAt,

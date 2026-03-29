@@ -6,13 +6,14 @@ import {
   type PromotionPolicy,
   type PromotionOverrideAction,
   type PromotionTarget,
+  resolveScoringProfile,
 } from '@unit-talk/contracts';
 import {
   bestBetsPromotionPolicy,
   evaluatePromotionEligibility,
-  exclusiveInsightsPromotionPolicy,
-  traderInsightsPromotionPolicy,
 } from '@unit-talk/domain';
+
+const activeScoringProfile = resolveScoringProfile(process.env.UNIT_TALK_SCORING_PROFILE);
 import type {
   AuditLogRecord,
   AuditLogRepository,
@@ -63,9 +64,9 @@ export async function evaluateAndPersistPromotion(
 
 export function activePromotionPolicies() {
   return [
-    exclusiveInsightsPromotionPolicy,
-    traderInsightsPromotionPolicy,
-    bestBetsPromotionPolicy,
+    activeScoringProfile.policies['exclusive-insights'],
+    activeScoringProfile.policies['trader-insights'],
+    activeScoringProfile.policies['best-bets'],
   ] as const;
 }
 
@@ -178,6 +179,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
       scoreInputs,
       policy: winnerPolicy,
       explanation: winnerDecision.explanation,
+      scoringProfile: activeScoringProfile.name,
     },
   });
 
@@ -221,6 +223,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
         scoreInputs,
         policy,
         explanation: decision.explanation,
+        scoringProfile: activeScoringProfile.name,
       },
     });
 
@@ -598,13 +601,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolvePromotionPolicyForTarget(target: PromotionTarget): PromotionPolicy {
-  if (target === 'exclusive-insights') {
-    return exclusiveInsightsPromotionPolicy;
-  }
-
-  if (target === 'trader-insights') {
-    return traderInsightsPromotionPolicy;
-  }
-
-  return bestBetsPromotionPolicy;
+  return activeScoringProfile.policies[target];
 }

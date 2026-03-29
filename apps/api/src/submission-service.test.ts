@@ -6,6 +6,10 @@ import {
   evaluatePromotionEligibility,
   exclusiveInsightsPromotionPolicy,
 } from '@unit-talk/domain';
+import {
+  defaultScoringProfile,
+  conservativeScoringProfile,
+} from '@unit-talk/contracts';
 import { handleSubmitPick } from './handlers/index.js';
 import { applyPromotionOverride } from './promotion-service.js';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
@@ -1793,4 +1797,38 @@ test('best-bets qualified pick with absent edge and trust scores still qualifies
     repositories.audit,
   );
   assert.equal(tiTracked.target, 'discord:trader-insights');
+});
+
+test('conservativeScoringProfile produces different scores than defaultScoringProfile for same inputs', () => {
+  const baseInput = {
+    target: 'best-bets' as const,
+    pick: { id: 'test', lifecycleState: 'validated' as const, confidence: 0.8, market: 'test', selection: 'Over', source: 'test', submissionId: 'sub-1', approvalStatus: 'approved' as const, promotionStatus: 'eligible' as const },
+    approvalStatus: 'approved' as const,
+    hasRequiredFields: true,
+    isStale: false,
+    withinPostingWindow: true,
+    marketStillValid: true,
+    riskBlocked: false,
+    scoreInputs: { edge: 95, trust: 60, readiness: 70, uniqueness: 80, boardFit: 75 },
+    minimumScore: 70,
+    boardCaps: { perSlate: 5, perSport: 3, perGame: 1 },
+    boardState: { currentBoardCount: 0, sameSportCount: 0, sameGameCount: 0, duplicateCount: 0 },
+    decidedAt: '2026-03-29T00:00:00.000Z',
+    decidedBy: 'test',
+  };
+
+  const defaultPolicy = defaultScoringProfile.policies['best-bets'];
+  const conservativePolicy = conservativeScoringProfile.policies['best-bets'];
+
+  const defaultDecision = evaluatePromotionEligibility(baseInput, defaultPolicy);
+  const conservativeDecision = evaluatePromotionEligibility(baseInput, conservativePolicy);
+
+  assert.notEqual(
+    defaultDecision.score,
+    conservativeDecision.score,
+    'conservative profile must produce different scores than default for the same inputs',
+  );
+  assert.notDeepEqual(defaultDecision.explanation.weights, conservativeDecision.explanation.weights);
+  // Conservative has higher edge weight (0.40 vs 0.35) → higher score when edge=95 > trust=60
+  assert.ok(conservativeDecision.score > defaultDecision.score, 'conservative (higher edge weight) should score higher when edge > trust');
 });
