@@ -437,6 +437,8 @@ export interface MemberTierActivateInput {
   changedBy: string;
   reason?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
+  /** ISO timestamp for trial expiry — required when tier === 'trial' */
+  effectiveUntil?: string | undefined;
 }
 
 export interface MemberTierDeactivateInput {
@@ -464,6 +466,9 @@ export interface MemberTierRepository {
 
   /** Returns active tier counts per tier (for operator snapshot). */
   getTierCounts(): Promise<Record<MemberTier, number>>;
+
+  /** Returns all trial rows where effective_until < as_of (expired but not yet audit-logged). */
+  getExpiredActiveTrials(as_of?: string): Promise<MemberTierRecord[]>;
 }
 
 export interface AuditLogCreateInput {

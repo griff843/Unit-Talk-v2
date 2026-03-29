@@ -56,7 +56,8 @@ import {
   readRoleTierMappings,
   syncMemberTierFromRoleChange,
 } from './handlers/member-tier-sync-handler.js';
-import { InMemoryMemberTierRepository } from '@unit-talk/db';
+import { InMemoryMemberTierRepository, InMemoryAuditLogRepository } from '@unit-talk/db';
+import { deactivateExpiredTrials } from './trial-expiry-scanner.js';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -1821,4 +1822,64 @@ test('InMemoryMemberTierRepository: getTierCounts reflects active rows only', as
   const counts = await repo.getTierCounts();
   assert.equal(counts.vip, 1, 'only u1 should have active vip');
   assert.equal(counts.capper, 1, 'u3 should have active capper');
+});
+
+// UTV2-150: Trial expiry scanner tests
+
+test('InMemoryMemberTierRepository: activateTier respects effectiveUntil', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  const expiry = new Date(Date.now() - 1000).toISOString(); // already expired
+  const row = await repo.activateTier({
+    discordId: 'user-trial',
+    tier: 'trial',
+    source: 'manual',
+    changedBy: 'operator',
+    effectiveUntil: expiry,
+  });
+  assert.equal(row.effective_until, expiry, 'effective_until should be stored');
+});
+
+test('InMemoryMemberTierRepository: getExpiredActiveTrials returns expired rows', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  const past = new Date(Date.now() - 86400000).toISOString(); // 1 day ago
+  const future = new Date(Date.now() + 86400000).toISOString(); // 1 day ahead
+
+  await repo.activateTier({ discordId: 'user-expired', tier: 'trial', source: 'manual', changedBy: 'op', effectiveUntil: past });
+  await repo.activateTier({ discordId: 'user-active', tier: 'trial', source: 'manual', changedBy: 'op', effectiveUntil: future });
+  await repo.activateTier({ discordId: 'user-vip', tier: 'vip', source: 'discord-role', changedBy: 'op' });
+
+  const expired = await repo.getExpiredActiveTrials();
+  assert.equal(expired.length, 1);
+  assert.equal(expired[0]?.discord_id, 'user-expired');
+});
+
+test('deactivateExpiredTrials: deactivates expired rows and writes audit entries', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  const audit = new InMemoryAuditLogRepository();
+  const past = new Date(Date.now() - 86400000).toISOString();
+
+  await repo.activateTier({ discordId: 'user-exp1', tier: 'trial', source: 'manual', changedBy: 'op', effectiveUntil: past });
+  await repo.activateTier({ discordId: 'user-exp2', tier: 'trial', source: 'manual', changedBy: 'op', effectiveUntil: past });
+
+  const result = await deactivateExpiredTrials(repo, audit);
+  assert.equal(result.scanned, 2);
+  assert.equal(result.expired, 2);
+  assert.equal(result.errors, 0);
+
+  const auditRecords = audit.records;
+  assert.equal(auditRecords.length, 2);
+  assert.ok(auditRecords.every((r) => r.action === 'member_tier.trial_expired'));
+});
+
+test('deactivateExpiredTrials: skips non-expired rows', async () => {
+  const repo = new InMemoryMemberTierRepository();
+  const audit = new InMemoryAuditLogRepository();
+  const future = new Date(Date.now() + 86400000).toISOString();
+
+  await repo.activateTier({ discordId: 'user-future', tier: 'trial', source: 'manual', changedBy: 'op', effectiveUntil: future });
+
+  const result = await deactivateExpiredTrials(repo, audit);
+  assert.equal(result.scanned, 0);
+  assert.equal(result.expired, 0);
+  assert.equal(audit.records.length, 0);
 });

@@ -1081,7 +1081,7 @@ export class InMemorySystemRunRepository implements SystemRunRepository {
 }
 
 export class InMemoryAuditLogRepository implements AuditLogRepository {
-  private readonly records: AuditLogRow[] = [];
+  readonly records: AuditLogRow[] = [];
 
   async record(input: AuditLogCreateInput): Promise<AuditLogRow> {
     const record: AuditLogRow = {
@@ -2830,7 +2830,7 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
       discord_username: input.discordUsername ?? null,
       tier: input.tier,
       effective_from: now,
-      effective_until: null,
+      effective_until: input.effectiveUntil ?? null,
       source: input.source,
       changed_by: input.changedBy,
       reason: input.reason ?? null,
@@ -2877,6 +2877,13 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
     }
     return counts;
   }
+
+  async getExpiredActiveTrials(as_of?: string): Promise<MemberTierRecord[]> {
+    const now = as_of ?? new Date().toISOString();
+    return this.rows.filter(
+      (r) => r.tier === 'trial' && r.effective_until !== null && r.effective_until < now,
+    );
+  }
 }
 
 export class DatabaseMemberTierRepository implements MemberTierRepository {
@@ -2913,6 +2920,7 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
         changed_by: input.changedBy,
         reason: input.reason ?? null,
         metadata: input.metadata ?? {},
+        ...(input.effectiveUntil !== undefined ? { effective_until: input.effectiveUntil } : {}),
       })
       .select('*')
       .single();
@@ -2995,6 +3003,20 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
     }
 
     return counts;
+  }
+
+  async getExpiredActiveTrials(as_of?: string): Promise<MemberTierRecord[]> {
+    const now = as_of ?? new Date().toISOString();
+    const { data, error } = await this.db
+      .from('member_tiers')
+      .select('*')
+      .eq('tier', 'trial')
+      .not('effective_until', 'is', null)
+      .lt('effective_until', now)
+      .order('created_at', { ascending: true });
+
+    if (error) throw new Error(`Failed to get expired trials: ${error.message}`);
+    return (data ?? []) as MemberTierRecord[];
   }
 }
 
