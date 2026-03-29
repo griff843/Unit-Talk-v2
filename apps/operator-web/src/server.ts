@@ -11,6 +11,7 @@ import {
   type AuditLogRow,
 } from '@unit-talk/db';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
+import { memberTiers, type MemberTier } from '@unit-talk/contracts';
 import {
   resolveEffectiveSettlement,
   computeSettlementSummary,
@@ -107,6 +108,10 @@ export interface OperatorSnapshot {
   quotaSummary: OperatorQuotaSummary;
   picksPipeline: PicksPipelineSummary;
   recap: SettlementSummary;
+  memberTiers: {
+    counts: Record<MemberTier, number>;
+    observedAt: string;
+  };
 }
 
 export interface OperatorQuotaProviderSummary {
@@ -482,6 +487,7 @@ export function createOperatorSnapshotProvider(
           resolvedTeamsWithExternalIdCountResult,
           totalTeamsCountResult,
           upcomingEventsResult,
+          memberTiersResult,
         ] = await Promise.all([
           (() => {
             let q = client.from('distribution_outbox').select('*');
@@ -542,6 +548,10 @@ export function createOperatorSnapshotProvider(
             .lte('event_date', nextWeek)
             .order('event_date', { ascending: true })
             .limit(5),
+          client
+            .from('member_tiers')
+            .select('tier')
+            .is('effective_until', null),
         ]);
 
         if (outboxResult.error) {
@@ -580,6 +590,9 @@ export function createOperatorSnapshotProvider(
         if (upcomingEventsResult.error) {
           throw upcomingEventsResult.error;
         }
+        // member_tiers query is best-effort — table may not exist in older environments
+        const memberTierRows =
+          memberTiersResult.error ? [] : (memberTiersResult.data ?? []) as Array<{ tier: string }>;
 
         const recentOutbox = outboxResult.data ?? [];
         const recentReceipts = receiptsResult.data ?? [];
@@ -635,6 +648,7 @@ export function createOperatorSnapshotProvider(
               (postedCountResult.count ?? 0) +
               (settledCountResult.count ?? 0),
           },
+          memberTierRows,
         });
       },
       async getParticipants(filter?: OperatorParticipantsFilter) {
@@ -958,6 +972,7 @@ export function createSnapshotFromRows(input: {
   entityHealth?: OperatorEntityHealth;
   upcomingEvents?: OperatorUpcomingEventSummary[];
   picksPipelineCounts?: PicksPipelineSummary['counts'];
+  memberTierRows?: Array<{ tier: string }>;
 }): OperatorSnapshot {
   const counts = {
     pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
@@ -1041,7 +1056,18 @@ export function createSnapshotFromRows(input: {
       input.picksPipelineCounts,
     ),
     recap: computeSettlementSummary(resolveAllEffectiveSettlements(input.recentSettlements ?? [])),
+    memberTiers: computeMemberTierCounts(input.memberTierRows ?? []),
   };
+}
+
+function computeMemberTierCounts(rows: Array<{ tier: string }>): OperatorSnapshot['memberTiers'] {
+  const empty = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
+  for (const row of rows) {
+    if (row.tier in empty) {
+      (empty as Record<string, number>)[row.tier]! += 1;
+    }
+  }
+  return { counts: empty, observedAt: new Date().toISOString() };
 }
 
 function summarizeCanaryLane(

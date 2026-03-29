@@ -1130,6 +1130,48 @@ export type Database = {
         }
         Relationships: []
       }
+      member_tiers: {
+        Row: {
+          id: string
+          discord_id: string
+          discord_username: string | null
+          tier: string
+          effective_from: string
+          effective_until: string | null
+          source: string
+          changed_by: string | null
+          reason: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          discord_id: string
+          discord_username?: string | null
+          tier: string
+          effective_from?: string
+          effective_until?: string | null
+          source: string
+          changed_by?: string | null
+          reason?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          discord_id?: string
+          discord_username?: string | null
+          tier?: string
+          effective_from?: string
+          effective_until?: string | null
+          source?: string
+          changed_by?: string | null
+          reason?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

@@ -1,6 +1,7 @@
 import type {
   CanonicalPick,
   LifecycleEvent,
+  MemberTier,
   ProviderOfferInsert,
   SubmissionPayload,
   ValidatedSubmission,
@@ -20,6 +21,7 @@ import type {
   HedgeOpportunityPriority,
   HedgeOpportunityRecord,
   HedgeOpportunityType,
+  MemberTierRecord,
   ParticipantRow,
   ParticipantType,
   PickRecord,
@@ -499,6 +501,32 @@ export interface IngestorRepositoryBundle {
   eventParticipants: EventParticipantRepository;
   participants: ParticipantRepository;
   gradeResults: GradeResultRepository;
+}
+
+export interface MemberTierActivateInput {
+  discordId: string;
+  discordUsername?: string | undefined;
+  tier: MemberTier;
+  source: 'discord-role' | 'manual' | 'system';
+  changedBy: string;
+  reason?: string | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
+export interface MemberTierDeactivateInput {
+  discordId: string;
+  tier: MemberTier;
+  changedBy: string;
+  reason?: string | undefined;
+}
+
+export interface MemberTierRepository {
+  activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord>;
+  deactivateTier(input: MemberTierDeactivateInput): Promise<void>;
+  getActiveTiers(discordId: string): Promise<MemberTierRecord[]>;
+  getTierHistory(discordId: string): Promise<MemberTierRecord[]>;
+  getActiveMembersForTier(tier: MemberTier): Promise<MemberTierRecord[]>;
+  getTierCounts(): Promise<Record<MemberTier, number>>;
 }
 
 export function mapValidatedSubmissionToSubmissionCreateInput(
