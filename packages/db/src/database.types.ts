@@ -9,39 +9,6 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      audit_log: {
-        Row: {
-          action: string
-          actor: string | null
-          created_at: string
-          entity_id: string | null
-          entity_ref: string | null
-          entity_type: string
-          id: string
-          payload: Json
-        }
-        Insert: {
-          action: string
-          actor?: string | null
-          created_at?: string
-          entity_id?: string | null
-          entity_ref?: string | null
-          entity_type: string
-          id?: string
-          payload?: Json
-        }
-        Update: {
-          action?: string
-          actor?: string | null
-          created_at?: string
-          entity_id?: string | null
-          entity_ref?: string | null
-          entity_type?: string
-          id?: string
-          payload?: Json
-        }
-        Relationships: []
-      }
       alert_detections: {
         Row: {
           baseline_snapshot_at: string
@@ -128,116 +95,38 @@ export type Database = {
           },
         ]
       }
-      hedge_opportunities: {
+      audit_log: {
         Row: {
-          arbitrage_percentage: number
-          bookmaker_a: string
-          bookmaker_b: string
-          cooldown_expires_at: string | null
+          action: string
+          actor: string | null
           created_at: string
-          detected_at: string
-          event_id: string | null
-          guaranteed_profit: number | null
+          entity_id: string | null
+          entity_ref: string | null
+          entity_type: string
           id: string
-          idempotency_key: string
-          implied_prob_a: number
-          implied_prob_b: number
-          line_a: number
-          line_b: number
-          line_discrepancy: number
-          market_key: string
-          metadata: Json
-          middle_gap: number | null
-          notified: boolean
-          notified_at: string | null
-          notified_channels: string[] | null
-          over_odds_a: number
-          participant_id: string | null
-          priority: string
-          profit_potential: number
-          total_implied_prob: number
-          type: string
-          under_odds_b: number
-          win_probability: number | null
+          payload: Json
         }
         Insert: {
-          arbitrage_percentage: number
-          bookmaker_a: string
-          bookmaker_b: string
-          cooldown_expires_at?: string | null
+          action: string
+          actor?: string | null
           created_at?: string
-          detected_at?: string
-          event_id?: string | null
-          guaranteed_profit?: number | null
+          entity_id?: string | null
+          entity_ref?: string | null
+          entity_type: string
           id?: string
-          idempotency_key: string
-          implied_prob_a: number
-          implied_prob_b: number
-          line_a: number
-          line_b: number
-          line_discrepancy: number
-          market_key: string
-          metadata?: Json
-          middle_gap?: number | null
-          notified?: boolean
-          notified_at?: string | null
-          notified_channels?: string[] | null
-          over_odds_a: number
-          participant_id?: string | null
-          priority: string
-          profit_potential: number
-          total_implied_prob: number
-          type: string
-          under_odds_b: number
-          win_probability?: number | null
+          payload?: Json
         }
         Update: {
-          arbitrage_percentage?: number
-          bookmaker_a?: string
-          bookmaker_b?: string
-          cooldown_expires_at?: string | null
+          action?: string
+          actor?: string | null
           created_at?: string
-          detected_at?: string
-          event_id?: string | null
-          guaranteed_profit?: number | null
+          entity_id?: string | null
+          entity_ref?: string | null
+          entity_type?: string
           id?: string
-          idempotency_key?: string
-          implied_prob_a?: number
-          implied_prob_b?: number
-          line_a?: number
-          line_b?: number
-          line_discrepancy?: number
-          market_key?: string
-          metadata?: Json
-          middle_gap?: number | null
-          notified?: boolean
-          notified_at?: string | null
-          notified_channels?: string[] | null
-          over_odds_a?: number
-          participant_id?: string | null
-          priority?: string
-          profit_potential?: number
-          total_implied_prob?: number
-          type?: string
-          under_odds_b?: number
-          win_probability?: number | null
+          payload?: Json
         }
-        Relationships: [
-          {
-            foreignKeyName: "hedge_opportunities_event_id_fkey"
-            columns: ["event_id"]
-            isOneToOne: false
-            referencedRelation: "events"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "hedge_opportunities_participant_id_fkey"
-            columns: ["participant_id"]
-            isOneToOne: false
-            referencedRelation: "participants"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       cappers: {
         Row: {
@@ -496,6 +385,159 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      hedge_opportunities: {
+        Row: {
+          arbitrage_percentage: number
+          bookmaker_a: string
+          bookmaker_b: string
+          cooldown_expires_at: string | null
+          created_at: string
+          detected_at: string
+          event_id: string | null
+          guaranteed_profit: number | null
+          id: string
+          idempotency_key: string
+          implied_prob_a: number
+          implied_prob_b: number
+          line_a: number
+          line_b: number
+          line_discrepancy: number
+          market_key: string
+          metadata: Json
+          middle_gap: number | null
+          notified: boolean
+          notified_at: string | null
+          notified_channels: string[] | null
+          over_odds_a: number | null
+          participant_id: string | null
+          priority: string
+          profit_potential: number
+          total_implied_prob: number
+          type: string
+          under_odds_b: number | null
+          win_probability: number | null
+        }
+        Insert: {
+          arbitrage_percentage: number
+          bookmaker_a: string
+          bookmaker_b: string
+          cooldown_expires_at?: string | null
+          created_at?: string
+          detected_at?: string
+          event_id?: string | null
+          guaranteed_profit?: number | null
+          id?: string
+          idempotency_key: string
+          implied_prob_a: number
+          implied_prob_b: number
+          line_a: number
+          line_b: number
+          line_discrepancy: number
+          market_key: string
+          metadata?: Json
+          middle_gap?: number | null
+          notified?: boolean
+          notified_at?: string | null
+          notified_channels?: string[] | null
+          over_odds_a?: number | null
+          participant_id?: string | null
+          priority: string
+          profit_potential: number
+          total_implied_prob: number
+          type: string
+          under_odds_b?: number | null
+          win_probability?: number | null
+        }
+        Update: {
+          arbitrage_percentage?: number
+          bookmaker_a?: string
+          bookmaker_b?: string
+          cooldown_expires_at?: string | null
+          created_at?: string
+          detected_at?: string
+          event_id?: string | null
+          guaranteed_profit?: number | null
+          id?: string
+          idempotency_key?: string
+          implied_prob_a?: number
+          implied_prob_b?: number
+          line_a?: number
+          line_b?: number
+          line_discrepancy?: number
+          market_key?: string
+          metadata?: Json
+          middle_gap?: number | null
+          notified?: boolean
+          notified_at?: string | null
+          notified_channels?: string[] | null
+          over_odds_a?: number | null
+          participant_id?: string | null
+          priority?: string
+          profit_potential?: number
+          total_implied_prob?: number
+          type?: string
+          under_odds_b?: number | null
+          win_probability?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hedge_opportunities_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hedge_opportunities_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      member_tiers: {
+        Row: {
+          changed_by: string | null
+          created_at: string
+          discord_id: string
+          discord_username: string | null
+          effective_from: string
+          effective_until: string | null
+          id: string
+          metadata: Json
+          reason: string | null
+          source: string
+          tier: string
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string
+          discord_id: string
+          discord_username?: string | null
+          effective_from?: string
+          effective_until?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          source: string
+          tier: string
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string
+          discord_id?: string
+          discord_username?: string | null
+          effective_from?: string
+          effective_until?: string | null
+          id?: string
+          metadata?: Json
+          reason?: string | null
+          source?: string
+          tier?: string
+        }
+        Relationships: []
       }
       participant_memberships: {
         Row: {
@@ -1130,48 +1172,6 @@ export type Database = {
         }
         Relationships: []
       }
-      member_tiers: {
-        Row: {
-          id: string
-          discord_id: string
-          discord_username: string | null
-          tier: string
-          effective_from: string
-          effective_until: string | null
-          source: string
-          changed_by: string | null
-          reason: string | null
-          metadata: Json
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          discord_id: string
-          discord_username?: string | null
-          tier: string
-          effective_from?: string
-          effective_until?: string | null
-          source: string
-          changed_by?: string | null
-          reason?: string | null
-          metadata?: Json
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          discord_id?: string
-          discord_username?: string | null
-          tier?: string
-          effective_from?: string
-          effective_until?: string | null
-          source?: string
-          changed_by?: string | null
-          reason?: string | null
-          metadata?: Json
-          created_at?: string
-        }
-        Relationships: []
-      }
     }
     Views: {
       [_ in never]: never
@@ -1311,3 +1311,5 @@ export const Constants = {
   },
 } as const
 
+A new version of Supabase CLI is available: v2.84.2 (currently installed v2.78.1)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
