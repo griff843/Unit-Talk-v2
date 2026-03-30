@@ -819,7 +819,9 @@ test('runWorkerCycles processes configured targets across cycles', async () => {
     'all results should be sent',
   );
   assert.equal(receipts.records.length, 2);
-  assert.equal(runs.records.length, 2);
+  // 2 distribution.process runs + 1 worker.heartbeat run per cycle
+  assert.equal(runs.records.filter((r) => r.run_type !== 'worker.heartbeat').length, 2);
+  assert.equal(runs.records.filter((r) => r.run_type === 'worker.heartbeat').length, 1);
 });
 
 test('createStubDeliveryAdapter returns deterministic dry-run receipt metadata', async () => {
@@ -1406,6 +1408,66 @@ test('resolveTargetRegistry with UNIT_TALK_ENABLED_TARGETS=best-bets disables al
   assert.equal(registry.find(e => e.target === 'trader-insights')?.enabled, false);
   assert.equal(registry.find(e => e.target === 'exclusive-insights')?.enabled, false);
   assert.ok(registry.find(e => e.target === 'trader-insights')?.disabledReason?.includes('UNIT_TALK_ENABLED_TARGETS'));
+});
+
+// ---------------------------------------------------------------------------
+// Worker heartbeat tests (UTV2-120)
+// ---------------------------------------------------------------------------
+
+test('runWorkerCycles writes a worker.heartbeat system_run per cycle', async () => {
+  const { repositories, runs } = createWorkerTestRepositories([
+    createOutboxRecord('discord:hb-target'),
+  ]);
+
+  await runWorkerCycles({
+    repositories,
+    workerId: 'worker-hb',
+    targets: ['discord:hb-target'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    workerHeartbeatIntervalMs: 30000,
+  });
+
+  const heartbeatRuns = runs.records.filter((r) => r.run_type === 'worker.heartbeat');
+  assert.equal(heartbeatRuns.length, 1, 'exactly one worker.heartbeat run must be written per cycle');
+  assert.equal(heartbeatRuns[0]?.status, 'succeeded', 'heartbeat run must be completed as succeeded');
+  assert.ok(heartbeatRuns[0]?.finished_at != null, 'heartbeat run must have a finished_at timestamp');
+});
+
+test('runWorkerCycles writes one heartbeat per cycle for multiple cycles', async () => {
+  const { repositories, runs } = createWorkerTestRepositories([]);
+
+  await runWorkerCycles({
+    repositories,
+    workerId: 'worker-hb-multi',
+    targets: ['discord:hb-multi'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 3,
+    sleep: async () => {},
+    workerHeartbeatIntervalMs: 30000,
+  });
+
+  const heartbeatRuns = runs.records.filter((r) => r.run_type === 'worker.heartbeat');
+  assert.equal(heartbeatRuns.length, 3, 'one worker.heartbeat run must be written per cycle');
+  assert.ok(heartbeatRuns.every((r) => r.status === 'succeeded'), 'all heartbeat runs must be succeeded');
+});
+
+test('runWorkerCycles skips heartbeat write when workerHeartbeatIntervalMs is 0', async () => {
+  const { repositories, runs } = createWorkerTestRepositories([
+    createOutboxRecord('discord:hb-skip'),
+  ]);
+
+  await runWorkerCycles({
+    repositories,
+    workerId: 'worker-hb-skip',
+    targets: ['discord:hb-skip'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    workerHeartbeatIntervalMs: 0,
+  });
+
+  const heartbeatRuns = runs.records.filter((r) => r.run_type === 'worker.heartbeat');
+  assert.equal(heartbeatRuns.length, 0, 'no worker.heartbeat runs must be written when interval is 0');
 });
 
 function isGovernedTarget(target: string) {

@@ -3199,3 +3199,80 @@ test('createSnapshotFromRows gradingAgent reflects latest recap.post row', () =>
   assert.equal(snapshot.gradingAgent.lastRecapChannel, '1296531122234327100');
   assert.equal(snapshot.gradingAgent.runCount, 0);
 });
+
+// ---------------------------------------------------------------------------
+// Worker heartbeat stale detection tests (UTV2-120)
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows marks worker degraded when worker.heartbeat is stale', () => {
+  // Heartbeat that is 300 seconds old — well past the 120s default threshold
+  const staleHeartbeatAt = new Date(Date.now() - 300_000).toISOString();
+  const heartbeatRun: SystemRunRecord = {
+    id: 'hb-stale-1',
+    run_type: 'worker.heartbeat',
+    status: 'succeeded',
+    started_at: staleHeartbeatAt,
+    finished_at: staleHeartbeatAt,
+    actor: 'worker-dev',
+    details: { cycle: 1, targets: ['discord:best-bets'] },
+    created_at: staleHeartbeatAt,
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [heartbeatRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  const workerSignal = snapshot.health.find((h) => h.component === 'worker');
+  assert.ok(workerSignal, 'worker health signal should be present');
+  assert.equal(workerSignal.status, 'degraded');
+  assert.ok(
+    workerSignal.detail?.includes('stale'),
+    `detail should mention stale heartbeat, got: ${workerSignal.detail}`,
+  );
+});
+
+test('createSnapshotFromRows keeps worker healthy when worker.heartbeat is fresh', () => {
+  // Heartbeat that is 10 seconds old — well within the 120s default threshold
+  const freshHeartbeatAt = new Date(Date.now() - 10_000).toISOString();
+  const heartbeatRun: SystemRunRecord = {
+    id: 'hb-fresh-1',
+    run_type: 'worker.heartbeat',
+    status: 'succeeded',
+    started_at: freshHeartbeatAt,
+    finished_at: freshHeartbeatAt,
+    actor: 'worker-dev',
+    details: { cycle: 1, targets: ['discord:best-bets'] },
+    created_at: freshHeartbeatAt,
+    idempotency_key: null,
+  };
+  const normalRun: SystemRunRecord = {
+    id: 'normal-run-hb-2',
+    run_type: 'distribution.process',
+    status: 'succeeded',
+    started_at: freshHeartbeatAt,
+    finished_at: freshHeartbeatAt,
+    actor: 'worker-dev',
+    details: null,
+    created_at: freshHeartbeatAt,
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [heartbeatRun, normalRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  const workerSignal = snapshot.health.find((h) => h.component === 'worker');
+  assert.ok(workerSignal, 'worker health signal should be present');
+  assert.equal(workerSignal.status, 'healthy', `worker should be healthy with fresh heartbeat, got: ${workerSignal.status} (${workerSignal.detail})`);
+});

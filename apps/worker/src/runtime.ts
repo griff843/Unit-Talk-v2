@@ -172,3 +172,13 @@ export function readCircuitBreakerCooldownMs(): number {
 
   return parsed;
 }
+
+export function readWorkerHeartbeatIntervalMs(): number {
+  const parsed = Number.parseInt(process.env.WORKER_HEARTBEAT_INTERVAL_MS ?? '30000', 10);
+
+  if (Number.isNaN(parsed) || parsed < 0) {
+    return 30000;
+  }
+
+  return parsed;
+}

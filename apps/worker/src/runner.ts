@@ -24,6 +24,8 @@ export interface WorkerRunnerOptions {
   heartbeatMs?: number | undefined;
   watchdogMs?: number | undefined;
   targetRegistry?: TargetRegistryEntry[] | undefined;
+  /** Interval at which the runner writes a worker.heartbeat system_run per cycle. Pass 0 to disable. Default: 30000. */
+  workerHeartbeatIntervalMs?: number | undefined;
 }
 
 export interface WorkerCycleSummary {
@@ -47,8 +49,25 @@ export async function runWorkerCycles(
   const summaries: WorkerCycleSummary[] = [];
   // Track system_run IDs for open circuits so we can close them when the circuit resets
   const openCircuitRunIds = new Map<string, string>();
+  // Write a worker.heartbeat row per cycle so the operator can detect silent failures.
+  // Pass workerHeartbeatIntervalMs=0 to disable. Default: 30000.
+  const heartbeatIntervalMs = options.workerHeartbeatIntervalMs ?? 30000;
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+    let heartbeatRunId: string | undefined;
+    if (heartbeatIntervalMs > 0) {
+      try {
+        const hb = await options.repositories.runs.startRun({
+          runType: 'worker.heartbeat',
+          actor: options.workerId,
+          details: { cycle, targets: options.targets },
+        });
+        heartbeatRunId = hb.id;
+      } catch {
+        // Non-fatal — heartbeat write is best-effort
+      }
+    }
+
     const reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
     const results: WorkerProcessResult[] = [];
 
@@ -137,6 +156,18 @@ export async function runWorkerCycles(
       reapedOutboxIds: reaped.map((row) => row.id),
       results,
     });
+
+    if (heartbeatRunId !== undefined) {
+      try {
+        await options.repositories.runs.completeRun({
+          runId: heartbeatRunId,
+          status: 'succeeded',
+          details: { cycle, targets: options.targets },
+        });
+      } catch {
+        // Non-fatal
+      }
+    }
 
     if (cycle < maxCycles) {
       await sleep(pollIntervalMs);
