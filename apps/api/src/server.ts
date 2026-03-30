@@ -6,25 +6,28 @@ import {
   createServiceRoleDatabaseConnectionConfig,
   type RepositoryBundle,
 } from '@unit-talk/db';
-import { memberTiers, type MemberTier } from '@unit-talk/contracts';
 import {
   createLogger,
   createRequestLogFields,
   getOrCreateCorrelationId,
   type Logger,
 } from '@unit-talk/observability';
+import { setCorsHeaders, writeJson } from './http-utils.js';
 import {
-  handleGetCatalog,
-  handleListEvents,
-  handleSearchPlayers,
-  handleSearchTeams,
-  handleSettlePick,
-  handleSubmitPick,
-} from './handlers/index.js';
-import { getAlertStatus, getRecentAlerts } from './alert-query-service.js';
-import { requeuePickController } from './controllers/requeue-controller.js';
-import { runGradingPass } from './grading-service.js';
-import { postRecapSummary } from './recap-service.js';
+  handleHealth,
+  handleAlertsRecent,
+  handleAlertsStatus,
+  handleSubmissions,
+  handleSettlePickRoute,
+  handleRequeuePick,
+  handleReferenceDataCatalog,
+  handleReferenceDataSearchTeams,
+  handleReferenceDataSearchPlayers,
+  handleReferenceDataEvents,
+  handleGradingRun,
+  handleRecapPost,
+  handleMemberTiers,
+} from './routes/index.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -78,7 +81,6 @@ export interface ApiRateLimitStore {
 const DEFAULT_BODY_LIMIT_BYTES = 64 * 1024;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 10;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
-const CORS_ORIGIN = process.env.CORS_ORIGIN ?? '*';
 
 export function createApiRuntimeDependencies(
   options: ApiServerOptions = {},
@@ -204,84 +206,35 @@ export async function routeRequest(
   }
 
   if (method === 'GET' && url.pathname === '/health') {
-    return writeJson(response, 200, {
-      ok: true,
-      service: 'api',
-      persistenceMode: runtime.persistenceMode,
-      runtimeMode: runtime.runtimeMode,
-    } satisfies ApiHealthResponse);
+    return handleHealth(response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/catalog') {
-    const apiResponse = await handleGetCatalog(runtime.repositories.referenceData);
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataCatalog(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/search/teams') {
-    const sport = url.searchParams.get('sport');
-    const q = url.searchParams.get('q');
-    const apiResponse = await handleSearchTeams(
-      { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
-      runtime.repositories.referenceData,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataSearchTeams(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/search/players') {
-    const sport = url.searchParams.get('sport');
-    const q = url.searchParams.get('q');
-    const apiResponse = await handleSearchPlayers(
-      { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
-      runtime.repositories.referenceData,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataSearchPlayers(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/events') {
-    const sport = url.searchParams.get('sport');
-    const date = url.searchParams.get('date');
-    const apiResponse = await handleListEvents(
-      { ...(sport ? { sport } : {}), ...(date ? { date } : {}) },
-      runtime.repositories.referenceData,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleReferenceDataEvents(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/alerts/recent') {
-    const limit = readOptionalInteger(url.searchParams.get('limit'));
-    const minTier = url.searchParams.get('minTier');
-    const body = await getRecentAlerts(runtime.repositories.alertDetections, {
-      limit,
-      minTier: minTier === 'alert-worthy' ? 'alert-worthy' : 'notable',
-    });
-    return writeJson(response, 200, body);
+    return handleAlertsRecent(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/alerts/status') {
-    const body = await getAlertStatus(runtime.repositories.alertDetections, process.env);
-    return writeJson(response, 200, body);
+    return handleAlertsStatus(request, response, runtime);
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {
-    const rateLimitResult = consumeSubmissionRateLimit(request, response, runtime);
-    if (rateLimitResult.exceeded) {
-      requestLogger.warn('submission rate limit exceeded', {
-        limit: rateLimitResult.limit,
-        remaining: rateLimitResult.remaining,
-        resetAt: new Date(rateLimitResult.resetAt).toISOString(),
-      });
-      return writeJson(response, 429, {
-        ok: false,
-        error: {
-          code: 'RATE_LIMIT_EXCEEDED',
-          message: 'Submission rate limit exceeded. Try again shortly.',
-        },
-      });
-    }
-
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleSubmissions(request, response, runtime, requestLogger);
   }
 
   const settleMatch =
@@ -290,17 +243,7 @@ export async function routeRequest(
       : null;
 
   if (settleMatch) {
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const apiResponse = await handleSettlePick(
-      {
-        params: {
-          pickId: settleMatch[1] ?? '',
-        },
-        body,
-      },
-      runtime.repositories,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleSettlePickRoute(request, response, runtime, settleMatch[1] ?? '');
   }
 
   const requeueMatch =
@@ -309,85 +252,19 @@ export async function routeRequest(
       : null;
 
   if (requeueMatch) {
-    const apiResponse = await requeuePickController(
-      requeueMatch[1] ?? '',
-      runtime.repositories,
-    );
-    return writeJson(response, apiResponse.status, apiResponse.body);
+    return handleRequeuePick(request, response, runtime, requeueMatch[1] ?? '');
   }
 
   if (method === 'POST' && url.pathname === '/api/grading/run') {
-    const result = await runGradingPass(runtime.repositories);
-    return writeJson(response, 200, { ok: true, result });
+    return handleGradingRun(request, response, runtime);
   }
 
   if (method === 'POST' && url.pathname === '/api/recap/post') {
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const period = body.period;
-    const channel = typeof body.channel === 'string' ? body.channel : undefined;
-
-    if (period !== 'daily' && period !== 'weekly' && period !== 'monthly') {
-      return writeJson(response, 400, {
-        ok: false,
-        error: {
-          code: 'INVALID_RECAP_PERIOD',
-          message: 'period must be one of daily, weekly, or monthly',
-        },
-      });
-    }
-
-    const result = await postRecapSummary(period, runtime.repositories, {
-      ...(channel ? { channel } : {}),
-    });
-    if (!result.ok) {
-      return writeJson(response, 200, result);
-    }
-
-    return writeJson(response, 200, {
-      ok: true,
-      postsCount: result.postsCount,
-      channel: result.channel,
-    });
+    return handleRecapPost(request, response, runtime);
   }
 
   if (method === 'POST' && url.pathname === '/api/member-tiers') {
-    const body = await readJsonBody(request, runtime.bodyLimitBytes);
-    const discordId = typeof body.discord_id === 'string' ? body.discord_id : null;
-    const tier = typeof body.tier === 'string' ? body.tier : null;
-    const action = typeof body.action === 'string' ? body.action : null;
-    const source = typeof body.source === 'string' ? body.source : 'manual';
-
-    if (!discordId) {
-      return writeJson(response, 400, { error: 'discord_id is required' });
-    }
-    if (!tier || !(memberTiers as readonly string[]).includes(tier)) {
-      return writeJson(response, 400, { error: `tier must be one of: ${memberTiers.join(', ')}` });
-    }
-    if (action !== 'activate' && action !== 'deactivate') {
-      return writeJson(response, 400, { error: 'action must be activate or deactivate' });
-    }
-
-    const validSource =
-      source === 'discord-role' || source === 'manual' || source === 'system'
-        ? (source as 'discord-role' | 'manual' | 'system')
-        : 'manual';
-
-    if (action === 'activate') {
-      await runtime.repositories.tiers.activateTier({
-        discordId,
-        tier: tier as MemberTier,
-        source: validSource,
-        changedBy: validSource,
-      });
-    } else {
-      await runtime.repositories.tiers.deactivateTier({
-        discordId,
-        tier: tier as MemberTier,
-        changedBy: validSource,
-      });
-    }
-
-    return writeJson(response, 200, { ok: true, tier, action });
+    return handleMemberTiers(request, response, runtime);
   }
 
   return writeJson(response, 404, {
@@ -442,41 +319,6 @@ export async function readJsonBody(
   }
 }
 
-function consumeSubmissionRateLimit(
-  request: IncomingMessage,
-  response: ServerResponse,
-  runtime: ApiRuntimeDependencies,
-) {
-  const key = buildSubmissionRateLimitKey(request);
-  const result = runtime.rateLimitStore.consume(
-    key,
-    runtime.submissionRateLimit,
-    runtime.now(),
-  );
-
-  response.setHeader('X-RateLimit-Limit', String(result.limit));
-  response.setHeader('X-RateLimit-Remaining', String(result.remaining));
-  response.setHeader('X-RateLimit-Reset', new Date(result.resetAt).toISOString());
-
-  if (result.exceeded) {
-    response.setHeader(
-      'Retry-After',
-      String(Math.max(Math.ceil((result.resetAt - runtime.now()) / 1000), 0)),
-    );
-  }
-
-  return result;
-}
-
-function buildSubmissionRateLimitKey(request: IncomingMessage) {
-  const forwardedFor = request.headers['x-forwarded-for'];
-  const clientId =
-    typeof forwardedFor === 'string'
-      ? forwardedFor.split(',')[0]?.trim()
-      : request.socket.remoteAddress ?? 'unknown';
-
-  return `submission:${clientId ?? 'unknown'}`;
-}
 
 function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
   const configured = environment.UNIT_TALK_API_RUNTIME_MODE?.trim().toLowerCase();
@@ -519,27 +361,6 @@ function readSubmissionRateLimit(environment: AppEnv): ApiSubmissionRateLimit {
   };
 }
 
-function setCorsHeaders(response: ServerResponse) {
-  response.setHeader('Access-Control-Allow-Origin', CORS_ORIGIN);
-  response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  response.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Correlation-Id, X-Request-Id');
-}
-
-function writeJson(response: ServerResponse, status: number, body: unknown) {
-  response.statusCode = status;
-  response.setHeader('content-type', 'application/json; charset=utf-8');
-  setCorsHeaders(response);
-  response.end(JSON.stringify(body));
-}
-
-function readOptionalInteger(rawValue: string | null) {
-  if (!rawValue) {
-    return undefined;
-  }
-
-  const parsed = Number.parseInt(rawValue, 10);
-  return Number.isFinite(parsed) ? parsed : undefined;
-}
 
 function toApiFailure(error: unknown) {
   if (error instanceof ApiRequestError) {
