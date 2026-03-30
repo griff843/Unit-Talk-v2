@@ -11,7 +11,10 @@ export async function handleSubmissions(
   runtime: ApiRuntimeDependencies,
   requestLogger: Logger,
 ): Promise<void> {
-  const rateLimitResult = consumeSubmissionRateLimit(request, response, runtime);
+  // Read body first so we can key the rate limiter by Discord user ID when present.
+  const body = await readJsonBody(request, runtime.bodyLimitBytes);
+
+  const rateLimitResult = consumeSubmissionRateLimit(request, body, response, runtime);
   if (rateLimitResult.exceeded) {
     requestLogger.warn('submission rate limit exceeded', {
       limit: rateLimitResult.limit,
@@ -28,17 +31,17 @@ export async function handleSubmissions(
     return;
   }
 
-  const body = await readJsonBody(request, runtime.bodyLimitBytes);
   const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
   writeJson(response, apiResponse.status, apiResponse.body);
 }
 
 function consumeSubmissionRateLimit(
   request: IncomingMessage,
+  body: Record<string, unknown>,
   response: ServerResponse,
   runtime: ApiRuntimeDependencies,
 ) {
-  const key = buildSubmissionRateLimitKey(request);
+  const key = buildSubmissionRateLimitKey(request, body);
   const result = runtime.rateLimitStore.consume(
     key,
     runtime.submissionRateLimit,
@@ -59,12 +62,39 @@ function consumeSubmissionRateLimit(
   return result;
 }
 
-function buildSubmissionRateLimitKey(request: IncomingMessage) {
+/**
+ * Build the rate-limit key for a submission request.
+ *
+ * Priority order:
+ * 1. `discordUserId` field in the request body (explicit Discord user ID)
+ * 2. `submittedBy` field in the request body (capper identity)
+ * 3. `x-forwarded-for` header first IP segment (proxy/CDN-forwarded client IP)
+ * 4. socket remote address
+ * 5. fallback: "unknown"
+ */
+function buildSubmissionRateLimitKey(
+  request: IncomingMessage,
+  body: Record<string, unknown>,
+): string {
+  // Prefer Discord user identity from body so each Discord user gets their own bucket
+  // regardless of which IP they're coming from.
+  const discordUserId =
+    typeof body['discordUserId'] === 'string' && body['discordUserId'].length > 0
+      ? body['discordUserId']
+      : typeof body['submittedBy'] === 'string' && body['submittedBy'].length > 0
+        ? body['submittedBy']
+        : null;
+
+  if (discordUserId !== null) {
+    return `submission:discord:${discordUserId}`;
+  }
+
+  // Fall back to IP address.
   const forwardedFor = request.headers['x-forwarded-for'];
-  const clientId =
+  const clientIp =
     typeof forwardedFor === 'string'
       ? forwardedFor.split(',')[0]?.trim()
       : request.socket.remoteAddress ?? 'unknown';
 
-  return `submission:${clientId ?? 'unknown'}`;
+  return `submission:ip:${clientIp ?? 'unknown'}`;
 }
