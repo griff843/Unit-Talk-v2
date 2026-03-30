@@ -653,6 +653,72 @@ test('processNextDistributionWork marks work failed and records audit', async ()
   assert.equal(audit.records[0]?.action, 'distribution.failed');
 });
 
+test('processNextDistributionWork immediately dead-letters terminal delivery failures', async () => {
+  const outboxRecord = createOutboxRecord('discord:terminal', { attempt_count: 1 });
+  const { repositories, picks, runs, audit } = createWorkerTestRepositories([outboxRecord]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:terminal',
+    'worker-terminal',
+    async () => ({
+      receiptType: 'discord.message',
+      status: 'terminal-failure',
+      reason: 'HTTP 403: Missing Access',
+      channel: 'discord:1234567890',
+      payload: {
+        adapter: 'discord',
+      },
+    }),
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'dead_letter');
+    assert.equal(result.outbox.attempt_count, 1);
+    assert.equal(result.outbox.last_error, 'HTTP 403: Missing Access');
+  }
+  const pick = await picks.findPickById(outboxRecord.pick_id);
+  assert.equal(pick?.status, 'queued', 'pick must remain queued on terminal failure');
+  assert.equal(runs.records[0]?.status, 'failed');
+  assert.equal(
+    (runs.records[0]?.details as Record<string, unknown> | undefined)?.terminalFailure,
+    true,
+  );
+  assert.equal(audit.records[0]?.action, 'distribution.dead_lettered');
+});
+
+test('processNextDistributionWork retries normally on retryable delivery failures', async () => {
+  const outboxRecord = createOutboxRecord('discord:retryable', { attempt_count: 1 });
+  const { repositories, picks, runs, audit } = createWorkerTestRepositories([outboxRecord]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:retryable',
+    'worker-retryable',
+    async () => ({
+      receiptType: 'discord.message',
+      status: 'retryable-failure',
+      reason: 'HTTP 429: rate limited',
+      channel: 'discord:1234567890',
+      payload: {
+        adapter: 'discord',
+      },
+    }),
+  );
+
+  assert.equal(result.status, 'failed');
+  if (result.status === 'failed') {
+    assert.equal(result.outbox.status, 'failed');
+    assert.equal(result.outbox.attempt_count, 2);
+    assert.equal(result.outbox.last_error, 'HTTP 429: rate limited');
+  }
+  const pick = await picks.findPickById(outboxRecord.pick_id);
+  assert.equal(pick?.status, 'queued', 'pick must remain queued on retryable failure');
+  assert.equal(runs.records[0]?.status, 'failed');
+  assert.equal(audit.records[0]?.action, 'distribution.failed');
+});
+
 test('processNextDistributionWork promotes the outbox row to dead_letter after the third failure', async () => {
   const { repositories, audit } = createWorkerTestRepositories([
     createOutboxRecord('discord:dead-letter', { attempt_count: 2 }),
@@ -1073,7 +1139,7 @@ test('createDiscordDeliveryAdapter resolves discord:<numericId> target directly 
   assert.equal(receipt.receiptType, 'discord.message');
 });
 
-test('createDiscordDeliveryAdapter throws descriptively on non-200 Discord response', async () => {
+test('createDiscordDeliveryAdapter classifies 4xx responses as terminal failures', async () => {
   const outbox = createOutboxRecord('discord:canary');
   const adapter = createDiscordDeliveryAdapter({
     dryRun: false,
@@ -1086,7 +1152,49 @@ test('createDiscordDeliveryAdapter throws descriptively on non-200 Discord respo
       }),
   });
 
-  await assert.rejects(() => adapter(outbox), /Discord delivery failed: 403/);
+  const result = await adapter(outbox);
+
+  assert.equal(result.status, 'terminal-failure');
+  assert.equal(result.channel, 'discord:1234567890');
+  assert.equal(result.reason, 'HTTP 403: {"message":"Missing Access"}');
+});
+
+test('createDiscordDeliveryAdapter classifies 429 responses as retryable failures', async () => {
+  const outbox = createOutboxRecord('discord:canary');
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:canary': '1234567890' },
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ message: 'rate limited' }), {
+        status: 429,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  const result = await adapter(outbox);
+
+  assert.equal(result.status, 'retryable-failure');
+  assert.equal(result.channel, 'discord:1234567890');
+  assert.equal(result.reason, 'HTTP 429: {"message":"rate limited"}');
+});
+
+test('createDiscordDeliveryAdapter classifies network errors as retryable failures', async () => {
+  const outbox = createOutboxRecord('discord:canary');
+  const adapter = createDiscordDeliveryAdapter({
+    dryRun: false,
+    botToken: 'test-bot-token',
+    targetMap: { 'discord:canary': '1234567890' },
+    fetchImpl: async () => {
+      throw new Error('socket hang up');
+    },
+  });
+
+  const result = await adapter(outbox);
+
+  assert.equal(result.status, 'retryable-failure');
+  assert.equal(result.channel, 'discord:1234567890');
+  assert.equal(result.reason, 'socket hang up');
 });
 
 test('buildDiscordMessagePayload omits content field for non-canary targets', async () => {
