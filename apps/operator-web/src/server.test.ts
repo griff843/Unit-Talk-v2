@@ -3546,3 +3546,64 @@ test('detectIncidents returns empty array when everything is healthy', () => {
     false,
   );
 });
+// ---------------------------------------------------------------------------
+// pick-detail route tests
+// ---------------------------------------------------------------------------
+
+test('GET /api/operator/picks/known-id returns PickDetailView JSON with correct shape', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/picks/known-id');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      pick: { id: string; status: string; market: string };
+      lifecycle: unknown[];
+      promotionHistory: unknown[];
+      outboxRows: unknown[];
+      receipts: unknown[];
+      settlements: unknown[];
+      auditTrail: unknown[];
+      submission: { id: string } | null;
+    };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(body.data.pick.id, 'known-id');
+  assert.equal(typeof body.data.pick.status, 'string');
+  assert.equal(typeof body.data.pick.market, 'string');
+  assert.ok(Array.isArray(body.data.lifecycle), 'lifecycle should be an array');
+  assert.ok(Array.isArray(body.data.promotionHistory), 'promotionHistory should be an array');
+  assert.ok(Array.isArray(body.data.outboxRows), 'outboxRows should be an array');
+  assert.ok(Array.isArray(body.data.receipts), 'receipts should be an array');
+  assert.ok(Array.isArray(body.data.settlements), 'settlements should be an array');
+  assert.ok(Array.isArray(body.data.auditTrail), 'auditTrail should be an array');
+});
+
+test('GET /api/operator/picks/unknown-id returns 404', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/picks/unknown-id');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 404);
+  const body = JSON.parse(response.body) as { ok: boolean; error: { code: string } };
+  assert.equal(body.ok, false);
+  assert.equal(body.error.code, 'NOT_FOUND');
+});
