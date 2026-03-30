@@ -37,6 +37,8 @@ importers:
         specifier: ^8.29.1
         version: 8.57.1(eslint@9.39.4(jiti@1.21.7))(typescript@5.9.3)
 
+  apps/alert-agent: {}
+
   apps/api:
     dependencies:
       '@unit-talk/config':
