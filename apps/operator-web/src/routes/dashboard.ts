@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OutboxRecord, SystemRunRecord, SettlementRecord } from '@unit-talk/db';
-import type { OperatorRouteDependencies, OperatorSnapshot } from '../server.js';
+import type { OperatorIncident, OperatorRouteDependencies, OperatorSnapshot } from '../server.js';
 import { writeHtml } from '../http-utils.js';
 
 function escapeHtml(value: string) {
@@ -86,6 +86,26 @@ function formatClvPercent(payload: unknown): string {
 function formatBeatsLine(payload: unknown): string {
   const v = readJsonObject(payload)?.['beatsClosingLine'];
   return typeof v === 'boolean' ? (v ? '✓' : '✗') : '—';
+}
+
+function renderActiveIncidentsSection(incidents: OperatorIncident[]): string {
+  if (incidents.length === 0) return '';
+
+  const rows = incidents.map((incident) => `
+      <tr>
+        <td><code>${escapeHtml(incident.type)}</code></td>
+        <td><span class="badge badge-${incident.severity === 'critical' ? 'down' : 'degraded'}">${escapeHtml(incident.severity)}</span></td>
+        <td>${escapeHtml(incident.summary)}</td>
+        <td><code>${escapeHtml(String(incident.affectedCount))}</code></td>
+      </tr>`).join('');
+
+  return `<section class="active-incidents" id="active-incidents">
+      <h2>Active Incidents (${escapeHtml(String(incidents.length))})</h2>
+      <table>
+        <thead><tr><th>Type</th><th>Severity</th><th>Summary</th><th>Affected</th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </section>`;
 }
 
 export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
@@ -577,6 +597,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       <h1>Unit Talk V2 Operator</h1>
       <p class="lede">Read-only operational view for the active canary lane. Observed at ${escapeHtml(snapshot.observedAt)} using ${escapeHtml(snapshot.persistenceMode)} mode.</p>
       ${incidentBanner}
+      ${renderActiveIncidentsSection(snapshot.incidents)}
       ${incidentTriageSection}
       <section>
         <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}${quotaCard}${workerRuntimeCard}</div>

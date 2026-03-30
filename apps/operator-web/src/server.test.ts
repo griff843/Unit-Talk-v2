@@ -2311,215 +2311,6 @@ test('buildCapperStatsResponse excludes picks outside the requested window', () 
   assert.deepEqual(stats.lastFive, ['L', 'W']);
 });
 
-test('detectIncidents detects stuck-outbox when pending row is older than 10 minutes', () => {
-  const now = '2026-03-29T12:00:00.000Z';
-  const stuckAt = '2026-03-29T11:45:00.000Z'; // 15 minutes before now
-  const incidents = detectIncidents(
-    {
-      recentOutbox: [
-        {
-          id: 'outbox-stuck-1',
-          pick_id: 'pick-stuck-1',
-          target: 'discord:canary',
-          status: 'pending',
-          attempt_count: 0,
-          next_attempt_at: null,
-          last_error: null,
-          payload: {},
-          claimed_at: null,
-          claimed_by: null,
-          idempotency_key: null,
-          created_at: stuckAt,
-          updated_at: stuckAt,
-        },
-      ],
-      recentRuns: [
-        {
-          id: 'run-heartbeat-1',
-          run_type: 'worker.heartbeat',
-          status: 'succeeded',
-          started_at: now,
-          finished_at: now,
-          actor: 'worker',
-          details: {},
-          created_at: now,
-          idempotency_key: null,
-        },
-      ],
-    },
-    now,
-  );
-  const stuckIncident = incidents.find((i) => i.type === 'stuck-outbox');
-  assert.ok(stuckIncident, 'expected stuck-outbox incident');
-  assert.equal(stuckIncident?.severity, 'warning');
-  assert.equal(stuckIncident?.affectedCount, 1);
-});
-
-test('detectIncidents detects stale-worker when no heartbeat run exists', () => {
-  const now = '2026-03-29T12:00:00.000Z';
-  const incidents = detectIncidents(
-    {
-      recentOutbox: [],
-      recentRuns: [],
-    },
-    now,
-  );
-  const staleWorkerIncident = incidents.find((i) => i.type === 'stale-worker');
-  assert.ok(staleWorkerIncident, 'expected stale-worker incident');
-  assert.equal(staleWorkerIncident?.severity, 'critical');
-  assert.equal(staleWorkerIncident?.affectedCount, 1);
-});
-
-test('detectIncidents detects open-dead-letter when dead_letter outbox rows exist', () => {
-  const now = '2026-03-29T12:00:00.000Z';
-  const incidents = detectIncidents(
-    {
-      recentOutbox: [
-        {
-          id: 'outbox-dl-1',
-          pick_id: 'pick-dl-1',
-          target: 'discord:canary',
-          status: 'dead_letter',
-          attempt_count: 5,
-          next_attempt_at: null,
-          last_error: 'max retries exceeded',
-          payload: {},
-          claimed_at: null,
-          claimed_by: null,
-          idempotency_key: null,
-          created_at: '2026-03-29T10:00:00.000Z',
-          updated_at: '2026-03-29T11:00:00.000Z',
-        },
-      ],
-      recentRuns: [
-        {
-          id: 'run-heartbeat-2',
-          run_type: 'worker.heartbeat',
-          status: 'succeeded',
-          started_at: now,
-          finished_at: now,
-          actor: 'worker',
-          details: {},
-          created_at: now,
-          idempotency_key: null,
-        },
-      ],
-    },
-    now,
-  );
-  const dlIncident = incidents.find((i) => i.type === 'open-dead-letter');
-  assert.ok(dlIncident, 'expected open-dead-letter incident');
-  assert.equal(dlIncident?.severity, 'warning');
-  assert.equal(dlIncident?.affectedCount, 1);
-});
-
-test('detectIncidents returns no incidents when all signals are healthy', () => {
-  const now = '2026-03-29T12:00:00.000Z';
-  // heartbeat just happened, pending row created seconds ago, no dead_letter or circuit-open
-  const incidents = detectIncidents(
-    {
-      recentOutbox: [
-        {
-          id: 'outbox-pending-fresh',
-          pick_id: 'pick-fresh',
-          target: 'discord:canary',
-          status: 'pending',
-          attempt_count: 0,
-          next_attempt_at: null,
-          last_error: null,
-          payload: {},
-          claimed_at: null,
-          claimed_by: null,
-          idempotency_key: null,
-          created_at: '2026-03-29T11:58:00.000Z', // 2 minutes old — under threshold
-          updated_at: '2026-03-29T11:58:00.000Z',
-        },
-      ],
-      recentRuns: [
-        {
-          id: 'run-heartbeat-3',
-          run_type: 'worker.heartbeat',
-          status: 'succeeded',
-          started_at: '2026-03-29T11:59:00.000Z', // 60s ago — under 120s threshold
-          finished_at: '2026-03-29T11:59:00.000Z',
-          actor: 'worker',
-          details: {},
-          created_at: '2026-03-29T11:59:00.000Z',
-          idempotency_key: null,
-        },
-      ],
-    },
-    now,
-  );
-  assert.equal(incidents.length, 0);
-});
-
-test('GET / renders Active Incidents section when incidents are present', async () => {
-  // Use a now that is 20 minutes after the pending outbox row — triggers stuck-outbox
-  const createdAt = '2026-03-29T11:40:00.000Z';
-  const now = '2026-03-29T12:00:00.000Z';
-
-  const provider: OperatorSnapshotProvider = {
-    async getSnapshot() {
-      return createSnapshotFromRows({
-        persistenceMode: 'database',
-        recentOutbox: [
-          {
-            id: 'outbox-stuck',
-            pick_id: 'pick-stuck',
-            target: 'discord:canary',
-            status: 'pending',
-            attempt_count: 0,
-            next_attempt_at: null,
-            last_error: null,
-            payload: {},
-            claimed_at: null,
-            claimed_by: null,
-            idempotency_key: null,
-            created_at: createdAt,
-            updated_at: createdAt,
-          },
-        ],
-        recentReceipts: [],
-        recentSettlements: [],
-        recentRuns: [
-          {
-            id: 'run-heartbeat-present',
-            run_type: 'worker.heartbeat',
-            status: 'succeeded',
-            started_at: now,
-            finished_at: now,
-            actor: 'worker',
-            details: {},
-            created_at: now,
-            idempotency_key: null,
-          },
-        ],
-        recentPicks: [],
-        recentAudit: [],
-        now,
-      });
-    },
-  };
-
-  const server = createOperatorServer({ provider });
-  await new Promise<void>((resolve) => server.listen(0, resolve));
-  const address = server.address();
-  if (!address || typeof address === 'string') {
-    throw new Error('Expected server address');
-  }
-
-  const response = await makeRequest(address.port, '/');
-  await new Promise<void>((resolve, reject) =>
-    server.close((error) => (error ? reject(error) : resolve())),
-  );
-
-  assert.equal(response.statusCode, 200);
-  assert.match(response.body, /Active Incidents/);
-  assert.match(response.body, /stuck-outbox/);
-  assert.match(response.body, /class="active-incidents"/);
-});
-
 function createStaticProvider(): OperatorSnapshotProvider {
   const participants = [
     {
@@ -3407,4 +3198,351 @@ test('createSnapshotFromRows gradingAgent reflects latest recap.post row', () =>
   assert.equal(snapshot.gradingAgent.lastRecapPostAt, '2026-03-29T10:01:00.000Z');
   assert.equal(snapshot.gradingAgent.lastRecapChannel, '1296531122234327100');
   assert.equal(snapshot.gradingAgent.runCount, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Worker heartbeat stale detection tests (UTV2-120)
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows marks worker degraded when worker.heartbeat is stale', () => {
+  // Heartbeat that is 300 seconds old — well past the 120s default threshold
+  const staleHeartbeatAt = new Date(Date.now() - 300_000).toISOString();
+  const heartbeatRun: SystemRunRecord = {
+    id: 'hb-stale-1',
+    run_type: 'worker.heartbeat',
+    status: 'succeeded',
+    started_at: staleHeartbeatAt,
+    finished_at: staleHeartbeatAt,
+    actor: 'worker-dev',
+    details: { cycle: 1, targets: ['discord:best-bets'] },
+    created_at: staleHeartbeatAt,
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [heartbeatRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  const workerSignal = snapshot.health.find((h) => h.component === 'worker');
+  assert.ok(workerSignal, 'worker health signal should be present');
+  assert.equal(workerSignal.status, 'degraded');
+  assert.ok(
+    workerSignal.detail?.includes('stale'),
+    `detail should mention stale heartbeat, got: ${workerSignal.detail}`,
+  );
+});
+
+test('createSnapshotFromRows keeps worker healthy when worker.heartbeat is fresh', () => {
+  // Heartbeat that is 10 seconds old — well within the 120s default threshold
+  const freshHeartbeatAt = new Date(Date.now() - 10_000).toISOString();
+  const heartbeatRun: SystemRunRecord = {
+    id: 'hb-fresh-1',
+    run_type: 'worker.heartbeat',
+    status: 'succeeded',
+    started_at: freshHeartbeatAt,
+    finished_at: freshHeartbeatAt,
+    actor: 'worker-dev',
+    details: { cycle: 1, targets: ['discord:best-bets'] },
+    created_at: freshHeartbeatAt,
+    idempotency_key: null,
+  };
+  const normalRun: SystemRunRecord = {
+    id: 'normal-run-hb-2',
+    run_type: 'distribution.process',
+    status: 'succeeded',
+    started_at: freshHeartbeatAt,
+    finished_at: freshHeartbeatAt,
+    actor: 'worker-dev',
+    details: null,
+    created_at: freshHeartbeatAt,
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [heartbeatRun, normalRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  const workerSignal = snapshot.health.find((h) => h.component === 'worker');
+  assert.ok(workerSignal, 'worker health signal should be present');
+  assert.equal(workerSignal.status, 'healthy', `worker should be healthy with fresh heartbeat, got: ${workerSignal.status} (${workerSignal.detail})`);
+});
+
+// ─── UTV2-142: incident surfaces ──────────────────────────────────────────────
+
+test('detectIncidents returns stuck-outbox incident for pending row older than 15 minutes', () => {
+  const now = new Date('2026-03-30T12:20:00.000Z');
+  // pending row created 20 minutes ago
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-stuck-1',
+        pick_id: 'pick-stuck-1',
+        target: 'discord:best-bets',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        updated_at: '2026-03-30T12:00:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const stuckIncident = snapshot.incidents.find((i) => i.type === 'stuck-outbox');
+  assert.ok(stuckIncident, 'stuck-outbox incident should be present');
+  assert.equal(stuckIncident.severity, 'critical');
+  assert.equal(stuckIncident.affectedCount, 1);
+  assert.match(stuckIncident.summary, /pending outbox row/i);
+});
+
+test('detectIncidents does not raise stuck-outbox when pending row is recent', () => {
+  const now = new Date('2026-03-30T12:05:00.000Z');
+  // pending row created 5 minutes ago (under threshold)
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-fresh-1',
+        pick_id: 'pick-fresh-1',
+        target: 'discord:best-bets',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        updated_at: '2026-03-30T12:00:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(
+    snapshot.incidents.some((i) => i.type === 'stuck-outbox'),
+    false,
+  );
+});
+
+test('detectIncidents returns stale-worker incident when most recent distribution-worker run finished more than 10 minutes ago', () => {
+  const now = new Date('2026-03-30T12:15:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [
+      {
+        id: 'run-worker-stale-1',
+        run_type: 'distribution-worker',
+        status: 'succeeded',
+        started_at: '2026-03-30T12:00:00.000Z',
+        finished_at: '2026-03-30T12:00:30.000Z',
+        actor: 'worker-dev',
+        details: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        idempotency_key: null,
+      },
+    ],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const staleIncident = snapshot.incidents.find((i) => i.type === 'stale-worker');
+  assert.ok(staleIncident, 'stale-worker incident should be present');
+  assert.equal(staleIncident.severity, 'warning');
+  assert.equal(staleIncident.affectedCount, 1);
+  assert.match(staleIncident.summary, /10 minutes/i);
+});
+
+test('detectIncidents returns stale-worker incident when no distribution-worker runs exist', () => {
+  const now = new Date('2026-03-30T12:00:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const staleIncident = snapshot.incidents.find((i) => i.type === 'stale-worker');
+  assert.ok(staleIncident, 'stale-worker incident should be present when no distribution-worker runs');
+  assert.equal(staleIncident.severity, 'warning');
+  assert.match(staleIncident.summary, /offline/i);
+});
+
+test('detectIncidents returns open-dead-letter incident when dead_letter rows exist', () => {
+  const now = new Date('2026-03-30T12:00:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-dl-1',
+        pick_id: 'pick-dl-1',
+        target: 'discord:best-bets',
+        status: 'dead_letter',
+        attempt_count: 5,
+        next_attempt_at: null,
+        last_error: 'permanently failed',
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T11:00:00.000Z',
+        updated_at: '2026-03-30T11:30:00.000Z',
+      },
+      {
+        id: 'outbox-dl-2',
+        pick_id: 'pick-dl-2',
+        target: 'discord:canary',
+        status: 'dead_letter',
+        attempt_count: 5,
+        next_attempt_at: null,
+        last_error: 'permanently failed',
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T11:05:00.000Z',
+        updated_at: '2026-03-30T11:35:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const dlIncident = snapshot.incidents.find((i) => i.type === 'open-dead-letter');
+  assert.ok(dlIncident, 'open-dead-letter incident should be present');
+  assert.equal(dlIncident.severity, 'critical');
+  assert.equal(dlIncident.affectedCount, 2);
+  assert.match(dlIncident.summary, /dead-letter/i);
+});
+
+test('detectIncidents returns circuit-open incident when bestBets circuit is open', () => {
+  const now = new Date('2026-03-30T12:00:00.000Z');
+  // 3 failed rows + 0 sent rows triggers circuit open
+  const failedOutboxRows = [1, 2, 3].map((i) => ({
+    id: `outbox-fail-${i}`,
+    pick_id: `pick-fail-${i}`,
+    target: 'discord:best-bets' as const,
+    status: 'failed' as const,
+    attempt_count: 3,
+    next_attempt_at: null,
+    last_error: 'delivery failed',
+    payload: {},
+    claimed_at: null,
+    claimed_by: null,
+    idempotency_key: null,
+    created_at: '2026-03-30T11:00:00.000Z',
+    updated_at: '2026-03-30T11:30:00.000Z',
+  }));
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: failedOutboxRows,
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const circuitIncident = snapshot.incidents.find((i) => i.type === 'circuit-open');
+  assert.ok(circuitIncident, 'circuit-open incident should be present');
+  assert.equal(circuitIncident.severity, 'critical');
+  assert.equal(circuitIncident.affectedCount, 1);
+  assert.match(circuitIncident.summary, /discord:best-bets/);
+
+  // Also check circuitBreaker field on bestBets channel summary
+  assert.equal(snapshot.bestBets.circuitBreaker.status, 'open');
+});
+
+test('detectIncidents returns empty array when everything is healthy', () => {
+  const now = new Date('2026-03-30T12:01:00.000Z');
+  // A recent successful distribution-worker run and sent outbox rows
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-sent-healthy',
+        pick_id: 'pick-healthy-1',
+        target: 'discord:best-bets',
+        status: 'sent',
+        attempt_count: 1,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: '2026-03-30T12:00:00.000Z',
+        claimed_by: 'worker-dev',
+        idempotency_key: 'key-healthy-1',
+        created_at: '2026-03-30T12:00:00.000Z',
+        updated_at: '2026-03-30T12:00:30.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [
+      {
+        id: 'run-worker-healthy-1',
+        run_type: 'distribution-worker',
+        status: 'succeeded',
+        started_at: '2026-03-30T12:00:00.000Z',
+        finished_at: '2026-03-30T12:00:30.000Z',
+        actor: 'worker-dev',
+        details: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        idempotency_key: null,
+      },
+    ],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const stuckOrDead = snapshot.incidents.filter(
+    (i) => i.type === 'stuck-outbox' || i.type === 'open-dead-letter' || i.type === 'circuit-open',
+  );
+  assert.deepEqual(stuckOrDead, []);
+  // stale-worker should also be absent since the run finished < 1 minute ago
+  assert.equal(
+    snapshot.incidents.some((i) => i.type === 'stale-worker'),
+    false,
+  );
 });

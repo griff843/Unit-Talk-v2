@@ -137,6 +137,7 @@ export interface OperatorSnapshot {
     runCount: number;
   };
   targetRegistry: TargetRegistryEntry[];
+  incidents: OperatorIncident[];
 }
 
 export interface AlertAgentRunSummary {
@@ -189,6 +190,14 @@ export interface ChannelHealthSummary {
   latestMessageId: string | null;
   activationHealthy: boolean;
   blockers: string[];
+  circuitBreaker: { status: 'open' | 'closed' };
+}
+
+export interface OperatorIncident {
+  type: 'stuck-outbox' | 'stale-worker' | 'open-dead-letter' | 'circuit-open';
+  severity: 'warning' | 'critical';
+  summary: string;
+  affectedCount: number;
 }
 
 export interface WorkerRuntimeSummary {
@@ -924,6 +933,7 @@ export function createSnapshotFromRows(input: {
   upcomingEvents?: OperatorUpcomingEventSummary[];
   picksPipelineCounts?: PicksPipelineSummary['counts'];
   memberTierRows?: Array<{ tier: string }>;
+  now?: Date;
 }): OperatorSnapshot {
   const counts = {
     pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
@@ -969,7 +979,7 @@ export function createSnapshotFromRows(input: {
               : 'no failed outbox items detected',
         };
 
-  return {
+  const snapshot: OperatorSnapshot = {
     observedAt: new Date().toISOString(),
     persistenceMode: input.persistenceMode,
     health: [
@@ -1012,7 +1022,11 @@ export function createSnapshotFromRows(input: {
     alertAgent: summarizeAlertAgentRuns(input.recentRuns),
     gradingAgent: summarizeGradingAgent(input.recentRuns),
     targetRegistry: resolveTargetRegistry(),
+    incidents: [],
   };
+
+  snapshot.incidents = detectIncidents(snapshot, input.now);
+  return snapshot;
 }
 
 function computeMemberTierCounts(rows: Array<{ tier: string }>): OperatorSnapshot['memberTiers'] {
@@ -1100,6 +1114,83 @@ function summarizeGradingAgent(recentRuns: SystemRunRecord[]): OperatorSnapshot[
   };
 }
 
+const STUCK_OUTBOX_THRESHOLD_MS = 15 * 60 * 1000; // 15 minutes
+const STALE_WORKER_THRESHOLD_MS = 10 * 60 * 1000; // 10 minutes
+
+export function detectIncidents(
+  snapshot: Omit<OperatorSnapshot, 'incidents'>,
+  now: Date = new Date(),
+): OperatorIncident[] {
+  const incidents: OperatorIncident[] = [];
+  const nowMs = now.getTime();
+
+  // 1. stuck-outbox: pending rows older than 15 minutes
+  const stuckRows = snapshot.recentOutbox.filter((row) => {
+    if (row.status !== 'pending') return false;
+    const age = nowMs - new Date(row.created_at).getTime();
+    return age > STUCK_OUTBOX_THRESHOLD_MS;
+  });
+  if (stuckRows.length > 0) {
+    incidents.push({
+      type: 'stuck-outbox',
+      severity: 'critical',
+      summary: `${stuckRows.length} pending outbox row(s) have been stuck for more than 15 minutes`,
+      affectedCount: stuckRows.length,
+    });
+  }
+
+  // 2. stale-worker: most recent distribution-worker run finished more than 10 minutes ago, or no run exists
+  const workerRuns = snapshot.recentRuns.filter((row) => row.run_type === 'distribution-worker');
+  const latestWorkerRun = workerRuns[0] ?? null;
+  const isStaleWorker =
+    latestWorkerRun === null
+      ? true
+      : (latestWorkerRun.status === 'succeeded' || latestWorkerRun.status === 'failed') &&
+        latestWorkerRun.finished_at !== null &&
+        nowMs - new Date(latestWorkerRun.finished_at).getTime() > STALE_WORKER_THRESHOLD_MS;
+  if (isStaleWorker) {
+    incidents.push({
+      type: 'stale-worker',
+      severity: 'warning',
+      summary:
+        latestWorkerRun === null
+          ? 'No distribution-worker runs are visible — worker may be offline'
+          : 'Most recent distribution-worker run finished more than 10 minutes ago',
+      affectedCount: 1,
+    });
+  }
+
+  // 3. open-dead-letter: any dead_letter outbox rows
+  const deadLetterRows = snapshot.recentOutbox.filter((row) => row.status === 'dead_letter');
+  if (deadLetterRows.length > 0) {
+    incidents.push({
+      type: 'open-dead-letter',
+      severity: 'critical',
+      summary: `${deadLetterRows.length} dead-letter outbox row(s) require manual intervention`,
+      affectedCount: deadLetterRows.length,
+    });
+  }
+
+  // 4. circuit-open: bestBets or traderInsights circuit is open
+  const openCircuits: string[] = [];
+  if (snapshot.bestBets.circuitBreaker.status === 'open') {
+    openCircuits.push(snapshot.bestBets.target);
+  }
+  if (snapshot.traderInsights.circuitBreaker.status === 'open') {
+    openCircuits.push(snapshot.traderInsights.target);
+  }
+  if (openCircuits.length > 0) {
+    incidents.push({
+      type: 'circuit-open',
+      severity: 'critical',
+      summary: `Circuit breaker open for: ${openCircuits.join(', ')}`,
+      affectedCount: openCircuits.length,
+    });
+  }
+
+  return incidents;
+}
+
 function summarizeCanaryLane(
   outboxRows: OutboxRecord[],
   receiptRows: ReceiptRecord[],
@@ -1147,6 +1238,10 @@ function summarizeChannelLane(
   if (deadLetterRows.length > 0) {
     blockers.push(`${deadLetterRows.length} dead-letter ${target} outbox item(s) still visible`);
   }
+  const circuitBreakerThreshold = 3;
+  const circuitOpen =
+    failedRows.length >= circuitBreakerThreshold && sentRows.length === 0;
+
   return {
     target,
     recentSentCount: sentRows.length,
@@ -1157,6 +1252,7 @@ function summarizeChannelLane(
     latestMessageId: targetReceipts[0]?.external_id ?? null,
     activationHealthy: blockers.length === 0,
     blockers,
+    circuitBreaker: { status: circuitOpen ? 'open' : 'closed' },
   };
 }
 
@@ -1379,6 +1475,7 @@ function inferWorkerStatus(
   mostRecentRun: SystemRunRecord | undefined,
   counts: OperatorSnapshot['counts'],
   allRuns: SystemRunRecord[] = [],
+  staleHeartbeatThresholdSeconds: number = 120,
 ): OperatorHealthSignal {
   // Check for unresolved open circuit breaker runs — these indicate a target is paused
   const openCircuitRuns = allRuns.filter(
@@ -1397,6 +1494,21 @@ function inferWorkerStatus(
       status: 'degraded',
       detail: `circuit breaker open for target(s): ${targetList}`,
     };
+  }
+
+  // Check for stale heartbeat — detect silent worker failures
+  const heartbeatRuns = allRuns.filter((row) => row.run_type === 'worker.heartbeat');
+  if (heartbeatRuns.length > 0) {
+    const latestHeartbeat = heartbeatRuns[0]!;
+    const heartbeatAt = latestHeartbeat.finished_at ?? latestHeartbeat.started_at;
+    const ageSeconds = (Date.now() - new Date(heartbeatAt).getTime()) / 1000;
+    if (ageSeconds > staleHeartbeatThresholdSeconds) {
+      return {
+        component: 'worker',
+        status: 'degraded',
+        detail: `worker heartbeat is stale (last seen ${Math.floor(ageSeconds)}s ago, threshold ${staleHeartbeatThresholdSeconds}s)`,
+      };
+    }
   }
 
   if (!mostRecentRun) {
