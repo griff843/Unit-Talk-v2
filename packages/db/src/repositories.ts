@@ -340,6 +340,7 @@ export interface SystemRunCompleteInput {
 export interface SystemRunRepository {
   startRun(input: SystemRunStartInput): Promise<SystemRunRecord>;
   completeRun(input: SystemRunCompleteInput): Promise<SystemRunRecord>;
+  listByType(runType: string, limit?: number): Promise<SystemRunRecord[]>;
 }
 
 export type ProviderOfferUpsertInput = ProviderOfferInsert;

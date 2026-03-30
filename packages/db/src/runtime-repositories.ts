@@ -1078,6 +1078,13 @@ export class InMemorySystemRunRepository implements SystemRunRepository {
     this.runs.set(updated.id, updated);
     return updated;
   }
+
+  async listByType(runType: string, limit = 50): Promise<SystemRunRecord[]> {
+    return Array.from(this.runs.values())
+      .filter((row) => row.run_type === runType)
+      .sort((a, b) => b.started_at.localeCompare(a.started_at))
+      .slice(0, limit);
+  }
 }
 
 export class InMemoryAuditLogRepository implements AuditLogRepository {
@@ -2314,6 +2321,21 @@ export class DatabaseSystemRunRepository implements SystemRunRepository {
     }
 
     return data;
+  }
+
+  async listByType(runType: string, limit = 50): Promise<SystemRunRecord[]> {
+    const { data, error } = await this.client
+      .from('system_runs')
+      .select('*')
+      .eq('run_type', runType)
+      .order('started_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list system runs by type: ${error.message}`);
+    }
+
+    return data ?? [];
   }
 }
 

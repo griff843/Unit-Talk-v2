@@ -127,6 +127,15 @@ export interface OperatorSnapshot {
     byGame: Record<string, number>;
   };
   alertAgent: AlertAgentRunSummary;
+  gradingAgent: {
+    lastGradingRunAt: string | null;
+    lastGradingRunStatus: string | null;
+    lastPicksGraded: number | null;
+    lastFailed: number | null;
+    lastRecapPostAt: string | null;
+    lastRecapChannel: string | null;
+    runCount: number;
+  };
 }
 
 export interface AlertAgentRunSummary {
@@ -1000,6 +1009,7 @@ export function createSnapshotFromRows(input: {
     memberTiers: computeMemberTierCounts(input.memberTierRows ?? []),
     boardExposure: { bySport: {}, byGame: {} },
     alertAgent: summarizeAlertAgentRuns(input.recentRuns),
+    gradingAgent: summarizeGradingAgent(input.recentRuns),
   };
 }
 
@@ -1050,6 +1060,41 @@ function summarizeAlertAgentRuns(recentRuns: SystemRunRecord[]): AlertAgentRunSu
     lastNotificationRunAt: lastNotificationRun?.started_at ?? null,
     lastNotificationStatus: lastNotificationRun?.status ?? null,
     lastNotificationDetails,
+  };
+}
+
+function summarizeGradingAgent(recentRuns: SystemRunRecord[]): OperatorSnapshot['gradingAgent'] {
+  const gradingRuns = recentRuns.filter((row) => row.run_type === 'grading.run');
+  const recapRuns = recentRuns.filter((row) => row.run_type === 'recap.post');
+  const latestGradingRun = gradingRuns[0];
+  const latestRecapRun = recapRuns[0];
+
+  const lastPicksGraded =
+    latestGradingRun?.details != null &&
+    typeof (latestGradingRun.details as Record<string, unknown>)['picksGraded'] === 'number'
+      ? ((latestGradingRun.details as Record<string, unknown>)['picksGraded'] as number)
+      : null;
+
+  const lastFailed =
+    latestGradingRun?.details != null &&
+    typeof (latestGradingRun.details as Record<string, unknown>)['failed'] === 'number'
+      ? ((latestGradingRun.details as Record<string, unknown>)['failed'] as number)
+      : null;
+
+  const lastRecapChannel =
+    latestRecapRun?.details != null &&
+    typeof (latestRecapRun.details as Record<string, unknown>)['channel'] === 'string'
+      ? ((latestRecapRun.details as Record<string, unknown>)['channel'] as string)
+      : null;
+
+  return {
+    lastGradingRunAt: latestGradingRun?.started_at ?? null,
+    lastGradingRunStatus: latestGradingRun?.status ?? null,
+    lastPicksGraded,
+    lastFailed,
+    lastRecapPostAt: latestRecapRun?.started_at ?? null,
+    lastRecapChannel,
+    runCount: gradingRuns.length,
   };
 }
 

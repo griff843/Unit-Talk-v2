@@ -3119,3 +3119,83 @@ test('createSnapshotFromRows does not degrade worker when worker.circuit-open ru
   assert.ok(workerSignal, 'worker health signal should be present');
   assert.equal(workerSignal.status, 'healthy');
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-144: gradingAgent section in operator snapshot
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows gradingAgent returns nulls when no grading.run rows present', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.ok(snapshot.gradingAgent, 'gradingAgent should be present');
+  assert.equal(snapshot.gradingAgent.lastGradingRunAt, null);
+  assert.equal(snapshot.gradingAgent.lastGradingRunStatus, null);
+  assert.equal(snapshot.gradingAgent.lastPicksGraded, null);
+  assert.equal(snapshot.gradingAgent.lastFailed, null);
+  assert.equal(snapshot.gradingAgent.lastRecapPostAt, null);
+  assert.equal(snapshot.gradingAgent.lastRecapChannel, null);
+  assert.equal(snapshot.gradingAgent.runCount, 0);
+});
+
+test('createSnapshotFromRows gradingAgent reflects latest grading.run row', () => {
+  const gradingRun: SystemRunRecord = {
+    id: 'grading-run-1',
+    run_type: 'grading.run',
+    status: 'succeeded',
+    started_at: '2026-03-29T10:00:00.000Z',
+    finished_at: '2026-03-29T10:00:05.000Z',
+    actor: 'grading-service',
+    details: { picksGraded: 4, failed: 0 },
+    created_at: '2026-03-29T10:00:00.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [gradingRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.gradingAgent.lastGradingRunAt, '2026-03-29T10:00:00.000Z');
+  assert.equal(snapshot.gradingAgent.lastGradingRunStatus, 'succeeded');
+  assert.equal(snapshot.gradingAgent.lastPicksGraded, 4);
+  assert.equal(snapshot.gradingAgent.lastFailed, 0);
+  assert.equal(snapshot.gradingAgent.runCount, 1);
+});
+
+test('createSnapshotFromRows gradingAgent reflects latest recap.post row', () => {
+  const recapRun: SystemRunRecord = {
+    id: 'recap-run-1',
+    run_type: 'recap.post',
+    status: 'succeeded',
+    started_at: '2026-03-29T10:01:00.000Z',
+    finished_at: '2026-03-29T10:01:01.000Z',
+    actor: 'grading-service',
+    details: { channel: '1296531122234327100', pickCount: 1 },
+    created_at: '2026-03-29T10:01:00.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [recapRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.gradingAgent.lastRecapPostAt, '2026-03-29T10:01:00.000Z');
+  assert.equal(snapshot.gradingAgent.lastRecapChannel, '1296531122234327100');
+  assert.equal(snapshot.gradingAgent.runCount, 0);
+});

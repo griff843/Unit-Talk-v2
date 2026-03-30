@@ -810,3 +810,69 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     ? (value as Record<string, unknown>)
     : null;
 }
+
+
+// ---------------------------------------------------------------------------
+// UTV2-144: system_runs observability for grading.run
+// ---------------------------------------------------------------------------
+
+test('runGradingPass writes a grading.run system_runs row on completion', async () => {
+  const { repositories, pickId } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId);
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 30,
+  });
+
+  await runGradingPass(repositories);
+
+  const runs = await repositories.runs.listByType('grading.run');
+  assert.equal(runs.length, 1);
+  assert.equal(runs[0]?.run_type, 'grading.run');
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['picksGraded'],
+    1,
+  );
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['failed'],
+    0,
+  );
+});
+
+test('runGradingPass writes grading.run row with failed count when errors occur', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const created = await processSubmission(
+    {
+      source: 'grading-test',
+      market: 'points-all-game-ou',
+      selection: 'Over 24.5',
+      line: 24.5,
+      odds: -105,
+    },
+    repositories,
+  );
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+
+  const brokenRepos = {
+    ...repositories,
+    settlements: {
+      ...repositories.settlements,
+      findLatestForPick: async () => {
+        throw new Error('forced settlement error');
+      },
+    },
+  };
+
+  await runGradingPass(brokenRepos as typeof repositories);
+
+  const runs = await repositories.runs.listByType('grading.run');
+  assert.equal(runs.length, 1);
+  assert.equal(
+    (runs[0]?.details as Record<string, unknown>)?.['failed'],
+    1,
+  );
+});

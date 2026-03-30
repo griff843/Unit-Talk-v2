@@ -467,6 +467,11 @@ class FakeSystemRunRepository implements SystemRunRepository {
     record.details = JSON.parse(JSON.stringify(input.details ?? {}));
     return record;
   }
+
+  async listByType(runType: string, limit?: number): Promise<SystemRunRecord[]> {
+    const filtered = this.records.filter((r) => r.run_type === runType);
+    return limit !== undefined ? filtered.slice(0, limit) : filtered;
+  }
 }
 
 class FakeAuditLogRepository implements AuditLogRepository {
