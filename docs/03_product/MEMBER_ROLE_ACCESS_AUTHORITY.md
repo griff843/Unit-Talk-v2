@@ -136,14 +136,16 @@ Trial expiry is automatic. `runTrialExpiryPass()` in `apps/api/src/trial-expiry-
 
 ### 2.3 Trial Surface Access
 
-Trial should give members enough real value to support upgrade evaluation. Intended access (design intent — enforced by Discord server permissions, not V2 runtime):
+**Trial gets everything VIP gets. This is ratified product policy (2026-03-29), not a design question.**
+
+Trial surface set (enforced by Discord server permissions, not V2 runtime):
 
 - Best Bets channel
 - Recaps
-- Selected capper surfaces
-- Trader Insights (if included in trial strategy — product decision)
+- Trader Insights
+- Capper surfaces (same as VIP)
 
-When trial expires: access reverts to Free surface set.
+When trial expires: access reverts to Free surface set. The trial → VIP conversion path should feel like continuity, not an upgrade shock.
 
 ---
 
@@ -256,14 +258,14 @@ The intended access model (design intent — not yet a V2 runtime enforcement ta
 | Announcements | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Recaps (`discord:recaps`) | ✓ | ✓ | ✓ | ✓ | ✓ | ✓ |
 | Best Bets (`discord:best-bets`) | — | ✓ | ✓ | ✓ | ✓ | ✓ |
-| Trader Insights (`discord:trader-insights`) | — | (product decision) | — | ✓ | ✓ | ✓ |
+| Trader Insights (`discord:trader-insights`) | — | ✓ | — | ✓ | ✓ | ✓ |
 | Exclusive Insights (`discord:exclusive-insights`) | — | — | — | — | ✓ | ✓ |
 | Capper surfaces | — | — | — | — | ✓ | ✓ |
 | Operator surfaces | — | — | — | — | — | ✓ |
 
 **Recaps are an all-tier credibility and transparency surface.** They are intentionally accessible to all tiers including Free. Recap access is not a paid benefit — it is a platform integrity signal.
 
-**Trial + Trader Insights** is a product decision. The contract does not mandate it. If trial strategy includes Trader Insights, Discord channel permissions should reflect it.
+**Trial includes Trader Insights.** This is ratified policy (2026-03-29). Discord channel permissions for the trial role should include `discord:trader-insights`.
 
 ---
 
@@ -279,7 +281,7 @@ The intended access model (design intent — not yet a V2 runtime enforcement ta
 | `/alerts-setup` requires operator role | **Enforced** — `requireOperatorRole()` + sentinel |
 | Operator snapshot shows tier counts | **Enforced** — live query, best-effort fallback |
 | Channel visibility matches the table above | **Design intent** — Discord server config, not V2 code |
-| Trial Discord role revoked on expiry | **Not implemented** — DB state is updated; Discord role removal is manual |
+| Trial Discord role revoked on expiry | **Ratified, not yet implemented** — DB expiry runs (scheduler); Discord role removal is still manual. Future sprint: scheduler calls bot API → `GuildMember.roles.remove()` |
 | Retroactive population of `member_tiers` for existing members | **Not implemented** — first-run population is manual or a separate script |
 | `black-label` tier functional | **Not implemented** — placeholder only |
 | `admin` and `moderator` roles in V2 | **Not implemented** — not in `memberTiers` const |
@@ -288,12 +290,12 @@ The intended access model (design intent — not yet a V2 runtime enforcement ta
 
 ## 9. Open Decisions (Owner Review Required)
 
-These questions are not blocking but should be resolved before the next tier-related sprint:
+4 of 6 original questions are resolved. Remaining open:
 
-1. **Trial + Trader Insights:** Should trial members see `discord:trader-insights`? Affects Discord permission configuration.
-2. **Discord role revocation on expiry:** Should the API or scheduler remove the Discord trial role when `effective_until` passes? This requires a bot write path (bot can remove roles via `GuildMember.roles.remove()`), currently not implemented.
-3. **Free vs No Role:** Is "free" a role that is actively assigned, or the default state when no paid role is present? Currently it is the default (no role assigned). An explicit free role would allow better Discord permission targeting.
-4. **Black Label:** When does this tier become active? What does it unlock? Currently a type placeholder.
+1. ~~**Trial + Trader Insights**~~ — **RESOLVED 2026-03-29:** Trial = full VIP surface set, including Trader Insights.
+2. ~~**Discord role revocation on expiry**~~ — **RESOLVED 2026-03-29:** Auto-revoke required. Implementation deferred — future sprint.
+3. **Free vs No Role:** Is "free" actively assigned, or the default when no paid role is present? Currently it is the default (no role assigned). An explicit free role would allow better Discord permission targeting.
+4. **Black Label:** When does this tier become active? What does it unlock? Currently a type placeholder only.
 5. **Admin/Moderator in V2:** Are these in scope for `member_tiers`? Currently not in the `memberTiers` const.
 6. **Retroactive population:** How should existing members' tier history be backfilled into `member_tiers`? Manual script, bulk import, or ignored?
 

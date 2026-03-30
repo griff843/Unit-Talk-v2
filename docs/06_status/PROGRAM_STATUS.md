@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-29 — PRs #75 + #76 merged. UTV2-164/166/167 (discord-bot access fixes) DONE. UTV2-165/149 (member_tiers implementation) DONE. UTV2-150 (upgrade/trial audit trail) unblocked. UTV2-163 (member role access authority) BLOCKED pending 8 gates in readiness audit. **Post-merge manual steps required: `supabase db push` + `pnpm supabase:types`** (see open risks). ~782 tests (773 + 7 member-tier-repo + 2 operator-web; CI PASS confirmed).
+2026-03-29 — PRs #75–#78 merged. UTV2-149/150/163/164/165/166/167 all DONE. Member tier model fully live: migration applied, types real-generated, sync handler wired, trial expiry scheduler running, `POST /api/member-tiers` endpoint live. `MEMBER_ROLE_ACCESS_AUTHORITY.md` ratified. Trial = full VIP surface set (incl. Trader Insights) — ratified. ~797 tests (CI PASS confirmed).
 
 ---
 
@@ -16,8 +16,8 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **~782 pass** — 773 at `ab37a8d` + 7 (member-tier-repo) + 2 (operator-web) via PRs #75/#76. CI PASS confirmed 2026-03-29. |
-| Gates | `pnpm verify` exits 0. CI confirmed 2026-03-29 (PR #76). **`pnpm supabase:types` pending post-merge DB steps.** |
+| Tests | **~797 pass** — 782 (PRs #75/#76) + 4 (trial-expiry) + 6 (discord-bot foundation) + 5 (http-integration) via PRs #77/#78. CI PASS confirmed 2026-03-29. |
+| Gates | `pnpm verify` exits 0. CI confirmed 2026-03-29 (PRs #77/#78). `pnpm supabase:types` regenerated against live DB 2026-03-29 — clean. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **M13 ACTIVE** — Wave 1 DONE. Wave 2 Codex queue unblocked (14 items Ready). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
 
@@ -29,8 +29,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | **~782** — CI PASS confirmed 2026-03-29 (PR #76). |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-29 (PR #76 CI). `pnpm supabase:types` pending manual DB step. |
+| `pnpm test` | PASS | **~797** — CI PASS confirmed 2026-03-29 (PRs #77/#78). |
+| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-29 (PRs #77/#78 CI). `supabase:types` regenerated clean 2026-03-29. |
 
 ### Runner Architecture
 
@@ -165,7 +165,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | UTV2-143 | Alert agent observability | T2 | — |
 | UTV2-144 | Recap/grading observability | T2 | — |
 | UTV2-145 | Replayable scoring (impl) | T2 | UTV2-136 impl |
-| UTV2-150 | Upgrade/trial audit trail | T2 | — (**UTV2-149 DONE**) |
+| UTV2-150 | Upgrade/trial audit trail | T2 | **DONE** PR #77 |
 | UTV2-129 | Target registry (impl) | T2 | — |
 | UTV2-130 | Tier authority drift detection | T2 | UTV2-129 impl |
 | UTV2-134 | Portfolio/exposure tracking | T3 | — |
@@ -191,7 +191,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | Board caps (perSlate=5) may re-saturate | Low | **Partially resolved** — lifecycle filter fix (UTV2-38) counts only queued/posted picks. Monitor after next full test run. |
 | Historical pre-fix outbox rows noise in operator incident triage | Low | Open |
 | `database.types.ts` hand-edit gap | Medium | **CLOSED** — migrations 014-017 applied via `supabase db push`; real generated types committed 2026-03-29 |
-| Bot durable tier wiring not yet implemented | Low | Open — deferred, requires `POST /api/member-tiers` API endpoint |
+| Discord trial role auto-revoke on expiry not yet implemented | Low | Open — ratified 2026-03-29; requires scheduler → bot API → `GuildMember.roles.remove()` write path |
 | API process requires manual restart for new code in dev | Low | Open |
 | `system_snapshot.md` stale | Low | Last updated 2026-03-21. Proof IDs still valid as historical record; current-state claims are wrong. Use `PROGRAM_STATUS.md`. |
 | `production_readiness_checklist.md` stale | Low | Last updated 2026-03-26. Use `ISSUE_QUEUE.md` for current lane state. |
@@ -240,7 +240,10 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - `MemberTierRepository` interface + `InMemoryMemberTierRepository` + `DatabaseMemberTierRepository` in `@unit-talk/db`
 - Operator snapshot `memberTiers.counts`: live query, best-effort fallback on error
 - **Live:** migrations 014-017 applied 2026-03-29; real generated types on main
-- **Deferred:** bot durable tier wiring — requires `POST /api/member-tiers` endpoint (boundary violation prevents `@unit-talk/db` in discord-bot)
+- `POST /api/member-tiers` endpoint live in `apps/api`; `createMemberTierSyncHandler()` wired in discord-bot `main.ts` — both `guildMemberUpdate` handlers run independently (PR #78)
+- Trial expiry: `runTrialExpiryPass()` scheduler runs hourly in API process; `TRIAL_DURATION_DAYS=7` canonical (PR #77)
+- **Ratified policy:** Trial = full VIP surface set (incl. Trader Insights). Discord role auto-revoke on expiry: ratified, not yet implemented.
+- `MEMBER_ROLE_ACCESS_AUTHORITY.md` ratified 2026-03-29 — supersedes `ROLE_ACCESS_MATRIX.md`
 
 ### Discord bot
 - Foundation: client, router, role-guard, api-client, command registry
@@ -305,6 +308,7 @@ These files are no longer maintained and should not be used as current-state tru
 | Operating model | `docs/05_operations/SPRINT_MODEL_v2.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
 | Platform surfaces | `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md` |
+| Member role access | `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` |
 | Discord commands | `docs/03_product/DISCORD_COMMAND_CATALOG.md` |
 | Docs follow-on queue | `docs/06_status/T1_DOCS_FOLLOW_ON_QUEUE.md` |
 | Proof template (T1) | `docs/06_status/PROOF_TEMPLATE.md` |

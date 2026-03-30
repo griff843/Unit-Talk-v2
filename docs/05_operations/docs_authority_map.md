@@ -13,7 +13,7 @@ When documents conflict:
 | Owner | Program Owner |
 | Status | Ratified |
 | Ratified | 2026-03-20 |
-| Last Updated | 2026-03-29 (UTV2-159 T1 docs program — product tier rebuild) |
+| Last Updated | 2026-03-29 (UTV2-163 post-docs-phase closeout — member role access authority ratified) |
 
 ## Tier 1 - Principles
 
@@ -42,6 +42,7 @@ When documents conflict:
 | File | Purpose | Owner |
 |---|---|---|
 | `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md` | **Primary** — authoritative platform surface registry (all live surfaces and Discord channels) | Product |
+| `docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` | **Primary** — authoritative member tier model, role access policy, trial lifecycle, capper/operator boundaries | Product |
 | `docs/03_product/best_bets_channel_contract.md` | Best Bets identity and qualification rules | Product |
 | `docs/03_product/TRADER_INSIGHTS_CHANNEL_CONTRACT.md` | Trader Insights identity, threshold, access, and routing rules | Product |
 | `docs/03_product/DISCORD_RECAPS_CHANNEL_CONTRACT.md` | Discord Recaps channel identity and delivery rules | Product |
@@ -56,7 +57,8 @@ When documents conflict:
 | `docs/03_product/DISCORD_BOT_FOUNDATION_SPEC.md` | `archive` | Status CLOSED 2026-03-26 — bot foundation is live |
 | `docs/03_product/DISCORD_STATS_COMMAND_SPEC.md` | `archive` | Status updated to CLOSED — /stats command is live |
 | `docs/03_product/command_center_truth_surface_prd.md` | `superseded` | Pre-M10 PRD — superseded by live operator-web |
-| `docs/03_product/ROLE_ACCESS_MATRIX.md` | `draft` | Design spec — partially real (member_tiers ratified); not full V2 runtime truth |
+| `docs/03_product/ROLE_ACCESS_MATRIX.md` | `superseded` | **SUPERSEDED 2026-03-29** — replaced by `MEMBER_ROLE_ACCESS_AUTHORITY.md`. Kept as historical reference only. |
+| `docs/03_product/MEMBER_ROLE_ACCESS_READINESS_AUDIT.md` | `archive` | Gate log for UTV2-163 — all 8 gates PASS at `7993ec8`. Historical record of unblocking conditions. |
 | `docs/03_product/ONBOARDING_ARCHITECTURE_SPEC.md` | `draft` | Design spec — not implemented in V2 |
 | `docs/03_product/SERVER_INFORMATION_ARCHITECTURE_SPEC.md` | `draft` | Design spec — not implemented in V2 |
 | `docs/03_product/ENTRY_PATH_INVITE_STRATEGY.md` | `draft` | Design spec — not implemented in V2 |

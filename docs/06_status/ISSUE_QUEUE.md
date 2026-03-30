@@ -7,8 +7,8 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 13 | 4 | 36 |
-| `lane:claude` | 0 | 0 | 0 | 1 | 26 |
+| `lane:codex` | 0 | 0 | 12 | 4 | 38 |
+| `lane:claude` | 0 | 0 | 0 | 0 | 27 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
 ---
@@ -330,14 +330,16 @@ Startup-time check: if `UNIT_TALK_ENABLED_TARGETS` env enables a target that `de
 | **ID** | UTV2-150 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:discord-bot`, `area:db` |
 | **Blocked by** | — |
+| **Branch** | `claude/UTV2-150-trial-expiry-scheduler` |
+| **PR** | #77 merged 2026-03-29 |
 | **Branch** | — |
 | **PR** | — |
 
-Trial tier rows written with `effective_until = now() + TRIAL_DURATION_DAYS`. **Canonical default: `TRIAL_DURATION_DAYS = 7` (7 days after joining) — ratified 2026-03-29.** Background scheduler deactivates expired trials via `deactivateTier()`. Expiry events written to `audit_log` with `action = 'member_tier.trial_expired'`. **This is a hard gate for UTV2-163** — trial access rules cannot be stated as enforced in the authority doc until this scheduler exists.
+Trial tier rows written with `effective_until = now() + TRIAL_DURATION_DAYS`. Canonical default: `TRIAL_DURATION_DAYS = 7`. Background scheduler (`runTrialExpiryPass()`, hourly) deactivates expired trials via `deactivateTier()`. Expiry events written to `audit_log` with `action = 'member_tier.trial_expired'`. Wired into API process startup/shutdown (`apps/api/src/index.ts`). 4 tests. Discord trial role auto-revoke: ratified, deferred to future sprint.
 
 ---
 
@@ -420,14 +422,14 @@ Migration 017, `MemberTier` type + `memberTiers` const in `@unit-talk/contracts`
 | **ID** | UTV2-163 |
 | **Tier** | T1 |
 | **Lane** | `lane:claude` |
-| **Status** | **BLOCKED** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:contracts`, `area:discord-bot`, `area:db` |
-| **Blocked by** | 8 hard gates — see `MEMBER_ROLE_ACCESS_READINESS_AUDIT.md` |
-| **Branch** | — |
-| **PR** | — |
+| **Blocked by** | — |
+| **Branch** | — (committed directly to main) |
+| **PR** | commit `b09f041` merged 2026-03-29 |
 
-`MEMBER_ROLE_ACCESS_AUTHORITY.md` cannot be written until all 8 gates in `docs/03_product/MEMBER_ROLE_ACCESS_READINESS_AUDIT.md` are satisfied. Primary remaining blockers: migration applied to live DB + `pnpm supabase:types` regenerated, bot durable tier wiring via `POST /api/member-tiers`, UTV2-150 (trial expiry scheduler).
+`docs/03_product/MEMBER_ROLE_ACCESS_AUTHORITY.md` ratified. All 8 hard gates verified PASS at `7993ec8`. Supersedes `ROLE_ACCESS_MATRIX.md`. Trial = full VIP surface set (incl. Trader Insights) ratified. Discord role auto-revoke on expiry: ratified, deferred.
 
 ---
 
