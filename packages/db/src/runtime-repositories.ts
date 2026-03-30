@@ -63,6 +63,8 @@ import type {
   SystemRunRepository,
   SystemRunStartInput,
   TeamSearchResult,
+  PickReviewCreateInput,
+  PickReviewRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -83,6 +85,7 @@ import type {
   SettlementRecord,
   SubmissionEventRecord,
   SubmissionRecord,
+  PickReviewRecord,
 } from './types.js';
 import type { Json } from './database.types.js';
 import {
@@ -211,6 +214,20 @@ export class InMemoryPickRepository implements PickRepository {
       updated_at: new Date().toISOString(),
     };
 
+    this.picks.set(pickId, updated);
+    return updated;
+  }
+
+  async updateApprovalStatus(pickId: string, approvalStatus: string): Promise<PickRecord> {
+    const existing = this.picks.get(pickId);
+    if (!existing) {
+      throw new Error(`Pick not found: ${pickId}`);
+    }
+    const updated: PickRecord = {
+      ...existing,
+      approval_status: approvalStatus,
+      updated_at: new Date().toISOString(),
+    };
     this.picks.set(pickId, updated);
     return updated;
   }
@@ -1332,6 +1349,20 @@ export class DatabasePickRepository implements PickRepository {
       throw new Error(`Failed to update pick lifecycle: ${error?.message ?? 'unknown error'}`);
     }
 
+    return data;
+  }
+
+  async updateApprovalStatus(pickId: string, approvalStatus: string): Promise<PickRecord> {
+    const { data, error } = await this.client
+      .from('picks')
+      .update({ approval_status: approvalStatus, updated_at: new Date().toISOString() })
+      .eq('id', pickId)
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to update approval status: ${error?.message ?? 'unknown error'}`);
+    }
     return data;
   }
 
@@ -2835,6 +2866,105 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 }
 
+// ---------------------------------------------------------------------------
+// Pick Review repositories
+// ---------------------------------------------------------------------------
+
+export class InMemoryPickReviewRepository implements PickReviewRepository {
+  private reviews: PickReviewRecord[] = [];
+
+  async createReview(input: PickReviewCreateInput): Promise<PickReviewRecord> {
+    const record: PickReviewRecord = {
+      id: crypto.randomUUID(),
+      pick_id: input.pickId,
+      decision: input.decision,
+      reason: input.reason,
+      decided_by: input.decidedBy,
+      decided_at: new Date().toISOString(),
+      created_at: new Date().toISOString(),
+    };
+    this.reviews.push(record);
+    return record;
+  }
+
+  async listByPick(pickId: string): Promise<PickReviewRecord[]> {
+    return this.reviews
+      .filter((r) => r.pick_id === pickId)
+      .sort((a, b) => b.decided_at.localeCompare(a.decided_at));
+  }
+
+  async listByDecision(decision: PickReviewRecord['decision'], limit = 50): Promise<PickReviewRecord[]> {
+    return this.reviews
+      .filter((r) => r.decision === decision)
+      .sort((a, b) => b.decided_at.localeCompare(a.decided_at))
+      .slice(0, limit);
+  }
+
+  async listRecent(limit = 50): Promise<PickReviewRecord[]> {
+    return this.reviews
+      .sort((a, b) => b.decided_at.localeCompare(a.decided_at))
+      .slice(0, limit);
+  }
+}
+
+export class DatabasePickReviewRepository implements PickReviewRepository {
+  private client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async createReview(input: PickReviewCreateInput): Promise<PickReviewRecord> {
+    const { data, error } = await this.client
+      .from('pick_reviews')
+      .insert({
+        pick_id: input.pickId,
+        decision: input.decision,
+        reason: input.reason,
+        decided_by: input.decidedBy,
+      })
+      .select('*')
+      .single();
+
+    if (error) throw new Error(`Failed to create pick review: ${error.message}`);
+    return data as unknown as PickReviewRecord;
+  }
+
+  async listByPick(pickId: string): Promise<PickReviewRecord[]> {
+    const { data, error } = await this.client
+      .from('pick_reviews')
+      .select('*')
+      .eq('pick_id', pickId)
+      .order('decided_at', { ascending: false });
+
+    if (error) throw new Error(`Failed to list reviews for pick: ${error.message}`);
+    return (data ?? []) as unknown as PickReviewRecord[];
+  }
+
+  async listByDecision(decision: PickReviewRecord['decision'], limit = 50): Promise<PickReviewRecord[]> {
+    const { data, error } = await this.client
+      .from('pick_reviews')
+      .select('*')
+      .eq('decision', decision)
+      .order('decided_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw new Error(`Failed to list reviews by decision: ${error.message}`);
+    return (data ?? []) as unknown as PickReviewRecord[];
+  }
+
+  async listRecent(limit = 50): Promise<PickReviewRecord[]> {
+    const { data, error } = await this.client
+      .from('pick_reviews')
+      .select('*')
+      .order('decided_at', { ascending: false })
+      .limit(limit);
+
+    if (error) throw new Error(`Failed to list recent reviews: ${error.message}`);
+    return (data ?? []) as unknown as PickReviewRecord[];
+  }
+}
+
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
   const providerOffers = new InMemoryProviderOfferRepository();
@@ -2858,6 +2988,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     audit: new InMemoryAuditLogRepository(),
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
     tiers: new InMemoryMemberTierRepository(),
+    reviews: new InMemoryPickReviewRepository(),
   };
 }
 
@@ -2881,6 +3012,7 @@ export function createDatabaseRepositoryBundle(
     audit: new DatabaseAuditLogRepository(connection),
     referenceData: new DatabaseReferenceDataRepository(connection),
     tiers: new DatabaseMemberTierRepository(connection),
+    reviews: new DatabasePickReviewRepository(connection),
   };
 }
 

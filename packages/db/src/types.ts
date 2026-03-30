@@ -137,6 +137,25 @@ export type GradeResultRecord = GradeResultRow;
 export type MemberTierRecord = MemberTierRow;
 
 // ---------------------------------------------------------------------------
+// Pick review types (not generated — table added in migration 018)
+// ---------------------------------------------------------------------------
+
+// Decision values are deliberately different from approval_status values.
+// approve/deny/hold/return are human decisions; pending/approved/rejected
+// are system gate states. pick_reviews drives approval_status, not vice versa.
+export type PickReviewDecision = 'approve' | 'deny' | 'hold' | 'return';
+
+export interface PickReviewRecord {
+  id: string;
+  pick_id: string;
+  decision: PickReviewDecision;
+  reason: string;
+  decided_by: string;
+  decided_at: string;
+  created_at: string;
+}
+
+// ---------------------------------------------------------------------------
 // Reference data types (not generated — tables added in migration 008)
 // ---------------------------------------------------------------------------
 

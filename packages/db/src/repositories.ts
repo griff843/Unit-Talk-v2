@@ -23,6 +23,7 @@ import type {
   HedgeOpportunityType,
   MemberTierRecord,
   ParticipantRow,
+  PickReviewRecord,
   ParticipantType,
   PickRecord,
   PickLifecycleRecord,
@@ -64,6 +65,7 @@ export interface PickRepository {
     pickId: string,
     lifecycleState: CanonicalPick['lifecycleState'],
   ): Promise<PickRecord>;
+  updateApprovalStatus(pickId: string, approvalStatus: ApprovalStatus): Promise<PickRecord>;
   findPickById(pickId: string): Promise<PickRecord | null>;
   listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
@@ -494,6 +496,7 @@ export interface RepositoryBundle {
   audit: AuditLogRepository;
   referenceData: ReferenceDataRepository;
   tiers: MemberTierRepository;
+  reviews: PickReviewRepository;
 }
 
 export interface IngestorRepositoryBundle {
@@ -533,6 +536,24 @@ export interface MemberTierRepository {
   getTierCounts(): Promise<Record<MemberTier, number>>;
   /** Returns active trial rows whose effective_until is at or before the given timestamp. */
   getExpiredTrials(now: string): Promise<MemberTierRecord[]>;
+}
+
+// ---------------------------------------------------------------------------
+// Pick Review
+// ---------------------------------------------------------------------------
+
+export interface PickReviewCreateInput {
+  pickId: string;
+  decision: PickReviewRecord['decision'];
+  reason: string;
+  decidedBy: string;
+}
+
+export interface PickReviewRepository {
+  createReview(input: PickReviewCreateInput): Promise<PickReviewRecord>;
+  listByPick(pickId: string): Promise<PickReviewRecord[]>;
+  listByDecision(decision: PickReviewRecord['decision'], limit?: number): Promise<PickReviewRecord[]>;
+  listRecent(limit?: number): Promise<PickReviewRecord[]>;
 }
 
 export function mapValidatedSubmissionToSubmissionCreateInput(
