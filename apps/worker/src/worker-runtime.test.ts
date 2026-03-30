@@ -28,6 +28,7 @@ import {
 } from './delivery-adapters.js';
 import { processNextDistributionWork } from './distribution-worker.js';
 import { runWorkerCycles } from './runner.js';
+import { DeliveryCircuitBreaker } from './circuit-breaker.js';
 
 interface CapturedRequest {
   url: string;
@@ -1254,6 +1255,120 @@ test('createDiscordDeliveryAdapter renders trader-insights target-specific embed
     'Target: discord:trader-insights | Market-alerts lane preview',
   );
   assert.equal(body.embeds?.[0]?.fields?.[0]?.name, 'Trader Insights Purpose');
+});
+
+// ---------------------------------------------------------------------------
+// Circuit breaker unit tests
+// ---------------------------------------------------------------------------
+
+test('DeliveryCircuitBreaker opens after N consecutive failures', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 3, cooldownMs: 60_000 });
+  const target = 'discord:circuit-test';
+
+  assert.equal(cb.isOpen(target), false, 'circuit must start closed');
+  cb.recordFailure(target);
+  cb.recordFailure(target);
+  assert.equal(cb.isOpen(target), false, 'circuit must remain closed before threshold');
+  cb.recordFailure(target);
+  assert.equal(cb.isOpen(target), true, 'circuit must open at threshold');
+  assert.ok(cb.resumeAt(target) !== null, 'resumeAt must be set when open');
+  assert.ok(
+    cb.openTargets().includes(target),
+    'openTargets() must include the tripped target',
+  );
+});
+
+test('DeliveryCircuitBreaker blocks delivery when open, allows after cooldown', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 1, cooldownMs: 50 });
+  const target = 'discord:cooldown-test';
+
+  cb.recordFailure(target);
+  assert.equal(cb.isOpen(target), true, 'circuit must be open immediately after threshold');
+
+  return new Promise<void>((resolve) => {
+    setTimeout(() => {
+      assert.equal(cb.isOpen(target), false, 'circuit must auto-reset after cooldown window');
+      assert.deepEqual(cb.openTargets(), [], 'openTargets must be empty after reset');
+      resolve();
+    }, 60);
+  });
+});
+
+test('DeliveryCircuitBreaker resets on success', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 2, cooldownMs: 60_000 });
+  const target = 'discord:reset-test';
+
+  cb.recordFailure(target);
+  cb.recordFailure(target);
+  assert.equal(cb.isOpen(target), true);
+  cb.recordSuccess(target);
+  assert.equal(cb.isOpen(target), false, 'circuit must close after success');
+  assert.equal(cb.resumeAt(target), null, 'resumeAt must be null after reset');
+});
+
+test('runWorkerCycles skips target with open circuit and returns circuit-open result', async () => {
+  // Three outbox rows for discord:best-bets — force threshold=2 failures to open the circuit,
+  // then the third cycle should return circuit-open without calling deliver.
+  const entries = [
+    createOutboxRecord('discord:best-bets'),
+    createOutboxRecord('discord:best-bets'),
+    createOutboxRecord('discord:best-bets'),
+  ];
+  const { repositories } = createWorkerTestRepositories(entries);
+
+  let deliverCallCount = 0;
+  const alwaysFail = async () => {
+    deliverCallCount += 1;
+    throw new Error('discord down');
+  };
+
+  const cb = new DeliveryCircuitBreaker({ threshold: 2, cooldownMs: 60_000 });
+
+  // 3 cycles: cycle 1 fails (count=1), cycle 2 fails → circuit opens (count=2), cycle 3 is skipped
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-cb',
+    targets: ['discord:best-bets'],
+    deliver: alwaysFail,
+    maxCycles: 3,
+    sleep: async () => {},
+    circuitBreaker: cb,
+  });
+
+  // Cycle 3 should have circuit-open because circuit opens at threshold=2
+  const cycle3 = cycles[2];
+  assert.ok(cycle3 !== undefined, 'must have 3 cycles');
+  const circuitOpenResult = cycle3.results.find((r) => r.status === 'circuit-open');
+  assert.ok(circuitOpenResult !== undefined, 'cycle 3 must include a circuit-open result');
+  assert.equal(circuitOpenResult.target, 'discord:best-bets');
+  // Deliver must only have been called twice (cycles 1 and 2 — cycle 3 was skipped)
+  assert.equal(deliverCallCount, 2, 'deliver must not be called when circuit is open');
+});
+
+test('runWorkerCycles writes system_runs row when circuit opens', async () => {
+  const entry = createOutboxRecord('discord:trader-insights');
+  const { repositories, runs } = createWorkerTestRepositories([entry]);
+
+  const cb = new DeliveryCircuitBreaker({ threshold: 1, cooldownMs: 60_000 });
+  const alwaysFail = async () => {
+    throw new Error('delivery failed');
+  };
+
+  await runWorkerCycles({
+    repositories,
+    workerId: 'worker-cb-run',
+    targets: ['discord:trader-insights'],
+    deliver: alwaysFail,
+    maxCycles: 1,
+    circuitBreaker: cb,
+  });
+
+  const circuitRun = runs.records.find((r) => r.run_type === 'worker.circuit-open');
+  assert.ok(circuitRun !== undefined, 'a worker.circuit-open system_run must be written');
+  assert.equal(circuitRun.status, 'running', 'run must remain running (open) until circuit closes');
+  const details = circuitRun.details as Record<string, unknown> | null;
+  assert.equal(typeof details?.target, 'string', 'details.target must be set');
+  assert.equal(typeof details?.resumeAt, 'string', 'details.resumeAt must be set');
 });
 
 function isGovernedTarget(target: string) {

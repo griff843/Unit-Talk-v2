@@ -146,3 +146,29 @@ function readAutorun() {
 function readAdapterKind(): 'stub' | 'discord' {
   return process.env.UNIT_TALK_WORKER_ADAPTER === 'discord' ? 'discord' : 'stub';
 }
+
+export function readCircuitBreakerThreshold(): number {
+  const parsed = Number.parseInt(
+    process.env.UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD ?? '5',
+    10,
+  );
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 5;
+  }
+
+  return parsed;
+}
+
+export function readCircuitBreakerCooldownMs(): number {
+  const parsed = Number.parseInt(
+    process.env.UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS ?? '300000',
+    10,
+  );
+
+  if (Number.isNaN(parsed) || parsed <= 0) {
+    return 300_000;
+  }
+
+  return parsed;
+}

@@ -3042,3 +3042,80 @@ test('createSnapshotFromRows alertAgent reflects last notification run from rece
   assert.equal(snapshot.alertAgent.lastNotificationDetails?.suppressed, 1);
   assert.equal(snapshot.alertAgent.lastDetectionRunAt, null);
 });
+
+// ---------------------------------------------------------------------------
+// Circuit breaker snapshot tests (UTV2-124)
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows marks worker degraded when a worker.circuit-open run is running', () => {
+  const circuitOpenRun: SystemRunRecord = {
+    id: 'circuit-run-1',
+    run_type: 'worker.circuit-open',
+    status: 'running',
+    started_at: '2026-03-29T10:00:00.000Z',
+    finished_at: null,
+    actor: 'worker-dev',
+    details: { target: 'discord:best-bets', openedAt: '2026-03-29T10:00:00.000Z', resumeAt: '2026-03-29T10:05:00.000Z' },
+    created_at: '2026-03-29T10:00:00.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [circuitOpenRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  const workerSignal = snapshot.health.find((h) => h.component === 'worker');
+  assert.ok(workerSignal, 'worker health signal should be present');
+  assert.equal(workerSignal.status, 'degraded');
+  assert.ok(
+    workerSignal.detail?.includes('circuit breaker open'),
+    `detail should mention circuit breaker open, got: ${workerSignal.detail}`,
+  );
+  assert.ok(
+    workerSignal.detail?.includes('discord:best-bets'),
+    `detail should include the target name, got: ${workerSignal.detail}`,
+  );
+});
+
+test('createSnapshotFromRows does not degrade worker when worker.circuit-open run is succeeded', () => {
+  const closedCircuitRun: SystemRunRecord = {
+    id: 'circuit-run-2',
+    run_type: 'worker.circuit-open',
+    status: 'succeeded',
+    started_at: '2026-03-29T10:00:00.000Z',
+    finished_at: '2026-03-29T10:05:00.000Z',
+    actor: 'worker-dev',
+    details: { target: 'discord:best-bets', closedAt: '2026-03-29T10:05:00.000Z' },
+    created_at: '2026-03-29T10:00:00.000Z',
+    idempotency_key: null,
+  };
+  const normalRun: SystemRunRecord = {
+    id: 'normal-run-1',
+    run_type: 'worker.cycle',
+    status: 'succeeded',
+    started_at: '2026-03-29T10:05:01.000Z',
+    finished_at: '2026-03-29T10:05:02.000Z',
+    actor: 'worker-dev',
+    details: null,
+    created_at: '2026-03-29T10:05:01.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [normalRun, closedCircuitRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  const workerSignal = snapshot.health.find((h) => h.component === 'worker');
+  assert.ok(workerSignal, 'worker health signal should be present');
+  assert.equal(workerSignal.status, 'healthy');
+});

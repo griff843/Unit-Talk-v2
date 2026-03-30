@@ -924,7 +924,7 @@ export function createSnapshotFromRows(input: {
   };
 
   const mostRecentRun = input.recentRuns[0];
-  const workerStatus = inferWorkerStatus(mostRecentRun, counts);
+  const workerStatus = inferWorkerStatus(mostRecentRun, counts, input.recentRuns);
   const workerRuntime = summarizeWorkerRuntime(
     input.recentRuns,
     input.recentOutbox,
@@ -1331,7 +1331,27 @@ function outboxRowsToChannelId(
 function inferWorkerStatus(
   mostRecentRun: SystemRunRecord | undefined,
   counts: OperatorSnapshot['counts'],
+  allRuns: SystemRunRecord[] = [],
 ): OperatorHealthSignal {
+  // Check for unresolved open circuit breaker runs — these indicate a target is paused
+  const openCircuitRuns = allRuns.filter(
+    (row) => row.run_type === 'worker.circuit-open' && row.status === 'running',
+  );
+  if (openCircuitRuns.length > 0) {
+    const targets = openCircuitRuns
+      .map((row) => {
+        const details = row.details as Record<string, unknown> | null;
+        return typeof details?.target === 'string' ? details.target : null;
+      })
+      .filter((t): t is string => t !== null);
+    const targetList = targets.length > 0 ? targets.join(', ') : 'unknown';
+    return {
+      component: 'worker',
+      status: 'degraded',
+      detail: `circuit breaker open for target(s): ${targetList}`,
+    };
+  }
+
   if (!mostRecentRun) {
     return {
       component: 'worker',

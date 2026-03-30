@@ -50,11 +50,18 @@ export interface WorkerProcessFailureResult {
   run: SystemRunRecord;
 }
 
+export interface WorkerProcessCircuitOpenResult {
+  status: 'circuit-open';
+  target: string;
+  workerId: string;
+}
+
 export type WorkerProcessResult =
   | WorkerProcessIdleResult
   | WorkerProcessSuccessResult
   | WorkerProcessSkippedResult
-  | WorkerProcessFailureResult;
+  | WorkerProcessFailureResult
+  | WorkerProcessCircuitOpenResult;
 
 export async function processNextDistributionWork(
   repositories: RepositoryBundle,
