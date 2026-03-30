@@ -6,13 +6,9 @@ import {
   type PromotionPolicy,
   type PromotionOverrideAction,
   type PromotionTarget,
+  resolveScoringProfile,
 } from '@unit-talk/contracts';
-import {
-  bestBetsPromotionPolicy,
-  evaluatePromotionEligibility,
-  exclusiveInsightsPromotionPolicy,
-  traderInsightsPromotionPolicy,
-} from '@unit-talk/domain';
+import { evaluatePromotionEligibility } from '@unit-talk/domain';
 import type {
   AuditLogRecord,
   AuditLogRepository,
@@ -20,6 +16,8 @@ import type {
   PickRepository,
   PromotionHistoryRecord,
 } from '@unit-talk/db';
+
+const activeScoringProfile = resolveScoringProfile(process.env['UNIT_TALK_SCORING_PROFILE']);
 
 export interface PromotionEvaluationResult {
   pick: CanonicalPick;
@@ -40,7 +38,7 @@ export async function evaluateAndPersistBestBetsPromotion(
     actor,
     pickRepository,
     auditLogRepository,
-    bestBetsPromotionPolicy,
+    activeScoringProfile.policies['best-bets'],
   );
 }
 
@@ -63,9 +61,9 @@ export async function evaluateAndPersistPromotion(
 
 export function activePromotionPolicies() {
   return [
-    exclusiveInsightsPromotionPolicy,
-    traderInsightsPromotionPolicy,
-    bestBetsPromotionPolicy,
+    activeScoringProfile.policies['exclusive-insights'],
+    activeScoringProfile.policies['trader-insights'],
+    activeScoringProfile.policies['best-bets'],
   ] as const;
 }
 
@@ -174,6 +172,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: null,
     payload: {
+      scoringProfile: activeScoringProfile.name,
       boardState: winnerBoardState,
       scoreInputs,
       policy: winnerPolicy,
@@ -217,6 +216,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
       promotionDecidedBy: decision.decidedBy,
       overrideAction: null,
       payload: {
+        scoringProfile: activeScoringProfile.name,
         boardState,
         scoreInputs,
         policy,
@@ -332,6 +332,7 @@ async function persistPromotionDecisionForPick(
     promotionDecidedBy: decision.decidedBy,
     overrideAction: override?.action ?? null,
     payload: {
+      scoringProfile: activeScoringProfile.name,
       boardState,
       scoreInputs,
       policy,
@@ -598,13 +599,5 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function resolvePromotionPolicyForTarget(target: PromotionTarget): PromotionPolicy {
-  if (target === 'exclusive-insights') {
-    return exclusiveInsightsPromotionPolicy;
-  }
-
-  if (target === 'trader-insights') {
-    return traderInsightsPromotionPolicy;
-  }
-
-  return bestBetsPromotionPolicy;
+  return activeScoringProfile.policies[target];
 }

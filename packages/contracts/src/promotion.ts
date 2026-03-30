@@ -75,6 +75,7 @@ export interface PromotionPolicy {
   minimumTrust: number;
   confidenceFloor?: number | undefined;
   boardCaps: PromotionBoardCaps;
+  weights: PromotionScoreWeights;
   version: string;
 }
 
@@ -145,6 +146,7 @@ export const bestBetsPromotionPolicy: PromotionPolicy = {
     perSport: 3,
     perGame: 1,
   },
+  weights: bestBetsScoreWeights,
   version: 'best-bets-v1',
 };
 
@@ -158,6 +160,13 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
     perSlate: 5,
     perSport: 3,
     perGame: 1,
+  },
+  weights: {
+    edge: 0.40,
+    trust: 0.30,
+    readiness: 0.15,
+    uniqueness: 0.10,
+    boardFit: 0.05,
   },
   version: 'trader-insights-v1',
 };
@@ -173,5 +182,87 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
     perSport: 3,
     perGame: 1,
   },
+  weights: {
+    edge: 0.45,
+    trust: 0.30,
+    readiness: 0.10,
+    uniqueness: 0.10,
+    boardFit: 0.05,
+  },
   version: 'exclusive-insights-v1',
 };
+
+/**
+ * A named scoring profile is a set of promotion policies (one per target)
+ * that can be selected at runtime via env var. Profiles allow weight
+ * experimentation without code deploys.
+ *
+ * All three canonical targets must be present in every profile.
+ * Missing targets would silently disable promotion for that lane.
+ */
+export interface ScoringProfile {
+  /** Unique identifier written to pick_promotion_history.metadata.scoringProfile */
+  name: string;
+  description: string;
+  policies: {
+    'best-bets': PromotionPolicy;
+    'trader-insights': PromotionPolicy;
+    'exclusive-insights': PromotionPolicy;
+  };
+}
+
+/**
+ * Default profile -- current production weights.
+ * This is the baseline; all experiments are deltas from this.
+ */
+export const defaultScoringProfile: ScoringProfile = {
+  name: 'default',
+  description: 'Production baseline weights (best-bets-v1, trader-insights-v1, exclusive-insights-v1)',
+  policies: {
+    'best-bets': bestBetsPromotionPolicy,
+    'trader-insights': traderInsightsPromotionPolicy,
+    'exclusive-insights': exclusiveInsightsPromotionPolicy,
+  },
+};
+
+/**
+ * Conservative profile -- higher edge weight, lower trust weight.
+ * Use when you want to prioritize pure mathematical edge over capper trust signals.
+ */
+export const conservativeScoringProfile: ScoringProfile = {
+  name: 'conservative',
+  description: 'Edge-weighted variant: edge +5%, trust -5% across all targets',
+  policies: {
+    'best-bets': {
+      ...bestBetsPromotionPolicy,
+      weights: { edge: 0.40, trust: 0.20, readiness: 0.20, uniqueness: 0.10, boardFit: 0.10 },
+      version: 'best-bets-conservative-v1',
+    },
+    'trader-insights': {
+      ...traderInsightsPromotionPolicy,
+      weights: { edge: 0.45, trust: 0.25, readiness: 0.15, uniqueness: 0.10, boardFit: 0.05 },
+      version: 'trader-insights-conservative-v1',
+    },
+    'exclusive-insights': {
+      ...exclusiveInsightsPromotionPolicy,
+      weights: { edge: 0.50, trust: 0.25, readiness: 0.10, uniqueness: 0.10, boardFit: 0.05 },
+      version: 'exclusive-insights-conservative-v1',
+    },
+  },
+};
+
+export const scoringProfiles: Record<string, ScoringProfile> = {
+  default: defaultScoringProfile,
+  conservative: conservativeScoringProfile,
+};
+
+export function resolveScoringProfile(name: string | undefined): ScoringProfile {
+  const key = name ?? 'default';
+  const profile = scoringProfiles[key];
+  if (!profile) {
+    throw new Error(
+      `Unknown scoring profile "${key}". Available: ${Object.keys(scoringProfiles).join(", ")}`,
+    );
+  }
+  return profile;
+}
