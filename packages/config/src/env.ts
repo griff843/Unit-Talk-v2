@@ -30,6 +30,7 @@ export interface AppEnv {
   UNIT_TALK_WORKER_DRY_RUN?: string | undefined;
   UNIT_TALK_WORKER_AUTORUN?: string | undefined;
   UNIT_TALK_API_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_API_MAX_BODY_BYTES?: string | undefined;
   UNIT_TALK_API_BODY_LIMIT_BYTES?: string | undefined;
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX?: string | undefined;
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS?: string | undefined;
@@ -126,6 +127,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_WORKER_DRY_RUN: optionalEnv('UNIT_TALK_WORKER_DRY_RUN', merged),
     UNIT_TALK_WORKER_AUTORUN: optionalEnv('UNIT_TALK_WORKER_AUTORUN', merged),
     UNIT_TALK_API_RUNTIME_MODE: optionalEnv('UNIT_TALK_API_RUNTIME_MODE', merged),
+    UNIT_TALK_API_MAX_BODY_BYTES: optionalEnv('UNIT_TALK_API_MAX_BODY_BYTES', merged),
     UNIT_TALK_API_BODY_LIMIT_BYTES: optionalEnv('UNIT_TALK_API_BODY_LIMIT_BYTES', merged),
     UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX: optionalEnv(
       'UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX',

@@ -335,7 +335,9 @@ function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
 }
 
 function readBodyLimitBytes(environment: AppEnv) {
-  const parsed = Number.parseInt(environment.UNIT_TALK_API_BODY_LIMIT_BYTES ?? '', 10);
+  // UNIT_TALK_API_MAX_BODY_BYTES is the canonical name; UNIT_TALK_API_BODY_LIMIT_BYTES is the legacy alias.
+  const raw = environment.UNIT_TALK_API_MAX_BODY_BYTES ?? environment.UNIT_TALK_API_BODY_LIMIT_BYTES ?? '';
+  const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BODY_LIMIT_BYTES;
 }
 
