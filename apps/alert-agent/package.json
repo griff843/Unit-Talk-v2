@@ -1,0 +1,13 @@
+{
+  "name": "@unit-talk/alert-agent",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist",
+    "dev": "tsx src/main.ts",
+    "start": "node dist/main.js",
+    "type-check": "tsc -p tsconfig.json --noEmit"
+  }
+}

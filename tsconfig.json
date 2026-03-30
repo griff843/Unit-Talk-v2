@@ -9,6 +9,7 @@
     { "path": "./packages/intelligence" },
     { "path": "./packages/observability" },
     { "path": "./packages/verification" },
+    { "path": "./apps/alert-agent" },
     { "path": "./apps/api" },
     { "path": "./apps/ingestor" },
     { "path": "./apps/worker" },
