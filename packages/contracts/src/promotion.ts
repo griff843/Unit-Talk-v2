@@ -266,3 +266,61 @@ export function resolveScoringProfile(name: string | undefined): ScoringProfile 
   }
   return profile;
 }
+
+/**
+ * Complete snapshot of all inputs that determined a promotion decision.
+ * Stored in pick_promotion_history.metadata at decision time.
+ * Given this snapshot and the policy thresholds, the original decision can be
+ * deterministically reproduced by replayPromotion() in @unit-talk/domain.
+ */
+export interface PromotionDecisionSnapshot {
+  /** Scoring profile name used at decision time (from UTV2-136). */
+  scoringProfile: string;
+  /** Policy version used at decision time (e.g. 'best-bets-v1'). */
+  policyVersion: string;
+
+  /** Raw 0–100 score component inputs before weighting. */
+  scoreInputs: {
+    edge: number;
+    trust: number;
+    readiness: number;
+    uniqueness: number;
+    boardFit: number;
+  };
+
+  /** Gate boolean/value inputs at the moment of decision. */
+  gateInputs: {
+    approvalStatus: string;
+    hasRequiredFields: boolean;
+    isStale: boolean;
+    withinPostingWindow: boolean;
+    marketStillValid: boolean;
+    riskBlocked: boolean;
+    confidenceFloor: number | null;
+    pickConfidence: number | null;
+  };
+
+  /** Board occupancy at decision time used for cap evaluation. */
+  boardStateAtDecision: {
+    currentBoardCount: number;
+    sameSportCount: number;
+    sameGameCount: number;
+    duplicateCount: number;
+  };
+
+  /** Weights resolved from the active scoring profile at decision time. */
+  weightsUsed: {
+    edge: number;
+    trust: number;
+    readiness: number;
+    uniqueness: number;
+    boardFit: number;
+  };
+
+  /** Override state applied at decision time, if any. */
+  override?: {
+    forcePromote?: boolean;
+    suppress?: boolean;
+    reason?: string;
+  };
+}

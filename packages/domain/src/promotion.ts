@@ -1,7 +1,10 @@
 import {
   bestBetsPromotionPolicy,
+  type ApprovalStatus,
   type BoardPromotionDecision,
   type BoardPromotionEvaluationInput,
+  type CanonicalPick,
+  type PromotionDecisionSnapshot,
   type PromotionPolicy,
   type PromotionScoreBreakdown,
   type PromotionScoreWeights,
@@ -210,4 +213,47 @@ function buildDecision(input: {
     decidedAt: input.decidedAt,
     decidedBy: input.decidedBy,
   };
+}
+
+/**
+ * Deterministically reproduces a promotion decision from a stored snapshot.
+ *
+ * Given the same snapshot and the same policy, this function produces the same
+ * BoardPromotionDecision that was recorded at decision time. Useful for:
+ * - Auditing: verify that a stored decision was computed correctly
+ * - Counterfactuals: "what would the decision have been under policy X?"
+ * - Regression testing: ensure scoring changes do not silently alter past decisions
+ *
+ * @param snapshot  - The PromotionDecisionSnapshot stored in pick_promotion_history.metadata
+ * @param policy    - The PromotionPolicy to evaluate against
+ * @param decidedAt - ISO timestamp for the replay (pass stored decidedAt for exact match)
+ */
+export function replayPromotion(
+  snapshot: PromotionDecisionSnapshot,
+  policy: PromotionPolicy,
+  decidedAt?: string,
+): BoardPromotionDecision {
+  const input: BoardPromotionEvaluationInput = {
+    target: policy.target,
+    pick: {
+      confidence: snapshot.gateInputs.pickConfidence ?? undefined,
+    } as CanonicalPick,
+    approvalStatus: snapshot.gateInputs.approvalStatus as ApprovalStatus,
+    hasRequiredFields: snapshot.gateInputs.hasRequiredFields,
+    isStale: snapshot.gateInputs.isStale,
+    withinPostingWindow: snapshot.gateInputs.withinPostingWindow,
+    marketStillValid: snapshot.gateInputs.marketStillValid,
+    riskBlocked: snapshot.gateInputs.riskBlocked,
+    scoreInputs: snapshot.scoreInputs,
+    minimumScore: policy.minimumScore,
+    confidenceFloor: snapshot.gateInputs.confidenceFloor ?? undefined,
+    boardCaps: policy.boardCaps,
+    boardState: snapshot.boardStateAtDecision,
+    override: snapshot.override,
+    decidedAt: decidedAt ?? new Date().toISOString(),
+    decidedBy: 'replay',
+    version: snapshot.policyVersion,
+  };
+
+  return evaluatePromotionEligibility(input, policy);
 }

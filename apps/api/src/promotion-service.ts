@@ -3,6 +3,7 @@ import {
   type BoardPromotionEvaluationInput,
   type CanonicalPick,
   type PickLifecycleState,
+  type PromotionDecisionSnapshot,
   type PromotionPolicy,
   type PromotionOverrideAction,
   type PromotionTarget,
@@ -25,6 +26,7 @@ export interface PromotionEvaluationResult {
   history: PromotionHistoryRecord;
   audit: AuditLogRecord;
   decision: BoardPromotionDecision;
+  snapshot: PromotionDecisionSnapshot;
 }
 
 export async function evaluateAndPersistBestBetsPromotion(
@@ -158,6 +160,46 @@ export async function evaluateAllPoliciesEagerAndPersist(
     : null;
   const winnerReason = summarizePromotionReason(winnerDecision);
 
+  const makeSnapshot = (
+    policy: PromotionPolicy,
+    boardState: (typeof boardStates)[number],
+  ): PromotionDecisionSnapshot => ({
+    scoringProfile: activeScoringProfile.name,
+    policyVersion: policy.version,
+    scoreInputs: {
+      edge: scoreInputs.edge,
+      trust: scoreInputs.trust,
+      readiness: scoreInputs.readiness,
+      uniqueness: scoreInputs.uniqueness,
+      boardFit: scoreInputs.boardFit,
+    },
+    gateInputs: {
+      approvalStatus: canonicalPick.approvalStatus,
+      hasRequiredFields: hasRequiredFields(canonicalPick),
+      isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
+      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+      marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
+      riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+      confidenceFloor: policy.confidenceFloor ?? null,
+      pickConfidence: canonicalPick.confidence ?? null,
+    },
+    boardStateAtDecision: {
+      currentBoardCount: boardState.currentBoardCount,
+      sameSportCount: boardState.sameSportCount,
+      sameGameCount: boardState.sameGameCount,
+      duplicateCount: boardState.duplicateCount,
+    },
+    weightsUsed: {
+      edge: policy.weights.edge,
+      trust: policy.weights.trust,
+      readiness: policy.weights.readiness,
+      uniqueness: policy.weights.uniqueness,
+      boardFit: policy.weights.boardFit,
+    },
+  });
+
+  const winnerSnapshot = makeSnapshot(winnerPolicy, winnerBoardState);
+
   // Persist winner: updates picks + inserts winner's history row.
   const persisted = await pickRepository.persistPromotionDecision({
     pickId,
@@ -172,11 +214,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: null,
     payload: {
-      scoringProfile: activeScoringProfile.name,
-      boardState: winnerBoardState,
-      scoreInputs,
-      policy: winnerPolicy,
+      ...winnerSnapshot,
       explanation: winnerDecision.explanation,
+      policy: winnerPolicy,
     },
   });
 
@@ -205,6 +245,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     const decision = decisions[index]!;
     const boardState = boardStates[index]!;
     const historyReason = summarizePromotionReason(decision);
+    const nonWinnerSnapshot = makeSnapshot(policy, boardState);
     const history = await pickRepository.insertPromotionHistoryRow({
       pickId,
       target: policy.target,
@@ -216,11 +257,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
       promotionDecidedBy: decision.decidedBy,
       overrideAction: null,
       payload: {
-        scoringProfile: activeScoringProfile.name,
-        boardState,
-        scoreInputs,
-        policy,
+        ...nonWinnerSnapshot,
         explanation: decision.explanation,
+        policy,
       },
     });
 
@@ -298,6 +337,7 @@ async function persistPromotionDecisionForPick(
     selection: canonicalPick.selection,
   });
   const scoreInputs = readPromotionScoreInputs(canonicalPick);
+  const overrideState = mapOverrideState(override);
   const decision = evaluatePromotionEligibility({
     target: policy.target,
     pick: canonicalPick,
@@ -312,13 +352,49 @@ async function persistPromotionDecisionForPick(
     confidenceFloor: policy.confidenceFloor,
     boardCaps: policy.boardCaps,
     boardState,
-    override: mapOverrideState(override),
+    override: overrideState,
     decidedAt: new Date().toISOString(),
     decidedBy: actor,
     version: policy.version,
   }, policy);
 
   const reason = summarizePromotionReason(decision);
+  const snapshot: PromotionDecisionSnapshot = {
+    scoringProfile: activeScoringProfile.name,
+    policyVersion: policy.version,
+    scoreInputs: {
+      edge: scoreInputs.edge,
+      trust: scoreInputs.trust,
+      readiness: scoreInputs.readiness,
+      uniqueness: scoreInputs.uniqueness,
+      boardFit: scoreInputs.boardFit,
+    },
+    gateInputs: {
+      approvalStatus: canonicalPick.approvalStatus,
+      hasRequiredFields: hasRequiredFields(canonicalPick),
+      isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
+      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+      marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
+      riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+      confidenceFloor: policy.confidenceFloor ?? null,
+      pickConfidence: canonicalPick.confidence ?? null,
+    },
+    boardStateAtDecision: {
+      currentBoardCount: boardState.currentBoardCount,
+      sameSportCount: boardState.sameSportCount,
+      sameGameCount: boardState.sameGameCount,
+      duplicateCount: boardState.duplicateCount,
+    },
+    weightsUsed: {
+      edge: policy.weights.edge,
+      trust: policy.weights.trust,
+      readiness: policy.weights.readiness,
+      uniqueness: policy.weights.uniqueness,
+      boardFit: policy.weights.boardFit,
+    },
+    ...(overrideState !== undefined ? { override: overrideState } : {}),
+  };
+
   const persisted = await pickRepository.persistPromotionDecision({
     pickId,
     target: policy.target,
@@ -332,11 +408,9 @@ async function persistPromotionDecisionForPick(
     promotionDecidedBy: decision.decidedBy,
     overrideAction: override?.action ?? null,
     payload: {
-      scoringProfile: activeScoringProfile.name,
-      boardState,
-      scoreInputs,
-      policy,
+      ...snapshot,
       explanation: decision.explanation,
+      policy,
     },
   });
   const audit = await auditLogRepository.record({
@@ -361,6 +435,7 @@ async function persistPromotionDecisionForPick(
     history: persisted.history,
     audit,
     decision,
+    snapshot,
   };
 }
 
