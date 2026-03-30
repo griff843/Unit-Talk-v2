@@ -9,10 +9,13 @@ import { writeJson } from '../http-utils.js';
  *   approval_status = 'pending' AND NOT held (latest review decision != 'hold')
  *
  * Query params:
- *   limit (default 25, max 100)
+ *   search  — pick ID prefix or market/selection text
+ *   source  — exact match on picks.source
+ *   sort    — newest (default), oldest, score
+ *   limit   — max 100, default 50
  */
 export async function handleReviewQueueRequest(
-  _request: IncomingMessage,
+  request: IncomingMessage,
   response: ServerResponse,
   deps: OperatorRouteDependencies,
 ): Promise<void> {
@@ -22,31 +25,33 @@ export async function handleReviewQueueRequest(
     return;
   }
 
-  const client = provider._supabaseClient as {
-    from: (table: string) => {
-      select: (cols: string, opts?: { count?: string }) => {
-        eq: (col: string, val: string) => {
-          order: (col: string, opts?: { ascending?: boolean }) => {
-            limit: (n: number) => Promise<{ data: unknown[]; error: unknown; count?: number }>;
-          };
-          not: (col: string, op: string, val: string) => {
-            order: (col: string, opts?: { ascending?: boolean }) => {
-              limit: (n: number) => Promise<{ data: unknown[]; error: unknown; count?: number }>;
-            };
-          };
-        };
-      };
-    };
-    rpc: (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
-  };
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const search = url.searchParams.get('search')?.trim() || null;
+  const source = url.searchParams.get('source')?.trim() || null;
+  const sort = url.searchParams.get('sort')?.trim() || 'newest';
+  const limit = Math.min(Math.max(1, Number(url.searchParams.get('limit')) || 50), 100);
 
-  // Get all pending picks
-  const { data: pendingPicks, error: picksError } = await client
-    .from('picks')
-    .select('*')
-    .eq('approval_status', 'pending')
-    .order('created_at', { ascending: false })
-    .limit(100);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = provider._supabaseClient as any;
+
+  let query = client.from('picks').select('*').eq('approval_status', 'pending');
+
+  if (source) query = query.eq('source', source);
+  if (search) {
+    if (search.match(/^[0-9a-f-]{4,}$/i)) {
+      query = query.ilike('id', `${search}%`);
+    } else {
+      query = query.or(`market.ilike.%${search}%,selection.ilike.%${search}%`);
+    }
+  }
+
+  switch (sort) {
+    case 'oldest': query = query.order('created_at', { ascending: true }); break;
+    case 'score': query = query.order('promotion_score', { ascending: false }); break;
+    default: query = query.order('created_at', { ascending: false }); break;
+  }
+
+  const { data: pendingPicks, error: picksError } = await query.limit(limit);
 
   if (picksError) {
     writeJson(response, 500, { ok: false, error: { code: 'DB_ERROR', message: String(picksError) } });
@@ -54,28 +59,16 @@ export async function handleReviewQueueRequest(
   }
 
   const picks = (pendingPicks ?? []) as Array<Record<string, unknown>>;
-
-  // For each pending pick, check if it's held (latest review = 'hold')
-  // Fetch all reviews for pending pick IDs in one query
   const pickIds = picks.map((p) => p['id'] as string);
 
   let heldPickIds: Set<string> = new Set();
   if (pickIds.length > 0) {
-    const { data: reviews } = await (client as unknown as {
-      from: (table: string) => {
-        select: (cols: string) => {
-          in: (col: string, vals: string[]) => {
-            order: (col: string, opts?: { ascending?: boolean }) => Promise<{ data: unknown[]; error: unknown }>;
-          };
-        };
-      };
-    })
+    const { data: reviews } = await client
       .from('pick_reviews')
       .select('pick_id, decision, decided_at')
       .in('pick_id', pickIds)
       .order('decided_at', { ascending: false });
 
-    // Group by pick_id, take latest decision
     const latestByPick = new Map<string, string>();
     for (const r of (reviews ?? []) as Array<Record<string, unknown>>) {
       const pid = r['pick_id'] as string;
@@ -91,7 +84,6 @@ export async function handleReviewQueueRequest(
     );
   }
 
-  // Review queue = pending picks that are NOT held
   const reviewQueuePicks = picks.filter((p) => !heldPickIds.has(p['id'] as string));
 
   writeJson(response, 200, {

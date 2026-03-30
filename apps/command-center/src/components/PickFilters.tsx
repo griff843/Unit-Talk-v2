@@ -9,6 +9,7 @@ const labelClass = 'text-[10px] font-medium uppercase tracking-wide text-gray-50
 
 const LIFECYCLE_OPTIONS = ['', 'validated', 'queued', 'posted', 'settled', 'voided'];
 const APPROVAL_OPTIONS = ['', 'pending', 'approved', 'rejected'];
+const RESULT_OPTIONS = ['', 'win', 'loss', 'push', 'void'];
 
 export function PickFilters() {
   const searchParams = useSearchParams();
@@ -65,6 +66,26 @@ export function PickFilters() {
             <option key={opt} value={opt}>{opt || 'All'}</option>
           ))}
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className={labelClass}>Result</label>
+        <select name="result" defaultValue={searchParams.get('result') ?? ''} className={`w-24 ${inputClass}`}>
+          {RESULT_OPTIONS.map((opt) => (
+            <option key={opt} value={opt}>{opt || 'All'}</option>
+          ))}
+        </select>
+      </div>
+
+      <div className="flex flex-col gap-1">
+        <label className={labelClass}>Capper</label>
+        <input
+          name="capper"
+          type="text"
+          defaultValue={searchParams.get('capper') ?? ''}
+          placeholder="Name..."
+          className={`w-24 ${inputClass}`}
+        />
       </div>
 
       <div className="flex flex-col gap-1">

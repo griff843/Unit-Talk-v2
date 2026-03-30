@@ -8,10 +8,14 @@ import { writeJson } from '../http-utils.js';
  * Returns picks in held state:
  *   approval_status = 'pending' AND latest pick_reviews decision = 'hold'
  *
- * Each row includes the hold decision metadata (held_by, held_at, hold_reason, age).
+ * Query params:
+ *   search  — pick ID prefix or market/selection text
+ *   source  — exact match on picks.source
+ *   sort    — newest (default), oldest, score
+ *   limit   — max 100, default 50
  */
 export async function handleHeldQueueRequest(
-  _request: IncomingMessage,
+  request: IncomingMessage,
   response: ServerResponse,
   deps: OperatorRouteDependencies,
 ): Promise<void> {
@@ -21,28 +25,33 @@ export async function handleHeldQueueRequest(
     return;
   }
 
-  const client = provider._supabaseClient as {
-    from: (table: string) => {
-      select: (cols: string) => {
-        eq: (col: string, val: string) => {
-          order: (col: string, opts?: { ascending?: boolean }) => {
-            limit: (n: number) => Promise<{ data: unknown[]; error: unknown }>;
-          };
-        };
-        in: (col: string, vals: string[]) => {
-          order: (col: string, opts?: { ascending?: boolean }) => Promise<{ data: unknown[]; error: unknown }>;
-        };
-      };
-    };
-  };
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const search = url.searchParams.get('search')?.trim() || null;
+  const source = url.searchParams.get('source')?.trim() || null;
+  const sort = url.searchParams.get('sort')?.trim() || 'newest';
+  const limit = Math.min(Math.max(1, Number(url.searchParams.get('limit')) || 50), 100);
 
-  // Get all pending picks
-  const { data: pendingPicks, error: picksError } = await client
-    .from('picks')
-    .select('*')
-    .eq('approval_status', 'pending')
-    .order('created_at', { ascending: false })
-    .limit(100);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const client = provider._supabaseClient as any;
+
+  let query = client.from('picks').select('*').eq('approval_status', 'pending');
+
+  if (source) query = query.eq('source', source);
+  if (search) {
+    if (search.match(/^[0-9a-f-]{4,}$/i)) {
+      query = query.ilike('id', `${search}%`);
+    } else {
+      query = query.or(`market.ilike.%${search}%,selection.ilike.%${search}%`);
+    }
+  }
+
+  switch (sort) {
+    case 'oldest': query = query.order('created_at', { ascending: true }); break;
+    case 'score': query = query.order('promotion_score', { ascending: false }); break;
+    default: query = query.order('created_at', { ascending: false }); break;
+  }
+
+  const { data: pendingPicks, error: picksError } = await query.limit(limit);
 
   if (picksError) {
     writeJson(response, 500, { ok: false, error: { code: 'DB_ERROR', message: String(picksError) } });
@@ -57,14 +66,12 @@ export async function handleHeldQueueRequest(
     return;
   }
 
-  // Fetch all reviews for these picks
   const { data: reviews } = await client
     .from('pick_reviews')
     .select('*')
     .in('pick_id', pickIds)
     .order('decided_at', { ascending: false });
 
-  // Group by pick_id, take latest decision
   const latestReviewByPick = new Map<string, Record<string, unknown>>();
   for (const r of (reviews ?? []) as Array<Record<string, unknown>>) {
     const pid = r['pick_id'] as string;
@@ -73,7 +80,6 @@ export async function handleHeldQueueRequest(
     }
   }
 
-  // Held = latest decision is 'hold'
   const now = Date.now();
   const heldPicks = picks
     .filter((p) => {
