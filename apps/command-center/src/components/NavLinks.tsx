@@ -8,8 +8,10 @@ const NAV_LINKS = [
   { href: '/picks-list', label: 'Picks' },
   { href: '/review', label: 'Review' },
   { href: '/held', label: 'Held' },
+  { href: '/exceptions', label: 'Exceptions' },
   { href: '/performance', label: 'Performance' },
   { href: '/decisions', label: 'Decisions' },
+  { href: '/interventions', label: 'Audit' },
 ];
 
 export function NavLinks() {
