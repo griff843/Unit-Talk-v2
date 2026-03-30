@@ -1,6 +1,7 @@
 import type { CanonicalPick } from '@unit-talk/contracts';
 import type { OutboxRecord, OutboxRepository } from '@unit-talk/db';
 import { buildDistributionWorkItem } from '@unit-talk/domain';
+import { isTargetEnabled, resolveTargetRegistry, type TargetRegistryEntry } from '@unit-talk/contracts';
 
 export interface DistributionEnqueueResult {
   pickId: string;
@@ -8,12 +9,25 @@ export interface DistributionEnqueueResult {
   outboxRecord: OutboxRecord;
 }
 
+export interface DistributionSkippedResult {
+  enqueued: false;
+  reason: 'target-disabled';
+  target: string;
+}
+
 export async function enqueueDistributionWork(
   pick: CanonicalPick,
   outboxRepository: OutboxRepository,
   target: string,
-): Promise<DistributionEnqueueResult> {
+  targetRegistry?: TargetRegistryEntry[],
+): Promise<DistributionEnqueueResult | DistributionSkippedResult> {
+  const registry = targetRegistry ?? resolveTargetRegistry();
   const requestedPromotionTarget = parseGovernedPromotionTarget(target);
+
+  if (requestedPromotionTarget && !isTargetEnabled(requestedPromotionTarget, registry)) {
+    return { enqueued: false, reason: 'target-disabled', target };
+  }
+
   if (
     requestedPromotionTarget &&
     (pick.promotionStatus !== 'qualified' && pick.promotionStatus !== 'promoted')

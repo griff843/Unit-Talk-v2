@@ -12,7 +12,7 @@ import {
   exclusiveInsightsPromotionPolicy,
   traderInsightsPromotionPolicy,
 } from '@unit-talk/domain';
-import { enqueueDistributionWork } from './distribution-service.js';
+import { enqueueDistributionWork, type DistributionEnqueueResult } from './distribution-service.js';
 import { ensurePickLifecycleState } from './lifecycle-service.js';
 import { evaluateAndPersistPromotion } from './promotion-service.js';
 
@@ -70,23 +70,42 @@ export async function enqueueDistributionWithRunTracking(
       outboxRepository,
       target,
     );
+
+    if ('enqueued' in distribution) {
+      // target-disabled — complete the run gracefully without an outbox record
+      const completedRun = await systemRunRepository.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: { target, reason: 'target-disabled' },
+      });
+      const audit = await auditLogRepository.record({
+        entityType: 'distribution_outbox',
+        entityId: run.id,
+        action: 'distribution.enqueue',
+        actor,
+        payload: { pickId: pick.id, target, skipped: true, reason: 'target-disabled' },
+      });
+      return { run: completedRun, audit, target, pickId: pick.id };
+    }
+
+    const enqueued = distribution as DistributionEnqueueResult;
     const completedRun = await systemRunRepository.completeRun({
       runId: run.id,
       status: 'succeeded',
       details: {
-        outboxId: distribution.outboxRecord.id,
+        outboxId: enqueued.outboxRecord.id,
         target,
         queuedLifecycleEventId: queuedTransition?.lifecycleEvent.id ?? null,
       },
     });
     const audit = await auditLogRepository.record({
       entityType: 'distribution_outbox',
-      entityId: distribution.outboxRecord.id,
+      entityId: enqueued.outboxRecord.id,
       action: 'distribution.enqueue',
       actor,
       payload: {
         pickId: pick.id,
-        outboxId: distribution.outboxRecord.id,
+        outboxId: enqueued.outboxRecord.id,
         target,
       },
     });
