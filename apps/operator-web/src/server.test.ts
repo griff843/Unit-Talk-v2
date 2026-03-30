@@ -2311,6 +2311,215 @@ test('buildCapperStatsResponse excludes picks outside the requested window', () 
   assert.deepEqual(stats.lastFive, ['L', 'W']);
 });
 
+test('detectIncidents detects stuck-outbox when pending row is older than 10 minutes', () => {
+  const now = '2026-03-29T12:00:00.000Z';
+  const stuckAt = '2026-03-29T11:45:00.000Z'; // 15 minutes before now
+  const incidents = detectIncidents(
+    {
+      recentOutbox: [
+        {
+          id: 'outbox-stuck-1',
+          pick_id: 'pick-stuck-1',
+          target: 'discord:canary',
+          status: 'pending',
+          attempt_count: 0,
+          next_attempt_at: null,
+          last_error: null,
+          payload: {},
+          claimed_at: null,
+          claimed_by: null,
+          idempotency_key: null,
+          created_at: stuckAt,
+          updated_at: stuckAt,
+        },
+      ],
+      recentRuns: [
+        {
+          id: 'run-heartbeat-1',
+          run_type: 'worker.heartbeat',
+          status: 'succeeded',
+          started_at: now,
+          finished_at: now,
+          actor: 'worker',
+          details: {},
+          created_at: now,
+          idempotency_key: null,
+        },
+      ],
+    },
+    now,
+  );
+  const stuckIncident = incidents.find((i) => i.type === 'stuck-outbox');
+  assert.ok(stuckIncident, 'expected stuck-outbox incident');
+  assert.equal(stuckIncident?.severity, 'warning');
+  assert.equal(stuckIncident?.affectedCount, 1);
+});
+
+test('detectIncidents detects stale-worker when no heartbeat run exists', () => {
+  const now = '2026-03-29T12:00:00.000Z';
+  const incidents = detectIncidents(
+    {
+      recentOutbox: [],
+      recentRuns: [],
+    },
+    now,
+  );
+  const staleWorkerIncident = incidents.find((i) => i.type === 'stale-worker');
+  assert.ok(staleWorkerIncident, 'expected stale-worker incident');
+  assert.equal(staleWorkerIncident?.severity, 'critical');
+  assert.equal(staleWorkerIncident?.affectedCount, 1);
+});
+
+test('detectIncidents detects open-dead-letter when dead_letter outbox rows exist', () => {
+  const now = '2026-03-29T12:00:00.000Z';
+  const incidents = detectIncidents(
+    {
+      recentOutbox: [
+        {
+          id: 'outbox-dl-1',
+          pick_id: 'pick-dl-1',
+          target: 'discord:canary',
+          status: 'dead_letter',
+          attempt_count: 5,
+          next_attempt_at: null,
+          last_error: 'max retries exceeded',
+          payload: {},
+          claimed_at: null,
+          claimed_by: null,
+          idempotency_key: null,
+          created_at: '2026-03-29T10:00:00.000Z',
+          updated_at: '2026-03-29T11:00:00.000Z',
+        },
+      ],
+      recentRuns: [
+        {
+          id: 'run-heartbeat-2',
+          run_type: 'worker.heartbeat',
+          status: 'succeeded',
+          started_at: now,
+          finished_at: now,
+          actor: 'worker',
+          details: {},
+          created_at: now,
+          idempotency_key: null,
+        },
+      ],
+    },
+    now,
+  );
+  const dlIncident = incidents.find((i) => i.type === 'open-dead-letter');
+  assert.ok(dlIncident, 'expected open-dead-letter incident');
+  assert.equal(dlIncident?.severity, 'warning');
+  assert.equal(dlIncident?.affectedCount, 1);
+});
+
+test('detectIncidents returns no incidents when all signals are healthy', () => {
+  const now = '2026-03-29T12:00:00.000Z';
+  // heartbeat just happened, pending row created seconds ago, no dead_letter or circuit-open
+  const incidents = detectIncidents(
+    {
+      recentOutbox: [
+        {
+          id: 'outbox-pending-fresh',
+          pick_id: 'pick-fresh',
+          target: 'discord:canary',
+          status: 'pending',
+          attempt_count: 0,
+          next_attempt_at: null,
+          last_error: null,
+          payload: {},
+          claimed_at: null,
+          claimed_by: null,
+          idempotency_key: null,
+          created_at: '2026-03-29T11:58:00.000Z', // 2 minutes old — under threshold
+          updated_at: '2026-03-29T11:58:00.000Z',
+        },
+      ],
+      recentRuns: [
+        {
+          id: 'run-heartbeat-3',
+          run_type: 'worker.heartbeat',
+          status: 'succeeded',
+          started_at: '2026-03-29T11:59:00.000Z', // 60s ago — under 120s threshold
+          finished_at: '2026-03-29T11:59:00.000Z',
+          actor: 'worker',
+          details: {},
+          created_at: '2026-03-29T11:59:00.000Z',
+          idempotency_key: null,
+        },
+      ],
+    },
+    now,
+  );
+  assert.equal(incidents.length, 0);
+});
+
+test('GET / renders Active Incidents section when incidents are present', async () => {
+  // Use a now that is 20 minutes after the pending outbox row — triggers stuck-outbox
+  const createdAt = '2026-03-29T11:40:00.000Z';
+  const now = '2026-03-29T12:00:00.000Z';
+
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'database',
+        recentOutbox: [
+          {
+            id: 'outbox-stuck',
+            pick_id: 'pick-stuck',
+            target: 'discord:canary',
+            status: 'pending',
+            attempt_count: 0,
+            next_attempt_at: null,
+            last_error: null,
+            payload: {},
+            claimed_at: null,
+            claimed_by: null,
+            idempotency_key: null,
+            created_at: createdAt,
+            updated_at: createdAt,
+          },
+        ],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [
+          {
+            id: 'run-heartbeat-present',
+            run_type: 'worker.heartbeat',
+            status: 'succeeded',
+            started_at: now,
+            finished_at: now,
+            actor: 'worker',
+            details: {},
+            created_at: now,
+            idempotency_key: null,
+          },
+        ],
+        recentPicks: [],
+        recentAudit: [],
+        now,
+      });
+    },
+  };
+
+  const server = createOperatorServer({ provider });
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/');
+  await new Promise<void>((resolve, reject) =>
+    server.close((error) => (error ? reject(error) : resolve())),
+  );
+
+  assert.equal(response.statusCode, 200);
+  assert.match(response.body, /Active Incidents/);
+  assert.match(response.body, /stuck-outbox/);
+  assert.match(response.body, /class="active-incidents"/);
+});
+
 function createStaticProvider(): OperatorSnapshotProvider {
   const participants = [
     {
