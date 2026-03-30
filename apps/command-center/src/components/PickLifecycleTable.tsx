@@ -2,10 +2,6 @@ import type { PickRow } from '@/lib/types';
 import Link from 'next/link';
 
 export function PickLifecycleTable({ picks }: { picks: PickRow[] }) {
-  if (picks.length === 0) {
-    return <p className="text-sm text-gray-500">No picks found.</p>;
-  }
-
   return (
     <div className="overflow-x-auto">
       <table className="w-full text-left text-sm">
@@ -25,7 +21,11 @@ export function PickLifecycleTable({ picks }: { picks: PickRow[] }) {
           </tr>
         </thead>
         <tbody>
-          {picks.map((pick) => (
+          {picks.length === 0 ? (
+            <tr>
+              <td colSpan={11} className="py-4 text-center text-sm text-gray-500">No picks found.</td>
+            </tr>
+          ) : picks.map((pick) => (
             <tr key={pick.id} className="border-b border-gray-800 hover:bg-gray-800">
               <td className="py-2 pr-4">
                 <Link href={`/picks/${pick.id}`} className="font-mono text-xs text-blue-400 hover:underline">
