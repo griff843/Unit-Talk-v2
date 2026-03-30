@@ -5,6 +5,8 @@ import type { AddressInfo } from 'node:net';
 import type { AppEnv } from '@unit-talk/config';
 import { createLogger, type StructuredLogEntry } from '@unit-talk/observability';
 import { createInMemoryRepositoryBundle } from './persistence.js';
+import { processSubmission } from './submission-service.js';
+import { transitionPickLifecycle } from './lifecycle-service.js';
 import {
   createApiRuntimeDependencies,
   createApiServer,
@@ -132,6 +134,154 @@ test('API requests preserve inbound correlation ids in response headers and logs
     );
   } finally {
     server.close();
+  }
+});
+
+test('POST /api/submissions accepts a body within the configured cap', async () => {
+  const server = createApiServer({
+    runtime: createTestRuntime({ bodyLimitBytes: 512 }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/submissions`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        source: 'body-size-test',
+        market: 'NBA points',
+        selection: 'Player Over 18.5',
+      }),
+    });
+
+    assert.equal(response.status, 201);
+    const body = (await response.json()) as { ok: boolean };
+    assert.equal(body.ok, true);
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/picks/:id/settle rejects bodies exceeding the configured cap', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await processSubmission(
+    { source: 'body-size-test', market: 'NBA rebounds', selection: 'Player Over 10.5' },
+    repositories,
+  );
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'posted',
+    'posted',
+    'poster',
+  );
+
+  const server = createApiServer({
+    runtime: createTestRuntime({ bodyLimitBytes: 64, repositories }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/settle`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          status: 'settled',
+          result: 'win',
+          source: 'operator',
+          confidence: 'confirmed',
+          evidenceRef: 'boxscore://body-size-test',
+          settledBy: 'operator',
+          notes: 'x'.repeat(256),
+        }),
+      },
+    );
+    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+
+    assert.equal(response.status, 413);
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'REQUEST_BODY_TOO_LARGE');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/recap/post rejects bodies exceeding the configured cap', async () => {
+  const server = createApiServer({
+    runtime: createTestRuntime({ bodyLimitBytes: 32 }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ period: 'daily', notes: 'x'.repeat(256) }),
+    });
+    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+
+    assert.equal(response.status, 413);
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'REQUEST_BODY_TOO_LARGE');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/member-tiers rejects bodies exceeding the configured cap', async () => {
+  const server = createApiServer({
+    runtime: createTestRuntime({ bodyLimitBytes: 32 }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        discord_id: 'user-123',
+        tier: 'vip',
+        action: 'activate',
+        source: 'discord-role',
+        notes: 'x'.repeat(256),
+      }),
+    });
+    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+
+    assert.equal(response.status, 413);
+    assert.equal(body.ok, false);
+    assert.equal(body.error?.code, 'REQUEST_BODY_TOO_LARGE');
+  } finally {
+    server.close();
+  }
+});
+
+test('UNIT_TALK_API_MAX_BODY_BYTES env var sets the body limit on createApiRuntimeDependencies', () => {
+  const previousValue = process.env.UNIT_TALK_API_MAX_BODY_BYTES;
+  process.env.UNIT_TALK_API_MAX_BODY_BYTES = '8192';
+
+  try {
+    const runtime = createApiRuntimeDependencies({
+      repositories: createInMemoryRepositoryBundle(),
+    });
+    assert.equal(runtime.bodyLimitBytes, 8192);
+  } finally {
+    if (previousValue === undefined) {
+      delete process.env.UNIT_TALK_API_MAX_BODY_BYTES;
+    } else {
+      process.env.UNIT_TALK_API_MAX_BODY_BYTES = previousValue;
+    }
   }
 });
 
