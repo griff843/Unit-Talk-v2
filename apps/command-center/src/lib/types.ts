@@ -25,6 +25,8 @@ export interface PickRow {
   unitSize: number | null;
   score: number | null;
   lifecycleStatus: LifecycleStatus;
+  promotionStatus: 'qualified' | 'not_eligible' | 'suppressed' | 'expired' | 'pending';
+  promotionReason: string | null;
   deliveryStatus: DeliveryStatus;
   settlementStatus: SettlementStatus;
   result: string | null;

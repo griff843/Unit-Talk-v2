@@ -250,6 +250,18 @@ function mapLifecycleStatus(status: string): LifecycleStatus {
   }
 }
 
+// ── Promotion status mapping ─────────────────────────────────────────────────
+
+function mapPromotionStatus(status: string): PickRow['promotionStatus'] {
+  switch (status) {
+    case 'qualified': return 'qualified';
+    case 'not_eligible': return 'not_eligible';
+    case 'suppressed': return 'suppressed';
+    case 'expired': return 'expired';
+    default: return 'pending';
+  }
+}
+
 // ── Delivery status mapping ──────────────────────────────────────────────────
 
 function mapDeliveryStatus(outboxRow: Record<string, unknown> | null): DeliveryStatus {
@@ -323,6 +335,8 @@ function mapPickRows(
     const odds = asNumberOrNull(p['odds']);
     const stakeUnits = asNumberOrNull(p['stake_units']);
     const promotionScore = asNumberOrNull(p['promotion_score']);
+    const promotionStatus = asString(p['promotion_status'], 'pending');
+    const promotionReason = asStringOrNull(p['promotion_reason']);
 
     // Settlement result from pipeline (correction-aware effective result)
     const pipelineRow = pipelineByPickId.get(pickId);
@@ -351,6 +365,8 @@ function mapPickRows(
       unitSize: stakeUnits,
       score: promotionScore,
       lifecycleStatus: mapLifecycleStatus(status),
+      promotionStatus: mapPromotionStatus(promotionStatus),
+      promotionReason,
       deliveryStatus: mapDeliveryStatus(outboxRow),
       settlementStatus: mapSettlementStatus(pickId, settlementResult, recentSettlements),
       result: settlementResult,
