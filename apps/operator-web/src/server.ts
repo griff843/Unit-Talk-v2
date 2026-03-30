@@ -1379,6 +1379,7 @@ function inferWorkerStatus(
   mostRecentRun: SystemRunRecord | undefined,
   counts: OperatorSnapshot['counts'],
   allRuns: SystemRunRecord[] = [],
+  staleHeartbeatThresholdSeconds: number = 120,
 ): OperatorHealthSignal {
   // Check for unresolved open circuit breaker runs — these indicate a target is paused
   const openCircuitRuns = allRuns.filter(
@@ -1397,6 +1398,21 @@ function inferWorkerStatus(
       status: 'degraded',
       detail: `circuit breaker open for target(s): ${targetList}`,
     };
+  }
+
+  // Check for stale heartbeat — detect silent worker failures
+  const heartbeatRuns = allRuns.filter((row) => row.run_type === 'worker.heartbeat');
+  if (heartbeatRuns.length > 0) {
+    const latestHeartbeat = heartbeatRuns[0]!;
+    const heartbeatAt = latestHeartbeat.finished_at ?? latestHeartbeat.started_at;
+    const ageSeconds = (Date.now() - new Date(heartbeatAt).getTime()) / 1000;
+    if (ageSeconds > staleHeartbeatThresholdSeconds) {
+      return {
+        component: 'worker',
+        status: 'degraded',
+        detail: `worker heartbeat is stale (last seen ${Math.floor(ageSeconds)}s ago, threshold ${staleHeartbeatThresholdSeconds}s)`,
+      };
+    }
   }
 
   if (!mostRecentRun) {
