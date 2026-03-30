@@ -61,7 +61,7 @@ test('POST /api/submissions rejects request bodies larger than the configured ca
 });
 
 test('POST /api/submissions rate limits repeat callers and exposes reset metadata', async () => {
-  let now = 1_000;
+  const now = 1_000;
   const server = createApiServer({
     runtime: createTestRuntime({
       now: () => now,
@@ -99,7 +99,7 @@ test('POST /api/submissions rate limits repeat callers and exposes reset metadat
 });
 
 test('POST /api/submissions allows requests up to the configured limit', async () => {
-  let now = 1_000;
+  const now = 1_000;
   const server = createApiServer({
     runtime: createTestRuntime({
       now: () => now,
@@ -126,7 +126,7 @@ test('POST /api/submissions allows requests up to the configured limit', async (
 });
 
 test('POST /api/submissions keys rate limit by Discord user ID from body when present', async () => {
-  let now = 1_000;
+  const now = 1_000;
   const server = createApiServer({
     runtime: createTestRuntime({
       now: () => now,
@@ -166,7 +166,7 @@ test('POST /api/submissions keys rate limit by Discord user ID from body when pr
 });
 
 test('POST /api/submissions keys rate limit by submittedBy when discordUserId absent', async () => {
-  let now = 1_000;
+  const now = 1_000;
   const server = createApiServer({
     runtime: createTestRuntime({
       now: () => now,
