@@ -9,9 +9,9 @@ export default defineConfig({
     headless: true,
   },
   webServer: {
-    command: 'pnpm start',
+    command: 'pnpm dev',
     url: 'http://localhost:4300',
     reuseExistingServer: true,
-    timeout: 30_000,
+    timeout: 60_000,
   },
 });
