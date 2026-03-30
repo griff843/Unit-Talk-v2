@@ -30,6 +30,8 @@ import { handleCapperRecapRequest } from './routes/capper-recap.js';
 import { handleParticipantsRequest } from './routes/participants.js';
 import { handleDashboardRequest } from './routes/dashboard.js';
 import { handlePickDetailRequest } from './routes/pick-detail.js';
+import { handleReviewQueueRequest } from './routes/review-queue.js';
+import { handleHeldQueueRequest } from './routes/held-queue.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution';
@@ -404,6 +406,14 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/participants') {
     return handleParticipantsRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/review-queue') {
+    return handleReviewQueueRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/held-queue') {
+    return handleHeldQueueRequest(request, response, deps);
   }
 
   const pickDetailMatch = /^\/api\/operator\/picks\/([^/]+)$/.exec(url.pathname);
