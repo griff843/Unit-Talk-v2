@@ -1,8 +1,10 @@
 import type { OutboxRecord, RepositoryBundle } from '@unit-talk/db';
+import { isTargetEnabled, resolveTargetRegistry, type TargetRegistryEntry } from '@unit-talk/contracts';
 import {
   processNextDistributionWork,
   type DeliveryResult,
   type WorkerProcessResult,
+  type WorkerProcessTargetDisabledResult,
 } from './distribution-worker.js';
 import { DeliveryCircuitBreaker } from './circuit-breaker.js';
 import { readCircuitBreakerThreshold, readCircuitBreakerCooldownMs } from './runtime.js';
@@ -21,6 +23,7 @@ export interface WorkerRunnerOptions {
   staleClaimMs?: number | undefined;
   heartbeatMs?: number | undefined;
   watchdogMs?: number | undefined;
+  targetRegistry?: TargetRegistryEntry[] | undefined;
 }
 
 export interface WorkerCycleSummary {
@@ -40,6 +43,7 @@ export async function runWorkerCycles(
     threshold: readCircuitBreakerThreshold(),
     cooldownMs: readCircuitBreakerCooldownMs(),
   });
+  const registry = options.targetRegistry ?? resolveTargetRegistry();
   const summaries: WorkerCycleSummary[] = [];
   // Track system_run IDs for open circuits so we can close them when the circuit resets
   const openCircuitRunIds = new Map<string, string>();
@@ -51,6 +55,18 @@ export async function runWorkerCycles(
     for (const target of options.targets) {
       if (cb.isOpen(target)) {
         results.push({ status: 'circuit-open', target, workerId: options.workerId });
+        continue;
+      }
+
+      const promotionTarget = target.startsWith('discord:') ? target.slice('discord:'.length) : null;
+      const isGoverned = promotionTarget === 'best-bets' || promotionTarget === 'trader-insights' || promotionTarget === 'exclusive-insights';
+      if (isGoverned && !isTargetEnabled(promotionTarget, registry)) {
+        const disabledResult: WorkerProcessTargetDisabledResult = {
+          status: 'target-disabled',
+          target,
+          workerId: options.workerId,
+        };
+        results.push(disabledResult);
         continue;
       }
 

@@ -1376,6 +1376,38 @@ test('runWorkerCycles writes system_runs row when circuit opens', async () => {
   assert.equal(typeof details?.resumeAt, 'string', 'details.resumeAt must be set');
 });
 
+// ---------------------------------------------------------------------------
+// Target registry unit tests
+// ---------------------------------------------------------------------------
+
+test('runWorkerCycles skips disabled target — outbox row stays pending', async () => {
+  const outbox = createOutboxRecord('discord:exclusive-insights');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-disabled-target',
+    targets: ['discord:exclusive-insights'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    targetRegistry: [
+      { target: 'best-bets', enabled: true },
+      { target: 'trader-insights', enabled: true },
+      { target: 'exclusive-insights', enabled: false, disabledReason: 'Activation contract required' },
+    ],
+  });
+  assert.equal(cycles[0]?.results[0]?.status, 'target-disabled');
+  assert.equal(outbox.status, 'pending');
+});
+
+test('resolveTargetRegistry with UNIT_TALK_ENABLED_TARGETS=best-bets disables all other targets', async () => {
+  const { resolveTargetRegistry } = await import('@unit-talk/contracts');
+  const registry = resolveTargetRegistry({ UNIT_TALK_ENABLED_TARGETS: 'best-bets' });
+  assert.equal(registry.find(e => e.target === 'best-bets')?.enabled, true);
+  assert.equal(registry.find(e => e.target === 'trader-insights')?.enabled, false);
+  assert.equal(registry.find(e => e.target === 'exclusive-insights')?.enabled, false);
+  assert.ok(registry.find(e => e.target === 'trader-insights')?.disabledReason?.includes('UNIT_TALK_ENABLED_TARGETS'));
+});
+
 function isGovernedTarget(target: string) {
   return target === 'discord:best-bets' || target === 'discord:trader-insights';
 }

@@ -324,3 +324,50 @@ export interface PromotionDecisionSnapshot {
     reason?: string;
   };
 }
+
+export interface TargetRegistryEntry {
+  target: PromotionTarget;
+  enabled: boolean;
+  disabledReason?: string;
+}
+
+export const defaultTargetRegistry: TargetRegistryEntry[] = [
+  { target: 'best-bets', enabled: true },
+  { target: 'trader-insights', enabled: true },
+  {
+    target: 'exclusive-insights',
+    enabled: false,
+    disabledReason: 'Activation contract required before live delivery',
+  },
+];
+
+export function resolveTargetRegistry(
+  env: { UNIT_TALK_ENABLED_TARGETS?: string } = process.env,
+): TargetRegistryEntry[] {
+  const raw = env.UNIT_TALK_ENABLED_TARGETS;
+  if (!raw) {
+    return defaultTargetRegistry;
+  }
+
+  const explicitlyEnabled = new Set(
+    raw.split(',').map((t) => t.trim()).filter(Boolean),
+  );
+
+  return promotionTargets.map((target) => ({
+    target,
+    enabled: explicitlyEnabled.has(target),
+    ...(explicitlyEnabled.has(target)
+      ? {}
+      : {
+          disabledReason: `Not listed in UNIT_TALK_ENABLED_TARGETS (${raw})`,
+        }),
+  }));
+}
+
+export function isTargetEnabled(
+  target: string,
+  registry: TargetRegistryEntry[],
+): boolean {
+  const entry = registry.find((e) => e.target === target);
+  return entry?.enabled ?? false;
+}

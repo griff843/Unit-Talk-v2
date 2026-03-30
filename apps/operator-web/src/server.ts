@@ -11,7 +11,7 @@ import {
   type AuditLogRow,
 } from '@unit-talk/db';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
-import { memberTiers, type MemberTier } from '@unit-talk/contracts';
+import { memberTiers, resolveTargetRegistry, type MemberTier, type TargetRegistryEntry } from '@unit-talk/contracts';
 import {
   resolveEffectiveSettlement,
   computeSettlementSummary,
@@ -136,6 +136,7 @@ export interface OperatorSnapshot {
     lastRecapChannel: string | null;
     runCount: number;
   };
+  targetRegistry: TargetRegistryEntry[];
 }
 
 export interface AlertAgentRunSummary {
@@ -1010,6 +1011,7 @@ export function createSnapshotFromRows(input: {
     boardExposure: { bySport: {}, byGame: {} },
     alertAgent: summarizeAlertAgentRuns(input.recentRuns),
     gradingAgent: summarizeGradingAgent(input.recentRuns),
+    targetRegistry: resolveTargetRegistry(),
   };
 }
 

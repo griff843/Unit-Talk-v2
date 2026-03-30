@@ -444,7 +444,7 @@ test('enqueueDistributionWork creates an outbox record with idempotency key', as
     'ready for downstream distribution',
   );
 
-  const distribution = await enqueueDistributionWork(
+  const distributionResult = await enqueueDistributionWork(
     {
       ...result.pick,
       lifecycleState: queued.lifecycleState,
@@ -452,6 +452,8 @@ test('enqueueDistributionWork creates an outbox record with idempotency key', as
     repositories.outbox,
     'discord:free-picks',
   );
+  assert.ok(!('enqueued' in distributionResult), 'expected DistributionEnqueueResult');
+  const distribution = distributionResult;
 
   assert.equal(distribution.outboxRecord.pick_id, result.pick.id);
   assert.equal(distribution.outboxRecord.target, 'discord:free-picks');
@@ -1736,7 +1738,13 @@ test('distribution gate accepts discord:exclusive-insights for qualified picks',
     result.pick,
     repositories.outbox,
     'discord:exclusive-insights',
+    [
+      { target: 'best-bets', enabled: true },
+      { target: 'trader-insights', enabled: true },
+      { target: 'exclusive-insights', enabled: true },
+    ],
   );
+  assert.ok(!('enqueued' in tracked), 'expected DistributionEnqueueResult');
 
   assert.equal(result.pick.promotionTarget, 'exclusive-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');

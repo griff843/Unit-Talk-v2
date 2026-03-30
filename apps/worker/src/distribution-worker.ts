@@ -56,12 +56,19 @@ export interface WorkerProcessCircuitOpenResult {
   workerId: string;
 }
 
+export interface WorkerProcessTargetDisabledResult {
+  status: 'target-disabled';
+  target: string;
+  workerId: string;
+}
+
 export type WorkerProcessResult =
   | WorkerProcessIdleResult
   | WorkerProcessSuccessResult
   | WorkerProcessSkippedResult
   | WorkerProcessFailureResult
-  | WorkerProcessCircuitOpenResult;
+  | WorkerProcessCircuitOpenResult
+  | WorkerProcessTargetDisabledResult;
 
 export async function processNextDistributionWork(
   repositories: RepositoryBundle,
