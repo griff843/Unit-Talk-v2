@@ -8,6 +8,7 @@ import type {
   EventRepository,
   ProviderOfferRecord,
   ProviderOfferRepository,
+  SystemRunRepository,
 } from '@unit-talk/db';
 
 const DEFAULT_LOOKBACK_MINUTES = 60;
@@ -232,8 +233,9 @@ export async function runAlertDetectionPass(
       providerOffers: ProviderOfferRepository;
       alertDetections: AlertDetectionRepository;
       events: EventRepository;
+      runs: SystemRunRepository;
     },
-    'alertDetections' | 'events' | 'providerOffers'
+    'alertDetections' | 'events' | 'providerOffers' | 'runs'
   >,
   config: Partial<AlertAgentConfig> = {},
 ): Promise<RunAlertDetectionPassResult> {
@@ -254,6 +256,11 @@ export async function runAlertDetectionPass(
       persistedSignals: [],
     };
   }
+
+  const run = await repositories.runs.startRun({
+    runType: 'alert.detection',
+    details: {},
+  });
 
   const nowIso = resolved.now ?? new Date().toISOString();
   const offers = await repositories.providerOffers.listAll();
@@ -315,6 +322,21 @@ export async function runAlertDetectionPass(
       shouldNotifyCount += 1;
     }
   }
+
+  const alertWorthy = persistedSignals.filter((s) => s.tier === 'alert-worthy').length;
+  const notable = persistedSignals.filter((s) => s.tier === 'notable').length;
+  const watch = persistedSignals.filter((s) => s.tier === 'watch').length;
+
+  await repositories.runs.completeRun({
+    runId: run.id,
+    status: 'succeeded',
+    details: {
+      signalsFound: detections,
+      alertWorthy,
+      notable,
+      watch,
+    },
+  });
 
   return {
     evaluatedGroups: offerGroups.size,

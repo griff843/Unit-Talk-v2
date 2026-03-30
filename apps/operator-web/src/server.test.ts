@@ -2957,3 +2957,88 @@ test('createSnapshotFromRows counts active member tier rows correctly', () => {
   assert.equal(snapshot.memberTiers.counts['free'], 0);
   assert.equal(snapshot.memberTiers.counts['operator'], 0);
 });
+
+// ---------------------------------------------------------------------------
+// alertAgent snapshot tests (UTV2-143)
+// ---------------------------------------------------------------------------
+
+test('createSnapshotFromRows includes alertAgent section with null values when no runs provided', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.ok(snapshot.alertAgent, 'alertAgent section should be present');
+  assert.equal(snapshot.alertAgent.lastDetectionRunAt, null);
+  assert.equal(snapshot.alertAgent.lastDetectionStatus, null);
+  assert.equal(snapshot.alertAgent.lastDetectionDetails, null);
+  assert.equal(snapshot.alertAgent.lastNotificationRunAt, null);
+  assert.equal(snapshot.alertAgent.lastNotificationStatus, null);
+  assert.equal(snapshot.alertAgent.lastNotificationDetails, null);
+});
+
+test('createSnapshotFromRows alertAgent reflects last detection run from recentRuns', () => {
+  const detectionRun: SystemRunRecord = {
+    id: 'run-det-1',
+    run_type: 'alert.detection',
+    status: 'succeeded',
+    started_at: '2026-03-28T10:00:00.000Z',
+    finished_at: '2026-03-28T10:00:01.000Z',
+    actor: null,
+    details: { signalsFound: 3, alertWorthy: 1, notable: 2, watch: 0 },
+    created_at: '2026-03-28T10:00:00.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [detectionRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.alertAgent.lastDetectionRunAt, '2026-03-28T10:00:00.000Z');
+  assert.equal(snapshot.alertAgent.lastDetectionStatus, 'succeeded');
+  assert.ok(snapshot.alertAgent.lastDetectionDetails, 'lastDetectionDetails should be present');
+  assert.equal(snapshot.alertAgent.lastDetectionDetails?.signalsFound, 3);
+  assert.equal(snapshot.alertAgent.lastDetectionDetails?.alertWorthy, 1);
+  assert.equal(snapshot.alertAgent.lastDetectionDetails?.notable, 2);
+  assert.equal(snapshot.alertAgent.lastDetectionDetails?.watch, 0);
+  assert.equal(snapshot.alertAgent.lastNotificationRunAt, null);
+});
+
+test('createSnapshotFromRows alertAgent reflects last notification run from recentRuns', () => {
+  const notificationRun: SystemRunRecord = {
+    id: 'run-notif-1',
+    run_type: 'alert.notification',
+    status: 'succeeded',
+    started_at: '2026-03-28T10:01:00.000Z',
+    finished_at: '2026-03-28T10:01:01.000Z',
+    actor: null,
+    details: { notified: 2, suppressed: 1 },
+    created_at: '2026-03-28T10:01:00.000Z',
+    idempotency_key: null,
+  };
+
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [notificationRun],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.alertAgent.lastNotificationRunAt, '2026-03-28T10:01:00.000Z');
+  assert.equal(snapshot.alertAgent.lastNotificationStatus, 'succeeded');
+  assert.ok(snapshot.alertAgent.lastNotificationDetails, 'lastNotificationDetails should be present');
+  assert.equal(snapshot.alertAgent.lastNotificationDetails?.notified, 2);
+  assert.equal(snapshot.alertAgent.lastNotificationDetails?.suppressed, 1);
+  assert.equal(snapshot.alertAgent.lastDetectionRunAt, null);
+});

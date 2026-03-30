@@ -126,6 +126,16 @@ export interface OperatorSnapshot {
     bySport: Record<string, number>;
     byGame: Record<string, number>;
   };
+  alertAgent: AlertAgentRunSummary;
+}
+
+export interface AlertAgentRunSummary {
+  lastDetectionRunAt: string | null;
+  lastDetectionStatus: string | null;
+  lastDetectionDetails: { signalsFound: number; alertWorthy: number; notable: number; watch: number } | null;
+  lastNotificationRunAt: string | null;
+  lastNotificationStatus: string | null;
+  lastNotificationDetails: { notified: number; suppressed: number } | null;
 }
 
 export interface OperatorQuotaProviderSummary {
@@ -989,6 +999,7 @@ export function createSnapshotFromRows(input: {
     recap: computeSettlementSummary(resolveAllEffectiveSettlements(input.recentSettlements ?? [])),
     memberTiers: computeMemberTierCounts(input.memberTierRows ?? []),
     boardExposure: { bySport: {}, byGame: {} },
+    alertAgent: summarizeAlertAgentRuns(input.recentRuns),
   };
 }
 
@@ -1000,6 +1011,46 @@ function computeMemberTierCounts(rows: Array<{ tier: string }>): OperatorSnapsho
     }
   }
   return { counts: empty, observedAt: new Date().toISOString() };
+}
+
+function summarizeAlertAgentRuns(recentRuns: SystemRunRecord[]): AlertAgentRunSummary {
+  const detectionRuns = recentRuns.filter((row) => row.run_type === 'alert.detection');
+  const notificationRuns = recentRuns.filter((row) => row.run_type === 'alert.notification');
+  const lastDetectionRun = detectionRuns[0];
+  const lastNotificationRun = notificationRuns[0];
+
+  let lastDetectionDetails: AlertAgentRunSummary['lastDetectionDetails'] = null;
+  if (lastDetectionRun) {
+    const d = readJsonObject(lastDetectionRun.details);
+    if (d) {
+      lastDetectionDetails = {
+        signalsFound: typeof d['signalsFound'] === 'number' ? d['signalsFound'] : 0,
+        alertWorthy: typeof d['alertWorthy'] === 'number' ? d['alertWorthy'] : 0,
+        notable: typeof d['notable'] === 'number' ? d['notable'] : 0,
+        watch: typeof d['watch'] === 'number' ? d['watch'] : 0,
+      };
+    }
+  }
+
+  let lastNotificationDetails: AlertAgentRunSummary['lastNotificationDetails'] = null;
+  if (lastNotificationRun) {
+    const d = readJsonObject(lastNotificationRun.details);
+    if (d) {
+      lastNotificationDetails = {
+        notified: typeof d['notified'] === 'number' ? d['notified'] : 0,
+        suppressed: typeof d['suppressed'] === 'number' ? d['suppressed'] : 0,
+      };
+    }
+  }
+
+  return {
+    lastDetectionRunAt: lastDetectionRun?.started_at ?? null,
+    lastDetectionStatus: lastDetectionRun?.status ?? null,
+    lastDetectionDetails,
+    lastNotificationRunAt: lastNotificationRun?.started_at ?? null,
+    lastNotificationStatus: lastNotificationRun?.status ?? null,
+    lastNotificationDetails,
+  };
 }
 
 function summarizeCanaryLane(
