@@ -11,6 +11,8 @@ const NAV_LINKS = [
   { href: '/picks-list', label: 'Picks' },
   { href: '/review', label: 'Review' },
   { href: '/held', label: 'Held' },
+  { href: '/performance', label: 'Performance' },
+  { href: '/decisions', label: 'Decisions' },
 ];
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
