@@ -104,7 +104,7 @@ export default async function DecisionsPage({
               </thead>
               <tbody>
                 {reviews.map((r) => (
-                  <tr key={r.id} className="border-b border-gray-800">
+                  <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
                     <td className="py-2 pr-3">
                       <Link href={`/picks/${r.pickId}`} className="font-mono text-xs text-blue-400 hover:underline">
                         {r.pickId.slice(0, 8)}...

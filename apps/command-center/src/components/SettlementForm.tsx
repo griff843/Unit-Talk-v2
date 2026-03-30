@@ -2,34 +2,15 @@
 
 import { useState, useTransition } from 'react';
 import { settlePick } from '@/app/actions/settle';
+import { Button } from '@/components/ui/Button';
 
 type ResultType = 'win' | 'loss' | 'push' | 'void';
 
-const RESULTS: { value: ResultType; label: string; colors: string }[] = [
-  {
-    value: 'win',
-    label: 'Win',
-    colors:
-      'bg-green-600 hover:bg-green-700 disabled:bg-green-900 data-[selected=true]:ring-2 data-[selected=true]:ring-green-400',
-  },
-  {
-    value: 'loss',
-    label: 'Loss',
-    colors:
-      'bg-red-600 hover:bg-red-700 disabled:bg-red-900 data-[selected=true]:ring-2 data-[selected=true]:ring-red-400',
-  },
-  {
-    value: 'push',
-    label: 'Push',
-    colors:
-      'bg-gray-600 hover:bg-gray-700 disabled:bg-gray-900 data-[selected=true]:ring-2 data-[selected=true]:ring-gray-400',
-  },
-  {
-    value: 'void',
-    label: 'Void',
-    colors:
-      'bg-yellow-600 hover:bg-yellow-700 disabled:bg-yellow-900 data-[selected=true]:ring-2 data-[selected=true]:ring-yellow-400',
-  },
+const RESULTS: { value: ResultType; label: string; variant: 'success' | 'danger' | 'secondary' | 'warning' }[] = [
+  { value: 'win', label: 'Win', variant: 'success' },
+  { value: 'loss', label: 'Loss', variant: 'danger' },
+  { value: 'push', label: 'Push', variant: 'secondary' },
+  { value: 'void', label: 'Void', variant: 'warning' },
 ];
 
 interface SettlementFormProps {
@@ -63,10 +44,7 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
     startTransition(async () => {
       const res = await settlePick(pickId, selected);
       if (res.ok) {
-        setOutcome({
-          ok: true,
-          message: `Settled. Record ID: ${res.settlementRecordId}`,
-        });
+        setOutcome({ ok: true, message: `Settled. Record ID: ${res.settlementRecordId}` });
       } else {
         setOutcome({ ok: false, message: res.error });
       }
@@ -76,9 +54,9 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
 
   if (outcome?.ok) {
     return (
-      <div className="rounded-md border border-green-700 bg-green-950 p-4">
-        <p className="text-sm font-medium text-green-300">Settlement recorded.</p>
-        <p className="mt-1 font-mono text-xs text-green-500">{outcome.message}</p>
+      <div className="rounded-md border border-emerald-700 bg-emerald-950 p-4">
+        <p className="text-sm font-medium text-emerald-300">Settlement recorded.</p>
+        <p className="mt-1 font-mono text-xs text-emerald-500">{outcome.message}</p>
       </div>
     );
   }
@@ -96,32 +74,24 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
         )}
       </div>
 
-      {/* Result selector */}
       <div className="flex flex-wrap gap-2">
-        {RESULTS.map(({ value, label, colors }) => (
-          <button
+        {RESULTS.map(({ value, label, variant }) => (
+          <Button
             key={value}
-            type="button"
+            variant={selected === value ? variant : 'secondary'}
+            size="sm"
             onClick={() => handleSelect(value)}
             disabled={isPending}
-            data-selected={selected === value}
-            className={`rounded px-4 py-2 text-sm font-medium text-white transition-colors ${colors}`}
           >
             {label}
-          </button>
+          </Button>
         ))}
       </div>
 
-      {/* Confirmation step */}
       {selected && !confirming && !outcome && (
-        <button
-          type="button"
-          onClick={handleConfirmClick}
-          disabled={isPending}
-          className="w-fit rounded bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
-        >
+        <Button variant="primary" size="sm" onClick={handleConfirmClick} disabled={isPending} className="w-fit">
           Settle Pick
-        </button>
+        </Button>
       )}
 
       {confirming && selected && (
@@ -131,22 +101,12 @@ export function SettlementForm({ pickId, isAlreadySettled }: SettlementFormProps
             <span className="font-semibold uppercase text-white">{selected}</span>?
           </p>
           <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={handleSubmit}
-              disabled={isPending}
-              className="rounded bg-white px-4 py-2 text-sm font-medium text-gray-900 hover:bg-gray-100 disabled:opacity-50"
-            >
-              {isPending ? 'Submitting…' : 'Confirm'}
-            </button>
-            <button
-              type="button"
-              onClick={handleCancel}
-              disabled={isPending}
-              className="rounded border border-gray-600 px-4 py-2 text-sm font-medium text-gray-300 hover:bg-gray-800 disabled:opacity-50"
-            >
+            <Button variant="primary" size="sm" loading={isPending} onClick={handleSubmit}>
+              Confirm
+            </Button>
+            <Button variant="secondary" size="sm" disabled={isPending} onClick={handleCancel}>
               Cancel
-            </button>
+            </Button>
           </div>
         </div>
       )}

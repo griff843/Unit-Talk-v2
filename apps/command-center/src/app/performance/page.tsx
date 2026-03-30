@@ -147,7 +147,7 @@ export default async function PerformancePage({
             <Link
               key={w}
               href={`/performance?window=${w}`}
-              className={`rounded px-2 py-1 text-xs ${w === window ? 'bg-blue-600 text-white' : 'border border-gray-700 text-gray-400 hover:bg-gray-800'}`}
+              className={`rounded px-2.5 py-1 text-xs font-medium transition-colors ${w === window ? 'bg-blue-600 text-white' : 'border border-gray-700 text-gray-400 hover:bg-gray-800 hover:text-gray-200'}`}
             >
               {w}d
             </Link>
@@ -172,7 +172,7 @@ export default async function PerformancePage({
               </thead>
               <tbody>
                 {leaderboard.map((row, i) => (
-                  <tr key={row.capper} className="border-b border-gray-800">
+                  <tr key={row.capper} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
                     <td className="py-2 pr-3 text-xs text-gray-500">{i + 1}</td>
                     <td className="py-2 pr-3 text-xs font-medium text-gray-200">{row.capper}</td>
                     <td className="py-2 pr-3 text-xs text-gray-300">{row.total}</td>

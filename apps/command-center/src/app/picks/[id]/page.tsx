@@ -1,5 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
+import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { SettlementForm } from '@/components/SettlementForm';
 
@@ -157,6 +158,7 @@ export default async function PickDetailPage({ params, searchParams }: PickDetai
   if (detail == null) {
     return (
       <div className="flex flex-col gap-6">
+        <Breadcrumb items={[{ label: 'Dashboard', href: '/' }, { label: 'Picks', href: '/picks-list' }, { label: pickId.slice(0, 8) + '...' }]} />
         <div>
           <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
           <p className="mt-1 font-mono text-sm text-gray-400">{pickId}</p>
@@ -181,6 +183,11 @@ export default async function PickDetailPage({ params, searchParams }: PickDetai
 
   const { pick } = detail;
   const corrections = detail.settlements.filter((s) => s.correctsId != null);
+  const breadcrumbs = [
+    { label: 'Dashboard', href: '/' },
+    { label: 'Picks', href: '/picks-list' },
+    { label: pick.id.slice(0, 12) + '...' },
+  ];
   const promotionScores =
     pick.metadata['promotionScores'] != null &&
     typeof pick.metadata['promotionScores'] === 'object' &&
@@ -190,6 +197,7 @@ export default async function PickDetailPage({ params, searchParams }: PickDetai
 
   return (
     <div className="flex flex-col gap-6">
+      <Breadcrumb items={breadcrumbs} />
       <div>
         <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
         <p className="mt-1 font-mono text-xs text-gray-400">{pick.id}</p>

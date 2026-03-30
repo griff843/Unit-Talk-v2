@@ -1,9 +1,9 @@
 import type { SignalStatus } from '@/lib/types';
 
 const colors: Record<SignalStatus, string> = {
-  WORKING: 'bg-green-500 text-white',
-  DEGRADED: 'bg-yellow-400 text-black',
-  BROKEN: 'bg-red-600 text-white',
+  WORKING: 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30',
+  DEGRADED: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
+  BROKEN: 'bg-red-500/20 text-red-400 border border-red-500/30',
 };
 
 export function StatusBadge({ status }: { status: SignalStatus }) {
