@@ -10,7 +10,6 @@ import {
   createOperatorServer,
   createSnapshotFromRows,
   createStatsRows,
-  detectIncidents,
   type OperatorCapperRecapProvider,
   type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
