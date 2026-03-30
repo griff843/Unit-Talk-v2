@@ -1,6 +1,6 @@
 # Unit Talk V2 — Repo Map
 
-> Generated: 2026-03-24. All paths are relative to repo root `C:\dev\Unit-Talk-v2`.
+> Updated: 2026-03-29 (UTV2-158). All paths are relative to repo root `C:\dev\Unit-Talk-v2`.
 
 ---
 
@@ -12,8 +12,10 @@ Unit-Talk-v2/
 │   ├── api/                  # Canonical write API
 │   ├── worker/               # Distribution outbox worker
 │   ├── operator-web/         # Read-only operator dashboard
-│   ├── smart-form/           # Browser intake form (Next.js)
-│   └── discord-bot/          # Discord bot (exists, not active)
+│   ├── smart-form/           # Browser intake form
+│   ├── discord-bot/          # Discord slash commands + event handlers
+│   ├── alert-agent/          # Alert detection + notification pass runner
+│   └── ingestor/             # External results ingestion (SGO + league data)
 ├── packages/
 │   ├── contracts/            # Types and policy constants (zero deps)
 │   ├── domain/               # Pure business logic
@@ -120,6 +122,37 @@ apps/smart-form/
 **Hardcoded:** `source = 'smart-form'` (governance rule — user input ignored)
 **Body limit:** 65536 bytes (413 on violation)
 **Missing:** No `confidence` field in V1 form — all picks score 61.5
+
+---
+
+## apps/alert-agent — Key Files
+
+```
+apps/alert-agent/src/
+└── main.ts                  # Entry point: runAlertDetectionPass() + runAlertNotificationPass()
+```
+
+**Purpose:** Runs alert detection and notification passes. Writes `system_runs` rows per pass (`runType: 'alert.detection'` and `runType: 'alert.notification'`). Operator snapshot `alertAgent` section shows last-run summary.
+
+---
+
+## apps/ingestor — Key Files
+
+```
+apps/ingestor/src/
+├── index.ts                 # Entry point
+├── ingestor-runner.ts       # Top-level orchestration
+├── ingest-league.ts         # Per-league ingestion logic
+├── entity-resolver.ts       # Resolves participants/teams from external data
+├── results-fetcher.ts       # Fetches results from external sources
+├── results-resolver.ts      # Maps fetched results to internal schema
+├── sgo-fetcher.ts           # SGO (Sports Grading Oracle) API client
+├── sgo-normalizer.ts        # Normalizes SGO data to internal types
+├── historical-backfill.ts   # Backfill ingestion for historical data
+└── ingestor.test.ts         # Ingestor unit tests
+```
+
+**Purpose:** Ingests external results data (SGO + league feeds) and writes to the DB. Used to settle picks automatically based on live outcomes.
 
 ---
 
