@@ -503,6 +503,23 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     existing.updated_at = new Date().toISOString();
     return existing;
   }
+
+  async listByPickId(pickId: string): Promise<OutboxRecord[]> {
+    return this.entries.filter((e) => e.pick_id === pickId);
+  }
+
+  async resetForRetry(outboxId: string): Promise<OutboxRecord> {
+    const existing = this.entries.find((e) => e.id === outboxId);
+    if (!existing) throw new Error(`Outbox record not found: ${outboxId}`);
+    existing.status = 'pending';
+    existing.attempt_count = 0;
+    existing.last_error = null;
+    existing.next_attempt_at = null;
+    existing.claimed_at = null;
+    existing.claimed_by = null;
+    existing.updated_at = new Date().toISOString();
+    return existing;
+  }
 }
 
 export class InMemoryAlertDetectionRepository implements AlertDetectionRepository {
@@ -1778,6 +1795,34 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       throw new Error(`Failed to mark outbox dead_letter: ${error?.message ?? 'unknown error'}`);
     }
 
+    return data as OutboxRecord;
+  }
+
+  async listByPickId(pickId: string): Promise<OutboxRecord[]> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .select('*')
+      .eq('pick_id', pickId)
+      .order('created_at', { ascending: false });
+    if (error) throw new Error(`Failed to list outbox by pick: ${error.message}`);
+    return (data ?? []) as OutboxRecord[];
+  }
+
+  async resetForRetry(outboxId: string): Promise<OutboxRecord> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .update({
+        status: 'pending',
+        attempt_count: 0,
+        last_error: null,
+        next_attempt_at: null,
+        claimed_at: null,
+        claimed_by: null,
+      })
+      .eq('id', outboxId)
+      .select()
+      .single();
+    if (error || !data) throw new Error(`Failed to reset outbox for retry: ${error?.message ?? 'unknown'}`);
     return data as OutboxRecord;
   }
 }

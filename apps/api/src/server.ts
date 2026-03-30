@@ -20,6 +20,9 @@ import {
   handleSubmissions,
   handleSettlePickRoute,
   handleReviewPickRoute,
+  handleRetryDeliveryRoute,
+  handleRerunPromotionRoute,
+  handleOverridePromotionRoute,
   handleRequeuePick,
   handleReferenceDataCatalog,
   handleReferenceDataSearchTeams,
@@ -254,6 +257,33 @@ export async function routeRequest(
 
   if (reviewMatch) {
     return handleReviewPickRoute(request, response, runtime, reviewMatch[1] ?? '');
+  }
+
+  const retryDeliveryMatch =
+    method === 'POST'
+      ? /^\/api\/picks\/([^/]+)\/retry-delivery$/.exec(url.pathname)
+      : null;
+
+  if (retryDeliveryMatch) {
+    return handleRetryDeliveryRoute(request, response, runtime, retryDeliveryMatch[1] ?? '');
+  }
+
+  const rerunPromotionMatch =
+    method === 'POST'
+      ? /^\/api\/picks\/([^/]+)\/rerun-promotion$/.exec(url.pathname)
+      : null;
+
+  if (rerunPromotionMatch) {
+    return handleRerunPromotionRoute(request, response, runtime, rerunPromotionMatch[1] ?? '');
+  }
+
+  const overridePromotionMatch =
+    method === 'POST'
+      ? /^\/api\/picks\/([^/]+)\/override-promotion$/.exec(url.pathname)
+      : null;
+
+  if (overridePromotionMatch) {
+    return handleOverridePromotionRoute(request, response, runtime, overridePromotionMatch[1] ?? '');
   }
 
   const requeueMatch =

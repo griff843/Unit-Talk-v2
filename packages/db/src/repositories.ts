@@ -165,6 +165,8 @@ export interface OutboxRepository {
     outboxId: string,
     errorMessage: string,
   ): Promise<OutboxRecord>;
+  listByPickId(pickId: string): Promise<OutboxRecord[]>;
+  resetForRetry(outboxId: string): Promise<OutboxRecord>;
 }
 
 export interface AlertDetectionCreateInput {
