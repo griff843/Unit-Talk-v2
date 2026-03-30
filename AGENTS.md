@@ -46,6 +46,8 @@ apps/
   operator-web/   ← read-only dashboard; node:http server
   discord-bot/    ← Discord slash commands + event handlers
   smart-form/     ← browser HTML intake form
+  alert-agent/    ← alert detection + notification pass runner
+  ingestor/       ← external results ingestion (SGO + league data)
 packages/
   contracts/      ← pure types and domain contracts (no runtime deps)
   domain/         ← pure business logic (imports contracts only)
@@ -54,6 +56,7 @@ packages/
   observability/  ← logging, metrics (supporting)
   events/         ← event types (supporting)
   intelligence/   ← scoring/analysis (supporting)
+  verification/   ← scenario registry + run history
 ```
 
 **Package dependency DAG — never violate this:**
