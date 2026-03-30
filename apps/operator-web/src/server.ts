@@ -32,6 +32,7 @@ import { handleDashboardRequest } from './routes/dashboard.js';
 import { handlePickDetailRequest } from './routes/pick-detail.js';
 import { handleReviewQueueRequest } from './routes/review-queue.js';
 import { handleHeldQueueRequest } from './routes/held-queue.js';
+import { handlePickSearchRequest } from './routes/pick-search.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution';
@@ -406,6 +407,10 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/participants') {
     return handleParticipantsRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/pick-search') {
+    return handlePickSearchRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/review-queue') {
