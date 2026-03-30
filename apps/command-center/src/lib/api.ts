@@ -80,6 +80,7 @@ function unwrapResponse(raw: unknown): Record<string, unknown> {
 function deriveSignals(
   snapshot: unknown,
   recap: unknown,
+  pipeline?: unknown,
 ): LifecycleSignal[] {
   const snap = unwrapResponse(snapshot);
   const counts = asRecord(snap['counts']);
@@ -195,10 +196,13 @@ function deriveSignals(
   }
 
   // ── stats_propagation ────────────────────────────────────────────────────
+  // Use pipeline settled count (covers ALL picks in DB) instead of
+  // recentPicks (limited to 12 most recent — causes false divergence).
   const totalPicks = asNumber(recapData['total_picks']);
-  const settledPickCount = recentPicks.filter(
-    (p) => asRecord(p)['status'] === 'settled',
-  ).length;
+  const pipelineCounts = pipeline ? asRecord(unwrapResponse(pipeline)['counts']) : null;
+  const settledPickCount = pipelineCounts
+    ? asNumber(pipelineCounts['settled'])
+    : recentPicks.filter((p) => asRecord(p)['status'] === 'settled').length;
 
   let statsStatus: SignalStatus;
   let statsDetail: string;
@@ -516,7 +520,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const pipelineData = unwrapResponse(pipeline);
   const pipelinePicks = asArray(pipelineData['recentPicks']);
 
-  const signals = deriveSignals(snapshot, recap);
+  const signals = deriveSignals(snapshot, recap, pipeline);
   const picks = mapPickRows(snapshotPicks, pipelinePicks, outbox, recentSettlements);
   const stats = mapStats(recap);
   const exceptions = detectExceptions(snapshot, recap, picks);

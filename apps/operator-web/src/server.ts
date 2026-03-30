@@ -237,6 +237,8 @@ export interface PicksPipelineSummary {
 export interface OperatorSnapshotProvider {
   getSnapshot(filter?: OutboxFilter): Promise<OperatorSnapshot>;
   getParticipants?(filter?: OperatorParticipantsFilter): Promise<OperatorParticipantsResponse>;
+  /** Supabase client exposed for pick detail route queries. Only present on database providers. */
+  _supabaseClient?: unknown;
 }
 
 export type StatsWindowDays = 7 | 14 | 30 | 90;
@@ -433,6 +435,7 @@ export function createOperatorSnapshotProvider(
     const client = createDatabaseClientFromConnection(connection);
 
     return {
+      _supabaseClient: client,
       async getSnapshot(filter?: OutboxFilter) {
         const today = new Date().toISOString().slice(0, 10);
         const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
