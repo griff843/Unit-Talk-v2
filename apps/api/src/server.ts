@@ -19,6 +19,7 @@ import {
   handleAlertsStatus,
   handleSubmissions,
   handleSettlePickRoute,
+  handleReviewPickRoute,
   handleRequeuePick,
   handleReferenceDataCatalog,
   handleReferenceDataSearchTeams,
@@ -244,6 +245,15 @@ export async function routeRequest(
 
   if (settleMatch) {
     return handleSettlePickRoute(request, response, runtime, settleMatch[1] ?? '');
+  }
+
+  const reviewMatch =
+    method === 'POST'
+      ? /^\/api\/picks\/([^/]+)\/review$/.exec(url.pathname)
+      : null;
+
+  if (reviewMatch) {
+    return handleReviewPickRoute(request, response, runtime, reviewMatch[1] ?? '');
   }
 
   const requeueMatch =

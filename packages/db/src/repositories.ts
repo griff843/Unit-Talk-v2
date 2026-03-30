@@ -65,7 +65,7 @@ export interface PickRepository {
     pickId: string,
     lifecycleState: CanonicalPick['lifecycleState'],
   ): Promise<PickRecord>;
-  updateApprovalStatus(pickId: string, approvalStatus: ApprovalStatus): Promise<PickRecord>;
+  updateApprovalStatus(pickId: string, status: ApprovalStatus): Promise<PickRecord>;
   findPickById(pickId: string): Promise<PickRecord | null>;
   listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],

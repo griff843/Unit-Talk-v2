@@ -1,7 +1,7 @@
 export { handleHealth } from './health.js';
 export { handleAlertsRecent, handleAlertsStatus } from './alerts.js';
 export { handleSubmissions } from './submissions.js';
-export { handleSettlePickRoute, handleRequeuePick } from './picks.js';
+export { handleSettlePickRoute, handleReviewPickRoute, handleRequeuePick } from './picks.js';
 export {
   handleReferenceDataCatalog,
   handleReferenceDataSearchTeams,

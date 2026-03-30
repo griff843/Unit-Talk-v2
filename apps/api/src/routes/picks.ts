@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies } from '../server.js';
 import { handleSettlePick } from '../handlers/index.js';
 import { requeuePickController } from '../controllers/requeue-controller.js';
+import { reviewPickController } from '../controllers/review-pick-controller.js';
 import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
 
@@ -19,6 +20,17 @@ export async function handleSettlePickRoute(
     },
     runtime.repositories,
   );
+  writeJson(response, apiResponse.status, apiResponse.body);
+}
+
+export async function handleReviewPickRoute(
+  request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+  pickId: string,
+): Promise<void> {
+  const body = await readJsonBody(request, runtime.bodyLimitBytes);
+  const apiResponse = await reviewPickController(pickId, body as { decision: string; reason: string; decidedBy: string }, runtime.repositories);
   writeJson(response, apiResponse.status, apiResponse.body);
 }
 
