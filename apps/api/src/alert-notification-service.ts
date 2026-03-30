@@ -2,6 +2,7 @@ import type {
   AlertDetectionRecord,
   AlertDetectionRepository,
   AlertDetectionTier,
+  SystemRunRepository,
 } from '@unit-talk/db';
 
 // Cooldown windows per tier (minutes) — per T1_ALERTAGENT_LINE_MOVEMENT_CONTRACT §6.2
@@ -31,6 +32,7 @@ export interface AlertNotificationPassOptions {
   dryRun?: boolean;
   now?: Date;
   fetchImpl?: typeof fetch;
+  runs?: SystemRunRepository;
 }
 
 /**
@@ -177,6 +179,12 @@ export async function runAlertNotificationPass(
   const dryRun = options.dryRun ?? true;
   const fetchImpl = options.fetchImpl ?? fetch;
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
+  const run = options.runs
+    ? await options.runs.startRun({
+        runType: 'alert.notification',
+        details: { signalCount: persistedSignals.length },
+      })
+    : null;
 
   for (const detection of persistedSignals) {
     const tier = detection.tier as AlertDetectionTier;
@@ -249,6 +257,17 @@ export async function runAlertNotificationPass(
     });
 
     result.notified++;
+  }
+
+  if (run && options.runs) {
+    await options.runs.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: {
+        notified: result.notified,
+        suppressed: result.skippedCooldown + result.skippedWatch,
+      },
+    });
   }
 
   return result;

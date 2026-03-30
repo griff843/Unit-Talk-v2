@@ -21,7 +21,7 @@ const ALERT_AGENT_INTERVAL_MS = 60_000;
 export function startAlertAgent(
   repositories: Pick<
     RepositoryBundle,
-    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers'
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs'
   >,
   logger: Pick<Console, 'error' | 'info'> = console,
   config: Partial<AlertAgentConfig & HedgeAgentConfig> = {},
@@ -61,7 +61,7 @@ export function startAlertAgent(
 }
 
 export async function runAlertDetectionPassForTests(
-  repositories: Pick<RepositoryBundle, 'alertDetections' | 'events' | 'providerOffers'>,
+  repositories: Pick<RepositoryBundle, 'alertDetections' | 'events' | 'providerOffers' | 'runs'>,
   config: Partial<AlertAgentConfig> = {},
 ) {
   return runAlertDetectionPass(repositories, {
@@ -73,7 +73,7 @@ export async function runAlertDetectionPassForTests(
 async function runAlertAgentTick(
   repositories: Pick<
     RepositoryBundle,
-    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers'
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs'
   >,
   logger: Pick<Console, 'error' | 'info'>,
   alertConfig: ReturnType<typeof loadAlertAgentConfig>,
@@ -143,7 +143,7 @@ async function runAlertAgentTick(
       const notificationResult = await runAlertNotificationPass(
         alertPersistedSignals,
         repositories.alertDetections,
-        { dryRun: alertConfig.dryRun },
+        { dryRun: alertConfig.dryRun, runs: repositories.runs },
       );
 
       logger.info(
