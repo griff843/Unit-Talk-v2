@@ -335,30 +335,39 @@ function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
 }
 
 function readBodyLimitBytes(environment: AppEnv) {
-  const parsed = Number.parseInt(environment.UNIT_TALK_API_BODY_LIMIT_BYTES ?? '', 10);
+  // UNIT_TALK_API_MAX_BODY_BYTES is the canonical name; UNIT_TALK_API_BODY_LIMIT_BYTES is the legacy alias.
+  const raw = environment.UNIT_TALK_API_MAX_BODY_BYTES ?? environment.UNIT_TALK_API_BODY_LIMIT_BYTES ?? '';
+  const parsed = Number.parseInt(raw, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BODY_LIMIT_BYTES;
 }
 
 function readSubmissionRateLimit(environment: AppEnv): ApiSubmissionRateLimit {
-  const maxRequests = Number.parseInt(
+  // UNIT_TALK_RATE_LIMIT_SUBMISSIONS_PER_MINUTE is the canonical name documented in .env.example.
+  // UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX is accepted as an alias (takes precedence when set).
+  const perMinute = Number.parseInt(
+    environment.UNIT_TALK_RATE_LIMIT_SUBMISSIONS_PER_MINUTE ?? '',
+    10,
+  );
+  const maxRequestsOverride = Number.parseInt(
     environment.UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX ?? '',
     10,
   );
-  const windowMs = Number.parseInt(
+  const windowMsOverride = Number.parseInt(
     environment.UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS ?? '',
     10,
   );
 
-  return {
-    maxRequests:
-      Number.isFinite(maxRequests) && maxRequests > 0
-        ? maxRequests
-        : DEFAULT_RATE_LIMIT_MAX_REQUESTS,
-    windowMs:
-      Number.isFinite(windowMs) && windowMs > 0
-        ? windowMs
-        : DEFAULT_RATE_LIMIT_WINDOW_MS,
-  };
+  const maxRequests = Number.isFinite(maxRequestsOverride) && maxRequestsOverride > 0
+    ? maxRequestsOverride
+    : Number.isFinite(perMinute) && perMinute > 0
+      ? perMinute
+      : DEFAULT_RATE_LIMIT_MAX_REQUESTS;
+
+  const windowMs = Number.isFinite(windowMsOverride) && windowMsOverride > 0
+    ? windowMsOverride
+    : DEFAULT_RATE_LIMIT_WINDOW_MS;
+
+  return { maxRequests, windowMs };
 }
 
 
