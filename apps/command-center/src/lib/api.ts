@@ -70,11 +70,18 @@ function asNumberOrNull(v: unknown): number | null {
 
 // ── Signal derivation ────────────────────────────────────────────────────────
 
+function unwrapResponse(raw: unknown): Record<string, unknown> {
+  const top = asRecord(raw);
+  // Operator-web wraps all responses: { ok, data: { ... } }
+  const data = top['data'];
+  return data !== undefined ? asRecord(data) : top;
+}
+
 function deriveSignals(
   snapshot: unknown,
   recap: unknown,
 ): LifecycleSignal[] {
-  const snap = asRecord(snapshot);
+  const snap = unwrapResponse(snapshot);
   const counts = asRecord(snap['counts']);
   const recentPicks = asArray(snap['recentPicks']);
   const recentReceipts = asArray(snap['recentReceipts']);
@@ -165,7 +172,7 @@ function deriveSignals(
   }
 
   // ── settlement ───────────────────────────────────────────────────────────
-  const recapData = asRecord(recap);
+  const recapData = unwrapResponse(recap);
   const byResult = asRecord(recapData['by_result']);
   const wins = asNumber(byResult['win']);
   const losses = asNumber(byResult['loss']);
@@ -278,19 +285,46 @@ function mapSettlementStatus(
 }
 
 // ── Pick rows mapping ────────────────────────────────────────────────────────
+//
+// Uses snapshot.recentPicks (full PickRecord with all DB columns, snake_case)
+// instead of picksPipeline.recentPicks (which strips source/market/selection/
+// line/odds/stake_units). Settlement result is resolved from the pipeline
+// endpoint which applies correction-aware effective settlement logic.
 
-function mapPickRows(pipeline: unknown, outbox: unknown[], recentSettlements: unknown[]): PickRow[] {
-  const pipelineData = asRecord(pipeline);
-  const picks = asArray(pipelineData['recentPicks']);
+function mapPickRows(
+  snapshotPicks: unknown[],
+  pipelinePicks: unknown[],
+  outbox: unknown[],
+  recentSettlements: unknown[],
+): PickRow[] {
+  // Build a lookup from pipeline picks for settlement result (correction-aware)
+  const pipelineByPickId = new Map<string, Record<string, unknown>>();
+  for (const pp of pipelinePicks) {
+    const row = asRecord(pp);
+    const id = asString(row['id']);
+    if (id) pipelineByPickId.set(id, row);
+  }
 
-  return picks.map((pick) => {
+  return snapshotPicks.map((pick) => {
     const p = asRecord(pick);
     const pickId = asString(p['id']);
     const status = asString(p['status']);
-    const promotionTarget = asStringOrNull(p['promotionTarget']);
-    const promotionScore = asNumberOrNull(p['promotionScore']);
-    const settlementResult = asStringOrNull(p['settlementResult']);
-    const createdAt = asString(p['createdAt']);
+    const createdAt = asString(p['created_at']);
+
+    // Real fields from full PickRecord (snapshot, snake_case DB columns)
+    const source = asString(p['source'], 'unknown');
+    const market = asString(p['market'], '—');
+    const selection = asString(p['selection'], '—');
+    const line = asNumberOrNull(p['line']);
+    const odds = asNumberOrNull(p['odds']);
+    const stakeUnits = asNumberOrNull(p['stake_units']);
+    const promotionScore = asNumberOrNull(p['promotion_score']);
+
+    // Settlement result from pipeline (correction-aware effective result)
+    const pipelineRow = pipelineByPickId.get(pickId);
+    const settlementResult = pipelineRow
+      ? asStringOrNull(pipelineRow['settlementResult'])
+      : null;
 
     // Find matching outbox row
     const outboxRow =
@@ -301,16 +335,16 @@ function mapPickRows(pipeline: unknown, outbox: unknown[], recentSettlements: un
     return {
       id: pickId,
       submittedAt: createdAt,
-      submitter: asString(p['source'] ?? p['approvalStatus'], 'unknown'),
-      source: asString(p['source'] ?? p['approvalStatus'], 'unknown'),
-      sport: promotionTarget ?? 'unknown',
+      submitter: source,
+      source,
+      sport: market,
       pickDetails: {
-        market: promotionTarget ?? '—',
-        selection: '—',
-        line: null,
-        odds: null,
+        market,
+        selection,
+        line,
+        odds,
       },
-      unitSize: null,
+      unitSize: stakeUnits,
       score: promotionScore,
       lifecycleStatus: mapLifecycleStatus(status),
       deliveryStatus: mapDeliveryStatus(outboxRow),
@@ -323,7 +357,7 @@ function mapPickRows(pipeline: unknown, outbox: unknown[], recentSettlements: un
 // ── Stats mapping ────────────────────────────────────────────────────────────
 
 function mapStats(recap: unknown): StatsSnapshot {
-  const r = asRecord(recap);
+  const r = unwrapResponse(recap);
   const byResult = asRecord(r['by_result']);
   const flatBetRoi = asRecord(r['flat_bet_roi']);
 
@@ -346,7 +380,7 @@ function detectExceptions(
   picks: PickRow[],
 ): OperationalException[] {
   const exceptions: OperationalException[] = [];
-  const snap = asRecord(snapshot);
+  const snap = unwrapResponse(snapshot);
   const recentSettlements = asArray(snap['recentSettlements']);
   const outboxRows = asArray(snap['recentOutbox']);
   const now = Date.now();
@@ -473,12 +507,17 @@ export async function fetchDashboardData(): Promise<DashboardData> {
     fetchRecap(),
   ]);
 
-  const snap = asRecord(snapshot);
+  const snap = unwrapResponse(snapshot);
   const outbox = asArray(snap['recentOutbox']);
   const recentSettlements = asArray(snap['recentSettlements']);
+  const snapshotPicks = asArray(snap['recentPicks']);
+
+  // Pipeline picks carry correction-aware settlement results (camelCase keys)
+  const pipelineData = unwrapResponse(pipeline);
+  const pipelinePicks = asArray(pipelineData['recentPicks']);
 
   const signals = deriveSignals(snapshot, recap);
-  const picks = mapPickRows(pipeline, outbox, recentSettlements);
+  const picks = mapPickRows(snapshotPicks, pipelinePicks, outbox, recentSettlements);
   const stats = mapStats(recap);
   const exceptions = detectExceptions(snapshot, recap, picks);
   const observedAt = asString(snap['observedAt'], new Date().toISOString());

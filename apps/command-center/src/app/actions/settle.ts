@@ -35,7 +35,7 @@ export async function settlePick(
       source: 'operator',
       confidence: 'confirmed',
       evidenceRef: 'operator-manual',
-      settledBy: 'operator-web',
+      settledBy: 'command-center',
     }),
   });
 
