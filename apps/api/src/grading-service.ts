@@ -40,6 +40,7 @@ export async function runGradingPass(
     | 'eventParticipants'
     | 'outbox'
     | 'receipts'
+    | 'runs'
   >,
   options: RunGradingPassOptions = {},
 ): Promise<GradingPassResult> {
@@ -142,7 +143,7 @@ export async function runGradingPass(
       await postSettlementRecapIfPossible(
         pick,
         settlementResult.settlementRecord,
-        repositories,
+        { outbox: repositories.outbox, receipts: repositories.receipts, runs: repositories.runs },
         options,
       );
 
@@ -162,11 +163,25 @@ export async function runGradingPass(
     }
   }
 
+  const gradedCount = details.filter((detail) => detail.outcome === 'graded').length;
+  const errorCount = details.filter((detail) => detail.outcome === 'error').length;
+
+  const runRecord = await repositories.runs.startRun({
+    runType: 'grading.run',
+    actor: 'grading-service',
+    details: { picksGraded: gradedCount, failed: errorCount },
+  });
+  await repositories.runs.completeRun({
+    runId: runRecord.id,
+    status: errorCount > 0 ? 'failed' : 'succeeded',
+    details: { picksGraded: gradedCount, failed: errorCount },
+  });
+
   return {
     attempted: picks.length,
-    graded: details.filter((detail) => detail.outcome === 'graded').length,
+    graded: gradedCount,
     skipped: details.filter((detail) => detail.outcome === 'skipped').length,
-    errors: details.filter((detail) => detail.outcome === 'error').length,
+    errors: errorCount,
     details,
   };
 }
@@ -174,7 +189,7 @@ export async function runGradingPass(
 async function postSettlementRecapIfPossible(
   pick: PickRecord,
   settlementRecord: SettlementRecord,
-  repositories: Pick<RepositoryBundle, 'outbox' | 'receipts'>,
+  repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'>,
   options: RunGradingPassOptions,
 ) {
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
@@ -221,6 +236,22 @@ async function postSettlementRecapIfPossible(
     options.logger?.warn?.(
       `Recap post failed for pick ${pick.id}: ${response.status} ${errorText}`,
     );
+    return;
+  }
+
+  try {
+    const runRecord = await repositories.runs.startRun({
+      runType: 'recap.post',
+      actor: 'grading-service',
+      details: { channel: resolution.channelId, pickCount: 1 },
+    });
+    await repositories.runs.completeRun({
+      runId: runRecord.id,
+      status: 'succeeded',
+      details: { channel: resolution.channelId, pickCount: 1 },
+    });
+  } catch {
+    // recap.post observability is best-effort; don't fail the recap
   }
 }
 
