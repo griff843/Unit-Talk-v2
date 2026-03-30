@@ -81,8 +81,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.65,
       promotionStatus: 'qualified',
       promotionTarget: 'exclusive-insights',
-      promotionScore: 92.4,
-      promotionReason: 'hard eligibility checks passed | promotion score 92.40 meets threshold 90.00',
+      promotionScore: 93.65,
+      promotionReason: 'hard eligibility checks passed | promotion score 93.65 meets threshold 90.00',
       promotionVersion: 'exclusive-insights-v1',
       metadata: {
         sport: 'NBA',
@@ -233,8 +233,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.9,
       promotionStatus: 'qualified',
       promotionTarget: 'trader-insights',
-      promotionScore: 88.9,
-      promotionReason: 'hard eligibility checks passed | promotion score 88.90 meets threshold 80.00',
+      promotionScore: 89.05000000000001,
+      promotionReason: 'hard eligibility checks passed | promotion score 89.05 meets threshold 80.00',
       promotionVersion: 'trader-insights-v1',
       metadata: {
         sport: 'NHL',
