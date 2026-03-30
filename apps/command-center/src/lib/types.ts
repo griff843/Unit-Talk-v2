@@ -38,9 +38,21 @@ export interface StatsSnapshot {
   roiPct: number | null;
 }
 
+export type ExceptionSeverity = 'warning' | 'critical';
+
+export interface OperationalException {
+  id: string;
+  severity: ExceptionSeverity;
+  category: 'settlement' | 'delivery' | 'lifecycle' | 'scoring' | 'correction';
+  title: string;
+  detail: string;
+  pickId?: string;
+}
+
 export interface DashboardData {
   signals: LifecycleSignal[];
   picks: PickRow[];
   stats: StatsSnapshot;
+  exceptions: OperationalException[];
   observedAt: string;
 }

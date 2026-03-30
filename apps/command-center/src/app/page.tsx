@@ -1,4 +1,5 @@
 import { Card } from '@/components/ui/Card';
+import { ExceptionPanel } from '@/components/ExceptionPanel';
 import { HealthSignalsPanel } from '@/components/HealthSignalsPanel';
 import { PickLifecycleTable } from '@/components/PickLifecycleTable';
 import { fetchDashboardData } from '@/lib/api';
@@ -22,6 +23,7 @@ export default async function DashboardPage() {
       signals: BROKEN_SIGNALS,
       picks: [],
       stats: { total: 0, wins: 0, losses: 0, pushes: 0, roiPct: null },
+      exceptions: [],
       observedAt: new Date().toISOString(),
     };
   }
@@ -43,6 +45,10 @@ export default async function DashboardPage() {
       </div>
 
       <HealthSignalsPanel signals={data.signals} />
+
+      {data.exceptions.length > 0 && (
+        <ExceptionPanel exceptions={data.exceptions} />
+      )}
 
       <Card title="Stats Summary">
         <div className="flex gap-6 text-sm">

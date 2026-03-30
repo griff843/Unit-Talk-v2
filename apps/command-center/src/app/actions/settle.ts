@@ -1,5 +1,7 @@
 'use server';
 
+import { revalidatePath } from 'next/cache';
+
 export type SettleResult =
   | { ok: true; settlementRecordId: string }
   | { ok: false; error: string };
@@ -48,6 +50,9 @@ export async function settlePick(
   const body = (await res.json()) as {
     data?: { settlementRecordId?: string };
   };
+
+  revalidatePath('/');
+
   return {
     ok: true,
     settlementRecordId: body.data?.settlementRecordId ?? '',

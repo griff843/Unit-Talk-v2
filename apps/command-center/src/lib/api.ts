@@ -3,6 +3,7 @@ import type {
   DeliveryStatus,
   LifecycleSignal,
   LifecycleStatus,
+  OperationalException,
   PickRow,
   SettlementStatus,
   SignalStatus,
@@ -335,6 +336,134 @@ function mapStats(recap: unknown): StatsSnapshot {
   return { total, wins, losses, pushes, roiPct };
 }
 
+// ── Exception detection ─────────────────────────────────────────────────────
+
+const SETTLEMENT_PENDING_HOURS = 48;
+
+function detectExceptions(
+  snapshot: unknown,
+  recap: unknown,
+  picks: PickRow[],
+): OperationalException[] {
+  const exceptions: OperationalException[] = [];
+  const snap = asRecord(snapshot);
+  const recentSettlements = asArray(snap['recentSettlements']);
+  const outboxRows = asArray(snap['recentOutbox']);
+  const now = Date.now();
+  let exId = 0;
+
+  // Picks pending settlement too long
+  for (const pick of picks) {
+    if (
+      (pick.lifecycleStatus === 'posted' || pick.lifecycleStatus === 'queued') &&
+      pick.settlementStatus === 'pending'
+    ) {
+      const age = now - new Date(pick.submittedAt).getTime();
+      const hours = age / (1000 * 60 * 60);
+      if (hours > SETTLEMENT_PENDING_HOURS) {
+        exceptions.push({
+          id: `exc-${++exId}`,
+          severity: hours > SETTLEMENT_PENDING_HOURS * 2 ? 'critical' : 'warning',
+          category: 'settlement',
+          title: 'Pick pending settlement',
+          detail: `Pick has been in "${pick.lifecycleStatus}" for ${Math.floor(hours)}h without settlement`,
+          pickId: pick.id,
+        });
+      }
+    }
+  }
+
+  // Failed Discord deliveries
+  for (const row of outboxRows) {
+    const o = asRecord(row);
+    const status = asString(o['status']);
+    const pickId = asString(o['pick_id']);
+    if (status === 'failed') {
+      exceptions.push({
+        id: `exc-${++exId}`,
+        severity: 'warning',
+        category: 'delivery',
+        title: 'Failed Discord delivery',
+        detail: `Outbox row failed — attempts: ${asNumber(o['attempt_count'])}`,
+        pickId: pickId || undefined,
+      });
+    }
+    if (status === 'dead_letter') {
+      exceptions.push({
+        id: `exc-${++exId}`,
+        severity: 'critical',
+        category: 'delivery',
+        title: 'Dead-letter delivery',
+        detail: `Delivery exhausted all retries — pick will not be posted`,
+        pickId: pickId || undefined,
+      });
+    }
+  }
+
+  // Stuck lifecycle states (validated or queued for too long)
+  for (const pick of picks) {
+    if (pick.lifecycleStatus === 'validated') {
+      const age = now - new Date(pick.submittedAt).getTime();
+      const hours = age / (1000 * 60 * 60);
+      if (hours > 4) {
+        exceptions.push({
+          id: `exc-${++exId}`,
+          severity: hours > 24 ? 'critical' : 'warning',
+          category: 'lifecycle',
+          title: 'Stuck in validated',
+          detail: `Pick has been "validated" for ${Math.floor(hours)}h — expected to advance to queued`,
+          pickId: pick.id,
+        });
+      }
+    }
+  }
+
+  // Missing scores
+  for (const pick of picks) {
+    if (pick.score === null && pick.lifecycleStatus !== 'voided') {
+      exceptions.push({
+        id: `exc-${++exId}`,
+        severity: 'warning',
+        category: 'scoring',
+        title: 'Missing promotion score',
+        detail: `Pick has no promotion score`,
+        pickId: pick.id,
+      });
+    }
+  }
+
+  // Missing results on settled picks
+  for (const pick of picks) {
+    if (pick.lifecycleStatus === 'settled' && pick.result === null) {
+      exceptions.push({
+        id: `exc-${++exId}`,
+        severity: 'critical',
+        category: 'settlement',
+        title: 'Settled without result',
+        detail: `Pick is marked "settled" but has no result (win/loss/push)`,
+        pickId: pick.id,
+      });
+    }
+  }
+
+  // Manual review items (correction conflicts / pending reviews)
+  for (const row of recentSettlements) {
+    const s = asRecord(row);
+    if (asString(s['status']) === 'manual_review') {
+      exceptions.push({
+        id: `exc-${++exId}`,
+        severity: 'warning',
+        category: 'correction',
+        title: 'Pending manual review',
+        detail: `Settlement record requires manual review`,
+        pickId: asString(s['pick_id']) || undefined,
+      });
+    }
+  }
+
+  return exceptions;
+}
+
 // ── Main dashboard fetch ─────────────────────────────────────────────────────
 
 export async function fetchDashboardData(): Promise<DashboardData> {
@@ -351,7 +480,8 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const signals = deriveSignals(snapshot, recap);
   const picks = mapPickRows(pipeline, outbox, recentSettlements);
   const stats = mapStats(recap);
+  const exceptions = detectExceptions(snapshot, recap, picks);
   const observedAt = asString(snap['observedAt'], new Date().toISOString());
 
-  return { signals, picks, stats, observedAt };
+  return { signals, picks, stats, exceptions, observedAt };
 }
