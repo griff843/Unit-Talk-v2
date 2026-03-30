@@ -98,6 +98,110 @@ test('POST /api/submissions rate limits repeat callers and exposes reset metadat
   }
 });
 
+test('POST /api/submissions allows requests up to the configured limit', async () => {
+  let now = 1_000;
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      now: () => now,
+      submissionRateLimit: {
+        maxRequests: 3,
+        windowMs: 60_000,
+      },
+    }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    for (let i = 0; i < 3; i++) {
+      const response = await submitTestPick(address.port, {
+        'x-forwarded-for': '203.0.113.10',
+      });
+      assert.equal(response.status, 201, `request ${i + 1} should pass`);
+    }
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/submissions keys rate limit by Discord user ID from body when present', async () => {
+  let now = 1_000;
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      now: () => now,
+      submissionRateLimit: {
+        maxRequests: 1,
+        windowMs: 60_000,
+      },
+    }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    // First Discord user uses one bucket
+    const firstUserFirst = await submitTestPickWithDiscordId(address.port, 'user-alice');
+    assert.equal(firstUserFirst.status, 201);
+    assert.equal(firstUserFirst.headers.get('x-ratelimit-remaining'), '0');
+
+    now += 1_000;
+
+    // Second Discord user gets a separate bucket — should not be rate limited
+    const secondUserFirst = await submitTestPickWithDiscordId(address.port, 'user-bob');
+    assert.equal(secondUserFirst.status, 201, 'different Discord user ID should get a fresh bucket');
+
+    now += 1_000;
+
+    // First user is now rate-limited
+    const firstUserSecond = await submitTestPickWithDiscordId(address.port, 'user-alice');
+    const body = (await firstUserSecond.json()) as { ok: boolean; error?: { code: string } };
+    assert.equal(firstUserSecond.status, 429);
+    assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
+    assert.ok(firstUserSecond.headers.get('retry-after'), 'Retry-After header should be set');
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/submissions keys rate limit by submittedBy when discordUserId absent', async () => {
+  let now = 1_000;
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      now: () => now,
+      submissionRateLimit: {
+        maxRequests: 1,
+        windowMs: 60_000,
+      },
+    }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const firstRequest = await submitTestPickWithSubmittedBy(address.port, 'capper-griff');
+    assert.equal(firstRequest.status, 201);
+
+    now += 1_000;
+
+    // Same submittedBy — should be rate-limited
+    const secondRequest = await submitTestPickWithSubmittedBy(address.port, 'capper-griff');
+    const body = (await secondRequest.json()) as { ok: boolean; error?: { code: string } };
+    assert.equal(secondRequest.status, 429);
+    assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
+
+    now += 1_000;
+
+    // Different submittedBy — separate bucket
+    const otherCapper = await submitTestPickWithSubmittedBy(address.port, 'capper-dalton');
+    assert.equal(otherCapper.status, 201, 'different submittedBy should get a fresh bucket');
+  } finally {
+    server.close();
+  }
+});
+
 test('API requests preserve inbound correlation ids in response headers and logs', async () => {
   const entries: StructuredLogEntry[] = [];
   const server = createApiServer({
@@ -203,6 +307,32 @@ async function submitTestPick(port: number, headers: Record<string, string>) {
       source: 'server-test',
       market: 'NBA points',
       selection: 'Player Over 18.5',
+    }),
+  });
+}
+
+async function submitTestPickWithDiscordId(port: number, discordUserId: string) {
+  return fetch(`http://127.0.0.1:${port}/api/submissions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      source: 'discord',
+      market: 'NBA points',
+      selection: 'Player Over 18.5',
+      discordUserId,
+    }),
+  });
+}
+
+async function submitTestPickWithSubmittedBy(port: number, submittedBy: string) {
+  return fetch(`http://127.0.0.1:${port}/api/submissions`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      source: 'discord',
+      market: 'NBA points',
+      selection: 'Player Over 18.5',
+      submittedBy,
     }),
   });
 }
