@@ -19,6 +19,16 @@ import {
   type EffectiveSettlement,
   type SettlementSummary,
 } from '@unit-talk/domain';
+import { writeJson } from './http-utils.js';
+import { handleHealthRequest } from './routes/health.js';
+import { handleSnapshotRequest } from './routes/snapshot.js';
+import { handlePicksPipelineRequest } from './routes/picks-pipeline.js';
+import { handleRecapRequest } from './routes/recap.js';
+import { handleStatsRequest } from './routes/stats.js';
+import { handleLeaderboardRequest } from './routes/leaderboard.js';
+import { handleCapperRecapRequest } from './routes/capper-recap.js';
+import { handleParticipantsRequest } from './routes/participants.js';
+import { handleDashboardRequest } from './routes/dashboard.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution';
@@ -112,6 +122,10 @@ export interface OperatorSnapshot {
     counts: Record<MemberTier, number>;
     observedAt: string;
   };
+  boardExposure: {
+    bySport: Record<string, number>;
+    byGame: Record<string, number>;
+  };
 }
 
 export interface OperatorQuotaProviderSummary {
@@ -142,6 +156,7 @@ export interface OutboxFilter {
   target?: string;
   since?: string;
   lifecycleState?: string;
+  limit?: number;
 }
 
 export interface ChannelHealthSummary {
@@ -279,6 +294,13 @@ export interface OperatorLeaderboardProvider {
   getLeaderboard(query: OperatorLeaderboardQuery): Promise<LeaderboardResponse>;
 }
 
+export interface OperatorRouteDependencies {
+  provider: OperatorSnapshotProvider;
+  statsProvider: OperatorStatsProvider;
+  leaderboardProvider: OperatorLeaderboardProvider;
+  capperRecapProvider: OperatorCapperRecapProvider;
+}
+
 export interface OperatorServerOptions {
   provider?: OperatorSnapshotProvider;
   statsProvider?: OperatorStatsProvider;
@@ -318,133 +340,42 @@ export async function routeOperatorRequest(
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const deps: OperatorRouteDependencies = { provider, statsProvider, leaderboardProvider, capperRecapProvider };
 
   if (method === 'GET' && url.pathname === '/health') {
-    const snapshot = await provider.getSnapshot();
-    return writeJson(response, 200, {
-      ok: true,
-      service: 'operator-web',
-      persistenceMode: snapshot.persistenceMode,
-      observedAt: snapshot.observedAt,
-      health: snapshot.health,
-    });
+    return handleHealthRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/snapshot') {
-    const outboxStatus = url.searchParams.get('outboxStatus');
-    const target = url.searchParams.get('target');
-    const since = url.searchParams.get('since');
-    const lifecycleState = url.searchParams.get('lifecycleState');
-    const filter: OutboxFilter | undefined =
-      outboxStatus || target || since || lifecycleState
-        ? {
-            ...(outboxStatus !== null ? { status: outboxStatus } : {}),
-            ...(target !== null ? { target } : {}),
-            ...(since !== null ? { since } : {}),
-            ...(lifecycleState !== null ? { lifecycleState } : {}),
-          }
-        : undefined;
-    const snapshot = await provider.getSnapshot(filter);
-    return writeJson(response, 200, { ok: true, data: snapshot });
+    return handleSnapshotRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/picks-pipeline') {
-    const since = url.searchParams.get('since');
-    const lifecycleState = url.searchParams.get('lifecycleState');
-    const filter: OutboxFilter | undefined =
-      since || lifecycleState
-        ? {
-            ...(since !== null ? { since } : {}),
-            ...(lifecycleState !== null ? { lifecycleState } : {}),
-          }
-        : undefined;
-    const snapshot = await provider.getSnapshot(filter);
-    return writeJson(response, 200, {
-      ok: true,
-      data: {
-        observedAt: snapshot.observedAt,
-        counts: snapshot.picksPipeline.counts,
-        recentPicks: snapshot.picksPipeline.recentPicks,
-      },
-    });
+    return handlePicksPipelineRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/recap') {
-    const snapshot = await provider.getSnapshot();
-    return writeJson(response, 200, { ok: true, data: snapshot.recap });
+    return handleRecapRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/stats') {
-    const statsQuery = parseStatsQuery(url);
-    if ('error' in statsQuery) {
-      return writeJson(response, 400, {
-        ok: false,
-        error: {
-          code: 'INVALID_QUERY',
-          message: statsQuery.error,
-        },
-      });
-    }
-
-    const stats = await statsProvider.getStats(statsQuery);
-    return writeJson(response, 200, { ok: true, data: stats });
+    return handleStatsRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/leaderboard') {
-    const leaderboardQuery = parseLeaderboardQuery(url);
-    if ('error' in leaderboardQuery) {
-      return writeJson(response, 400, {
-        ok: false,
-        error: {
-          code: 'INVALID_QUERY',
-          message: leaderboardQuery.error,
-        },
-      });
-    }
-
-    const leaderboard = await leaderboardProvider.getLeaderboard(leaderboardQuery);
-    return writeJson(response, 200, { ok: true, data: leaderboard });
+    return handleLeaderboardRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/capper-recap') {
-    const capperRecapQuery = parseCapperRecapQuery(url);
-    if ('error' in capperRecapQuery) {
-      return writeJson(response, 400, {
-        ok: false,
-        error: {
-          code: 'INVALID_QUERY',
-          message: capperRecapQuery.error,
-        },
-      });
-    }
-
-    const recap = await capperRecapProvider.getCapperRecap(capperRecapQuery);
-    return writeJson(response, 200, { ok: true, data: recap });
+    return handleCapperRecapRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/participants') {
-    const type = url.searchParams.get('type');
-    const sport = normalizeOptionalQueryValue(url.searchParams.get('sport'));
-    const q = normalizeOptionalQueryValue(url.searchParams.get('q'));
-    const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '20', 10);
-    const limit = Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 100) : 20;
-    const participants = await provider.getParticipants?.({
-      ...(type === 'player' || type === 'team' ? { type } : {}),
-      ...(sport ? { sport } : {}),
-      ...(q ? { q } : {}),
-      limit,
-    });
-
-    return writeJson(
-      response,
-      200,
-      participants ?? { participants: [], total: 0, observedAt: new Date().toISOString() },
-    );
+    return handleParticipantsRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/') {
-    const snapshot = await provider.getSnapshot();
-    return writeHtml(response, 200, renderOperatorDashboard(snapshot));
+    return handleDashboardRequest(request, response, deps);
   }
 
   return writeJson(response, 404, {
@@ -1057,6 +988,7 @@ export function createSnapshotFromRows(input: {
     ),
     recap: computeSettlementSummary(resolveAllEffectiveSettlements(input.recentSettlements ?? [])),
     memberTiers: computeMemberTierCounts(input.memberTierRows ?? []),
+    boardExposure: { bySport: {}, byGame: {} },
   };
 }
 
@@ -1388,573 +1320,6 @@ function inferWorkerStatus(
   };
 }
 
-function renderOperatorDashboard(snapshot: OperatorSnapshot) {
-  const degradedSignals = snapshot.health.filter(
-    (s) => s.status === 'degraded' || s.status === 'down',
-  );
-  const incidentBanner =
-    degradedSignals.length > 0
-      ? `<div class="incident-banner"><strong>Incident detected</strong>: ${degradedSignals
-          .map((s) => `${escapeHtml(s.component)}: ${escapeHtml(s.detail)}`)
-          .join(' &bull; ')}</div>`
-      : '';
-
-  const healthCards = snapshot.health
-    .map(
-      (signal) => `
-      <article class="card">
-        <h2>${escapeHtml(signal.component)}</h2>
-        <p class="badge badge-${signal.status}">${escapeHtml(signal.status)}</p>
-        <p>${escapeHtml(signal.detail)}</p>
-      </article>`,
-    )
-    .join('');
-  const entityCatalogCard = snapshot.entityHealth
-    ? `
-      <article class="card">
-        <h2>Entity Catalog</h2>
-        <p>Events resolved: ${escapeHtml(String(snapshot.entityHealth.resolvedEventsCount))} (${escapeHtml(String(snapshot.entityHealth.upcomingEventsCount))} upcoming)</p>
-        <p>Players resolved: ${escapeHtml(String(snapshot.entityHealth.resolvedPlayersCount))}</p>
-        <p>Teams with SGO ID: ${escapeHtml(String(snapshot.entityHealth.resolvedTeamsWithExternalIdCount))} / ${escapeHtml(String(snapshot.entityHealth.totalTeamsCount))}</p>
-      </article>`
-    : '';
-
-  const ingestorCard = `
-      <article class="card">
-        <h2>Ingestor</h2>
-        <p>Status: <strong>${escapeHtml(snapshot.ingestorHealth.status)}</strong></p>
-        <p>Last run: ${escapeHtml(snapshot.ingestorHealth.lastRunAt ?? '\u2014')}</p>
-        <p>Run count: ${escapeHtml(String(snapshot.ingestorHealth.runCount))}</p>
-      </article>`;
-  const quotaRows =
-    snapshot.quotaSummary.providers.length > 0
-      ? renderTableRows(snapshot.quotaSummary.providers, (row) => [
-          row.provider,
-          String(row.runCount),
-          String(row.requestCount),
-          String(row.successfulRequests),
-          String(row.creditsUsed),
-          row.remaining === null ? '—' : String(row.remaining),
-          row.limit === null ? '—' : String(row.limit),
-          String(row.rateLimitHitCount),
-          row.backoffMs === 0 ? '0 ms' : `${row.backoffMs} ms`,
-          row.lastStatus === null ? '—' : String(row.lastStatus),
-          row.resetAt ?? '—',
-        ], 11)
-      : '<tr><td colspan="11">No provider quota telemetry is visible in recent ingestor runs.</td></tr>';
-  const quotaCard = `
-      <article class="card">
-        <h2>API Quota</h2>
-        <p>Observed at: ${escapeHtml(snapshot.quotaSummary.observedAt)}</p>
-        <table>
-          <thead>
-            <tr><th>Provider</th><th>Runs</th><th>Requests</th><th>Success</th><th>Credits</th><th>Remaining</th><th>Limit</th><th>Rate limit hits</th><th>Backoff</th><th>Last status</th><th>Reset</th></tr>
-          </thead>
-          <tbody>${quotaRows}</tbody>
-        </table>
-      </article>`;
-  const workerRuntimeCard = `
-      <article class="card">
-        <h2>Worker Runtime</h2>
-        <p>Status: <strong>${escapeHtml(snapshot.workerRuntime.drainState)}</strong></p>
-        <p>${escapeHtml(snapshot.workerRuntime.detail)}</p>
-        <p>Last distribution run: ${escapeHtml(snapshot.workerRuntime.latestDistributionRunAt ?? '\u2014')}</p>
-        <p>Last successful drain: ${escapeHtml(snapshot.workerRuntime.latestSuccessfulDistributionRunAt ?? '\u2014')}</p>
-        <p>Last receipt: ${escapeHtml(snapshot.workerRuntime.latestReceiptRecordedAt ?? '\u2014')}</p>
-      </article>`;
-
-  const countCards = [
-    ['pending outbox', snapshot.counts.pendingOutbox],
-    ['processing outbox', snapshot.counts.processingOutbox],
-    ['failed outbox', snapshot.counts.failedOutbox],
-    ['dead-letter outbox', snapshot.counts.deadLetterOutbox],
-    ['sent outbox', snapshot.counts.sentOutbox],
-  ]
-    .map(
-      ([label, value]) => `
-      <article class="card stat">
-        <h2>${escapeHtml(String(label))}</h2>
-        <p class="stat-value">${escapeHtml(String(value))}</p>
-      </article>`,
-    )
-    .join('');
-  const upcomingEventRows = renderTableRows(
-    snapshot.upcomingEvents,
-    (row) => [
-      row.eventName,
-      row.eventDate,
-      row.sport,
-      row.teams.join(', ') || 'n/a',
-      String(row.playerCount),
-    ],
-    5,
-  );
-  const latestIngestRun = snapshot.recentRuns.find((row) => row.run_type === 'ingestor.cycle');
-  const ingestDuration = latestIngestRun?.finished_at
-    ? `${Math.max(
-        0,
-        (new Date(latestIngestRun.finished_at).getTime() - new Date(latestIngestRun.started_at).getTime()) /
-          1000,
-      ).toFixed(1)}s`
-    : 'n/a';
-  const ingestLeague = readJsonObject(latestIngestRun?.details)?.['league'];
-  const lastIngestCycleSection = latestIngestRun
-    ? `<section>
-        <h2>Last Ingest Cycle</h2>
-        <table>
-          <thead><tr><th>Status</th><th>League</th><th>Started</th><th>Duration</th></tr></thead>
-          <tbody><tr>
-            <td><code>${escapeHtml(latestIngestRun.status)}</code></td>
-            <td><code>${escapeHtml(typeof ingestLeague === 'string' ? ingestLeague : 'n/a')}</code></td>
-            <td><code>${escapeHtml(latestIngestRun.started_at)}</code></td>
-            <td><code>${escapeHtml(ingestDuration)}</code></td>
-          </tr></tbody>
-        </table>
-      </section>`
-    : `<section>
-        <h2>Last Ingest Cycle</h2>
-        <div class="card"><p>No recent ingest cycles.</p></div>
-      </section>`;
-  const upcomingEventsSection = `<section>
-        <h2>Upcoming Events</h2>
-        <table>
-          <thead><tr><th>Event</th><th>Date</th><th>Sport</th><th>Teams</th><th>Player Count</th></tr></thead>
-          <tbody>${upcomingEventRows}</tbody>
-        </table>
-      </section>`;
-
-  const failedOutbox = snapshot.recentOutbox.filter(
-    (row) => row.status === 'failed' || row.status === 'dead_letter',
-  );
-  const degradedRuns = snapshot.recentRuns.filter(
-    (row) => row.status === 'failed' || row.status === 'cancelled',
-  );
-  const incidentTriageSection =
-    failedOutbox.length > 0 || degradedRuns.length > 0
-      ? `<section class="incident-triage">
-        <h2>Incident Triage</h2>
-        ${failedOutbox.length > 0 ? `<h3>Failed / Dead-letter Outbox (${failedOutbox.length})</h3>
-        <table>
-          <thead><tr><th>ID</th><th>Target</th><th>Status</th><th>Worker</th><th>Updated</th></tr></thead>
-          <tbody>${renderTriageOutboxRows(failedOutbox)}</tbody>
-        </table>` : ''}
-        ${degradedRuns.length > 0 ? `<h3>Failed / Cancelled Runs (${degradedRuns.length})</h3>
-        <table>
-          <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Actor</th><th>Created</th></tr></thead>
-          <tbody>${renderTriageRunRows(degradedRuns)}</tbody>
-        </table>` : ''}
-      </section>`
-      : '';
-  const canaryBlockers =
-    snapshot.canary.blockers.length > 0
-      ? `<ul>${snapshot.canary.blockers
-          .map((blocker) => `<li>${escapeHtml(blocker)}</li>`)
-          .join('')}</ul>`
-      : '<p>No canary blockers are visible in the current snapshot.</p>';
-  const canaryReadinessSection = `<section>
-        <h2>Canary Readiness</h2>
-        <table>
-          <thead><tr><th>Target</th><th>Recent Sent</th><th>Recent Failed</th><th>Dead-letter</th><th>Latest Receipt</th><th>Latest Message ID</th><th>Ready</th></tr></thead>
-          <tbody><tr>
-            <td><code>${escapeHtml(snapshot.canary.target)}</code></td>
-            <td><code>${escapeHtml(String(snapshot.canary.recentSentCount))}</code></td>
-            <td><code>${escapeHtml(String(snapshot.canary.recentFailureCount))}</code></td>
-            <td><code>${escapeHtml(String(snapshot.canary.recentDeadLetterCount))}</code></td>
-            <td><code>${escapeHtml(snapshot.canary.latestReceiptRecordedAt ?? 'n/a')}</code></td>
-            <td><code>${escapeHtml(snapshot.canary.latestMessageId ?? 'n/a')}</code></td>
-            <td><code>${escapeHtml(snapshot.canary.graduationReady ? 'yes' : 'no')}</code></td>
-          </tr></tbody>
-        </table>
-        <div class="card" style="margin-top: 12px;">
-          <h3>Graduation blockers</h3>
-          ${canaryBlockers}
-        </div>
-      </section>`;
-  const bestBetsBlockers =
-    snapshot.bestBets.blockers.length > 0
-      ? `<ul>${snapshot.bestBets.blockers
-          .map((blocker) => `<li>${escapeHtml(blocker)}</li>`)
-          .join('')}</ul>`
-      : '<p>No Best Bets blockers are visible in the current snapshot.</p>';
-  const bestBetsHealthSection = `<section>
-        <h2>Best Bets Health</h2>
-        <table>
-          <thead><tr><th>Target</th><th>Recent Sent</th><th>Recent Failed</th><th>Dead-letter</th><th>Latest Receipt</th><th>Latest Message ID</th><th>Healthy</th></tr></thead>
-          <tbody><tr>
-            <td><code>${escapeHtml(snapshot.bestBets.target)}</code></td>
-            <td><code>${escapeHtml(String(snapshot.bestBets.recentSentCount))}</code></td>
-            <td><code>${escapeHtml(String(snapshot.bestBets.recentFailureCount))}</code></td>
-            <td><code>${escapeHtml(String(snapshot.bestBets.recentDeadLetterCount))}</code></td>
-            <td><code>${escapeHtml(snapshot.bestBets.latestReceiptRecordedAt ?? 'n/a')}</code></td>
-            <td><code>${escapeHtml(snapshot.bestBets.latestMessageId ?? 'n/a')}</code></td>
-            <td><code>${escapeHtml(snapshot.bestBets.activationHealthy ? 'yes' : 'no')}</code></td>
-          </tr></tbody>
-        </table>
-        <div class="card" style="margin-top: 12px;">
-          <h3>Activation blockers</h3>
-          ${bestBetsBlockers}
-        </div>
-      </section>`;
-  const traderInsightsBlockers =
-    snapshot.traderInsights.blockers.length > 0
-      ? `<ul>${snapshot.traderInsights.blockers
-          .map((blocker) => `<li>${escapeHtml(blocker)}</li>`)
-          .join('')}</ul>`
-      : '<p>No Trader Insights blockers are visible in the current snapshot.</p>';
-  const traderInsightsHealthSection = `<section>
-        <h2>Trader Insights Health</h2>
-        <table>
-          <thead><tr><th>Target</th><th>Recent Sent</th><th>Recent Failed</th><th>Dead-letter</th><th>Latest Receipt</th><th>Latest Message ID</th><th>Healthy</th></tr></thead>
-          <tbody><tr>
-            <td><code>${escapeHtml(snapshot.traderInsights.target)}</code></td>
-            <td><code>${escapeHtml(String(snapshot.traderInsights.recentSentCount))}</code></td>
-            <td><code>${escapeHtml(String(snapshot.traderInsights.recentFailureCount))}</code></td>
-            <td><code>${escapeHtml(String(snapshot.traderInsights.recentDeadLetterCount))}</code></td>
-            <td><code>${escapeHtml(snapshot.traderInsights.latestReceiptRecordedAt ?? 'n/a')}</code></td>
-            <td><code>${escapeHtml(snapshot.traderInsights.latestMessageId ?? 'n/a')}</code></td>
-            <td><code>${escapeHtml(snapshot.traderInsights.activationHealthy ? 'yes' : 'no')}</code></td>
-          </tr></tbody>
-        </table>
-        <div class="card" style="margin-top: 12px;">
-          <h3>Activation blockers</h3>
-          ${traderInsightsBlockers}
-        </div>
-      </section>`;
-  const picksPipelineRows = renderTableRows(snapshot.picksPipeline.recentPicks, (row) => [
-    row.id,
-    row.status,
-    row.approvalStatus,
-    row.promotionStatus ?? 'n/a',
-    row.promotionTarget ?? 'n/a',
-    row.promotionScore !== null ? String(row.promotionScore) : 'n/a',
-    row.settlementResult ?? 'n/a',
-    row.createdAt,
-  ], 8);
-  const picksPipelineCountCards = [
-    ['validated', snapshot.picksPipeline.counts.validated],
-    ['queued', snapshot.picksPipeline.counts.queued],
-    ['posted', snapshot.picksPipeline.counts.posted],
-    ['settled', snapshot.picksPipeline.counts.settled],
-    ['total picks', snapshot.picksPipeline.counts.total],
-  ]
-    .map(
-      ([label, value]) => `
-      <article class="card stat">
-        <h2>${escapeHtml(String(label))}</h2>
-        <p class="stat-value">${escapeHtml(String(value))}</p>
-      </article>`,
-    )
-    .join('');
-  const picksPipelineSection = `<section>
-        <h2>Picks Pipeline</h2>
-        <div class="grid count-grid">${picksPipelineCountCards}</div>
-        <table>
-          <thead><tr><th>ID</th><th>Status</th><th>Approval</th><th>Promotion</th><th>Target</th><th>Score</th><th>Settlement</th><th>Created</th></tr></thead>
-          <tbody>${picksPipelineRows}</tbody>
-        </table>
-      </section>`;
-
-  const recapCountCards = [
-    ['total picks', snapshot.recap.total_picks],
-    ['hit rate %', snapshot.recap.hit_rate_pct.toFixed(1)],
-    ['flat-bet ROI %', snapshot.recap.flat_bet_roi.roi_pct.toFixed(1)],
-    ['corrections', snapshot.recap.correction_count],
-    ['pending review', snapshot.recap.pending_review_count],
-  ]
-    .map(
-      ([label, value]) => `
-      <article class="card stat">
-        <h2>${escapeHtml(String(label))}</h2>
-        <p class="stat-value">${escapeHtml(String(value))}</p>
-      </article>`,
-    )
-    .join('');
-  const recapResultRows = Object.entries(snapshot.recap.by_result)
-    .map(([result, count]) => `<tr><td><code>${escapeHtml(result)}</code></td><td><code>${escapeHtml(String(count))}</code></td></tr>`)
-    .join('') || `<tr><td colspan="2">No settled picks yet.</td></tr>`;
-  const recapSection = `<section>
-        <h2>Settlement Recap</h2>
-        <div class="grid count-grid">${recapCountCards}</div>
-        <table>
-          <thead><tr><th>Result</th><th>Count</th></tr></thead>
-          <tbody>${recapResultRows}</tbody>
-        </table>
-      </section>`;
-
-  const outboxRows = renderTableRows(snapshot.recentOutbox, (row) => [
-    row.id,
-    row.target,
-    row.status,
-    row.claimed_by ?? 'unclaimed',
-    row.updated_at,
-  ]);
-  const receiptRows = renderTableRows(snapshot.recentReceipts, (row) => [
-    row.id,
-    row.channel ?? 'n/a',
-    row.status,
-    row.external_id ?? 'n/a',
-    row.recorded_at,
-  ]);
-  const runRows = renderTableRows(snapshot.recentRuns, (row) => [
-    row.id,
-    row.run_type,
-    row.status,
-    row.actor ?? 'system',
-    row.created_at,
-  ]);
-  const settlementRows = renderTableRows(snapshot.recentSettlements, (row) => [
-    row.id,
-    row.pick_id,
-    formatSettlementStatusLabel(row),
-    row.result ?? 'n/a',
-    row.source,
-    row.corrects_id ?? 'n/a',
-    row.evidence_ref ?? 'n/a',
-    row.settled_at,
-    formatClvPercent(row.payload),
-    formatBeatsLine(row.payload),
-  ], 10);
-
-  return `<!doctype html>
-<html lang="en">
-  <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Unit Talk V2 Operator</title>
-    <style>
-      :root {
-        color-scheme: light;
-        --bg: #f4efe6;
-        --panel: #fffdf8;
-        --ink: #1f2933;
-        --muted: #6b7280;
-        --line: #d8d0c2;
-        --ok: #1f7a4d;
-        --warn: #a76500;
-        --down: #b42318;
-        --accent: #0f4c81;
-      }
-      body {
-        margin: 0;
-        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background: radial-gradient(circle at top, #fff8ea 0%, var(--bg) 52%, #e8e0d4 100%);
-        color: var(--ink);
-      }
-      main {
-        max-width: 1180px;
-        margin: 0 auto;
-        padding: 32px 20px 48px;
-      }
-      h1 {
-        margin: 0 0 8px;
-        font-size: 2rem;
-      }
-      .lede {
-        color: var(--muted);
-        margin-bottom: 24px;
-      }
-      .grid {
-        display: grid;
-        gap: 16px;
-      }
-      .health-grid, .count-grid {
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        margin-bottom: 24px;
-      }
-      .card {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 16px;
-        padding: 16px;
-        box-shadow: 0 10px 30px rgba(31, 41, 51, 0.06);
-      }
-      .badge {
-        display: inline-block;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-size: 0.85rem;
-        font-weight: 700;
-        text-transform: uppercase;
-      }
-      .badge-healthy { background: rgba(31, 122, 77, 0.14); color: var(--ok); }
-      .badge-degraded { background: rgba(167, 101, 0, 0.14); color: var(--warn); }
-      .badge-down { background: rgba(180, 35, 24, 0.14); color: var(--down); }
-      .incident-banner {
-        background: rgba(180, 35, 24, 0.08);
-        border: 1.5px solid var(--down);
-        border-radius: 12px;
-        padding: 12px 18px;
-        margin-bottom: 20px;
-        color: var(--down);
-        font-size: 0.95rem;
-      }
-      .incident-banner strong { font-weight: 700; }
-      .incident-triage {
-        margin-top: 28px;
-        background: rgba(180, 35, 24, 0.04);
-        border: 1.5px solid var(--down);
-        border-radius: 16px;
-        padding: 16px 20px;
-      }
-      .incident-triage > h2 {
-        color: var(--down);
-        margin: 0 0 16px;
-        font-size: 1.1rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-      }
-      .incident-triage h3 {
-        font-size: 0.9rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-        color: var(--muted);
-        margin: 12px 0 6px;
-      }
-      .stat-value {
-        font-size: 2rem;
-        font-weight: 700;
-        margin: 8px 0 0;
-        color: var(--accent);
-      }
-      section {
-        margin-top: 28px;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-        background: var(--panel);
-        border-radius: 16px;
-        overflow: hidden;
-        border: 1px solid var(--line);
-      }
-      th, td {
-        padding: 12px 14px;
-        border-bottom: 1px solid var(--line);
-        text-align: left;
-        vertical-align: top;
-      }
-      th {
-        background: #f6f1e8;
-        font-size: 0.85rem;
-        text-transform: uppercase;
-        letter-spacing: 0.04em;
-      }
-      tr:last-child td {
-        border-bottom: none;
-      }
-      code {
-        font-family: Consolas, "Courier New", monospace;
-        font-size: 0.9em;
-      }
-    </style>
-  </head>
-  <body>
-    <main>
-      <h1>Unit Talk V2 Operator</h1>
-      <p class="lede">Read-only operational view for the active canary lane. Observed at ${escapeHtml(snapshot.observedAt)} using ${escapeHtml(snapshot.persistenceMode)} mode.</p>
-      ${incidentBanner}
-      ${incidentTriageSection}
-      <section>
-        <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}${quotaCard}${workerRuntimeCard}</div>
-        <div class="grid count-grid">${countCards}</div>
-      </section>
-      ${upcomingEventsSection}
-      ${lastIngestCycleSection}
-      ${canaryReadinessSection}
-      ${bestBetsHealthSection}
-      ${traderInsightsHealthSection}
-      ${picksPipelineSection}
-      ${recapSection}
-      <section>
-        <h2>Recent Outbox</h2>
-        <table>
-          <thead><tr><th>ID</th><th>Target</th><th>Status</th><th>Worker</th><th>Updated</th></tr></thead>
-          <tbody>${outboxRows}</tbody>
-        </table>
-      </section>
-      <section>
-        <h2>Recent Receipts</h2>
-        <table>
-          <thead><tr><th>ID</th><th>Channel</th><th>Status</th><th>External</th><th>Recorded</th></tr></thead>
-          <tbody>${receiptRows}</tbody>
-        </table>
-      </section>
-      <section>
-        <h2>Recent Settlements</h2>
-        <table>
-          <thead><tr><th>ID</th><th>Pick</th><th>Status</th><th>Result</th><th>Source</th><th>Corrects</th><th>Evidence</th><th>Settled</th><th>CLV%</th><th>Beats Line</th></tr></thead>
-          <tbody>${settlementRows}</tbody>
-        </table>
-      </section>
-      <section>
-        <h2>Recent Runs</h2>
-        <table>
-          <thead><tr><th>ID</th><th>Type</th><th>Status</th><th>Actor</th><th>Created</th></tr></thead>
-          <tbody>${runRows}</tbody>
-        </table>
-      </section>
-    </main>
-  </body>
-</html>`;
-}
-
-function renderTriageOutboxRows(rows: OutboxRecord[]) {
-  return renderTableRows(rows, (row) => [
-    row.id,
-    row.target,
-    row.status,
-    row.claimed_by ?? 'unclaimed',
-    row.updated_at,
-  ]);
-}
-
-function renderTriageRunRows(rows: SystemRunRecord[]) {
-  return renderTableRows(rows, (row) => [
-    row.id,
-    row.run_type,
-    row.status,
-    row.actor ?? 'system',
-    row.created_at,
-  ]);
-}
-
-function renderTableRows<T>(rows: T[], mapRow: (row: T) => string[], columnCount = 5) {
-  if (rows.length === 0) {
-    return `<tr><td colspan="${columnCount}">No rows available yet.</td></tr>`;
-  }
-
-  return rows
-    .map(
-      (row) =>
-        `<tr>${mapRow(row)
-          .map((value) => `<td><code>${escapeHtml(value)}</code></td>`)
-          .join('')}</tr>`,
-    )
-    .join('');
-}
-
-function formatSettlementStatusLabel(row: SettlementRecord) {
-  if (row.status === 'manual_review') {
-    return '[MANUAL REVIEW] manual_review';
-  }
-
-  if (row.corrects_id) {
-    return `[CORRECTION] ${row.status}`;
-  }
-
-  return row.status;
-}
-
-function formatClvPercent(payload: unknown): string {
-  const v = readJsonObject(payload)?.['clvPercent'];
-  return typeof v === 'number' ? v.toFixed(1) + '%' : '—';
-}
-
-function formatBeatsLine(payload: unknown): string {
-  const v = readJsonObject(payload)?.['beatsClosingLine'];
-  return typeof v === 'boolean' ? (v ? '✓' : '✗') : '—';
-}
-
 export interface StatsRow {
   settlement: EffectiveSettlement;
   rawSettlement: SettlementRecord;
@@ -2246,66 +1611,6 @@ export function createEmptyLeaderboardResponse(
     observedAt: new Date().toISOString(),
   };
 }
-
-export function parseStatsQuery(url: URL): OperatorStatsQuery | { error: string } {
-  const requestedWindow = url.searchParams.get('last');
-  const parsedWindow = requestedWindow === null ? 30 : Number.parseInt(requestedWindow, 10);
-  if (!isAllowedStatsWindow(parsedWindow)) {
-    return { error: 'Query parameter "last" must be one of 7, 14, 30, 90.' };
-  }
-
-  const capper = normalizeOptionalQueryValue(url.searchParams.get('capper'));
-  const sport = normalizeOptionalQueryValue(url.searchParams.get('sport'));
-
-  return {
-    ...(capper ? { capper } : {}),
-    ...(sport ? { sport } : {}),
-    window: parsedWindow,
-  };
-}
-
-export function parseLeaderboardQuery(
-  url: URL,
-): OperatorLeaderboardQuery | { error: string } {
-  const requestedWindow = url.searchParams.get('last');
-  const parsedWindow = requestedWindow === null ? 30 : Number.parseInt(requestedWindow, 10);
-  if (!isAllowedStatsWindow(parsedWindow)) {
-    return { error: 'Query parameter "last" must be one of 7, 14, 30, 90.' };
-  }
-
-  const sport = normalizeOptionalQueryValue(url.searchParams.get('sport'));
-  const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '10', 10);
-  const requestedMinPicks = Number.parseInt(url.searchParams.get('minPicks') ?? '3', 10);
-
-  return {
-    ...(sport ? { sport } : {}),
-    window: parsedWindow,
-    limit: Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 25) : 10,
-    minPicks:
-      Number.isFinite(requestedMinPicks) && requestedMinPicks > 0 ? requestedMinPicks : 3,
-  };
-}
-
-export function parseCapperRecapQuery(
-  url: URL,
-): OperatorCapperRecapQuery | { error: string } {
-  const submittedBy = normalizeOptionalQueryValue(url.searchParams.get('submittedBy'));
-  if (!submittedBy) {
-    return { error: 'Query parameter "submittedBy" is required.' };
-  }
-
-  const requestedLimit = Number.parseInt(url.searchParams.get('limit') ?? '10', 10);
-
-  return {
-    submittedBy,
-    limit: Number.isFinite(requestedLimit) ? Math.min(Math.max(requestedLimit, 1), 20) : 10,
-  };
-}
-
-function isAllowedStatsWindow(value: number): value is StatsWindowDays {
-  return value === 7 || value === 14 || value === 30 || value === 90;
-}
-
 function createEmptyEntityHealth(): OperatorEntityHealth {
   return {
     resolvedEventsCount: 0,
@@ -2438,16 +1743,6 @@ function mapUpcomingEvents(
     };
   });
 }
-
-function normalizeOptionalQueryValue(value: string | null): string | undefined {
-  if (value === null) {
-    return undefined;
-  }
-
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : undefined;
-}
-
 function createStatsSinceIso(window: StatsWindowDays) {
   return new Date(Date.now() - window * 24 * 60 * 60 * 1000).toISOString();
 }
@@ -2603,25 +1898,4 @@ function computeStreak(rows: StatsRow[]) {
   }
 
   return firstResult === 'win' ? streak : -streak;
-}
-
-function writeJson(response: ServerResponse, status: number, body: unknown) {
-  response.statusCode = status;
-  response.setHeader('content-type', 'application/json; charset=utf-8');
-  response.end(JSON.stringify(body));
-}
-
-function writeHtml(response: ServerResponse, status: number, body: string) {
-  response.statusCode = status;
-  response.setHeader('content-type', 'text/html; charset=utf-8');
-  response.end(body);
-}
-
-function escapeHtml(value: string) {
-  return value
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#39;');
-}
+}

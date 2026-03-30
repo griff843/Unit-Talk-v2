@@ -11,6 +11,7 @@ export default tseslint.config(
       '.turbo/**',
       '.pnpm-store/**',
       'coverage/**',
+      '.claude/worktrees/**',
     ],
   },
   js.configs.recommended,

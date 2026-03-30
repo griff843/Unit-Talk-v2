@@ -62,6 +62,8 @@ Sprint ceremony scales with risk. High-risk changes get full governance. Low-ris
 
 **Batching:** Multiple T3 sprints can be grouped into a single commit if they're logically related.
 
+**Structural refactor rule:** Pure structural refactors (no behavior change, no schema change, no routing change) qualify for T3 ceremony regardless of how the issue is tier-labeled in the queue. If an issue is labeled T2 but meets the T3 criteria above, T3 ceremony is correct. Reclassify at implementation time and note in the commit.
+
 ## What Remains Unchanged
 
 These are non-negotiable regardless of tier:
