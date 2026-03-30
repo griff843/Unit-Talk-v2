@@ -2,7 +2,6 @@ import type {
   AlertDetectionRecord,
   HedgeOpportunityRecord,
   RepositoryBundle,
-  SystemRunRepository,
 } from '@unit-talk/db';
 import {
   loadAlertAgentConfig,
