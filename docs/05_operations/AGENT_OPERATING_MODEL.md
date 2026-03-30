@@ -122,6 +122,23 @@ If neither condition is met, Claude executes within its own lane.
 
 ---
 
+## Batch Orchestration Pattern
+
+When Codex is unavailable or the PM explicitly authorizes batch execution, Claude may orchestrate parallel worktree agents for codex-lane items.
+
+**Rules:**
+- Each agent gets one issue, one branch, one PR — no stacking
+- Agents run in isolated worktrees (`isolation: worktree`) — no cross-contamination between agents or the main worktree
+- Serial dependencies chain on merge: launch the next dependent agent when the merge notification arrives, not in advance
+- Linear is updated per issue when PRs land — batch orchestration does not change reporting discipline
+- Merge on green CI without ceremony delay — do not hold PRs waiting for a batch to complete
+
+**When Codex is back online:** route issues to Codex directly. The batch orchestration path goes dormant. Nothing reverts — the model supports both modes.
+
+**Operator authorization is required.** This pattern activates only when the PM explicitly says to run multiple issues in parallel. It is not a standing permission.
+
+---
+
 ## When Repo Docs Are Updated
 
 | Doc type | Updated when |

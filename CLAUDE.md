@@ -74,6 +74,18 @@ This repo uses explicit lane separation.
 
 If asked to verify, do not change runtime code.
 
+## Batch Execution Pattern
+
+When the PM authorizes parallel execution of multiple codex-lane issues:
+
+- Launch agents with `isolation: worktree` — each agent gets a clean isolated copy
+- One agent per issue, one branch per issue, one PR per issue — no stacking
+- **Merge on green CI without ceremony delay.** Do not hold PRs waiting for a full batch to complete — merge each as it lands
+- Serial chains (issues with dependencies): launch the next agent on merge notification, not in advance
+- When Codex is available, route codex-lane issues to Codex directly — this pattern is for Codex-offline or explicit PM batch authorization only
+
+**Operator-web bottleneck:** Issues that share `apps/operator-web/src/server.ts` must land sequentially. Preferred order when all are in scope: route modules (UTV2-127) → target registry (UTV2-129) → pagination (UTV2-131) → exposure tracking (UTV2-134).
+
 ## Architecture
 
 ### Package dependency graph
