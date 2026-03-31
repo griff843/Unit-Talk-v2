@@ -4,6 +4,7 @@ import { writeJson } from '../http-utils.js';
 import {
   fetchIntelligenceDataset,
   computeMiniStats,
+  computePickPayout,
   computeScoreCorrelation,
   evaluateScoreSignal,
   sliceBySource,
@@ -97,11 +98,9 @@ export async function handleIntelligenceRequest(
     let totalRisked = 0, totalProfit = 0;
     for (const p of bandPicks) {
       const r = resultByPick.get(p['id'] as string)!;
-      const odds = p['odds'] as number | null;
-      const risk = (odds != null && Number.isFinite(odds) && odds < 0) ? Math.abs(odds) : 110;
-      const profit = (odds != null && Number.isFinite(odds) && odds > 0) ? odds : 100;
-      if (r === 'win') { wins++; totalRisked += (odds != null && odds < 0) ? risk : 100; totalProfit += (odds != null && odds > 0) ? profit : 100; }
-      else if (r === 'loss') { losses++; totalRisked += (odds != null && odds < 0) ? risk : 110; totalProfit -= (odds != null && odds < 0) ? risk : 110; }
+      const payout = computePickPayout(p['odds'] as number | null);
+      if (r === 'win') { wins++; totalRisked += payout.riskPerUnit; totalProfit += payout.profitPerUnit; }
+      else if (r === 'loss') { losses++; totalRisked += payout.riskPerUnit; totalProfit -= payout.riskPerUnit; }
       else if (r === 'push') { pushes++; }
     }
     const total = wins + losses + pushes;

@@ -104,7 +104,7 @@ export async function fetchIntelligenceDataset(client: any): Promise<Intelligenc
  * Compute ROI using actual American odds when available.
  * Falls back to flat -110 assumption when odds are missing.
  */
-function computePickPayout(odds: number | null): { riskPerUnit: number; profitPerUnit: number } {
+export function computePickPayout(odds: number | null): { riskPerUnit: number; profitPerUnit: number } {
   if (odds == null || !Number.isFinite(odds)) {
     // Flat -110 fallback
     return { riskPerUnit: 110, profitPerUnit: 100 };
@@ -145,16 +145,15 @@ export function computeStats(
     const r = resultByPick.get(p['id'] as string)!;
     const odds = p['odds'] as number | null;
     const payout = computePickPayout(odds);
-    const stakeMultiplier = 1; // normalize to 1-unit bets for ROI
 
     if (r === 'win') {
       wins++;
-      totalRisked += payout.riskPerUnit * stakeMultiplier;
-      totalProfit += payout.profitPerUnit * stakeMultiplier;
+      totalRisked += payout.riskPerUnit;
+      totalProfit += payout.profitPerUnit;
     } else if (r === 'loss') {
       losses++;
-      totalRisked += payout.riskPerUnit * stakeMultiplier;
-      totalProfit -= payout.riskPerUnit * stakeMultiplier;
+      totalRisked += payout.riskPerUnit;
+      totalProfit -= payout.riskPerUnit;
     } else if (r === 'push') {
       pushes++;
       // No risk/profit on push
@@ -270,18 +269,21 @@ export function evaluateScoreSignal(
   if (score == null || (result !== 'win' && result !== 'loss')) return null;
 
   // Score bands map to expected win rate ranges:
-  // 90-100: strong signal (~65%+ expected win rate) — loss is acceptable
-  // 70-89: moderate signal (~55% expected) — loss is expected ~45% of the time
-  // <70: weak/negative signal — win is acceptable, loss is expected
+  // 90-100: strong signal — loss is a meaningful miss
+  // 70-89: moderate signal — loss is normal variance
+  // 50-69: weak signal — win is a positive surprise, loss is expected
+  // <50: anti-signal — win contradicts score, loss confirms
   if (score >= 90) {
-    return result === 'win' ? 'correct' : 'marginal';
+    return result === 'win' ? 'correct' : 'incorrect';
   }
   if (score >= 70) {
-    // In the promotion zone — wins are expected but losses are normal
     return result === 'win' ? 'correct' : 'marginal';
   }
-  // Below promotion threshold — losses are expected, wins are a bonus
-  return result === 'loss' ? 'correct' : 'marginal';
+  if (score >= 50) {
+    return result === 'loss' ? 'correct' : 'marginal';
+  }
+  // Below 50: strong negative signal
+  return result === 'loss' ? 'correct' : 'incorrect';
 }
 
 /**
