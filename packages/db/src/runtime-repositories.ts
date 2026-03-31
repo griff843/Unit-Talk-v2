@@ -318,12 +318,16 @@ export class InMemoryPickRepository implements PickRepository {
   ): Promise<PromotionBoardStateSnapshot> {
     // Only count picks that are currently active on the board.
     // Settled and voided picks no longer occupy board capacity.
+    // 7-day window prevents stale picks from permanently blocking.
+    const boardWindowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const promoted = Array.from(this.picks.values()).filter(
       (pick) =>
         pick.promotion_target === input.target &&
         (pick.promotion_status === 'qualified' || pick.promotion_status === 'promoted') &&
         pick.status !== 'settled' &&
-        pick.status !== 'voided',
+        pick.status !== 'voided' &&
+        pick.created_at >= boardWindowStart &&
+        (pick.source === 'smart-form' || pick.source === 'discord' || pick.source === 'api'),
     );
 
     return {
@@ -1508,13 +1512,19 @@ export class DatabasePickRepository implements PickRepository {
   ): Promise<PromotionBoardStateSnapshot> {
     // Only count picks that are currently active on the board.
     // Settled and voided picks no longer occupy board capacity.
+    // Only picks created within the last 7 days count — stale picks
+    // from old test/proof runs must not permanently block the board.
+    const boardWindowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
     const { data, error } = await this.client
       .from('picks')
-      .select('market,selection,metadata,promotion_target,promotion_status')
+      .select('market,selection,metadata,promotion_target,promotion_status,source')
       .eq('promotion_target', input.target)
       .in('promotion_status', ['qualified', 'promoted'])
+      .in('source', ['smart-form', 'discord', 'api'])
       .neq('status', 'settled')
-      .neq('status', 'voided');
+      .neq('status', 'voided')
+      .gte('created_at', boardWindowStart);
 
     if (error) {
       throw new Error(`Failed to query promotion board state: ${error.message}`);

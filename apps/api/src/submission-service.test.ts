@@ -1259,7 +1259,7 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
   for (let index = 0; index < 5; index += 1) {
     const seeded = await processSubmission(
       {
-        source: 'test',
+        source: 'smart-form',
         market: `NBA points ${index}`,
         selection: `Player Over ${20 + index}.5`,
         confidence: 0.95,
@@ -1294,7 +1294,7 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
   // Neither qualifies; bb's suppression data (board cap) is persisted on picks.
   const candidate = await processSubmission(
     {
-      source: 'test',
+      source: 'smart-form',
       market: 'NBA rebounds',
       selection: 'Player Over 9.5',
       confidence: 0.92,
@@ -1339,7 +1339,7 @@ test('settled best-bets picks do not consume board capacity', async () => {
   for (let index = 0; index < 5; index += 1) {
     const seeded = await processSubmission(
       {
-        source: 'test',
+        source: 'smart-form',
         market: `NBA points ${index}`,
         selection: `Player Over ${20 + index}.5`,
         confidence: 0.95,
@@ -1396,7 +1396,7 @@ test('settled best-bets picks do not consume board capacity', async () => {
 
   const candidate = await processSubmission(
     {
-      source: 'test',
+      source: 'smart-form',
       market: 'NBA rebounds',
       selection: 'Player Over 9.5',
       confidence: 0.92,
@@ -1437,7 +1437,7 @@ test('duplicate suppression blocks repeated best-bets thesis', async () => {
   // edge=78 < 85 → trader-insights suppressed for both picks; bb sees the duplicate.
   const first = await processSubmission(
     {
-      source: 'test',
+      source: 'smart-form',
       market: 'NBA points',
       selection: 'Player Over 27.5',
       confidence: 0.94,
@@ -1469,7 +1469,7 @@ test('duplicate suppression blocks repeated best-bets thesis', async () => {
 
   const duplicate = await processSubmission(
     {
-      source: 'test',
+      source: 'smart-form',
       market: 'NBA points',
       selection: 'Player Over 27.5',
       confidence: 0.94,
