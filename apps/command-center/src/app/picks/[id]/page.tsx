@@ -3,10 +3,11 @@ import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { SettlementForm } from '@/components/SettlementForm';
+import { getAllowedActions } from '@/lib/pick-actions';
 
 interface PickDetailPageProps {
   params: { id: string };
-  searchParams: { status?: string };
+  searchParams: Record<string, string | string[] | undefined>;
 }
 
 interface LifecycleRow {
@@ -146,12 +147,8 @@ async function fetchPickDetail(pickId: string): Promise<PickDetailViewResponse |
  * - status === 'settled'   → CorrectionForm
  * - status === 'voided'    → informational message only
  */
-export default async function PickDetailPage({ params, searchParams }: PickDetailPageProps) {
+export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const pickId = params.id;
-  const status = searchParams.status ?? '';
-
-  const isSettled = status === 'settled';
-  const isVoided = status === 'voided';
 
   const detail = await fetchPickDetail(pickId);
 
@@ -166,22 +163,12 @@ export default async function PickDetailPage({ params, searchParams }: PickDetai
         <div className="text-red-400 text-sm">
           Pick not found or operator-web unavailable: {pickId}
         </div>
-
-        {/* Still render forms even if trace unavailable */}
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-          {isVoided ? (
-            <p className="text-sm text-gray-400">Pick is voided — no further action available.</p>
-          ) : isSettled ? (
-            <CorrectionForm pickId={pickId} />
-          ) : (
-            <SettlementForm pickId={pickId} isAlreadySettled={false} />
-          )}
-        </div>
       </div>
     );
   }
 
   const { pick } = detail;
+  const allowedActions = getAllowedActions(pick.status);
   const corrections = detail.settlements.filter((s) => s.correctsId != null);
   const breadcrumbs = [
     { label: 'Dashboard', href: '/' },
@@ -201,21 +188,21 @@ export default async function PickDetailPage({ params, searchParams }: PickDetai
       <div>
         <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
         <p className="mt-1 font-mono text-xs text-gray-400">{pick.id}</p>
-        {status && (
-          <p className="mt-1 text-sm text-gray-500">
-            Status: <span className="font-medium text-gray-300">{status}</span>
-          </p>
-        )}
+        <p className="mt-1 text-sm text-gray-500">
+          Status: <span className="font-medium text-gray-300">{pick.status}</span>
+        </p>
       </div>
 
-      {/* Settlement / Correction surface */}
+      {/* Settlement / Correction surface — derived from canonical pick state */}
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
-        {isVoided ? (
-          <p className="text-sm text-gray-400">Pick is voided — no further action available.</p>
-        ) : isSettled ? (
+        {allowedActions.length === 0 ? (
+          <p className="text-sm text-gray-400">Pick is {pick.status} — no further action available.</p>
+        ) : allowedActions.includes('correct') ? (
           <CorrectionForm pickId={pickId} />
-        ) : (
+        ) : allowedActions.includes('settle') ? (
           <SettlementForm pickId={pickId} isAlreadySettled={false} />
+        ) : (
+          <p className="text-sm text-gray-400">No actions available for this pick.</p>
         )}
       </div>
 

@@ -14,7 +14,7 @@ interface AuditRow {
   created_at: string;
 }
 
-const INTERVENTION_ACTIONS = [
+const INTERVENTION_ACTIONS: ReadonlySet<string> = new Set([
   'delivery.retry',
   'promotion.rerun',
   'promotion.override.force_promote',
@@ -23,7 +23,7 @@ const INTERVENTION_ACTIONS = [
   'review.deny',
   'review.hold',
   'review.return',
-];
+]);
 
 async function fetchInterventionAudit(): Promise<AuditRow[]> {
   try {
@@ -31,9 +31,9 @@ async function fetchInterventionAudit(): Promise<AuditRow[]> {
     if (!provider.ok) return [];
     const json = (await provider.json()) as { ok: boolean; data: { recentAudit: AuditRow[] } };
     if (!json.ok) return [];
-    // Filter to intervention actions only
+    // Filter to intervention actions only — exact match, no prefix matching
     return (json.data.recentAudit ?? []).filter((row) =>
-      INTERVENTION_ACTIONS.some((a) => row.action.startsWith(a.split('.')[0]!)),
+      INTERVENTION_ACTIONS.has(row.action),
     );
   } catch {
     return [];

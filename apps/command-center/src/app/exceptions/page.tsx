@@ -149,7 +149,7 @@ export default async function ExceptionsPage() {
                     <td className="py-2 pr-3 text-xs text-gray-300">{String(row['settled_by'] ?? '—')}</td>
                     <td className="py-2 pr-3 text-xs text-gray-400">{new Date(String(row['created_at'])).toLocaleDateString()}</td>
                     <td className="py-2">
-                      <Link href={`/picks/${row['pick_id']}?status=posted`} className="text-xs text-blue-400 hover:underline">
+                      <Link href={`/picks/${row['pick_id']}`} className="text-xs text-blue-400 hover:underline">
                         Resolve
                       </Link>
                     </td>
