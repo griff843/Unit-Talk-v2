@@ -196,7 +196,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 | API process requires manual restart for new code in dev | Low | Open |
 | `system_snapshot.md` stale | Low | Last updated 2026-03-21. Proof IDs still valid as historical record; current-state claims are wrong. Use `PROGRAM_STATUS.md`. |
 | `production_readiness_checklist.md` stale | Low | Last updated 2026-03-26. Use `ISSUE_QUEUE.md` for current lane state. |
-| Shadow validation not yet executed | Medium | **Plan ratified** (UTV2-25). G12 gate OPEN. Comparison scripts ready. V1 data extraction mapped (UTV2-172). Execution requires V1 DB credentials. |
+| Production readiness canary not yet executed | Medium | **Plan ratified** (`PRODUCTION_READINESS_CANARY_PLAN.md`). G12 gate OPEN. Requires 7-day canary period with >= 30 graded picks. Supersedes shadow validation after V1 synthetic data discovery. |
 
 ---
 
@@ -313,11 +313,11 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ### Cutover readiness
 - **Shadow validation plan ratified** (UTV2-25): 8 comparison surfaces, discrepancy taxonomy, evidence bundle, sign-off authority. G12 gate added to `migration_cutover_plan.md` — required for cutover.
-- **V1 data extraction audit complete** (UTV2-172): all V1 surfaces mapped (picks, grading, CLV, promotion, stats, recap, Discord delivery). Both systems use Supabase PostgreSQL. Historical overlap comparison viable.
-- **Shadow comparison scripts ready**: `scripts/shadow-grading-parity.ts` (grading outcomes), `scripts/shadow-clv-parity.ts` (CLV values). Both query V1+V2 Supabase, match by composite key, classify discrepancies per plan thresholds.
+- **V1 data extraction audit complete** (UTV2-172): all V1 surfaces mapped. V1 found to contain only synthetic test data — shadow comparison against V1 invalidated.
+- **Production readiness canary plan ratified** (supersedes shadow validation plan): 7-day canary period with real picks, grading spot-checks, delivery health monitoring, evidence bundle. See `PRODUCTION_READINESS_CANARY_PLAN.md`.
 - **Cutover risk audit complete** (UTV2-27): 3 stale risks closed (R-07, R-08, R-11). Follow-on issues all shipped: UTV2-168 (outbox cleanup DONE), UTV2-169 (board cap monitoring DONE), UTV2-170 (recap idempotency DONE, R-06 closed).
 - **V1 lifecycle safety foundation ported** (UTV2-175, 176, 177): typed transition errors, atomic claim idempotency, writer authority enforcement. 46 new lifecycle tests.
-- **Cutover gate status**: G1-G9, G11 PASS. G10 (dead-letter) acceptable. **G12 (shadow validation) OPEN — execution not started.**
+- **Cutover gate status**: G1-G9, G11 PASS. G10 (dead-letter) acceptable. **G12 (production readiness canary) OPEN — canary period not started.**
 
 ---
 
@@ -355,7 +355,7 @@ These files are no longer maintained and should not be used as current-state tru
 | CLV wiring contract | `docs/05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md` |
 | Discord routing | `docs/05_operations/discord_routing.md` |
 | Migration ledger | `docs/05_operations/migration_ledger.md` |
-| Shadow validation plan | `docs/05_operations/SHADOW_VALIDATION_PLAN.md` |
+| Production readiness canary | `docs/05_operations/PRODUCTION_READINESS_CANARY_PLAN.md` |
 | Migration cutover plan | `docs/05_operations/migration_cutover_plan.md` |
 | Simulation mode contract | `docs/05_operations/SIMULATION_MODE_CONTRACT.md` |
 | Rollout controls contract | `docs/05_operations/ROLLOUT_CONTROLS_CONTRACT.md` |

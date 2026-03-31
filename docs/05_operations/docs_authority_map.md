@@ -120,7 +120,8 @@ When documents conflict:
 | `docs/05_operations/SPRINT_MODEL_v2.md` | Risk-tiered sprint model (T1/T2/T3) | Program Owner |
 | `docs/05_operations/QUEUE_ORCHESTRATION_DESIGN.md` | Queue/orchestration system design — ratified 2026-03-26 | Claude |
 | `docs/05_operations/agent_delegation_policy.md` | **SUPERSEDED 2026-03-28** — replaced by `AGENT_OPERATING_MODEL.md` | historical |
-| `docs/05_operations/SHADOW_VALIDATION_PLAN.md` | Shadow validation design — parity checks, thresholds, evidence, sign-off for cutover | UTV2-25 |
+| `docs/05_operations/PRODUCTION_READINESS_CANARY_PLAN.md` | **Active** — production readiness canary: live grading verification, delivery health, evidence bundle | UTV2-25 |
+| `docs/05_operations/SHADOW_VALIDATION_PLAN.md` | **SUPERSEDED** — replaced by PRODUCTION_READINESS_CANARY_PLAN.md (V1 synthetic data invalidated parity comparison) | UTV2-25 |
 | `docs/05_operations/ROLLOUT_CONTROLS_CONTRACT.md` | Per-target rollout %, sport filters, deterministic sampling for gradual activation | UTV2-154 |
 | `docs/05_operations/SIMULATION_MODE_CONTRACT.md` | System-wide simulation delivery mode for pre-activation validation | UTV2-156 |
 | `docs/05_operations/V1_DATA_EXTRACTION_AUDIT.md` | V1 data surface map — tables, fields, extraction queries for shadow validation | UTV2-172 |

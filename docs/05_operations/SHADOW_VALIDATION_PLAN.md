@@ -1,8 +1,8 @@
 # Shadow Validation Plan
 
-**Status:** Ratified 2026-03-31
+**Status:** SUPERSEDED 2026-03-31 — replaced by `PRODUCTION_READINESS_CANARY_PLAN.md`
 **Issue:** UTV2-25
-**Authority:** Tier 4 — Operational. Cross-references: `migration_cutover_plan.md` (section 4.3), `risk_register.md`.
+**Authority:** Historical only. V1 data extraction audit (UTV2-172) revealed V1 contains only synthetic test data, invalidating cross-system parity comparison. See `PRODUCTION_READINESS_CANARY_PLAN.md` for the active G12 gate definition.
 **Milestone:** UTV2-M8 Cutover Ready
 
 ---

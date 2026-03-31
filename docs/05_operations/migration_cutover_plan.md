@@ -93,19 +93,25 @@ Cutover gate is **OPEN** when G1–G8, G11, and G12 are PASS, and G10 is accepta
 
 G9 (AlertAgent) is not a hard cutover gate — it is post-cutover hardening. Cutover can proceed without AlertAgent live.
 
-### 4.3 Shadow Validation (G12)
+### 4.3 Production Readiness Canary (G12)
 
-Before declaring cutover open, execute the shadow validation plan defined in `docs/05_operations/SHADOW_VALIDATION_PLAN.md`.
+Before declaring cutover open, complete a production readiness canary period as defined in `docs/05_operations/PRODUCTION_READINESS_CANARY_PLAN.md`.
 
-Shadow validation runs V2 alongside V1 for >= 7 calendar days, comparing grading outcomes, CLV, settlement, stats, and routing on overlapping picks. The plan defines per-surface parity thresholds, a discrepancy taxonomy, evidence bundle requirements, and sign-off authority.
+The canary period runs V2 as the sole active system for >= 7 calendar days with real picks, real game results, and heightened monitoring. It replaces the original shadow validation plan (which was invalidated when the V1 data extraction audit revealed V1 contains only synthetic test data — cross-system parity comparison against synthetic data does not prove production correctness).
 
 | Gate | Requirement | Current Status |
 |------|-------------|----------------|
-| G12 — Shadow validation | Shadow validation sign-off record exists with explicit approval | **OPEN** — plan ratified, execution not started |
+| G12 — Production readiness canary | Canary sign-off record exists: >= 30 graded picks, >= 2 sports, 100% grading accuracy on spot-checks, 0 dead-letter, 0 duplicates, evidence bundle complete, PM approval | **OPEN** — plan ratified, canary period not started |
 
-Shadow validation is required for cutover. This is a deliberate upgrade from the original "recommended but not required" posture — the existence of a concrete validation plan with measurable thresholds makes the gate enforceable, and proceeding without it leaves grading/settlement correctness unproven on real-world data.
+The canary validates:
+- Grading accuracy against real box scores (100% on spot-checks)
+- CLV computation on real closing lines
+- Delivery health (0 dead-letter for 7 days)
+- No duplicate Discord posts
+- Operator snapshot truth (counts match DB)
+- Stats/leaderboard accuracy
 
-See `SHADOW_VALIDATION_PLAN.md` for the full comparison model, acceptance criteria, and abort conditions.
+See `PRODUCTION_READINESS_CANARY_PLAN.md` for full criteria, failure handling, and evidence requirements.
 
 ---
 
