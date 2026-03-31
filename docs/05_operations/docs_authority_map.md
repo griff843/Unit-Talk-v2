@@ -124,6 +124,8 @@ When documents conflict:
 | `docs/05_operations/ROLLOUT_CONTROLS_CONTRACT.md` | Per-target rollout %, sport filters, deterministic sampling for gradual activation | UTV2-154 |
 | `docs/05_operations/SIMULATION_MODE_CONTRACT.md` | System-wide simulation delivery mode for pre-activation validation | UTV2-156 |
 | `docs/05_operations/V1_DATA_EXTRACTION_AUDIT.md` | V1 data surface map — tables, fields, extraction queries for shadow validation | UTV2-172 |
+| `docs/05_operations/V1_LIFECYCLE_REUSE_AUDIT.md` | V1 lifecycle logic inventory — PORT/ENHANCE/SKIP decisions for V2 | UTV2-24 |
+| `docs/05_operations/LOGGING_INFRASTRUCTURE.md` | Loki + Grafana centralized logging — dual writer, batching, docker-compose | UTV2-153 |
 | `docs/05_operations/SPRINT_MODEL_v2_PROPOSAL.md` | **SUPERSEDED 2026-03-29** — pre-ratification draft; replaced by `SPRINT_MODEL_v2.md` | historical |
 
 ### Wave 1 Hardening Contracts (ratified 2026-03-29)
