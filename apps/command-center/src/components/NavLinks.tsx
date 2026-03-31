@@ -10,6 +10,7 @@ const NAV_LINKS = [
   { href: '/held', label: 'Held' },
   { href: '/exceptions', label: 'Exceptions' },
   { href: '/performance', label: 'Performance' },
+  { href: '/intelligence', label: 'Intelligence' },
   { href: '/decisions', label: 'Decisions' },
   { href: '/interventions', label: 'Audit' },
 ];

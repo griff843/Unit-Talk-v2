@@ -27,10 +27,10 @@ export async function handlePerformanceRequest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = provider._supabaseClient as any;
 
-  // Fetch all settled picks + their settlements + reviews
+  // Fetch all picks + settlements (with CLV payload) + reviews
   const [picksResult, settlementsResult, reviewsResult] = await Promise.all([
-    client.from('picks').select('id, source, market, status, approval_status, promotion_score, created_at, settled_at'),
-    client.from('settlement_records').select('pick_id, result, status, source, created_at').order('created_at', { ascending: false }),
+    client.from('picks').select('id, source, market, status, approval_status, promotion_score, stake_units, odds, confidence, created_at, settled_at'),
+    client.from('settlement_records').select('pick_id, result, status, source, payload, created_at').order('created_at', { ascending: false }),
     client.from('pick_reviews').select('pick_id, decision, decided_by, decided_at'),
   ]);
 
@@ -40,10 +40,21 @@ export async function handlePerformanceRequest(
 
   // Build effective result map (latest settlement per pick)
   const resultByPick = new Map<string, string>();
+  // Build CLV map from settlement payloads (latest per pick)
+  const clvByPick = new Map<string, number>();
   for (const s of settlements) {
     const pid = s['pick_id'] as string;
     if (!resultByPick.has(pid) && s['result']) {
       resultByPick.set(pid, s['result'] as string);
+    }
+    if (!clvByPick.has(pid)) {
+      const payload = s['payload'] as Record<string, unknown> | null;
+      if (payload) {
+        const clvPct = payload['clvPercent'];
+        if (typeof clvPct === 'number' && Number.isFinite(clvPct)) {
+          clvByPick.set(pid, clvPct);
+        }
+      }
     }
   }
 
@@ -65,6 +76,7 @@ export async function handlePerformanceRequest(
   function computeStats(pickList: Array<Record<string, unknown>>) {
     const settled = pickList.filter((p) => resultByPick.has(p['id'] as string));
     let wins = 0, losses = 0, pushes = 0, scoreSum = 0, scoreCount = 0;
+    let clvSum = 0, clvCount = 0, stakeSum = 0, stakeCount = 0;
     for (const p of settled) {
       const r = resultByPick.get(p['id'] as string)!;
       if (r === 'win') wins++;
@@ -72,6 +84,10 @@ export async function handlePerformanceRequest(
       else if (r === 'push') pushes++;
       const score = p['promotion_score'] as number | null;
       if (score != null) { scoreSum += score; scoreCount++; }
+      const clv = clvByPick.get(p['id'] as string);
+      if (clv != null) { clvSum += clv; clvCount++; }
+      const stake = p['stake_units'] as number | null;
+      if (stake != null && Number.isFinite(stake)) { stakeSum += stake; stakeCount++; }
     }
     const total = wins + losses + pushes;
     const hitRate = total > 0 ? (wins / (wins + losses)) * 100 : 0;
@@ -83,6 +99,8 @@ export async function handlePerformanceRequest(
       hitRatePct: Math.round(hitRate * 10) / 10,
       roiPct: Math.round(roi * 10) / 10,
       avgScore: scoreCount > 0 ? Math.round((scoreSum / scoreCount) * 10) / 10 : null,
+      avgClvPct: clvCount > 0 ? Math.round((clvSum / clvCount) * 10) / 10 : null,
+      avgStakeUnits: stakeCount > 0 ? Math.round((stakeSum / stakeCount) * 10) / 10 : null,
     };
   }
 
@@ -131,28 +149,42 @@ export async function handlePerformanceRequest(
   }
 
   // Insights
-  const overallStats = computeStats(picks);
   const capperStats = computeStats(capperPicks);
   const systemStats = computeStats(systemPicks);
   const approvedStats = computeStats(approvedPicks);
   const deniedStats = computeStats(deniedPicks);
+  const heldStats = computeStats(heldPicks);
 
-  // Find top capper (by source)
-  const capperSourceMap = new Map<string, Array<Record<string, unknown>>>();
+  // Per-individual-source breakdown
+  const sourceMap = new Map<string, Array<Record<string, unknown>>>();
   for (const p of picks) {
     const src = p['source'] as string;
-    if (!capperSourceMap.has(src)) capperSourceMap.set(src, []);
-    capperSourceMap.get(src)!.push(p);
+    if (!sourceMap.has(src)) sourceMap.set(src, []);
+    sourceMap.get(src)!.push(p);
   }
-  let topCapper = { name: '—', roiPct: 0 };
-  let worstSegment = { name: '—', roiPct: 0 };
-  for (const [name, capPicks] of capperSourceMap) {
-    const s = computeStats(capPicks);
+  const byIndividualSource: Record<string, ReturnType<typeof computeStats>> = {};
+  let topCapper = { name: '—', roiPct: 0, sampleSize: 0 };
+  let worstSegment = { name: '—', roiPct: 0, sampleSize: 0 };
+  for (const [name, srcPicks] of sourceMap) {
+    const s = computeStats(srcPicks);
+    byIndividualSource[name] = s;
     if (s.settled >= 3 && s.roiPct > topCapper.roiPct) {
-      topCapper = { name, roiPct: s.roiPct };
+      topCapper = { name, roiPct: s.roiPct, sampleSize: s.settled };
     }
     if (s.settled >= 3 && s.roiPct < worstSegment.roiPct) {
-      worstSegment = { name, roiPct: s.roiPct };
+      worstSegment = { name, roiPct: s.roiPct, sampleSize: s.settled };
+    }
+  }
+
+  // Strongest/weakest sport
+  let strongestSport = { name: '—', roiPct: 0, sampleSize: 0 };
+  let weakestSport = { name: '—', roiPct: 0, sampleSize: 0 };
+  for (const [sport, stats] of Object.entries(bySport)) {
+    if (stats.settled >= 3 && stats.roiPct > strongestSport.roiPct) {
+      strongestSport = { name: sport, roiPct: stats.roiPct, sampleSize: stats.settled };
+    }
+    if (stats.settled >= 3 && stats.roiPct < weakestSport.roiPct) {
+      weakestSport = { name: sport, roiPct: stats.roiPct, sampleSize: stats.settled };
     }
   }
 
@@ -170,9 +202,11 @@ export async function handlePerformanceRequest(
         system: systemStats,
       },
       bySport,
+      byIndividualSource,
       decisions: {
         approved: approvedStats,
         denied: deniedStats,
+        held: heldStats,
         heldCount: heldPicks.length,
       },
       insights: {
@@ -180,20 +214,31 @@ export async function handlePerformanceRequest(
         systemRoiPct: systemStats.roiPct,
         approvedRoiPct: approvedStats.roiPct,
         deniedRoiPct: deniedStats.roiPct,
+        approvedVsDeniedDelta: Math.round((approvedStats.roiPct - deniedStats.roiPct) * 10) / 10,
         topCapper,
         worstSegment,
+        strongestSport,
+        weakestSport,
       },
     },
   });
 }
 
 function createEmptyPerformance() {
-  const empty = { total: 0, settled: 0, wins: 0, losses: 0, pushes: 0, hitRatePct: 0, roiPct: 0, avgScore: null };
+  const empty = { total: 0, settled: 0, wins: 0, losses: 0, pushes: 0, hitRatePct: 0, roiPct: 0, avgScore: null, avgClvPct: null, avgStakeUnits: null };
   return {
     windows: { today: empty, last7d: empty, last30d: empty, mtd: empty },
     bySource: { capper: empty, system: empty },
     bySport: {},
-    decisions: { approved: empty, denied: empty, heldCount: 0 },
-    insights: { capperRoiPct: 0, systemRoiPct: 0, approvedRoiPct: 0, deniedRoiPct: 0, topCapper: { name: '—', roiPct: 0 }, worstSegment: { name: '—', roiPct: 0 } },
+    byIndividualSource: {},
+    decisions: { approved: empty, denied: empty, held: empty, heldCount: 0 },
+    insights: {
+      capperRoiPct: 0, systemRoiPct: 0, approvedRoiPct: 0, deniedRoiPct: 0,
+      approvedVsDeniedDelta: 0,
+      topCapper: { name: '—', roiPct: 0, sampleSize: 0 },
+      worstSegment: { name: '—', roiPct: 0, sampleSize: 0 },
+      strongestSport: { name: '—', roiPct: 0, sampleSize: 0 },
+      weakestSport: { name: '—', roiPct: 0, sampleSize: 0 },
+    },
   };
 }

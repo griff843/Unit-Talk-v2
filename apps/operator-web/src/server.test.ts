@@ -3607,3 +3607,116 @@ test('GET /api/operator/picks/unknown-id returns 404', async () => {
   assert.equal(body.ok, false);
   assert.equal(body.error.code, 'NOT_FOUND');
 });
+
+// ── Wave 4: Performance + Intelligence endpoint tests ─────────────
+
+test('GET /api/operator/performance returns extended stats shape with CLV and stake fields', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  const response = await makeRequest(address.port, '/api/operator/performance');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as { ok: boolean; data: Record<string, unknown> };
+  assert.equal(body.ok, true);
+
+  const data = body.data;
+  // Verify extended shape
+  assert.ok('windows' in data);
+  assert.ok('bySource' in data);
+  assert.ok('bySport' in data);
+  assert.ok('byIndividualSource' in data);
+  assert.ok('decisions' in data);
+  assert.ok('insights' in data);
+
+  // Verify windows have CLV fields
+  const windows = data['windows'] as Record<string, Record<string, unknown>>;
+  for (const key of ['today', 'last7d', 'last30d', 'mtd']) {
+    const w = windows[key]!;
+    assert.ok('avgClvPct' in w, `${key} missing avgClvPct`);
+    assert.ok('avgStakeUnits' in w, `${key} missing avgStakeUnits`);
+  }
+
+  // Verify decisions has held stats
+  const decisions = data['decisions'] as Record<string, unknown>;
+  assert.ok('held' in decisions);
+  assert.ok('heldCount' in decisions);
+
+  // Verify insights has new fields
+  const insights = data['insights'] as Record<string, unknown>;
+  assert.ok('approvedVsDeniedDelta' in insights);
+  assert.ok('strongestSport' in insights);
+  assert.ok('weakestSport' in insights);
+  const topCapper = insights['topCapper'] as Record<string, unknown>;
+  assert.ok('sampleSize' in topCapper);
+});
+
+test('GET /api/operator/intelligence returns intelligence shape', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  const response = await makeRequest(address.port, '/api/operator/intelligence');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as { ok: boolean; data: Record<string, unknown> };
+  assert.equal(body.ok, true);
+
+  const data = body.data;
+  // Verify shape
+  assert.ok('recentForm' in data);
+  assert.ok('scoreQuality' in data);
+  assert.ok('decisionQuality' in data);
+  assert.ok('feedbackLoop' in data);
+  assert.ok('insights' in data);
+  assert.ok('observedAt' in data);
+
+  // Verify recentForm structure
+  const recentForm = data['recentForm'] as Record<string, unknown>;
+  for (const key of ['overall', 'capper', 'system', 'approved', 'denied']) {
+    const form = recentForm[key] as Record<string, unknown>;
+    assert.ok('last5' in form, `recentForm.${key} missing last5`);
+    assert.ok('last10' in form, `recentForm.${key} missing last10`);
+    assert.ok('last20' in form, `recentForm.${key} missing last20`);
+    const last5 = form['last5'] as Record<string, unknown>;
+    assert.ok('wins' in last5);
+    assert.ok('losses' in last5);
+    assert.ok('hitRatePct' in last5);
+    assert.ok('roiPct' in last5);
+    assert.ok('streak' in last5);
+  }
+  assert.ok('bySport' in recentForm);
+  assert.ok('bySource' in recentForm);
+
+  // Verify scoreQuality
+  const scoreQuality = data['scoreQuality'] as Record<string, unknown>;
+  assert.ok('bands' in scoreQuality);
+  assert.ok('scoreVsOutcome' in scoreQuality);
+  const scoreVsOutcome = scoreQuality['scoreVsOutcome'] as Record<string, unknown>;
+  assert.ok('correlation' in scoreVsOutcome);
+
+  // Verify decisionQuality
+  const decisionQuality = data['decisionQuality'] as Record<string, unknown>;
+  assert.ok('approvedWinRate' in decisionQuality);
+  assert.ok('deniedWouldHaveWonRate' in decisionQuality);
+  assert.ok('approvedVsDeniedRoiDelta' in decisionQuality);
+  assert.ok('holdsResolvedCount' in decisionQuality);
+  assert.ok('holdsTotal' in decisionQuality);
+
+  // Verify feedbackLoop is an array
+  assert.ok(Array.isArray(data['feedbackLoop']));
+
+  // Verify insights
+  const insights = data['insights'] as Record<string, unknown>;
+  assert.ok('warnings' in insights);
+  assert.ok(Array.isArray(insights['warnings']));
+});

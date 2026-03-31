@@ -35,6 +35,7 @@ import { handleHeldQueueRequest } from './routes/held-queue.js';
 import { handlePickSearchRequest } from './routes/pick-search.js';
 import { handleReviewHistoryRequest } from './routes/review-history.js';
 import { handlePerformanceRequest } from './routes/performance.js';
+import { handleIntelligenceRequest } from './routes/intelligence.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
 
 export interface OperatorHealthSignal {
@@ -418,6 +419,10 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/performance') {
     return handlePerformanceRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/intelligence') {
+    return handleIntelligenceRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/exception-queues') {

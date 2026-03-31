@@ -12,20 +12,32 @@ interface Stats {
   hitRatePct: number;
   roiPct: number;
   avgScore: number | null;
+  avgClvPct: number | null;
+  avgStakeUnits: number | null;
+}
+
+interface NamedInsight {
+  name: string;
+  roiPct: number;
+  sampleSize: number;
 }
 
 interface PerformanceData {
   windows: { today: Stats; last7d: Stats; last30d: Stats; mtd: Stats };
   bySource: { capper: Stats; system: Stats };
   bySport: Record<string, Stats>;
-  decisions: { approved: Stats; denied: Stats; heldCount: number };
+  byIndividualSource: Record<string, Stats>;
+  decisions: { approved: Stats; denied: Stats; held: Stats; heldCount: number };
   insights: {
     capperRoiPct: number;
     systemRoiPct: number;
     approvedRoiPct: number;
     deniedRoiPct: number;
-    topCapper: { name: string; roiPct: number };
-    worstSegment: { name: string; roiPct: number };
+    approvedVsDeniedDelta: number;
+    topCapper: NamedInsight;
+    worstSegment: NamedInsight;
+    strongestSport: NamedInsight;
+    weakestSport: NamedInsight;
   };
 }
 
@@ -103,6 +115,17 @@ function StatCard({ label, stats }: { label: string; stats: Stats | null }) {
         {stats.avgScore != null && (
           <div><span className="text-gray-400">Avg Score</span> <span className="font-bold">{stats.avgScore.toFixed(1)}</span></div>
         )}
+        {stats.avgClvPct != null && (
+          <div>
+            <span className="text-gray-400">CLV%</span>{' '}
+            <span className={`font-bold ${stats.avgClvPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {stats.avgClvPct >= 0 ? '+' : ''}{stats.avgClvPct.toFixed(1)}%
+            </span>
+          </div>
+        )}
+        {stats.avgStakeUnits != null && (
+          <div><span className="text-gray-400">Avg Units</span> <span className="font-bold">{stats.avgStakeUnits.toFixed(1)}</span></div>
+        )}
       </div>
     </div>
   );
@@ -142,13 +165,22 @@ export default async function PerformancePage({
         <StatCard label="Month to Date" stats={perf?.windows.mtd ?? null} />
       </div>
 
-      {/* Source split + Decision outcomes side by side */}
-      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-        <StatCard label="Capper Picks" stats={perf?.bySource.capper ?? null} />
-        <StatCard label="System Picks" stats={perf?.bySource.system ?? null} />
-        <StatCard label="Approved (outcome)" stats={perf?.decisions.approved ?? null} />
-        <StatCard label="Denied (counterfactual)" stats={perf?.decisions.denied ?? null} />
-      </div>
+      {/* Comparative: Source split */}
+      <Card title="Capper vs System">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <StatCard label="Capper Picks" stats={perf?.bySource.capper ?? null} />
+          <StatCard label="System Picks" stats={perf?.bySource.system ?? null} />
+        </div>
+      </Card>
+
+      {/* Comparative: Decision outcomes */}
+      <Card title="Decision Outcomes">
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          <StatCard label="Approved (outcome)" stats={perf?.decisions.approved ?? null} />
+          <StatCard label="Denied (counterfactual)" stats={perf?.decisions.denied ?? null} />
+          <StatCard label="Held (outcome)" stats={perf?.decisions.held ?? null} />
+        </div>
+      </Card>
 
       {/* Sport breakdown */}
       {perf && Object.keys(perf.bySport).length > 0 && (
@@ -156,6 +188,17 @@ export default async function PerformancePage({
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
             {Object.entries(perf.bySport).map(([sport, stats]) => (
               <StatCard key={sport} label={sport} stats={stats} />
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* Per-Source Breakdown */}
+      {perf && Object.keys(perf.byIndividualSource).length > 0 && (
+        <Card title="By Source">
+          <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+            {Object.entries(perf.byIndividualSource).map(([source, stats]) => (
+              <StatCard key={source} label={source} stats={stats} />
             ))}
           </div>
         </Card>
@@ -170,16 +213,23 @@ export default async function PerformancePage({
               value={`System ${perf.insights.systemRoiPct >= 0 ? '+' : ''}${perf.insights.systemRoiPct.toFixed(1)}% / Capper ${perf.insights.capperRoiPct >= 0 ? '+' : ''}${perf.insights.capperRoiPct.toFixed(1)}%`}
             />
             <InsightRow
-              label="Approved vs Denied"
+              label="Approved vs Denied ROI"
               value={`Approved ${perf.insights.approvedRoiPct >= 0 ? '+' : ''}${perf.insights.approvedRoiPct.toFixed(1)}% / Denied ${perf.insights.deniedRoiPct >= 0 ? '+' : ''}${perf.insights.deniedRoiPct.toFixed(1)}%`}
+            />
+            <InsightRow
+              label="Approved vs Denied Delta"
+              value={`${perf.insights.approvedVsDeniedDelta >= 0 ? '+' : ''}${perf.insights.approvedVsDeniedDelta.toFixed(1)}%`}
+              color={perf.insights.approvedVsDeniedDelta > 0 ? 'text-emerald-400' : perf.insights.approvedVsDeniedDelta < 0 ? 'text-red-400' : 'text-gray-300'}
             />
             <InsightRow
               label="Held picks"
               value={`${perf.decisions.heldCount} unresolved`}
               color={perf.decisions.heldCount > 0 ? 'text-yellow-400' : 'text-gray-300'}
             />
-            <InsightRow label="Top capper" value={`${perf.insights.topCapper.name} (${perf.insights.topCapper.roiPct >= 0 ? '+' : ''}${perf.insights.topCapper.roiPct.toFixed(1)}%)`} color="text-emerald-400" />
-            <InsightRow label="Worst segment" value={`${perf.insights.worstSegment.name} (${perf.insights.worstSegment.roiPct >= 0 ? '+' : ''}${perf.insights.worstSegment.roiPct.toFixed(1)}%)`} color="text-red-400" />
+            <InsightRow label="Top source" value={`${perf.insights.topCapper.name} (${perf.insights.topCapper.roiPct >= 0 ? '+' : ''}${perf.insights.topCapper.roiPct.toFixed(1)}%, n=${perf.insights.topCapper.sampleSize})`} color="text-emerald-400" />
+            <InsightRow label="Worst source" value={`${perf.insights.worstSegment.name} (${perf.insights.worstSegment.roiPct >= 0 ? '+' : ''}${perf.insights.worstSegment.roiPct.toFixed(1)}%, n=${perf.insights.worstSegment.sampleSize})`} color="text-red-400" />
+            <InsightRow label="Strongest sport" value={`${perf.insights.strongestSport.name} (${perf.insights.strongestSport.roiPct >= 0 ? '+' : ''}${perf.insights.strongestSport.roiPct.toFixed(1)}%, n=${perf.insights.strongestSport.sampleSize})`} color="text-emerald-400" />
+            <InsightRow label="Weakest sport" value={`${perf.insights.weakestSport.name} (${perf.insights.weakestSport.roiPct >= 0 ? '+' : ''}${perf.insights.weakestSport.roiPct.toFixed(1)}%, n=${perf.insights.weakestSport.sampleSize})`} color="text-red-400" />
           </div>
         </Card>
       )}
