@@ -171,6 +171,7 @@ test('computeAndAttachCLV returns a positive CLV result when pick beats the clos
       status: 'posted',
       posted_at: '2026-03-26T20:05:00.000Z',
       settled_at: null,
+      idempotency_key: null,
       metadata: {
         eventName: 'Player One vs. Defense',
       },
@@ -251,6 +252,7 @@ test('computeAndAttachCLV falls back to event_date cutoff when starts_at is miss
       status: 'posted',
       posted_at: '2026-03-27T20:05:00.000Z',
       settled_at: null,
+      idempotency_key: null,
       metadata: {},
       created_at: '2026-03-27T20:00:00.000Z',
       updated_at: '2026-03-27T20:05:00.000Z',
@@ -329,6 +331,7 @@ test('computeAndAttachCLV logs market mismatches and returns null', async () => 
       status: 'posted',
       posted_at: '2026-03-28T20:05:00.000Z',
       settled_at: null,
+      idempotency_key: null,
       metadata: {},
       created_at: '2026-03-28T20:00:00.000Z',
       updated_at: '2026-03-28T20:05:00.000Z',

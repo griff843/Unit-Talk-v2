@@ -18,7 +18,7 @@ import {
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
-import { processSubmission } from './submission-service.js';
+import { computeSubmissionIdempotencyKey, processSubmission } from './submission-service.js';
 import type { SubmitPickControllerResult } from './controllers/submit-pick-controller.js';
 
 // ─── Enqueue-gap fix tests ────────────────────────────────────────────────────
@@ -1944,4 +1944,68 @@ test('checkExposureGate game limit takes priority over daily limit', () => {
     enabled: true,
   });
   assert.equal(result, 'exposure-game-limit');
+});
+
+// ─── Submission idempotency tests (UTV2-183) ────────────────────────────────
+
+test('duplicate submission returns existing pick without creating a new row', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const payload = {
+    source: 'idempotency-test',
+    market: 'NFL passing yards',
+    selection: 'QB Over 287.5',
+    line: 287.5,
+    odds: -115,
+    confidence: 0.75,
+    eventName: 'NFL Dedup Game',
+    metadata: {
+      sport: 'NFL',
+      promotionScores: { edge: 50, trust: 50, readiness: 50, uniqueness: 50, boardFit: 50 },
+    },
+  };
+
+  const first = await processSubmission(payload, repositories);
+  assert.ok(first.pickRecord.id, 'first submission should create a pick');
+  assert.equal(first.duplicate, undefined, 'first submission is not a duplicate');
+
+  const second = await processSubmission(payload, repositories);
+  assert.equal(second.duplicate, true, 'second submission should be flagged as duplicate');
+  assert.equal(second.pickRecord.id, first.pickRecord.id, 'duplicate returns same pick id');
+
+  // Verify only one pick exists in the repository
+  const stored = await repositories.picks.findPickById(first.pickRecord.id);
+  assert.ok(stored, 'pick should exist');
+  assert.equal(stored?.idempotency_key, computeSubmissionIdempotencyKey({
+    ...payload,
+    market: first.pick.market,
+  }));
+});
+
+test('submissions with different payloads produce different picks', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const first = await processSubmission(
+    {
+      source: 'idempotency-test',
+      market: 'NFL passing yards',
+      selection: 'QB Over 287.5',
+      line: 287.5,
+      odds: -115,
+    },
+    repositories,
+  );
+
+  const second = await processSubmission(
+    {
+      source: 'idempotency-test',
+      market: 'NFL passing yards',
+      selection: 'QB Over 300.5',
+      line: 300.5,
+      odds: -110,
+    },
+    repositories,
+  );
+
+  assert.notEqual(first.pickRecord.id, second.pickRecord.id, 'different payloads create different picks');
+  assert.equal(second.duplicate, undefined, 'different payload is not a duplicate');
 });

@@ -121,7 +121,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
   );
 
   // Fetch open picks for correlation-aware scoring and exposure gate
-  const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
+  const openPickRecords = await pickRepository.listByLifecycleStates(['validated', 'queued', 'posted'], 300);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
 
   // Exposure gate — blocks before scoring if limits exceeded
@@ -362,7 +362,7 @@ async function persistPromotionDecisionForPick(
     selection: canonicalPick.selection,
   });
   // Fetch open picks for correlation-aware scoring
-  const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
+  const openPickRecords = await pickRepository.listByLifecycleStates(['validated', 'queued', 'posted'], 300);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
   const scoreInputs = await readPromotionScoreInputs(
     canonicalPick,
@@ -523,7 +523,6 @@ async function readPromotionScoreInputs(
   let trust = readScore(configured, 'trust', trustFallback);
 
   // Apply CLV feedback adjustment to trust score when repositories are available
-  // Use metadata.capper (canonical capper identity), falling back to pick.source
   if (repositories) {
     const capperIdentity = readMetadataString(pick.metadata, 'capper') || pick.source;
     const clvAdjustment = await computeClvTrustAdjustment(
@@ -752,7 +751,6 @@ export function checkExposureGate(
   openPicks: readonly CanonicalPick[],
   config: ExposureGateConfig,
 ): ExposureGateRejectionReason | null {
-  // Use metadata.capper (canonical capper identity), falling back to pick.source
   const submitter = readMetadataString(pick.metadata, 'capper') || pick.source;
   const pickEventName = readMetadataString(pick.metadata, 'eventName');
 

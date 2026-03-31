@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type {
   CanonicalPick,
   LifecycleEvent,
@@ -41,10 +41,29 @@ export interface SubmissionProcessingResult {
   pickRecord: PickRecord;
   lifecycleEvent: LifecycleEvent;
   lifecycleEventRecord: PickLifecycleRecord;
+  /** True when the submission was deduplicated against an existing pick. */
+  duplicate?: boolean;
 }
 
 function nextSubmissionId() {
   return randomUUID();
+}
+
+/**
+ * Compute a deterministic idempotency key from the submission payload.
+ * Hash of (source + market + selection + line + odds + eventDate/eventName).
+ * Two identical submissions produce the same key, preventing duplicate picks.
+ */
+export function computeSubmissionIdempotencyKey(payload: SubmissionPayload): string {
+  const parts = [
+    payload.source ?? '',
+    payload.market ?? '',
+    payload.selection ?? '',
+    String(payload.line ?? ''),
+    String(payload.odds ?? ''),
+    payload.eventName ?? '',
+  ];
+  return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 32);
 }
 
 export async function processSubmission(
@@ -57,6 +76,54 @@ export async function processSubmission(
   },
 ): Promise<SubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
+
+  // Idempotency check: compute key from normalized payload and check for existing pick.
+  const idempotencyKey = computeSubmissionIdempotencyKey({
+    ...payload,
+    market: normalizedMarketKey,
+  });
+  const existingPick = await repositories.picks.findPickByIdempotencyKey(idempotencyKey);
+  if (existingPick) {
+    // Return idempotent success — no new rows created.
+    const submission = createValidatedSubmission(existingPick.submission_id ?? existingPick.id, {
+      ...payload,
+      market: normalizedMarketKey,
+    });
+    const stubPick: CanonicalPick = {
+      id: existingPick.id,
+      submissionId: existingPick.submission_id ?? existingPick.id,
+      market: existingPick.market,
+      selection: existingPick.selection,
+      line: existingPick.line ?? undefined,
+      odds: existingPick.odds ?? undefined,
+      stakeUnits: existingPick.stake_units ?? undefined,
+      confidence: existingPick.confidence ?? undefined,
+      source: existingPick.source,
+      approvalStatus: existingPick.approval_status as CanonicalPick['approvalStatus'],
+      promotionStatus: existingPick.promotion_status as CanonicalPick['promotionStatus'],
+      promotionTarget: (existingPick.promotion_target ?? undefined) as CanonicalPick['promotionTarget'],
+      lifecycleState: existingPick.status as CanonicalPick['lifecycleState'],
+      metadata: (existingPick.metadata ?? {}) as Record<string, unknown>,
+      createdAt: existingPick.created_at,
+    };
+    return {
+      submission,
+      submissionRecord: { id: existingPick.submission_id ?? existingPick.id } as SubmissionRecord,
+      submissionEventRecord: {} as SubmissionEventRecord,
+      pick: stubPick,
+      pickRecord: existingPick,
+      lifecycleEvent: {
+        pickId: existingPick.id,
+        toState: existingPick.status as CanonicalPick['lifecycleState'],
+        writerRole: 'submitter' as const,
+        reason: 'idempotent-duplicate',
+        createdAt: existingPick.created_at,
+      },
+      lifecycleEventRecord: {} as PickLifecycleRecord,
+      duplicate: true,
+    };
+  }
+
   const submission = createValidatedSubmission(nextSubmissionId(), {
     ...payload,
     market: normalizedMarketKey,
@@ -107,7 +174,7 @@ export async function processSubmission(
       },
       createdAt: submission.receivedAt,
     }),
-    repositories.picks.savePick(enrichedPick),
+    repositories.picks.savePick(enrichedPick, idempotencyKey),
   ]);
 
   // Step 3: lifecycle event (FK → pick) must follow the pick insert.

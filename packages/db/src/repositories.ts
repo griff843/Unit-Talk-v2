@@ -59,7 +59,7 @@ export interface SubmissionRepository {
 }
 
 export interface PickRepository {
-  savePick(pick: CanonicalPick): Promise<PickRecord>;
+  savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord>;
   saveLifecycleEvent(event: LifecycleEvent): Promise<PickLifecycleRecord>;
   updatePickLifecycleState(
     pickId: string,
@@ -67,8 +67,13 @@ export interface PickRepository {
   ): Promise<PickRecord>;
   updateApprovalStatus(pickId: string, status: ApprovalStatus): Promise<PickRecord>;
   findPickById(pickId: string): Promise<PickRecord | null>;
+  findPickByIdempotencyKey(key: string): Promise<PickRecord | null>;
   listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]>;
+  listByLifecycleStates(
+    lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
   ): Promise<PickRecord[]>;
   persistPromotionDecision(

@@ -94,7 +94,7 @@ import {
   type UnitTalkSupabaseClient,
 } from './client.js';
 
-function mapPickToRecord(pick: CanonicalPick): PickRecord {
+function mapPickToRecord(pick: CanonicalPick, idempotencyKey?: string | null): PickRecord {
   return {
     id: pick.id,
     submission_id: pick.submissionId,
@@ -117,6 +117,7 @@ function mapPickToRecord(pick: CanonicalPick): PickRecord {
     status: pick.lifecycleState,
     posted_at: null,
     settled_at: null,
+    idempotency_key: idempotencyKey ?? null,
     metadata: toJsonObject(pick.metadata),
     created_at: pick.createdAt,
     updated_at: pick.createdAt,
@@ -187,8 +188,8 @@ export class InMemoryPickRepository implements PickRepository {
   private readonly lifecycleEvents: PickLifecycleRecord[] = [];
   private readonly promotionHistory: PromotionHistoryRecord[] = [];
 
-  async savePick(pick: CanonicalPick): Promise<PickRecord> {
-    const record = mapPickToRecord(pick);
+  async savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord> {
+    const record = mapPickToRecord(pick, idempotencyKey);
     this.picks.set(record.id, record);
     return record;
   }
@@ -244,6 +245,17 @@ export class InMemoryPickRepository implements PickRepository {
       .filter((pick) => pick.status === lifecycleState)
       .sort((left, right) => left.created_at.localeCompare(right.created_at));
 
+    return limit === undefined ? matches : matches.slice(0, limit);
+  }
+
+  async listByLifecycleStates(
+    lifecycleStates: CanonicalPick['lifecycleState'][],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    const stateSet = new Set(lifecycleStates);
+    const matches = Array.from(this.picks.values())
+      .filter((pick) => stateSet.has(pick.status as CanonicalPick['lifecycleState']))
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
     return limit === undefined ? matches : matches.slice(0, limit);
   }
 
@@ -356,6 +368,15 @@ export class InMemoryPickRepository implements PickRepository {
     };
     this.picks.set(pickId, updated);
     return { claimed: true };
+  }
+
+  async findPickByIdempotencyKey(key: string): Promise<PickRecord | null> {
+    for (const pick of this.picks.values()) {
+      if (pick.idempotency_key === key) {
+        return pick;
+      }
+    }
+    return null;
   }
 }
 
@@ -1308,7 +1329,7 @@ export class DatabasePickRepository implements PickRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async savePick(pick: CanonicalPick): Promise<PickRecord> {
+  async savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord> {
     const { data, error } = await this.client
       .from('picks')
       .insert({
@@ -1333,6 +1354,7 @@ export class DatabasePickRepository implements PickRepository {
         status: pick.lifecycleState,
         posted_at: null,
         settled_at: null,
+        idempotency_key: idempotencyKey ?? null,
         metadata: toJsonObject(pick.metadata),
         created_at: pick.createdAt,
         updated_at: pick.createdAt,
@@ -1452,6 +1474,29 @@ export class DatabasePickRepository implements PickRepository {
 
     if (error) {
       throw new Error(`Failed to list picks by lifecycle state: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listByLifecycleStates(
+    lifecycleStates: CanonicalPick['lifecycleState'][],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    let query = this.client
+      .from('picks')
+      .select('*')
+      .in('status', lifecycleStates)
+      .order('created_at', { ascending: true });
+
+    if (limit !== undefined) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to list picks by lifecycle states: ${error.message}`);
     }
 
     return data ?? [];
@@ -1602,6 +1647,20 @@ export class DatabasePickRepository implements PickRepository {
     }
 
     return { claimed: (data?.length ?? 0) > 0 };
+  }
+
+  async findPickByIdempotencyKey(key: string): Promise<PickRecord | null> {
+    const { data, error } = await this.client
+      .from('picks')
+      .select()
+      .eq('idempotency_key', key)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find pick by idempotency key: ${error.message}`);
+    }
+
+    return data;
   }
 }
 

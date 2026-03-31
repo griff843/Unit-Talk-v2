@@ -723,6 +723,7 @@ export type Database = {
           confidence: number | null
           created_at: string
           id: string
+          idempotency_key: string | null
           line: number | null
           market: string
           metadata: Json
@@ -749,6 +750,7 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           line?: number | null
           market: string
           metadata?: Json
@@ -775,6 +777,7 @@ export type Database = {
           confidence?: number | null
           created_at?: string
           id?: string
+          idempotency_key?: string | null
           line?: number | null
           market?: string
           metadata?: Json

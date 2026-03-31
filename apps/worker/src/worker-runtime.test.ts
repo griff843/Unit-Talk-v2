@@ -283,6 +283,7 @@ class FakePickRepository implements PickRepository {
         status: 'queued',
         posted_at: null,
         settled_at: null,
+        idempotency_key: null,
         metadata: {},
         created_at: now,
         updated_at: now,
@@ -314,6 +315,7 @@ class FakePickRepository implements PickRepository {
       status: pick.lifecycleState,
       posted_at: null,
       settled_at: null,
+      idempotency_key: null,
       metadata: {},
       created_at: now,
       updated_at: now,
@@ -380,6 +382,13 @@ class FakePickRepository implements PickRepository {
     return [];
   }
 
+  async listByLifecycleStates(
+    _lifecycleStates: CanonicalPick['lifecycleState'][],
+    _limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    return [];
+  }
+
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
@@ -432,6 +441,10 @@ class FakePickRepository implements PickRepository {
 
   async claimPickTransition(): Promise<{ claimed: boolean }> {
     return { claimed: false };
+  }
+
+  async findPickByIdempotencyKey(_key: string): Promise<PickRecord | null> {
+    return null;
   }
 
   async insertPromotionHistoryRow(
