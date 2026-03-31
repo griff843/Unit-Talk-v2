@@ -89,18 +89,23 @@ All of the following must be true before cutover is considered open:
 
 ### 4.2 Cutover Decision Rule
 
-Cutover gate is **OPEN** when G1–G8 and G11 are PASS, and G10 is acceptable.
+Cutover gate is **OPEN** when G1–G8, G11, and G12 are PASS, and G10 is acceptable.
 
 G9 (AlertAgent) is not a hard cutover gate — it is post-cutover hardening. Cutover can proceed without AlertAgent live.
 
-### 4.3 Shadow Period (recommended)
+### 4.3 Shadow Validation (G12)
 
-Before declaring cutover open, run V2 in shadow mode alongside legacy for ≥ 1 full week:
-- V2 ingests, grades, and delivers picks independently
-- Compare grading results against legacy for any overlapping games
-- Confirm no pick duplication or routing drift
+Before declaring cutover open, execute the shadow validation plan defined in `docs/05_operations/SHADOW_VALIDATION_PLAN.md`.
 
-Shadow period is recommended but not required if G1–G11 are all PASS and no issues are observed in canary traffic.
+Shadow validation runs V2 alongside V1 for >= 7 calendar days, comparing grading outcomes, CLV, settlement, stats, and routing on overlapping picks. The plan defines per-surface parity thresholds, a discrepancy taxonomy, evidence bundle requirements, and sign-off authority.
+
+| Gate | Requirement | Current Status |
+|------|-------------|----------------|
+| G12 — Shadow validation | Shadow validation sign-off record exists with explicit approval | **OPEN** — plan ratified, execution not started |
+
+Shadow validation is required for cutover. This is a deliberate upgrade from the original "recommended but not required" posture — the existence of a concrete validation plan with measurable thresholds makes the gate enforceable, and proceeding without it leaves grading/settlement correctness unproven on real-world data.
+
+See `SHADOW_VALIDATION_PLAN.md` for the full comparison model, acceptance criteria, and abort conditions.
 
 ---
 
