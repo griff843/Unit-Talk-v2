@@ -19,6 +19,12 @@ export interface DeliveryResult {
 
 export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
 
+/**
+ * Only picks from these sources are eligible for live Discord delivery.
+ * All other sources (proof, test, synthetic) are blocked at claim time.
+ */
+const LIVE_SOURCES = new Set(['smart-form', 'discord', 'api']);
+
 export interface WorkerProcessIdleResult {
   status: 'idle';
   target: string;
@@ -133,6 +139,43 @@ export async function processNextDistributionWork(
         target,
         workerId,
         outbox: skipped,
+        run: completedRun,
+      };
+    }
+
+    // Block non-live sources from delivery (proof, test, synthetic picks)
+    if (pick && !LIVE_SOURCES.has(pick.source)) {
+      await repositories.outbox.markDeadLetter(claimed.id, `proof-pick-blocked: source '${pick.source}' is not a live source`);
+      const completedRun = await repositories.runs.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+          blocked: true,
+          reason: `source '${pick.source}' is not in LIVE_SOURCES`,
+        },
+      });
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.blocked',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+          source: pick.source,
+          reason: 'proof-pick-blocked',
+        },
+      });
+
+      return {
+        status: 'skipped',
+        target,
+        workerId,
+        outbox: { ...claimed, status: 'dead_letter' } as OutboxRecord,
         run: completedRun,
       };
     }

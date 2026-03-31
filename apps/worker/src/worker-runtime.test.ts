@@ -178,6 +178,20 @@ class FakeOutboxRepository implements OutboxRepository {
     return entry;
   }
 
+  async listByPickId(pickId: string): Promise<OutboxRecord[]> {
+    return this.entries.filter((e) => e.pick_id === pickId);
+  }
+
+  async resetForRetry(outboxId: string): Promise<OutboxRecord> {
+    const entry = this.requireEntry(outboxId);
+    entry.status = 'pending';
+    entry.attempt_count = 0;
+    entry.last_error = null;
+    entry.claimed_at = null;
+    entry.claimed_by = null;
+    return entry;
+  }
+
   private requireEntry(outboxId: string) {
     const entry = this.entries.find((candidate) => candidate.id === outboxId);
     if (!entry) {
@@ -342,6 +356,14 @@ class FakePickRepository implements PickRepository {
       updated_at: now,
     };
 
+    this.picks.set(pickId, updated);
+    return updated;
+  }
+
+  async updateApprovalStatus(pickId: string, approvalStatus: string): Promise<PickRecord> {
+    const existing = this.picks.get(pickId);
+    if (!existing) throw new Error(`Pick not found: ${pickId}`);
+    const updated: PickRecord = { ...existing, approval_status: approvalStatus, updated_at: new Date().toISOString() };
     this.picks.set(pickId, updated);
     return updated;
   }
@@ -532,6 +554,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       audit,
       referenceData: {} as RepositoryBundle['referenceData'],
       tiers: {} as RepositoryBundle['tiers'],
+      reviews: {} as RepositoryBundle['reviews'],
     },
     picks,
     receipts,
