@@ -157,7 +157,7 @@ class FakeOutboxRepository implements OutboxRepository {
     nextAttemptAt?: string | undefined,
   ): Promise<OutboxRecord> {
     const entry = this.requireEntry(outboxId);
-    entry.status = 'failed';
+    entry.status = 'pending';
     entry.last_error = errorMessage;
     entry.next_attempt_at = nextAttemptAt ?? null;
     entry.attempt_count += 1;
@@ -688,8 +688,11 @@ test('processNextDistributionWork marks work failed and records audit', async ()
 
   assert.equal(result.status, 'failed');
   if (result.status === 'failed') {
-    assert.equal(result.outbox.status, 'failed');
+    assert.equal(result.outbox.status, 'pending');
     assert.equal(result.outbox.attempt_count, 1);
+    assert.equal(result.outbox.claimed_by, null);
+    assert.equal(result.outbox.claimed_at, null);
+    assert.ok(result.outbox.next_attempt_at, 'next_attempt_at must be set for retry backoff');
   }
   assert.equal(runs.records[0]?.status, 'failed');
   assert.ok(runs.records[0]?.finished_at != null, 'finished_at must be set on failed run');
@@ -697,7 +700,7 @@ test('processNextDistributionWork marks work failed and records audit', async ()
     new Date(runs.records[0]!.finished_at!) >= new Date(runs.records[0]!.started_at),
     `finished_at must not be earlier than started_at (clock skew regression)`,
   );
-  assert.equal(audit.records[0]?.action, 'distribution.failed');
+  assert.equal(audit.records[0]?.action, 'distribution.retry_scheduled');
 });
 
 test('processNextDistributionWork immediately dead-letters terminal delivery failures', async () => {
@@ -756,14 +759,17 @@ test('processNextDistributionWork retries normally on retryable delivery failure
 
   assert.equal(result.status, 'failed');
   if (result.status === 'failed') {
-    assert.equal(result.outbox.status, 'failed');
+    assert.equal(result.outbox.status, 'pending');
     assert.equal(result.outbox.attempt_count, 2);
     assert.equal(result.outbox.last_error, 'HTTP 429: rate limited');
+    assert.equal(result.outbox.claimed_by, null);
+    assert.equal(result.outbox.claimed_at, null);
+    assert.ok(result.outbox.next_attempt_at, 'next_attempt_at must be set for retry backoff');
   }
   const pick = await picks.findPickById(outboxRecord.pick_id);
   assert.equal(pick?.status, 'queued', 'pick must remain queued on retryable failure');
   assert.equal(runs.records[0]?.status, 'failed');
-  assert.equal(audit.records[0]?.action, 'distribution.failed');
+  assert.equal(audit.records[0]?.action, 'distribution.retry_scheduled');
 });
 
 test('processNextDistributionWork promotes the outbox row to dead_letter after the third failure', async () => {
@@ -793,7 +799,7 @@ test('processNextDistributionWork promotes the outbox row to dead_letter after t
   );
 });
 
-test('processNextDistributionWork keeps the row failed before the dead_letter threshold', async () => {
+test('processNextDistributionWork resets row to pending with backoff before the dead_letter threshold', async () => {
   const { repositories, audit } = createWorkerTestRepositories([
     createOutboxRecord('discord:retry', { attempt_count: 1 }),
   ]);
@@ -809,11 +815,14 @@ test('processNextDistributionWork keeps the row failed before the dead_letter th
 
   assert.equal(result.status, 'failed');
   if (result.status === 'failed') {
-    assert.equal(result.outbox.status, 'failed');
+    assert.equal(result.outbox.status, 'pending');
     assert.equal(result.outbox.attempt_count, 2);
     assert.equal(result.outbox.last_error, 'retryable failure');
+    assert.equal(result.outbox.claimed_by, null);
+    assert.equal(result.outbox.claimed_at, null);
+    assert.ok(result.outbox.next_attempt_at, 'next_attempt_at must be set for retry backoff');
   }
-  assert.equal(audit.records[0]?.action, 'distribution.failed');
+  assert.equal(audit.records[0]?.action, 'distribution.retry_scheduled');
 });
 
 test('processNextDistributionWork marks dead_letter rows without delivering again once promotion occurs', async () => {

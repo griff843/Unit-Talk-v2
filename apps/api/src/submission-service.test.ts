@@ -607,7 +607,7 @@ test('failDistributionWork marks claimed work failed and increments attempt coun
     'discord unavailable',
   );
 
-  assert.equal(failed.status, 'failed');
+  assert.equal(failed.status, 'pending');
   assert.equal(failed.attempt_count, 1);
   assert.equal(failed.last_error, 'discord unavailable');
   assert.equal(failed.claimed_by, null);

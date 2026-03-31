@@ -432,19 +432,20 @@ export class InMemoryOutboxRepository implements OutboxRepository {
   }
 
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
+    const now = new Date().toISOString();
     const next = this.entries.find(
       (entry) =>
         entry.target === target &&
         entry.status === 'pending' &&
         entry.claimed_at === null &&
-        entry.claimed_by === null,
+        entry.claimed_by === null &&
+        (entry.next_attempt_at === null || entry.next_attempt_at <= now),
     );
 
     if (!next) {
       return null;
     }
 
-    const now = new Date().toISOString();
     next.status = 'processing';
     next.claimed_at = now;
     next.claimed_by = workerId;
@@ -519,7 +520,7 @@ export class InMemoryOutboxRepository implements OutboxRepository {
       throw new Error(`Outbox record not found: ${outboxId}`);
     }
 
-    existing.status = 'failed';
+    existing.status = 'pending';
     existing.last_error = errorMessage;
     existing.next_attempt_at = nextAttemptAt ?? null;
     existing.attempt_count += 1;
@@ -1735,6 +1736,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
   }
 
   async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
+    const now = new Date().toISOString();
     const { data: pending, error: selectError } = await this.client
       .from('distribution_outbox')
       .select()
@@ -1742,6 +1744,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .eq('status', 'pending')
       .is('claimed_at', null)
       .is('claimed_by', null)
+      .or(`next_attempt_at.is.null,next_attempt_at.lte.${now}`)
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
@@ -1754,12 +1757,12 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       return null;
     }
 
-    const now = new Date().toISOString();
+    const claimTime = new Date().toISOString();
     const { data, error } = await this.client
       .from('distribution_outbox')
       .update({
         status: 'processing',
-        claimed_at: now,
+        claimed_at: claimTime,
         claimed_by: workerId,
       })
       .eq('id', pending.id)
@@ -1876,7 +1879,7 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     const { data, error } = await this.client
       .from('distribution_outbox')
       .update({
-        status: 'failed',
+        status: 'pending',
         last_error: errorMessage,
         next_attempt_at: nextAttemptAt ?? null,
         attempt_count: existing.attempt_count + 1,

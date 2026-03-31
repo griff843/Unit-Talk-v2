@@ -335,94 +335,55 @@ export async function processNextDistributionWork(
       });
     }
 
-    // --- Post-send reconciliation ---
-    // Once Discord confirms delivery (status='sent'), the message IS sent.
-    // Any failure from this point on is a bookkeeping problem, NOT a delivery
-    // failure. We must NEVER downgrade the outbox row to failed/dead_letter
-    // after a successful send. If bookkeeping fails, we log a structured error
-    // and leave the row in 'processing' state for the stale-claim reaper to
-    // reconcile later.
-    try {
-      const sent = await repositories.outbox.markSent(claimed.id);
-      const postedTransition = await transitionPickLifecycle(
-        repositories.picks,
-        claimed.pick_id,
-        'posted',
-        'downstream delivery confirmed',
-        'poster',
-      );
-      const receipt = await repositories.receipts.record({
+    const sent = await repositories.outbox.markSent(claimed.id);
+    const postedTransition = await transitionPickLifecycle(
+      repositories.picks,
+      claimed.pick_id,
+      'posted',
+      'downstream delivery confirmed',
+      'poster',
+    );
+    const receipt = await repositories.receipts.record({
+      outboxId: claimed.id,
+      receiptType: delivery.receiptType,
+      status: delivery.status,
+      channel: delivery.channel,
+      externalId: delivery.externalId,
+      idempotencyKey: delivery.idempotencyKey,
+      payload: delivery.payload,
+    });
+    const completedRun = await repositories.runs.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: {
         outboxId: claimed.id,
-        receiptType: delivery.receiptType,
-        status: delivery.status,
-        channel: delivery.channel,
-        externalId: delivery.externalId,
-        idempotencyKey: delivery.idempotencyKey,
-        payload: delivery.payload,
-      });
-      const completedRun = await repositories.runs.completeRun({
-        runId: run.id,
-        status: 'succeeded',
-        details: {
-          outboxId: claimed.id,
-          receiptId: receipt.id,
-          target,
-          postedLifecycleEventId: postedTransition.lifecycleEvent.id,
-        },
-      });
-      await recordWorkerAudit(repositories.audit, {
-        entityType: 'distribution_outbox',
-        entityId: claimed.id,
-        action: 'distribution.sent',
-        actor: workerId,
-        payload: {
-          outboxId: claimed.id,
-          receiptId: receipt.id,
-          target,
-          pickId: claimed.pick_id,
-          postedLifecycleEventId: postedTransition.lifecycleEvent.id,
-        },
-      });
-
-      return {
-        status: 'sent',
+        receiptId: receipt.id,
         target,
-        workerId,
-        outbox: sent,
-        receipt,
-        run: completedRun,
-      };
-    } catch (bookkeepingError) {
-      // Post-send bookkeeping failed. The Discord message was already delivered
-      // successfully, so we must NOT mark the outbox as failed or dead_letter.
-      // Log a structured error and leave the row in 'processing' — the stale
-      // claim reaper will pick it up for reconciliation.
-      const errorMessage = bookkeepingError instanceof Error
-        ? bookkeepingError.message
-        : 'unknown bookkeeping error';
-      console.error(JSON.stringify({
-        level: 'error',
-        event: 'post_send_bookkeeping_failure',
+        postedLifecycleEventId: postedTransition.lifecycleEvent.id,
+      },
+    });
+    await recordWorkerAudit(repositories.audit, {
+      entityType: 'distribution_outbox',
+      entityId: claimed.id,
+      action: 'distribution.sent',
+      actor: workerId,
+      payload: {
         outboxId: claimed.id,
+        receiptId: receipt.id,
         target,
         pickId: claimed.pick_id,
-        discordMessageId: delivery.externalId ?? null,
-        workerId,
-        error: errorMessage,
-        message: 'Discord delivery confirmed but post-send bookkeeping failed. Row left in processing for stale-claim reaper.',
-      }));
+        postedLifecycleEventId: postedTransition.lifecycleEvent.id,
+      },
+    });
 
-      // Return sent status — from the caller's perspective the delivery succeeded.
-      // The receipt/run/audit data may be incomplete, but the message reached Discord.
-      return {
-        status: 'sent',
-        target,
-        workerId,
-        outbox: { ...claimed, status: 'processing' } as OutboxRecord,
-        receipt: { id: 'bookkeeping-failed', outboxId: claimed.id } as unknown as ReceiptRecord,
-        run,
-      };
-    }
+    return {
+      status: 'sent',
+      target,
+      workerId,
+      outbox: sent,
+      receipt,
+      run: completedRun,
+    };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'unknown delivery error';
     return handleFailedDelivery({
@@ -484,6 +445,18 @@ function withWatchdog<T>(promise: Promise<T>, watchdogMs: number): Promise<T> {
   });
 }
 
+/** Base delay for exponential backoff in milliseconds (5 seconds). */
+const RETRY_BASE_DELAY_MS = 5_000;
+
+/** Maximum number of retry attempts before dead-lettering. */
+const MAX_RETRY_ATTEMPTS = 3;
+
+function computeNextAttemptAt(attemptCount: number): string {
+  // Exponential backoff: 5s, 10s, 20s, ...
+  const delayMs = RETRY_BASE_DELAY_MS * Math.pow(2, attemptCount);
+  return new Date(Date.now() + delayMs).toISOString();
+}
+
 async function handleFailedDelivery(input: {
   repositories: RepositoryBundle;
   runId: string;
@@ -493,14 +466,103 @@ async function handleFailedDelivery(input: {
   errorMessage: string;
   deadLetterImmediately: boolean;
 }): Promise<WorkerProcessFailureResult> {
-  const failed = input.deadLetterImmediately
-    ? null
-    : await input.repositories.outbox.markFailed(input.claimed.id, input.errorMessage);
-  const shouldDeadLetter =
-    input.deadLetterImmediately || (failed?.attempt_count ?? 0) >= 3;
-  const finalOutbox = shouldDeadLetter
-    ? await input.repositories.outbox.markDeadLetter(input.claimed.id, input.errorMessage)
-    : failed!;
+  if (input.deadLetterImmediately) {
+    // Terminal failure: dead-letter immediately
+    const finalOutbox = await input.repositories.outbox.markDeadLetter(
+      input.claimed.id,
+      input.errorMessage,
+    );
+    const completedRun = await input.repositories.runs.completeRun({
+      runId: input.runId,
+      status: 'failed',
+      details: {
+        outboxId: input.claimed.id,
+        target: input.target,
+        error: input.errorMessage,
+        deadLettered: true,
+        terminalFailure: true,
+      },
+    });
+    await recordWorkerAudit(input.repositories.audit, {
+      entityType: 'distribution_outbox',
+      entityId: input.claimed.id,
+      action: 'distribution.dead_lettered',
+      actor: input.workerId,
+      payload: {
+        outboxId: input.claimed.id,
+        target: input.target,
+        error: input.errorMessage,
+        deadLettered: true,
+        terminalFailure: true,
+      },
+    });
+
+    return {
+      status: 'failed',
+      target: input.target,
+      workerId: input.workerId,
+      outbox: finalOutbox,
+      run: completedRun,
+    };
+  }
+
+  // Retryable failure: increment attempt_count and compute backoff
+  const currentAttempt = (input.claimed.attempt_count ?? 0) + 1;
+  const nextAttemptAt = computeNextAttemptAt(currentAttempt);
+
+  // markFailed sets status to 'pending', clears claimed_by/claimed_at,
+  // increments attempt_count, and sets next_attempt_at for backoff
+  const failed = await input.repositories.outbox.markFailed(
+    input.claimed.id,
+    input.errorMessage,
+    nextAttemptAt,
+  );
+
+  const shouldDeadLetter = failed.attempt_count >= MAX_RETRY_ATTEMPTS;
+
+  if (shouldDeadLetter) {
+    const finalOutbox = await input.repositories.outbox.markDeadLetter(
+      input.claimed.id,
+      input.errorMessage,
+    );
+    const completedRun = await input.repositories.runs.completeRun({
+      runId: input.runId,
+      status: 'failed',
+      details: {
+        outboxId: input.claimed.id,
+        target: input.target,
+        error: input.errorMessage,
+        attemptCount: failed.attempt_count,
+        deadLettered: true,
+        terminalFailure: false,
+      },
+    });
+    await recordWorkerAudit(input.repositories.audit, {
+      entityType: 'distribution_outbox',
+      entityId: input.claimed.id,
+      action: 'distribution.dead_lettered',
+      actor: input.workerId,
+      payload: {
+        outboxId: input.claimed.id,
+        target: input.target,
+        error: input.errorMessage,
+        attemptCount: failed.attempt_count,
+        deadLettered: true,
+        terminalFailure: false,
+        reason: `exceeded ${MAX_RETRY_ATTEMPTS} retry attempts`,
+      },
+    });
+
+    return {
+      status: 'failed',
+      target: input.target,
+      workerId: input.workerId,
+      outbox: finalOutbox,
+      run: completedRun,
+    };
+  }
+
+  // Row is now pending with backoff — log the retry transition
   const completedRun = await input.repositories.runs.completeRun({
     runId: input.runId,
     status: 'failed',
@@ -508,21 +570,25 @@ async function handleFailedDelivery(input: {
       outboxId: input.claimed.id,
       target: input.target,
       error: input.errorMessage,
-      deadLettered: shouldDeadLetter,
-      terminalFailure: input.deadLetterImmediately,
+      attemptCount: failed.attempt_count,
+      nextAttemptAt,
+      deadLettered: false,
+      terminalFailure: false,
+      retryScheduled: true,
     },
   });
   await recordWorkerAudit(input.repositories.audit, {
     entityType: 'distribution_outbox',
     entityId: input.claimed.id,
-    action: shouldDeadLetter ? 'distribution.dead_lettered' : 'distribution.failed',
+    action: 'distribution.retry_scheduled',
     actor: input.workerId,
     payload: {
       outboxId: input.claimed.id,
       target: input.target,
       error: input.errorMessage,
-      deadLettered: shouldDeadLetter,
-      terminalFailure: input.deadLetterImmediately,
+      attemptCount: failed.attempt_count,
+      nextAttemptAt,
+      retryScheduled: true,
     },
   });
 
@@ -530,7 +596,7 @@ async function handleFailedDelivery(input: {
     status: 'failed',
     target: input.target,
     workerId: input.workerId,
-    outbox: finalOutbox,
+    outbox: failed,
     run: completedRun,
   };
 }
