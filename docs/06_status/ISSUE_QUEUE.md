@@ -1,7 +1,7 @@
 # Unit Talk V2 — Issue Queue
 
-> **Queue is source of truth for state.** Linear mirrors it. Git branches are named `{lane}/{LINEAR_ID}-{slug}`.
-> One issue = one branch = one PR. No stacking.
+> **DEPRECATED 2026-03-31.** This file is a historical record. **Linear is the live execution queue.** This file is updated after merges as a repo-native record but does not determine what to work on.
+> Git branches are named `{lane}/{LINEAR_ID}-{slug}`. One issue = one branch = one PR. No stacking.
 
 ## Queue Health
 

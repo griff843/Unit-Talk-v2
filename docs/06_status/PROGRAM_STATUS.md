@@ -3,7 +3,7 @@
 > Canonical high-level status authority for Unit Talk V2.
 > Adopted 2026-03-21. Replaces `status_source_of_truth.md`, `current_phase.md`, and `next_build_order.md`.
 > Operating model: `docs/05_operations/SPRINT_MODEL_v2.md`
-> **Operational work queue (active/ready/blocked/done): `docs/06_status/ISSUE_QUEUE.md`**
+> **Operational work queue: Linear (live) | `docs/06_status/ISSUE_QUEUE.md` (historical record)**
 
 ## Last Updated
 
@@ -320,7 +320,7 @@ These files are no longer maintained and should not be used as current-state tru
 
 | Purpose | File |
 |---------|------|
-| **Operational work queue** | `docs/06_status/ISSUE_QUEUE.md` |
+| **Operational work queue** | Linear (live queue) — `docs/06_status/ISSUE_QUEUE.md` is historical record only |
 | **Active program status** | this file |
 | Operating model | `docs/05_operations/SPRINT_MODEL_v2.md` |
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
@@ -341,6 +341,6 @@ These files are no longer maintained and should not be used as current-state tru
 
 Update at **T1/T2 sprint close only**. Update: milestone summary, key capabilities, open risks.
 
-**T3 sprints:** update `ISSUE_QUEUE.md` (mark DONE) only. No `PROGRAM_STATUS.md` update required.
+**T3 sprints:** update Linear (mark DONE) only. No `PROGRAM_STATUS.md` update required.
 
-Active lane state lives in `ISSUE_QUEUE.md`. Do not duplicate it here.
+Active lane state lives in Linear. `ISSUE_QUEUE.md` is a historical record — do not use it as the live queue.

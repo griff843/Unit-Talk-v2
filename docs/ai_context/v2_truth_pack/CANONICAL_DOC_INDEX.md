@@ -1,5 +1,7 @@
 # Unit Talk V2 — Canonical Document Index
 
+> **SUPERSEDED 2026-03-31.** This file is a historical snapshot. The authoritative document index is `docs/05_operations/docs_authority_map.md`. Do not use this file for current-state decisions.
+
 > Generated: 2026-03-24.
 > Lists every authority document, its role, and whether it is actively maintained.
 

@@ -1,5 +1,7 @@
 # Unit Talk V2 — Current System Truth
 
+> **SUPERSEDED 2026-03-31.** This file is a historical snapshot from 2026-03-24. The current system truth authority is `docs/06_status/PROGRAM_STATUS.md`. Do not use this file for current-state decisions.
+
 > Generated: 2026-03-24. Grounded in live repo inspection.
 > This is a handoff document for AI assistants (ChatGPT, Claude, etc.) entering cold sessions.
 > All values are from actual source files, not inferred from history or docs alone.
