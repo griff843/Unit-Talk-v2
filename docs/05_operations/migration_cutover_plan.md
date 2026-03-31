@@ -75,15 +75,15 @@ All of the following must be true before cutover is considered open:
 
 | Gate | Requirement | Current Status |
 |------|-------------|----------------|
-| G1 — Test suite | `pnpm verify` exits 0; ≥ 692 tests passing | **PASS** — 692/692 at `532e753` |
+| G1 — Test suite | `pnpm verify` exits 0; ≥ 692 tests passing | **PASS** — verified 2026-03-31 |
 | G2 — Submission path live | `POST /api/submissions` accepts and persists picks | **PASS** — live |
 | G3 — Promotion + delivery live | Qualified picks reach `discord:best-bets` | **PASS** — live |
 | G4 — Grading live | `POST /api/grading/run` grades against `game_results` | **PASS** — live (UTV2-69) |
 | G5 — Settlement live | Settlement write path, correction chain, CLV | **PASS** — live |
 | G6 — Operator surface live | `/api/operator/snapshot` reflects real system state | **PASS** — live |
 | G7 — Bot commands live | `/stats`, `/leaderboard`, `/pick`, `/help`, `/recap` | **PASS** — 5 commands registered |
-| G8 — Recap routing correct | Scheduled recaps posting to `discord:recaps` (not best-bets) | **OPEN** — pending UTV2-90 |
-| G9 — AlertAgent live | Line movement detection + notification layer | **OPEN** — detection done (UTV2-59); notification layer pending (UTV2-59b) |
+| G8 — Recap routing correct | Scheduled recaps posting to `discord:recaps` (not best-bets) | **PASS** — UTV2-90 DONE (PR #53). DB-backed idempotency (UTV2-170). |
+| G9 — AlertAgent live | Line movement detection + notification layer | **PASS** — detection (UTV2-59 PR #48) + notification (UTV2-114 PR #55) both live. Post-cutover hardening only. |
 | G10 — Dead-letter health | No `dead_letter` rows in `distribution_outbox` | Monitor — acceptable if < 3 |
 | G11 — Rollback plan ratified | This document exists and is current | **PASS** — this document |
 
