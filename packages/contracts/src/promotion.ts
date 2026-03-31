@@ -329,39 +329,105 @@ export interface TargetRegistryEntry {
   target: PromotionTarget;
   enabled: boolean;
   disabledReason?: string;
+  /** Percentage of picks delivered to this target (0-100). Default 100. */
+  rolloutPct: number;
+  /** Optional sport filter. When set, only picks with a matching sport are delivered. */
+  sportFilter?: string[];
 }
 
 export const defaultTargetRegistry: TargetRegistryEntry[] = [
-  { target: 'best-bets', enabled: true },
-  { target: 'trader-insights', enabled: true },
+  { target: 'best-bets', enabled: true, rolloutPct: 100 },
+  { target: 'trader-insights', enabled: true, rolloutPct: 100 },
   {
     target: 'exclusive-insights',
     enabled: false,
     disabledReason: 'Activation contract required before live delivery',
+    rolloutPct: 100,
   },
 ];
 
+/**
+ * Rollout config override shape parsed from UNIT_TALK_ROLLOUT_CONFIG env var.
+ * Example JSON: { "best-bets": { "rolloutPct": 50, "sportFilter": ["NBA","NFL"] } }
+ */
+export interface RolloutConfigOverride {
+  rolloutPct?: number;
+  sportFilter?: string[];
+}
+
+/**
+ * Parse UNIT_TALK_ROLLOUT_CONFIG env var and return per-target overrides.
+ * Returns an empty record when the env var is absent or unparseable.
+ */
+export function resolveRolloutConfig(
+  env: { UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env,
+): Record<string, RolloutConfigOverride> {
+  const raw = env.UNIT_TALK_ROLLOUT_CONFIG;
+  if (!raw) return {};
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    const result: Record<string, RolloutConfigOverride> = {};
+    for (const [key, value] of Object.entries(parsed as Record<string, unknown>)) {
+      if (!value || typeof value !== 'object' || Array.isArray(value)) continue;
+      const v = value as Record<string, unknown>;
+      const override: RolloutConfigOverride = {};
+      if (typeof v['rolloutPct'] === 'number') {
+        override.rolloutPct = Math.max(0, Math.min(100, v['rolloutPct']));
+      }
+      if (Array.isArray(v['sportFilter'])) {
+        override.sportFilter = (v['sportFilter'] as unknown[]).filter(
+          (s): s is string => typeof s === 'string',
+        );
+      }
+      result[key] = override;
+    }
+    return result;
+  } catch {
+    return {};
+  }
+}
+
 export function resolveTargetRegistry(
-  env: { UNIT_TALK_ENABLED_TARGETS?: string } = process.env,
+  env: { UNIT_TALK_ENABLED_TARGETS?: string; UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env,
 ): TargetRegistryEntry[] {
   const raw = env.UNIT_TALK_ENABLED_TARGETS;
+  let registry: TargetRegistryEntry[];
+
   if (!raw) {
-    return defaultTargetRegistry;
+    registry = defaultTargetRegistry.map((entry) => ({ ...entry }));
+  } else {
+    const explicitlyEnabled = new Set(
+      raw.split(',').map((t) => t.trim()).filter(Boolean),
+    );
+
+    registry = promotionTargets.map((target) => ({
+      target,
+      enabled: explicitlyEnabled.has(target),
+      rolloutPct: 100,
+      ...(explicitlyEnabled.has(target)
+        ? {}
+        : {
+            disabledReason: `Not listed in UNIT_TALK_ENABLED_TARGETS (${raw})`,
+          }),
+    }));
   }
 
-  const explicitlyEnabled = new Set(
-    raw.split(',').map((t) => t.trim()).filter(Boolean),
-  );
+  // Merge rollout config overrides
+  const rolloutConfig = resolveRolloutConfig(env);
+  for (const entry of registry) {
+    const override = rolloutConfig[entry.target];
+    if (!override) continue;
+    if (override.rolloutPct !== undefined) {
+      entry.rolloutPct = override.rolloutPct;
+    }
+    if (override.sportFilter !== undefined) {
+      entry.sportFilter = override.sportFilter;
+    }
+  }
 
-  return promotionTargets.map((target) => ({
-    target,
-    enabled: explicitlyEnabled.has(target),
-    ...(explicitlyEnabled.has(target)
-      ? {}
-      : {
-          disabledReason: `Not listed in UNIT_TALK_ENABLED_TARGETS (${raw})`,
-        }),
-  }));
+  return registry;
 }
 
 export function isTargetEnabled(
@@ -370,4 +436,62 @@ export function isTargetEnabled(
 ): boolean {
   const entry = registry.find((e) => e.target === target);
   return entry?.enabled ?? false;
+}
+
+/**
+ * Deterministic FNV-1a 32-bit hash. Same input always produces same output.
+ */
+export function fnv1aHash(input: string): number {
+  let hash = 0x811c9dc5; // FNV offset basis
+  for (let i = 0; i < input.length; i++) {
+    hash ^= input.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193); // FNV prime
+  }
+  return hash >>> 0; // unsigned 32-bit
+}
+
+export type RolloutSkipReason = 'rollout-pct' | 'sport-filter';
+
+export interface RolloutCheckResult {
+  allowed: boolean;
+  skipReason?: RolloutSkipReason;
+}
+
+/**
+ * Check whether a pick should be delivered to a target based on rollout controls.
+ * @param pickId - The pick ID
+ * @param target - The target name (e.g. 'best-bets')
+ * @param pickSport - The sport from the pick metadata (may be null/undefined)
+ * @param registry - The resolved target registry
+ */
+export function checkRolloutControls(
+  pickId: string,
+  target: string,
+  pickSport: string | null | undefined,
+  registry: TargetRegistryEntry[],
+): RolloutCheckResult {
+  const entry = registry.find((e) => e.target === target);
+  if (!entry) return { allowed: true };
+
+  // Sport filter check
+  if (entry.sportFilter && entry.sportFilter.length > 0) {
+    if (!pickSport || !entry.sportFilter.includes(pickSport)) {
+      return { allowed: false, skipReason: 'sport-filter' };
+    }
+  }
+
+  // Rollout percentage check
+  if (entry.rolloutPct <= 0) {
+    return { allowed: false, skipReason: 'rollout-pct' };
+  }
+  if (entry.rolloutPct >= 100) {
+    return { allowed: true };
+  }
+
+  const bucket = fnv1aHash(`${pickId}:${target}`) % 100;
+  if (bucket >= entry.rolloutPct) {
+    return { allowed: false, skipReason: 'rollout-pct' };
+  }
+
+  return { allowed: true };
 }

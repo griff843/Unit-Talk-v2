@@ -108,6 +108,36 @@ function renderActiveIncidentsSection(incidents: OperatorIncident[]): string {
     </section>`;
 }
 
+function renderRolloutConfigSection(snapshot: OperatorSnapshot): string {
+  if (!snapshot.rolloutConfig || snapshot.rolloutConfig.length === 0) return '';
+
+  const hasPartialRollout = snapshot.rolloutConfig.some((entry) => entry.rolloutPct < 100);
+  const headerNote = hasPartialRollout
+    ? ' <span class="badge badge-degraded">PARTIAL ROLLOUT ACTIVE</span>'
+    : '';
+
+  const rows = snapshot.rolloutConfig
+    .map(
+      (entry) =>
+        `<tr>
+          <td><code>${escapeHtml(entry.target)}</code></td>
+          <td><code>${escapeHtml(String(entry.enabled))}</code></td>
+          <td><code>${escapeHtml(String(entry.rolloutPct))}%</code>${entry.rolloutPct < 100 ? ' <span class="badge badge-degraded">partial</span>' : ''}</td>
+          <td><code>${entry.sportFilter && entry.sportFilter.length > 0 ? escapeHtml(entry.sportFilter.join(', ')) : 'all'}</code></td>
+          <td><code>${escapeHtml(String(entry.skippedCount))}</code></td>
+        </tr>`,
+    )
+    .join('');
+
+  return `<section>
+        <h2>Rollout Controls${headerNote}</h2>
+        <table>
+          <thead><tr><th>Target</th><th>Enabled</th><th>Rollout %</th><th>Sport Filter</th><th>Skipped (recent)</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </section>`;
+}
+
 export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
   const degradedSignals = snapshot.health.filter(
     (s) => s.status === 'degraded' || s.status === 'down',
@@ -617,6 +647,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       </section>
       ${upcomingEventsSection}
       ${lastIngestCycleSection}
+      ${renderRolloutConfigSection(snapshot)}
       ${canaryReadinessSection}
       ${bestBetsHealthSection}
       ${traderInsightsHealthSection}

@@ -6,6 +6,7 @@ import type {
   SystemRunRecord,
 } from '@unit-talk/db';
 import { transitionPickLifecycle } from '@unit-talk/db';
+import { checkRolloutControls, type TargetRegistryEntry } from '@unit-talk/contracts';
 
 export interface DeliveryResult {
   receiptType: string;
@@ -90,13 +91,24 @@ export interface WorkerProcessTargetDisabledResult {
   workerId: string;
 }
 
+export interface WorkerProcessRolloutSkipResult {
+  status: 'rollout-skip';
+  target: string;
+  workerId: string;
+  outbox: OutboxRecord;
+  receipt: ReceiptRecord;
+  run: SystemRunRecord;
+  reason: 'rollout-pct' | 'sport-filter';
+}
+
 export type WorkerProcessResult =
   | WorkerProcessIdleResult
   | WorkerProcessSuccessResult
   | WorkerProcessSkippedResult
   | WorkerProcessFailureResult
   | WorkerProcessCircuitOpenResult
-  | WorkerProcessTargetDisabledResult;
+  | WorkerProcessTargetDisabledResult
+  | WorkerProcessRolloutSkipResult;
 
 export async function processNextDistributionWork(
   repositories: RepositoryBundle,
@@ -106,6 +118,7 @@ export async function processNextDistributionWork(
   options: {
     heartbeatMs?: number;
     watchdogMs?: number;
+    targetRegistry?: TargetRegistryEntry[];
   } = {},
 ): Promise<WorkerProcessResult> {
   const claimed = await repositories.outbox.claimNext(target, workerId);
@@ -239,6 +252,55 @@ export async function processNextDistributionWork(
         outbox: { ...claimed, status: 'dead_letter' } as OutboxRecord,
         run: completedRun,
       };
+    }
+
+    // Rollout controls check
+    if (options.targetRegistry) {
+      const promotionTarget = target.startsWith('discord:') ? target.slice('discord:'.length) : target;
+      const pickSport = typeof pickMetadata?.['sport'] === 'string' ? pickMetadata['sport'] : null;
+      const rolloutCheck = checkRolloutControls(claimed.pick_id, promotionTarget, pickSport, options.targetRegistry);
+      if (!rolloutCheck.allowed) {
+        const sent = await repositories.outbox.markSent(claimed.id);
+        const receipt = await repositories.receipts.record({
+          outboxId: claimed.id,
+          receiptType: 'worker.rollout-skip',
+          status: 'sent',
+          channel: `rollout-skip:${target}`,
+          payload: { reason: rolloutCheck.skipReason, pickId: claimed.pick_id, target },
+        });
+        const completedRun = await repositories.runs.completeRun({
+          runId: run.id,
+          status: 'succeeded',
+          details: {
+            outboxId: claimed.id,
+            target,
+            pickId: claimed.pick_id,
+            rolloutSkip: true,
+            reason: rolloutCheck.skipReason,
+          },
+        });
+        await recordWorkerAudit(repositories.audit, {
+          entityType: 'distribution_outbox',
+          entityId: claimed.id,
+          action: 'distribution.rollout-skip',
+          actor: workerId,
+          payload: {
+            outboxId: claimed.id,
+            target,
+            pickId: claimed.pick_id,
+            reason: rolloutCheck.skipReason,
+          },
+        });
+        return {
+          status: 'rollout-skip',
+          target,
+          workerId,
+          outbox: sent,
+          receipt,
+          run: completedRun,
+          reason: rolloutCheck.skipReason!,
+        };
+      }
     }
 
     const delivery = await deliverWithHeartbeat({

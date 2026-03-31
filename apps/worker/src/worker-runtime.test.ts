@@ -1413,9 +1413,9 @@ test('runWorkerCycles skips disabled target — outbox row stays pending', async
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
     targetRegistry: [
-      { target: 'best-bets', enabled: true },
-      { target: 'trader-insights', enabled: true },
-      { target: 'exclusive-insights', enabled: false, disabledReason: 'Activation contract required' },
+      { target: 'best-bets', enabled: true, rolloutPct: 100 },
+      { target: 'trader-insights', enabled: true, rolloutPct: 100 },
+      { target: 'exclusive-insights', enabled: false, disabledReason: 'Activation contract required', rolloutPct: 100 },
     ],
   });
   assert.equal(cycles[0]?.results[0]?.status, 'target-disabled');

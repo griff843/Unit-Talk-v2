@@ -147,7 +147,16 @@ export interface OperatorSnapshot {
     runCount: number;
   };
   targetRegistry: TargetRegistryEntry[];
+  rolloutConfig: RolloutConfigEntry[];
   incidents: OperatorIncident[];
+}
+
+export interface RolloutConfigEntry {
+  target: string;
+  enabled: boolean;
+  rolloutPct: number;
+  sportFilter?: string[];
+  skippedCount: number;
 }
 
 export interface AlertAgentRunSummary {
@@ -1084,12 +1093,34 @@ export function createSnapshotFromRows(input: {
     alertAgent: summarizeAlertAgentRuns(input.recentRuns),
     gradingAgent: summarizeGradingAgent(input.recentRuns),
     targetRegistry: resolveTargetRegistry(),
+    rolloutConfig: buildRolloutConfig(resolveTargetRegistry(), input.recentReceipts),
     incidents: [],
   };
 
   snapshot.simulationMode = snapshot.counts.simulatedDeliveries > 0 || readOperatorSimulationMode();
   snapshot.incidents = detectIncidents(snapshot, input.now);
   return snapshot;
+}
+
+function buildRolloutConfig(
+  registry: TargetRegistryEntry[],
+  recentReceipts: ReceiptRecord[],
+): RolloutConfigEntry[] {
+  const skipCounts = new Map<string, number>();
+  for (const receipt of recentReceipts) {
+    if (receipt.receipt_type === 'worker.rollout-skip' && typeof receipt.channel === 'string') {
+      const count = skipCounts.get(receipt.channel) ?? 0;
+      skipCounts.set(receipt.channel, count + 1);
+    }
+  }
+
+  return registry.map((entry) => ({
+    target: entry.target,
+    enabled: entry.enabled,
+    rolloutPct: entry.rolloutPct,
+    ...(entry.sportFilter ? { sportFilter: entry.sportFilter } : {}),
+    skippedCount: skipCounts.get(`rollout-skip:discord:${entry.target}`) ?? 0,
+  }));
 }
 
 function computeMemberTierCounts(rows: Array<{ tier: string }>): OperatorSnapshot['memberTiers'] {

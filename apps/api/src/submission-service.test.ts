@@ -1739,9 +1739,9 @@ test('distribution gate accepts discord:exclusive-insights for qualified picks',
     repositories.outbox,
     'discord:exclusive-insights',
     [
-      { target: 'best-bets', enabled: true },
-      { target: 'trader-insights', enabled: true },
-      { target: 'exclusive-insights', enabled: true },
+      { target: 'best-bets', enabled: true, rolloutPct: 100 },
+      { target: 'trader-insights', enabled: true, rolloutPct: 100 },
+      { target: 'exclusive-insights', enabled: true, rolloutPct: 100 },
     ],
   );
   assert.ok(!('enqueued' in tracked), 'expected DistributionEnqueueResult');

@@ -97,6 +97,7 @@ export async function runWorkerCycles(
         {
           ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
           ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
+          targetRegistry: registry,
         },
       );
 
