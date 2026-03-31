@@ -30,6 +30,9 @@ export interface RecapSummary {
   netUnits: number;
   roiPercent: number;
   totalRiskedUnits: number;
+  totalPicks: number;
+  windowDescription: string;
+  sampleContext: string;
   topPlay: RecapTopPlay;
 }
 
@@ -215,6 +218,10 @@ export async function computeRecapSummary(
     return null;
   }
 
+  const totalPicks = joinedRows.length;
+  const windowDescription = buildWindowDescription(period, window);
+  const sampleContext = buildSampleContext(totalPicks, period, window);
+
   return {
     period,
     window,
@@ -226,6 +233,9 @@ export async function computeRecapSummary(
     netUnits,
     roiPercent,
     totalRiskedUnits,
+    totalPicks,
+    windowDescription,
+    sampleContext,
     topPlay: {
       pickId: topPlayRow.pick.id,
       market: topPlayRow.pick.market,
@@ -299,6 +309,10 @@ export async function postRecapSummary(
 }
 
 export function buildRecapEmbed(summary: RecapSummary) {
+  const sampleValue = summary.totalPicks < 20
+    ? `${summary.sampleContext}\n_Small sample \u2014 interpret with caution_`
+    : summary.sampleContext;
+
   return {
     title: summary.window.label,
     color: summary.netUnits >= 0 ? 0x2f855a : 0xc53030,
@@ -319,6 +333,11 @@ export function buildRecapEmbed(summary: RecapSummary) {
         inline: true,
       },
       {
+        name: 'Sample',
+        value: sampleValue,
+        inline: true,
+      },
+      {
         name: 'Top Play',
         value: [
           `${summary.topPlay.selection} (${summary.topPlay.market})`,
@@ -330,6 +349,32 @@ export function buildRecapEmbed(summary: RecapSummary) {
       },
     ],
   };
+}
+
+function buildWindowDescription(period: RecapPeriod, window: RecapWindow): string {
+  const startsAt = new Date(window.startsAt);
+  const endsAt = new Date(window.endsAt);
+
+  if (period === 'daily') {
+    return `Daily (last 24h)`;
+  }
+
+  if (period === 'weekly') {
+    const startStr = formatMonthDay(startsAt);
+    const endStr = formatMonthDay(new Date(endsAt.getTime() - UTC_DAY_MS));
+    return `Weekly (${startStr}-${endStr})`;
+  }
+
+  return `Monthly (${formatMonthYear(startsAt)})`;
+}
+
+function buildSampleContext(totalPicks: number, period: RecapPeriod, window: RecapWindow): string {
+  const startsAt = new Date(window.startsAt);
+  const endsAt = new Date(window.endsAt);
+  const daysSpan = Math.round((endsAt.getTime() - startsAt.getTime()) / UTC_DAY_MS);
+  const pickLabel = totalPicks === 1 ? 'pick' : 'picks';
+  const dayLabel = daysSpan === 1 ? 'day' : 'days';
+  return `${totalPicks} ${pickLabel} over ${daysSpan} ${dayLabel}`;
 }
 
 function createUtcDate(year: number, month: number, date: number) {

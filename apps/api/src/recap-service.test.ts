@@ -3,6 +3,7 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import {
+  buildRecapEmbed,
   computeRecapSummary,
   detectRecapCollision,
   getRecapWindow,
@@ -100,6 +101,9 @@ test('computeRecapSummary returns record, net units, ROI, and top play for settl
   assert.equal(summary?.netUnits, -0.5);
   assert.equal(summary?.totalRiskedUnits, 4);
   assert.equal(summary?.roiPercent, -12.5);
+  assert.equal(summary?.totalPicks, 3);
+  assert.equal(summary?.windowDescription, 'Daily (last 24h)');
+  assert.equal(summary?.sampleContext, '3 picks over 1 day');
   assert.equal(summary?.topPlay.selection, 'Over 24.5');
   assert.equal(summary?.topPlay.profitLossUnits, 1.5);
   assert.equal(summary?.topPlay.submittedBy, 'griff843');
@@ -124,6 +128,101 @@ test('computeRecapSummary returns null when no settlements land inside the reque
   );
 
   assert.equal(summary, null);
+});
+
+test('computeRecapSummary includes totalPicks, windowDescription, and sampleContext', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+  await createSettledPick(repositories, {
+    selection: 'Under 8.5',
+    market: 'assists-all-game-ou',
+    odds: -110,
+    stakeUnits: 2,
+    submittedBy: 'dalton',
+    result: 'loss',
+    settledAt: '2026-03-27T10:00:00.000Z',
+  });
+  await createSettledPick(repositories, {
+    selection: 'Over 4.5',
+    market: 'rebounds-all-game-ou',
+    odds: -105,
+    stakeUnits: 1,
+    submittedBy: 'locke',
+    result: 'push',
+    settledAt: '2026-03-27T18:00:00.000Z',
+  });
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T11:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary.totalPicks, 3);
+  assert.equal(summary.windowDescription, 'Daily (last 24h)');
+  assert.equal(summary.sampleContext, '3 picks over 1 day');
+});
+
+test('buildRecapEmbed includes Sample field with small-sample caution for fewer than 20 picks', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T11:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  const embed = buildRecapEmbed(summary);
+  const sampleField = embed.fields.find((f: { name: string }) => f.name === 'Sample');
+  assert.ok(sampleField, 'embed must include a Sample field');
+  assert.ok(sampleField.value.includes('1 pick over 1 day'));
+  assert.ok(sampleField.value.includes('Small sample'), 'small sample caution must appear for < 20 picks');
+});
+
+test('computeRecapSummary weekly window produces correct windowDescription and sampleContext', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // Create picks across the week of Mar 23-29
+  for (let day = 23; day <= 29; day++) {
+    await createSettledPick(repositories, {
+      selection: `Pick ${day}`,
+      market: 'points-all-game-ou',
+      odds: -110,
+      stakeUnits: 1,
+      submittedBy: 'griff843',
+      result: day % 2 === 0 ? 'win' : 'loss',
+      settledAt: `2026-03-${day}T12:00:00.000Z`,
+    });
+  }
+
+  const summary = await computeRecapSummary(
+    'weekly',
+    repositories,
+    new Date('2026-03-30T11:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary.totalPicks, 7);
+  assert.equal(summary.windowDescription, 'Weekly (Mar 23-Mar 29)');
+  assert.equal(summary.sampleContext, '7 picks over 7 days');
 });
 
 test('postRecapSummary defaults recap posts to discord:recaps', async () => {
