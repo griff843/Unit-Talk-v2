@@ -20,6 +20,21 @@ export function createDeliveryAdapter(
   });
 }
 
+export function createSimulationDeliveryAdapter(): DeliveryAdapter {
+  return async (outbox) => ({
+    receiptType: 'worker.simulation',
+    status: 'sent',
+    channel: `simulated:${outbox.target}`,
+    externalId: `sim:${outbox.id}`,
+    payload: {
+      adapter: 'simulation',
+      simulated: true,
+      target: outbox.target,
+      outboxId: outbox.id,
+    },
+  });
+}
+
 export function createStubDeliveryAdapter(options?: {
   channelPrefix?: string;
   dryRun?: boolean;

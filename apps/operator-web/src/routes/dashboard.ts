@@ -189,6 +189,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
     ['failed outbox', snapshot.counts.failedOutbox],
     ['dead-letter outbox', snapshot.counts.deadLetterOutbox],
     ['sent outbox', snapshot.counts.sentOutbox],
+    ['simulated deliveries', snapshot.counts.simulatedDeliveries],
   ]
     .map(
       ([label, value]) => `
@@ -532,6 +533,16 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
         color: var(--down);
         font-size: 0.95rem;
       }
+      .simulation-banner {
+        background: rgba(167, 101, 0, 0.12);
+        border: 1.5px solid var(--warn);
+        border-radius: 12px;
+        padding: 12px 18px;
+        margin-bottom: 20px;
+        color: var(--warn);
+        font-size: 0.95rem;
+      }
+      .simulation-banner strong { font-weight: 700; }
       .incident-banner strong { font-weight: 700; }
       .incident-triage {
         margin-top: 28px;
@@ -596,6 +607,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
     <main>
       <h1>Unit Talk V2 Operator</h1>
       <p class="lede">Read-only operational view for the active canary lane. Observed at ${escapeHtml(snapshot.observedAt)} using ${escapeHtml(snapshot.persistenceMode)} mode.</p>
+      ${snapshot.simulationMode ? '<div class="simulation-banner"><strong>SIMULATION MODE ACTIVE</strong> &mdash; deliveries are simulated, not posted to Discord.</div>' : ''}
       ${incidentBanner}
       ${renderActiveIncidentsSection(snapshot.incidents)}
       ${incidentTriageSection}

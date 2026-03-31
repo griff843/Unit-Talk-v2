@@ -19,6 +19,7 @@ export interface WorkerRuntimeDependencies {
   watchdogMs: number;
   dryRun: boolean;
   autorun: boolean;
+  simulationMode: boolean;
 }
 
 export function createWorkerRuntimeDependencies(): WorkerRuntimeDependencies {
@@ -36,6 +37,7 @@ export function createWorkerRuntimeDependencies(): WorkerRuntimeDependencies {
       watchdogMs: readWatchdogMs(),
       dryRun: readDryRun(),
       autorun: readAutorun(),
+      simulationMode: readSimulationMode(),
     };
   }
 
@@ -55,6 +57,7 @@ export function createWorkerRuntimeDependencies(): WorkerRuntimeDependencies {
     watchdogMs: readWatchdogMs(),
     dryRun: readDryRun(),
     autorun: readAutorun(),
+    simulationMode: readSimulationMode(),
   };
 }
 
@@ -145,6 +148,10 @@ function readAutorun() {
 
 function readAdapterKind(): 'stub' | 'discord' {
   return process.env.UNIT_TALK_WORKER_ADAPTER === 'discord' ? 'discord' : 'stub';
+}
+
+export function readSimulationMode(): boolean {
+  return process.env.UNIT_TALK_SIMULATION_MODE === 'true';
 }
 
 export function readCircuitBreakerThreshold(): number {

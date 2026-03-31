@@ -1,5 +1,5 @@
 import { createWorkerRuntimeDependencies } from './runtime.js';
-import { createDeliveryAdapter } from './delivery-adapters.js';
+import { createDeliveryAdapter, createSimulationDeliveryAdapter } from './delivery-adapters.js';
 import { runWorkerCycles } from './runner.js';
 
 export function createWorkerRuntimeSummary() {
@@ -19,6 +19,7 @@ export function createWorkerRuntimeSummary() {
     watchdogMs: runtime.watchdogMs,
     dryRun: runtime.dryRun,
     autorun: runtime.autorun,
+    simulationMode: runtime.simulationMode,
     nextStep: runtime.autorun
       ? 'worker cycles will execute with the configured delivery adapter'
       : 'set UNIT_TALK_WORKER_AUTORUN=true to execute worker cycles',
@@ -28,10 +29,12 @@ export function createWorkerRuntimeSummary() {
 const runtime = createWorkerRuntimeDependencies();
 
 if (runtime.autorun) {
-  const deliveryAdapter = createDeliveryAdapter({
-    kind: runtime.adapterKind,
-    dryRun: runtime.dryRun,
-  });
+  const deliveryAdapter = runtime.simulationMode
+    ? createSimulationDeliveryAdapter()
+    : createDeliveryAdapter({
+        kind: runtime.adapterKind,
+        dryRun: runtime.dryRun,
+      });
 
   runWorkerCycles({
     repositories: runtime.repositories,
