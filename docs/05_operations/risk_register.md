@@ -12,11 +12,11 @@ Update this file when risks are opened, escalated, mitigated, or closed. Do not 
 
 | ID | Risk | Severity | Owner | Status | Mitigation |
 |----|------|----------|-------|--------|------------|
-| R-01 | Historical pre-fix `distribution_outbox` rows create noise in operator incident triage | Low | Platform ops | Open | Filter by `created_at > 2026-03-20` in operator queries; these rows are inert but visible |
+| R-01 | Historical pre-fix `distribution_outbox` rows create noise in operator incident triage | Low | Platform ops | **CLOSED** | UTV2-168 shipped. `OUTBOX_HISTORY_CUTOFF` filters pre-2026-03-20 rows from DB queries and snapshot counts. |
 | R-02 | API process requires manual restart for new code in dev | Low | Platform ops | Open | Acceptable in dev. Not a production blocker — production restarts are handled by process supervisor |
 | R-03 | `system_snapshot.md` stale | Low | Governance | Open | Use `PROGRAM_STATUS.md` for current-state truth; snapshot retained as historical artifact only |
 | R-04 | `production_readiness_checklist.md` partially stale | Low | Governance | Open | Use `ISSUE_QUEUE.md` for active lane state |
-| R-05 | Board caps (`perSlate=5`) may re-saturate if pick volume spikes | Low | Platform ops | Partially mitigated | Lifecycle filter fix (UTV2-38) counts only queued/posted picks; monitor after high-volume sessions |
+| R-05 | Board caps (`perSlate=5`) may re-saturate if pick volume spikes | Low | Platform ops | **CLOSED** | UTV2-169 shipped. `boardUtilization` in operator snapshot with configurable cap, warning at >= 80%, saturated at >= 100%. |
 | R-06 | In-memory recap idempotency lost on process restart | Low | Platform ops | **CLOSED** | DB-backed idempotency via `system_runs` shipped (UTV2-170). Process restart no longer causes duplicate recap posts. |
 | R-09 | `discord:game-threads` delivery blocked | Low | Architecture | Open | Thread routing requires architectural work (worker posts to channel IDs only). No contract yet. Not a cutover blocker. |
 | R-10 | `discord:strategy-room` delivery blocked | Low | Architecture | Open | DM routing not implemented. No contract yet. Not a cutover blocker. |
@@ -37,6 +37,9 @@ Update this file when risks are opened, escalated, mitigated, or closed. Do not 
 | R-C08 | `discord:recaps` not yet live | 2026-03-31 | UTV2-90 DONE (PR #53); recap scheduler live; channel `1300411261854547968` mapped and posting |
 | R-C09 | AlertAgent notification layer not live | 2026-03-31 | UTV2-114 DONE (PR #55); `runAlertNotificationPass()` wired; embed building, Discord delivery, tier-based routing all live |
 | R-C10 | `discord:exclusive-insights` not routed | 2026-03-31 | UTV2-87 DONE (PR #59); exclusive-insights in promotion evaluation, distribution service, and target map |
+| R-C11 | Historical pre-fix outbox rows noise | 2026-03-31 | UTV2-168 shipped; `OUTBOX_HISTORY_CUTOFF` filters pre-2026-03-20 rows |
+| R-C12 | Board caps may re-saturate | 2026-03-31 | UTV2-169 shipped; `boardUtilization` in operator snapshot with configurable cap and warning thresholds |
+| R-C13 | In-memory recap idempotency | 2026-03-31 | UTV2-170 shipped; DB-backed idempotency via `system_runs` prevents duplicate posts on restart |
 
 ---
 

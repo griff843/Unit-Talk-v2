@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-31 — **Post-M13 hardening session.** 10 issues completed: simulation mode (UTV2-156), rollout controls (UTV2-154), shadow validation plan (UTV2-25, G12 gate), cutover risk audit (UTV2-27), recap DB idempotency (UTV2-170), simulation desync fix (UTV2-171), V1 data extraction audit (UTV2-172), shadow comparison scripts (UTV2-173, UTV2-174). Safe activation pipeline complete: simulate → canary → gradual rollout → full activation.
+2026-03-31 — **Post-M13 hardening session.** 17 issues completed. Safe activation pipeline shipped (simulate → canary → gradual rollout). Shadow validation plan ratified with G12 gate. V1 lifecycle safety foundation ported (transition validator, atomic claims, writer authority). Centralized Loki+Grafana logging wired. Test count: 799 → 1062.
 
 ---
 
@@ -16,8 +16,8 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **~799 pass** — all unit test suites 0 failures. 188 Playwright e2e tests pass. Verified 2026-03-31. |
-| Gates | `pnpm type-check` PASS, `pnpm build` PASS, `pnpm test` PASS — verified 2026-03-31. |
+| Tests | **1062 pass** — all unit test suites 0 failures. 188 Playwright e2e tests pass. `pnpm verify` PASS. Verified 2026-03-31. |
+| Gates | `pnpm verify` PASS (env:check + lint + type-check + build + test) — verified 2026-03-31. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **M13 CLOSED 2026-03-31** — Wave 1 DONE. Wave 2 DONE. Wave 4 (Command Center Intelligence) DONE. All 54 codex-lane items DONE. Queue empty. M12 CLOSED 2026-03-28. |
 
@@ -189,8 +189,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 |------|----------|--------|
 | Discord CLIENT_ID mismatch — `deploy-commands` may fail | Low | **CLOSED** — UTV2-59 verified 3 commands, UTV2-65 confirmed 5 commands (post /help + /recap). Guild deploy current. |
 | Smart Form `confidence` field missing | Resolved | **CLOSED** — UTV2-49 merged. `confidence = capperConviction / 10` wired. Score avg lifted ~20pts. |
-| Board caps (perSlate=5) may re-saturate | Low | **Tracked** — UTV2-169 (board cap monitoring) in progress. Lifecycle filter (UTV2-38) counts only queued/posted. |
-| Historical pre-fix outbox rows noise in operator incident triage | Low | **Tracked** — UTV2-168 (outbox cutoff filter) in progress |
+| Board caps (perSlate=5) may re-saturate | Low | **CLOSED** — UTV2-169 shipped. Board utilization in operator snapshot with warning at >= 80%, configurable cap. |
+| Historical pre-fix outbox rows noise in operator incident triage | Low | **CLOSED** — UTV2-168 shipped. `OUTBOX_HISTORY_CUTOFF` filters pre-2026-03-20 rows from queries and counts. |
 | `database.types.ts` hand-edit gap | Medium | **CLOSED** — migrations 014-017 applied via `supabase db push`; real generated types committed 2026-03-29 |
 | Discord trial role auto-revoke on expiry not yet implemented | Low | Open — ratified 2026-03-29; requires scheduler → bot API → `GuildMember.roles.remove()` write path |
 | API process requires manual restart for new code in dev | Low | Open |
@@ -204,7 +204,9 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ### Submission and lifecycle
 - Canonical submission intake live (API + Smart Form)
-- Lifecycle transitions enforced (single-writer discipline)
+- Lifecycle transitions enforced with typed errors: `InvalidTransitionError`, `InvalidPickStateError` (UTV2-175)
+- Atomic claim idempotency: `atomicClaimForTransition()` prevents double-posting/settling via conditional UPDATE (UTV2-176)
+- Writer authority: per-field `assertFieldAuthority()` enforces single-writer discipline in code (UTV2-177)
 - Market key normalization at submission time (`normalizeMarketKey()`)
 - Conviction field → trust score in `metadata.promotionScores`
 - Domain analysis at submission time: implied probability, edge, devig (`metadata.deviggingResult`), Kelly sizing (`metadata.kellySizing`) — all fail-closed (UTV2-64, UTV2-67)
@@ -303,12 +305,19 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - Pure computation: probability, devig, calibration, features, models, signals, bands, scoring, outcomes, evaluation, edge-validation, rollups, system-health, risk, strategy
 - Verification control plane: scenarios, run history, archive
 
+### Observability
+- Structured JSON logging via `@unit-talk/observability` with `createLogger()`, correlation IDs, request fields (UTV2-123)
+- **Centralized logging** (UTV2-153): Loki + Grafana via `createLokiLogWriter()` + `createDualLogWriter()`. Batched HTTP push, env-var activated (`LOKI_URL`). `docker-compose.logging.yml` for local dev.
+- Board utilization monitoring in operator snapshot: `boardUtilization` with configurable cap, warning at >= 80%, saturated at >= 100% (UTV2-169)
+- Historical outbox noise filtered: `OUTBOX_HISTORY_CUTOFF` excludes pre-2026-03-20 rows from operator queries (UTV2-168)
+
 ### Cutover readiness
 - **Shadow validation plan ratified** (UTV2-25): 8 comparison surfaces, discrepancy taxonomy, evidence bundle, sign-off authority. G12 gate added to `migration_cutover_plan.md` — required for cutover.
 - **V1 data extraction audit complete** (UTV2-172): all V1 surfaces mapped (picks, grading, CLV, promotion, stats, recap, Discord delivery). Both systems use Supabase PostgreSQL. Historical overlap comparison viable.
 - **Shadow comparison scripts ready**: `scripts/shadow-grading-parity.ts` (grading outcomes), `scripts/shadow-clv-parity.ts` (CLV values). Both query V1+V2 Supabase, match by composite key, classify discrepancies per plan thresholds.
-- **Cutover risk audit complete** (UTV2-27): 3 stale risks closed (R-07, R-08, R-11). 3 backlog issues created (UTV2-168, 169, 170). R-06 (recap idempotency) closed after UTV2-170 shipped.
-- **Cutover gate status**: G1-G8, G11 PASS. G9 (AlertAgent) post-cutover. G10 (dead-letter) acceptable. **G12 (shadow validation) OPEN — execution not started.**
+- **Cutover risk audit complete** (UTV2-27): 3 stale risks closed (R-07, R-08, R-11). Follow-on issues all shipped: UTV2-168 (outbox cleanup DONE), UTV2-169 (board cap monitoring DONE), UTV2-170 (recap idempotency DONE, R-06 closed).
+- **V1 lifecycle safety foundation ported** (UTV2-175, 176, 177): typed transition errors, atomic claim idempotency, writer authority enforcement. 46 new lifecycle tests.
+- **Cutover gate status**: G1-G9, G11 PASS. G10 (dead-letter) acceptable. **G12 (shadow validation) OPEN — execution not started.**
 
 ---
 
