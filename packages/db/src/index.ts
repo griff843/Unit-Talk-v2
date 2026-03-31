@@ -34,3 +34,4 @@ export * from './repositories.js';
 export * from './runtime-repositories.js';
 export * from './schema.js';
 export * from './types.js';
+export * from './writer-authority.js';
