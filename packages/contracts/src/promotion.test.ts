@@ -6,6 +6,8 @@ import {
   checkRolloutControls,
   fnv1aHash,
   defaultTargetRegistry,
+  resolveExposureGateConfig,
+  defaultExposureGateConfig,
   type TargetRegistryEntry,
 } from './promotion.js';
 
@@ -174,5 +176,62 @@ describe('rollout controls', () => {
       const result = checkRolloutControls('pick-1', 'unknown-target', 'NBA', []);
       assert.equal(result.allowed, true);
     });
+  });
+});
+
+describe('exposure gate config', () => {
+  test('returns defaults when env var is absent', () => {
+    const config = resolveExposureGateConfig({});
+    assert.deepStrictEqual(config, defaultExposureGateConfig);
+  });
+
+  test('returns defaults when env var is empty string', () => {
+    const config = resolveExposureGateConfig({ UNIT_TALK_EXPOSURE_GATE_CONFIG: '' });
+    assert.deepStrictEqual(config, defaultExposureGateConfig);
+  });
+
+  test('returns defaults when env var is malformed JSON', () => {
+    const config = resolveExposureGateConfig({ UNIT_TALK_EXPOSURE_GATE_CONFIG: '{bad' });
+    assert.deepStrictEqual(config, defaultExposureGateConfig);
+  });
+
+  test('returns defaults when env var is an array', () => {
+    const config = resolveExposureGateConfig({ UNIT_TALK_EXPOSURE_GATE_CONFIG: '[]' });
+    assert.deepStrictEqual(config, defaultExposureGateConfig);
+  });
+
+  test('parses valid overrides', () => {
+    const config = resolveExposureGateConfig({
+      UNIT_TALK_EXPOSURE_GATE_CONFIG: JSON.stringify({
+        maxPicksPerGame: 5,
+        maxPicksPerDay: 20,
+        enabled: false,
+      }),
+    });
+    assert.equal(config.maxPicksPerGame, 5);
+    assert.equal(config.maxPicksPerDay, 20);
+    assert.equal(config.enabled, false);
+  });
+
+  test('uses defaults for missing fields', () => {
+    const config = resolveExposureGateConfig({
+      UNIT_TALK_EXPOSURE_GATE_CONFIG: JSON.stringify({ maxPicksPerGame: 7 }),
+    });
+    assert.equal(config.maxPicksPerGame, 7);
+    assert.equal(config.maxPicksPerDay, defaultExposureGateConfig.maxPicksPerDay);
+    assert.equal(config.enabled, defaultExposureGateConfig.enabled);
+  });
+
+  test('ignores non-numeric maxPicksPerGame', () => {
+    const config = resolveExposureGateConfig({
+      UNIT_TALK_EXPOSURE_GATE_CONFIG: JSON.stringify({ maxPicksPerGame: 'five' }),
+    });
+    assert.equal(config.maxPicksPerGame, defaultExposureGateConfig.maxPicksPerGame);
+  });
+
+  test('default config has expected values', () => {
+    assert.equal(defaultExposureGateConfig.maxPicksPerGame, 3);
+    assert.equal(defaultExposureGateConfig.maxPicksPerDay, 15);
+    assert.equal(defaultExposureGateConfig.enabled, true);
   });
 });

@@ -450,6 +450,60 @@ export function fnv1aHash(input: string): number {
   return hash >>> 0; // unsigned 32-bit
 }
 
+// ─── Exposure Gate ────────────────────────────────────────────────────────────
+
+export interface ExposureGateConfig {
+  /** Maximum open picks (validated/queued/posted) from the same submitter on the same event. */
+  maxPicksPerGame: number;
+  /** Maximum open picks from the same submitter today. */
+  maxPicksPerDay: number;
+  /** Whether the exposure gate is enabled. */
+  enabled: boolean;
+}
+
+export const defaultExposureGateConfig: ExposureGateConfig = {
+  maxPicksPerGame: 3,
+  maxPicksPerDay: 15,
+  enabled: true,
+};
+
+/**
+ * Resolve exposure gate config from UNIT_TALK_EXPOSURE_GATE_CONFIG env var (JSON)
+ * or return defaults. Malformed JSON silently falls back to defaults.
+ */
+export function resolveExposureGateConfig(
+  env: { UNIT_TALK_EXPOSURE_GATE_CONFIG?: string } = process.env,
+): ExposureGateConfig {
+  const raw = env.UNIT_TALK_EXPOSURE_GATE_CONFIG;
+  if (!raw) return { ...defaultExposureGateConfig };
+
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return { ...defaultExposureGateConfig };
+    }
+    const obj = parsed as Record<string, unknown>;
+    return {
+      maxPicksPerGame:
+        typeof obj['maxPicksPerGame'] === 'number' && Number.isFinite(obj['maxPicksPerGame'])
+          ? obj['maxPicksPerGame']
+          : defaultExposureGateConfig.maxPicksPerGame,
+      maxPicksPerDay:
+        typeof obj['maxPicksPerDay'] === 'number' && Number.isFinite(obj['maxPicksPerDay'])
+          ? obj['maxPicksPerDay']
+          : defaultExposureGateConfig.maxPicksPerDay,
+      enabled:
+        typeof obj['enabled'] === 'boolean'
+          ? obj['enabled']
+          : defaultExposureGateConfig.enabled,
+    };
+  } catch {
+    return { ...defaultExposureGateConfig };
+  }
+}
+
+export type ExposureGateRejectionReason = 'exposure-game-limit' | 'exposure-daily-limit';
+
 export type RolloutSkipReason = 'rollout-pct' | 'sport-filter';
 
 export interface RolloutCheckResult {

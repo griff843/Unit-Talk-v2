@@ -161,6 +161,7 @@ export interface OperatorSnapshot {
   };
   targetRegistry: TargetRegistryEntry[];
   rolloutConfig: RolloutConfigEntry[];
+  exposureGateRejections: number;
   incidents: OperatorIncident[];
 }
 
@@ -1136,6 +1137,9 @@ export function createSnapshotFromRows(input: {
     gradingAgent: summarizeGradingAgent(input.recentRuns),
     targetRegistry: resolveTargetRegistry(),
     rolloutConfig: buildRolloutConfig(resolveTargetRegistry(), input.recentReceipts),
+    exposureGateRejections: input.recentPicks.filter(
+      (p) => typeof p.promotion_reason === 'string' && p.promotion_reason.startsWith('exposure-'),
+    ).length,
     incidents: [],
   };
 

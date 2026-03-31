@@ -8,6 +8,8 @@ import {
   type PromotionOverrideAction,
   type PromotionTarget,
   resolveScoringProfile,
+  type ExposureGateConfig,
+  resolveExposureGateConfig,
 } from '@unit-talk/contracts';
 import { evaluatePromotionEligibility, detectCorrelatedPicks, computeCorrelationPenalty } from '@unit-talk/domain';
 import type {
@@ -118,9 +120,21 @@ export async function evaluateAllPoliciesEagerAndPersist(
     ),
   );
 
-  // Fetch open picks for correlation-aware scoring
+  // Fetch open picks for correlation-aware scoring and exposure gate
   const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
+
+  // Exposure gate — blocks before scoring if limits exceeded
+  const exposureGateConfig = resolveExposureGateConfig();
+  if (exposureGateConfig.enabled) {
+    const exposureRejection = checkExposureGate(canonicalPick, openPicks, exposureGateConfig);
+    if (exposureRejection) {
+      return buildExposureSuppressedResult(
+        canonicalPick, pickRecord, exposureRejection, actor, pickRepository, auditLogRepository,
+      );
+    }
+  }
+
   const scoreInputs = await readPromotionScoreInputs(
     canonicalPick,
     openPicks,
@@ -723,4 +737,152 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function resolvePromotionPolicyForTarget(target: PromotionTarget): PromotionPolicy {
   return activeScoringProfile.policies[target];
+}
+
+// ---------------------------------------------------------------------------
+// Exposure gate (UTV2-179)
+// ---------------------------------------------------------------------------
+
+type ExposureGateRejectionReason = 'exposure-game-limit' | 'exposure-daily-limit';
+
+export function checkExposureGate(
+  pick: CanonicalPick,
+  openPicks: readonly CanonicalPick[],
+  config: ExposureGateConfig,
+): ExposureGateRejectionReason | null {
+  const submitter = pick.source;
+  const pickEventName = readMetadataString(pick.metadata, 'eventName');
+
+  if (pickEventName) {
+    const sameGameCount = openPicks.filter((op) => {
+      if (op.id === pick.id) return false;
+      if (op.source !== submitter) return false;
+      return readMetadataString(op.metadata, 'eventName') === pickEventName;
+    }).length;
+    if (sameGameCount >= config.maxPicksPerGame) {
+      return 'exposure-game-limit';
+    }
+  }
+
+  const todayPrefix = new Date().toISOString().slice(0, 10);
+  const sameDayCount = openPicks.filter((op) => {
+    if (op.id === pick.id) return false;
+    if (op.source !== submitter) return false;
+    return op.createdAt.slice(0, 10) === todayPrefix;
+  }).length;
+  if (sameDayCount >= config.maxPicksPerDay) {
+    return 'exposure-daily-limit';
+  }
+
+  return null;
+}
+
+async function buildExposureSuppressedResult(
+  canonicalPick: CanonicalPick,
+  pickRecord: PickRecord,
+  reason: ExposureGateRejectionReason,
+  actor: string,
+  pickRepository: PickRepository,
+  auditLogRepository: AuditLogRepository,
+): Promise<EagerPromotionAllPoliciesResult> {
+  const decidedAt = new Date().toISOString();
+  const policies = activePromotionPolicies();
+
+  const makeSuppressedDecision = (policy: PromotionPolicy): BoardPromotionDecision => ({
+    status: 'suppressed',
+    target: policy.target,
+    qualified: false,
+    score: 0,
+    breakdown: { edge: 0, trust: 0, readiness: 0, uniqueness: 0, boardFit: 0, total: 0 },
+    explanation: {
+      target: policy.target,
+      reasons: [],
+      suppressionReasons: [reason],
+      weights: policy.weights,
+    },
+    version: policy.version,
+    decidedAt,
+    decidedBy: actor,
+  });
+
+  const decisions = policies.map(makeSuppressedDecision);
+  const decisionByTarget = new Map(
+    policies.map((policy, index) => [policy.target, decisions[index]!] as const),
+  );
+
+  const winnerPolicy = policies[policies.length - 1]!;
+  const winnerDecision = decisions[decisions.length - 1]!;
+
+  const persisted = await pickRepository.persistPromotionDecision({
+    pickId: canonicalPick.id,
+    target: winnerPolicy.target,
+    approvalStatus: canonicalPick.approvalStatus,
+    promotionStatus: 'suppressed',
+    promotionTarget: null,
+    promotionScore: 0,
+    promotionReason: reason,
+    promotionVersion: winnerDecision.version,
+    promotionDecidedAt: decidedAt,
+    promotionDecidedBy: actor,
+    overrideAction: null,
+    payload: { exposureGateRejection: reason },
+  });
+
+  await auditLogRepository.record({
+    entityType: 'pick_promotion_history',
+    entityId: persisted.history.id,
+    entityRef: canonicalPick.id,
+    action: 'promotion.suppressed',
+    actor,
+    payload: {
+      pickId: canonicalPick.id,
+      target: winnerPolicy.target,
+      status: 'suppressed',
+      score: 0,
+      resolvedTarget: null,
+      exposureGateRejection: reason,
+    },
+  });
+
+  for (let index = 0; index < policies.length - 1; index += 1) {
+    const policy = policies[index]!;
+    const decision = decisions[index]!;
+    const history = await pickRepository.insertPromotionHistoryRow({
+      pickId: canonicalPick.id,
+      target: policy.target,
+      promotionStatus: 'suppressed',
+      promotionScore: 0,
+      promotionReason: reason,
+      promotionVersion: decision.version,
+      promotionDecidedAt: decidedAt,
+      promotionDecidedBy: decision.decidedBy,
+      overrideAction: null,
+      payload: { exposureGateRejection: reason },
+    });
+
+    await auditLogRepository.record({
+      entityType: 'pick_promotion_history',
+      entityId: history.id,
+      entityRef: canonicalPick.id,
+      action: 'promotion.suppressed',
+      actor,
+      payload: {
+        pickId: canonicalPick.id,
+        target: policy.target,
+        status: 'suppressed',
+        score: 0,
+        resolvedTarget: null,
+        exposureGateRejection: reason,
+      },
+    });
+  }
+
+  return {
+    pick: mapPickRecordToCanonicalPick(persisted.pick),
+    pickRecord: persisted.pick,
+    resolvedTarget: null,
+    exclusiveInsightsDecision: decisionByTarget.get('exclusive-insights')!,
+    traderInsightsDecision: decisionByTarget.get('trader-insights')!,
+    bestBetsDecision: decisionByTarget.get('best-bets')!,
+  };
 }

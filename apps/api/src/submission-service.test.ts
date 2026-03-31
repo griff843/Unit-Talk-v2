@@ -7,7 +7,7 @@ import {
   exclusiveInsightsPromotionPolicy,
 } from '@unit-talk/domain';
 import { handleSubmitPick } from './handlers/index.js';
-import { applyPromotionOverride } from './promotion-service.js';
+import { applyPromotionOverride, checkExposureGate } from './promotion-service.js';
 import { recordDistributionReceipt } from './distribution-receipt-service.js';
 import { enqueueDistributionWork } from './distribution-service.js';
 import {
@@ -1801,4 +1801,147 @@ test('best-bets qualified pick with absent edge and trust scores still qualifies
     repositories.audit,
   );
   assert.equal(tiTracked.target, 'discord:trader-insights');
+});
+
+// ─── Exposure Gate Tests ────────────────────────────────────────────────────
+
+function makeTestPick(overrides: Partial<CanonicalPick> = {}): CanonicalPick {
+  return {
+    id: 'pick-test',
+    submissionId: 'sub-1',
+    market: 'NFL passing yards',
+    selection: 'Over 287.5',
+    source: 'capper-1',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'validated',
+    metadata: { eventName: 'Game A', sport: 'NFL' },
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+test('checkExposureGate returns null when under game limit', () => {
+  const pick = makeTestPick({ id: 'pick-new' });
+  const openPicks = [
+    makeTestPick({ id: 'pick-1' }),
+    makeTestPick({ id: 'pick-2' }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, null);
+});
+
+test('checkExposureGate returns exposure-game-limit when at game limit', () => {
+  const pick = makeTestPick({ id: 'pick-new' });
+  const openPicks = [
+    makeTestPick({ id: 'pick-1' }),
+    makeTestPick({ id: 'pick-2' }),
+    makeTestPick({ id: 'pick-3' }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, 'exposure-game-limit');
+});
+
+test('checkExposureGate does not count picks from different submitters', () => {
+  const pick = makeTestPick({ id: 'pick-new', source: 'capper-1' });
+  const openPicks = [
+    makeTestPick({ id: 'pick-1', source: 'capper-2' }),
+    makeTestPick({ id: 'pick-2', source: 'capper-2' }),
+    makeTestPick({ id: 'pick-3', source: 'capper-2' }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, null);
+});
+
+test('checkExposureGate does not count picks on different events', () => {
+  const pick = makeTestPick({ id: 'pick-new', metadata: { eventName: 'Game A', sport: 'NFL' } });
+  const openPicks = [
+    makeTestPick({ id: 'pick-1', metadata: { eventName: 'Game B', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-2', metadata: { eventName: 'Game B', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-3', metadata: { eventName: 'Game B', sport: 'NFL' } }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, null);
+});
+
+test('checkExposureGate returns exposure-daily-limit when at daily limit', () => {
+  const today = new Date().toISOString();
+  const pick = makeTestPick({ id: 'pick-new', metadata: { sport: 'NFL' } }); // no eventName
+  const openPicks = Array.from({ length: 15 }, (_, i) =>
+    makeTestPick({
+      id: `pick-${i}`,
+      metadata: { eventName: `Game ${i}`, sport: 'NFL' },
+      createdAt: today,
+    }),
+  );
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, 'exposure-daily-limit');
+});
+
+test('checkExposureGate does not count picks from other days for daily limit', () => {
+  const yesterday = new Date(Date.now() - 86400000).toISOString();
+  const pick = makeTestPick({ id: 'pick-new' });
+  const openPicks = Array.from({ length: 15 }, (_, i) =>
+    makeTestPick({
+      id: `pick-${i}`,
+      metadata: { eventName: `Game ${i}`, sport: 'NFL' },
+      createdAt: yesterday,
+    }),
+  );
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, null);
+});
+
+test('checkExposureGate does not count the pick itself', () => {
+  const pick = makeTestPick({ id: 'pick-same' });
+  const openPicks = [
+    makeTestPick({ id: 'pick-same' }),
+    makeTestPick({ id: 'pick-1' }),
+    makeTestPick({ id: 'pick-2' }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, null);
+});
+
+test('checkExposureGate game limit takes priority over daily limit', () => {
+  const today = new Date().toISOString();
+  const pick = makeTestPick({ id: 'pick-new' });
+  // 15 picks on same game = hits both game and daily limit; game should trigger first
+  const openPicks = Array.from({ length: 15 }, (_, i) =>
+    makeTestPick({ id: `pick-${i}`, createdAt: today }),
+  );
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  assert.equal(result, 'exposure-game-limit');
 });
