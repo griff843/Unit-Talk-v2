@@ -9,7 +9,7 @@
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
     "dev": "tsx src/index.ts",
-    "test": "tsx --test src/ingestor.test.ts",
+    "test": "tsx --test src/ingestor.test.ts src/circuit-breaker.test.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
