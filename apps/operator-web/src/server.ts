@@ -136,6 +136,12 @@ export interface OperatorSnapshot {
     bySport: Record<string, number>;
     byGame: Record<string, number>;
   };
+  boardUtilization: {
+    capPerSlate: number;
+    currentOpenPicks: number;
+    utilizationPct: number;
+    status: 'healthy' | 'warning' | 'saturated';
+  };
   alertAgent: AlertAgentRunSummary;
   gradingAgent: {
     lastGradingRunAt: string | null;
@@ -1049,6 +1055,26 @@ export function createSnapshotFromRows(input: {
               : 'no failed outbox items detected',
         };
 
+  const boardUtil = computeBoardUtilization(input.recentPicks, input.picksPipelineCounts);
+
+  const healthSignals: OperatorHealthSignal[] = [
+    {
+      component: 'api',
+      status: 'healthy',
+      detail: `${input.recentPicks.length} recent pick record(s) available`,
+    },
+    workerStatus,
+    distributionStatus,
+  ];
+
+  if (boardUtil.status !== 'healthy') {
+    healthSignals.push({
+      component: 'distribution',
+      status: 'degraded',
+      detail: `Board utilization at ${boardUtil.utilizationPct.toFixed(0)}% (${boardUtil.currentOpenPicks}/${boardUtil.capPerSlate} cap)`,
+    });
+  }
+
   const snapshot: OperatorSnapshot = {
     observedAt: new Date().toISOString(),
     persistenceMode: input.persistenceMode,
@@ -1091,6 +1117,7 @@ export function createSnapshotFromRows(input: {
     memberTiers: computeMemberTierCounts(input.memberTierRows ?? []),
     boardExposure: { bySport: {}, byGame: {} },
     alertAgent: summarizeAlertAgentRuns(input.recentRuns),
+    boardUtilization: boardUtil,
     gradingAgent: summarizeGradingAgent(input.recentRuns),
     targetRegistry: resolveTargetRegistry(),
     rolloutConfig: buildRolloutConfig(resolveTargetRegistry(), input.recentReceipts),
@@ -1100,6 +1127,26 @@ export function createSnapshotFromRows(input: {
   snapshot.simulationMode = snapshot.counts.simulatedDeliveries > 0 || readOperatorSimulationMode();
   snapshot.incidents = detectIncidents(snapshot, input.now);
   return snapshot;
+}
+
+const OPEN_PICK_STATUSES = new Set(['validated', 'queued', 'posted']);
+const DEFAULT_BOARD_CAP_PER_SLATE = 5;
+
+export function computeBoardUtilization(
+  recentPicks: PickRecord[],
+  picksPipelineCounts?: PicksPipelineSummary['counts'],
+): OperatorSnapshot['boardUtilization'] {
+  const capPerSlate = parseInt(process.env['UNIT_TALK_BOARD_CAP_PER_SLATE'] ?? '', 10) || DEFAULT_BOARD_CAP_PER_SLATE;
+
+  const currentOpenPicks = picksPipelineCounts
+    ? (picksPipelineCounts.validated + picksPipelineCounts.queued + picksPipelineCounts.posted)
+    : recentPicks.filter((p) => OPEN_PICK_STATUSES.has(p.status)).length;
+
+  const utilizationPct = capPerSlate > 0 ? (currentOpenPicks / capPerSlate) * 100 : 0;
+  const status: 'healthy' | 'warning' | 'saturated' =
+    utilizationPct >= 100 ? 'saturated' : utilizationPct >= 80 ? 'warning' : 'healthy';
+
+  return { capPerSlate, currentOpenPicks, utilizationPct, status };
 }
 
 function buildRolloutConfig(
