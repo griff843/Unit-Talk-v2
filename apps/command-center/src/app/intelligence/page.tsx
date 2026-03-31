@@ -34,7 +34,7 @@ interface FeedbackEntry {
   promotionScore: number | null;
   reviewDecision: string | null;
   result: string;
-  scoreWasRight: boolean | null;
+  scoreSignal: 'correct' | 'incorrect' | 'marginal' | null;
   reviewWasRight: boolean | null;
 }
 
@@ -54,6 +54,8 @@ interface IntelligenceData {
       avgScoreWins: number | null;
       avgScoreLosses: number | null;
       correlation: 'positive' | 'weak' | 'negative' | 'insufficient_data';
+      sampleSize: number;
+      confidence: 'high' | 'medium' | 'low' | 'none';
     };
   };
   decisionQuality: {
@@ -144,6 +146,13 @@ function CorrelationBadge({ value }: { value: string }) {
   );
 }
 
+function ScoreSignalBadge({ value }: { value: 'correct' | 'incorrect' | 'marginal' | null }) {
+  if (value === null) return <span className="text-xs text-gray-500">--</span>;
+  if (value === 'correct') return <span className="text-xs font-medium text-emerald-400">Correct</span>;
+  if (value === 'marginal') return <span className="text-xs font-medium text-yellow-400">Marginal</span>;
+  return <span className="text-xs font-medium text-red-400">Wrong</span>;
+}
+
 function RightWrongBadge({ value }: { value: boolean | null }) {
   if (value === null) return <span className="text-xs text-gray-500">--</span>;
   return value
@@ -221,9 +230,15 @@ export default async function IntelligencePage() {
 
       {/* Score Quality */}
       <Card title="Score Quality">
-        <div className="mb-4 flex items-center gap-4">
+        <div className="mb-4 flex flex-wrap items-center gap-4">
           <div className="text-sm text-gray-400">
             Score-Outcome Correlation: <CorrelationBadge value={data.scoreQuality.scoreVsOutcome.correlation} />
+          </div>
+          <div className="text-xs text-gray-500">
+            n={data.scoreQuality.scoreVsOutcome.sampleSize ?? 0}
+            {data.scoreQuality.scoreVsOutcome.confidence && data.scoreQuality.scoreVsOutcome.confidence !== 'none' && (
+              <span className="ml-1 text-gray-600">({data.scoreQuality.scoreVsOutcome.confidence} confidence)</span>
+            )}
           </div>
           {data.scoreQuality.scoreVsOutcome.avgScoreWins != null && (
             <div className="text-xs text-gray-500">
@@ -334,7 +349,7 @@ export default async function IntelligencePage() {
                     <td className={`py-2 pr-3 text-xs font-medium ${entry.result === 'win' ? 'text-emerald-400' : entry.result === 'loss' ? 'text-red-400' : 'text-gray-300'}`}>
                       {entry.result}
                     </td>
-                    <td className="py-2 pr-3"><RightWrongBadge value={entry.scoreWasRight} /></td>
+                    <td className="py-2 pr-3"><ScoreSignalBadge value={entry.scoreSignal} /></td>
                     <td className="py-2"><RightWrongBadge value={entry.reviewWasRight} /></td>
                   </tr>
                 ))}

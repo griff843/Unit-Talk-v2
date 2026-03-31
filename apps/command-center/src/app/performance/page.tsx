@@ -84,6 +84,11 @@ async function fetchLeaderboard(window: number): Promise<LeaderboardRow[]> {
   }
 }
 
+function fmt(n: number | null | undefined, fallback = '—'): string {
+  if (n == null || !Number.isFinite(n)) return fallback;
+  return n.toFixed(1);
+}
+
 function StatCard({ label, stats }: { label: string; stats: Stats | null }) {
   if (!stats) return (
     <div className="rounded border border-gray-800 bg-gray-900/50 p-4">
@@ -105,26 +110,26 @@ function StatCard({ label, stats }: { label: string; stats: Stats | null }) {
             <span className="text-gray-300">{stats.pushes}</span>
           </span>
         </div>
-        <div><span className="text-gray-400">Hit Rate</span> <span className="font-bold">{stats.hitRatePct.toFixed(1)}%</span></div>
+        <div><span className="text-gray-400">Hit Rate</span> <span className="font-bold">{fmt(stats.hitRatePct)}%</span></div>
         <div>
           <span className="text-gray-400">ROI</span>{' '}
-          <span className={`font-bold ${stats.roiPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-            {stats.roiPct >= 0 ? '+' : ''}{stats.roiPct.toFixed(1)}%
+          <span className={`font-bold ${(stats.roiPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+            {(stats.roiPct ?? 0) >= 0 ? '+' : ''}{fmt(stats.roiPct)}%
           </span>
         </div>
         {stats.avgScore != null && (
-          <div><span className="text-gray-400">Avg Score</span> <span className="font-bold">{stats.avgScore.toFixed(1)}</span></div>
+          <div><span className="text-gray-400">Avg Score</span> <span className="font-bold">{fmt(stats.avgScore)}</span></div>
         )}
         {stats.avgClvPct != null && (
           <div>
             <span className="text-gray-400">CLV%</span>{' '}
-            <span className={`font-bold ${stats.avgClvPct >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {stats.avgClvPct >= 0 ? '+' : ''}{stats.avgClvPct.toFixed(1)}%
+            <span className={`font-bold ${(stats.avgClvPct ?? 0) >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+              {(stats.avgClvPct ?? 0) >= 0 ? '+' : ''}{fmt(stats.avgClvPct)}%
             </span>
           </div>
         )}
         {stats.avgStakeUnits != null && (
-          <div><span className="text-gray-400">Avg Units</span> <span className="font-bold">{stats.avgStakeUnits.toFixed(1)}</span></div>
+          <div><span className="text-gray-400">Avg Units</span> <span className="font-bold">{fmt(stats.avgStakeUnits)}</span></div>
         )}
       </div>
     </div>
