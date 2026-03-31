@@ -430,6 +430,10 @@ class FakePickRepository implements PickRepository {
     };
   }
 
+  async claimPickTransition(): Promise<{ claimed: boolean }> {
+    return { claimed: false };
+  }
+
   async insertPromotionHistoryRow(
     input: PromotionHistoryInsertInput,
   ): Promise<PromotionHistoryRecord> {

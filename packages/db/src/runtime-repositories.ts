@@ -339,6 +339,24 @@ export class InMemoryPickRepository implements PickRepository {
       ).length,
     };
   }
+
+  async claimPickTransition(
+    pickId: string,
+    fromState: string,
+    toState: string,
+  ): Promise<{ claimed: boolean }> {
+    const existing = this.picks.get(pickId);
+    if (!existing || existing.status !== fromState) {
+      return { claimed: false };
+    }
+    const updated: PickRecord = {
+      ...existing,
+      status: toState,
+      updated_at: new Date().toISOString(),
+    };
+    this.picks.set(pickId, updated);
+    return { claimed: true };
+  }
 }
 
 export class InMemoryOutboxRepository implements OutboxRepository {
@@ -1554,6 +1572,36 @@ export class DatabasePickRepository implements PickRepository {
         (pick) => pick.market === input.market && pick.selection === input.selection,
       ).length,
     };
+  }
+
+  async claimPickTransition(
+    pickId: string,
+    fromState: string,
+    toState: string,
+  ): Promise<{ claimed: boolean }> {
+    const updates: Record<string, unknown> = {
+      status: toState,
+      updated_at: new Date().toISOString(),
+    };
+    if (toState === 'posted') {
+      updates.posted_at = new Date().toISOString();
+    }
+    if (toState === 'settled') {
+      updates.settled_at = new Date().toISOString();
+    }
+
+    const { data, error } = await this.client
+      .from('picks')
+      .update(updates)
+      .eq('id', pickId)
+      .eq('status', fromState)
+      .select('id');
+
+    if (error) {
+      throw new Error(`Failed to claim pick transition: ${error.message}`);
+    }
+
+    return { claimed: (data?.length ?? 0) > 0 };
   }
 }
 

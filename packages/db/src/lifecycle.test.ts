@@ -19,6 +19,7 @@ import { InMemoryPickRepository } from './runtime-repositories.js';
 import {
   transitionPickLifecycle,
   ensurePickLifecycleState,
+  atomicClaimForTransition,
   InvalidTransitionError,
   InvalidPickStateError,
   getAllowedTransitions,
@@ -279,4 +280,36 @@ test('InvalidPickStateError with detail includes detail in message', () => {
   const err = new InvalidPickStateError('pick-123', 'unexpected state');
   assert.ok(err.message.includes('unexpected state'));
   assert.ok(err.message.includes('pick-123'));
+});
+
+// ---------------------------------------------------------------------------
+// Atomic claim idempotency tests (UTV2-176)
+// ---------------------------------------------------------------------------
+
+test('atomicClaimForTransition claims pick on first call', async () => {
+  const repo = await repoWithPick('claim-1', 'validated');
+  const result = await atomicClaimForTransition(repo, 'claim-1', 'validated', 'queued');
+  assert.equal(result.claimed, true);
+  assert.equal(result.pickId, 'claim-1');
+  const updated = await repo.findPickById('claim-1');
+  assert.equal(updated?.status, 'queued');
+});
+
+test('atomicClaimForTransition returns false on second call (idempotent)', async () => {
+  const repo = await repoWithPick('claim-2', 'validated');
+  await atomicClaimForTransition(repo, 'claim-2', 'validated', 'queued');
+  const second = await atomicClaimForTransition(repo, 'claim-2', 'validated', 'queued');
+  assert.equal(second.claimed, false);
+});
+
+test('atomicClaimForTransition returns false if pick is in wrong state', async () => {
+  const repo = await repoWithPick('claim-3', 'posted');
+  const result = await atomicClaimForTransition(repo, 'claim-3', 'validated', 'queued');
+  assert.equal(result.claimed, false);
+});
+
+test('atomicClaimForTransition returns false for invalid transition', async () => {
+  const repo = await repoWithPick('claim-4', 'settled');
+  const result = await atomicClaimForTransition(repo, 'claim-4', 'settled', 'posted');
+  assert.equal(result.claimed, false);
 });

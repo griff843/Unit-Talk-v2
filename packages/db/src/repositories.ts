@@ -80,6 +80,11 @@ export interface PickRepository {
   getPromotionBoardState(
     input: PromotionBoardStateQuery,
   ): Promise<PromotionBoardStateSnapshot>;
+  claimPickTransition(
+    pickId: string,
+    fromState: string,
+    toState: string,
+  ): Promise<{ claimed: boolean }>;
 }
 
 export interface PromotionDecisionPersistenceInput {

@@ -157,3 +157,40 @@ export async function ensurePickLifecycleState(
 
   return transitionPickLifecycle(pickRepository, pickId, targetState, reason, writerRole);
 }
+
+// ---------------------------------------------------------------------------
+// Atomic claim (idempotent transition)
+// ---------------------------------------------------------------------------
+
+export interface ClaimResult {
+  claimed: boolean;
+  pickId: string;
+}
+
+/**
+ * Atomically claim a pick for a lifecycle transition using a conditional
+ * UPDATE ... WHERE status = expectedCurrentState pattern. Returns
+ * { claimed: true } only if the pick was in the expected state and was
+ * successfully transitioned. Returns { claimed: false } (no error) if
+ * the pick was already in a different state — making the call idempotent
+ * and safe under concurrent worker cycles.
+ */
+export async function atomicClaimForTransition(
+  pickRepository: PickRepository,
+  pickId: string,
+  expectedCurrentState: PickLifecycleState,
+  targetState: PickLifecycleState,
+): Promise<ClaimResult> {
+  const allowed = allowedTransitions[expectedCurrentState] ?? [];
+  if (!allowed.includes(targetState)) {
+    return { claimed: false, pickId };
+  }
+
+  const { claimed } = await pickRepository.claimPickTransition(
+    pickId,
+    expectedCurrentState,
+    targetState,
+  );
+
+  return { claimed, pickId };
+}
