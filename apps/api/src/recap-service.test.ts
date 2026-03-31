@@ -259,6 +259,7 @@ test('checkAndPostRecaps logs structured error when postRecapSummary throws, doe
       listRecent: () => Promise.reject(new Error('db connection lost')),
     },
     picks: { findPickById: () => Promise.resolve(null) },
+    runs: { listByType: () => Promise.resolve([]) },
   } as unknown as ReturnType<typeof createInMemoryRepositoryBundle>;
 
   // Use a time that triggers daily recap so shouldPostRecap returns 'daily'
@@ -359,6 +360,70 @@ test('startRecapScheduler registers a 60 second polling interval and cleanup cle
     globalThis.setInterval = originalSetInterval;
     globalThis.clearInterval = originalClearInterval;
   }
+});
+
+test('DB-backed idempotency prevents duplicate post after in-memory state is reset (simulates process restart)', async () => {
+  resetRecapSchedulerStateForTests();
+
+  // Empty repositories — no settled picks means "no settled picks in window" which
+  // still marks as posted and writes a system_runs record (no Discord fetch needed)
+  const repositories = createInMemoryRepositoryBundle();
+
+  const infoLogs: string[] = [];
+  const logger = {
+    error: (_msg: string) => {},
+    info: (msg: string) => { infoLogs.push(msg); },
+  };
+  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+
+  // First tick — "no settled picks in window" triggers markPosted + recordRecapRun
+  await checkAndPostRecapsForTests(repositories, logger, () => postingTime);
+
+  // Verify the system_runs record was written
+  const runs = await repositories.runs.listByType('recap.post', 10);
+  assert.equal(runs.length, 1, 'expected exactly one recap.post system_runs record');
+  assert.equal(runs[0]!.status, 'succeeded');
+  const details = runs[0]!.details as Record<string, unknown>;
+  assert.equal(details['period'], 'daily');
+  assert.equal(details['windowEndsAt'], '2026-06-09T00:00:00.000Z');
+
+  // Simulate process restart: clear in-memory state
+  resetRecapSchedulerStateForTests();
+
+  // Second attempt — in-memory guard is gone, but DB guard should catch it
+  await checkAndPostRecapsForTests(repositories, logger, () => postingTime);
+
+  // Verify DB dedup was triggered (tick.db_dedup_skip logged)
+  const dbDedupLog = infoLogs.find((log) => {
+    const parsed = JSON.parse(log) as Record<string, unknown>;
+    return parsed['event'] === 'tick.db_dedup_skip';
+  });
+  assert.ok(dbDedupLog, 'expected a tick.db_dedup_skip log entry after simulated restart');
+
+  // Verify no additional system_runs records were written
+  const runsAfter = await repositories.runs.listByType('recap.post', 10);
+  assert.equal(runsAfter.length, 1, 'DB guard should prevent writing a second recap.post record');
+});
+
+test('checkAndPostRecaps writes system_runs record after recap completion', async () => {
+  resetRecapSchedulerStateForTests();
+
+  const repositories = createInMemoryRepositoryBundle();
+  const logger = { error: (_msg: string) => {}, info: (_msg: string) => {} };
+  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+
+  // Before posting, no recap runs should exist
+  const runsBefore = await repositories.runs.listByType('recap.post', 10);
+  assert.equal(runsBefore.length, 0);
+
+  // Post with no settled picks — still writes the system_runs record
+  await checkAndPostRecapsForTests(repositories, logger, () => postingTime);
+
+  // After posting, exactly one recap run should exist with correct details
+  const runsAfter = await repositories.runs.listByType('recap.post', 10);
+  assert.equal(runsAfter.length, 1);
+  assert.equal(runsAfter[0]!.status, 'succeeded');
+  assert.equal(runsAfter[0]!.run_type, 'recap.post');
 });
 
 async function createSettledPick(
