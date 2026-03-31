@@ -3,38 +3,6 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { computeClvTrustAdjustment } from './clv-feedback.js';
 
-function makePickRecord(
-  id: string,
-  source: string,
-) {
-  return {
-    id,
-    submission_id: `sub-${id}`,
-    market: 'NBA points',
-    selection: 'Player Over 18.5',
-    line: 18.5,
-    odds: -110,
-    stake_units: 1,
-    confidence: 0.7,
-    source,
-    approval_status: 'approved',
-    promotion_status: 'qualified',
-    promotion_target: 'best-bets',
-    promotion_score: 80,
-    promotion_reason: 'qualified',
-    promotion_version: '1.0',
-    promotion_decided_at: new Date().toISOString(),
-    promotion_decided_by: 'system',
-    status: 'posted',
-    participant_id: null,
-    posted_at: new Date().toISOString(),
-    settled_at: null,
-    metadata: {},
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
-}
-
 async function seedSettlements(
   repositories: ReturnType<typeof createInMemoryRepositoryBundle> extends Promise<infer T> ? T : ReturnType<typeof createInMemoryRepositoryBundle>,
   source: string,

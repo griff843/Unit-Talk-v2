@@ -44,7 +44,7 @@ export async function handleExceptionQueuesRequest(
 
   // Enrich outbox rows with pick context
   const allOutboxPickIds = [...new Set([...failed, ...deadLetter].map((r) => r['pick_id'] as string))];
-  let pickMap = new Map<string, Record<string, unknown>>();
+  const pickMap = new Map<string, Record<string, unknown>>();
   if (allOutboxPickIds.length > 0) {
     const { data: picks } = await client.from('picks').select('id, market, selection, source, status').in('id', allOutboxPickIds);
     for (const p of (picks ?? []) as Array<Record<string, unknown>>) {

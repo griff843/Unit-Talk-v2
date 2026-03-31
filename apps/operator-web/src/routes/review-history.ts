@@ -52,7 +52,7 @@ export async function handleReviewHistoryRequest(
   // Fetch associated picks for context + settlement outcome
   const pickIds = [...new Set(reviewRows.map((r) => r['pick_id'] as string))];
 
-  let pickMap = new Map<string, Record<string, unknown>>();
+  const pickMap = new Map<string, Record<string, unknown>>();
   if (pickIds.length > 0) {
     const { data: picks } = await client
       .from('picks')
@@ -69,7 +69,7 @@ export async function handleReviewHistoryRequest(
     .filter((p) => p['status'] === 'settled')
     .map((p) => p['id'] as string);
 
-  let settlementMap = new Map<string, string>();
+  const settlementMap = new Map<string, string>();
   if (settledPickIds.length > 0) {
     const { data: settlements } = await client
       .from('settlement_records')

@@ -238,7 +238,7 @@ test('default failureThreshold is 3', async () => {
 });
 
 test('default cooldownMs is 60000', () => {
-  let currentTime = 0;
+  const currentTime = 0;
   const cb = new CircuitBreaker(
     async () => { throw new Error('fail'); },
     'fallback',

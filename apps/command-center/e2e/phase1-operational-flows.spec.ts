@@ -24,7 +24,7 @@ test.describe('Pick Visibility — open and inspect', () => {
   test('pick detail shows lifecycle state section', async ({ page }) => {
     await page.goto('/picks/test-lifecycle');
     // Must have the Lifecycle Transitions section
-    const body = await page.content();
+    const _body = await page.content();
     // The page renders either the full 8-section trace (when operator-web is up)
     // or the settlement/correction surface (always rendered)
     await expect(page.getByText('Pick Detail')).toBeVisible();
@@ -353,7 +353,7 @@ test.describe('Integrated Flow — complete operator workflow is possible', () =
 
     // Settled pick → correction form only
     await page.goto('/picks/mutual-exclusive-test?status=settled');
-    const settleHeading2 = await page.getByText('Settle Pick', { exact: false }).count();
+    const _settleHeading2 = await page.getByText('Settle Pick', { exact: false }).count();
     const correctHeading2 = await page.getByText('Correct Settlement').count();
     // "Settle Pick" button won't appear, but "Re-settle Pick" might — check for correction
     expect(correctHeading2).toBeGreaterThan(0);

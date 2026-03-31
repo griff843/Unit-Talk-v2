@@ -12,7 +12,6 @@
  */
 
 import type { ParticipantRepository, SystemRunRepository } from '@unit-talk/db';
-import type { ParticipantRow } from '@unit-talk/db';
 
 export interface PlayerEnrichmentDeps {
   participants: ParticipantRepository;
@@ -34,7 +33,7 @@ export interface EnrichmentResult {
 export async function resolveHeadshotUrl(
   displayName: string,
   sport: string | null,
-  externalId: string | null,
+  _externalId: string | null,
 ): Promise<string | null> {
   if (!sport) return null;
 

@@ -4,7 +4,6 @@ import {
   computeExecutionQuality,
   type ExecutionQualityPick,
   type ExecutionQualityReceipt,
-  type ExecutionQualityContext,
 } from './execution-quality.js';
 
 // ---------------------------------------------------------------------------

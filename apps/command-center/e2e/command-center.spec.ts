@@ -345,7 +345,7 @@ test.describe('§10 Exception Visibility', () => {
   test('exception panel is absent when there are zero exceptions (clean state)', async ({ page }) => {
     await page.goto('/');
     // "Exceptions" card should NOT appear when no exceptions
-    const exceptionCard = page.getByText('Exceptions', { exact: false });
+    const _exceptionCard = page.getByText('Exceptions', { exact: false });
     // In BROKEN state with no picks, no exceptions are generated
     // (exceptions require pick data to analyze)
     await expect(page.getByText('System Health')).toBeVisible();
@@ -377,7 +377,7 @@ test.describe('§11 Authority Model', () => {
 
 test.describe('§15 Implementation Stack', () => {
   test('app is served by Next.js (meta tag or header present)', async ({ page }) => {
-    const response = await page.goto('/');
+    const _response = await page.goto('/');
     // Next.js sets x-powered-by header (unless disabled)
     // Or we can check for Next.js data attributes in HTML
     const html = await page.content();

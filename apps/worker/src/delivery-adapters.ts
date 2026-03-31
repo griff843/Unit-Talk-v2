@@ -199,7 +199,7 @@ function safelyResolveDiscordChannelId(target: string, targetMap: Record<string,
 
 function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const payload = isRecord(outbox.payload) ? outbox.payload : {};
-  const market = typeof payload.market === 'string' ? payload.market : 'Unknown market';
+  const _market = typeof payload.market === 'string' ? payload.market : 'Unknown market';
   const selection =
     typeof payload.selection === 'string' ? payload.selection : 'Unknown selection';
   const line = formatLine(payload.line);
