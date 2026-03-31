@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
-import type { OperatorRouteDependencies, OutboxFilter } from '../server.js';
+import type { OperatorRouteDependencies, OperatorSnapshot, OutboxFilter } from '../server.js';
 import { writeJson } from '../http-utils.js';
 
 export async function handleSnapshotRequest(
@@ -26,5 +26,31 @@ export async function handleSnapshotRequest(
         }
       : undefined;
   const snapshot = await deps.provider.getSnapshot(filter);
-  writeJson(response, 200, { ok: true, data: snapshot });
+
+  // Apply pagination: truncate recent* arrays to the requested limit and detect hasMore
+  const effectiveLimit = filter?.limit ?? 25;
+  const paginatedArrayKeys: (keyof OperatorSnapshot)[] = [
+    'recentOutbox',
+    'recentReceipts',
+    'recentSettlements',
+    'recentRuns',
+    'recentPicks',
+    'recentAudit',
+  ];
+
+  let hasMore = false;
+  const paginatedSnapshot = { ...snapshot };
+  for (const key of paginatedArrayKeys) {
+    const arr = paginatedSnapshot[key] as unknown[];
+    if (arr.length > effectiveLimit) {
+      hasMore = true;
+      (paginatedSnapshot as Record<string, unknown>)[key] = arr.slice(0, effectiveLimit);
+    }
+  }
+
+  writeJson(response, 200, {
+    ok: true,
+    data: paginatedSnapshot,
+    pagination: { limit: effectiveLimit, hasMore },
+  });
 }

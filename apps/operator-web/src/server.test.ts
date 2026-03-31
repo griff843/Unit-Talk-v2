@@ -3720,3 +3720,169 @@ test('GET /api/operator/intelligence returns intelligence shape', async () => {
   assert.ok('warnings' in insights);
   assert.ok(Array.isArray(insights['warnings']));
 });
+
+// ---------------------------------------------------------------------------
+// Snapshot pagination tests (UTV2-131)
+// ---------------------------------------------------------------------------
+
+test('GET /api/operator/snapshot returns pagination metadata with default limit', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/snapshot');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: Record<string, unknown>;
+    pagination: { limit: number; hasMore: boolean };
+  };
+  assert.equal(body.ok, true);
+  assert.equal(body.pagination.limit, 25);
+  assert.equal(body.pagination.hasMore, false);
+});
+
+test('GET /api/operator/snapshot truncates arrays when limit < array length', async () => {
+  // Build a provider that returns 4 outbox items (more than limit=2)
+  const outboxItems = Array.from({ length: 4 }, (_, i) => ({
+    id: `outbox-pg-${i}`,
+    pick_id: `pick-pg-${i}`,
+    target: 'discord:canary' as const,
+    status: 'sent' as const,
+    attempt_count: 0,
+    next_attempt_at: null,
+    last_error: null,
+    payload: { market: 'NBA points' },
+    claimed_at: `2026-03-20T12:0${i}:00.000Z`,
+    claimed_by: 'worker-canary',
+    idempotency_key: `pg-${i}:discord:canary:distribution`,
+    created_at: `2026-03-20T12:0${i}:00.000Z`,
+    updated_at: `2026-03-20T12:0${i}:01.000Z`,
+  }));
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot(_filter?: OutboxFilter) {
+      return createSnapshotFromRows({
+        persistenceMode: 'demo',
+        recentOutbox: outboxItems,
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/snapshot?limit=2');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: { recentOutbox: unknown[] };
+    pagination: { limit: number; hasMore: boolean };
+  };
+  assert.equal(body.pagination.limit, 2);
+  assert.equal(body.pagination.hasMore, true);
+  assert.equal(body.data.recentOutbox.length, 2);
+});
+
+test('GET /api/operator/snapshot clamps limit to max 100', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot(_filter?: OutboxFilter) {
+      return createSnapshotFromRows({
+        persistenceMode: 'demo',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/snapshot?limit=999');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    pagination: { limit: number; hasMore: boolean };
+  };
+  assert.equal(body.pagination.limit, 100);
+  assert.equal(body.pagination.hasMore, false);
+});
+
+test('GET /api/operator/snapshot hasMore is false when arrays fit within limit', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot(_filter?: OutboxFilter) {
+      return createSnapshotFromRows({
+        persistenceMode: 'demo',
+        recentOutbox: [
+          {
+            id: 'outbox-fit-1',
+            pick_id: 'pick-fit-1',
+            target: 'discord:canary',
+            status: 'sent',
+            attempt_count: 0,
+            next_attempt_at: null,
+            last_error: null,
+            payload: {},
+            claimed_at: '2026-03-20T12:00:00.000Z',
+            claimed_by: 'worker',
+            idempotency_key: 'fit-1',
+            created_at: '2026-03-20T12:00:00.000Z',
+            updated_at: '2026-03-20T12:00:00.000Z',
+          },
+        ],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/snapshot?limit=5');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: { recentOutbox: unknown[] };
+    pagination: { limit: number; hasMore: boolean };
+  };
+  assert.equal(body.pagination.limit, 5);
+  assert.equal(body.pagination.hasMore, false);
+  assert.equal(body.data.recentOutbox.length, 1);
+});
