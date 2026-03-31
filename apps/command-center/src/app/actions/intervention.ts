@@ -7,12 +7,15 @@ export type InterventionResult =
   | { ok: false; error: string };
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3000';
+// Operator identity for audit logs. Set OPERATOR_IDENTITY in env for traceability.
+// Replace with real auth when implemented.
+const OPERATOR_ACTOR = process.env.OPERATOR_IDENTITY ?? 'command-center';
 
 export async function retryDelivery(pickId: string, reason: string): Promise<InterventionResult> {
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/retry-delivery`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reason, actor: 'command-center' }),
+    body: JSON.stringify({ reason, actor: OPERATOR_ACTOR }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
@@ -24,7 +27,7 @@ export async function rerunPromotion(pickId: string, reason: string): Promise<In
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/rerun-promotion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ reason, actor: 'command-center' }),
+    body: JSON.stringify({ reason, actor: OPERATOR_ACTOR }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
@@ -41,7 +44,7 @@ export async function overridePromotion(
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/override-promotion`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ action, reason, actor: 'command-center', target }),
+    body: JSON.stringify({ action, reason, actor: OPERATOR_ACTOR, target }),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };

@@ -46,7 +46,7 @@ import { handleIntelligenceRequest } from './routes/intelligence.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
 
 export interface OperatorHealthSignal {
-  component: 'api' | 'worker' | 'distribution';
+  component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
   status: 'healthy' | 'degraded' | 'down';
   detail: string;
 }
@@ -1073,6 +1073,23 @@ export function createSnapshotFromRows(input: {
 
   const boardUtil = computeBoardUtilization(input.recentPicks, input.picksPipelineCounts);
 
+  // Fail-closed health: missing data = degraded, not healthy.
+  const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000; // 2 hours
+  const nowMs = (input.now ?? new Date()).getTime();
+
+  const ingestorStale = !ingestorHealth.lastRunAt ||
+    (nowMs - new Date(ingestorHealth.lastRunAt).getTime()) > STALE_THRESHOLD_MS;
+
+  const gradingRuns = input.recentRuns.filter((r) => r.run_type === 'grading.run');
+  const latestGradingAt = gradingRuns[0]?.started_at;
+  const gradingStale = !latestGradingAt ||
+    (nowMs - new Date(latestGradingAt).getTime()) > STALE_THRESHOLD_MS;
+
+  const alertRuns = input.recentRuns.filter((r) => r.run_type === 'alert.detection');
+  const latestAlertAt = alertRuns[0]?.started_at;
+  const alertStale = !latestAlertAt ||
+    (nowMs - new Date(latestAlertAt).getTime()) > STALE_THRESHOLD_MS;
+
   const healthSignals: OperatorHealthSignal[] = [
     {
       component: 'api',
@@ -1082,6 +1099,36 @@ export function createSnapshotFromRows(input: {
     workerStatus,
     distributionStatus,
   ];
+
+  if (ingestorStale) {
+    healthSignals.push({
+      component: 'ingestor',
+      status: 'degraded',
+      detail: ingestorHealth.lastRunAt
+        ? `Last ingestor run ${ingestorHealth.lastRunAt} — over 2h ago`
+        : 'No ingestor runs detected — feed may be down',
+    });
+  }
+
+  if (gradingStale) {
+    healthSignals.push({
+      component: 'grading',
+      status: 'degraded',
+      detail: latestGradingAt
+        ? `Last grading run ${latestGradingAt} — over 2h ago`
+        : 'No grading runs detected — picks may not be settling',
+    });
+  }
+
+  if (alertStale) {
+    healthSignals.push({
+      component: 'alert-agent',
+      status: 'degraded',
+      detail: latestAlertAt
+        ? `Last alert detection ${latestAlertAt} — over 2h ago`
+        : 'No alert detection runs — agent may not be running',
+    });
+  }
 
   if (boardUtil.status !== 'healthy') {
     healthSignals.push({

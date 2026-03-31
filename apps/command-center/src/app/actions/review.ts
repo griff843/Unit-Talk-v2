@@ -14,6 +14,8 @@ export async function reviewPick(
   reason: string,
 ): Promise<ReviewResult> {
   const apiUrl = process.env.API_BASE_URL ?? 'http://localhost:3000';
+  // Operator identity for audit logs. Replace with real auth when implemented.
+  const operatorActor = process.env.OPERATOR_IDENTITY ?? 'command-center';
 
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/review`, {
     method: 'POST',
@@ -21,7 +23,7 @@ export async function reviewPick(
     body: JSON.stringify({
       decision,
       reason,
-      decidedBy: 'command-center',
+      decidedBy: operatorActor,
     }),
   });
 

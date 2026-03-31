@@ -25,6 +25,8 @@ export async function settlePick(
   result: 'win' | 'loss' | 'push' | 'void',
 ): Promise<SettleResult> {
   const apiUrl = process.env.API_BASE_URL ?? 'http://localhost:3000';
+  // Operator identity for audit logs. Replace with real auth when implemented.
+  const operatorActor = process.env.OPERATOR_IDENTITY ?? 'command-center';
 
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/settle`, {
     method: 'POST',
@@ -35,7 +37,7 @@ export async function settlePick(
       source: 'operator',
       confidence: 'confirmed',
       evidenceRef: 'operator-manual',
-      settledBy: 'command-center',
+      settledBy: operatorActor,
     }),
   });
 
