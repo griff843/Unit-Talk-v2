@@ -26,7 +26,7 @@ import type {
   SettlementRecord,
   SettlementRepository,
 } from '@unit-talk/db';
-import { transitionPickLifecycle } from './lifecycle-service.js';
+import { ensurePickLifecycleState, transitionPickLifecycle } from './lifecycle-service.js';
 import { ApiError } from './errors.js';
 import { computeAndAttachCLV } from './clv-service.js';
 
@@ -121,9 +121,11 @@ export async function recordGradedSettlement(
     throw new Error(`Pick not found for graded settlement: ${pickId}`);
   }
 
-  if (pick.status !== 'posted') {
+  // Allow both 'posted' (normal path) and 'settled' (when atomicClaimForTransition
+  // has already transitioned the pick before this function is called).
+  if (pick.status !== 'posted' && pick.status !== 'settled') {
     throw new Error(
-      `Pick ${pickId} must be in posted state for graded settlement; found ${pick.status}`,
+      `Pick ${pickId} must be in posted or settled state for graded settlement; found ${pick.status}`,
     );
   }
 
@@ -141,21 +143,50 @@ export async function recordGradedSettlement(
   }
 
   const settledAt = new Date().toISOString();
-  const settlementRecord = await repositories.settlements.record({
-    pickId: pick.id,
-    status: 'settled',
-    result,
-    source: 'grading',
-    confidence: 'confirmed',
-    evidenceRef: `game-result:${gradingContext.gameResultId}`,
-    notes: null,
-    reviewReason: null,
-    settledBy: 'grading-service',
-    settledAt,
-    payload,
-  });
 
-  const transitioned = await transitionPickLifecycle(
+  let settlementRecord: SettlementRecord;
+  try {
+    settlementRecord = await repositories.settlements.record({
+      pickId: pick.id,
+      status: 'settled',
+      result,
+      source: 'grading',
+      confidence: 'confirmed',
+      evidenceRef: `game-result:${gradingContext.gameResultId}`,
+      notes: null,
+      reviewReason: null,
+      settledBy: 'grading-service',
+      settledAt,
+      payload,
+    });
+  } catch (err: unknown) {
+    // Handle unique constraint violation (duplicate settlement for same pick+source).
+    // Postgres error code 23505 = unique_violation.
+    if (isDuplicateSettlementError(err)) {
+      const existing = await repositories.settlements.findLatestForPick(pick.id);
+      if (existing) {
+        const currentPick = await repositories.picks.findPickById(pick.id);
+        const downstream = await computeSettlementDownstreamBundle(
+          currentPick ?? pick,
+          repositories.settlements,
+        );
+        return {
+          pickRecord: currentPick ?? pick,
+          settlementRecord: existing,
+          lifecycleEvent: null,
+          auditRecords: [],
+          finalLifecycleState: currentPick?.status ?? pick.status,
+          downstream,
+        };
+      }
+    }
+    throw err;
+  }
+
+  // Use ensurePickLifecycleState instead of transitionPickLifecycle so that
+  // if atomicClaimForTransition already moved the pick to 'settled', we
+  // skip the redundant transition gracefully.
+  const transitioned = await ensurePickLifecycleState(
     repositories.picks,
     pick.id,
     'settled',
@@ -184,7 +215,7 @@ export async function recordGradedSettlement(
       result,
       source: 'grading',
       gradingContext,
-      settledLifecycleEventId: transitioned.lifecycleEvent.id,
+      settledLifecycleEventId: transitioned?.lifecycleEvent.id ?? null,
       downstream,
     },
   });
@@ -192,7 +223,7 @@ export async function recordGradedSettlement(
   return {
     pickRecord: updatedPick,
     settlementRecord,
-    lifecycleEvent: transitioned.lifecycleEvent,
+    lifecycleEvent: transitioned?.lifecycleEvent ?? null,
     auditRecords: [audit],
     finalLifecycleState: updatedPick.status,
     downstream,
@@ -272,22 +303,46 @@ async function recordInitialSettlement(
   },
 ): Promise<RecordSettlementResult> {
   const settledAt = new Date().toISOString();
-  const settlementRecord = await repositories.settlements.record({
-    pickId: pick.id,
-    status: 'settled',
-    result: request.result ?? null,
-    source: request.source,
-    confidence: request.confidence,
-    evidenceRef: request.evidenceRef,
-    notes: request.notes ?? null,
-    reviewReason: null,
-    settledBy: request.settledBy,
-    settledAt,
-    payload: {
-      requestStatus: request.status,
-      correction: false,
-    },
-  });
+
+  let settlementRecord: SettlementRecord;
+  try {
+    settlementRecord = await repositories.settlements.record({
+      pickId: pick.id,
+      status: 'settled',
+      result: request.result ?? null,
+      source: request.source,
+      confidence: request.confidence,
+      evidenceRef: request.evidenceRef,
+      notes: request.notes ?? null,
+      reviewReason: null,
+      settledBy: request.settledBy,
+      settledAt,
+      payload: {
+        requestStatus: request.status,
+        correction: false,
+      },
+    });
+  } catch (err: unknown) {
+    if (isDuplicateSettlementError(err)) {
+      const existing = await repositories.settlements.findLatestForPick(pick.id);
+      if (existing) {
+        const currentPick = await repositories.picks.findPickById(pick.id);
+        const downstream = await computeSettlementDownstreamBundle(
+          currentPick ?? pick,
+          repositories.settlements,
+        );
+        return {
+          pickRecord: currentPick ?? pick,
+          settlementRecord: existing,
+          lifecycleEvent: null,
+          auditRecords: [],
+          finalLifecycleState: currentPick?.status ?? pick.status,
+          downstream,
+        };
+      }
+    }
+    throw err;
+  }
 
   const transitioned = await transitionPickLifecycle(
     repositories.picks,
@@ -493,5 +548,18 @@ function readNumber(value: unknown): number | null {
 
 function readBoolean(value: unknown): boolean | null {
   return typeof value === 'boolean' ? value : null;
+}
+
+/**
+ * Detect Postgres unique_violation (code 23505) on the
+ * settlement_records_pick_source_idx partial unique index.
+ */
+function isDuplicateSettlementError(err: unknown): boolean {
+  if (typeof err !== 'object' || err === null) {
+    return false;
+  }
+  const record = err as Record<string, unknown>;
+  // Supabase/pg errors surface the code as `.code`
+  return record['code'] === '23505';
 }
 
