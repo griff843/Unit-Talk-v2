@@ -16,7 +16,9 @@ import type {
   PickRecord,
   PickRepository,
   PromotionHistoryRecord,
+  SettlementRepository,
 } from '@unit-talk/db';
+import { computeClvTrustAdjustment } from './clv-feedback.js';
 
 const activeScoringProfile = resolveScoringProfile(process.env['UNIT_TALK_SCORING_PROFILE']);
 
@@ -93,6 +95,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
   actor: string,
   pickRepository: PickRepository,
   auditLogRepository: AuditLogRepository,
+  settlementRepository?: SettlementRepository,
 ): Promise<EagerPromotionAllPoliciesResult> {
   const pickRecord = await pickRepository.findPickById(pickId);
   if (!pickRecord) {
@@ -118,7 +121,11 @@ export async function evaluateAllPoliciesEagerAndPersist(
   // Fetch open picks for correlation-aware scoring
   const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
-  const scoreInputs = readPromotionScoreInputs(canonicalPick, openPicks);
+  const scoreInputs = await readPromotionScoreInputs(
+    canonicalPick,
+    openPicks,
+    settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
+  );
   const decidedAt = new Date().toISOString();
 
   const makeInput = (
@@ -325,6 +332,7 @@ async function persistPromotionDecisionForPick(
         reason: string;
       }
     | undefined,
+  settlementRepository?: SettlementRepository,
 ): Promise<PromotionEvaluationResult> {
   const pickRecord = await pickRepository.findPickById(pickId);
   if (!pickRecord) {
@@ -342,7 +350,11 @@ async function persistPromotionDecisionForPick(
   // Fetch open picks for correlation-aware scoring
   const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
   const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
-  const scoreInputs = readPromotionScoreInputs(canonicalPick, openPicks);
+  const scoreInputs = await readPromotionScoreInputs(
+    canonicalPick,
+    openPicks,
+    settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
+  );
   const overrideState = mapOverrideState(override);
   const decision = evaluatePromotionEligibility({
     target: policy.target,
@@ -474,9 +486,13 @@ function hasRequiredFields(pick: CanonicalPick) {
   return Boolean(pick.market && pick.selection && pick.source);
 }
 
-function readPromotionScoreInputs(
+async function readPromotionScoreInputs(
   pick: CanonicalPick,
   openPicks?: readonly CanonicalPick[],
+  repositories?: {
+    settlements: SettlementRepository;
+    picks: PickRepository;
+  },
 ) {
   const configured = readNestedRecord(pick.metadata, 'promotionScores');
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
@@ -490,6 +506,20 @@ function readPromotionScoreInputs(
   // Readiness fallback priority: explicit promotionScores.readiness > domain readiness signal > 80
   const readinessFallback = readDomainAnalysisReadinessSignal(pick.metadata) ?? 80;
 
+  let trust = readScore(configured, 'trust', trustFallback);
+
+  // Apply CLV feedback adjustment to trust score when repositories are available
+  if (repositories) {
+    const clvAdjustment = await computeClvTrustAdjustment(
+      pick.source,
+      repositories.settlements,
+      repositories.picks,
+    );
+    if (clvAdjustment) {
+      trust = Math.max(0, Math.min(100, trust + clvAdjustment.adjustment));
+    }
+  }
+
   let boardFit = readScore(configured, 'boardFit', 75);
 
   // Apply correlation penalty when open picks are available
@@ -501,7 +531,7 @@ function readPromotionScoreInputs(
 
   return {
     edge: readScore(configured, 'edge', edgeFallback),
-    trust: readScore(configured, 'trust', trustFallback),
+    trust,
     readiness: readScore(configured, 'readiness', readinessFallback),
     uniqueness: readScore(configured, 'uniqueness', 80),
     boardFit,
