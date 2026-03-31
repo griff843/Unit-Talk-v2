@@ -355,6 +355,155 @@ function coerceLogValue(value: unknown): LogValue {
   return String(value);
 }
 
+// ---------------------------------------------------------------------------
+// Metrics Collector
+// ---------------------------------------------------------------------------
+
+export type MetricLabels = Record<string, string>;
+
+interface CounterEntry {
+  value: number;
+  labels: MetricLabels;
+}
+
+interface GaugeEntry {
+  value: number;
+  labels: MetricLabels;
+}
+
+interface HistogramEntry {
+  count: number;
+  sum: number;
+  buckets: Map<number, number>;
+  labels: MetricLabels;
+}
+
+export interface MetricsSnapshot {
+  counters: Record<string, { value: number; labels: MetricLabels }[]>;
+  gauges: Record<string, { value: number; labels: MetricLabels }[]>;
+  histograms: Record<
+    string,
+    {
+      count: number;
+      sum: number;
+      buckets: Record<string, number>;
+      labels: MetricLabels;
+    }[]
+  >;
+}
+
+const DEFAULT_DURATION_BUCKETS = [5, 10, 25, 50, 100, 250, 500, 1000, 2500, 5000];
+
+function labelsKey(labels: MetricLabels | undefined): string {
+  if (!labels || Object.keys(labels).length === 0) return '';
+  return Object.entries(labels)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join(',');
+}
+
+function metricKey(name: string, labels: MetricLabels | undefined): string {
+  return `${name}|${labelsKey(labels)}`;
+}
+
+export class MetricsCollector {
+  readonly #counters = new Map<string, CounterEntry>();
+  readonly #gauges = new Map<string, GaugeEntry>();
+  readonly #histograms = new Map<string, HistogramEntry>();
+  readonly #buckets: number[];
+
+  constructor(buckets: number[] = DEFAULT_DURATION_BUCKETS) {
+    this.#buckets = [...buckets].sort((a, b) => a - b);
+  }
+
+  increment(metric: string, labels?: MetricLabels): void {
+    const key = metricKey(metric, labels);
+    const existing = this.#counters.get(key);
+    if (existing) {
+      existing.value += 1;
+    } else {
+      this.#counters.set(key, { value: 1, labels: labels ?? {} });
+    }
+  }
+
+  gauge(metric: string, value: number, labels?: MetricLabels): void {
+    const key = metricKey(metric, labels);
+    this.#gauges.set(key, { value, labels: labels ?? {} });
+  }
+
+  histogram(metric: string, value: number, labels?: MetricLabels): void {
+    const key = metricKey(metric, labels);
+    const existing = this.#histograms.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.sum += value;
+      for (const bound of this.#buckets) {
+        if (value <= bound) {
+          existing.buckets.set(bound, (existing.buckets.get(bound) ?? 0) + 1);
+        }
+      }
+    } else {
+      const bucketMap = new Map<number, number>();
+      for (const bound of this.#buckets) {
+        bucketMap.set(bound, value <= bound ? 1 : 0);
+      }
+      this.#histograms.set(key, {
+        count: 1,
+        sum: value,
+        buckets: bucketMap,
+        labels: labels ?? {},
+      });
+    }
+  }
+
+  snapshot(): MetricsSnapshot {
+    const counters: MetricsSnapshot['counters'] = {};
+    for (const entry of this.#counters.values()) {
+      const name = this.#nameFromEntry(this.#counters, entry);
+      if (!counters[name]) counters[name] = [];
+      counters[name].push({ value: entry.value, labels: { ...entry.labels } });
+    }
+
+    const gauges: MetricsSnapshot['gauges'] = {};
+    for (const entry of this.#gauges.values()) {
+      const name = this.#nameFromEntry(this.#gauges, entry);
+      if (!gauges[name]) gauges[name] = [];
+      gauges[name].push({ value: entry.value, labels: { ...entry.labels } });
+    }
+
+    const histograms: MetricsSnapshot['histograms'] = {};
+    for (const entry of this.#histograms.values()) {
+      const name = this.#nameFromEntry(this.#histograms, entry);
+      if (!histograms[name]) histograms[name] = [];
+      const bucketObj: Record<string, number> = {};
+      for (const [bound, count] of entry.buckets) {
+        bucketObj[String(bound)] = count;
+      }
+      histograms[name].push({
+        count: entry.count,
+        sum: entry.sum,
+        buckets: bucketObj,
+        labels: { ...entry.labels },
+      });
+    }
+
+    return { counters, gauges, histograms };
+  }
+
+  #nameFromEntry<T>(map: Map<string, T>, entry: T): string {
+    for (const [key, val] of map) {
+      if (val === entry) {
+        return key.split('|')[0] ?? '';
+      }
+    }
+    return '';
+  }
+}
+
+export function createMetricsCollector(buckets?: number[]): MetricsCollector {
+  return new MetricsCollector(buckets);
+}
+
 function readHeaderValue(
   headers:
     | Headers

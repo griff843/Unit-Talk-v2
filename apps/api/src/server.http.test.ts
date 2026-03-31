@@ -12,6 +12,7 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
+import { createMetricsCollector } from '@unit-talk/observability';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 
@@ -153,6 +154,7 @@ test('POST /api/submissions with oversized body returns 413', async () => {
         repositories: createInMemoryRepositoryBundle(),
       }).logger,
       now: Date.now,
+      metricsCollector: createMetricsCollector(),
       rateLimitStore: {
         consume(_key, limit, now) {
           return {

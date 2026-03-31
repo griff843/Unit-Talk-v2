@@ -11,9 +11,11 @@ import {
   createDualLogWriter,
   createLogger,
   createLokiLogWriter,
+  createMetricsCollector,
   createRequestLogFields,
   getOrCreateCorrelationId,
   type Logger,
+  type MetricsCollector,
 } from '@unit-talk/observability';
 import { setCorsHeaders, writeJson } from './http-utils.js';
 import {
@@ -61,6 +63,7 @@ export interface ApiRuntimeDependencies {
   logger: Logger;
   now: () => number;
   rateLimitStore: ApiRateLimitStore;
+  metricsCollector: MetricsCollector;
 }
 
 export interface ApiHealthResponse {
@@ -94,6 +97,7 @@ export function createApiRuntimeDependencies(
 ): ApiRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
   const runtimeMode = readApiRuntimeMode(environment);
+  const metricsCollector = createMetricsCollector();
   const lokiUrl = process.env.LOKI_URL?.trim();
   const writer = lokiUrl
     ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
@@ -116,6 +120,7 @@ export function createApiRuntimeDependencies(
       logger,
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
+      metricsCollector,
     };
   }
 
@@ -131,6 +136,7 @@ export function createApiRuntimeDependencies(
       logger,
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
+      metricsCollector,
     };
   } catch (error) {
     if (runtimeMode === 'fail_closed') {
@@ -154,6 +160,7 @@ export function createApiRuntimeDependencies(
       logger,
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
+      metricsCollector,
     };
   }
 }
@@ -179,14 +186,24 @@ export function createApiServer(options: ApiServerOptions = {}) {
 
     response.setHeader('X-Correlation-Id', correlationId);
 
+    runtime.metricsCollector.increment('api_requests_total', { method, path: url.pathname });
+
     try {
       await routeRequest(request, response, runtime, requestLogger);
+      const durationMs = Math.max(runtime.now() - startedAt, 0);
+      runtime.metricsCollector.histogram('api_request_duration_ms', durationMs, { method, path: url.pathname });
+      if (response.statusCode >= 400) {
+        runtime.metricsCollector.increment('api_errors_total', { method, path: url.pathname, status: String(response.statusCode) });
+      }
       requestLogger.info('request completed', {
         statusCode: response.statusCode,
-        durationMs: Math.max(runtime.now() - startedAt, 0),
+        durationMs,
       });
     } catch (error) {
       const failure = toApiFailure(error);
+      const durationMs = Math.max(runtime.now() - startedAt, 0);
+      runtime.metricsCollector.histogram('api_request_duration_ms', durationMs, { method, path: url.pathname });
+      runtime.metricsCollector.increment('api_errors_total', { method, path: url.pathname, status: String(failure.status) });
 
       if (!response.headersSent) {
         writeJson(response, failure.status, failure.body);
@@ -194,7 +211,7 @@ export function createApiServer(options: ApiServerOptions = {}) {
 
       requestLogger.error('request failed', error, {
         statusCode: failure.status,
-        durationMs: Math.max(runtime.now() - startedAt, 0),
+        durationMs,
       });
     }
   });
@@ -219,6 +236,11 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/health') {
     return handleHealth(response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/metrics') {
+    runtime.metricsCollector.gauge('uptime_seconds', Math.floor(process.uptime()));
+    return writeJson(response, 200, runtime.metricsCollector.snapshot());
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/catalog') {

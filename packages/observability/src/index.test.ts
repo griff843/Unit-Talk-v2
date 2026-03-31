@@ -1,12 +1,15 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { describe, it } from 'node:test';
 import {
   createCorrelationId,
   createDualLogWriter,
   createLogger,
   createLokiLogWriter,
+  createMetricsCollector,
   createRequestLogFields,
   getOrCreateCorrelationId,
+  MetricsCollector,
   normalizeCorrelationId,
   serializeError,
   type LogLevel,
@@ -197,4 +200,109 @@ test('createDualLogWriter continues if secondary fails', () => {
   dual.write('info', createMockEntry());
 
   assert.equal(primaryEntries.length, 1, 'primary should still receive entry');
+});
+
+// ---------------------------------------------------------------------------
+// MetricsCollector
+// ---------------------------------------------------------------------------
+
+describe('MetricsCollector', () => {
+  it('createMetricsCollector returns a MetricsCollector instance', () => {
+    const collector = createMetricsCollector();
+    assert.ok(collector instanceof MetricsCollector);
+  });
+
+  it('increment increases counter by 1 each call', () => {
+    const collector = createMetricsCollector();
+    collector.increment('api_requests_total');
+    collector.increment('api_requests_total');
+    collector.increment('api_requests_total');
+    const snap = collector.snapshot();
+    assert.deepStrictEqual(snap.counters['api_requests_total'], [
+      { value: 3, labels: {} },
+    ]);
+  });
+
+  it('increment with labels tracks separately', () => {
+    const collector = createMetricsCollector();
+    collector.increment('api_requests_total', { method: 'GET' });
+    collector.increment('api_requests_total', { method: 'POST' });
+    collector.increment('api_requests_total', { method: 'GET' });
+    const snap = collector.snapshot();
+    const entries = snap.counters['api_requests_total']!;
+    assert.equal(entries.length, 2);
+    const getEntry = entries.find((e) => e.labels.method === 'GET');
+    const postEntry = entries.find((e) => e.labels.method === 'POST');
+    assert.equal(getEntry?.value, 2);
+    assert.equal(postEntry?.value, 1);
+  });
+
+  it('gauge sets and overwrites value', () => {
+    const collector = createMetricsCollector();
+    collector.gauge('uptime_seconds', 10);
+    collector.gauge('uptime_seconds', 20);
+    const snap = collector.snapshot();
+    assert.deepStrictEqual(snap.gauges['uptime_seconds'], [
+      { value: 20, labels: {} },
+    ]);
+  });
+
+  it('gauge with labels tracks separately', () => {
+    const collector = createMetricsCollector();
+    collector.gauge('memory_mb', 100, { process: 'api' });
+    collector.gauge('memory_mb', 200, { process: 'worker' });
+    const snap = collector.snapshot();
+    const entries = snap.gauges['memory_mb']!;
+    assert.equal(entries.length, 2);
+  });
+
+  it('histogram records count, sum, and bucket distribution', () => {
+    const collector = createMetricsCollector();
+    collector.histogram('api_request_duration_ms', 15);
+    collector.histogram('api_request_duration_ms', 150);
+    collector.histogram('api_request_duration_ms', 3000);
+    const snap = collector.snapshot();
+    const entries = snap.histograms['api_request_duration_ms']!;
+    assert.equal(entries.length, 1);
+    const h = entries[0]!;
+    assert.equal(h.count, 3);
+    assert.equal(h.sum, 15 + 150 + 3000);
+    assert.equal(h.buckets['5'], 0);
+    assert.equal(h.buckets['10'], 0);
+    assert.equal(h.buckets['25'], 1);
+    assert.equal(h.buckets['50'], 1);
+    assert.equal(h.buckets['100'], 1);
+    assert.equal(h.buckets['250'], 2);
+    assert.equal(h.buckets['500'], 2);
+    assert.equal(h.buckets['1000'], 2);
+    assert.equal(h.buckets['2500'], 2);
+    assert.equal(h.buckets['5000'], 3);
+  });
+
+  it('snapshot returns empty when no metrics recorded', () => {
+    const collector = createMetricsCollector();
+    const snap = collector.snapshot();
+    assert.deepStrictEqual(snap, { counters: {}, gauges: {}, histograms: {} });
+  });
+
+  it('snapshot returns copies (not live references)', () => {
+    const collector = createMetricsCollector();
+    collector.increment('test_counter');
+    const snap1 = collector.snapshot();
+    collector.increment('test_counter');
+    const snap2 = collector.snapshot();
+    assert.equal(snap1.counters['test_counter']![0]!.value, 1);
+    assert.equal(snap2.counters['test_counter']![0]!.value, 2);
+  });
+
+  it('custom buckets are respected', () => {
+    const collector = createMetricsCollector([10, 100, 1000]);
+    collector.histogram('custom', 50);
+    const snap = collector.snapshot();
+    const h = snap.histograms['custom']![0]!;
+    assert.equal(h.buckets['10'], 0);
+    assert.equal(h.buckets['100'], 1);
+    assert.equal(h.buckets['1000'], 1);
+    assert.equal(Object.keys(h.buckets).length, 3);
+  });
 });
