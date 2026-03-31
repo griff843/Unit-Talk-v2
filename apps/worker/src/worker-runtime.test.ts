@@ -915,18 +915,15 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
   );
   assert.equal(embed?.title, 'Unit Talk V2 Canary');
   assert.equal(embed?.description, 'NBA | Lakers vs Celtics');
-  assert.equal(embed?.footer?.text, 'Target: discord:canary');
-  assert.deepEqual(
-    embed?.fields?.map((field) => [field.name, field.value]),
-    [
-      ['Market', 'Player points'],
-      ['Pick', 'Over 24.5 @ +24.5 (-110)'],
-      ['Capper', 'griff843'],
-      ['Source', 'smart-form'],
-      ['State', 'queued'],
-      ['Pick ID', `\`${outbox.pick_id}\``],
-    ],
-  );
+  assert.equal(embed?.footer?.text, 'Unit Talk');
+  // Spec-compliant fields: no pick_id, no State, no Source
+  const fieldNames = embed?.fields?.map((f: Record<string, unknown>) => f.name) ?? [];
+  assert.ok(fieldNames.includes('Pick'), 'must have Pick field');
+  assert.ok(fieldNames.includes('Odds'), 'must have Odds field');
+  assert.ok(fieldNames.includes('Capper'), 'must have Capper field');
+  assert.ok(!fieldNames.includes('Pick ID'), 'must NOT show Pick ID');
+  assert.ok(!fieldNames.includes('State'), 'must NOT show State');
+  assert.ok(!fieldNames.includes('Source'), 'must NOT show Source');
   assert.equal(receipt.receiptType, 'discord.message');
   assert.equal(receipt.channel, 'discord:1234567890');
   assert.equal(receipt.externalId, 'discord-message-1');
@@ -1251,7 +1248,7 @@ test('buildDiscordMessagePayload omits content field for non-canary targets', as
   assert.equal(body.content, undefined, 'content field must be absent for non-canary targets');
   assert.ok(body.embeds?.[0] != null, 'embed must still be present');
   assert.equal(body.embeds?.[0]?.title, 'Unit Talk V2 Best Bet');
-  assert.equal(body.embeds?.[0]?.footer?.text, 'Target: discord:best-bets | Curated lane preview');
+  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk');
   assert.equal(
     body.embeds?.[0]?.fields?.[0]?.name,
     'Best Bets Purpose',
@@ -1282,7 +1279,7 @@ test('createDiscordDeliveryAdapter renders trader-insights target-specific embed
   assert.equal(body.embeds?.[0]?.title, 'Unit Talk V2 Trader Insight');
   assert.equal(
     body.embeds?.[0]?.footer?.text,
-    'Target: discord:trader-insights | Market-alerts lane preview',
+    'Unit Talk',
   );
   assert.equal(body.embeds?.[0]?.fields?.[0]?.name, 'Trader Insights Purpose');
 });

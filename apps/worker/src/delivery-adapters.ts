@@ -196,6 +196,7 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const sport = typeof metadata.sport === 'string' ? metadata.sport : null;
   const eventName = typeof metadata.eventName === 'string' ? metadata.eventName : null;
   const capper = typeof metadata.capper === 'string' ? metadata.capper : null;
+  const stakeUnits = typeof payload.stakeUnits === 'number' ? payload.stakeUnits : null;
   const description = [sport, eventName].filter((value): value is string => Boolean(value)).join(
     ' | ',
   );
@@ -206,6 +207,29 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
     lifecycleState,
   });
 
+  // Embed follows discord_embed_system_spec.md:
+  // - Never show pick_id, raw lifecycle state, or internal metadata
+  // - 3-6 fields max
+  // - Fields: Pick, Odds, Units, Capper, Date (optional)
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [];
+
+  if (presentation.leadField) {
+    fields.push({ name: presentation.leadField.name, value: presentation.leadField.value, inline: false });
+  }
+
+  fields.push({ name: 'Pick', value: `${selection}${line}`, inline: true });
+  fields.push({ name: 'Odds', value: odds || '—', inline: true });
+
+  if (stakeUnits != null) {
+    fields.push({ name: 'Units', value: String(stakeUnits), inline: true });
+  }
+
+  fields.push({ name: 'Capper', value: capper ?? 'Unit Talk', inline: true });
+
+  if (eventName) {
+    fields.push({ name: 'Date', value: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), inline: true });
+  }
+
   return {
     content: presentation.content,
     embeds: [
@@ -213,49 +237,9 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
         title: presentation.title,
         description: presentation.description,
         color: presentation.color,
-        fields: [
-          ...(presentation.leadField
-            ? [
-                {
-                  name: presentation.leadField.name,
-                  value: presentation.leadField.value,
-                  inline: false,
-                },
-              ]
-            : []),
-          {
-            name: 'Market',
-            value: market,
-            inline: true,
-          },
-          {
-            name: 'Pick',
-            value: `${selection}${line}${odds}`.trim(),
-            inline: true,
-          },
-          {
-            name: 'Capper',
-            value: capper ?? 'Unit Talk',
-            inline: true,
-          },
-          {
-            name: 'Source',
-            value: source,
-            inline: true,
-          },
-          {
-            name: 'State',
-            value: lifecycleState,
-            inline: true,
-          },
-          {
-            name: 'Pick ID',
-            value: `\`${outbox.pick_id}\``,
-            inline: false,
-          },
-        ],
+        fields,
         footer: {
-          text: presentation.footer,
+          text: 'Unit Talk',
         },
         timestamp: new Date().toISOString(),
       },
