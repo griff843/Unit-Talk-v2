@@ -474,6 +474,9 @@ export function createOperatorSnapshotProvider(
       async getSnapshot(filter?: OutboxFilter) {
         const today = new Date().toISOString().slice(0, 10);
         const nextWeek = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+        // Fetch one extra row beyond the requested limit so the route can detect hasMore
+        const requestedLimit = filter?.limit ?? 25;
+        const fetchLimit = requestedLimit + 1;
         const [
           outboxResult,
           receiptsResult,
@@ -498,30 +501,30 @@ export function createOperatorSnapshotProvider(
             if (filter?.status) q = q.eq('status', filter.status);
             if (filter?.target) q = q.eq('target', filter.target);
             if (filter?.since) q = q.gte('created_at', filter.since);
-            return q.order('created_at', { ascending: false }).limit(filter ? 20 : 12);
+            return q.order('created_at', { ascending: false }).limit(fetchLimit);
           })(),
           client
             .from('distribution_receipts')
             .select('*')
             .order('recorded_at', { ascending: false })
-            .limit(12),
+            .limit(fetchLimit),
           client
             .from('settlement_records')
             .select('*')
             .order('created_at', { ascending: false })
-            .limit(12),
+            .limit(fetchLimit),
           (() => {
             let q = client.from('system_runs').select('*');
             if (filter?.since) q = q.gte('created_at', filter.since);
-            return q.order('created_at', { ascending: false }).limit(filter?.since ? 20 : 12);
+            return q.order('created_at', { ascending: false }).limit(fetchLimit);
           })(),
           (() => {
             let q = client.from('picks').select('*');
             if (filter?.lifecycleState) q = q.eq('status', filter.lifecycleState);
             if (filter?.since) q = q.gte('created_at', filter.since);
-            return q.order('created_at', { ascending: false }).limit(filter?.lifecycleState || filter?.since ? 20 : 12);
+            return q.order('created_at', { ascending: false }).limit(fetchLimit);
           })(),
-          client.from('audit_log').select('*').order('created_at', { ascending: false }).limit(12),
+          client.from('audit_log').select('*').order('created_at', { ascending: false }).limit(fetchLimit),
           client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'validated'),
           client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'queued'),
           client.from('picks').select('id', { count: 'exact', head: true }).eq('status', 'posted'),
