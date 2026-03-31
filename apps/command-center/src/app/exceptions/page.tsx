@@ -44,7 +44,7 @@ function CountBadge({ count, color }: { count: number; color: string }) {
   return <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${color}`}>{count}</span>;
 }
 
-function DeliveryRow({ row, onRetry }: { row: Record<string, unknown>; onRetry: (pickId: string, reason: string) => Promise<{ ok: boolean; error?: string }> }) {
+function DeliveryRow({ row }: { row: Record<string, unknown> }) {
   const pickId = String(row['pick_id'] ?? '');
   const pick = row['pick'] as Record<string, unknown> | null;
   return (
@@ -57,7 +57,7 @@ function DeliveryRow({ row, onRetry }: { row: Record<string, unknown>; onRetry: 
       <td className="py-2 pr-3 text-xs text-gray-300">{row['ageHours'] as number}h</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{pick ? String(pick['status']) : '—'}</td>
       <td className="py-2">
-        <InterventionAction label="Retry" variant="primary" onExecute={(reason) => onRetry(pickId, reason)} />
+        <InterventionAction label="Retry" variant="primary" onExecute={retryDelivery.bind(null, pickId)} />
       </td>
     </tr>
   );
@@ -100,7 +100,7 @@ export default async function ExceptionsPage() {
               </thead>
               <tbody>
                 {data!.failedDelivery.map((row, i) => (
-                  <DeliveryRow key={i} row={row} onRetry={retryDelivery} />
+                  <DeliveryRow key={i} row={row} />
                 ))}
               </tbody>
             </table>
@@ -122,7 +122,7 @@ export default async function ExceptionsPage() {
               </thead>
               <tbody>
                 {data!.deadLetter.map((row, i) => (
-                  <DeliveryRow key={i} row={row} onRetry={retryDelivery} />
+                  <DeliveryRow key={i} row={row} />
                 ))}
               </tbody>
             </table>
@@ -186,8 +186,8 @@ export default async function ExceptionsPage() {
                       <td className="py-2 pr-3 text-xs text-gray-300">{String(row['promotion_target'] ?? '—')}</td>
                       <td className="py-2">
                         <div className="flex gap-2">
-                          <InterventionAction label="Rerun" variant="primary" onExecute={(reason) => rerunPromotion(pickId, reason)} />
-                          <InterventionAction label="Force Promote" variant="success" onExecute={(reason) => overridePromotion(pickId, 'force_promote', reason)} />
+                          <InterventionAction label="Rerun" variant="primary" onExecute={rerunPromotion.bind(null, pickId)} />
+                          <InterventionAction label="Force Promote" variant="success" onExecute={overridePromotion.bind(null, pickId, 'force_promote')} />
                         </div>
                       </td>
                     </tr>
@@ -221,7 +221,7 @@ export default async function ExceptionsPage() {
                       <td className="py-2 pr-3 text-xs text-gray-300">{row['promotion_score'] != null ? Number(row['promotion_score']).toFixed(1) : '—'}</td>
                       <td className="py-2 pr-3 text-xs text-yellow-400">{row['ageHours'] as number}h</td>
                       <td className="py-2">
-                        <InterventionAction label="Rerun Promo" variant="primary" onExecute={(reason) => rerunPromotion(pickId, reason)} />
+                        <InterventionAction label="Rerun Promo" variant="primary" onExecute={rerunPromotion.bind(null, pickId)} />
                       </td>
                     </tr>
                   );

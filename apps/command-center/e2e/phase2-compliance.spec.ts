@@ -157,10 +157,10 @@ test.describe('2C — Operator Insights', () => {
     const insightsVisible = await page.getByText('Operator Insights').isVisible().catch(() => false);
     if (insightsVisible) {
       await expect(page.getByText('System vs Capper ROI')).toBeVisible();
-      await expect(page.getByText('Approved vs Denied')).toBeVisible();
+      await expect(page.getByText('Approved vs Denied ROI')).toBeVisible();
       await expect(page.getByText('Held picks')).toBeVisible();
-      await expect(page.getByText('Top capper')).toBeVisible();
-      await expect(page.getByText('Worst segment')).toBeVisible();
+      await expect(page.getByText('Top source')).toBeVisible();
+      await expect(page.getByText('Worst source')).toBeVisible();
     }
   });
 });
