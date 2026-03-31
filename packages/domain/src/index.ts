@@ -29,6 +29,7 @@ export * from './rollups/index.js';
 export * from './system-health/index.js';
 export * from './risk/index.js';
 export * from './hedge-detection.js';
+export * from './execution-quality.js';
 // strategy/ not re-exported here (name collision: americanToDecimal with risk/kelly-sizer)
 // import directly: import { ExecutionSimulator } from '@unit-talk/domain/strategy'
 // calibration/ not re-exported here (name collision with probability/calibration)
