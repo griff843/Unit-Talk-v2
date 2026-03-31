@@ -9,7 +9,7 @@ import {
   type PromotionTarget,
   resolveScoringProfile,
 } from '@unit-talk/contracts';
-import { evaluatePromotionEligibility } from '@unit-talk/domain';
+import { evaluatePromotionEligibility, detectCorrelatedPicks, computeCorrelationPenalty } from '@unit-talk/domain';
 import type {
   AuditLogRecord,
   AuditLogRepository,
@@ -115,7 +115,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
     ),
   );
 
-  const scoreInputs = readPromotionScoreInputs(canonicalPick);
+  // Fetch open picks for correlation-aware scoring
+  const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
+  const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
+  const scoreInputs = readPromotionScoreInputs(canonicalPick, openPicks);
   const decidedAt = new Date().toISOString();
 
   const makeInput = (
@@ -336,7 +339,10 @@ async function persistPromotionDecisionForPick(
     market: canonicalPick.market,
     selection: canonicalPick.selection,
   });
-  const scoreInputs = readPromotionScoreInputs(canonicalPick);
+  // Fetch open picks for correlation-aware scoring
+  const openPickRecords = await pickRepository.listByLifecycleState('validated', 100);
+  const openPicks = openPickRecords.map(mapPickRecordToCanonicalPick);
+  const scoreInputs = readPromotionScoreInputs(canonicalPick, openPicks);
   const overrideState = mapOverrideState(override);
   const decision = evaluatePromotionEligibility({
     target: policy.target,
@@ -468,7 +474,10 @@ function hasRequiredFields(pick: CanonicalPick) {
   return Boolean(pick.market && pick.selection && pick.source);
 }
 
-function readPromotionScoreInputs(pick: CanonicalPick) {
+function readPromotionScoreInputs(
+  pick: CanonicalPick,
+  openPicks?: readonly CanonicalPick[],
+) {
   const configured = readNestedRecord(pick.metadata, 'promotionScores');
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
 
@@ -481,12 +490,21 @@ function readPromotionScoreInputs(pick: CanonicalPick) {
   // Readiness fallback priority: explicit promotionScores.readiness > domain readiness signal > 80
   const readinessFallback = readDomainAnalysisReadinessSignal(pick.metadata) ?? 80;
 
+  let boardFit = readScore(configured, 'boardFit', 75);
+
+  // Apply correlation penalty when open picks are available
+  if (openPicks && openPicks.length > 0) {
+    const correlationInfo = detectCorrelatedPicks(pick, openPicks);
+    const penalty = computeCorrelationPenalty(correlationInfo);
+    boardFit = Math.max(0, boardFit + penalty);
+  }
+
   return {
     edge: readScore(configured, 'edge', edgeFallback),
     trust: readScore(configured, 'trust', trustFallback),
     readiness: readScore(configured, 'readiness', readinessFallback),
     uniqueness: readScore(configured, 'uniqueness', 80),
-    boardFit: readScore(configured, 'boardFit', 75),
+    boardFit,
   };
 }
 
