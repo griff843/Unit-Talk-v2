@@ -45,10 +45,19 @@ export async function submitPickController(
         repositories.audit,
       );
       outboxEnqueued = true;
-    } catch {
+    } catch (enqueueError) {
       // Enqueue failure is audited inside enqueueDistributionWithRunTracking.
-      // Submission is still valid — return 201 so the caller gets the pick ID.
+      // Pick is durable but NOT queued — this is a degraded state.
+      // Log structured error so operators can find zombie picks.
       outboxEnqueued = false;
+      console.error(JSON.stringify({
+        service: 'submit-pick-controller',
+        event: 'enqueue.failed',
+        pickId: result.pick.id,
+        promotionTarget: result.pick.promotionTarget,
+        error: enqueueError instanceof Error ? enqueueError.message : String(enqueueError),
+        impact: 'Pick qualified but not queued for delivery. Manual re-queue required.',
+      }));
     }
   }
 
@@ -67,6 +76,9 @@ export async function submitPickController(
         promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
         promotionTarget: result.pick.promotionTarget ?? null,
         outboxEnqueued,
+        ...(outboxEnqueued === false && result.pick.promotionStatus === 'qualified'
+          ? { warning: 'Pick qualified but distribution enqueue failed. Manual intervention may be required.' }
+          : {}),
       },
     },
   };

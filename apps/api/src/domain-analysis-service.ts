@@ -26,9 +26,14 @@ export interface DomainAnalysis {
   version: string;
   /** Timestamp of analysis computation */
   computedAt: string;
-  /** Edge: confidence - impliedProbability (only if confidence present) */
+  /**
+   * Confidence delta: confidence - impliedProbability from submitted odds.
+   * NOTE: This is NOT market edge. It measures how much the submitter's
+   * confidence exceeds the odds they submitted. Real edge requires
+   * comparison against devigged multi-book consensus (Sprint D).
+   */
   edge?: number | undefined;
-  /** Whether edge is positive */
+  /** Whether confidence delta is positive */
   hasPositiveEdge?: boolean | undefined;
   /** Fractional Kelly bet sizing (only if confidence and odds present) */
   kellyFraction?: number | undefined;

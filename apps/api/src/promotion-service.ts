@@ -554,14 +554,18 @@ async function readPromotionScoreInputs(
 }
 
 /**
- * Convert domain analysis raw edge to a 0-100 promotion score.
+ * Convert domain analysis confidence delta to a 0-100 promotion score.
  *
- * Raw edge is confidence - impliedProbability (typically -0.5 to +0.5).
- * Mapping: score = clamp(50 + rawEdge * 400, 0, 100)
+ * NOTE: This is labeled "edge" in the scoring model but is actually a
+ * confidence delta (confidence - impliedProbability from submitted odds).
+ * Real market edge requires devigged multi-book consensus (Sprint D, UTV2-198).
+ *
+ * Raw delta is typically -0.5 to +0.5.
+ * Mapping: score = clamp(50 + rawDelta * 400, 0, 100)
  *
  * Examples: +0.10 → 90, +0.05 → 70, 0.00 → 50, -0.05 → 30, -0.10 → 10
  *
- * Returns null if domain analysis is absent or edge was not computed.
+ * Returns null if domain analysis is absent or delta was not computed.
  */
 export function readDomainAnalysisEdgeScore(
   metadata: Record<string, unknown>,
@@ -580,14 +584,15 @@ export function readDomainAnalysisEdgeScore(
 }
 
 /**
- * Derive a trust signal from domain analysis edge.
+ * Derive a trust signal from domain analysis confidence delta.
  *
- * When domain analysis confirms a positive edge, the pick has mathematically-backed
- * trustworthiness beyond raw confidence. Picks with significant edge (≥5%) get
- * higher trust; marginal-edge picks get moderate trust.
+ * NOTE: This uses the confidence delta (mislabeled "edge" in domain analysis),
+ * not real market edge. A positive delta means the submitter's confidence
+ * exceeds the implied probability of their own submitted odds. This is a
+ * confidence assertion, not a proven market advantage.
  *
- * Returns null if domain analysis is absent or edge is not positive (falls through
- * to confidence-based fallback).
+ * Binary output: ≥5% delta → 80, >0% delta → 65, else null.
+ * Returns null if domain analysis is absent or delta is not positive.
  */
 export function readDomainAnalysisTrustSignal(
   metadata: Record<string, unknown>,
