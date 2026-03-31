@@ -335,55 +335,94 @@ export async function processNextDistributionWork(
       });
     }
 
-    const sent = await repositories.outbox.markSent(claimed.id);
-    const postedTransition = await transitionPickLifecycle(
-      repositories.picks,
-      claimed.pick_id,
-      'posted',
-      'downstream delivery confirmed',
-      'poster',
-    );
-    const receipt = await repositories.receipts.record({
-      outboxId: claimed.id,
-      receiptType: delivery.receiptType,
-      status: delivery.status,
-      channel: delivery.channel,
-      externalId: delivery.externalId,
-      idempotencyKey: delivery.idempotencyKey,
-      payload: delivery.payload,
-    });
-    const completedRun = await repositories.runs.completeRun({
-      runId: run.id,
-      status: 'succeeded',
-      details: {
+    // --- Post-send reconciliation ---
+    // Once Discord confirms delivery (status='sent'), the message IS sent.
+    // Any failure from this point on is a bookkeeping problem, NOT a delivery
+    // failure. We must NEVER downgrade the outbox row to failed/dead_letter
+    // after a successful send. If bookkeeping fails, we log a structured error
+    // and leave the row in 'processing' state for the stale-claim reaper to
+    // reconcile later.
+    try {
+      const sent = await repositories.outbox.markSent(claimed.id);
+      const postedTransition = await transitionPickLifecycle(
+        repositories.picks,
+        claimed.pick_id,
+        'posted',
+        'downstream delivery confirmed',
+        'poster',
+      );
+      const receipt = await repositories.receipts.record({
         outboxId: claimed.id,
-        receiptId: receipt.id,
+        receiptType: delivery.receiptType,
+        status: delivery.status,
+        channel: delivery.channel,
+        externalId: delivery.externalId,
+        idempotencyKey: delivery.idempotencyKey,
+        payload: delivery.payload,
+      });
+      const completedRun = await repositories.runs.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: {
+          outboxId: claimed.id,
+          receiptId: receipt.id,
+          target,
+          postedLifecycleEventId: postedTransition.lifecycleEvent.id,
+        },
+      });
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.sent',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          receiptId: receipt.id,
+          target,
+          pickId: claimed.pick_id,
+          postedLifecycleEventId: postedTransition.lifecycleEvent.id,
+        },
+      });
+
+      return {
+        status: 'sent',
         target,
-        postedLifecycleEventId: postedTransition.lifecycleEvent.id,
-      },
-    });
-    await recordWorkerAudit(repositories.audit, {
-      entityType: 'distribution_outbox',
-      entityId: claimed.id,
-      action: 'distribution.sent',
-      actor: workerId,
-      payload: {
+        workerId,
+        outbox: sent,
+        receipt,
+        run: completedRun,
+      };
+    } catch (bookkeepingError) {
+      // Post-send bookkeeping failed. The Discord message was already delivered
+      // successfully, so we must NOT mark the outbox as failed or dead_letter.
+      // Log a structured error and leave the row in 'processing' — the stale
+      // claim reaper will pick it up for reconciliation.
+      const errorMessage = bookkeepingError instanceof Error
+        ? bookkeepingError.message
+        : 'unknown bookkeeping error';
+      console.error(JSON.stringify({
+        level: 'error',
+        event: 'post_send_bookkeeping_failure',
         outboxId: claimed.id,
-        receiptId: receipt.id,
         target,
         pickId: claimed.pick_id,
-        postedLifecycleEventId: postedTransition.lifecycleEvent.id,
-      },
-    });
+        discordMessageId: delivery.externalId ?? null,
+        workerId,
+        error: errorMessage,
+        message: 'Discord delivery confirmed but post-send bookkeeping failed. Row left in processing for stale-claim reaper.',
+      }));
 
-    return {
-      status: 'sent',
-      target,
-      workerId,
-      outbox: sent,
-      receipt,
-      run: completedRun,
-    };
+      // Return sent status — from the caller's perspective the delivery succeeded.
+      // The receipt/run/audit data may be incomplete, but the message reached Discord.
+      return {
+        status: 'sent',
+        target,
+        workerId,
+        outbox: { ...claimed, status: 'processing' } as OutboxRecord,
+        receipt: { id: 'bookkeeping-failed', outboxId: claimed.id } as unknown as ReceiptRecord,
+        run,
+      };
+    }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'unknown delivery error';
     return handleFailedDelivery({
