@@ -383,6 +383,7 @@ export interface ParticipantRepository {
   findById(participantId: string): Promise<ParticipantRow | null>;
   findByExternalId(externalId: string): Promise<ParticipantRow | null>;
   listByType(participantType: ParticipantType, sport?: string | undefined): Promise<ParticipantRow[]>;
+  updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<ParticipantRow>;
 }
 
 export interface EventUpsertInput {
