@@ -3886,3 +3886,115 @@ test('GET /api/operator/snapshot hasMore is false when arrays fit within limit',
   assert.equal(body.pagination.hasMore, false);
   assert.equal(body.data.recentOutbox.length, 1);
 });
+
+// --- Simulation mode count separation tests ---
+
+test('createSnapshotFromRows separates simulated deliveries from sentOutbox', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [
+      {
+        id: 'outbox-real-1',
+        pick_id: 'pick-1',
+        target: 'discord:canary',
+        status: 'sent',
+        attempt_count: 1,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: '2026-03-20T12:00:00.000Z',
+        claimed_by: 'worker-1',
+        idempotency_key: 'real-key-1',
+        created_at: '2026-03-20T12:00:00.000Z',
+        updated_at: '2026-03-20T12:01:00.000Z',
+      },
+      {
+        id: 'outbox-sim-1',
+        pick_id: 'pick-2',
+        target: 'discord:best-bets',
+        status: 'sent',
+        attempt_count: 1,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: '2026-03-20T12:00:00.000Z',
+        claimed_by: 'worker-sim',
+        idempotency_key: 'sim-key-1',
+        created_at: '2026-03-20T12:00:00.000Z',
+        updated_at: '2026-03-20T12:01:00.000Z',
+      },
+    ],
+    recentReceipts: [
+      {
+        id: 'receipt-real-1',
+        outbox_id: 'outbox-real-1',
+        external_id: 'discord-msg-1',
+        idempotency_key: 'receipt-real-key-1',
+        receipt_type: 'discord.message',
+        status: 'sent',
+        channel: 'discord:1296531122234327100',
+        payload: {},
+        recorded_at: '2026-03-20T12:01:01.000Z',
+      },
+      {
+        id: 'receipt-sim-1',
+        outbox_id: 'outbox-sim-1',
+        external_id: 'sim:outbox-sim-1',
+        idempotency_key: 'receipt-sim-key-1',
+        receipt_type: 'worker.simulation',
+        status: 'sent',
+        channel: 'simulated:discord:best-bets',
+        payload: { simulated: true },
+        recorded_at: '2026-03-20T12:01:01.000Z',
+      },
+    ],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.counts.sentOutbox, 1, 'sentOutbox should exclude simulated deliveries');
+  assert.equal(snapshot.counts.simulatedDeliveries, 1, 'simulatedDeliveries should count simulation receipts');
+});
+
+test('createSnapshotFromRows has zero simulatedDeliveries when no simulation receipts exist', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'demo',
+    recentOutbox: [
+      {
+        id: 'outbox-1',
+        pick_id: 'pick-1',
+        target: 'discord:canary',
+        status: 'sent',
+        attempt_count: 1,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: '2026-03-20T12:00:00.000Z',
+        claimed_by: 'worker-1',
+        idempotency_key: 'key-1',
+        created_at: '2026-03-20T12:00:00.000Z',
+        updated_at: '2026-03-20T12:01:00.000Z',
+      },
+    ],
+    recentReceipts: [
+      {
+        id: 'receipt-1',
+        outbox_id: 'outbox-1',
+        external_id: 'discord-msg-1',
+        idempotency_key: 'receipt-key-1',
+        receipt_type: 'discord.message',
+        status: 'sent',
+        channel: 'discord:1296531122234327100',
+        payload: {},
+        recorded_at: '2026-03-20T12:01:01.000Z',
+      },
+    ],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+
+  assert.equal(snapshot.counts.sentOutbox, 1);
+  assert.equal(snapshot.counts.simulatedDeliveries, 0);
+});

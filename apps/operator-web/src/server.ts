@@ -88,6 +88,7 @@ export interface OperatorParticipantsFilter {
 export interface OperatorSnapshot {
   observedAt: string;
   persistenceMode: 'database' | 'demo';
+  simulationMode: boolean;
   health: OperatorHealthSignal[];
   counts: {
     pendingOutbox: number;
@@ -95,6 +96,7 @@ export interface OperatorSnapshot {
     failedOutbox: number;
     deadLetterOutbox: number;
     sentOutbox: number;
+    simulatedDeliveries: number;
   };
   recentOutbox: OutboxRecord[];
   recentReceipts: ReceiptRecord[];
@@ -982,12 +984,24 @@ export function createSnapshotFromRows(input: {
   memberTierRows?: Array<{ tier: string }>;
   now?: Date;
 }): OperatorSnapshot {
+  const simulatedDeliveries = input.recentReceipts.filter(
+    (row) => row.receipt_type === 'worker.simulation',
+  ).length;
+  const simulatedOutboxIds = new Set(
+    input.recentReceipts
+      .filter((row) => row.receipt_type === 'worker.simulation')
+      .map((row) => row.outbox_id)
+      .filter((id): id is string => id !== null),
+  );
   const counts = {
     pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
     processingOutbox: input.recentOutbox.filter((row) => row.status === 'processing').length,
     failedOutbox: input.recentOutbox.filter((row) => row.status === 'failed').length,
     deadLetterOutbox: input.recentOutbox.filter((row) => row.status === 'dead_letter').length,
-    sentOutbox: input.recentOutbox.filter((row) => row.status === 'sent').length,
+    sentOutbox: input.recentOutbox.filter(
+      (row) => row.status === 'sent' && !simulatedOutboxIds.has(row.id),
+    ).length,
+    simulatedDeliveries,
   };
 
   const mostRecentRun = input.recentRuns[0];
@@ -1029,6 +1043,7 @@ export function createSnapshotFromRows(input: {
   const snapshot: OperatorSnapshot = {
     observedAt: new Date().toISOString(),
     persistenceMode: input.persistenceMode,
+    simulationMode: readOperatorSimulationMode(),
     health: [
       {
         component: 'api',
@@ -1897,6 +1912,10 @@ function createEmptyEntityHealth(): OperatorEntityHealth {
     totalTeamsCount: 0,
     observedAt: new Date().toISOString(),
   };
+}
+
+export function readOperatorSimulationMode(): boolean {
+  return process.env.UNIT_TALK_SIMULATION_MODE === 'true';
 }
 
 export function readOperatorRuntimeMode(

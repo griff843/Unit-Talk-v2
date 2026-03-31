@@ -24,6 +24,7 @@ import type { CanonicalPick, LifecycleEvent } from '@unit-talk/contracts';
 import {
   createDeliveryAdapter,
   createDiscordDeliveryAdapter,
+  createSimulationDeliveryAdapter,
   createStubDeliveryAdapter,
 } from './delivery-adapters.js';
 import { processNextDistributionWork } from './distribution-worker.js';
@@ -1509,3 +1510,78 @@ function parseDiscordRequestBody(value: string | undefined): DiscordRequestBody 
 
   return JSON.parse(value) as DiscordRequestBody;
 }
+
+// --- Simulation adapter tests ---
+
+test('simulation adapter returns correct receipt shape', async () => {
+  const adapter = createSimulationDeliveryAdapter();
+  const outbox: OutboxRecord = {
+    id: 'outbox-sim-1',
+    pick_id: 'pick-sim-1',
+    target: 'discord:best-bets',
+    status: 'processing',
+    attempt_count: 0,
+    next_attempt_at: null,
+    last_error: null,
+    payload: { market: 'NBA points' },
+    claimed_at: '2026-03-20T12:00:00.000Z',
+    claimed_by: 'worker-sim',
+    idempotency_key: 'sim-key-1',
+    created_at: '2026-03-20T12:00:00.000Z',
+    updated_at: '2026-03-20T12:00:00.000Z',
+  };
+
+  const receipt = await adapter(outbox);
+
+  assert.equal(receipt.receiptType, 'worker.simulation');
+  assert.equal(receipt.status, 'sent');
+  assert.equal(receipt.externalId, 'sim:outbox-sim-1');
+  assert.equal((receipt.payload as Record<string, unknown>).simulated, true);
+});
+
+test('simulation adapter channel format is simulated:<target>', async () => {
+  const adapter = createSimulationDeliveryAdapter();
+  const outbox: OutboxRecord = {
+    id: 'outbox-sim-2',
+    pick_id: 'pick-sim-2',
+    target: 'discord:trader-insights',
+    status: 'processing',
+    attempt_count: 0,
+    next_attempt_at: null,
+    last_error: null,
+    payload: { market: 'MLB hits' },
+    claimed_at: '2026-03-20T12:00:00.000Z',
+    claimed_by: 'worker-sim',
+    idempotency_key: 'sim-key-2',
+    created_at: '2026-03-20T12:00:00.000Z',
+    updated_at: '2026-03-20T12:00:00.000Z',
+  };
+
+  const receipt = await adapter(outbox);
+
+  assert.equal(receipt.channel, 'simulated:discord:trader-insights');
+});
+
+test('simulation adapter always succeeds', async () => {
+  const adapter = createSimulationDeliveryAdapter();
+  const outbox: OutboxRecord = {
+    id: 'outbox-sim-3',
+    pick_id: 'pick-sim-3',
+    target: 'discord:canary',
+    status: 'processing',
+    attempt_count: 5,
+    next_attempt_at: null,
+    last_error: 'previous failure',
+    payload: {},
+    claimed_at: '2026-03-20T12:00:00.000Z',
+    claimed_by: 'worker-sim',
+    idempotency_key: 'sim-key-3',
+    created_at: '2026-03-20T12:00:00.000Z',
+    updated_at: '2026-03-20T12:00:00.000Z',
+  };
+
+  const receipt = await adapter(outbox);
+
+  assert.equal(receipt.status, 'sent');
+  assert.equal(receipt.receiptType, 'worker.simulation');
+});
