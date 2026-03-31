@@ -987,6 +987,21 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
       )
       .sort((left, right) => left.display_name.localeCompare(right.display_name));
   }
+
+  async updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<ParticipantRow> {
+    const existing = this.participants.get(participantId);
+    if (!existing) {
+      throw new Error(`Participant not found: ${participantId}`);
+    }
+    const merged = { ...(existing.metadata as Record<string, unknown> ?? {}), ...metadata };
+    const updated: ParticipantRow = {
+      ...existing,
+      metadata: toJsonObject(merged),
+      updated_at: new Date().toISOString(),
+    };
+    this.participants.set(participantId, updated);
+    return updated;
+  }
 }
 
 export class InMemoryEventRepository implements EventRepository {
@@ -2632,6 +2647,24 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
     }
 
     return data ?? [];
+  }
+
+  async updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<ParticipantRow> {
+    const existing = await this.findById(participantId);
+    if (!existing) {
+      throw new Error(`Participant not found: ${participantId}`);
+    }
+    const merged = { ...(existing.metadata as Record<string, unknown> ?? {}), ...metadata };
+    const { data, error } = await this.client
+      .from('participants')
+      .update({ metadata: toJsonObject(merged), updated_at: new Date().toISOString() })
+      .eq('id', participantId)
+      .select()
+      .single();
+    if (error || !data) {
+      throw new Error(`Failed to update participant metadata: ${error?.message ?? 'unknown error'}`);
+    }
+    return data;
   }
 }
 

@@ -1,6 +1,7 @@
 import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { startRecapScheduler } from './recap-scheduler.js';
 import { startTrialExpiryScheduler } from './trial-expiry-service.js';
+import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -8,6 +9,7 @@ const runtime = createApiRuntimeDependencies();
 const server = createApiServer({ runtime });
 let stopRecapScheduler: (() => void) | null = null;
 let stopTrialExpiryScheduler: (() => void) | null = null;
+let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -16,6 +18,16 @@ server.listen(port, () => {
     runtime.repositories.tiers,
     runtime.repositories.audit,
   );
+
+  // Player enrichment: run once on startup, then every 6 hours
+  const enrichmentDeps = {
+    participants: runtime.repositories.participants,
+    runs: runtime.repositories.runs,
+  };
+  runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
+  enrichmentTimer = setInterval(() => {
+    runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
+  }, 6 * 60 * 60 * 1000);
 
   console.log(
     JSON.stringify(
@@ -72,6 +84,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   stopRecapScheduler = null;
   stopTrialExpiryScheduler?.();
   stopTrialExpiryScheduler = null;
+  if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
 
   server.close(() => {
     process.exit(0);
