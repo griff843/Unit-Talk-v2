@@ -36,6 +36,7 @@ export interface AppEnv {
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS?: string | undefined;
   UNIT_TALK_RATE_LIMIT_SUBMISSIONS_PER_MINUTE?: string | undefined;
   UNIT_TALK_OPERATOR_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_SHADOW_MODE?: string | undefined;
   DISCORD_BOT_TOKEN?: string | undefined;
   DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
