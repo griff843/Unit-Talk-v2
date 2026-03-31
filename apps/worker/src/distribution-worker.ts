@@ -25,6 +25,28 @@ export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
  */
 const LIVE_SOURCES = new Set(['smart-form', 'discord', 'api']);
 
+/**
+ * Event name patterns that indicate synthetic/test picks.
+ * Picks with matching eventName metadata are blocked from delivery
+ * even if their source is live.
+ */
+const SYNTHETIC_EVENT_PATTERNS = [
+  /^system generated/i,
+  /^unique event/i,
+  /^live test/i,
+  /^guard test/i,
+  /^board.*test/i,
+  /^test event/i,
+  /^proof/i,
+];
+
+function isSyntheticEvent(metadata: Record<string, unknown> | null | undefined): boolean {
+  if (!metadata) return false;
+  const eventName = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : '';
+  if (!eventName) return false; // missing eventName is not conclusively synthetic
+  return SYNTHETIC_EVENT_PATTERNS.some((pattern) => pattern.test(eventName));
+}
+
 export interface WorkerProcessIdleResult {
   status: 'idle';
   target: string;
@@ -168,6 +190,45 @@ export async function processNextDistributionWork(
           pickId: claimed.pick_id,
           source: pick.source,
           reason: 'proof-pick-blocked',
+        },
+      });
+
+      return {
+        status: 'skipped',
+        target,
+        workerId,
+        outbox: { ...claimed, status: 'dead_letter' } as OutboxRecord,
+        run: completedRun,
+      };
+    }
+
+    // Block picks with synthetic/test event names from delivery
+    const pickMetadata = (pick?.metadata ?? null) as Record<string, unknown> | null;
+    if (pick && isSyntheticEvent(pickMetadata)) {
+      const eventName = typeof pickMetadata?.['eventName'] === 'string' ? pickMetadata['eventName'] : '(missing)';
+      await repositories.outbox.markDeadLetter(claimed.id, `synthetic-event-blocked: eventName '${eventName}'`);
+      const completedRun = await repositories.runs.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+          blocked: true,
+          reason: `synthetic event: '${eventName}'`,
+        },
+      });
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.blocked',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+          eventName,
+          reason: 'synthetic-event-blocked',
         },
       });
 
