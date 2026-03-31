@@ -7,7 +7,10 @@ import {
   type RepositoryBundle,
 } from '@unit-talk/db';
 import {
+  createConsoleLogWriter,
+  createDualLogWriter,
   createLogger,
+  createLokiLogWriter,
   createRequestLogFields,
   getOrCreateCorrelationId,
   type Logger,
@@ -91,11 +94,16 @@ export function createApiRuntimeDependencies(
 ): ApiRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
   const runtimeMode = readApiRuntimeMode(environment);
+  const lokiUrl = process.env.LOKI_URL?.trim();
+  const writer = lokiUrl
+    ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
+    : undefined;
   const logger =
     options.logger ??
     createLogger({
       service: 'api',
       fields: { runtimeMode },
+      ...(writer ? { writer } : {}),
     });
 
   if (options.repositories) {
