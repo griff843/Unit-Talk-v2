@@ -10,6 +10,7 @@ import {
   createOperatorServer,
   createSnapshotFromRows,
   createStatsRows,
+  readOperatorSimulationMode,
   type OperatorCapperRecapProvider,
   type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
@@ -3997,4 +3998,84 @@ test('createSnapshotFromRows has zero simulatedDeliveries when no simulation rec
 
   assert.equal(snapshot.counts.sentOutbox, 1);
   assert.equal(snapshot.counts.simulatedDeliveries, 0);
+});
+
+// --- Simulation mode data-derived detection tests (UTV2-171) ---
+
+test('createSnapshotFromRows sets simulationMode=true when simulation receipts exist without env var', () => {
+  delete process.env['UNIT_TALK_SIMULATION_MODE'];
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [
+      {
+        id: 'receipt-sim-detect-1',
+        outbox_id: 'outbox-sim-1',
+        external_id: null,
+        idempotency_key: null,
+        receipt_type: 'worker.simulation',
+        status: 'sent',
+        channel: 'simulated:discord:canary',
+        payload: {},
+        recorded_at: '2026-03-31T12:00:00.000Z',
+      },
+    ],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+  assert.equal(snapshot.simulationMode, true);
+  assert.equal(snapshot.counts.simulatedDeliveries, 1);
+});
+
+test('createSnapshotFromRows sets simulationMode=true when env var is set even without simulation receipts', () => {
+  process.env['UNIT_TALK_SIMULATION_MODE'] = 'true';
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+  assert.equal(snapshot.simulationMode, true);
+  assert.equal(snapshot.counts.simulatedDeliveries, 0);
+  delete process.env['UNIT_TALK_SIMULATION_MODE'];
+});
+
+test('createSnapshotFromRows sets simulationMode=false when no simulation receipts and no env var', () => {
+  delete process.env['UNIT_TALK_SIMULATION_MODE'];
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [
+      {
+        id: 'receipt-real-detect-1',
+        outbox_id: 'outbox-real-1',
+        external_id: 'discord-msg-1',
+        idempotency_key: null,
+        receipt_type: 'discord.message',
+        status: 'sent',
+        channel: 'discord:canary',
+        payload: {},
+        recorded_at: '2026-03-31T12:00:00.000Z',
+      },
+    ],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+  });
+  assert.equal(snapshot.simulationMode, false);
+  assert.equal(snapshot.counts.simulatedDeliveries, 0);
+});
+
+test('readOperatorSimulationMode returns true when env var is set', () => {
+  process.env['UNIT_TALK_SIMULATION_MODE'] = 'true';
+  assert.equal(readOperatorSimulationMode(), true);
+  delete process.env['UNIT_TALK_SIMULATION_MODE'];
+});
+
+test('readOperatorSimulationMode returns false when env var is absent', () => {
+  delete process.env['UNIT_TALK_SIMULATION_MODE'];
+  assert.equal(readOperatorSimulationMode(), false);
 });

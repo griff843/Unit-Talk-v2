@@ -607,7 +607,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
     <main>
       <h1>Unit Talk V2 Operator</h1>
       <p class="lede">Read-only operational view for the active canary lane. Observed at ${escapeHtml(snapshot.observedAt)} using ${escapeHtml(snapshot.persistenceMode)} mode.</p>
-      ${snapshot.simulationMode ? '<div class="simulation-banner"><strong>SIMULATION MODE ACTIVE</strong> &mdash; deliveries are simulated, not posted to Discord.</div>' : ''}
+      ${snapshot.simulationMode ? `<div class="simulation-banner"><strong>SIMULATION MODE ACTIVE</strong> &mdash; ${escapeHtml(String(snapshot.counts.simulatedDeliveries))} simulated delivery receipt(s) detected in current window.</div>` : ''}
       ${incidentBanner}
       ${renderActiveIncidentsSection(snapshot.incidents)}
       ${incidentTriageSection}

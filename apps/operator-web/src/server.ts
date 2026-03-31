@@ -1043,7 +1043,7 @@ export function createSnapshotFromRows(input: {
   const snapshot: OperatorSnapshot = {
     observedAt: new Date().toISOString(),
     persistenceMode: input.persistenceMode,
-    simulationMode: readOperatorSimulationMode(),
+    simulationMode: false, // derived below after simulatedDeliveries is computed
     health: [
       {
         component: 'api',
@@ -1087,6 +1087,7 @@ export function createSnapshotFromRows(input: {
     incidents: [],
   };
 
+  snapshot.simulationMode = snapshot.counts.simulatedDeliveries > 0 || readOperatorSimulationMode();
   snapshot.incidents = detectIncidents(snapshot, input.now);
   return snapshot;
 }
