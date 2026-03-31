@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-29 — PRs #75–#78 merged. UTV2-149/150/163/164/165/166/167 all DONE. Member tier model fully live: migration applied, types real-generated, sync handler wired, trial expiry scheduler running, `POST /api/member-tiers` endpoint live. `MEMBER_ROLE_ACCESS_AUTHORITY.md` ratified. Trial = full VIP surface set (incl. Trader Insights) — ratified. ~797 tests (CI PASS confirmed).
+2026-03-31 — Wave 4 Command Center intelligence layer shipped (commits `6fba621`, `ac7e3a9`). `/performance` extended with CLV%, avg stake, held stats, per-source breakdown, strongest/weakest sport. New `/intelligence` page: recent form (last 5/10/20), score band quality, decision quality metrics, feedback loop. New `/api/operator/intelligence` endpoint. Exceptions page server-action bug fixed. 188/188 Playwright e2e pass. All unit tests pass.
 
 ---
 
@@ -16,12 +16,12 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **~797 pass** — 782 (PRs #75/#76) + 4 (trial-expiry) + 6 (discord-bot foundation) + 5 (http-integration) via PRs #77/#78. CI PASS confirmed 2026-03-29. |
-| Gates | `pnpm verify` exits 0. CI confirmed 2026-03-29 (PRs #77/#78). `pnpm supabase:types` regenerated against live DB 2026-03-29 — clean. |
+| Tests | **~799 pass** — all unit test suites 0 failures. 188 Playwright e2e tests pass. Verified 2026-03-31. |
+| Gates | `pnpm type-check` PASS, `pnpm build` PASS, `pnpm test` PASS — verified 2026-03-31. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 ACTIVE** — Wave 1 DONE. Wave 2 Codex queue unblocked (14 items Ready). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
+| Milestone | **M13 ACTIVE** — Wave 1 DONE. **Wave 4 (Command Center Intelligence) DONE.** Wave 2 Codex queue unblocked (14 items Ready). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
 
-## Gate Notes (last verified 2026-03-28)
+## Gate Notes (last verified 2026-03-31)
 
 | Gate | Status | Notes |
 |------|--------|-------|
@@ -29,8 +29,9 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | **~797** — CI PASS confirmed 2026-03-29 (PRs #77/#78). |
-| `pnpm verify` (full chain) | PASS | Exit 0 confirmed 2026-03-29 (PRs #77/#78 CI). `supabase:types` regenerated clean 2026-03-29. |
+| `pnpm test` | PASS | All suites 0 failures. Verified 2026-03-31. |
+| `pnpm verify` (full chain) | PASS | Exit 0. Verified 2026-03-31. |
+| Playwright e2e | PASS | **188/188** — all phases (Phase 1, Phase 2, Wave 3, Wave 4). Verified 2026-03-31. |
 
 ### Runner Architecture
 
@@ -198,7 +199,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ---
 
-## Key Capabilities (current as of 2026-03-28, M13 ACTIVE)
+## Key Capabilities (current as of 2026-03-31, M13 ACTIVE)
 
 ### Submission and lifecycle
 - Canonical submission intake live (API + Smart Form)
@@ -229,6 +230,22 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - `GET /api/operator/participants` — player/team search
 - `GET /api/operator/events` — upcoming events
 - `GET /api/operator/recap` — settlement summary via domain
+- `GET /api/operator/performance` — comparative performance: time windows (today/7d/30d/mtd), capper vs system, approved/denied/held decision outcomes, per-sport, per-source, CLV%, avg stake, operator insights (Wave 4)
+- `GET /api/operator/intelligence` — intelligence layer: recent form (last 5/10/20) for all slices, score band quality analysis, decision quality metrics, feedback loop (score-right / review-right), degradation warnings (Wave 4)
+
+### Command Center (Wave 4 — Intelligence Layer)
+- Next.js 14 app at `apps/command-center` (port 4300) — reads from operator-web, writes through API
+- `/` — dashboard: 6 lifecycle health signals, exceptions, stats summary, pick lifecycle table
+- `/picks-list` — filterable pick search with pagination
+- `/review` — review queue (approve/deny/hold)
+- `/held` — held picks queue with return/resolve actions
+- `/exceptions` — 5 exception categories with intervention actions (retry, rerun, force promote)
+- `/performance` — comparative performance intelligence: time windows, capper vs system, decision outcomes, by sport, by source, CLV%, avg stake, operator insights, capper leaderboard
+- `/intelligence` — score quality (band segmentation, score-vs-outcome correlation), decision quality (approved win rate, denied would-have-won, ROI delta), recent form grid (last 5/10/20), feedback loop table
+- `/decisions` — decision audit with filter tabs (all/approved/denied/held/returned)
+- `/interventions` — intervention audit log
+- `/picks/[id]` — 8-section pick lifecycle trace with settlement/correction forms
+- 188 Playwright e2e tests verify all surfaces
 
 ### Data ingestion
 - `apps/ingestor/` live — populates `provider_offers` and `game_results` from SGO feed

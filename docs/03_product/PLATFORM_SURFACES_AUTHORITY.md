@@ -8,7 +8,7 @@
 | Ratified | 2026-03-29 |
 | Issue | UTV2-159 |
 | Supersedes | `docs/03_product/program_surfaces.md` |
-| Last updated | 2026-03-29 |
+| Last updated | 2026-03-31 |
 
 Unit Talk is a full platform for pick submission, evaluation, distribution, and settlement. Discord is the primary delivery surface — not the product definition. The platform drives what Discord carries, not the other way around.
 
@@ -73,6 +73,42 @@ Key endpoints:
 - `GET /api/operator/participants` — player/team search
 - `GET /api/operator/events` — upcoming events
 - `GET /api/operator/recap` — settlement summary via domain
+- `GET /api/operator/performance` — comparative performance (time windows, source/sport/decision splits, CLV%, insights)
+- `GET /api/operator/intelligence` — intelligence layer (recent form, score bands, decision quality, feedback loop, warnings)
+- `GET /api/operator/exception-queues` — exception queue counts and rows
+- `GET /api/operator/review-history` — review decision history
+- `GET /api/operator/review-queue` — picks pending review
+- `GET /api/operator/held-queue` — held picks
+- `GET /api/operator/pick-search` — pick search with filters
+- `GET /api/operator/picks/:id` — full pick detail (8-section lifecycle trace)
+
+---
+
+### Command Center — Operator Intelligence Dashboard
+
+| Field | Value |
+|-------|-------|
+| App | `apps/command-center` |
+| State | **LIVE** |
+| Role | Operator intelligence, decision-quality analysis, and pick lifecycle management |
+| Access | Operator / Admin only |
+| Port | 4300 |
+
+Next.js 14 application that reads from operator-web and writes through the API. No direct DB access. Provides operator-grade intelligence surfaces for evaluating edge, decision quality, and performance trends.
+
+Pages:
+- `/` — dashboard with health signals, exceptions, stats summary, pick lifecycle table
+- `/picks-list` — filterable pick search with pagination
+- `/review` — review queue (approve/deny/hold decisions with reason)
+- `/held` — held picks queue with return/resolve actions
+- `/exceptions` — 5 exception categories with intervention actions
+- `/performance` — comparative performance: capper vs system, decision outcomes, by sport/source, CLV%, insights, leaderboard
+- `/intelligence` — score quality (band segmentation, correlation), decision quality (approved vs denied accuracy), recent form (last 5/10/20), feedback loop
+- `/decisions` — decision audit with filter tabs
+- `/interventions` — intervention audit log
+- `/picks/[id]` — 8-section pick lifecycle trace with settlement/correction forms
+
+188 Playwright e2e tests verify all surfaces.
 
 ---
 
