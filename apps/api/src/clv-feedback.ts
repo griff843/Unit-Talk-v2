@@ -15,9 +15,9 @@ export interface ClvTrustAdjustmentOptions {
 /**
  * Compute a trust-score adjustment based on historical CLV data from settled picks.
  *
- * Queries recent grading settlements for the given capper (matched by `picks.source`),
- * extracts CLV data from settlement payloads, and returns a signed adjustment
- * that should be added to the base trust score.
+ * Queries recent grading settlements for the given capper (matched by pick
+ * metadata.capper — the canonical capper identity, NOT pick.source which is
+ * the intake channel like 'smart-form' or 'discord-bot').
  *
  * Returns `null` when insufficient data is available (fail-open — trust score unchanged).
  */
@@ -44,12 +44,17 @@ export async function computeClvTrustAdjustment(
     (s) => s.source === 'grading' && s.settled_at >= cutoffIso,
   );
 
-  // Cross-reference with picks to match the capper (submittedBy → picks.source).
+  // Cross-reference with picks to match the capper by metadata.capper
+  // (canonical capper identity), NOT pick.source (intake channel).
   const clvValues: number[] = [];
 
   for (const settlement of gradingSettlements) {
     const pick = await pickRepository.findPickById(settlement.pick_id);
-    if (!pick || pick.source !== submittedBy) {
+    if (!pick) continue;
+
+    const pickMetadata = asRecord(pick.metadata);
+    const pickCapper = typeof pickMetadata['capper'] === 'string' ? pickMetadata['capper'] : pick.source;
+    if (pickCapper !== submittedBy) {
       continue;
     }
 

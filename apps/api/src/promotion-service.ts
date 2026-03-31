@@ -523,9 +523,11 @@ async function readPromotionScoreInputs(
   let trust = readScore(configured, 'trust', trustFallback);
 
   // Apply CLV feedback adjustment to trust score when repositories are available
+  // Use metadata.capper (canonical capper identity), falling back to pick.source
   if (repositories) {
+    const capperIdentity = readMetadataString(pick.metadata, 'capper') || pick.source;
     const clvAdjustment = await computeClvTrustAdjustment(
-      pick.source,
+      capperIdentity,
       repositories.settlements,
       repositories.picks,
     );
@@ -750,13 +752,15 @@ export function checkExposureGate(
   openPicks: readonly CanonicalPick[],
   config: ExposureGateConfig,
 ): ExposureGateRejectionReason | null {
-  const submitter = pick.source;
+  // Use metadata.capper (canonical capper identity), falling back to pick.source
+  const submitter = readMetadataString(pick.metadata, 'capper') || pick.source;
   const pickEventName = readMetadataString(pick.metadata, 'eventName');
 
   if (pickEventName) {
     const sameGameCount = openPicks.filter((op) => {
       if (op.id === pick.id) return false;
-      if (op.source !== submitter) return false;
+      const opCapper = readMetadataString(op.metadata, 'capper') || op.source;
+      if (opCapper !== submitter) return false;
       return readMetadataString(op.metadata, 'eventName') === pickEventName;
     }).length;
     if (sameGameCount >= config.maxPicksPerGame) {
@@ -767,7 +771,8 @@ export function checkExposureGate(
   const todayPrefix = new Date().toISOString().slice(0, 10);
   const sameDayCount = openPicks.filter((op) => {
     if (op.id === pick.id) return false;
-    if (op.source !== submitter) return false;
+    const opCapper = readMetadataString(op.metadata, 'capper') || op.source;
+    if (opCapper !== submitter) return false;
     return op.createdAt.slice(0, 10) === todayPrefix;
   }).length;
   if (sameDayCount >= config.maxPicksPerDay) {
