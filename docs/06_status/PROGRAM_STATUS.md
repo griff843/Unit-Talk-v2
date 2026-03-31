@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-31 — **Sprint A (Truth + Safety) COMPLETE.** 11 issues + 2 hotfixes shipped. All P0 safety blockers resolved: submission/settlement idempotency, atomic promotion, retry model, post-send reconciliation, naming honesty, status truth reset. Syndicate Roadmap Sprint B next (Control Plane Hardening). 1072 tests passing, all gates green.
+2026-03-31 — **Sprint A + B COMPLETE.** Sprint A: 11 issues + 2 hotfixes (safety lock). Sprint B: 5 issues (control plane hardening). Operator identity, backend-authoritative actions, fail-closed health, aging/escalation. 1076 tests, all gates green. Sprint C (Honest Launch Package) next.
 
 ---
 
@@ -16,11 +16,11 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **1072 pass** — all unit test suites 0 failures. 188 Playwright e2e tests (not in verify chain). |
+| Tests | **1076 pass** — all unit test suites 0 failures. 188 Playwright e2e tests (not in verify chain). |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **M13 CLOSED.** Syndicate Roadmap active. |
-| Roadmap | **Sprint A COMPLETE** (11 issues + 2 hotfixes). Sprint B next. 21 issues remaining (UTV2-189 through 211). |
+| Roadmap | **Sprint A + B COMPLETE** (18 issues). Sprint C next. 14 issues remaining (UTV2-194 through 211). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
