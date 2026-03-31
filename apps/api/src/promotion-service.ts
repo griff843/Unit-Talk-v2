@@ -260,47 +260,98 @@ export async function evaluateAllPoliciesEagerAndPersist(
   });
 
   // Insert all non-winning policy history rows (does not touch picks).
-  for (let index = 0; index < policies.length; index += 1) {
-    if (index === resolvedIndex) {
-      continue;
-    }
+  // Wrapped in compensating rollback: if any history insert fails after the pick
+  // was already updated, reset pick.promotion_target to null to avoid state-without-history.
+  try {
+    for (let index = 0; index < policies.length; index += 1) {
+      if (index === resolvedIndex) {
+        continue;
+      }
 
-    const policy = policies[index]!;
-    const decision = decisions[index]!;
-    const boardState = boardStates[index]!;
-    const historyReason = summarizePromotionReason(decision);
-    const nonWinnerSnapshot = makeSnapshot(policy, boardState);
-    const history = await pickRepository.insertPromotionHistoryRow({
-      pickId,
-      target: policy.target,
-      promotionStatus: decision.status,
-      promotionScore: decision.score,
-      promotionReason: historyReason,
-      promotionVersion: decision.version,
-      promotionDecidedAt: decision.decidedAt,
-      promotionDecidedBy: decision.decidedBy,
-      overrideAction: null,
-      payload: {
-        ...nonWinnerSnapshot,
-        explanation: decision.explanation,
-        policy,
-      },
-    });
-
-    await auditLogRepository.record({
-      entityType: 'pick_promotion_history',
-      entityId: history.id,
-      entityRef: pickId,
-      action: decision.qualified ? 'promotion.qualified' : 'promotion.suppressed',
-      actor,
-      payload: {
+      const policy = policies[index]!;
+      const decision = decisions[index]!;
+      const boardState = boardStates[index]!;
+      const historyReason = summarizePromotionReason(decision);
+      const nonWinnerSnapshot = makeSnapshot(policy, boardState);
+      const history = await pickRepository.insertPromotionHistoryRow({
         pickId,
         target: policy.target,
-        status: decision.status,
-        score: decision.score,
+        promotionStatus: decision.status,
+        promotionScore: decision.score,
+        promotionReason: historyReason,
+        promotionVersion: decision.version,
+        promotionDecidedAt: decision.decidedAt,
+        promotionDecidedBy: decision.decidedBy,
+        overrideAction: null,
+        payload: {
+          ...nonWinnerSnapshot,
+          explanation: decision.explanation,
+          policy,
+        },
+      });
+
+      await auditLogRepository.record({
+        entityType: 'pick_promotion_history',
+        entityId: history.id,
+        entityRef: pickId,
+        action: decision.qualified ? 'promotion.qualified' : 'promotion.suppressed',
+        actor,
+        payload: {
+          pickId,
+          target: policy.target,
+          status: decision.status,
+          score: decision.score,
+          resolvedTarget,
+        },
+      });
+    }
+  } catch (historyError: unknown) {
+    // Compensating rollback: reset pick promotion state to avoid state-without-history
+    console.error(JSON.stringify({
+      service: 'promotion-service',
+      event: 'promotion.history_insert_failed',
+      pickId,
+      resolvedTarget,
+      error: historyError instanceof Error ? historyError.message : String(historyError),
+      action: 'executing compensating rollback',
+    }));
+
+    try {
+      await pickRepository.persistPromotionDecision({
+        pickId,
+        target: winnerPolicy.target,
+        approvalStatus: canonicalPick.approvalStatus,
+        promotionStatus: 'suppressed',
+        promotionTarget: null,
+        promotionScore: 0,
+        promotionReason: 'compensating-rollback: history insert failure',
+        promotionVersion: winnerDecision.version,
+        promotionDecidedAt: new Date().toISOString(),
+        promotionDecidedBy: 'system:rollback',
+        overrideAction: null,
+        payload: { rollbackReason: 'non-winner history insert failed', originalTarget: resolvedTarget },
+      });
+
+      await auditLogRepository.record({
+        entityType: 'pick_promotion_history',
+        entityId: persisted.history.id,
+        entityRef: pickId,
+        action: 'promotion.rollback',
+        actor: 'system:rollback',
+        payload: { pickId, resolvedTarget, reason: 'non-winner history insert failed after pick update' },
+      });
+    } catch (rollbackError: unknown) {
+      console.error(JSON.stringify({
+        service: 'promotion-service',
+        event: 'promotion.rollback_failed',
+        pickId,
         resolvedTarget,
-      },
-    });
+        error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
+        impact: 'Pick may be in inconsistent state — promotion_target set but history incomplete',
+      }));
+    }
+
+    throw historyError;
   }
 
   return {
