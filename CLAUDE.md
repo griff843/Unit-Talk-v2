@@ -23,68 +23,205 @@ Tests use `node:test` + `tsx --test`. No Jest, no Vitest. Assertions use `node:a
 
 Environment is loaded from `local.env` (gitignored, has real credentials) > `.env` (gitignored) > `.env.example` (template). No dotenv package — `@unit-talk/config` parses env files directly. The Supabase project ref is `feownrheeefbcsehtsiw`.
 
-## Start-of-Session Checklist
+## Execution Model
 
-Before doing any work, read these in order:
+Claude Code is the execution orchestrator for Unit Talk V2. The job is to work the Linear backlog continuously until there are no executable issues left.
 
-1. `docs/06_status/status_source_of_truth.md` ← wins on conflict
-2. `docs/06_status/current_phase.md`
-3. `docs/06_status/next_build_order.md`
-4. active week contract in `docs/05_operations/`
-5. `docs/05_operations/docs_authority_map.md`
+### Authority
+
+- **Linear is the only execution queue.** `ISSUE_QUEUE.md` is a historical record updated after merges — it does not determine what to work on.
+- **GitHub main is shipped truth.** Repo docs mirror shipped truth after merge.
+- **Direct PM instructions in-session override the Linear-only rule.** Create the Linear issue as part of execution if one does not exist.
+- Do not work on anything that is not represented in Linear or directly requested by the PM.
+
+### Start-of-Session Checklist
+
+1. Read Linear issues in Ready, In Progress, and In Review states
+2. Reconcile Linear state against repo truth on main (mark already-merged issues Done, detect stale states)
+3. Read `docs/06_status/PROGRAM_STATUS.md` for current milestone context
+4. Read `docs/05_operations/docs_authority_map.md` for authority tiers
 
 Then answer:
-- What is the current active week/slice?
-- What is in scope?
-- What is explicitly out of scope?
-- Is this an implementation lane or a verification/governance lane?
+- What milestone is active?
+- What Linear issues are executable?
+- What is blocked and why?
 
 If any of those are unclear, stop and resolve before making changes.
+
+### Core Loop
+
+Repeat until no executable issues remain:
+
+1. Read all Linear issues in Ready, In Progress, and In Review
+2. Reconcile Linear state against repo truth on main
+   - Mark already-merged issues Done
+   - Detect stale In Review / In Progress / Ready states
+   - Identify duplicates and blocked issues
+3. Build an execution batch only from executable Linear issues
+4. Classify each issue into exactly one bucket:
+   - **Claude-only** — execute directly in auto mode
+   - **Codex-safe** — generate exact execution packet and dispatch
+   - **blocked** — mark and report blocker
+   - **needs-contract / needs-reshaping** — stop and report
+5. Execute Claude-only issues directly
+6. For Codex-safe issues, dispatch with exact task packets (see Codex Prompt Template below)
+7. Review returned work
+8. Run required verification
+9. Merge according to risk tier
+10. Update Linear with PR/commit/merge truth
+11. Repeat
+
+### Classification Rules
+
+**Claude-only** — use for:
+- cross-cutting refactors
+- shared contracts/types
+- shared route or repository changes
+- scoring/promotion/lifecycle logic
+- governance/status reconciliation
+- any issue with ambiguity
+- any issue that overlaps another active task
+- any T1 issue
+
+**Codex-safe** — only delegate when ALL are true:
+- the issue exists in Linear
+- scope is explicit
+- acceptance criteria are explicit
+- allowed files are explicit
+- no migration
+- no shared contract/type overlap with active work
+- no overlapping routes/tests likely to collide
+- verification path is independent
+
+### Concurrency
+
+- Claude may execute one complex lane directly
+- Codex may run at most 2 parallel lanes at a time
+- Do not exceed 2 Codex lanes unless all active tasks are fully isolated by app and file scope
+
+### Merge Policy
+
+- **T3/docs/isolated UI:** merge on green
+- **T2 isolated logic/refactor:** review diff, verify green, then merge
+- **T1/migrations/runtime routing/shared contracts:** do not merge without explicit PM approval
+
+### Required Checks Before Merge
+
+At minimum run:
+- `pnpm type-check`
+- `pnpm test`
+- issue-specific verification commands
+- diff review for scope bleed, accidental deletions, and unrelated edits
+
+### Stop Conditions
+
+Do not continue blindly. Stop a lane and mark/block/reshape the issue if:
+- issue scope is ambiguous
+- Linear state conflicts with repo truth
+- task requires a missing contract
+- task overlaps another active lane
+- baseline on main is failing
+- issue depends on unresolved upstream work
+- migration/runtime-risk work requires explicit PM approval
+
+### Linear Hygiene
+
+After every completed lane:
+- update issue status
+- attach PR link
+- attach merge commit if merged
+- note blockers if not completed
+- create follow-on issues only when genuinely required by discovered repo truth
+
+### Completion
+
+When only blocked or non-executable issues remain, produce:
+- list of completed issues
+- merged PRs
+- blocked issues and exact blocker
+- reshaped issues created
+- next recommended batch
+
+## Codex Prompt Template
+
+Every Codex task must include this packet. Do not give Codex vague work.
+
+```
+Work only this Linear issue.
+
+You are not exploring the repo. You are executing a bounded task packet.
+
+Required output:
+1. implement only the scoped issue
+2. touch only allowed files
+3. do not modify forbidden files
+4. run the required verification commands
+5. summarize what changed
+6. provide PR-ready summary
+7. stop if scope is ambiguous or collides with active work
+
+Task packet:
+* Linear issue: <ID + title>
+* Why it matters: <one short paragraph>
+* Allowed files: <exact list>
+* Forbidden files: <exact list or "all others">
+* Acceptance criteria:
+  * <item>
+  * <item>
+* Verification:
+  * <command>
+  * <command>
+* Merge dependencies:
+  * <none / depends on X>
+* Rollback note:
+  * <one short note>
+
+Rules:
+* no opportunistic refactors
+* no unrelated cleanup
+* no scope expansion
+* no hidden dependency work unless explicitly included
+* if blocked, stop and report the precise blocker
+```
 
 ## Lane Discipline
 
 This repo uses explicit lane separation.
 
-**Codex lane** — default owner for:
-- runtime implementation
-- migrations
-- schema/type updates
-- tests
-- CI changes
-- service wiring
-- endpoint implementation
-
 **Claude lane** — default owner for:
+- cross-cutting implementation
 - independent verification
-- proof templates
-- rollback/failure templates
-- weekly closeout artifacts
-- docs authority maintenance
-- status updates after proof
-- anti-drift audits
+- governance / status reconciliation
+- contracts and docs authority maintenance
 - readiness decisions
 - Linear / Notion sync
+- orchestration of Codex lanes
+
+**Codex lane** — default owner for:
+- isolated runtime implementation
+- isolated tests
+- isolated endpoint implementation
+- refactors with explicit file scope
 
 **Never do without explicit approval:**
 - redefine architecture boundaries
 - change canonical contracts materially
-- widen the active week scope
+- widen the active milestone scope
 - introduce new channels / product surfaces
-- start the next week before the current one is formally closed
+- start the next milestone before the current one is formally closed
+- activate Discord channels (game-threads, strategy-room, exclusive-insights live activation are explicitly out of scope)
 
 If asked to verify, do not change runtime code.
 
 ## Batch Execution Pattern
 
-When the PM authorizes parallel execution of multiple codex-lane issues:
+When executing parallel Codex-lane issues:
 
 - Launch agents with `isolation: worktree` — each agent gets a clean isolated copy
 - One agent per issue, one branch per issue, one PR per issue — no stacking
-- **Merge on green CI without ceremony delay.** Do not hold PRs waiting for a full batch to complete — merge each as it lands
+- Max 2 parallel Codex lanes (increase only when file scope is fully isolated)
+- **Merge on green without ceremony delay.** Do not hold PRs waiting for a full batch
 - Serial chains (issues with dependencies): launch the next agent on merge notification, not in advance
-- When Codex is available, route codex-lane issues to Codex directly — this pattern is for Codex-offline or explicit PM batch authorization only
-
-**Operator-web bottleneck:** Issues that share `apps/operator-web/src/server.ts` must land sequentially. Preferred order when all are in scope: route modules (UTV2-127) → target registry (UTV2-129) → pagination (UTV2-131) → exposure tracking (UTV2-134).
 
 ## Architecture
 
@@ -115,27 +252,37 @@ POST /api/submissions
 
 ### apps/api
 
-The only canonical writer to the database. Routes: `POST /api/submissions`, `POST /api/picks/:id/settle`, `GET /health`. Handler layer coerces raw request bodies, delegates to controller layer, which calls services. Services are pure functions that receive repository bundles.
+The only canonical writer to the database. Handler layer coerces raw request bodies, delegates to controller layer, which calls services. Services are pure functions that receive repository bundles.
 
 All servers fall back to in-memory repositories when Supabase credentials are absent — this is how unit tests run without a live DB.
 
 ### apps/worker
 
-Polls `distribution_outbox`, claims rows, calls a `DeliveryAdapter` (Discord), records receipts. The core logic is in `distribution-worker.ts` and is adapter-agnostic.
+Polls `distribution_outbox`, claims rows, calls a `DeliveryAdapter` (Discord), records receipts. Typed `DeliveryOutcome` (`sent` | `retryable-failure` | `terminal-failure`). Circuit breaker per target.
 
 ### apps/operator-web
 
-Read-only operator dashboard. No write surfaces. `createOperatorSnapshotProvider()` in `server.ts` makes parallel Supabase queries on every request — no caching. `createSnapshotFromRows()` is pure and is what tests use.
+Read-only operator dashboard. No write surfaces. Provides JSON API endpoints consumed by Command Center.
 
-Routes:
-- `GET /`
-- `GET /health`
-- `GET /api/operator/snapshot`
-- `GET /api/operator/picks-pipeline`
+### apps/command-center
+
+Next.js 14 operator intelligence dashboard. Reads from operator-web, writes through API. No direct DB access.
 
 ### apps/smart-form
 
 Browser HTML intake form. Posts to `apps/api` via fetch. Source is hardcoded to `'smart-form'`. Body size capped at 64 KB.
+
+### apps/discord-bot
+
+Discord slash commands and member interaction. Reads from API. Does not write to DB directly.
+
+### apps/alert-agent
+
+Standalone process for line movement detection and notification routing.
+
+### apps/ingestor
+
+SGO feed ingest — populates `provider_offers` and `game_results`.
 
 ### @unit-talk/db
 
@@ -147,11 +294,11 @@ Browser HTML intake form. Posts to `apps/api` via fetch. Source is hardcoded to 
 
 ### @unit-talk/contracts
 
-Source of truth for all cross-package types. `promotionTargets` is currently `['best-bets']` only unless a later week explicitly expands it.
+Source of truth for all cross-package types. Includes promotion policies, scoring profiles, target registry, and member tier definitions.
 
 ## Promotion Gate
 
-`evaluateAndPersistBestBetsPromotion()` in `apps/api/src/promotion-service.ts` evaluates five score components (`edge`, `trust`, `readiness`, `uniqueness`, `boardFit`) from `pick.metadata.promotionScores`, runs them through `bestBetsPromotionPolicy` (minimumScore: 70.00) from `@unit-talk/domain`, and persists to `pick_promotion_history`.
+`evaluateAndPersistBestBetsPromotion()` in `apps/api/src/promotion-service.ts` evaluates five score components (`edge`, `trust`, `readiness`, `uniqueness`, `boardFit`) from `pick.metadata.promotionScores`, runs them through per-policy weights from `@unit-talk/domain`, and persists to `pick_promotion_history`.
 
 `distribution-service.ts` then enforces: picks not `qualified` or with `promotion_target != 'best-bets'` cannot reach `discord:best-bets`.
 
@@ -172,22 +319,15 @@ Approval and promotion are separate. Never collapse them conceptually in docs or
 |---|---|---|
 | `discord:canary` | `1296531122234327100` | Live — permanent control lane |
 | `discord:best-bets` | `1288613037539852329` | Live — production channel |
-| `discord:trader-insights` | `1356613995175481405` | Blocked — activation contract required |
-| `discord:exclusive-insights` | `1288613114815840466` | Blocked |
-| `discord:game-threads` | — | Blocked — thread routing not implemented |
-| `discord:strategy-room` | — | Blocked — DM routing not implemented |
+| `discord:trader-insights` | `1356613995175481405` | Live — production channel |
+| `discord:recaps` | `1300411261854547968` | Live — daily/weekly recap posts |
+| `discord:exclusive-insights` | `1288613114815840466` | Code merged — live activation deferred |
+| `discord:game-threads` | — | Not implemented — deferred |
+| `discord:strategy-room` | — | Not implemented — deferred |
 
-Do not activate blocked targets without a written and ratified contract.
+Do not activate deferred targets. Do not create new Discord channels.
 
 ## Governance
-
-Development follows a weekly contract cadence.
-
-Before starting implementation:
-- active contract must exist in `docs/05_operations/`
-- `status_source_of_truth.md` wins on conflict
-- `next_build_order.md` defines sequence
-- `docs_authority_map.md` defines authority tiers
 
 **Runtime leads docs.**
 
@@ -198,20 +338,6 @@ Rules:
 - docs update only to match enforced reality
 
 If something exists only in docs, say `docs-only`. If something exists only in config, say `config-only`. If something exists only in tests, say `test-only`.
-
-### Weekly close sequence
-
-After all checks pass:
-1. update `system_snapshot.md`
-2. update `status_source_of_truth.md`
-3. update `current_phase.md`
-4. update `active_roadmap.md`
-5. update `next_build_order.md`
-6. update Linear
-7. update Notion checkpoint
-8. update Rebuild Home
-
-Do not mark a week closed before proof and independent verification are complete.
 
 ## Verification Discipline
 
@@ -261,9 +387,10 @@ If legacy parity knowledge is needed, convert it into a bounded v2 reference art
 
 ## Do Not Do These By Default
 
-- do not widen the active week scope
-- do not start Week N+1 work before Week N is formally closed
+- do not widen the active milestone scope
+- do not start M(N+1) before M(N) is formally closed
 - do not add new channels without a contract
+- do not activate deferred Discord channels
 - do not add write surfaces to operator-web
 - do not mutate settlement history
 - do not change routing/product semantics casually
