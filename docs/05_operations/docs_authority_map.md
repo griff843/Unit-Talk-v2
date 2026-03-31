@@ -53,7 +53,7 @@ When documents conflict:
 
 | File | Class | Notes |
 |---|---|---|
-| `docs/03_product/COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md` | `active` | Operator-web implementation spec — accurate as of M10+; informational reference |
+| `docs/03_product/COMMAND_CENTER_LIFECYCLE_MINIMUM_SPEC.md` | `active` | Operator-web implementation spec — accurate as of M10+; Wave 4 intelligence layer shipped 2026-03-31 |
 | `docs/03_product/DISCORD_BOT_FOUNDATION_SPEC.md` | `archive` | Status CLOSED 2026-03-26 — bot foundation is live |
 | `docs/03_product/DISCORD_STATS_COMMAND_SPEC.md` | `archive` | Status updated to CLOSED — /stats command is live |
 | `docs/03_product/command_center_truth_surface_prd.md` | `superseded` | Pre-M10 PRD — superseded by live operator-web |
