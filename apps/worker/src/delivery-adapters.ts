@@ -222,10 +222,17 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
     lifecycleState,
   });
 
-  // Embed follows discord_embed_system_spec.md:
-  // - Never show pick_id, raw lifecycle state, or internal metadata
-  // - 3-6 fields max
-  // - Fields: Pick, Odds, Units, Capper, Date (optional)
+  // Enhanced embed (UTV2-194): Pick + context fields for member decision support.
+  // Shows: pick, odds, units, confidence, implied probability, capper, timing.
+  // Does NOT show fake edge — confidence delta is not market edge (Sprint D).
+  const confidence = typeof payload.confidence === 'number' ? payload.confidence : null;
+  const domainAnalysis = isRecord(metadata.domainAnalysis) ? metadata.domainAnalysis : null;
+  const impliedProb = typeof domainAnalysis?.impliedProbability === 'number'
+    ? domainAnalysis.impliedProbability
+    : null;
+  const capperRecord = typeof metadata.capperRecord === 'string' ? metadata.capperRecord : null;
+  const capperClv = typeof metadata.capperClvPct === 'number' ? metadata.capperClvPct : null;
+
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
 
   if (presentation.leadField) {
@@ -239,11 +246,33 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
     fields.push({ name: 'Units', value: String(stakeUnits), inline: true });
   }
 
-  fields.push({ name: 'Capper', value: capper ?? 'Unit Talk', inline: true });
-
-  if (eventName) {
-    fields.push({ name: 'Date', value: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }), inline: true });
+  if (confidence != null) {
+    const confPct = (confidence * 100).toFixed(0);
+    fields.push({ name: 'Confidence', value: `${confPct}%`, inline: true });
   }
+
+  if (impliedProb != null) {
+    const implPct = (impliedProb * 100).toFixed(1);
+    fields.push({ name: 'Implied Prob', value: `${implPct}%`, inline: true });
+  }
+
+  // Capper context: name + recent record + CLV if available
+  let capperValue = capper ?? 'Unit Talk';
+  if (capperRecord) {
+    capperValue += ` (${capperRecord})`;
+  }
+  if (capperClv != null) {
+    const clvSign = capperClv >= 0 ? '+' : '';
+    capperValue += ` | CLV: ${clvSign}${capperClv.toFixed(1)}%`;
+  }
+  fields.push({ name: 'Capper', value: capperValue, inline: true });
+
+  // Timestamp for urgency context
+  fields.push({
+    name: 'Posted',
+    value: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
+    inline: true,
+  });
 
   return {
     content: presentation.content,

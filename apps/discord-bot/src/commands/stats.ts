@@ -119,8 +119,8 @@ export function buildStatsEmbed(stats: CapperStatsResponse) {
 
   if (stats.picks >= 5 && stats.picksWithClv > 0) {
     embed.addFields({
-      name: 'Avg CLV%',
-      value: `${formatSignedPercent(stats.avgClvPct)} (${stats.picksWithClv} picks with line data)`,
+      name: 'Avg CLV% (vs SGO close)',
+      value: `${formatSignedPercent(stats.avgClvPct)} (${stats.picksWithClv} picks with closing line data)`,
       inline: false,
     });
     embed.addFields({

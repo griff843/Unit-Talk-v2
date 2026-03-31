@@ -40,7 +40,7 @@ export function buildRecapEmbedData(input: RecapEmbedInput): APIEmbed {
         inline: true,
       },
       {
-        name: 'CLV%',
+        name: 'CLV% (vs SGO close)',
         value: formatSignedPercent(input.clvPercent),
         inline: true,
       },
