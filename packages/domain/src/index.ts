@@ -31,6 +31,7 @@ export * from './risk/index.js';
 export * from './hedge-detection.js';
 export * from './multi-book-consensus.js';
 export * from './clv-weight-tuner.js';
+export * from './member-lifecycle.js';
 // strategy/ not re-exported here (name collision: americanToDecimal with risk/kelly-sizer)
 // import directly: import { ExecutionSimulator } from '@unit-talk/domain/strategy'
 // calibration/ not re-exported here (name collision with probability/calibration)
