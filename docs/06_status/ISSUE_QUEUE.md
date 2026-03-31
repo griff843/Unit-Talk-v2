@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 12 | 4 | 38 |
+| `lane:codex` | 0 | 0 | 1 | 0 | 53 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 27 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
@@ -24,12 +24,12 @@
 | **ID** | UTV2-87 |
 | **Tier** | T1 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:api`, `area:discord-bot` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-87-exclusive-insights-activation` |
+| **PR** | Merged in prior session |
 
 Contract ratified PR #56. Third pick delivery tier: score ≥90 / edge ≥90 / trust ≥88. Requires migration (add `'exclusive-insights'` to CHECK constraints), `exclusiveInsightsPromotionPolicy`, and priority ordering (exclusive > trader > best-bets). Contract: `docs/05_operations/T1_EXCLUSIVE_INSIGHTS_ACTIVATION_CONTRACT.md`.
 
@@ -42,12 +42,12 @@ Contract ratified PR #56. Third pick delivery tier: score ≥90 / edge ≥90 / t
 | **ID** | UTV2-69 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:api`, `area:db` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-69-hedge-detection` |
+| **PR** | Merged in prior session |
 
 Contract ratified PR #56. Cross-bookmaker arbitrage/middle/hedge detection from `provider_offers`. New `hedge_opportunities` table, detection algorithm, notification routing via UTV2-114 infrastructure. Contract: `docs/05_operations/T2_HEDGE_DETECTION_CONTRACT.md`. *(Note: identifier previously used for M12 grading cron — see M12 section below.)*
 
@@ -60,12 +60,12 @@ Contract ratified PR #56. Cross-bookmaker arbitrage/middle/hedge detection from 
 | **ID** | UTV2-148 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:worker` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-148-delivery-adapter-hardening` |
+| **PR** | #80 merged |
 
 Type `DeliveryResult.status` as `DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure'`. Discord adapter returns typed results instead of throwing. 4xx (except 429) → `terminal-failure` (immediate dead-letter, no attempt_count burn); 429/5xx/network → `retryable-failure` (existing retry logic). Contract: `docs/05_operations/DELIVERY_ADAPTER_HARDENING_CONTRACT.md`.
 
@@ -78,12 +78,12 @@ Type `DeliveryResult.status` as `DeliveryOutcome = 'sent' | 'retryable-failure' 
 | **ID** | UTV2-136 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:contracts`, `area:domain`, `area:api` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-136-model-registry-score-weights` |
+| **PR** | Merged in prior session |
 
 **Bug fix:** `calculateScore()` hardcodes `bestBetsScoreWeights` for all targets — trader-insights and exclusive-insights picks score with wrong weights. Fix: add `weights: PromotionScoreWeights` to `PromotionPolicy`, pass `policy.weights` into `calculateScore()`. Also add `ScoringProfile` type, `defaultScoringProfile` + `conservativeScoringProfile`, `resolveScoringProfile()`, and `UNIT_TALK_SCORING_PROFILE` env var. Profile name written to `pick_promotion_history.metadata.scoringProfile`. Contract: `docs/05_operations/MODEL_REGISTRY_CONTRACT.md`.
 
@@ -96,12 +96,12 @@ Type `DeliveryResult.status` as `DeliveryOutcome = 'sent' | 'retryable-failure' 
 | **ID** | UTV2-126 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:api`, `area:alert-agent` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-126-alert-agent-extraction` |
+| **PR** | #104 merged 2026-03-31 |
 
 Extract `startAlertAgent` from `apps/api/src/index.ts` into `apps/alert-agent/src/main.ts` (new standalone process). API index.ts runs HTTP server + recap scheduler only. Both processes handle SIGTERM cleanly. Alert agent tests stay in `apps/api/src/` for now. Contract: `docs/05_operations/ALERT_AGENT_EXTRACTION_CONTRACT.md`.
 
@@ -114,12 +114,12 @@ Extract `startAlertAgent` from `apps/api/src/index.ts` into `apps/alert-agent/sr
 | **ID** | UTV2-129 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:contracts`, `area:worker`, `area:api`, `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-129-promotion-target-registry` |
+| **PR** | Merged in prior session |
 
 Machine-enforceable runtime kill switch per delivery target. `defaultTargetRegistry` in `@unit-talk/contracts`: best-bets=enabled, trader-insights=enabled, exclusive-insights=disabled. Worker skips disabled targets (outbox rows stay `pending`, not failed). Distribution service checks registry before enqueuing. `UNIT_TALK_ENABLED_TARGETS` env var override. Operator snapshot includes `targetRegistry` field. Contract: `docs/05_operations/PROMOTION_TARGET_REGISTRY_CONTRACT.md`.
 
@@ -150,12 +150,12 @@ Machine-enforceable runtime kill switch per delivery target. `defaultTargetRegis
 | **ID** | UTV2-127 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:operator-web` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-127-operator-web-route-modules` |
+| **PR** | Merged in prior session |
 
 Refactor `apps/operator-web/src/server.ts` (~700 lines) into route modules under `apps/operator-web/src/routes/`. `server.ts` becomes the wiring layer only. All existing tests pass unchanged. No behavior changes.
 
@@ -168,12 +168,12 @@ Refactor `apps/operator-web/src/server.ts` (~700 lines) into route modules under
 | **ID** | UTV2-141 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
-| **Branch** | — |
-| **PR** | — |
+| **Branch** | `codex/UTV2-141-api-route-modules` |
+| **PR** | Merged in prior session |
 
 Refactor `apps/api/src/server.ts` into route modules under `apps/api/src/routes/`. `server.ts` becomes the wiring layer only. All existing tests pass unchanged. No behavior changes.
 
@@ -204,7 +204,7 @@ Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit
 | **ID** | UTV2-143 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
@@ -222,7 +222,7 @@ Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit
 | **ID** | UTV2-144 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:api` |
 | **Blocked by** | — |
@@ -240,7 +240,7 @@ Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit
 | **ID** | UTV2-134 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:operator-web`, `area:api` |
 | **Blocked by** | — |
@@ -258,7 +258,7 @@ Add `?limit=N&since=<iso>` params to `GET /api/operator/snapshot`. Default limit
 | **ID** | UTV2-158 |
 | **Tier** | T3 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:docs` |
 | **Blocked by** | — |
@@ -276,12 +276,12 @@ Update `AGENTS.md` and repo maps to reflect current package structure. All apps 
 | **ID** | UTV2-124 |
 | **Tier** | T1 |
 | **Lane** | `lane:codex` |
-| **Status** | **BLOCKED** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:worker`, `area:operator-web` |
-| **Blocked by** | UTV2-148 |
-| **Branch** | — |
-| **PR** | — |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-124-circuit-breaker` |
+| **PR** | Merged in prior session |
 
 Per-target in-process circuit breaker. After N consecutive failures (default 5), pause delivery to that target for cooldown window (default 5min). `DeliveryCircuitBreaker` class in `apps/worker/src/circuit-breaker.ts`. `system_runs` row written when circuit opens; completed when closed. Operator snapshot `workerRuntime` → `degraded` when any circuit open. Env: `UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD`, `UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS`. Contract: `docs/05_operations/DISCORD_CIRCUIT_BREAKER_CONTRACT.md`.
 
@@ -294,12 +294,12 @@ Per-target in-process circuit breaker. After N consecutive failures (default 5),
 | **ID** | UTV2-145 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **BLOCKED** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:contracts`, `area:domain`, `area:api` |
-| **Blocked by** | UTV2-136 |
-| **Branch** | — |
-| **PR** | — |
+| **Blocked by** | — |
+| **Branch** | `codex/UTV2-145-replayable-scoring` |
+| **PR** | Merged in prior session |
 
 `PromotionDecisionSnapshot` interface stored in `pick_promotion_history.metadata` at decision time (scoreInputs, gateInputs, boardStateAtDecision, weightsUsed). `replayPromotion(snapshot, policy)` in `@unit-talk/domain` deterministically reproduces any past decision. `PromotionEvaluationResult.snapshot` field added. Contract: `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md`.
 
@@ -312,11 +312,11 @@ Per-target in-process circuit breaker. After N consecutive failures (default 5),
 | **ID** | UTV2-130 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **BLOCKED** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:worker`, `area:contracts` |
-| **Blocked by** | UTV2-129 |
-| **Branch** | — |
+| **Blocked by** | — |
+| **Branch** | Merged in prior session |
 | **PR** | — |
 
 Startup-time check: if `UNIT_TALK_ENABLED_TARGETS` env enables a target that `defaultTargetRegistry` has `enabled: false`, log a structured warning with target name and disabled reason. Fail-open (does not block startup).

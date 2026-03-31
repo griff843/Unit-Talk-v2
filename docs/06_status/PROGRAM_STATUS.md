@@ -19,7 +19,7 @@
 | Tests | **~799 pass** — all unit test suites 0 failures. 188 Playwright e2e tests pass. Verified 2026-03-31. |
 | Gates | `pnpm type-check` PASS, `pnpm build` PASS, `pnpm test` PASS — verified 2026-03-31. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 ACTIVE** — Wave 1 DONE. **Wave 4 (Command Center Intelligence) DONE.** Wave 2 Codex queue unblocked (14 items Ready). UTV2-87 (exclusive-insights) and UTV2-69 (hedge detection) READY. M12 CLOSED 2026-03-28. |
+| Milestone | **M13 ACTIVE** — Wave 1 DONE. Wave 2 DONE. **Wave 4 (Command Center Intelligence) DONE.** Codex queue drained: 53 DONE, 1 READY (UTV2-131 snapshot pagination). All blocked items unblocked and merged. M12 CLOSED 2026-03-28. |
 
 ## Gate Notes (last verified 2026-03-31)
 
