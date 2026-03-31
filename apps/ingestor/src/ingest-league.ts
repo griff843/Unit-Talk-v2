@@ -1,8 +1,9 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
+import { CircuitBreaker, type CircuitBreakerOptions } from './circuit-breaker.js';
 import { resolveSgoEntities } from './entity-resolver.js';
 import { fetchSGOResultsWithTelemetry, type SGORequestTelemetry } from './sgo-fetcher.js';
 import { resolveAndInsertResults } from './results-resolver.js';
-import { fetchAndPairSGOProps, type SGOFetchOptions } from './sgo-fetcher.js';
+import { fetchAndPairSGOProps, type SGOFetchOptions, type SGOFetchResult } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 
 export interface IngestLeagueOptions {
@@ -16,6 +17,13 @@ export interface IngestLeagueOptions {
   skipResults?: boolean;
   sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'warn' | 'info'>;
+  /** Circuit breaker options for odds API calls. */
+  circuitBreaker?: CircuitBreakerOptions;
+  /** Pre-built circuit breakers per league (managed by the runner for cross-cycle persistence). */
+  circuitBreakers?: {
+    odds?: CircuitBreaker<SGOFetchResult>;
+    results?: CircuitBreaker<Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>>;
+  };
 }
 
 export interface IngestQuotaSummary {
@@ -92,15 +100,20 @@ export async function ingestLeague(
   });
 
   try {
-    const fetched = await fetchAndPairSGOProps({
-      apiKey,
-      league,
-      snapshotAt,
-      ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
-      ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
-      ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-      ...(options.sleep ? { sleep: options.sleep } : {}),
-    });
+    const oddsFetchFn = () =>
+      fetchAndPairSGOProps({
+        apiKey,
+        league,
+        snapshotAt,
+        ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+        ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
+        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+        ...(options.sleep ? { sleep: options.sleep } : {}),
+      });
+
+    const oddsCb = options.circuitBreakers?.odds ??
+      new CircuitBreaker(oddsFetchFn, createEmptyFetchResult(snapshotAt), options.circuitBreaker);
+    const fetched = await oddsCb.call();
 
     const resolved = await resolveSgoEntities(fetched.events, repositories, {
       ...(options.logger ? { logger: options.logger } : {}),
@@ -112,9 +125,13 @@ export async function ingestLeague(
 
     const upsert = await repositories.providerOffers.upsertBatch(normalized);
     const skippedCount = fetched.pairedProps.length - normalized.length;
-    const fetchedResults = options.skipResults
-      ? { results: [], requestTelemetry: createEmptyRequestTelemetry('results') }
-      : await fetchSGOResultsWithTelemetry({
+    const emptyResults = { results: [], requestTelemetry: createEmptyRequestTelemetry('results') };
+    let fetchedResults: Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>;
+    if (options.skipResults) {
+      fetchedResults = emptyResults;
+    } else {
+      const resultsFetchFn = () =>
+        fetchSGOResultsWithTelemetry({
           apiKey,
           league,
           snapshotAt,
@@ -126,6 +143,11 @@ export async function ingestLeague(
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),
         });
+
+      const resultsCb = options.circuitBreakers?.results ??
+        new CircuitBreaker(resultsFetchFn, emptyResults, options.circuitBreaker);
+      fetchedResults = await resultsCb.call();
+    }
 
     const completedResultEvents = fetchedResults.results
       .map((result) => result.resolvedEvent)
@@ -258,5 +280,14 @@ function createEmptyRequestTelemetry(
   return {
     ...createEmptyQuotaSummary(),
     endpoint,
+  };
+}
+
+function createEmptyFetchResult(_snapshotAt: string): SGOFetchResult {
+  return {
+    eventsCount: 0,
+    events: [],
+    pairedProps: [],
+    requestTelemetry: createEmptyRequestTelemetry('odds'),
   };
 }
