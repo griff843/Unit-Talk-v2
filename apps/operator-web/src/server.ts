@@ -163,6 +163,13 @@ export interface OperatorSnapshot {
   rolloutConfig: RolloutConfigEntry[];
   exposureGateRejections: number;
   incidents: OperatorIncident[];
+  aging: {
+    staleValidated: number;
+    stalePosted: number;
+    staleProcessing: number;
+    oldestValidatedAge: string | null;
+    oldestPostedAge: string | null;
+  };
 }
 
 export interface RolloutConfigEntry {
@@ -1138,19 +1145,62 @@ export function createSnapshotFromRows(input: {
     });
   }
 
+  // Aging detection
+  const STALE_VALIDATED_MS = 24 * 60 * 60 * 1000; // 24 hours
+  const STALE_POSTED_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+  const STALE_PROCESSING_MS = 10 * 60 * 1000; // 10 minutes
+
+  const validatedPicks = input.recentPicks.filter((p) => p.status === 'validated');
+  const staleValidatedPicks = validatedPicks.filter(
+    (p) => nowMs - new Date(p.created_at).getTime() > STALE_VALIDATED_MS,
+  );
+  const postedPicks = input.recentPicks.filter((p) => p.status === 'posted');
+  const stalePostedPicks = postedPicks.filter(
+    (p) => nowMs - new Date(p.created_at).getTime() > STALE_POSTED_MS,
+  );
+  const staleProcessingRows = filteredOutbox.filter(
+    (row) =>
+      row.status === 'processing' &&
+      row.claimed_at !== null &&
+      nowMs - new Date(row.claimed_at).getTime() > STALE_PROCESSING_MS,
+  );
+
+  const oldestValidated = validatedPicks
+    .map((p) => p.created_at)
+    .sort()[0] ?? null;
+  const oldestPosted = postedPicks
+    .map((p) => p.created_at)
+    .sort()[0] ?? null;
+
+  const aging: OperatorSnapshot['aging'] = {
+    staleValidated: staleValidatedPicks.length,
+    stalePosted: stalePostedPicks.length,
+    staleProcessing: staleProcessingRows.length,
+    oldestValidatedAge: oldestValidated,
+    oldestPostedAge: oldestPosted,
+  };
+
+  if (aging.staleValidated > 0 || aging.stalePosted > 0) {
+    healthSignals.push({
+      component: 'api',
+      status: 'degraded',
+      detail: `${aging.staleValidated} stale validated + ${aging.stalePosted} stale posted picks need attention`,
+    });
+  }
+
+  if (aging.staleProcessing > 0) {
+    healthSignals.push({
+      component: 'worker',
+      status: 'degraded',
+      detail: `${aging.staleProcessing} outbox row(s) stuck in processing > 10min`,
+    });
+  }
+
   const snapshot: OperatorSnapshot = {
     observedAt: new Date().toISOString(),
     persistenceMode: input.persistenceMode,
     simulationMode: false, // derived below after simulatedDeliveries is computed
-    health: [
-      {
-        component: 'api',
-        status: 'healthy',
-        detail: `${input.recentPicks.length} recent pick record(s) available`,
-      },
-      workerStatus,
-      distributionStatus,
-    ],
+    health: healthSignals,
     counts,
     recentOutbox: input.recentOutbox,
     recentReceipts: input.recentReceipts,
@@ -1188,6 +1238,7 @@ export function createSnapshotFromRows(input: {
       (p) => typeof p.promotion_reason === 'string' && p.promotion_reason.startsWith('exposure-'),
     ).length,
     incidents: [],
+    aging,
   };
 
   snapshot.simulationMode = snapshot.counts.simulatedDeliveries > 0 || readOperatorSimulationMode();

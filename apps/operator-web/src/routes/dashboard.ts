@@ -138,6 +138,41 @@ function renderRolloutConfigSection(snapshot: OperatorSnapshot): string {
       </section>`;
 }
 
+function renderAgingSection(snapshot: OperatorSnapshot): string {
+  const { aging } = snapshot;
+  const hasWarning = aging.staleValidated > 0 || aging.stalePosted > 0 || aging.staleProcessing > 0;
+  const badgeClass = hasWarning ? 'badge-degraded' : 'badge-healthy';
+  const badgeLabel = hasWarning ? 'NEEDS ATTENTION' : 'HEALTHY';
+
+  const rows = [
+    ['Stale Validated (>24h)', String(aging.staleValidated), aging.staleValidated > 0 ? 'var(--warn)' : ''],
+    ['Stale Posted (>7d ungraded)', String(aging.stalePosted), aging.stalePosted > 0 ? 'var(--warn)' : ''],
+    ['Stuck Processing (>10min)', String(aging.staleProcessing), aging.staleProcessing > 0 ? 'var(--warn)' : ''],
+  ]
+    .map(
+      ([label, value, color]) =>
+        `<tr><td>${escapeHtml(label!)}</td><td${color ? ` style="color:${color};font-weight:700"` : ''}><code>${escapeHtml(value!)}</code></td></tr>`,
+    )
+    .join('');
+
+  const oldestInfo = [
+    aging.oldestValidatedAge ? `Oldest validated: ${escapeHtml(aging.oldestValidatedAge)}` : null,
+    aging.oldestPostedAge ? `Oldest posted: ${escapeHtml(aging.oldestPostedAge)}` : null,
+  ]
+    .filter(Boolean)
+    .map((line) => `<p style="margin:4px 0;color:var(--muted);font-size:0.9rem">${line}</p>`)
+    .join('');
+
+  return `<section${hasWarning ? ' style="background:rgba(167,101,0,0.04);border:1.5px solid var(--warn);border-radius:16px;padding:16px 20px"' : ''}>
+        <h2>Aging <span class="badge ${badgeClass}">${badgeLabel}</span></h2>
+        <table>
+          <thead><tr><th>Metric</th><th>Count</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        ${oldestInfo}
+      </section>`;
+}
+
 export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
   const degradedSignals = snapshot.health.filter(
     (s) => s.status === 'degraded' || s.status === 'down',
@@ -652,6 +687,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${bestBetsHealthSection}
       ${traderInsightsHealthSection}
       ${picksPipelineSection}
+      ${renderAgingSection(snapshot)}
       ${recapSection}
       ${boardExposureSection}
       <section>

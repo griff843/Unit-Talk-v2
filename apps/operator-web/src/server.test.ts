@@ -4084,3 +4084,185 @@ test('readOperatorSimulationMode returns false when env var is absent', () => {
   delete process.env['UNIT_TALK_SIMULATION_MODE'];
   assert.equal(readOperatorSimulationMode(), false);
 });
+
+test('createSnapshotFromRows aging counts zero when no stale picks or outbox rows exist', () => {
+  const now = new Date('2026-03-25T12:00:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [
+      {
+        id: 'pick-fresh',
+        submission_id: 'sub-1',
+        participant_id: null,
+        market: 'NBA points',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -110,
+        stake_units: 1,
+        confidence: 0.8,
+        source: 'smart-form',
+        approval_status: 'approved',
+        promotion_status: 'not_eligible',
+        promotion_target: null,
+        promotion_score: null,
+        promotion_reason: null,
+        promotion_version: null,
+        promotion_decided_at: null,
+        promotion_decided_by: null,
+        status: 'validated',
+        posted_at: null,
+        settled_at: null,
+        idempotency_key: null,
+        metadata: {},
+        created_at: '2026-03-25T11:00:00.000Z', // 1h old, under 24h threshold
+        updated_at: '2026-03-25T11:00:00.000Z',
+      },
+    ],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(snapshot.aging.staleValidated, 0);
+  assert.equal(snapshot.aging.stalePosted, 0);
+  assert.equal(snapshot.aging.staleProcessing, 0);
+  assert.equal(snapshot.aging.oldestValidatedAge, '2026-03-25T11:00:00.000Z');
+  assert.equal(snapshot.aging.oldestPostedAge, null);
+});
+
+test('createSnapshotFromRows aging detects stale validated picks older than 24h', () => {
+  const now = new Date('2026-03-25T12:00:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [
+      {
+        id: 'pick-stale-validated',
+        submission_id: 'sub-1',
+        participant_id: null,
+        market: 'NBA points',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -110,
+        stake_units: 1,
+        confidence: 0.8,
+        source: 'smart-form',
+        approval_status: 'approved',
+        promotion_status: 'not_eligible',
+        promotion_target: null,
+        promotion_score: null,
+        promotion_reason: null,
+        promotion_version: null,
+        promotion_decided_at: null,
+        promotion_decided_by: null,
+        status: 'validated',
+        posted_at: null,
+        settled_at: null,
+        idempotency_key: null,
+        metadata: {},
+        created_at: '2026-03-23T10:00:00.000Z', // ~50h old
+        updated_at: '2026-03-23T10:00:00.000Z',
+      },
+    ],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(snapshot.aging.staleValidated, 1);
+  assert.equal(snapshot.aging.oldestValidatedAge, '2026-03-23T10:00:00.000Z');
+  // Should produce a degraded health signal for aging
+  const agingSignal = snapshot.health.find(
+    (s) => s.component === 'api' && s.detail.includes('stale validated'),
+  );
+  assert.ok(agingSignal, 'Expected a degraded api health signal for stale validated picks');
+  assert.equal(agingSignal.status, 'degraded');
+});
+
+test('createSnapshotFromRows aging detects stale posted picks older than 7d', () => {
+  const now = new Date('2026-03-25T12:00:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [
+      {
+        id: 'pick-stale-posted',
+        submission_id: 'sub-1',
+        participant_id: null,
+        market: 'NBA points',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -110,
+        stake_units: 1,
+        confidence: 0.8,
+        source: 'smart-form',
+        approval_status: 'approved',
+        promotion_status: 'not_eligible',
+        promotion_target: null,
+        promotion_score: null,
+        promotion_reason: null,
+        promotion_version: null,
+        promotion_decided_at: null,
+        promotion_decided_by: null,
+        status: 'posted',
+        posted_at: '2026-03-10T12:00:00.000Z',
+        settled_at: null,
+        idempotency_key: null,
+        metadata: {},
+        created_at: '2026-03-10T12:00:00.000Z', // 15d old
+        updated_at: '2026-03-10T12:00:00.000Z',
+      },
+    ],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(snapshot.aging.stalePosted, 1);
+  assert.equal(snapshot.aging.oldestPostedAge, '2026-03-10T12:00:00.000Z');
+  const agingSignal = snapshot.health.find(
+    (s) => s.component === 'api' && s.detail.includes('stale'),
+  );
+  assert.ok(agingSignal);
+  assert.equal(agingSignal.status, 'degraded');
+});
+
+test('createSnapshotFromRows aging detects stuck processing outbox rows older than 10min', () => {
+  const now = new Date('2026-03-25T12:00:00.000Z');
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-stuck',
+        pick_id: 'pick-1',
+        target: 'discord:canary',
+        status: 'processing',
+        attempt_count: 1,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: '2026-03-25T11:30:00.000Z', // 30min ago
+        claimed_by: 'worker-1',
+        idempotency_key: 'key-1',
+        created_at: '2026-03-25T11:00:00.000Z',
+        updated_at: '2026-03-25T11:30:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(snapshot.aging.staleProcessing, 1);
+  const workerSignal = snapshot.health.find(
+    (s) => s.component === 'worker' && s.detail.includes('stuck in processing'),
+  );
+  assert.ok(workerSignal, 'Expected degraded worker signal for stuck processing outbox');
+  assert.equal(workerSignal.status, 'degraded');
+});
