@@ -2,12 +2,15 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   createCorrelationId,
+  createDualLogWriter,
   createLogger,
+  createLokiLogWriter,
   createRequestLogFields,
   getOrCreateCorrelationId,
   normalizeCorrelationId,
   serializeError,
   type LogLevel,
+  type LogWriter,
   type StructuredLogEntry,
 } from './index.js';
 
@@ -110,4 +113,88 @@ test('serializeError handles nested causes and plain objects', () => {
     retries: 2,
     success: false,
   });
+});
+
+// --- Loki log writer tests ---
+
+function createMockEntry(service = 'test', level: LogLevel = 'info'): StructuredLogEntry {
+  return {
+    timestamp: '2026-03-31T12:00:00.000Z',
+    level,
+    service,
+    message: 'test message',
+  };
+}
+
+test('createLokiLogWriter batches entries and flushes at threshold', async () => {
+  const pushed: Array<{ body: string }> = [];
+  const mockFetch = async (url: string, init: RequestInit) => {
+    pushed.push({ body: init.body as string });
+    return new Response('', { status: 204 });
+  };
+
+  const writer = createLokiLogWriter({
+    url: 'http://localhost:3100',
+    batchSize: 3,
+    flushIntervalMs: 60000,
+    fetchImpl: mockFetch as unknown as typeof fetch,
+  });
+
+  writer.write('info', createMockEntry('api', 'info'));
+  writer.write('warn', createMockEntry('api', 'warn'));
+  assert.equal(pushed.length, 0, 'should not flush before batch size');
+
+  writer.write('error', createMockEntry('api', 'error'));
+  // Allow async flush to complete
+  await new Promise((r) => setTimeout(r, 50));
+  assert.equal(pushed.length, 1, 'should flush at batch size');
+
+  const body = JSON.parse(pushed[0]!.body) as { streams: Array<{ stream: Record<string, string>; values: string[][] }> };
+  assert.ok(body.streams.length > 0, 'should have at least one stream');
+
+  writer.stop();
+});
+
+test('createLokiLogWriter handles push failure gracefully', async () => {
+  const mockFetch = async () => {
+    throw new Error('network down');
+  };
+
+  const writer = createLokiLogWriter({
+    url: 'http://localhost:3100',
+    batchSize: 1,
+    flushIntervalMs: 60000,
+    fetchImpl: mockFetch as unknown as typeof fetch,
+  });
+
+  // Should not throw
+  writer.write('error', createMockEntry());
+  await new Promise((r) => setTimeout(r, 50));
+
+  writer.stop();
+});
+
+test('createDualLogWriter calls both writers', () => {
+  const primaryEntries: StructuredLogEntry[] = [];
+  const secondaryEntries: StructuredLogEntry[] = [];
+
+  const primary: LogWriter = { write: (_l, e) => { primaryEntries.push(e); } };
+  const secondary: LogWriter = { write: (_l, e) => { secondaryEntries.push(e); } };
+
+  const dual = createDualLogWriter(primary, secondary);
+  dual.write('info', createMockEntry());
+
+  assert.equal(primaryEntries.length, 1);
+  assert.equal(secondaryEntries.length, 1);
+});
+
+test('createDualLogWriter continues if secondary fails', () => {
+  const primaryEntries: StructuredLogEntry[] = [];
+  const primary: LogWriter = { write: (_l, e) => { primaryEntries.push(e); } };
+  const secondary: LogWriter = { write: () => { throw new Error('secondary broken'); } };
+
+  const dual = createDualLogWriter(primary, secondary);
+  dual.write('info', createMockEntry());
+
+  assert.equal(primaryEntries.length, 1, 'primary should still receive entry');
 });

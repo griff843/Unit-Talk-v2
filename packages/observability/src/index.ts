@@ -94,6 +94,100 @@ export function createLogger(options: CreateLoggerOptions): Logger {
   };
 }
 
+export interface LokiLogWriterOptions {
+  url: string;
+  batchSize?: number;
+  flushIntervalMs?: number;
+  tenantId?: string;
+  fetchImpl?: typeof fetch;
+}
+
+export function createLokiLogWriter(options: LokiLogWriterOptions): LogWriter & { flush(): Promise<void>; stop(): void } {
+  const batchSize = options.batchSize ?? 10;
+  const flushIntervalMs = options.flushIntervalMs ?? 5000;
+  const fetchImpl = options.fetchImpl ?? fetch;
+  const buffer: Array<{ level: LogLevel; entry: StructuredLogEntry }> = [];
+  let flushTimer: ReturnType<typeof setInterval> | null = null;
+
+  async function pushToLoki(entries: Array<{ level: LogLevel; entry: StructuredLogEntry }>) {
+    const streamMap = new Map<string, Array<[string, string]>>();
+
+    for (const { entry } of entries) {
+      const streamKey = `${entry.service}|${entry.level}`;
+      if (!streamMap.has(streamKey)) {
+        streamMap.set(streamKey, []);
+      }
+      const ts = String(BigInt(new Date(entry.timestamp).getTime()) * 1_000_000n);
+      streamMap.get(streamKey)!.push([ts, JSON.stringify(entry)]);
+    }
+
+    const streams = Array.from(streamMap.entries()).map(([key, values]) => {
+      const [service, level] = key.split('|');
+      return {
+        stream: { service: service ?? 'unknown', level: level ?? 'info' },
+        values,
+      };
+    });
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (options.tenantId) {
+      headers['X-Scope-OrgID'] = options.tenantId;
+    }
+
+    try {
+      await fetchImpl(`${options.url}/loki/api/v1/push`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ streams }),
+      });
+    } catch (err) {
+      console.error(`[loki-writer] push failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
+  async function flush() {
+    if (buffer.length === 0) return;
+    const batch = buffer.splice(0);
+    await pushToLoki(batch);
+  }
+
+  flushTimer = setInterval(() => {
+    flush().catch(() => {});
+  }, flushIntervalMs);
+
+  return {
+    write(level: LogLevel, entry: StructuredLogEntry) {
+      buffer.push({ level, entry });
+      if (buffer.length >= batchSize) {
+        flush().catch(() => {});
+      }
+    },
+    async flush() {
+      await flush();
+    },
+    stop() {
+      if (flushTimer) {
+        clearInterval(flushTimer);
+        flushTimer = null;
+      }
+      flush().catch(() => {});
+    },
+  };
+}
+
+export function createDualLogWriter(primary: LogWriter, secondary: LogWriter): LogWriter {
+  return {
+    write(level: LogLevel, entry: StructuredLogEntry) {
+      primary.write(level, entry);
+      try {
+        secondary.write(level, entry);
+      } catch {
+        // Secondary failure must not block primary logging
+      }
+    },
+  };
+}
+
 export function createConsoleLogWriter(): LogWriter {
   return {
     write(level: LogLevel, entry: StructuredLogEntry) {
