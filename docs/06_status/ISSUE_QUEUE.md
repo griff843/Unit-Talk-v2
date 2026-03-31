@@ -7,7 +7,7 @@
 
 | Lane | IN_PROGRESS | IN_REVIEW | READY | BLOCKED | DONE |
 |---|---|---|---|---|---|
-| `lane:codex` | 0 | 0 | 1 | 0 | 53 |
+| `lane:codex` | 0 | 0 | 0 | 0 | 54 |
 | `lane:claude` | 0 | 0 | 0 | 0 | 27 |
 | `lane:augment` | 0 | 0 | 0 | 0 | 11 |
 
@@ -186,7 +186,7 @@ Refactor `apps/api/src/server.ts` into route modules under `apps/api/src/routes/
 | **ID** | UTV2-131 |
 | **Tier** | T2 |
 | **Lane** | `lane:codex` |
-| **Status** | **READY** |
+| **Status** | **DONE** |
 | **Milestone** | M13 |
 | **Area** | `area:operator-web`, `area:api` |
 | **Blocked by** | — |

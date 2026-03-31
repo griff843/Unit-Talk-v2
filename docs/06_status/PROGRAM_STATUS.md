@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-31 — Wave 4 Command Center intelligence layer shipped (commits `6fba621`, `ac7e3a9`). `/performance` extended with CLV%, avg stake, held stats, per-source breakdown, strongest/weakest sport. New `/intelligence` page: recent form (last 5/10/20), score band quality, decision quality metrics, feedback loop. New `/api/operator/intelligence` endpoint. Exceptions page server-action bug fixed. 188/188 Playwright e2e pass. All unit tests pass.
+2026-03-31 — **M13 CLOSED.** All 54 codex-lane items DONE, 0 READY, 0 BLOCKED. UTV2-131 (snapshot pagination) merged as final item (PR #111). Wave 4 Command Center intelligence layer shipped. Adversarial review findings addressed. Full queue alignment audit completed.
 
 ---
 
@@ -19,7 +19,7 @@
 | Tests | **~799 pass** — all unit test suites 0 failures. 188 Playwright e2e tests pass. Verified 2026-03-31. |
 | Gates | `pnpm type-check` PASS, `pnpm build` PASS, `pnpm test` PASS — verified 2026-03-31. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 ACTIVE** — Wave 1 DONE. Wave 2 DONE. **Wave 4 (Command Center Intelligence) DONE.** Codex queue drained: 53 DONE, 1 READY (UTV2-131 snapshot pagination). All blocked items unblocked and merged. M12 CLOSED 2026-03-28. |
+| Milestone | **M13 CLOSED 2026-03-31** — Wave 1 DONE. Wave 2 DONE. Wave 4 (Command Center Intelligence) DONE. All 54 codex-lane items DONE. Queue empty. M12 CLOSED 2026-03-28. |
 
 ## Gate Notes (last verified 2026-03-31)
 
