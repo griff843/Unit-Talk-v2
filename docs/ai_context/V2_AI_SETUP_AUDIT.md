@@ -1,5 +1,7 @@
 # V2 AI Setup Audit
 
+> **ARCHIVE 2026-03-31.** Setup-era audit — historical record only. References to `status_source_of_truth.md`, `current_phase.md`, and hook configurations are stale. Current authority: `PROGRAM_STATUS.md` + `docs_authority_map.md`.
+
 > Generated: 2026-03-24. All findings are grounded in direct repo inspection.
 > Working folder: `C:\dev\Unit-Talk-v2`
 

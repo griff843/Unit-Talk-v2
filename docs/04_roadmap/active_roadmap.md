@@ -1,6 +1,8 @@
 # Active Roadmap
 
-This is the active sequencing document for `unit-talk-v2`.
+> **SUPERSEDED 2026-03-31.** This file is a historical record. The active program status and roadmap authority is `docs/06_status/PROGRAM_STATUS.md`. Work sequencing is driven by Linear.
+
+This was the active sequencing document for `unit-talk-v2` through M12.
 
 Use this file to answer:
 - what is already complete

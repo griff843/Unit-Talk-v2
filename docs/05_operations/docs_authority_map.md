@@ -146,7 +146,7 @@ When documents conflict:
 | File | Purpose | Authority Within Tier |
 |---|---|---|
 | `docs/06_status/PROGRAM_STATUS.md` | Canonical active program status — milestone, capabilities, risks | **Primary — high-level** |
-| `docs/06_status/ISSUE_QUEUE.md` | Operational work queue — active/ready/blocked/done per lane | **Primary — work state** |
+| `docs/06_status/ISSUE_QUEUE.md` | **DEPRECATED 2026-03-31** — historical work queue record; Linear is the live execution queue | Historical only |
 | `docs/06_status/system_snapshot.md` | Evidence record — specific IDs, receipts, historical proof | Evidence record (STALE as of 2026-03-21 for current state) |
 | `docs/06_status/PROOF_TEMPLATE.md` | Reusable T1 independent verification template | Closeout template |
 | `docs/06_status/ROLLBACK_TEMPLATE.md` | Reusable T1 rollback template | Rollback template |
@@ -160,7 +160,7 @@ When documents conflict:
 1. Tier 5 never overrides Tier 2 or Tier 3.
 2. Operational docs must not contradict principles, contracts, or product identity.
 3. `docs/06_status/PROGRAM_STATUS.md` is authoritative for current milestone and capability state.
-4. `docs/06_status/ISSUE_QUEUE.md` is authoritative for current work lane state.
+4. Linear is authoritative for current work lane state. `ISSUE_QUEUE.md` is a historical record only.
 5. Legacy repo references never override V2 docs; see `docs/05_operations/legacy_repo_reference_boundary.md`.
 
 ## Doc Lifecycle
