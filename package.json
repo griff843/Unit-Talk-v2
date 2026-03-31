@@ -34,6 +34,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",
+    "@notionhq/client": "^5.16.0",
     "@types/node": "^24.5.2",
     "eslint": "^9.24.0",
     "globals": "^16.0.0",
@@ -42,14 +43,15 @@
     "typescript": "^5.9.2",
     "typescript-eslint": "^8.29.1"
   },
-  "dependencies": {},
   "pnpm": {
     "overrides": {
       "react": "18.3.1",
       "react-dom": "18.3.1"
     },
     "peerDependencyRules": {
-      "ignoreMissing": ["@playwright/test"]
+      "ignoreMissing": [
+        "@playwright/test"
+      ]
     }
   }
 }
