@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-31 — **Post-M13 hardening session.** 17 issues completed. Safe activation pipeline shipped (simulate → canary → gradual rollout). Shadow validation plan ratified with G12 gate. V1 lifecycle safety foundation ported (transition validator, atomic claims, writer authority). Centralized Loki+Grafana logging wired. Test count: 799 → 1062.
+2026-03-31 — **Forensic audit completed. Syndicate Roadmap created (UTV2-180 through 211).** Honest assessment: infrastructure is production-grade (lifecycle FSM, outbox delivery, circuit breakers, atomic claims). Intelligence layer is placeholder (edge is confidence proxy, 4/5 scoring components are hardcoded constants, single odds provider, calibration is dead code). Sprint A (Truth + Safety) in progress — fixing verify gate, submission/settlement idempotency, status truth reset.
 
 ---
 
@@ -16,12 +16,25 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **1062 pass** — all unit test suites 0 failures. 188 Playwright e2e tests pass. `pnpm verify` PASS. Verified 2026-03-31. |
-| Gates | `pnpm verify` PASS (env:check + lint + type-check + build + test) — verified 2026-03-31. |
+| Tests | **~1070 pass** — all unit test suites 0 failures. 188 Playwright e2e tests (not in verify chain). |
+| Gates | `pnpm verify` **BLOCKED** — 13 lint errors (UTV2-180 in progress). type-check PASS, build PASS, test PASS. Lint FAIL. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **M13 CLOSED 2026-03-31** — Wave 1 DONE. Wave 2 DONE. Wave 4 (Command Center Intelligence) DONE. All 54 codex-lane items DONE. Queue empty. M12 CLOSED 2026-03-28. |
+| Roadmap | **Syndicate Roadmap active** — 32 issues (UTV2-180 through 211), 7 sprints. Sprint A in progress. |
 
-## Gate Notes (last verified 2026-03-31)
+## Honest Assessment (forensic audit 2026-03-31)
+
+| Layer | Grade | Reality |
+|-------|-------|---------|
+| **Infrastructure** | 8/10 | Lifecycle FSM, outbox delivery, circuit breakers, atomic claims, rollout controls, simulation mode, writer authority — production-grade. |
+| **Intelligence** | 3/10 | Edge = confidence proxy (not market edge). 4/5 scoring components are hardcoded constants. Single odds provider. Calibration is dead code. Weights are unvalidated. |
+| **Product** | 5/10 | Discord delivery works but provides no decision support. No confidence, edge, thesis, or Kelly in pick embeds. Recaps lack sample size context. |
+
+**Launch positioning:** Pick operations + distribution + tracking platform. NOT autonomous edge engine or syndicate intelligence system — until Sprint D (Intelligence v1) is complete.
+
+**Blocking items:** `pnpm verify` fails (lint). No submission dedup. No settlement dedup. These are Sprint A P0s.
+
+## Gate Notes (last verified 2026-03-31 — STALE until Sprint A completes)
 
 | Gate | Status | Notes |
 |------|--------|-------|
@@ -58,7 +71,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 | `discord:best-bets` | **LIVE** | Real channel `1288613037539852329`. |
 | `discord:trader-insights` | **LIVE** | Real channel `1356613995175481405`. |
 | `discord:recaps` | **LIVE** | Real channel `1300411261854547968`. Daily/weekly recap posts. |
-| `discord:exclusive-insights` | Blocked | Contract ratified (UTV2-87 READY). Not yet implemented. |
+| `discord:exclusive-insights` | **LIVE** | Real channel `1288613114815840466`. Promotion evaluation, distribution service, and target map all wired (UTV2-87 DONE). |
 | `discord:game-threads` | Blocked | Thread routing not implemented. |
 | `discord:strategy-room` | Blocked | DM routing not implemented. |
 
@@ -317,7 +330,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - **Production readiness canary plan ratified** (supersedes shadow validation plan): 7-day canary period with real picks, grading spot-checks, delivery health monitoring, evidence bundle. See `PRODUCTION_READINESS_CANARY_PLAN.md`.
 - **Cutover risk audit complete** (UTV2-27): 3 stale risks closed (R-07, R-08, R-11). Follow-on issues all shipped: UTV2-168 (outbox cleanup DONE), UTV2-169 (board cap monitoring DONE), UTV2-170 (recap idempotency DONE, R-06 closed).
 - **V1 lifecycle safety foundation ported** (UTV2-175, 176, 177): typed transition errors, atomic claim idempotency, writer authority enforcement. 46 new lifecycle tests.
-- **Cutover gate status**: G1-G9, G11 PASS. G10 (dead-letter) acceptable. **G12 (production readiness canary) OPEN — canary period not started.**
+- **Cutover gate status**: **G1 BLOCKED** (lint fails). G2-G9, G11 PASS. G10 acceptable. **G12 OPEN** (canary not started). **Cutover blocked until Sprint A completes.**
+- **Additional blockers from forensic audit**: No submission dedup (UTV2-183), no settlement dedup (UTV2-184), enqueue failure silent (UTV2-186). All Sprint A P0s.
 
 ---
 
