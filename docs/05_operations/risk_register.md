@@ -15,7 +15,7 @@ Update this file when risks are opened, escalated, mitigated, or closed. Do not 
 | R-01 | Historical pre-fix `distribution_outbox` rows create noise in operator incident triage | Low | Platform ops | **CLOSED** | UTV2-168 shipped. `OUTBOX_HISTORY_CUTOFF` filters pre-2026-03-20 rows from DB queries and snapshot counts. |
 | R-02 | API process requires manual restart for new code in dev | Low | Platform ops | Open | Acceptable in dev. Not a production blocker — production restarts are handled by process supervisor |
 | R-03 | `system_snapshot.md` stale | Low | Governance | Open | Use `PROGRAM_STATUS.md` for current-state truth; snapshot retained as historical artifact only |
-| R-04 | `production_readiness_checklist.md` partially stale | Low | Governance | Open | Use `ISSUE_QUEUE.md` for active lane state |
+| R-04 | `production_readiness_checklist.md` partially stale | Low | Governance | Open | Use Linear for active lane state (ISSUE_QUEUE.md deprecated). |
 | R-05 | Board caps (`perSlate=5`) may re-saturate if pick volume spikes | Low | Platform ops | **CLOSED** | UTV2-169 shipped. `boardUtilization` in operator snapshot with configurable cap, warning at >= 80%, saturated at >= 100%. |
 | R-06 | In-memory recap idempotency lost on process restart | Low | Platform ops | **CLOSED** | DB-backed idempotency via `system_runs` shipped (UTV2-170). Process restart no longer causes duplicate recap posts. |
 | R-09 | `discord:game-threads` delivery blocked | Low | Architecture | Open | Thread routing requires architectural work (worker posts to channel IDs only). No contract yet. Not a cutover blocker. |

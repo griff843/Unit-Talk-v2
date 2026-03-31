@@ -75,7 +75,7 @@ All of the following must be true before cutover is considered open:
 
 | Gate | Requirement | Current Status |
 |------|-------------|----------------|
-| G1 — Test suite | `pnpm verify` exits 0; ≥ 692 tests passing | **PASS** — verified 2026-03-31 |
+| G1 — Test suite | `pnpm verify` exits 0; ≥ 692 tests passing | **PASS** — 1072 tests, lint 0 errors. Verified post-Sprint A. |
 | G2 — Submission path live | `POST /api/submissions` accepts and persists picks | **PASS** — live |
 | G3 — Promotion + delivery live | Qualified picks reach `discord:best-bets` | **PASS** — live |
 | G4 — Grading live | `POST /api/grading/run` grades against `game_results` | **PASS** — live (UTV2-69) |

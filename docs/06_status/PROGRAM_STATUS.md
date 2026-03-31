@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-31 — **Forensic audit completed. Syndicate Roadmap created (UTV2-180 through 211).** Honest assessment: infrastructure is production-grade (lifecycle FSM, outbox delivery, circuit breakers, atomic claims). Intelligence layer is placeholder (edge is confidence proxy, 4/5 scoring components are hardcoded constants, single odds provider, calibration is dead code). Sprint A (Truth + Safety) in progress — fixing verify gate, submission/settlement idempotency, status truth reset.
+2026-03-31 — **Sprint A (Truth + Safety) COMPLETE.** 11 issues + 2 hotfixes shipped. All P0 safety blockers resolved: submission/settlement idempotency, atomic promotion, retry model, post-send reconciliation, naming honesty, status truth reset. Syndicate Roadmap Sprint B next (Control Plane Hardening). 1072 tests passing, all gates green.
 
 ---
 
@@ -16,11 +16,11 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **~1070 pass** — all unit test suites 0 failures. 188 Playwright e2e tests (not in verify chain). |
-| Gates | `pnpm verify` **BLOCKED** — 13 lint errors (UTV2-180 in progress). type-check PASS, build PASS, test PASS. Lint FAIL. |
+| Tests | **1072 pass** — all unit test suites 0 failures. 188 Playwright e2e tests (not in verify chain). |
+| Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 CLOSED 2026-03-31** — Wave 1 DONE. Wave 2 DONE. Wave 4 (Command Center Intelligence) DONE. All 54 codex-lane items DONE. Queue empty. M12 CLOSED 2026-03-28. |
-| Roadmap | **Syndicate Roadmap active** — 32 issues (UTV2-180 through 211), 7 sprints. Sprint A in progress. |
+| Milestone | **M13 CLOSED.** Syndicate Roadmap active. |
+| Roadmap | **Sprint A COMPLETE** (11 issues + 2 hotfixes). Sprint B next. 21 issues remaining (UTV2-189 through 211). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
@@ -32,9 +32,13 @@
 
 **Launch positioning:** Pick operations + distribution + tracking platform. NOT autonomous edge engine or syndicate intelligence system — until Sprint D (Intelligence v1) is complete.
 
-**Blocking items:** `pnpm verify` fails (lint). No submission dedup. No settlement dedup. These are Sprint A P0s.
+**Sprint A resolved:** Lint fixed (G1 unblocked). Submission dedup (UNIQUE index). Settlement dedup (atomic claim + UNIQUE constraint). Atomic promotion (compensating rollback). Retry model (pending + backoff). Post-send reconciliation. CLV capper identity hotfix. Exposure gate lifecycle fix.
 
-## Gate Notes (last verified 2026-03-31 — STALE until Sprint A completes)
+**Pending migrations (must apply to Supabase before production):**
+- `202603310001_submission_idempotency.sql` — adds `idempotency_key` column + UNIQUE index to `picks`
+- `202603310002_settlement_idempotency.sql` — adds UNIQUE partial index on `settlement_records(pick_id, source)`
+
+## Gate Notes (verified 2026-03-31 — Sprint A complete)
 
 | Gate | Status | Notes |
 |------|--------|-------|
@@ -330,8 +334,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - **Production readiness canary plan ratified** (supersedes shadow validation plan): 7-day canary period with real picks, grading spot-checks, delivery health monitoring, evidence bundle. See `PRODUCTION_READINESS_CANARY_PLAN.md`.
 - **Cutover risk audit complete** (UTV2-27): 3 stale risks closed (R-07, R-08, R-11). Follow-on issues all shipped: UTV2-168 (outbox cleanup DONE), UTV2-169 (board cap monitoring DONE), UTV2-170 (recap idempotency DONE, R-06 closed).
 - **V1 lifecycle safety foundation ported** (UTV2-175, 176, 177): typed transition errors, atomic claim idempotency, writer authority enforcement. 46 new lifecycle tests.
-- **Cutover gate status**: **G1 BLOCKED** (lint fails). G2-G9, G11 PASS. G10 acceptable. **G12 OPEN** (canary not started). **Cutover blocked until Sprint A completes.**
-- **Additional blockers from forensic audit**: No submission dedup (UTV2-183), no settlement dedup (UTV2-184), enqueue failure silent (UTV2-186). All Sprint A P0s.
+- **Cutover gate status**: G1 PASS (lint fixed). G2-G9, G11 PASS. G10 acceptable. **G12 OPEN** (canary not started). Sprint A blockers resolved.
+- **Sprint A safety fixes shipped**: Submission idempotency (UTV2-183). Settlement idempotency (UTV2-184). Atomic promotion rollback (UTV2-185). Enqueue failure visibility (UTV2-186). Post-send reconciliation (UTV2-187). Retry model fix (UTV2-188). CLV capper identity (UTV2-212). Exposure gate lifecycle (UTV2-213).
 
 ---
 
