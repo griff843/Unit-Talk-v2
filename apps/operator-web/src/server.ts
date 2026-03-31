@@ -1,4 +1,11 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
+
+/**
+ * Outbox rows created before this date are excluded from operator snapshot queries
+ * and counts. Historical pre-fix rows (before 2026-03-20) are inert but create noise
+ * in operator incident triage.
+ */
+export const OUTBOX_HISTORY_CUTOFF = '2026-03-20T00:00:00.000Z';
 import {
   createServiceRoleDatabaseConnectionConfig,
   createDatabaseClientFromConnection,
@@ -517,7 +524,11 @@ export function createOperatorSnapshotProvider(
             let q = client.from('distribution_outbox').select('*');
             if (filter?.status) q = q.eq('status', filter.status);
             if (filter?.target) q = q.eq('target', filter.target);
-            if (filter?.since) q = q.gte('created_at', filter.since);
+            // Apply the later of the user-supplied since and the history cutoff
+            const effectiveSince = filter?.since && filter.since > OUTBOX_HISTORY_CUTOFF
+              ? filter.since
+              : OUTBOX_HISTORY_CUTOFF;
+            q = q.gte('created_at', effectiveSince);
             return q.order('created_at', { ascending: false }).limit(fetchLimit);
           })(),
           client
@@ -1008,12 +1019,16 @@ export function createSnapshotFromRows(input: {
       .map((row) => row.outbox_id)
       .filter((id): id is string => id !== null),
   );
+  // Exclude historical pre-fix outbox rows (defense-in-depth — DB query also filters)
+  const filteredOutbox = input.recentOutbox.filter(
+    (row) => row.created_at >= OUTBOX_HISTORY_CUTOFF,
+  );
   const counts = {
-    pendingOutbox: input.recentOutbox.filter((row) => row.status === 'pending').length,
-    processingOutbox: input.recentOutbox.filter((row) => row.status === 'processing').length,
-    failedOutbox: input.recentOutbox.filter((row) => row.status === 'failed').length,
-    deadLetterOutbox: input.recentOutbox.filter((row) => row.status === 'dead_letter').length,
-    sentOutbox: input.recentOutbox.filter(
+    pendingOutbox: filteredOutbox.filter((row) => row.status === 'pending').length,
+    processingOutbox: filteredOutbox.filter((row) => row.status === 'processing').length,
+    failedOutbox: filteredOutbox.filter((row) => row.status === 'failed').length,
+    deadLetterOutbox: filteredOutbox.filter((row) => row.status === 'dead_letter').length,
+    sentOutbox: filteredOutbox.filter(
       (row) => row.status === 'sent' && !simulatedOutboxIds.has(row.id),
     ).length,
     simulatedDeliveries,
