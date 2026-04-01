@@ -53,9 +53,24 @@ export interface SubmissionEventCreateInput {
   createdAt: string;
 }
 
+export interface SubmissionAtomicInput {
+  submission: SubmissionCreateInput;
+  event: SubmissionEventCreateInput;
+  pick: CanonicalPick;
+  idempotencyKey?: string | null;
+  lifecycleEvent?: LifecycleEvent | null;
+}
+
+export interface SubmissionAtomicResult {
+  submission: SubmissionRecord;
+  pick: PickRecord;
+  lifecycleEvent: PickLifecycleRecord | null;
+}
+
 export interface SubmissionRepository {
   saveSubmission(input: SubmissionCreateInput): Promise<SubmissionRecord>;
   saveSubmissionEvent(input: SubmissionEventCreateInput): Promise<SubmissionEventRecord>;
+  processSubmissionAtomic(input: SubmissionAtomicInput): Promise<SubmissionAtomicResult>;
 }
 
 export interface PickRepository {

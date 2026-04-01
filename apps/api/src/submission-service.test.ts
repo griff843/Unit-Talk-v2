@@ -177,7 +177,7 @@ test('processSubmission materializes canonical records and submission event', as
   );
 
   assert.equal(result.submissionRecord.status, 'validated');
-  assert.equal(result.submissionEventRecord.event_name, 'submission.accepted');
+  assert.equal(result.submissionEventRecord!.event_name, 'submission.accepted');
   assert.equal(result.pickRecord.market, 'assists-all-game-ou');
   assert.equal(result.pickRecord.approval_status, 'approved');
   assert.equal(result.pickRecord.promotion_status, 'not_eligible');
