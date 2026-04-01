@@ -16,6 +16,7 @@ export interface AppEnv {
   SUPABASE_ANON_KEY?: string | undefined;
   SUPABASE_SERVICE_ROLE_KEY?: string | undefined;
   SGO_API_KEY?: string | undefined;
+  ODDS_API_KEY?: string | undefined;
   UNIT_TALK_INGESTOR_LEAGUES?: string | undefined;
   UNIT_TALK_INGESTOR_POLL_MS?: string | undefined;
   UNIT_TALK_INGESTOR_MAX_CYCLES?: string | undefined;
@@ -115,6 +116,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     SUPABASE_ANON_KEY: optionalEnv('SUPABASE_ANON_KEY', merged),
     SUPABASE_SERVICE_ROLE_KEY: optionalEnv('SUPABASE_SERVICE_ROLE_KEY', merged),
     SGO_API_KEY: optionalEnv('SGO_API_KEY', merged),
+    ODDS_API_KEY: optionalEnv('ODDS_API_KEY', merged),
     UNIT_TALK_INGESTOR_LEAGUES: optionalEnv('UNIT_TALK_INGESTOR_LEAGUES', merged),
     UNIT_TALK_INGESTOR_POLL_MS: optionalEnv('UNIT_TALK_INGESTOR_POLL_MS', merged),
     UNIT_TALK_INGESTOR_MAX_CYCLES: optionalEnv('UNIT_TALK_INGESTOR_MAX_CYCLES', merged),

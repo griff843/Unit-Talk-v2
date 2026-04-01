@@ -27,6 +27,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       apiKey: env.SGO_API_KEY,
+      oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
     };
   } catch {
@@ -39,6 +40,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       apiKey: env.SGO_API_KEY,
+      oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
     };
   }
@@ -50,7 +52,10 @@ export function createIngestorRuntimeSummary() {
     service: 'ingestor',
     status: 'ready',
     persistenceMode: runtime.persistenceMode,
-    provider: 'sgo',
+    providers: {
+      sgo: runtime.apiKey ? 'configured' : 'missing',
+      oddsApi: runtime.oddsApiKey ? 'configured' : 'missing',
+    },
     leagues: runtime.leagues,
     pollIntervalMs: runtime.pollIntervalMs,
     maxCyclesPerRun: runtime.maxCycles ?? 0,

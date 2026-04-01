@@ -1,5 +1,6 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
+import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
 
 export const SUPPORTED_SGO_LEAGUES = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
 
@@ -7,6 +8,7 @@ export interface IngestorRunnerOptions {
   repositories: IngestorRepositoryBundle;
   leagues: string[];
   apiKey?: string;
+  oddsApiKey?: string;
   apiUrl?: string;
   maxCycles?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -26,6 +28,7 @@ export interface IngestorGradingTriggerSummary {
 export interface IngestorCycleSummary {
   cycle: number;
   results: IngestLeagueSummary[];
+  oddsApiResults: OddsApiIngestSummary[];
   gradingTrigger: IngestorGradingTriggerSummary;
 }
 
@@ -53,8 +56,24 @@ export async function runIngestorCycles(
       );
     }
 
+    // Odds API ingest (Pinnacle + multi-book consensus) — runs alongside SGO
+    const oddsApiResults: OddsApiIngestSummary[] = [];
+    if (options.oddsApiKey) {
+      for (const league of options.leagues) {
+        oddsApiResults.push(
+          await ingestOddsApiLeague({
+            apiKey: options.oddsApiKey,
+            league,
+            repositories: options.repositories,
+            ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            ...(options.logger ? { logger: options.logger } : {}),
+          }),
+        );
+      }
+    }
+
     const gradingTrigger = await triggerGradingForCycle(results, options);
-    summaries.push({ cycle, results, gradingTrigger });
+    summaries.push({ cycle, results, oddsApiResults, gradingTrigger });
 
     if (cycle < maxCycles) {
       await sleep(pollIntervalMs);
