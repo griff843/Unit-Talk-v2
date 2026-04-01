@@ -94,8 +94,6 @@ export interface NormalizedOddsOffer {
   line: number | null;
   overOdds: number | null;
   underOdds: number | null;
-  homeOdds: number | null;
-  awayOdds: number | null;
   eventName: string;
   sport: string;
 }
@@ -287,20 +285,30 @@ export function normalizeOddsApiToOffers(
           // Moneyline: home vs away
           const homeOutcome = market.outcomes.find((o) => o.name === event.home_team);
           const awayOutcome = market.outcomes.find((o) => o.name === event.away_team);
-          offers.push({
-            providerKey,
-            providerEventId: event.id,
-            providerMarketKey: `${market.key}`,
-            providerParticipantId: null,
-            snapshotAt: bookmaker.last_update || snapshotAt,
-            line: null,
-            overOdds: null,
-            underOdds: null,
-            homeOdds: homeOutcome?.price ?? null,
-            awayOdds: awayOutcome?.price ?? null,
-            eventName,
-            sport,
-          });
+          if (Number.isFinite(homeOutcome?.price) && Number.isFinite(awayOutcome?.price)) {
+            offers.push(
+              buildMoneylineOffer({
+                providerKey,
+                providerEventId: event.id,
+                selectionTeam: event.home_team,
+                selectionOdds: homeOutcome?.price ?? null,
+                opposingOdds: awayOutcome?.price ?? null,
+                snapshotAt: bookmaker.last_update || snapshotAt,
+                eventName,
+                sport,
+              }),
+              buildMoneylineOffer({
+                providerKey,
+                providerEventId: event.id,
+                selectionTeam: event.away_team,
+                selectionOdds: awayOutcome?.price ?? null,
+                opposingOdds: homeOutcome?.price ?? null,
+                snapshotAt: bookmaker.last_update || snapshotAt,
+                eventName,
+                sport,
+              }),
+            );
+          }
         } else if (market.key === 'spreads' || market.key === 'totals') {
           // Spreads/totals: paired over/under or home/away with point
           for (const [, outcomes] of outcomesByPoint) {
@@ -320,8 +328,6 @@ export function normalizeOddsApiToOffers(
               line,
               overOdds: over?.price ?? null,
               underOdds: under?.price ?? null,
-              homeOdds: null,
-              awayOdds: null,
               eventName,
               sport,
             });
@@ -345,8 +351,6 @@ export function normalizeOddsApiToOffers(
               line,
               overOdds: over?.price ?? null,
               underOdds: under?.price ?? null,
-              homeOdds: null,
-              awayOdds: null,
               eventName,
               sport,
             });
@@ -419,4 +423,28 @@ function buildOutcomePairingKey(marketKey: string, outcome: OddsApiOutcome): str
   return outcome.description
     ? `${outcome.description}:${outcome.point ?? ''}`
     : `${outcome.name}:${outcome.point ?? ''}`;
+}
+
+function buildMoneylineOffer(input: {
+  providerKey: string;
+  providerEventId: string;
+  selectionTeam: string;
+  selectionOdds: number | null;
+  opposingOdds: number | null;
+  snapshotAt: string;
+  eventName: string;
+  sport: string;
+}): NormalizedOddsOffer {
+  return {
+    providerKey: input.providerKey,
+    providerEventId: input.providerEventId,
+    providerMarketKey: 'moneyline',
+    providerParticipantId: input.selectionTeam,
+    snapshotAt: input.snapshotAt,
+    line: null,
+    overOdds: input.selectionOdds,
+    underOdds: input.opposingOdds,
+    eventName: input.eventName,
+    sport: input.sport,
+  };
 }

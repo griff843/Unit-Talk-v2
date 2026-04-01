@@ -111,9 +111,13 @@ export async function ingestOddsApiLeague(
   }
 }
 
-function mapOddsApiOfferToProviderOfferInsert(offer: NormalizedOddsOffer): ProviderOfferInsert {
+export function mapOddsApiOfferToProviderOfferInsert(
+  offer: NormalizedOddsOffer,
+): ProviderOfferInsert {
+  const participantKey = offer.providerParticipantId ?? '';
+
   return {
-    idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${offer.snapshotAt}`,
+    idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${participantKey}:${offer.snapshotAt}`,
     devigMode: 'PAIRED',
     providerKey: offer.providerKey,
     providerEventId: offer.providerEventId,

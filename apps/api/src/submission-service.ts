@@ -135,6 +135,7 @@ export async function processSubmission(
   const domainAnalysis = computeSubmissionDomainAnalysis(materialized.pick);
   const deviggingResult = await resolveDeviggingResult(
     normalizedMarketKey,
+    materialized.pick.selection,
     repositories.providerOffers,
   );
   const kellySizing = resolveKellySizing(
@@ -227,6 +228,7 @@ export async function processSubmission(
     });
 
     submissionRecord = atomicResult.submission;
+    submissionEventRecord = atomicResult.submissionEvent ?? undefined;
     pickRecord = atomicResult.pick;
     lifecycleEventRecord = atomicResult.lifecycleEvent!;
   } catch {
@@ -267,10 +269,15 @@ export async function processSubmission(
 
 async function resolveDeviggingResult(
   normalizedMarketKey: string,
+  selection: string,
   providerOffers: ProviderOfferRepository,
 ) {
   try {
-    const matchingOffer = await findLatestMatchingOffer(normalizedMarketKey, providerOffers);
+    const matchingOffer = await findLatestMatchingOffer(
+      normalizedMarketKey,
+      selection,
+      providerOffers,
+    );
     if (!matchingOffer) {
       return null;
     }
@@ -310,15 +317,28 @@ async function resolveDeviggingResult(
 
 async function findLatestMatchingOffer(
   normalizedMarketKey: string,
+  selection: string,
   providerOffers: ProviderOfferRepository,
 ): Promise<ProviderOfferRecord | null> {
+  const participantKey =
+    normalizedMarketKey === 'moneyline' ? normalizeSelectionParticipantKey(selection) : undefined;
+
   // Use indexed query instead of full table scan (UTV2-205).
   // Tries SGO first (has results data), falls back to any provider.
-  const sgoOffer = await providerOffers.findLatestByMarketKey(normalizedMarketKey, 'sgo');
+  const sgoOffer = await providerOffers.findLatestByMarketKey(
+    normalizedMarketKey,
+    'sgo',
+    participantKey,
+  );
   if (sgoOffer) return sgoOffer;
 
   // Fall back to any provider (Odds API, etc.)
-  return providerOffers.findLatestByMarketKey(normalizedMarketKey);
+  return providerOffers.findLatestByMarketKey(normalizedMarketKey, undefined, participantKey);
+}
+
+function normalizeSelectionParticipantKey(selection: string): string | null {
+  const normalized = selection.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function resolveKellySizing(

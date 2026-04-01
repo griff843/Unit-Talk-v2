@@ -18,5 +18,9 @@ export const MARKET_KEY_MAP: Record<string, string> = {
 };
 
 export function normalizeMarketKey(market: string): string {
+  if (/moneyline/i.test(market)) {
+    return 'moneyline';
+  }
+
   return MARKET_KEY_MAP[market] ?? market;
 }

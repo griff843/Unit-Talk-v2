@@ -1013,9 +1013,20 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at));
   }
 
-  async findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null> {
+  async findLatestByMarketKey(
+    marketKey: string,
+    providerKey?: string,
+    providerParticipantId?: string | null,
+  ): Promise<ProviderOfferRecord | null> {
     const matches = Array.from(this.offers.values())
-      .filter((o) => o.provider_market_key === marketKey && (providerKey ? o.provider_key === providerKey : true))
+      .filter(
+        (o) =>
+          o.provider_market_key === marketKey &&
+          (providerKey ? o.provider_key === providerKey : true) &&
+          (providerParticipantId === undefined
+            ? true
+            : (o.provider_participant_id ?? null) === providerParticipantId),
+      )
       .sort((a, b) => b.snapshot_at.localeCompare(a.snapshot_at));
     return matches[0] ?? null;
   }
@@ -1476,6 +1487,19 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
       throw new Error(`process_submission_atomic failed: ${error.message}`);
     }
 
+    const { data: eventData, error: eventError } = await this.client
+      .from('submission_events')
+      .select('*')
+      .eq('submission_id', sub.id)
+      .eq('event_name', evt.eventName)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (eventError) {
+      throw new Error(`Failed to load submission event after atomic insert: ${eventError.message}`);
+    }
+
     const result = data as {
       submission: SubmissionRecord;
       pick: PickRecord;
@@ -1484,6 +1508,7 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
 
     return {
       submission: result.submission,
+      submissionEvent: eventData ?? null,
       pick: result.pick,
       lifecycleEvent: result.lifecycleEvent,
     };
@@ -2936,7 +2961,11 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return data ?? [];
   }
 
-  async findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null> {
+  async findLatestByMarketKey(
+    marketKey: string,
+    providerKey?: string,
+    providerParticipantId?: string | null,
+  ): Promise<ProviderOfferRecord | null> {
     let query = this.client
       .from('provider_offers')
       .select('*')
@@ -2946,6 +2975,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     if (providerKey) {
       query = query.eq('provider_key', providerKey);
+    }
+
+    if (providerParticipantId !== undefined) {
+      query = query.eq('provider_participant_id', providerParticipantId);
     }
 
     const { data, error } = await query.maybeSingle();
