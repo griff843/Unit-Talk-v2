@@ -28,15 +28,28 @@ export interface DomainAnalysis {
   computedAt: string;
   /**
    * Confidence delta: confidence - impliedProbability from submitted odds.
-   * NOTE: This is NOT market edge. It measures how much the submitter's
-   * confidence exceeds the odds they submitted. Real edge requires
-   * comparison against devigged multi-book consensus (Sprint D).
+   * This is a confidence assertion, not market edge.
+   * When realEdge is available, use that instead.
    */
   edge?: number | undefined;
   /** Whether confidence delta is positive */
   hasPositiveEdge?: boolean | undefined;
   /** Fractional Kelly bet sizing (only if confidence and odds present) */
   kellyFraction?: number | undefined;
+  /**
+   * Real edge: model probability vs devigged market consensus.
+   * Available when Pinnacle or multi-book data exists.
+   * This IS market edge — use for promotion scoring when present.
+   */
+  realEdge?: number | undefined;
+  /** Source of the real edge (pinnacle, consensus, sgo, confidence-delta) */
+  realEdgeSource?: string | undefined;
+  /** Market probability used for real edge computation */
+  marketProbability?: number | undefined;
+  /** Whether real edge is positive */
+  hasRealEdge?: boolean | undefined;
+  /** Number of books in consensus */
+  realEdgeBookCount?: number | undefined;
 }
 
 export const DOMAIN_ANALYSIS_VERSION = 'domain-analysis-v1.0.0';

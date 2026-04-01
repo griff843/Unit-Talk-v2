@@ -605,27 +605,38 @@ async function readPromotionScoreInputs(
 }
 
 /**
- * Convert domain analysis confidence delta to a 0-100 promotion score.
+ * Read edge score from domain analysis.
  *
- * NOTE: This is labeled "edge" in the scoring model but is actually a
- * confidence delta (confidence - impliedProbability from submitted odds).
- * Real market edge requires devigged multi-book consensus (Sprint D, UTV2-198).
+ * Priority: real edge (vs Pinnacle/consensus) > confidence delta (vs submitted odds)
  *
- * Raw delta is typically -0.5 to +0.5.
- * Mapping: score = clamp(50 + rawDelta * 400, 0, 100)
+ * Real edge (UTV2-198): model probability vs devigged market consensus.
+ * Available when Pinnacle or multi-book data exists via The Odds API.
  *
- * Examples: +0.10 → 90, +0.05 → 70, 0.00 → 50, -0.05 → 30, -0.10 → 10
+ * Confidence delta (legacy): confidence - impliedProbability from submitted odds.
+ * Used as fallback when no market data is available.
  *
- * Returns null if domain analysis is absent or delta was not computed.
+ * Both are mapped to 0-100 score: clamp(50 + rawValue * 400, 0, 100)
  */
 export function readDomainAnalysisEdgeScore(
   metadata: Record<string, unknown>,
 ): number | null {
   const domainAnalysis = metadata['domainAnalysis'];
   if (!isRecord(domainAnalysis)) {
+    // Check if real edge is in top-level metadata (from submission enrichment)
+    const topLevelRealEdge = metadata['realEdge'];
+    if (typeof topLevelRealEdge === 'number' && Number.isFinite(topLevelRealEdge)) {
+      return Math.max(0, Math.min(100, 50 + topLevelRealEdge * 400));
+    }
     return null;
   }
 
+  // Prefer real edge (vs Pinnacle/consensus) when available
+  const realEdge = domainAnalysis['realEdge'];
+  if (typeof realEdge === 'number' && Number.isFinite(realEdge)) {
+    return Math.max(0, Math.min(100, 50 + realEdge * 400));
+  }
+
+  // Fall back to confidence delta
   const rawEdge = domainAnalysis['edge'];
   if (typeof rawEdge !== 'number' || !Number.isFinite(rawEdge)) {
     return null;

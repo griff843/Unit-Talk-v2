@@ -147,12 +147,53 @@ export async function processSubmission(
     materialized.pick.metadata,
     domainAnalysis,
   );
+
+  // Compute real edge against Pinnacle/consensus market data (Sprint D UTV2-198)
+  let realEdgeData: Record<string, unknown> = {};
+  if (
+    materialized.pick.confidence != null &&
+    materialized.pick.confidence > 0 &&
+    materialized.pick.confidence < 1 &&
+    materialized.pick.odds != null
+  ) {
+    try {
+      const { computeRealEdge } = await import('./real-edge-service.js');
+      const realEdgeResult = await computeRealEdge({
+        confidence: materialized.pick.confidence,
+        marketKey: normalizedMarketKey,
+        selection: materialized.pick.selection,
+        submittedOdds: materialized.pick.odds,
+        providerOffers: repositories.providerOffers,
+      });
+
+      realEdgeData = {
+        realEdge: realEdgeResult.realEdge,
+        realEdgeSource: realEdgeResult.marketSource,
+        marketProbability: realEdgeResult.marketProbability,
+        hasRealEdge: realEdgeResult.hasRealEdge,
+        realEdgeBookCount: realEdgeResult.bookCount,
+      };
+
+      // Enrich domain analysis with real edge if available
+      if (domainAnalysis && realEdgeResult.marketSource !== 'confidence-delta') {
+        domainAnalysis.realEdge = realEdgeResult.realEdge;
+        domainAnalysis.realEdgeSource = realEdgeResult.marketSource;
+        domainAnalysis.marketProbability = realEdgeResult.marketProbability;
+        domainAnalysis.hasRealEdge = realEdgeResult.hasRealEdge;
+        domainAnalysis.realEdgeBookCount = realEdgeResult.bookCount;
+      }
+    } catch {
+      // Real edge computation is fail-open — if it fails, confidence delta is used
+    }
+  }
+
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
       ...enrichedMetadata,
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
+      ...realEdgeData,
     },
   };
 
