@@ -3,7 +3,9 @@
   "compilerOptions": {
     "composite": true,
     "rootDir": "src",
-    "outDir": "dist"
+    "outDir": "dist",
+    "exactOptionalPropertyTypes": false,
+    "noImplicitAny": false
   },
   "include": ["src/**/*.ts"]
 }
