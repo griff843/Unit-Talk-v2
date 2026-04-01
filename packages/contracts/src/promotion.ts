@@ -33,6 +33,23 @@ export const promotionOverrideActions = [
 ] as const;
 export type PromotionOverrideAction = (typeof promotionOverrideActions)[number];
 
+/**
+ * Identifies the source of the edge score component in a promotion decision.
+ * - 'real-edge': model probability vs Pinnacle devigged line (authoritative)
+ * - 'consensus-edge': model probability vs multi-book devigged consensus
+ * - 'sgo-edge': model probability vs SGO devigged line
+ * - 'confidence-delta': confidence minus implied probability from submitted odds (self-reported)
+ * - 'explicit': edge provided directly in pick.metadata.promotionScores.edge
+ */
+export const edgeSources = [
+  'real-edge',
+  'consensus-edge',
+  'sgo-edge',
+  'confidence-delta',
+  'explicit',
+] as const;
+export type EdgeSource = (typeof edgeSources)[number];
+
 export interface PromotionScoreWeights {
   edge: number;
   trust: number;
@@ -300,6 +317,11 @@ export interface PromotionDecisionSnapshot {
     readiness: number;
     uniqueness: number;
     boardFit: number;
+    /**
+     * Source of the edge component at decision time.
+     * Absent on snapshots written before UTV2-222/223.
+     */
+    edgeSource?: EdgeSource | undefined;
   };
 
   /** Gate boolean/value inputs at the moment of decision. */

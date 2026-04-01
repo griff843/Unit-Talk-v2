@@ -28,10 +28,19 @@ export interface DomainAnalysis {
   computedAt: string;
   /**
    * Confidence delta: confidence - impliedProbability from submitted odds.
-   * This is a confidence assertion, not market edge.
-   * When realEdge is available, use that instead.
+   * This is a confidence assertion, NOT market edge.
+   * When realEdge is available, use that for promotion scoring.
+   *
+   * @deprecated Use `confidenceDelta`. This alias is kept for backward compat with
+   * existing picks in the DB that have `metadata.domainAnalysis.edge`.
    */
   edge?: number | undefined;
+  /**
+   * Confidence delta (canonical name): confidence - impliedProbability.
+   * Same value as `edge`. Prefer this over `edge` in new code.
+   * This is a confidence assertion, NOT real market edge.
+   */
+  confidenceDelta?: number | undefined;
   /** Whether confidence delta is positive */
   hasPositiveEdge?: boolean | undefined;
   /** Fractional Kelly bet sizing (only if confidence and odds present) */
@@ -100,7 +109,8 @@ export function computeSubmissionDomainAnalysis(
     pick.confidence < 1
   ) {
     const edge = roundTo(pick.confidence - impliedProbability, 6);
-    analysis.edge = edge;
+    analysis.edge = edge;           // backward compat — existing DB records use this name
+    analysis.confidenceDelta = edge; // canonical name for new code
     analysis.hasPositiveEdge = edge > 0;
 
     // Kelly fraction: uses confidence as win probability estimate

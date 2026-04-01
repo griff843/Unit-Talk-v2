@@ -2,6 +2,7 @@ import {
   type BoardPromotionDecision,
   type BoardPromotionEvaluationInput,
   type CanonicalPick,
+  type EdgeSource,
   type PickLifecycleState,
   type PromotionDecisionSnapshot,
   type PromotionPolicy,
@@ -196,6 +197,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
       readiness: scoreInputs.readiness,
       uniqueness: scoreInputs.uniqueness,
       boardFit: scoreInputs.boardFit,
+      edgeSource: scoreInputs.edgeSource,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -451,6 +453,7 @@ async function persistPromotionDecisionForPick(
       readiness: scoreInputs.readiness,
       uniqueness: scoreInputs.uniqueness,
       boardFit: scoreInputs.boardFit,
+      edgeSource: scoreInputs.edgeSource,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -563,7 +566,16 @@ async function readPromotionScoreInputs(
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
 
   // Edge fallback priority: explicit promotionScores.edge > domain analysis edge > confidence
-  const edgeFallback = readDomainAnalysisEdgeScore(pick.metadata) ?? confidenceScore;
+  const domainEdgeScore = readDomainAnalysisEdgeScore(pick.metadata);
+  const edgeFallback = domainEdgeScore ?? confidenceScore;
+
+  // Track the source of the edge score for the decision snapshot
+  const edgeIsExplicit = typeof configured?.['edge'] === 'number';
+  const edgeSource: EdgeSource = edgeIsExplicit
+    ? 'explicit'
+    : domainEdgeScore !== null
+      ? readDomainAnalysisEdgeSource(pick.metadata)
+      : 'confidence-delta';
 
   // Trust fallback priority: explicit promotionScores.trust > domain trust signal > confidence
   const trustFallback = readDomainAnalysisTrustSignal(pick.metadata) ?? confidenceScore;
@@ -604,6 +616,8 @@ async function readPromotionScoreInputs(
     // Weight should be minimal until a market saturation signal exists.
     uniqueness: readScore(configured, 'uniqueness', 50),
     boardFit,
+    /** Source of the edge component — used in decision snapshot for auditability. */
+    edgeSource,
   };
 }
 
@@ -649,12 +663,49 @@ export function readDomainAnalysisEdgeScore(
 }
 
 /**
+ * Determine the authoritative source of the edge score.
+ *
+ * Returns 'real-edge' when Pinnacle data drove the edge,
+ * 'consensus-edge' for multi-book, 'sgo-edge' for SGO-only,
+ * 'confidence-delta' when no market data was available.
+ *
+ * This is used to label the snapshot so operators can see whether
+ * the edge score reflects a true market comparison or a self-reported
+ * confidence assertion.
+ */
+export function readDomainAnalysisEdgeSource(
+  metadata: Record<string, unknown>,
+): EdgeSource {
+  const domainAnalysis = metadata['domainAnalysis'];
+
+  // Check inside domainAnalysis first (set at submission enrichment time)
+  if (isRecord(domainAnalysis)) {
+    if (typeof domainAnalysis['realEdge'] === 'number' && Number.isFinite(domainAnalysis['realEdge'])) {
+      return mapRealEdgeSource(domainAnalysis['realEdgeSource']);
+    }
+  }
+
+  // Check top-level metadata (also set at submission enrichment time)
+  if (typeof metadata['realEdge'] === 'number' && Number.isFinite(metadata['realEdge'])) {
+    return mapRealEdgeSource(metadata['realEdgeSource']);
+  }
+
+  return 'confidence-delta';
+}
+
+function mapRealEdgeSource(source: unknown): EdgeSource {
+  if (source === 'pinnacle') return 'real-edge';
+  if (source === 'consensus') return 'consensus-edge';
+  if (source === 'sgo') return 'sgo-edge';
+  return 'confidence-delta';
+}
+
+/**
  * Derive a trust signal from domain analysis confidence delta.
  *
- * NOTE: This uses the confidence delta (mislabeled "edge" in domain analysis),
- * not real market edge. A positive delta means the submitter's confidence
- * exceeds the implied probability of their own submitted odds. This is a
- * confidence assertion, not a proven market advantage.
+ * Uses the confidence delta (confidence - implied probability from submitted odds).
+ * This is a confidence assertion, NOT real market edge. A positive delta means
+ * the submitter's confidence exceeds the implied probability of their own odds.
  *
  * Binary output: ≥5% delta → 80, >0% delta → 65, else null.
  * Returns null if domain analysis is absent or delta is not positive.
@@ -671,12 +722,13 @@ export function readDomainAnalysisTrustSignal(
     return null;
   }
 
-  const edge = domainAnalysis['edge'];
-  if (typeof edge !== 'number' || !Number.isFinite(edge)) {
+  // Prefer `confidenceDelta` (canonical name); fall back to `edge` for existing DB records
+  const delta = domainAnalysis['confidenceDelta'] ?? domainAnalysis['edge'];
+  if (typeof delta !== 'number' || !Number.isFinite(delta)) {
     return null;
   }
 
-  return edge >= 0.05 ? 80 : 65;
+  return delta >= 0.05 ? 80 : 65;
 }
 
 /**
