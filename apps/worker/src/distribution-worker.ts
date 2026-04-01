@@ -121,7 +121,14 @@ export async function processNextDistributionWork(
     targetRegistry?: TargetRegistryEntry[];
   } = {},
 ): Promise<WorkerProcessResult> {
-  const claimed = await repositories.outbox.claimNext(target, workerId);
+  // Try atomic claim (SELECT FOR UPDATE SKIP LOCKED) first,
+  // fall back to sequential claim for InMemory mode.
+  let claimed: OutboxRecord | null;
+  try {
+    claimed = await repositories.outbox.claimNextAtomic(target, workerId);
+  } catch {
+    claimed = await repositories.outbox.claimNext(target, workerId);
+  }
 
   if (!claimed) {
     return {
@@ -335,23 +342,73 @@ export async function processNextDistributionWork(
       });
     }
 
-    const sent = await repositories.outbox.markSent(claimed.id);
-    const postedTransition = await transitionPickLifecycle(
-      repositories.picks,
-      claimed.pick_id,
-      'posted',
-      'downstream delivery confirmed',
-      'poster',
-    );
-    const receipt = await repositories.receipts.record({
-      outboxId: claimed.id,
-      receiptType: delivery.receiptType,
-      status: delivery.status,
-      channel: delivery.channel,
-      externalId: delivery.externalId,
-      idempotencyKey: delivery.idempotencyKey,
-      payload: delivery.payload,
-    });
+    // Try atomic confirm (markSent + lifecycle + receipt + audit in one tx),
+    // fall back to sequential for InMemory mode.
+    let sent: OutboxRecord;
+    let receipt: ReceiptRecord;
+    let postedLifecycleEventId: string | null = null;
+
+    try {
+      const confirmResult = await repositories.outbox.confirmDeliveryAtomic({
+        outboxId: claimed.id,
+        pickId: claimed.pick_id,
+        workerId,
+        receiptType: delivery.receiptType,
+        receiptStatus: delivery.status,
+        receiptChannel: delivery.channel ?? '',
+        receiptExternalId: delivery.externalId ?? null,
+        receiptIdempotencyKey: delivery.idempotencyKey ?? `${claimed.id}:receipt`,
+        receiptPayload: delivery.payload ?? {},
+        lifecycleFromState: 'queued',
+        lifecycleToState: 'posted',
+        lifecycleWriterRole: 'poster',
+        lifecycleReason: 'downstream delivery confirmed',
+        auditAction: 'distribution.sent',
+        auditPayload: {
+          outboxId: claimed.id,
+          target,
+          pickId: claimed.pick_id,
+        },
+      });
+
+      sent = confirmResult.outbox;
+      receipt = confirmResult.receipt ?? ({} as ReceiptRecord);
+      postedLifecycleEventId = confirmResult.lifecycleEvent?.id ?? null;
+    } catch {
+      // Sequential fallback (InMemory mode)
+      sent = await repositories.outbox.markSent(claimed.id);
+      const postedTransition = await transitionPickLifecycle(
+        repositories.picks,
+        claimed.pick_id,
+        'posted',
+        'downstream delivery confirmed',
+        'poster',
+      );
+      receipt = await repositories.receipts.record({
+        outboxId: claimed.id,
+        receiptType: delivery.receiptType,
+        status: delivery.status,
+        channel: delivery.channel,
+        externalId: delivery.externalId,
+        idempotencyKey: delivery.idempotencyKey,
+        payload: delivery.payload,
+      });
+      postedLifecycleEventId = postedTransition.lifecycleEvent.id;
+      await recordWorkerAudit(repositories.audit, {
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.sent',
+        actor: workerId,
+        payload: {
+          outboxId: claimed.id,
+          receiptId: receipt.id,
+          target,
+          pickId: claimed.pick_id,
+          postedLifecycleEventId,
+        },
+      });
+    }
+
     const completedRun = await repositories.runs.completeRun({
       runId: run.id,
       status: 'succeeded',
@@ -359,20 +416,7 @@ export async function processNextDistributionWork(
         outboxId: claimed.id,
         receiptId: receipt.id,
         target,
-        postedLifecycleEventId: postedTransition.lifecycleEvent.id,
-      },
-    });
-    await recordWorkerAudit(repositories.audit, {
-      entityType: 'distribution_outbox',
-      entityId: claimed.id,
-      action: 'distribution.sent',
-      actor: workerId,
-      payload: {
-        outboxId: claimed.id,
-        receiptId: receipt.id,
-        target,
-        pickId: claimed.pick_id,
-        postedLifecycleEventId: postedTransition.lifecycleEvent.id,
+        postedLifecycleEventId,
       },
     });
 

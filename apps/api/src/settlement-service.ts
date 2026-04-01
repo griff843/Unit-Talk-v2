@@ -304,24 +304,80 @@ async function recordInitialSettlement(
 ): Promise<RecordSettlementResult> {
   const settledAt = new Date().toISOString();
 
-  let settlementRecord: SettlementRecord;
+  const settlementInput = {
+    pickId: pick.id,
+    status: 'settled' as const,
+    result: request.result ?? null,
+    source: request.source,
+    confidence: request.confidence,
+    evidenceRef: request.evidenceRef,
+    notes: request.notes ?? null,
+    reviewReason: null,
+    settledBy: request.settledBy,
+    settledAt,
+    payload: {
+      requestStatus: request.status,
+      correction: false,
+    },
+  };
+
+  // Try atomic settlement (all writes in one Postgres transaction),
+  // fall back to sequential for InMemory mode.
   try {
-    settlementRecord = await repositories.settlements.record({
+    const atomicResult = await repositories.settlements.settlePickAtomic({
       pickId: pick.id,
-      status: 'settled',
-      result: request.result ?? null,
-      source: request.source,
-      confidence: request.confidence,
-      evidenceRef: request.evidenceRef,
-      notes: request.notes ?? null,
-      reviewReason: null,
-      settledBy: request.settledBy,
-      settledAt,
-      payload: {
-        requestStatus: request.status,
-        correction: false,
+      settlement: settlementInput,
+      lifecycleFromState: pick.status,
+      lifecycleToState: 'settled',
+      lifecycleWriterRole: 'settler',
+      lifecycleReason: 'settlement recorded',
+      auditAction: 'settlement.recorded',
+      auditActor: request.settledBy,
+      auditPayload: {
+        pickId: pick.id,
+        result: request.result,
+        source: request.source,
+        confidence: request.confidence,
+        evidenceRef: request.evidenceRef,
       },
     });
+
+    if (atomicResult.duplicate) {
+      const currentPick = atomicResult.pick;
+      const downstream = await computeSettlementDownstreamBundle(
+        currentPick,
+        repositories.settlements,
+      );
+      return {
+        pickRecord: currentPick,
+        settlementRecord: atomicResult.settlement,
+        lifecycleEvent: null,
+        auditRecords: [],
+        finalLifecycleState: currentPick.status,
+        downstream,
+      };
+    }
+
+    const downstream = await computeSettlementDownstreamBundle(
+      atomicResult.pick,
+      repositories.settlements,
+    );
+
+    return {
+      pickRecord: atomicResult.pick,
+      settlementRecord: atomicResult.settlement,
+      lifecycleEvent: atomicResult.lifecycleEvent,
+      auditRecords: [],
+      finalLifecycleState: atomicResult.pick.status,
+      downstream,
+    };
+  } catch {
+    // Sequential fallback (InMemory mode or RPC not deployed).
+  }
+
+  let settlementRecord: SettlementRecord;
+  try {
+    settlementRecord = await repositories.settlements.record(settlementInput);
   } catch (err: unknown) {
     if (isDuplicateSettlementError(err)) {
       const existing = await repositories.settlements.findLatestForPick(pick.id);

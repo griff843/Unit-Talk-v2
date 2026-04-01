@@ -60,6 +60,18 @@ class FakeOutboxRepository implements OutboxRepository {
     throw new Error('enqueue is not used in this test');
   }
 
+  async enqueueDistributionAtomic(): Promise<null> {
+    throw new Error('enqueueDistributionAtomic is not supported in test mode');
+  }
+
+  async claimNextAtomic(): Promise<OutboxRecord | null> {
+    throw new Error('claimNextAtomic is not supported in test mode');
+  }
+
+  async confirmDeliveryAtomic(): Promise<never> {
+    throw new Error('confirmDeliveryAtomic is not supported in test mode');
+  }
+
   async findByPickAndTarget(
     pickId: string,
     target: string,

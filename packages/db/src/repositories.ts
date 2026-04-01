@@ -162,8 +162,58 @@ export interface OutboxCreateInput {
   idempotencyKey: string;
 }
 
+export interface EnqueueDistributionAtomicInput {
+  pickId: string;
+  fromState: string;
+  toState: string;
+  writerRole: string;
+  reason: string;
+  lifecycleCreatedAt: string;
+  outboxTarget: string;
+  outboxPayload: Record<string, unknown>;
+  outboxIdempotencyKey: string;
+}
+
+export interface EnqueueDistributionAtomicResult {
+  pick: PickRecord;
+  lifecycleEvent: PickLifecycleRecord;
+  outbox: OutboxRecord;
+}
+
+export interface ClaimNextAtomicResult {
+  outbox: OutboxRecord;
+}
+
+export interface ConfirmDeliveryAtomicInput {
+  outboxId: string;
+  pickId: string;
+  workerId: string;
+  receiptType: string;
+  receiptStatus: string;
+  receiptChannel: string;
+  receiptExternalId: string | null;
+  receiptIdempotencyKey: string;
+  receiptPayload: Record<string, unknown>;
+  lifecycleFromState: string;
+  lifecycleToState: string;
+  lifecycleWriterRole: string;
+  lifecycleReason: string;
+  auditAction: string;
+  auditPayload: Record<string, unknown>;
+}
+
+export interface ConfirmDeliveryAtomicResult {
+  outbox: OutboxRecord;
+  lifecycleEvent?: PickLifecycleRecord;
+  receipt?: ReceiptRecord;
+  alreadyConfirmed: boolean;
+}
+
 export interface OutboxRepository {
   enqueue(input: OutboxCreateInput): Promise<OutboxRecord>;
+  enqueueDistributionAtomic(input: EnqueueDistributionAtomicInput): Promise<EnqueueDistributionAtomicResult | null>;
+  claimNextAtomic(target: string, workerId: string): Promise<OutboxRecord | null>;
+  confirmDeliveryAtomic(input: ConfirmDeliveryAtomicInput): Promise<ConfirmDeliveryAtomicResult>;
   findByPickAndTarget(
     pickId: string,
     target: string,
@@ -342,8 +392,28 @@ export interface SettlementCreateInput {
   payload: Record<string, unknown>;
 }
 
+export interface SettlePickAtomicInput {
+  pickId: string;
+  settlement: SettlementCreateInput;
+  lifecycleFromState: string;
+  lifecycleToState: string;
+  lifecycleWriterRole: string;
+  lifecycleReason: string;
+  auditAction: string;
+  auditActor: string;
+  auditPayload: Record<string, unknown>;
+}
+
+export interface SettlePickAtomicResult {
+  settlement: SettlementRecord;
+  pick: PickRecord;
+  lifecycleEvent: PickLifecycleRecord | null;
+  duplicate: boolean;
+}
+
 export interface SettlementRepository {
   record(input: SettlementCreateInput): Promise<SettlementRecord>;
+  settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult>;
   updatePayload(
     settlementId: string,
     payload: Record<string, unknown>,
