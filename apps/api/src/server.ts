@@ -37,6 +37,8 @@ import {
   handleGradingRun,
   handleRecapPost,
   handleMemberTiers,
+  handlePicksQuery,
+  handleSettlementsRecent,
 } from './routes/index.js';
 
 export interface ApiServerOptions {
@@ -274,6 +276,14 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/alerts/status') {
     return handleAlertsStatus(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/picks') {
+    return handlePicksQuery(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/settlements/recent') {
+    return handleSettlementsRecent(request, response, runtime);
   }
 
   // --- Auth gate: all POST routes require authentication ---

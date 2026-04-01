@@ -18,3 +18,5 @@ export {
 export { handleGradingRun } from './grading.js';
 export { handleRecapPost } from './recap.js';
 export { handleMemberTiers } from './member-tiers.js';
+export { handlePicksQuery } from './picks-query.js';
+export { handleSettlementsRecent } from './settlements-query.js';

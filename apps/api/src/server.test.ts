@@ -844,3 +844,105 @@ function restoreEnv(name: string, value: string | undefined) {
 
   process.env[name] = value;
 }
+
+// --- Pick query endpoint ---
+
+test('GET /api/picks returns 400 without status param', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/picks`);
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 400);
+    assert.equal(body.error.code, 'MISSING_STATUS');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/picks?status=validated returns picks in that state', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await processSubmission(
+    { source: 'test', market: 'NBA', selection: 'Over 200.5' },
+    repositories,
+  );
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks?status=validated`,
+    );
+    const body = (await response.json()) as { ok: boolean; picks: unknown[]; count: number };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.count, 1);
+    assert.equal(body.picks.length, 1);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/picks?status=settled returns empty when no settled picks', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await processSubmission(
+    { source: 'test', market: 'NBA', selection: 'Over 200.5' },
+    repositories,
+  );
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks?status=settled`,
+    );
+    const body = (await response.json()) as { ok: boolean; picks: unknown[]; count: number };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.count, 0);
+  } finally {
+    server.close();
+  }
+});
+
+// --- Settlement query endpoint ---
+
+test('GET /api/settlements/recent returns empty array when no settlements', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/settlements/recent`,
+    );
+    const body = (await response.json()) as { ok: boolean; settlements: unknown[]; count: number };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.count, 0);
+    assert.deepEqual(body.settlements, []);
+  } finally {
+    server.close();
+  }
+});
