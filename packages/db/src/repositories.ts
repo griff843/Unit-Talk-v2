@@ -84,6 +84,7 @@ export interface PickRepository {
   ): Promise<PickRecord>;
   updateApprovalStatus(pickId: string, status: ApprovalStatus): Promise<PickRecord>;
   findPickById(pickId: string): Promise<PickRecord | null>;
+  findPicksByIds(pickIds: string[]): Promise<Map<string, PickRecord>>;
   findPickByIdempotencyKey(key: string): Promise<PickRecord | null>;
   listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],

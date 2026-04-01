@@ -151,35 +151,36 @@ export async function computeRecapSummary(
     return null;
   }
 
-  const joinedRows = (
-    await Promise.all(
-      relevantSettlements.map(async (settlement) => {
-        const pick = await repositories.picks.findPickById(settlement.pick_id);
-        if (!pick) {
-          return null;
-        }
+  const pickIds = [...new Set(relevantSettlements.map((s) => s.pick_id))];
+  const picksMap = await repositories.picks.findPicksByIds(pickIds);
 
-        const result = settlement.result as 'win' | 'loss' | 'push';
-        return {
-          pick,
+  const joinedRows = relevantSettlements
+    .map((settlement) => {
+      const pick = picksMap.get(settlement.pick_id);
+      if (!pick) {
+        return null;
+      }
+
+      const result = settlement.result as 'win' | 'loss' | 'push';
+      return {
+        pick,
+        result,
+        profitLossUnits: computeProfitLossUnits(
           result,
-          profitLossUnits: computeProfitLossUnits(
-            result,
-            readStakeUnits(pick),
-            pick.odds,
-          ),
-        };
-      }),
-    )
-  ).filter(
-    (
-      row,
-    ): row is {
-      pick: PickRecord;
-      result: 'win' | 'loss' | 'push';
-      profitLossUnits: number;
-    } => row !== null,
-  );
+          readStakeUnits(pick),
+          pick.odds,
+        ),
+      };
+    })
+    .filter(
+      (
+        row,
+      ): row is {
+        pick: PickRecord;
+        result: 'win' | 'loss' | 'push';
+        profitLossUnits: number;
+      } => row !== null,
+    );
 
   if (joinedRows.length === 0) {
     return null;

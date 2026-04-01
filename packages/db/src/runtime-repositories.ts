@@ -251,6 +251,17 @@ export class InMemoryPickRepository implements PickRepository {
     return this.picks.get(pickId) ?? null;
   }
 
+  async findPicksByIds(pickIds: string[]): Promise<Map<string, PickRecord>> {
+    const result = new Map<string, PickRecord>();
+    for (const id of pickIds) {
+      const pick = this.picks.get(id);
+      if (pick) {
+        result.set(id, pick);
+      }
+    }
+    return result;
+  }
+
   async listByLifecycleState(
     lifecycleState: CanonicalPick['lifecycleState'],
     limit?: number | undefined,
@@ -1603,6 +1614,28 @@ export class DatabasePickRepository implements PickRepository {
     }
 
     return data;
+  }
+
+  async findPicksByIds(pickIds: string[]): Promise<Map<string, PickRecord>> {
+    const result = new Map<string, PickRecord>();
+    if (pickIds.length === 0) {
+      return result;
+    }
+
+    const { data, error } = await this.client
+      .from('picks')
+      .select()
+      .in('id', pickIds);
+
+    if (error) {
+      throw new Error(`Failed to find picks by ids: ${error.message}`);
+    }
+
+    for (const pick of data ?? []) {
+      result.set(pick.id, pick);
+    }
+
+    return result;
   }
 
   async listByLifecycleState(

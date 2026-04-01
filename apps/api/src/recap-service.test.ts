@@ -525,6 +525,78 @@ test('checkAndPostRecaps writes system_runs record after recap completion', asyn
   assert.equal(runsAfter[0]!.run_type, 'recap.post');
 });
 
+test('computeRecapSummary uses batched pick lookup instead of N+1 queries', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  // Create multiple settled picks to exercise the batch path
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+  await createSettledPick(repositories, {
+    selection: 'Under 8.5',
+    market: 'assists-all-game-ou',
+    odds: -110,
+    stakeUnits: 2,
+    submittedBy: 'dalton',
+    result: 'loss',
+    settledAt: '2026-03-27T10:00:00.000Z',
+  });
+  await createSettledPick(repositories, {
+    selection: 'Over 4.5',
+    market: 'rebounds-all-game-ou',
+    odds: -105,
+    stakeUnits: 1,
+    submittedBy: 'locke',
+    result: 'push',
+    settledAt: '2026-03-27T18:00:00.000Z',
+  });
+  await createSettledPick(repositories, {
+    selection: 'Over 30.5',
+    market: 'points-all-game-ou',
+    odds: -120,
+    stakeUnits: 3,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T20:00:00.000Z',
+  });
+
+  // Wrap the picks repository to count calls
+  let findByIdCalls = 0;
+  let findByIdsCalls = 0;
+  const originalFindPickById = repositories.picks.findPickById.bind(repositories.picks);
+  const originalFindPicksByIds = repositories.picks.findPicksByIds.bind(repositories.picks);
+
+  repositories.picks.findPickById = async (pickId: string) => {
+    findByIdCalls++;
+    return originalFindPickById(pickId);
+  };
+  repositories.picks.findPicksByIds = async (pickIds: string[]) => {
+    findByIdsCalls++;
+    return originalFindPicksByIds(pickIds);
+  };
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T11:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary.settledCount, 4);
+  assert.equal(summary.record, '2-1-1');
+
+  // The optimization: findPicksByIds should be called exactly once (batch),
+  // and findPickById should NOT be called at all
+  assert.equal(findByIdsCalls, 1, 'findPicksByIds should be called exactly once');
+  assert.equal(findByIdCalls, 0, 'findPickById should not be called (N+1 eliminated)');
+});
+
 async function createSettledPick(
   repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
   input: {

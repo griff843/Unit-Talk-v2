@@ -387,6 +387,17 @@ class FakePickRepository implements PickRepository {
     return this.picks.get(pickId) ?? null;
   }
 
+  async findPicksByIds(pickIds: string[]): Promise<Map<string, PickRecord>> {
+    const result = new Map<string, PickRecord>();
+    for (const id of pickIds) {
+      const pick = this.picks.get(id);
+      if (pick) {
+        result.set(id, pick);
+      }
+    }
+    return result;
+  }
+
   async listByLifecycleState(
     _lifecycleState: CanonicalPick['lifecycleState'],
     _limit?: number | undefined,
