@@ -204,6 +204,14 @@ export interface ScoringProfile {
   /** Unique identifier written to pick_promotion_history.metadata.scoringProfile */
   name: string;
   description: string;
+  /** Semantic version for auditability (e.g., '1.0.0', '1.1.0') */
+  version: string;
+  /** When this profile was last modified */
+  lastModifiedAt: string;
+  /** Why this profile exists or was changed */
+  rationale: string;
+  /** Reference to backtest evidence (e.g., 'out/backtest/weight_backtest_2026-04-01.json') */
+  backtestRef?: string | undefined;
   policies: {
     'best-bets': PromotionPolicy;
     'trader-insights': PromotionPolicy;
@@ -217,7 +225,10 @@ export interface ScoringProfile {
  */
 export const defaultScoringProfile: ScoringProfile = {
   name: 'default',
-  description: 'Production baseline weights (best-bets-v1, trader-insights-v1, exclusive-insights-v1)',
+  description: 'Production baseline weights — edge-dominant with CLV feedback trust adjustment',
+  version: '2.0.0',
+  lastModifiedAt: '2026-04-01',
+  rationale: 'Sprint D intelligence: real edge (Pinnacle/consensus), Kelly gradient readiness, CLV trust feedback. Uniqueness reduced to neutral (no real signal).',
   policies: {
     'best-bets': bestBetsPromotionPolicy,
     'trader-insights': traderInsightsPromotionPolicy,
@@ -232,6 +243,9 @@ export const defaultScoringProfile: ScoringProfile = {
 export const conservativeScoringProfile: ScoringProfile = {
   name: 'conservative',
   description: 'Edge-weighted variant: edge +5%, trust -5% across all targets',
+  version: '1.0.0',
+  lastModifiedAt: '2026-03-29',
+  rationale: 'Experimental variant for edge-dominant strategy testing. Not validated by backtest.',
   policies: {
     'best-bets': {
       ...bestBetsPromotionPolicy,
