@@ -39,7 +39,7 @@ export interface ReplayEvent {
   eventType: ReplayEventType;
 
   /** Primary pick identifier (absent for RECAP_TRIGGERED). */
-  pickId?: string;
+  pickId?: string | undefined;
 
   /**
    * Virtual clock position when this event occurred.

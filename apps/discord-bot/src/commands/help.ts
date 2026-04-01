@@ -10,6 +10,10 @@ import type { CommandHandler } from '../command-registry.js';
 const COMMAND_ENTRIES: ReadonlyArray<{ name: string; description: string }> = [
   { name: 'alerts-setup', description: 'Show alert agent status (operator only)' },
   { name: 'heat-signal', description: 'Show recent notable line movement signals' },
+  { name: 'live', description: 'Show active picks that are still live on the board' },
+  { name: 'today', description: "Show picks created in today's board window" },
+  { name: 'my-picks', description: 'Show picks that match your Discord identity' },
+  { name: 'results', description: 'Show recent settled results with outcome visibility' },
   { name: 'trial-status', description: 'Show your current access tier and what it includes' },
   { name: 'upgrade', description: 'See your upgrade path and what higher tiers unlock' },
   { name: 'pick',        description: 'Submit a capper pick through the canonical API path' },

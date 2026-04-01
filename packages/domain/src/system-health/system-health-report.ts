@@ -2,13 +2,12 @@
  * System Health Report
  *
  * Core computation functions for the intelligence pipeline health snapshot.
- * Composes existing modules (calibration, evaluation, drift, downgrade)
+ * Composes existing modules (evaluation, drift, downgrade)
  * into a unified health report.
  *
  * This module only MEASURES — it does NOT modify any system parameters.
  */
 
-import { computeCalibrationMetrics } from '../calibration/analysis.js';
 import {
   buildDowngradeRecord,
   analyzeDowngradeEffectiveness,
@@ -20,6 +19,7 @@ import type {
   BandROIMetrics,
   BandDistributionSection,
   BandDistributionMetrics,
+  CalibrationMetrics,
   CalibrationCurveSection,
   DowngradeEffectivenessSection,
   SuppressionEffectivenessSection,
@@ -342,4 +342,83 @@ function round4(n: number): number {
 
 function round6(n: number): number {
   return Math.round(n * 1_000_000) / 1_000_000;
+}
+
+function computeCalibrationMetrics(
+  predictions: Array<{ p: number; outcome: 0 | 1 }>,
+  numBuckets = 10,
+): CalibrationMetrics {
+  if (predictions.length === 0) {
+    return {
+      brierScore: 0,
+      logLoss: 0,
+      ece: 0,
+      reliabilityCurve: [],
+      sampleSize: 0,
+    };
+  }
+
+  const brierScore = round6(
+    predictions.reduce((sum, prediction) => sum + (prediction.outcome - prediction.p) ** 2, 0) /
+      predictions.length,
+  );
+
+  const logLoss = round6(
+    predictions.reduce((sum, prediction) => {
+      const pClamped = Math.max(1e-7, Math.min(1 - 1e-7, prediction.p));
+      return sum - (
+        prediction.outcome * Math.log(pClamped) +
+        (1 - prediction.outcome) * Math.log(1 - pClamped)
+      );
+    }, 0) / predictions.length,
+  );
+
+  const reliabilityCurve = buildReliabilityCurve(predictions, numBuckets);
+  const ece = round6(
+    reliabilityCurve.reduce(
+      (sum, bucket) => sum + (bucket.count / predictions.length) * Math.abs(bucket.observed - bucket.predicted),
+      0,
+    ),
+  );
+
+  return {
+    brierScore,
+    logLoss,
+    ece,
+    reliabilityCurve,
+    sampleSize: predictions.length,
+  };
+}
+
+function buildReliabilityCurve(
+  predictions: Array<{ p: number; outcome: 0 | 1 }>,
+  numBuckets: number,
+): CalibrationCurveSection['reliability_buckets'] {
+  const bucketWidth = 1 / numBuckets;
+  const buckets: CalibrationCurveSection['reliability_buckets'] = [];
+
+  for (let index = 0; index < numBuckets; index += 1) {
+    const lower = index * bucketWidth;
+    const upper = (index + 1) * bucketWidth;
+    const inBucket = predictions.filter(
+      (prediction) =>
+        prediction.p >= lower &&
+        (index === numBuckets - 1 ? prediction.p <= upper : prediction.p < upper),
+    );
+    const count = inBucket.length;
+    const predicted =
+      count > 0 ? inBucket.reduce((sum, prediction) => sum + prediction.p, 0) / count : lower + bucketWidth / 2;
+    const observed =
+      count > 0 ? inBucket.reduce((sum, prediction) => sum + prediction.outcome, 0) / count : 0;
+
+    buckets.push({
+      predicted: round6(predicted),
+      observed: round6(observed),
+      count,
+      lower: round6(lower),
+      upper: round6(upper),
+    });
+  }
+
+  return buckets;
 }

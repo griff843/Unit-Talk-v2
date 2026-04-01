@@ -215,6 +215,7 @@ export interface ConfirmDeliveryAtomicResult {
 export interface OutboxRepository {
   enqueue(input: OutboxCreateInput): Promise<OutboxRecord>;
   enqueueDistributionAtomic(input: EnqueueDistributionAtomicInput): Promise<EnqueueDistributionAtomicResult | null>;
+  findByIdempotencyKey?(idempotencyKey: string): Promise<OutboxRecord | null>;
   claimNextAtomic(target: string, workerId: string): Promise<OutboxRecord | null>;
   confirmDeliveryAtomic(input: ConfirmDeliveryAtomicInput): Promise<ConfirmDeliveryAtomicResult>;
   findByPickAndTarget(

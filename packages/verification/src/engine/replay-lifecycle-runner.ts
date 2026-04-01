@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 /**
  * VERIFICATION & SIMULATION CONTROL PLANE — ReplayLifecycleRunner
  * Sprint: SPRINT-VERIFICATION-SIMULATION-LAYER-R2
@@ -66,8 +65,8 @@ import type { IsolatedPickStore, UpdateCondition } from './isolated-pick-store.j
 /** Result of a single lifecycle operation in replay mode. */
 export interface ReplayOperationResult {
   success: boolean;
-  pickId?: string;
-  error?: string;
+  pickId?: string | undefined;
+  error?: string | undefined;
   /** true when the operation passed all lifecycle validation */
   validationPassed: boolean;
 }
@@ -331,8 +330,8 @@ export class ReplayLifecycleRunner {
     pickId: string,
     settlement: {
       settlement_status: 'settled' | 'void';
-      settlement_result?: 'win' | 'loss' | 'push';
-      settlement_source?: string;
+      settlement_result?: 'win' | 'loss' | 'push' | undefined;
+      settlement_source?: string | undefined;
     },
     context: { writerRole?: WriterRole; traceId?: string; clock?: ClockProvider }
   ): ReplayOperationResult {

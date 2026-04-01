@@ -73,6 +73,18 @@
     "type": 1
   },
   {
+    "options": [],
+    "name": "live",
+    "description": "Show active picks that are still live on the board",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "my-picks",
+    "description": "Show picks that match your Discord identity",
+    "type": 1
+  },
+  {
     "options": [
       {
         "type": 3,
@@ -110,6 +122,49 @@
         "description": "Optional event or matchup label",
         "required": false,
         "max_length": 100
+      },
+      {
+        "max_value": 0.99,
+        "min_value": 0.01,
+        "type": 10,
+        "name": "confidence",
+        "description": "Optional confidence from 0.01 to 0.99",
+        "required": false
+      },
+      {
+        "type": 3,
+        "name": "event_start_time",
+        "description": "Optional event start time in ISO-8601 UTC format",
+        "required": false,
+        "max_length": 40
+      },
+      {
+        "max_value": 100,
+        "min_value": -100,
+        "type": 10,
+        "name": "edge_percent",
+        "description": "Optional edge estimate vs market",
+        "required": false
+      },
+      {
+        "type": 3,
+        "choices": [
+          {
+            "name": "Improving",
+            "value": "improving"
+          },
+          {
+            "name": "Steady",
+            "value": "steady"
+          },
+          {
+            "name": "Cooling",
+            "value": "cooling"
+          }
+        ],
+        "name": "clv_trend",
+        "description": "Optional recent close-line trend",
+        "required": false
       }
     ],
     "name": "pick",
@@ -129,6 +184,12 @@
     ],
     "name": "recap",
     "description": "Show your last settled picks",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "results",
+    "description": "Show recent settled results with outcome visibility",
     "type": 1
   },
   {
@@ -173,6 +234,12 @@
     ],
     "name": "stats",
     "description": "Show settled pick performance for a capper or the full server",
+    "type": 1
+  },
+  {
+    "options": [],
+    "name": "today",
+    "description": "Show picks created in today's board window",
     "type": 1
   },
   {

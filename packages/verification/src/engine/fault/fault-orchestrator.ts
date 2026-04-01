@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 /**
  * VERIFICATION & SIMULATION CONTROL PLANE — FaultOrchestrator
  * Sprint: SPRINT-VERIFICATION-SIMULATION-LAYER-R4
@@ -62,7 +61,7 @@ const DRAWDOWN_THRESHOLD = 3;
 interface RunError {
   eventId: string;
   eventType: string;
-  pickId?: string;
+  pickId?: string | undefined;
   error: string;
   sequenceNumber: number;
 }

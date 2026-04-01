@@ -40,6 +40,7 @@ import {
   handlePicksQuery,
   handleSettlementsRecent,
 } from './routes/index.js';
+import { handleTracePickRoute } from './routes/picks.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -280,6 +281,15 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/picks') {
     return handlePicksQuery(request, response, runtime);
+  }
+
+  const traceMatch =
+    method === 'GET'
+      ? /^\/api\/picks\/([^/]+)\/trace$/.exec(url.pathname)
+      : null;
+
+  if (traceMatch) {
+    return handleTracePickRoute(request, response, runtime, traceMatch[1] ?? '');
   }
 
   if (method === 'GET' && url.pathname === '/api/settlements/recent') {

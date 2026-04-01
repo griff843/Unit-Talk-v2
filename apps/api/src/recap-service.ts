@@ -1,4 +1,5 @@
 import type { PickRecord, RepositoryBundle } from '@unit-talk/db';
+import { recordDistributionReceipt } from './distribution-receipt-service.js';
 
 export type RecapPeriod = 'daily' | 'weekly' | 'monthly';
 
@@ -42,6 +43,11 @@ export interface PostRecapOptions {
   fetchImpl?: typeof fetch;
   dryRun?: boolean;
 }
+
+type RecapDeliveryRepositories = Pick<
+  RepositoryBundle,
+  'settlements' | 'picks' | 'outbox' | 'receipts' | 'audit'
+>;
 
 export type PostRecapResult =
   | {
@@ -252,7 +258,7 @@ export async function computeRecapSummary(
 
 export async function postRecapSummary(
   period: RecapPeriod,
-  repositories: Pick<RepositoryBundle, 'settlements' | 'picks'>,
+  repositories: RecapDeliveryRepositories,
   options: PostRecapOptions = {},
 ): Promise<PostRecapResult> {
   const summary = await computeRecapSummary(period, repositories, options.now);
@@ -266,6 +272,12 @@ export async function postRecapSummary(
   if (!channelId) {
     return { ok: false, reason: 'channel target could not be resolved' };
   }
+
+  const idempotencyKey = buildRecapIdempotencyKey(period, channel, summary.window.endsAt);
+  const existingOutbox = await findRecapOutboxByIdempotencyKey(
+    repositories.outbox,
+    idempotencyKey,
+  );
 
   if (dryRun) {
     return {
@@ -282,23 +294,101 @@ export async function postRecapSummary(
     return { ok: false, reason: 'DISCORD_BOT_TOKEN not configured' };
   }
 
-  const response = await (options.fetchImpl ?? fetch)(
-    `https://discord.com/api/v10/channels/${channelId}/messages`,
-    {
-      method: 'POST',
-      headers: {
-        Authorization: `Bot ${botToken}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        embeds: [buildRecapEmbed(summary)],
-      }),
-    },
-  );
+  if (existingOutbox?.status === 'sent') {
+    return {
+      ok: true,
+      postsCount: 0,
+      channel,
+      summary,
+      dryRun: false,
+    };
+  }
 
-  if (!response.ok) {
+  const outbox =
+    existingOutbox && (existingOutbox.status === 'pending' || existingOutbox.status === 'processing')
+      ? existingOutbox
+      : await repositories.outbox.enqueue({
+          pickId: summary.topPlay.pickId,
+          target: channel,
+          idempotencyKey,
+          payload: buildRecapOutboxPayload(summary, channel, channelId),
+        });
+
+  let response: Response;
+  try {
+    response = await (options.fetchImpl ?? fetch)(
+      `https://discord.com/api/v10/channels/${channelId}/messages`,
+      {
+        method: 'POST',
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          embeds: [buildRecapEmbed(summary)],
+        }),
+      },
+    );
+
+    if (!response.ok) {
+      const terminalFailure =
+        response.status >= 400 && response.status < 500 && response.status !== 429;
+      await recordRecapDeliveryFailure({
+        repositories,
+        outbox,
+        summary,
+        channel,
+        channelId,
+        errorMessage: `HTTP ${response.status}`,
+        terminalFailure,
+      });
+      return { ok: false, reason: 'discord post failed' };
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'unknown delivery error';
+    await recordRecapDeliveryFailure({
+      repositories,
+      outbox,
+      summary,
+      channel,
+      channelId,
+      errorMessage,
+      terminalFailure: false,
+    });
     return { ok: false, reason: 'discord post failed' };
   }
+
+  const body = (await response.json().catch(() => null)) as { id?: string } | null;
+  const receipt = await recordDistributionReceipt(repositories.receipts, {
+    outboxId: outbox.id,
+    receiptType: 'discord.message',
+    status: 'sent',
+    channel: `discord:${channelId}`,
+    externalId: typeof body?.id === 'string' ? body.id : undefined,
+    idempotencyKey: `${outbox.id}:discord:${channelId}:receipt`,
+    payload: {
+      target: channel,
+      channelId,
+      outboxId: outbox.id,
+      recapPeriod: summary.period,
+      windowEndsAt: summary.window.endsAt,
+    },
+  });
+  await repositories.audit.record({
+    entityType: 'distribution_outbox',
+    entityId: outbox.id,
+    entityRef: summary.topPlay.pickId,
+    action: 'distribution.sent',
+    actor: 'recap-service',
+    payload: {
+      outboxId: outbox.id,
+      target: channel,
+      pickId: summary.topPlay.pickId,
+      receiptId: receipt.receipt.id,
+      channelId,
+    },
+  });
+  await repositories.outbox.markSent(outbox.id);
 
   return {
     ok: true,
@@ -349,6 +439,18 @@ export function buildRecapEmbed(summary: RecapSummary) {
         inline: false,
       },
     ],
+  };
+}
+
+function buildRecapOutboxPayload(summary: RecapSummary, channel: string, channelId: string) {
+  return {
+    type: 'recap.post',
+    channel,
+    channelId,
+    period: summary.period,
+    window: summary.window,
+    summary,
+    embeds: [buildRecapEmbed(summary)],
   };
 }
 
@@ -505,6 +607,73 @@ function formatPercent(value: number) {
 
 function roundToTwoDecimals(value: number) {
   return Math.round(value * 100) / 100;
+}
+
+function buildRecapIdempotencyKey(period: RecapPeriod, channel: string, windowEndsAt: string) {
+  return `recap:${period}:${channel}:${windowEndsAt}`;
+}
+
+async function findRecapOutboxByIdempotencyKey(
+  outboxRepository: RecapDeliveryRepositories['outbox'],
+  idempotencyKey: string,
+) {
+  if (!outboxRepository.findByIdempotencyKey) {
+    return null;
+  }
+
+  return outboxRepository.findByIdempotencyKey(idempotencyKey);
+}
+
+async function recordRecapDeliveryFailure(
+  input: {
+    repositories: RecapDeliveryRepositories;
+    outbox: { id: string; attempt_count: number };
+    summary: RecapSummary;
+    channel: string;
+    channelId: string;
+    errorMessage: string;
+    terminalFailure: boolean;
+  },
+) {
+  if (input.terminalFailure) {
+    await input.repositories.outbox.markDeadLetter(input.outbox.id, input.errorMessage);
+    await input.repositories.audit.record({
+      entityType: 'distribution_outbox',
+      entityId: input.outbox.id,
+      entityRef: input.summary.topPlay.pickId,
+      action: 'distribution.dead_lettered',
+      actor: 'recap-service',
+      payload: {
+        outboxId: input.outbox.id,
+        target: input.channel,
+        pickId: input.summary.topPlay.pickId,
+        channelId: input.channelId,
+        error: input.errorMessage,
+        deadLettered: true,
+      },
+    });
+    return;
+  }
+
+  const attemptCount = (input.outbox.attempt_count ?? 0) + 1;
+  const nextAttemptAt = new Date(Date.now() + 5_000 * Math.pow(2, attemptCount)).toISOString();
+
+  await input.repositories.outbox.markFailed(input.outbox.id, input.errorMessage, nextAttemptAt);
+  await input.repositories.audit.record({
+    entityType: 'distribution_outbox',
+    entityId: input.outbox.id,
+    entityRef: input.summary.topPlay.pickId,
+    action: 'distribution.retry_scheduled',
+    actor: 'recap-service',
+    payload: {
+      outboxId: input.outbox.id,
+      target: input.channel,
+      pickId: input.summary.topPlay.pickId,
+      channelId: input.channelId,
+      error: input.errorMessage,
+      nextAttemptAt,
+    },
+  });
 }
 
 function capitalize(value: string) {

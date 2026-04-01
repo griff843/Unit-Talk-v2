@@ -449,6 +449,14 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     throw new Error('enqueueDistributionAtomic is not supported in InMemory mode. Use the sequential path.');
   }
 
+  async findByIdempotencyKey(idempotencyKey: string): Promise<OutboxRecord | null> {
+    return (
+      [...this.entries]
+        .filter((entry) => entry.idempotency_key === idempotencyKey)
+        .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null
+    );
+  }
+
   async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
     throw new Error('claimNextAtomic is not supported in InMemory mode. Use claimNext.');
   }
@@ -1900,6 +1908,22 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     };
 
     return result;
+  }
+
+  async findByIdempotencyKey(idempotencyKey: string): Promise<OutboxRecord | null> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .select('*')
+      .eq('idempotency_key', idempotencyKey)
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find outbox row by idempotency key: ${error.message}`);
+    }
+
+    return (data as OutboxRecord | null) ?? null;
   }
 
   async claimNextAtomic(target: string, workerId: string): Promise<OutboxRecord | null> {

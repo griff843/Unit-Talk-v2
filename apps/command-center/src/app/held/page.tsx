@@ -1,10 +1,12 @@
 import { Card } from '@/components/ui/Card';
 import { ReviewActions } from '@/components/ReviewActions';
 import { QueueFilters } from '@/components/QueueFilters';
+import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 interface HeldPick {
   id: string;
@@ -34,6 +36,15 @@ async function fetchHeldQueue(params: Record<string, string>): Promise<{ picks: 
   }
 }
 
+function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
+  const raw = searchParams?.refresh;
+  const parsed = typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(Math.max(parsed, 5), 300) * 1000;
+  }
+  return DEFAULT_AUTO_REFRESH_INTERVAL_MS;
+}
+
 export default async function HeldQueuePage({
   searchParams,
 }: {
@@ -45,12 +56,17 @@ export default async function HeldQueuePage({
   }
 
   const { picks, total } = await fetchHeldQueue(params);
+  const intervalMs = readRefreshIntervalMs(searchParams);
+  const observedAt = new Date().toISOString();
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-100">Held Picks</h1>
-        <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} on hold</span>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold text-gray-100">Held Picks</h1>
+          <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} on hold</span>
+        </div>
+        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
 
       <Card>

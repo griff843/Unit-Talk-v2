@@ -18,7 +18,10 @@ const RECAP_INTERVAL_MS = 60_000;
 const lastPostedAt: Partial<Record<RecapPeriod, string>> = {};
 type RecapSchedulerLogger = Pick<Console, 'error'> & Partial<Pick<Console, 'info'>>;
 
-type RecapRepositories = Pick<RepositoryBundle, 'settlements' | 'picks' | 'runs'>;
+type RecapRepositories = Pick<
+  RepositoryBundle,
+  'settlements' | 'picks' | 'runs' | 'outbox' | 'receipts' | 'audit'
+>;
 
 export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
   const collision = detectRecapTrigger(now);
@@ -55,6 +58,16 @@ export function startRecapScheduler(
   logger: RecapSchedulerLogger = console,
   clock: () => Date = () => new Date(),
 ) {
+  void checkForMissedRecaps(repositories, logger, clock).catch((err: unknown) => {
+    logger.error(
+      JSON.stringify({
+        service: 'recap-scheduler',
+        event: 'catchup.unhandled_error',
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
+  });
+
   const interval = setInterval(() => {
     checkAndPostRecaps(repositories, logger, clock).catch((err: unknown) => {
       logger.error(
@@ -88,6 +101,14 @@ export async function checkAndPostRecapsForTests(
   clock: () => Date,
 ) {
   return checkAndPostRecaps(repositories, logger, clock);
+}
+
+export async function checkForMissedRecapsForTests(
+  repositories: RecapRepositories,
+  logger: RecapSchedulerLogger,
+  clock: () => Date,
+) {
+  return checkForMissedRecaps(repositories, logger, clock);
 }
 
 async function checkAndPostRecaps(
@@ -163,6 +184,95 @@ async function checkAndPostRecaps(
   }
 }
 
+async function checkForMissedRecaps(
+  repositories: RecapRepositories,
+  logger: RecapSchedulerLogger,
+  clock: () => Date,
+) {
+  const now = clock();
+  const periods: RecapPeriod[] = ['daily', 'weekly', 'monthly'];
+
+  for (const period of periods) {
+    const triggerTime = findLatestTriggerForPeriod(period, now);
+    if (!triggerTime) {
+      continue;
+    }
+
+    try {
+      if (hasAlreadyPosted(period, triggerTime)) {
+        continue;
+      }
+
+      const alreadyPostedInDb = await hasAlreadyPostedInDb(repositories, period, triggerTime);
+      if (alreadyPostedInDb) {
+        markPosted(period, triggerTime);
+        logger.info?.(
+          JSON.stringify({
+            service: 'recap-scheduler',
+            event: 'catchup.db_dedup_skip',
+            period,
+            triggerTime: triggerTime.toISOString(),
+          }),
+        );
+        continue;
+      }
+
+      const result = await postRecapSummary(period, repositories, {
+        now: triggerTime,
+        dryRun: readRecapDryRun(),
+      });
+
+      if (result.ok && result.dryRun) {
+        logger.info?.(
+          JSON.stringify({
+            service: 'recap-scheduler',
+            event: 'catchup.dry_run',
+            period,
+            triggerTime: triggerTime.toISOString(),
+            summary: result.summary,
+          }),
+        );
+        continue;
+      }
+
+      if (result.ok || result.reason === 'no settled picks in window') {
+        markPosted(period, triggerTime);
+        await recordRecapRun(repositories, period, triggerTime);
+        logger.info?.(
+          JSON.stringify({
+            service: 'recap-scheduler',
+            event: 'catchup.posted',
+            period,
+            triggerTime: triggerTime.toISOString(),
+            outcome: result.ok ? 'posted' : result.reason,
+          }),
+        );
+        continue;
+      }
+
+      logger.error(
+        JSON.stringify({
+          service: 'recap-scheduler',
+          event: 'catchup.post_failed',
+          period,
+          triggerTime: triggerTime.toISOString(),
+          reason: result.reason,
+        }),
+      );
+    } catch (err: unknown) {
+      logger.error(
+        JSON.stringify({
+          service: 'recap-scheduler',
+          event: 'catchup.period_error',
+          period,
+          triggerTime: triggerTime.toISOString(),
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+    }
+  }
+}
+
 function detectRecapTrigger(now: Date): RecapPeriod | 'combined' | 'none' {
   if (now.getUTCHours() !== 11 || now.getUTCMinutes() !== 0) {
     return 'none';
@@ -181,6 +291,48 @@ function detectRecapTrigger(now: Date): RecapPeriod | 'combined' | 'none' {
   }
 
   return 'daily';
+}
+
+function findLatestTriggerForPeriod(period: RecapPeriod, now: Date) {
+  const latestCandidate = latestEligibleTrigger(now);
+
+  for (let offset = 0; offset <= 40; offset += 1) {
+    const candidate = new Date(latestCandidate.getTime() - offset * 24 * 60 * 60 * 1000);
+    const due = detectRecapTrigger(candidate);
+    if (due === 'none') {
+      continue;
+    }
+
+    if (due === 'combined' && (period === 'weekly' || period === 'monthly')) {
+      return candidate;
+    }
+
+    if (due === period) {
+      return candidate;
+    }
+  }
+
+  return null;
+}
+
+function latestEligibleTrigger(now: Date) {
+  const candidate = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      11,
+      0,
+      0,
+      0,
+    ),
+  );
+
+  if (now.getTime() >= candidate.getTime()) {
+    return candidate;
+  }
+
+  return new Date(candidate.getTime() - 24 * 60 * 60 * 1000);
 }
 
 function hasAlreadyPosted(period: RecapPeriod, now: Date) {

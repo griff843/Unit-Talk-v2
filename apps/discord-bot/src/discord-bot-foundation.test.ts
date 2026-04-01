@@ -19,7 +19,13 @@ import { parseBotConfig } from './config.js';
 import { checkRoles } from './role-guard.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
-import { ApiClientError, createApiClient, type ApiClient } from './api-client.js';
+import {
+  ApiClientError,
+  createApiClient,
+  type ApiClient,
+  type QueriedPick,
+  type RecentSettlement,
+} from './api-client.js';
 import type { ChatInputCommandInteraction, GuildMember, Interaction } from 'discord.js';
 import type { CommandHandler, CommandRegistry } from './command-registry.js';
 import { createPickCommand, parsePickSubmission } from './commands/pick.js';
@@ -46,7 +52,26 @@ import {
 import {
   createHeatSignalCommand,
 } from './commands/heat-signal.js';
+import {
+  buildLiveEmbeds,
+  createLiveCommand,
+} from './commands/live.js';
+import {
+  buildTodayEmbeds,
+  filterTodayPicks,
+} from './commands/today.js';
+import {
+  buildMyPicksEmbeds,
+  createMyPicksCommand,
+  filterPicksForIdentity,
+} from './commands/my-picks.js';
+import {
+  buildResultsEmbeds,
+  createResultsCommand,
+} from './commands/results.js';
 import { buildRecapEmbedData } from './embeds/recap-embed.js';
+import { buildPickUrgencyDisplay } from './embeds/urgency-utils.js';
+import { buildBettorIntelligenceFields } from './embeds/intelligence-display.js';
 import { resolveMemberTier } from './tier-resolver.js';
 import {
   buildCapperWelcomeEmbed,
@@ -354,6 +379,34 @@ function makeRecapResponse() {
   };
 }
 
+function makeQueriedPick(overrides: Partial<QueriedPick> = {}): QueriedPick {
+  return {
+    id: overrides.id ?? 'pick-1',
+    market: overrides.market ?? 'NBA - Moneyline',
+    selection: overrides.selection ?? 'Knicks',
+    odds: overrides.odds ?? -110,
+    stake_units: overrides.stake_units ?? 1,
+    status: overrides.status ?? 'validated',
+    source: overrides.source ?? 'discord-bot',
+    created_at: overrides.created_at ?? '2026-03-28T12:00:00.000Z',
+    promotion_status: overrides.promotion_status ?? 'not_eligible',
+    promotion_target: overrides.promotion_target ?? null,
+    metadata: overrides.metadata ?? { submittedBy: 'griff843' },
+  };
+}
+
+function makeRecentSettlement(overrides: Partial<RecentSettlement> = {}): RecentSettlement {
+  return {
+    id: overrides.id ?? 'settlement-1',
+    pick_id: overrides.pick_id ?? 'pick-1',
+    status: overrides.status ?? 'settled',
+    result: overrides.result ?? 'win',
+    settled_at: overrides.settled_at ?? '2026-03-28T14:00:00.000Z',
+    created_at: overrides.created_at ?? '2026-03-28T14:00:00.000Z',
+    payload: overrides.payload ?? {},
+  };
+}
+
 // ---------------------------------------------------------------------------
 // parseBotConfig tests
 // ---------------------------------------------------------------------------
@@ -373,6 +426,235 @@ test('parseBotConfig returns BotConfig when all required vars are present', () =
   assert.equal(config.operatorRoleId, 'role-operator');
   assert.equal(config.apiUrl, 'http://localhost:4000');
   assert.equal(config.appEnv, 'local');
+});
+
+test('loadCommandRegistry also loads live, today, my-picks, and results commands', async () => {
+  await withEnvVars(
+    makeRegistryEnv({
+      DISCORD_CLIENT_ID: '123',
+      DISCORD_GUILD_ID: 'g123',
+      DISCORD_CAPPER_ROLE_ID: 'r123',
+    }),
+    async () => {
+      const registry = await loadCommandRegistry();
+      for (const commandName of ['live', 'today', 'my-picks', 'results']) {
+        assert.ok(registry.get(commandName), `${commandName} command not found in registry`);
+      }
+    },
+  );
+});
+
+test('createApiClient.getPicksByStatus calls GET /api/picks with status and limit params', async () => {
+  let capturedUrl = '';
+  const mockFetch: typeof fetch = async (input) => {
+    capturedUrl = String(input);
+    return new Response(JSON.stringify({ picks: [], count: 0 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const client = createApiClient('http://localhost:4000', mockFetch);
+  const result = await client.getPicksByStatus?.(['validated', 'queued'], 25);
+
+  assert.equal(
+    capturedUrl,
+    'http://localhost:4000/api/picks?status=validated%2Cqueued&limit=25',
+  );
+  assert.equal(result?.count, 0);
+});
+
+test('createApiClient.getRecentSettlements calls GET /api/settlements/recent with limit param', async () => {
+  let capturedUrl = '';
+  const mockFetch: typeof fetch = async (input) => {
+    capturedUrl = String(input);
+    return new Response(JSON.stringify({ settlements: [], count: 0 }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const client = createApiClient('http://localhost:4000', mockFetch);
+  const result = await client.getRecentSettlements?.(15);
+
+  assert.equal(
+    capturedUrl,
+    'http://localhost:4000/api/settlements/recent?limit=15',
+  );
+  assert.equal(result?.count, 0);
+});
+
+test('/live command renders active picks from the picks query API', async () => {
+  type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  const apiClient: ApiClient = {
+    get: async <T>() => ({ picks: [], count: 0 } as T),
+    post: async <T>() => ({} as T),
+    getPicksByStatus: async () => ({
+      count: 2,
+      picks: [
+        makeQueriedPick({ id: 'pick-1', status: 'validated', selection: 'Knicks ML' }),
+        makeQueriedPick({ id: 'pick-2', status: 'posted', selection: 'Suns ML' }),
+      ],
+    }),
+  };
+  const command = createLiveCommand(apiClient);
+  let payload: Payload | null = null;
+
+  await command.execute({
+    editReply: async (next: Payload) => {
+      payload = next;
+    },
+  } as never);
+
+  assert.ok(payload);
+  const settledPayload = payload as Payload;
+  const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  assert.equal(embed.title, 'Live Board');
+  assert.match(embed.description ?? '', /\[VALIDATED\].*Knicks ML/);
+  assert.match(embed.description ?? '', /\[POSTED\].*Suns ML/);
+});
+
+test('buildLiveEmbeds paginates after 10 picks', () => {
+  const embeds = buildLiveEmbeds(
+    Array.from({ length: 11 }, (_, index) =>
+      makeQueriedPick({ id: `pick-${index}`, selection: `Pick ${index}` }),
+    ),
+  );
+
+  assert.equal(embeds.length, 2);
+  assert.equal(embeds[0]?.toJSON().title, 'Live Board - Page 1/2');
+  assert.equal(embeds[1]?.toJSON().title, 'Live Board - Page 2/2');
+});
+
+test('filterTodayPicks keeps only picks created on the same UTC date', () => {
+  const picks = [
+    makeQueriedPick({ id: 'pick-today', created_at: '2026-03-28T01:00:00.000Z' }),
+    makeQueriedPick({ id: 'pick-yesterday', created_at: '2026-03-27T23:59:00.000Z' }),
+  ];
+
+  const filtered = filterTodayPicks(picks, new Date('2026-03-28T13:00:00.000Z'));
+
+  assert.deepEqual(filtered.map((pick) => pick.id), ['pick-today']);
+});
+
+test('buildTodayEmbeds paginates after 10 picks', () => {
+  const embeds = buildTodayEmbeds(
+    Array.from({ length: 12 }, (_, index) =>
+      makeQueriedPick({ id: `today-${index}`, selection: `Today ${index}` }),
+    ),
+  );
+
+  assert.equal(embeds.length, 2);
+});
+
+test('filterPicksForIdentity matches metadata submittedBy against Discord usernames and display names', () => {
+  const picks = [
+    makeQueriedPick({ id: 'mine', metadata: { submittedBy: 'Griff Display' } }),
+    makeQueriedPick({ id: 'other', metadata: { submittedBy: 'Casey' } }),
+  ];
+
+  const filtered = filterPicksForIdentity(picks, {
+    user: { username: 'griff843', globalName: 'Griff' },
+    member: { displayName: 'Griff Display' },
+  } as never);
+
+  assert.deepEqual(filtered.map((pick) => pick.id), ['mine']);
+});
+
+test('/my-picks command renders only picks matching the caller identity', async () => {
+  type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  const apiClient: ApiClient = {
+    get: async <T>() => ({ picks: [], count: 0 } as T),
+    post: async <T>() => ({} as T),
+    getPicksByStatus: async () => ({
+      count: 2,
+      picks: [
+        makeQueriedPick({ id: 'mine', selection: 'My Pick', metadata: { submittedBy: 'griff843' } }),
+        makeQueriedPick({ id: 'other', selection: 'Other Pick', metadata: { submittedBy: 'casey' } }),
+      ],
+    }),
+  };
+  const command = createMyPicksCommand(apiClient);
+  let payload: Payload | null = null;
+
+  await command.execute({
+    user: { username: 'griff843', globalName: 'Griff' },
+    member: { displayName: 'Griff Display' },
+    editReply: async (next: Payload) => {
+      payload = next;
+    },
+  } as never);
+
+  assert.ok(payload);
+  const settledPayload = payload as Payload;
+  const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  assert.equal(embed.title, 'My Picks');
+  assert.match(embed.description ?? '', /My Pick/);
+  assert.doesNotMatch(embed.description ?? '', /Other Pick/);
+});
+
+test('buildMyPicksEmbeds paginates after 10 picks', () => {
+  const embeds = buildMyPicksEmbeds(
+    Array.from({ length: 13 }, (_, index) =>
+      makeQueriedPick({ id: `mine-${index}`, selection: `Mine ${index}` }),
+    ),
+  );
+
+  assert.equal(embeds.length, 2);
+});
+
+test('/results command joins recent settlements to settled picks and shows P/L', async () => {
+  type Payload = { content?: string; embeds?: Array<{ toJSON(): Record<string, unknown> }> };
+  const apiClient: ApiClient = {
+    get: async <T>() => ({ settlements: [], count: 0 } as T),
+    post: async <T>() => ({} as T),
+    getRecentSettlements: async () => ({
+      count: 1,
+      settlements: [
+        makeRecentSettlement({ pick_id: 'pick-win', result: 'win' }),
+      ],
+    }),
+    getPicksByStatus: async () => ({
+      count: 1,
+      picks: [
+        makeQueriedPick({
+          id: 'pick-win',
+          selection: 'Knicks ML',
+          market: 'NBA - Moneyline',
+          odds: 150,
+          stake_units: 1,
+          status: 'settled',
+        }),
+      ],
+    }),
+  };
+  const command = createResultsCommand(apiClient);
+  let payload: Payload | null = null;
+
+  await command.execute({
+    editReply: async (next: Payload) => {
+      payload = next;
+    },
+  } as never);
+
+  assert.ok(payload);
+  const settledPayload = payload as Payload;
+  const embed = settledPayload.embeds?.[0]?.toJSON() as { title?: string; description?: string };
+  assert.equal(embed.title, 'Recent Results');
+  assert.match(embed.description ?? '', /\[WIN\].*Knicks ML.*\+1\.5u/);
+});
+
+test('buildResultsEmbeds paginates after 10 settlements', () => {
+  const picks = Array.from({ length: 11 }, (_, index) =>
+    makeQueriedPick({ id: `pick-${index}`, selection: `Selection ${index}` }),
+  );
+  const settlements = Array.from({ length: 11 }, (_, index) =>
+    makeRecentSettlement({ id: `settlement-${index}`, pick_id: `pick-${index}` }),
+  );
+
+  const embeds = buildResultsEmbeds(settlements, picks);
+
+  assert.equal(embeds.length, 2);
 });
 
 test('parseBotConfig throws when DISCORD_BOT_TOKEN is missing', () => {
@@ -896,7 +1178,7 @@ test('recap embed renders win result, units, and CLV fields', () => {
       ['Selection', 'Over 24.5'],
       ['Result', 'Win'],
       ['P/L', '+1.0u'],
-      ['CLV%', '+3.8%'],
+      ['CLV% (vs SGO close)', '+3.8%'],
       ['Capper', 'griff843'],
       ['Stake', '1.0u'],
     ],
@@ -1104,6 +1386,10 @@ test('/pick command registers the required option contract and private visibilit
       { name: 'odds', required: true },
       { name: 'stake_units', required: true },
       { name: 'event_name', required: false },
+      { name: 'confidence', required: false },
+      { name: 'event_start_time', required: false },
+      { name: 'edge_percent', required: false },
+      { name: 'clv_trend', required: false },
     ],
   );
 });
@@ -1115,6 +1401,10 @@ test('parsePickSubmission maps slash command values into the canonical submissio
     selection: 'LeBron James Points O 27.5',
     odds: -110,
     stake_units: 2,
+    confidence: 0.78,
+    event_start_time: '2026-03-28T18:15:00.000Z',
+    edge_percent: 2.3,
+    clv_trend: 'improving',
   });
 
   const payload = parsePickSubmission(mock.interaction);
@@ -1126,7 +1416,13 @@ test('parsePickSubmission maps slash command values into the canonical submissio
     selection: 'LeBron James Points O 27.5',
     odds: -110,
     stakeUnits: 2,
+    confidence: 0.78,
     eventName: 'Lakers vs Celtics',
+    metadata: {
+      eventStartTime: '2026-03-28T18:15:00.000Z',
+      edgePercent: 2.3,
+      clvTrend: 'improving',
+    },
   });
 });
 
@@ -1275,6 +1571,80 @@ test('/pick command returns service unavailable when the API cannot be reached',
   assert.equal(mock.edited[0], 'Service temporarily unavailable - try again shortly.');
 });
 
+test('buildPickUrgencyDisplay formats countdown, closing soon, and locked states', () => {
+  const standard = buildPickUrgencyDisplay(
+    '2026-03-28T18:15:00.000Z',
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+  const closingSoon = buildPickUrgencyDisplay(
+    '2026-03-28T16:20:00.000Z',
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+  const locked = buildPickUrgencyDisplay(
+    '2026-03-28T15:55:00.000Z',
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+
+  assert.equal(standard?.countdownLabel, 'Starts in 2h 15m');
+  assert.equal(standard?.statusLabel, 'Live window open');
+  assert.equal(closingSoon?.statusLabel, '⚡ Closing soon');
+  assert.equal(locked?.statusLabel, '🔒 Locked');
+});
+
+test('buildBettorIntelligenceFields uses bettor-safe labels and avoids internal jargon', () => {
+  const fields = buildBettorIntelligenceFields({
+    confidence: 0.82,
+    metadata: {
+      edgePercent: 2.3,
+      clvTrend: 'improving',
+    },
+  });
+
+  assert.deepEqual(
+    fields.map((field) => field.name),
+    ['Market Edge', 'Confidence', 'Track Record'],
+  );
+  assert.match(fields[0]?.value ?? '', /2\.3% edge vs market/);
+  assert.ok(fields.every((field) => !field.value.includes('promotionScores')));
+});
+
+test('/pick command includes urgency and bettor-safe intelligence context when optional metadata is supplied', async () => {
+  const apiClient: ApiClient = {
+    get: async <T>() => ({} as T),
+    post: async <T>() =>
+      ({
+        ok: true as const,
+        data: {
+          submissionId: 'sub-1',
+          pickId: 'pick-1',
+        },
+      } as T),
+  };
+  const command = createPickCommand(apiClient, 'role-capper');
+  const mock = makePickInteraction({
+    market: 'NFL - Spread',
+    selection: 'Bills -3.5',
+    odds: -110,
+    stake_units: 1.5,
+    confidence: 0.82,
+    event_start_time: '2099-03-28T18:15:00.000Z',
+    edge_percent: 2.3,
+    clv_trend: 'improving',
+  });
+
+  await command.execute(mock.interaction);
+
+  const embed = mock.editedPayloads[0]?.embeds?.[0] as { toJSON(): Record<string, unknown> };
+  const json = embed.toJSON() as { fields?: Array<{ name?: string; value?: string }> };
+  const fields = new Map((json.fields ?? []).map((field) => [field.name, field.value] as const));
+
+  assert.match(String(fields.get('Game Time') ?? ''), /2099-03-28 18:15 UTC/);
+  assert.match(String(fields.get('Timing') ?? ''), /Starts in/);
+  assert.equal(fields.get('Market Edge'), '+2.3% edge vs market');
+  assert.equal(fields.get('Confidence'), 'High conviction');
+  assert.equal(fields.get('Track Record'), 'Beating the close lately');
+});
+
 // ---------------------------------------------------------------------------
 // createApiClient tests
 // ---------------------------------------------------------------------------
@@ -1398,7 +1768,7 @@ test('/help command execute calls editReply with a single embed containing all c
   assert.equal(payload.embeds.length, 1, 'exactly one embed expected');
 
   const description = payload.embeds[0]?.toJSON().description ?? '';
-  for (const name of ['alerts-setup', 'heat-signal', 'pick', 'stats', 'leaderboard', 'trial-status', 'upgrade', 'help', 'recap']) {
+  for (const name of ['alerts-setup', 'heat-signal', 'live', 'today', 'my-picks', 'results', 'pick', 'stats', 'leaderboard', 'trial-status', 'upgrade', 'help', 'recap']) {
     assert.ok(description.includes(`/${name}`), `embed description missing /${name}`);
   }
 });

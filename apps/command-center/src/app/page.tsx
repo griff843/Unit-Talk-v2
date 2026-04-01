@@ -3,7 +3,10 @@ import { ExceptionPanel } from '@/components/ExceptionPanel';
 import { HealthSignalsPanel } from '@/components/HealthSignalsPanel';
 import { PickLifecycleTable } from '@/components/PickLifecycleTable';
 import { fetchDashboardData } from '@/lib/api';
+import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { DashboardData, LifecycleSignal } from '@/lib/types';
+
+const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 /** Build drilldown links for health signals that have actionable detail pages */
 function buildDrilldownLinks(
@@ -60,7 +63,20 @@ const BROKEN_SIGNALS: LifecycleSignal[] = [
   { signal: 'stats_propagation', status: 'BROKEN', detail: 'API unreachable' },
 ];
 
-export default async function DashboardPage() {
+function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
+  const raw = searchParams?.refresh;
+  const parsed = typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(Math.max(parsed, 5), 300) * 1000;
+  }
+  return DEFAULT_AUTO_REFRESH_INTERVAL_MS;
+}
+
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   let data: DashboardData;
   try {
     data = await fetchDashboardData();
@@ -74,20 +90,17 @@ export default async function DashboardPage() {
     };
   }
 
+  const observedAt = data.observedAt ?? new Date().toISOString();
+  const intervalMs = readRefreshIntervalMs(searchParams);
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-sm text-gray-500">
-          Last updated: {new Date(data.observedAt).toLocaleString()}
-        </h1>
-        <form action="/" method="GET">
-          <button
-            type="submit"
-            className="rounded bg-gray-700 px-3 py-1 text-xs text-gray-300 hover:bg-gray-600"
-          >
-            Refresh
-          </button>
-        </form>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold text-gray-100">Command Center</h1>
+          <p className="text-sm text-gray-500">Operational overview for pick flow, queue health, and delivery status.</p>
+        </div>
+        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
 
       <HealthSignalsPanel signals={data.signals} drilldownLinks={buildDrilldownLinks(data.signals)} />

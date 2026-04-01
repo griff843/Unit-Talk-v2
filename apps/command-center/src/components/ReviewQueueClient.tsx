@@ -64,6 +64,9 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
       />
 
       <div className="flex items-center gap-3 px-1">
+        <span className="text-xs text-gray-500">
+          Showing {picks.length} of {total}
+        </span>
         <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
           <input
             type="checkbox"

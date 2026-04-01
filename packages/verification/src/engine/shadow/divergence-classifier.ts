@@ -20,7 +20,7 @@
 import { ShadowScoreComparator } from './shadow-comparator.js';
 
 import type { DivergenceReport, DivergenceEntry } from '../shadow-comparator.js';
-import type { ClassifiedDivergences, StructuralDivergence, ScoreDivergence } from './types.js';
+import type { ClassifiedDivergences, StructuralDivergence } from './types.js';
 
 // Structural fields from the R3 divergence report that escalate to CRITICAL
 const CRITICAL_STRUCTURAL_FIELDS = new Set([

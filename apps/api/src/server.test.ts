@@ -921,6 +921,117 @@ test('GET /api/picks?status=settled returns empty when no settled picks', async 
   }
 });
 
+test('GET /api/picks/:id/trace returns the full pick lifecycle aggregate', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+
+  await enqueueDistributionWithRunTracking(
+    created.pick,
+    'discord:best-bets',
+    'server-test',
+    repositories.picks,
+    repositories.outbox,
+    repositories.runs,
+    repositories.audit,
+  );
+  const [outboxEntry] = await repositories.outbox.listByPickId(created.pick.id);
+  assert.ok(outboxEntry, 'expected trace seed outbox entry');
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+
+  await repositories.receipts.record({
+    outboxId: outboxEntry.id,
+    receiptType: 'discord.message',
+    status: 'sent',
+    channel: 'discord:best-bets',
+    externalId: 'message-1',
+    idempotencyKey: 'trace-receipt-1',
+    payload: { ok: true },
+  });
+
+  await repositories.settlements.record({
+    pickId: created.pick.id,
+    status: 'settled',
+    result: 'win',
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: `trace://${created.pick.id}`,
+    settledBy: 'trace-tester',
+    settledAt: new Date().toISOString(),
+    payload: {},
+  });
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'settled', 'settled', 'settler');
+  await repositories.audit.record({
+    entityType: 'trace_seed',
+    entityId: 'trace-seed-1',
+    entityRef: created.pick.id,
+    action: 'trace.seeded',
+    actor: 'server-test',
+    payload: { pickId: created.pick.id },
+  });
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/trace`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: {
+        pick: { id: string };
+        submissionEvents: Array<{ submission_id: string }>;
+        promotionHistory: Array<{ pick_id: string }>;
+        outboxEntries: Array<{ pick_id: string }>;
+        distributionReceipts: Array<{ outbox_id: string }>;
+        settlementRecords: Array<{ pick_id: string }>;
+        auditLogEntries: Array<{ entity_ref: string }>;
+        lifecycleEvents: Array<{ pick_id: string; to_state: string }>;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data?.pick.id, created.pick.id);
+    assert.equal(body.data?.submissionEvents[0]?.submission_id, created.submission.id);
+    assert.equal(body.data?.promotionHistory[0]?.pick_id, created.pick.id);
+    assert.equal(body.data?.outboxEntries[0]?.pick_id, created.pick.id);
+    assert.equal(body.data?.distributionReceipts[0]?.outbox_id, outboxEntry.id);
+    assert.equal(body.data?.settlementRecords[0]?.pick_id, created.pick.id);
+    assert.ok(body.data?.auditLogEntries.some((entry) => entry.entity_ref === created.pick.id));
+    assert.ok(body.data?.lifecycleEvents.some((entry) => entry.to_state === 'queued'));
+    assert.ok(body.data?.lifecycleEvents.some((entry) => entry.to_state === 'settled'));
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/picks/:id/trace returns 404 for unknown pick', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/missing-pick/trace`,
+    );
+    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+
+    assert.equal(response.status, 404);
+    assert.equal(body.ok, false);
+    assert.equal(body.error.code, 'PICK_NOT_FOUND');
+  } finally {
+    server.close();
+  }
+});
+
 // --- Settlement query endpoint ---
 
 test('GET /api/settlements/recent returns empty array when no settlements', async () => {

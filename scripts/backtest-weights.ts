@@ -166,7 +166,6 @@ async function main() {
     let promotedClvCount = 0;
     let rejectedWouldHaveWon = 0;
     let rejectedClvSum = 0;
-    let rejectedClvCount = 0;
 
     for (const pick of enrichedPicks) {
       if (pick.confidence == null) continue;
@@ -202,7 +201,6 @@ async function main() {
         if (pick.result === 'win') rejectedWouldHaveWon++;
         if (pick.clvPercent != null) {
           rejectedClvSum += pick.clvPercent;
-          rejectedClvCount++;
         }
       }
     }
