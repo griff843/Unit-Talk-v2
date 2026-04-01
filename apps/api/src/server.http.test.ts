@@ -39,27 +39,29 @@ async function startServer(server: ReturnType<typeof createApiServer>) {
 // GET /health
 // ---------------------------------------------------------------------------
 
-test('GET /health returns 200 with ok:true and service:api', async () => {
+test('GET /health returns 503 degraded for in-memory persistence', async () => {
   const server = createTestServer();
   const address = await startServer(server);
 
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/health`);
     const body = (await response.json()) as {
-      ok: boolean;
+      status: string;
       service: string;
       persistenceMode: string;
       runtimeMode: string;
+      dbReachable: boolean;
     };
 
-    assert.equal(response.status, 200);
+    assert.equal(response.status, 503);
     assert.equal(
       response.headers.get('content-type'),
       'application/json; charset=utf-8',
     );
-    assert.equal(body.ok, true);
+    assert.equal(body.status, 'degraded');
     assert.equal(body.service, 'api');
     assert.equal(body.persistenceMode, 'in_memory');
+    assert.equal(body.dbReachable, false);
   } finally {
     server.close();
   }

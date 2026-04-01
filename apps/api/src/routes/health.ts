@@ -1,12 +1,39 @@
 import type { ServerResponse } from 'node:http';
-import type { ApiRuntimeDependencies, ApiHealthResponse } from '../server.js';
+import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from '../server.js';
 import { writeJson } from '../http-utils.js';
 
-export function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): void {
-  writeJson(response, 200, {
-    ok: true,
+/**
+ * Probes DB connectivity by issuing a lightweight query through the picks
+ * repository.  Returns true only when persistence is backed by a real database
+ * AND the database is reachable.
+ */
+async function probeDbConnectivity(runtime: ApiRuntimeDependencies): Promise<boolean> {
+  if (runtime.persistenceMode !== 'database') {
+    return false;
+  }
+
+  try {
+    // A lookup by a non-existent ID is the cheapest round-trip we can make —
+    // it exercises the full Supabase client path without returning rows.
+    await runtime.repositories.picks.findPickById('health-probe');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): Promise<void> {
+  const dbReachable = await probeDbConnectivity(runtime);
+
+  const isDurable = runtime.persistenceMode === 'database' && dbReachable;
+  const status: ApiHealthStatus = isDurable ? 'healthy' : 'degraded';
+  const httpStatus = isDurable ? 200 : 503;
+
+  writeJson(response, httpStatus, {
+    status,
     service: 'api',
     persistenceMode: runtime.persistenceMode,
     runtimeMode: runtime.runtimeMode,
+    dbReachable,
   } satisfies ApiHealthResponse);
 }

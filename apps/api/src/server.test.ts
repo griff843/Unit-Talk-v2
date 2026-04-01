@@ -8,7 +8,7 @@ import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 
-test('GET /health returns service status', async () => {
+test('GET /health returns degraded 503 when using in-memory repositories', async () => {
   const server = createApiServer({
     repositories: createInMemoryRepositoryBundle(),
   });
@@ -20,15 +20,41 @@ test('GET /health returns service status', async () => {
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/health`);
     const body = (await response.json()) as {
-      ok: boolean;
+      status: string;
       service: string;
       persistenceMode: string;
+      runtimeMode: string;
+      dbReachable: boolean;
     };
 
-    assert.equal(response.status, 200);
-    assert.equal(body.ok, true);
+    assert.equal(response.status, 503);
+    assert.equal(body.status, 'degraded');
     assert.equal(body.service, 'api');
     assert.equal(body.persistenceMode, 'in_memory');
+    assert.equal(body.dbReachable, false);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /health response body includes persistence mode indicators', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+    const body = (await response.json()) as Record<string, unknown>;
+
+    // All required persistence indicators must be present
+    assert.ok('status' in body, 'response must include status');
+    assert.ok('persistenceMode' in body, 'response must include persistenceMode');
+    assert.ok('dbReachable' in body, 'response must include dbReachable');
+    assert.ok('runtimeMode' in body, 'response must include runtimeMode');
   } finally {
     server.close();
   }

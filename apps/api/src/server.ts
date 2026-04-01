@@ -68,11 +68,14 @@ export interface ApiRuntimeDependencies {
   metricsCollector: MetricsCollector;
 }
 
+export type ApiHealthStatus = 'healthy' | 'degraded';
+
 export interface ApiHealthResponse {
-  ok: true;
+  status: ApiHealthStatus;
   service: 'api';
   persistenceMode: ApiRuntimeDependencies['persistenceMode'];
   runtimeMode: ApiRuntimeMode;
+  dbReachable: boolean;
 }
 
 export interface ApiRateLimitResult {
