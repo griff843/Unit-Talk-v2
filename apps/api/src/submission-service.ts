@@ -291,24 +291,13 @@ async function findLatestMatchingOffer(
   normalizedMarketKey: string,
   providerOffers: ProviderOfferRepository,
 ): Promise<ProviderOfferRecord | null> {
-  const offers = await providerOffers.listByProvider('sgo');
-  const latestOffer = [...offers]
-    .sort((left, right) => {
-      const snapshotCompare = right.snapshot_at.localeCompare(left.snapshot_at);
-      if (snapshotCompare !== 0) {
-        return snapshotCompare;
-      }
+  // Use indexed query instead of full table scan (UTV2-205).
+  // Tries SGO first (has results data), falls back to any provider.
+  const sgoOffer = await providerOffers.findLatestByMarketKey(normalizedMarketKey, 'sgo');
+  if (sgoOffer) return sgoOffer;
 
-      const createdCompare = right.created_at.localeCompare(left.created_at);
-      if (createdCompare !== 0) {
-        return createdCompare;
-      }
-
-      return right.id.localeCompare(left.id);
-    })
-    .find((offer) => offer.provider_market_key === normalizedMarketKey);
-
-  return latestOffer ?? null;
+  // Fall back to any provider (Odds API, etc.)
+  return providerOffers.findLatestByMarketKey(normalizedMarketKey);
 }
 
 function resolveKellySizing(

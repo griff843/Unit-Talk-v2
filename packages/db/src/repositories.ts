@@ -375,6 +375,7 @@ export interface ClosingLineLookupCriteria {
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
   findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
+  findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null>;
   listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
 }

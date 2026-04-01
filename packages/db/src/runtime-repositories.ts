@@ -949,6 +949,13 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at));
   }
 
+  async findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null> {
+    const matches = Array.from(this.offers.values())
+      .filter((o) => o.provider_market_key === marketKey && (providerKey ? o.provider_key === providerKey : true))
+      .sort((a, b) => b.snapshot_at.localeCompare(a.snapshot_at));
+    return matches[0] ?? null;
+  }
+
   async listAll(): Promise<ProviderOfferRecord[]> {
     return Array.from(this.offers.values()).sort(
       (left, right) => right.snapshot_at.localeCompare(left.snapshot_at),
@@ -2610,6 +2617,27 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     }
 
     return data ?? [];
+  }
+
+  async findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null> {
+    let query = this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('provider_market_key', marketKey)
+      .order('snapshot_at', { ascending: false })
+      .limit(1);
+
+    if (providerKey) {
+      query = query.eq('provider_key', providerKey);
+    }
+
+    const { data, error } = await query.maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find latest offer by market key: ${error.message}`);
+    }
+
+    return data;
   }
 
   async listAll(): Promise<ProviderOfferRecord[]> {
