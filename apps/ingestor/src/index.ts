@@ -4,7 +4,19 @@ import {
   createInMemoryIngestorRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
 } from '@unit-talk/db';
+import {
+  createConsoleLogWriter,
+  createDualLogWriter,
+  createLogger,
+  createLokiLogWriter,
+} from '@unit-talk/observability';
 import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js';
+
+const lokiUrl = process.env.LOKI_URL?.trim();
+const ingestorWriter = lokiUrl
+  ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
+  : undefined;
+const logger = createLogger({ service: 'ingestor', ...(ingestorWriter ? { writer: ingestorWriter } : {}) });
 
 function createIngestorRuntimeDependencies() {
   const env = loadEnvironment();

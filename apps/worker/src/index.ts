@@ -1,6 +1,18 @@
+import {
+  createConsoleLogWriter,
+  createDualLogWriter,
+  createLogger,
+  createLokiLogWriter,
+} from '@unit-talk/observability';
 import { createWorkerRuntimeDependencies } from './runtime.js';
 import { createDeliveryAdapter, createSimulationDeliveryAdapter } from './delivery-adapters.js';
 import { runWorkerCycles } from './runner.js';
+
+const lokiUrl = process.env.LOKI_URL?.trim();
+const writer = lokiUrl
+  ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
+  : undefined;
+const logger = createLogger({ service: 'worker', ...(writer ? { writer } : {}) });
 
 export function createWorkerRuntimeSummary() {
   const runtime = createWorkerRuntimeDependencies();

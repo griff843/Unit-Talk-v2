@@ -9,5 +9,8 @@
     "dev": "tsx src/main.ts",
     "start": "node dist/main.js",
     "type-check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@unit-talk/observability": "workspace:*"
   }
 }

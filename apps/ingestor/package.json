@@ -15,6 +15,7 @@
   "dependencies": {
     "@unit-talk/config": "workspace:*",
     "@unit-talk/contracts": "workspace:*",
-    "@unit-talk/db": "workspace:*"
+    "@unit-talk/db": "workspace:*",
+    "@unit-talk/observability": "workspace:*"
   }
 }
