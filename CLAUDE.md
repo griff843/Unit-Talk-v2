@@ -425,3 +425,148 @@ Avoid:
 - vague optimism
 - roadmap language when implementation truth is being requested
 - inferring completion from intention
+
+---
+
+## Session Tools & Skill Discipline (MANDATORY)
+
+### MCP Servers (Claude Code)
+
+| Server | Purpose | When to use |
+|---|---|---|
+| Context7 | Live library docs | Any code touching Supabase, Discord.js, Next.js |
+| Linear | Issue tracking | Reading/updating Linear during execution |
+| Supabase | DB truth | Verification, schema, live state checks |
+| GitHub | Repo ops | PRs, branches, merges |
+| Notion | Docs authority | When doc truth is relevant |
+
+Supabase project ref: `feownrheeefbcsehtsiw`
+
+---
+
+## Required Skills (Behavioral Contracts)
+
+Claude must apply these behaviors when relevant:
+
+### betting-domain
+Use when:
+- CanonicalPick
+- scoring / promotionScores
+- lifecycle
+- CLV
+- grading logic
+
+Rules:
+- Domain must remain PURE
+- No DB, HTTP, or side effects
+- Scoring must not drift from contracts
+
+---
+
+### outbox-worker
+Use when:
+- outbox polling
+- delivery adapter
+- retry / circuit breaker
+- DeliveryOutcome
+
+Rules:
+- Exactly ONE DeliveryOutcome per attempt
+- No swallowed errors
+- No duplicate delivery paths
+- Worker does NOT contain business logic
+
+---
+
+### system-state-loader
+Use at:
+- start of session
+- after `/clear`
+
+Rules:
+- Load current system state before acting
+- Do not assume state from memory
+- Respect current milestone and blockers
+
+---
+
+## Core System Invariants
+
+These must NEVER be violated:
+
+1. Contract-first system
+2. Fail-closed behavior (no silent fallback)
+3. Postgres outbox is the ONLY queue
+4. Domain logic is pure
+5. Apps own side effects
+6. No cross-app imports
+7. No hallucinated architecture
+
+---
+
+## Context Management
+
+- Run `/clear` at major task boundaries
+- After `/clear`:
+  - re-read this file
+  - update Current Focus
+  - run system-state-loader mentally
+- If context degrades → clear immediately
+
+---
+
+## Execution Discipline (Always Active)
+
+All tasks in Unit Talk must follow this execution model.
+
+### Required Skills
+
+Claude must apply these behaviors automatically:
+
+- **betting-domain**
+  - Domain logic must remain pure
+  - No DB, HTTP, or side effects
+  - Scoring, CLV, lifecycle must align with contracts
+
+- **outbox-worker**
+  - Exactly one DeliveryOutcome per attempt
+  - No duplicate delivery paths
+  - No swallowed errors
+  - Worker contains no business logic
+
+- **system-state-loader**
+  - Load current system state before acting
+  - Do not assume state
+  - Respect milestone and blockers
+
+---
+
+### System Invariants (Never Violate)
+
+- Contract-first system
+- Fail-closed behavior (no silent fallback)
+- Postgres outbox is the ONLY queue
+- Domain logic is pure
+- Apps own side effects
+- No cross-app imports
+- No duplicate delivery paths
+- No swallowed errors
+- No hallucinated architecture
+
+---
+
+### Execution Rules
+
+- Prefer code over docs
+- If uncertain → say "check actual implementation"
+- Do not invent APIs or structure
+- Fail closed rather than guessing
+- Highlight violations when found
+
+---
+
+### Pre-Execution Thinking (Implicit)
+
+Before acting, always determine:
+- which skill applies
+- which invariant is most at risk
