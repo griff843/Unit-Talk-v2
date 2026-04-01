@@ -396,6 +396,7 @@ function createTestRuntime(
     repositories: createInMemoryRepositoryBundle(),
     persistenceMode: 'in_memory',
     runtimeMode: 'fail_open',
+    authConfig: { enabled: false, keys: new Map() },
     bodyLimitBytes: 64 * 1024,
     submissionRateLimit: {
       maxRequests: 10,

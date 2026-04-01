@@ -18,6 +18,7 @@ import {
   type MetricsCollector,
 } from '@unit-talk/observability';
 import { setCorsHeaders, writeJson } from './http-utils.js';
+import { authenticateRequest, authorizeRoute, loadAuthConfig, type AuthConfig, type AuthContext } from './auth.js';
 import {
   handleHealth,
   handleAlertsRecent,
@@ -58,6 +59,7 @@ export interface ApiRuntimeDependencies {
   repositories: RepositoryBundle;
   persistenceMode: 'database' | 'in_memory';
   runtimeMode: ApiRuntimeMode;
+  authConfig: AuthConfig;
   bodyLimitBytes: number;
   submissionRateLimit: ApiSubmissionRateLimit;
   logger: Logger;
@@ -97,6 +99,7 @@ export function createApiRuntimeDependencies(
 ): ApiRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
   const runtimeMode = readApiRuntimeMode(environment);
+  const authConfig = loadAuthConfig(process.env as Record<string, string | undefined>);
   const metricsCollector = createMetricsCollector();
   const lokiUrl = process.env.LOKI_URL?.trim();
   const writer = lokiUrl
@@ -115,6 +118,7 @@ export function createApiRuntimeDependencies(
       repositories: options.repositories,
       persistenceMode: 'in_memory',
       runtimeMode,
+      authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit: readSubmissionRateLimit(environment),
       logger,
@@ -131,6 +135,7 @@ export function createApiRuntimeDependencies(
       repositories: createDatabaseRepositoryBundle(connection),
       persistenceMode: 'database',
       runtimeMode,
+      authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit: readSubmissionRateLimit(environment),
       logger,
@@ -155,6 +160,7 @@ export function createApiRuntimeDependencies(
       repositories: createInMemoryRepositoryBundle(),
       persistenceMode: 'in_memory',
       runtimeMode,
+      authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit: readSubmissionRateLimit(environment),
       logger,
@@ -265,6 +271,31 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/alerts/status') {
     return handleAlertsStatus(request, response, runtime);
+  }
+
+  // --- Auth gate: all POST routes require authentication ---
+  if (method === 'POST') {
+    const auth = authenticateRequest(request, runtime.authConfig);
+    if (!auth) {
+      return writeJson(response, 401, {
+        ok: false,
+        error: {
+          code: 'UNAUTHORIZED',
+          message: 'Missing or invalid Authorization header. Use: Authorization: Bearer <api-key>',
+        },
+      });
+    }
+    if (!authorizeRoute(auth, url.pathname)) {
+      return writeJson(response, 403, {
+        ok: false,
+        error: {
+          code: 'FORBIDDEN',
+          message: `Role '${auth.role}' is not authorized for ${url.pathname}`,
+        },
+      });
+    }
+    // Attach auth context to request for downstream use
+    (request as IncomingMessage & { auth?: AuthContext }).auth = auth;
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {

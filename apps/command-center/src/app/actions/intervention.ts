@@ -7,14 +7,19 @@ export type InterventionResult =
   | { ok: false; error: string };
 
 const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3000';
-// Operator identity for audit logs. Set OPERATOR_IDENTITY in env for traceability.
-// Replace with real auth when implemented.
+const API_KEY = process.env.UNIT_TALK_CC_API_KEY ?? '';
 const OPERATOR_ACTOR = process.env.OPERATOR_IDENTITY ?? 'command-center';
+
+function authHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
+  return headers;
+}
 
 export async function retryDelivery(pickId: string, reason: string): Promise<InterventionResult> {
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/retry-delivery`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ reason, actor: OPERATOR_ACTOR }),
   });
   const body = await res.json().catch(() => ({}));
@@ -26,7 +31,7 @@ export async function retryDelivery(pickId: string, reason: string): Promise<Int
 export async function rerunPromotion(pickId: string, reason: string): Promise<InterventionResult> {
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/rerun-promotion`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ reason, actor: OPERATOR_ACTOR }),
   });
   const body = await res.json().catch(() => ({}));
@@ -43,7 +48,7 @@ export async function overridePromotion(
 ): Promise<InterventionResult> {
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/override-promotion`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
     body: JSON.stringify({ action, reason, actor: OPERATOR_ACTOR, target }),
   });
   const body = await res.json().catch(() => ({}));
@@ -55,7 +60,7 @@ export async function overridePromotion(
 export async function requeueDelivery(pickId: string): Promise<InterventionResult> {
   const res = await fetch(`${API_BASE}/api/picks/${pickId}/requeue`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: authHeaders(),
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
