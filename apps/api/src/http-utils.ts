@@ -7,7 +7,7 @@ export function setCorsHeaders(response: ServerResponse) {
   response.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   response.setHeader(
     'Access-Control-Allow-Headers',
-    'Content-Type, X-Correlation-Id, X-Request-Id',
+    'Content-Type, X-Correlation-Id, X-Request-Id, Authorization',
   );
 }
 
