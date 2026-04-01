@@ -27,6 +27,7 @@ export interface ReviewPickResult {
   decision: PickReviewDecision;
   approvalStatus: string;
   auditId: string;
+  promotionError?: string;
 }
 
 export async function reviewPickController(
@@ -96,6 +97,7 @@ export async function reviewPickController(
   });
 
   // If approved, trigger promotion re-evaluation
+  let promotionError: string | undefined;
   if (decision === 'approve') {
     try {
       const { evaluateAllPoliciesEagerAndPersist } = await import('../promotion-service.js');
@@ -105,16 +107,43 @@ export async function reviewPickController(
         repositories.picks,
         repositories.audit,
       );
-    } catch {
-      // Promotion failure should not fail the review — pick is still approved
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      promotionError = `Promotion evaluation failed: ${message}`;
+
+      // Log structured error so operators can observe failures
+      console.error(JSON.stringify({
+        level: 'error',
+        event: 'promotion_evaluation_failed',
+        pickId,
+        actor: payload.decidedBy.trim(),
+        error: message,
+        timestamp: new Date().toISOString(),
+      }));
+
+      // Record the failure in the audit log so it is visible in operator tools
+      await repositories.audit.record({
+        entityType: 'pick_review',
+        entityId: review.id,
+        entityRef: pickId,
+        action: 'promotion.evaluation_failed',
+        actor: payload.decidedBy.trim(),
+        payload: { error: message, decision },
+      });
     }
   }
 
-  return successResponse(200, {
+  const result: ReviewPickResult = {
     pickId,
     reviewId: review.id,
     decision,
     approvalStatus: newApprovalStatus ?? pick.approval_status,
     auditId: audit.id,
-  });
+  };
+
+  if (promotionError) {
+    result.promotionError = promotionError;
+  }
+
+  return successResponse(200, result);
 }
