@@ -68,10 +68,11 @@ export async function runHedgeDetectionPass(
 
   const now = resolved.now ?? new Date().toISOString();
   const cutoff = new Date(Date.parse(now) - resolved.lookbackMinutes * 60 * 1000);
-  const offers = await repositories.providerOffers.listAll();
+  const sinceIso = cutoff.toISOString();
+  const offers = await repositories.providerOffers.listRecentOffers(sinceIso);
   const filteredOffers = offers.filter((offer) => {
     const snapshot = Date.parse(offer.snapshot_at);
-    return Number.isFinite(snapshot) && snapshot >= cutoff.getTime() && snapshot <= Date.parse(now);
+    return Number.isFinite(snapshot) && snapshot <= Date.parse(now);
   });
 
   const persistedOpportunities: HedgeOpportunityRecord[] = [];

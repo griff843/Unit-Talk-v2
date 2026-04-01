@@ -366,6 +366,84 @@ test('shouldNotify scopes cooldown by participant identity as well as market tup
   );
 });
 
+test('listRecentOffers excludes offers older than the since boundary', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-bound-1',
+      line: 4.5,
+      snapshotAt: '2026-03-28T08:00:00.000Z',
+      idempotencyKey: 'old-offer',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-bound-1',
+      line: 6.0,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'recent-offer',
+    }),
+  ]);
+
+  const recent = await repositories.providerOffers.listRecentOffers('2026-03-28T09:00:00.000Z');
+  assert.equal(recent.length, 1);
+  assert.equal(recent[0]?.idempotency_key, 'recent-offer');
+});
+
+test('listRecentOffers respects the limit parameter', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const offers = Array.from({ length: 5 }, (_, i) =>
+    makeOfferInsert({
+      providerEventId: 'evt-limit-1',
+      line: 4.5 + i,
+      snapshotAt: `2026-03-28T10:0${i}:00.000Z`,
+      idempotencyKey: `limit-offer-${i}`,
+    }),
+  );
+  await repositories.providerOffers.upsertBatch(offers);
+
+  const limited = await repositories.providerOffers.listRecentOffers('2026-03-28T10:00:00.000Z', 3);
+  assert.equal(limited.length, 3);
+});
+
+test('runAlertDetectionPass only considers offers within lookback window', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-window-1',
+    sportId: 'NBA',
+    eventName: 'Suns vs Nuggets',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  // Offer well outside the 60-minute lookback window
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-window-1',
+      line: 4.5,
+      snapshotAt: '2026-03-28T06:00:00.000Z',
+      idempotencyKey: 'stale-1',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-window-1',
+      line: 10.0,
+      snapshotAt: '2026-03-28T06:30:00.000Z',
+      idempotencyKey: 'stale-2',
+    }),
+  ]);
+
+  const result = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-03-28T10:30:00.000Z',
+  });
+
+  // Both offers are outside the 60-min window (before 09:30), so no detections
+  assert.equal(result.evaluatedGroups, 0);
+  assert.equal(result.detections, 0);
+  assert.equal(result.persisted, 0);
+});
+
 function baseDetection() {
   return {
     providerEventId: 'evt-1',

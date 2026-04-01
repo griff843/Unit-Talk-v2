@@ -263,7 +263,12 @@ export async function runAlertDetectionPass(
   });
 
   const nowIso = resolved.now ?? new Date().toISOString();
-  const offers = await repositories.providerOffers.listAll();
+  // Use 2x lookback so baseline offers (within lookbackMinutes of the current
+  // offer, not of now) are included. This is still bounded and far better than
+  // a full-table scan.
+  const fetchWindowMs = resolved.lookbackMinutes * 2 * 60 * 1000;
+  const sinceIso = new Date(Date.parse(nowIso) - fetchWindowMs).toISOString();
+  const offers = await repositories.providerOffers.listRecentOffers(sinceIso);
   const offerGroups = groupOffersByTuple(offers);
   const persistedSignals: AlertDetectionRecord[] = [];
   let detections = 0;

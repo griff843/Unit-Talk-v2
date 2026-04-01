@@ -398,6 +398,21 @@ export class InMemoryOutboxRepository implements OutboxRepository {
   private readonly entries: OutboxRecord[] = [];
 
   async enqueue(input: OutboxCreateInput): Promise<OutboxRecord> {
+    // Idempotency: reject if an active (pending/processing) row already exists
+    // for the same pick+target combination.
+    const activeStatuses = ['pending', 'processing'];
+    const existing = this.entries.find(
+      (entry) =>
+        entry.pick_id === input.pickId &&
+        entry.target === input.target &&
+        activeStatuses.includes(entry.status),
+    );
+    if (existing) {
+      throw new Error(
+        `Duplicate outbox row: an active row already exists for pick ${input.pickId} target ${input.target} (id=${existing.id}, status=${existing.status})`,
+      );
+    }
+
     const now = new Date().toISOString();
     const record: OutboxRecord = {
       id: `${input.pickId}_${this.entries.length + 1}`,
@@ -990,6 +1005,13 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     return Array.from(this.offers.values()).sort(
       (left, right) => right.snapshot_at.localeCompare(left.snapshot_at),
     );
+  }
+
+  async listRecentOffers(since: string, limit = 10_000): Promise<ProviderOfferRecord[]> {
+    return Array.from(this.offers.values())
+      .filter((offer) => offer.snapshot_at >= since)
+      .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))
+      .slice(0, limit);
   }
 
   async findClosingLine(
@@ -2886,6 +2908,21 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     if (error) {
       throw new Error(`Failed to list provider offers: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listRecentOffers(since: string, limit = 10_000): Promise<ProviderOfferRecord[]> {
+    const { data, error } = await this.client
+      .from('provider_offers')
+      .select('*')
+      .gte('snapshot_at', since)
+      .order('snapshot_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list recent provider offers: ${error.message}`);
     }
 
     return data ?? [];

@@ -465,6 +465,11 @@ export interface ProviderOfferRepository {
   findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null>;
   listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
+  /**
+   * Returns offers with snapshot_at >= since, ordered by snapshot_at descending.
+   * An optional limit caps the result set as a safety net (default: 10 000).
+   */
+  listRecentOffers(since: string, limit?: number): Promise<ProviderOfferRecord[]>;
 }
 
 export interface ParticipantUpsertInput {
