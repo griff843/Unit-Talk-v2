@@ -11,9 +11,16 @@ export interface DistributionEnqueueResult {
 
 export interface DistributionSkippedResult {
   enqueued: false;
-  reason: 'target-disabled';
+  reason: 'target-disabled' | 'duplicate-pending';
   target: string;
+  existingOutboxId?: string;
 }
+
+/**
+ * Terminal outbox statuses that allow a new enqueue for the same pick+target.
+ * Rows in these states represent completed or abandoned delivery attempts.
+ */
+const ACTIVE_OUTBOX_STATUSES = ['pending', 'processing'] as const;
 
 export async function enqueueDistributionWork(
   pick: CanonicalPick,
@@ -41,6 +48,22 @@ export async function enqueueDistributionWork(
     throw new Error(
       `${formatTargetLabel(requestedPromotionTarget)} routing is blocked: pick promotion target is not ${requestedPromotionTarget}`,
     );
+  }
+
+  // Idempotency guard: reject enqueue if a pending or processing row already exists
+  const existingActive = await outboxRepository.findByPickAndTarget(
+    pick.id,
+    target,
+    ACTIVE_OUTBOX_STATUSES,
+  );
+
+  if (existingActive) {
+    return {
+      enqueued: false,
+      reason: 'duplicate-pending',
+      target,
+      existingOutboxId: existingActive.id,
+    };
   }
 
   const workItem = buildDistributionWorkItem(pick, target);

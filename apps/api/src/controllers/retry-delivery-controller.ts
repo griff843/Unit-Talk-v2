@@ -47,6 +47,22 @@ export async function retryDeliveryController(
     return errorResponse(400, 'NO_RETRYABLE_ROW', `No failed or dead_letter outbox row found for pick ${pickId}`);
   }
 
+  // Idempotency guard: reject retry if an active row already exists for this pick+target
+  const alreadyActive = outboxRows.find(
+    (row) =>
+      row.target === retryable.target &&
+      (row.status === 'pending' || row.status === 'processing') &&
+      row.id !== retryable.id,
+  );
+
+  if (alreadyActive) {
+    return errorResponse(
+      409,
+      'ACTIVE_ROW_EXISTS',
+      `Cannot retry: an active outbox row already exists for pick ${pickId} target ${retryable.target} (id=${alreadyActive.id}, status=${alreadyActive.status})`,
+    );
+  }
+
   const previousStatus = retryable.status;
 
   // Reset to pending with attempt_count = 0
