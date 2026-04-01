@@ -1,9 +1,11 @@
 import { Card } from '@/components/ui/Card';
 import { QueueFilters } from '@/components/QueueFilters';
 import { ReviewQueueClient } from '@/components/ReviewQueueClient';
+import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { Suspense } from 'react';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 interface ReviewPick {
   id: string;
@@ -30,6 +32,15 @@ async function fetchReviewQueue(params: Record<string, string>): Promise<{ picks
   }
 }
 
+function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
+  const raw = searchParams?.refresh;
+  const parsed = typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(Math.max(parsed, 5), 300) * 1000;
+  }
+  return DEFAULT_AUTO_REFRESH_INTERVAL_MS;
+}
+
 export default async function ReviewQueuePage({
   searchParams,
 }: {
@@ -41,12 +52,17 @@ export default async function ReviewQueuePage({
   }
 
   const { picks, total } = await fetchReviewQueue(params);
+  const intervalMs = readRefreshIntervalMs(searchParams);
+  const observedAt = new Date().toISOString();
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-lg font-bold text-gray-100">Review Queue</h1>
-        <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} awaiting review</span>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold text-gray-100">Review Queue</h1>
+          <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} awaiting review</span>
+        </div>
+        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
 
       <Card>

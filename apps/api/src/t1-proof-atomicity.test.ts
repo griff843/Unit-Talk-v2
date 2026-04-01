@@ -8,10 +8,58 @@
 import { describe, test, before } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
-import { loadEnvironment } from '@unit-talk/config';
+import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 
 let SUPABASE_URL: string;
 let SUPABASE_KEY: string;
+
+type RpcError = { message: string; code?: string };
+
+interface SubmissionAtomicResponse {
+  submission: { id: string };
+  pick: { id: string; status: string };
+  lifecycleEvent: { id: string };
+}
+
+interface EnqueueAtomicResponse {
+  pick: { status: string };
+  outbox: { status: string };
+}
+
+interface ConfirmDeliveryAtomicResponse {
+  alreadyConfirmed: boolean;
+  outbox: { status: string };
+}
+
+interface SettlePickAtomicResponse {
+  duplicate: boolean;
+  settlement: { id: string };
+  lifecycleEvent: { id: string };
+  pick: { status: string };
+}
+
+interface PickIdRow {
+  id: string;
+}
+
+interface PickStatusRow {
+  status: string;
+}
+
+interface PickPostedRow {
+  status: string;
+  posted_at: string | null;
+}
+
+interface PickSettledRow {
+  status: string;
+  settled_at: string | null;
+}
+
+interface OutboxRow {
+  id: string;
+  status: string;
+}
 
 function headers() {
   return {
@@ -22,24 +70,24 @@ function headers() {
   };
 }
 
-async function rpc(name: string, params: Record<string, unknown>) {
+async function rpc<T>(name: string, params: Record<string, unknown>): Promise<{ data: T | null; error: RpcError | null }> {
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${name}`, {
     method: 'POST',
     headers: headers(),
     body: JSON.stringify(params),
   });
-  const body = await resp.json();
+  const body = (await resp.json()) as unknown;
   if (!resp.ok) {
-    return { data: null, error: body as { message: string; code?: string } };
+    return { data: null, error: body as RpcError };
   }
-  return { data: body, error: null };
+  return { data: body as T, error: null };
 }
 
-async function query(table: string, filter: string) {
+async function query<T>(table: string, filter: string): Promise<T[]> {
   const resp = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${filter}`, {
     headers: headers(),
   });
-  return resp.json();
+  return (await resp.json()) as T[];
 }
 
 async function insert(table: string, row: Record<string, unknown>) {
@@ -94,7 +142,7 @@ describe('STEP 2 — Submission atomicity (UTV2-218)', () => {
 
   test('A. atomic submission creates all records', async () => {
     const now = new Date().toISOString();
-    const { data, error } = await rpc('process_submission_atomic', {
+    const { data, error } = await rpc<SubmissionAtomicResponse>('process_submission_atomic', {
       p_submission: {
         id: submissionId, source: 't1-proof', submitted_by: 'proof-runner',
         payload: { market: 'nba-spread', selection: 'LAL -3.5' },
@@ -129,7 +177,7 @@ describe('STEP 2 — Submission atomicity (UTV2-218)', () => {
 
   test('B. duplicate returns existing pick (idempotent)', async () => {
     const now = new Date().toISOString();
-    const { data, error } = await rpc('process_submission_atomic', {
+    const { data, error } = await rpc<SubmissionAtomicResponse>('process_submission_atomic', {
       p_submission: {
         id: randomUUID(), source: 't1-proof', submitted_by: 'proof-runner',
         payload: {}, status: 'validated', received_at: now, created_at: now, updated_at: now,
@@ -155,7 +203,7 @@ describe('STEP 2 — Submission atomicity (UTV2-218)', () => {
   });
 
   test('C. exactly 1 pick for idempotency key', async () => {
-    const picks = await query('picks', `idempotency_key=eq.${idempotencyKey}&select=id`);
+    const picks = await query<PickIdRow>('picks', `idempotency_key=eq.${idempotencyKey}&select=id`);
     assert.equal(picks.length, 1, `Expected 1 pick, got ${picks.length}`);
     console.log(`  ✓ 1 pick record — no orphans`);
   });
@@ -183,7 +231,7 @@ describe('STEP 3 — Enqueue atomicity (UTV2-219)', () => {
   });
 
   test('A. atomic enqueue transitions + creates outbox', async () => {
-    const { data, error } = await rpc('enqueue_distribution_atomic', {
+    const { data, error } = await rpc<EnqueueAtomicResponse>('enqueue_distribution_atomic', {
       p_pick_id: enqueuePickId, p_from_state: 'validated', p_to_state: 'queued',
       p_writer_role: 'promoter', p_reason: 'proof: ready',
       p_lifecycle_created_at: new Date().toISOString(),
@@ -200,16 +248,16 @@ describe('STEP 3 — Enqueue atomicity (UTV2-219)', () => {
   });
 
   test('B. no zombie pick (outbox exists for queued pick)', async () => {
-    const picks = await query('picks', `id=eq.${enqueuePickId}&select=status`);
+    const picks = await query<PickStatusRow>('picks', `id=eq.${enqueuePickId}&select=status`);
     assert.equal(picks[0]?.status, 'queued');
 
-    const outbox = await query('distribution_outbox', `pick_id=eq.${enqueuePickId}&select=id,status`);
+    const outbox = await query<OutboxRow>('distribution_outbox', `pick_id=eq.${enqueuePickId}&select=id,status`);
     assert.ok(outbox.length >= 1, 'ZOMBIE: queued pick has no outbox row');
     console.log(`  ✓ Consistent: pick=queued, outbox rows=${outbox.length}`);
   });
 
   test('C. re-enqueue returns null (already queued)', async () => {
-    const { data, error } = await rpc('enqueue_distribution_atomic', {
+    const { data, error } = await rpc<null>('enqueue_distribution_atomic', {
       p_pick_id: enqueuePickId, p_from_state: 'validated', p_to_state: 'queued',
       p_writer_role: 'promoter', p_reason: 'retry',
       p_lifecycle_created_at: new Date().toISOString(),
@@ -251,7 +299,7 @@ describe('STEP 4 — Delivery idempotency (UTV2-220)', () => {
   });
 
   test('A. claim returns null for empty target', async () => {
-    const { data, error } = await rpc('claim_next_outbox', {
+    const { data, error } = await rpc<null>('claim_next_outbox', {
       p_target: `none-${randomUUID()}`, p_worker_id: 'proof',
     });
     assert.ok(!error, `Claim error: ${error?.message}`);
@@ -260,7 +308,7 @@ describe('STEP 4 — Delivery idempotency (UTV2-220)', () => {
   });
 
   test('B. confirm_delivery_atomic — marks sent + lifecycle + receipt', async () => {
-    const { data, error } = await rpc('confirm_delivery_atomic', {
+    const { data, error } = await rpc<ConfirmDeliveryAtomicResponse>('confirm_delivery_atomic', {
       p_outbox_id: dlvOutboxId, p_pick_id: dlvPickId, p_worker_id: 'proof-worker',
       p_receipt_type: 'discord.message', p_receipt_status: 'sent',
       p_receipt_channel: 'discord:#canary', p_receipt_external_id: 'msg-proof-123',
@@ -279,7 +327,7 @@ describe('STEP 4 — Delivery idempotency (UTV2-220)', () => {
   });
 
   test('C. re-confirm returns alreadyConfirmed=true (NO double post)', async () => {
-    const { data, error } = await rpc('confirm_delivery_atomic', {
+    const { data, error } = await rpc<ConfirmDeliveryAtomicResponse>('confirm_delivery_atomic', {
       p_outbox_id: dlvOutboxId, p_pick_id: dlvPickId, p_worker_id: 'proof-worker',
       p_receipt_type: 'discord.message', p_receipt_status: 'sent',
       p_receipt_channel: 'discord:#canary', p_receipt_external_id: 'msg-proof-456',
@@ -297,7 +345,7 @@ describe('STEP 4 — Delivery idempotency (UTV2-220)', () => {
   });
 
   test('D. pick is posted (not stuck in queued)', async () => {
-    const picks = await query('picks', `id=eq.${dlvPickId}&select=status,posted_at`);
+    const picks = await query<PickPostedRow>('picks', `id=eq.${dlvPickId}&select=status,posted_at`);
     assert.equal(picks[0]?.status, 'posted');
     assert.ok(picks[0]?.posted_at, 'posted_at missing');
     console.log(`  ✓ Pick status=posted, posted_at=${picks[0].posted_at}`);
@@ -325,7 +373,7 @@ describe('STEP 5 — Settlement atomicity (UTV2-221)', () => {
   });
 
   test('A. atomic settlement creates record + transitions', async () => {
-    const { data, error } = await rpc('settle_pick_atomic', {
+    const { data, error } = await rpc<SettlePickAtomicResponse>('settle_pick_atomic', {
       p_pick_id: settlePickId,
       p_settlement: {
         result: 'win', source: 'operator', confidence: 'confirmed',
@@ -348,7 +396,7 @@ describe('STEP 5 — Settlement atomicity (UTV2-221)', () => {
   });
 
   test('B. duplicate returns existing (idempotent)', async () => {
-    const { data, error } = await rpc('settle_pick_atomic', {
+    const { data, error } = await rpc<SettlePickAtomicResponse>('settle_pick_atomic', {
       p_pick_id: settlePickId,
       p_settlement: {
         result: 'win', source: 'operator', confidence: 'confirmed',
@@ -368,14 +416,14 @@ describe('STEP 5 — Settlement atomicity (UTV2-221)', () => {
   });
 
   test('C. exactly 1 settlement record', async () => {
-    const settlements = await query('settlement_records',
+    const settlements = await query<PickIdRow>('settlement_records',
       `pick_id=eq.${settlePickId}&corrects_id=is.null&select=id`);
     assert.equal(settlements.length, 1, `Expected 1, got ${settlements.length}`);
     console.log(`  ✓ 1 settlement record — no duplicates`);
   });
 
   test('D. pick is settled with timestamp', async () => {
-    const picks = await query('picks', `id=eq.${settlePickId}&select=status,settled_at`);
+    const picks = await query<PickSettledRow>('picks', `id=eq.${settlePickId}&select=status,settled_at`);
     assert.equal(picks[0]?.status, 'settled');
     assert.ok(picks[0]?.settled_at);
     console.log(`  ✓ Pick settled, settled_at=${picks[0].settled_at}`);
@@ -387,18 +435,20 @@ describe('STEP 5 — Settlement atomicity (UTV2-221)', () => {
 describe('STEP 6 — Fail-closed (UTV2-217)', () => {
   test('API refuses to start in fail_closed without DB', async () => {
     const { createApiRuntimeDependencies } = await import('./server.js');
+    const failClosedEnvironment: AppEnv = {
+      NODE_ENV: 'production',
+      UNIT_TALK_APP_ENV: 'production',
+      UNIT_TALK_API_RUNTIME_MODE: 'fail_closed',
+      UNIT_TALK_ACTIVE_WORKSPACE: 'test',
+      UNIT_TALK_LEGACY_WORKSPACE: 'test',
+      LINEAR_TEAM_KEY: 'test',
+      LINEAR_TEAM_NAME: 'test',
+      NOTION_WORKSPACE_NAME: 'test',
+      SLACK_WORKSPACE_NAME: 'test',
+    };
     assert.throws(
       () => createApiRuntimeDependencies({
-        environment: {
-          UNIT_TALK_APP_ENV: 'production',
-          UNIT_TALK_API_RUNTIME_MODE: 'fail_closed',
-          UNIT_TALK_ACTIVE_WORKSPACE: 'test',
-          UNIT_TALK_LEGACY_WORKSPACE: 'test',
-          LINEAR_TEAM_KEY: 'test',
-          LINEAR_TEAM_NAME: 'test',
-          NOTION_WORKSPACE_NAME: 'test',
-          SLACK_WORKSPACE_NAME: 'test',
-        } as any,
+        environment: failClosedEnvironment,
       }),
       (err: Error) => {
         assert.ok(err.message.includes('fail_closed'));

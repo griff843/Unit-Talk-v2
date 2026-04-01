@@ -38,7 +38,5 @@ export * from './execution-quality.js';
 export * from './shadow-mode.js';
 // strategy/ not re-exported here (name collision: americanToDecimal with risk/kelly-sizer)
 // import directly: import { ExecutionSimulator } from '@unit-talk/domain/strategy'
-// calibration/ not re-exported here (name collision with probability/calibration)
-// import directly: import { calibrate } from '@unit-talk/domain/calibration'
 // evaluation/ not re-exported here (name collision: computeBrierScore/computeLogLoss)
 // import directly: import { computeAlphaEvaluation } from '@unit-talk/domain/evaluation'

@@ -123,7 +123,6 @@ async function tryProviderEdge(
   if (!devigged) return null;
 
   // Determine which side the pick is on
-  const isOver = /\bover\b/i.test(selection);
   const isUnder = /\bunder\b/i.test(selection);
   const marketProbability = isUnder ? devigged.underFair : devigged.overFair;
 

@@ -96,6 +96,8 @@ function formatDetectionLine(detection: AlertsRecentResponse['detections'][numbe
     `- ${formatLineValue(detection.oldLine)} -> ${formatLineValue(detection.newLine)} (${changeValue})`,
     `- ${detection.bookmakerKey}`,
     `- ${arrow}`,
+    `- ${detection.timeElapsedMinutes}m`,
+    detection.velocity != null ? `- velocity ${detection.velocity.toFixed(2)}/min` : '',
   ].join(' ');
 }
 

@@ -43,14 +43,14 @@ export interface ReplayRunConfig {
   /** Complete adapter manifest — all must be non-production mode. */
   adapters: AdapterManifest;
   /** ISO date range for event filtering (optional). */
-  from?: Date;
-  to?: Date;
+  from?: Date | undefined;
+  to?: Date | undefined;
 }
 
 export interface ReplayError {
   eventId: string;
   eventType: string;
-  pickId?: string;
+  pickId?: string | undefined;
   error: string;
   sequenceNumber: number;
 }
@@ -177,7 +177,7 @@ export class ReplayOrchestrator {
   private async dispatch(event: {
     eventId: string;
     eventType: string;
-    pickId?: string;
+    pickId?: string | undefined;
     payload: Record<string, unknown>;
     sequenceNumber: number;
   }): Promise<boolean> {

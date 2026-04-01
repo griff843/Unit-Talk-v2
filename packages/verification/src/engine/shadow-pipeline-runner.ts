@@ -1,4 +1,3 @@
-/* eslint-disable max-lines-per-function */
 /**
  * VERIFICATION & SIMULATION CONTROL PLANE — ShadowPipelineRunner
  * Sprint: SPRINT-VERIFICATION-SIMULATION-LAYER-R3
@@ -32,7 +31,7 @@ import type { LifecyclePick } from './v2-type-bridge.js';
 export interface ShadowError {
   eventId: string;
   eventType: string;
-  pickId?: string;
+  pickId?: string | undefined;
   error: string;
   sequenceNumber: number;
 }
@@ -80,8 +79,8 @@ export class ShadowPipelineRunner {
     store: JournalEventStore,
     clock: ClockProvider,
     runId: string,
-    from?: Date,
-    to?: Date
+    from?: Date | undefined,
+    to?: Date | undefined
   ): Promise<ShadowPipelineResult> {
     // Reset all state before this pass
     this.pickStore.clear();

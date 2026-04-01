@@ -41,8 +41,8 @@ export interface ShadowRunConfig {
   /** Shadow adapters (potentially different model outputs). */
   shadowAdapters: AdapterManifest;
   /** Optional date range for event filtering. */
-  from?: Date;
-  to?: Date;
+  from?: Date | undefined;
+  to?: Date | undefined;
 }
 
 export interface ShadowResult {

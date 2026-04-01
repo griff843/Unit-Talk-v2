@@ -3,8 +3,6 @@ import type {
   AuditLogRepository,
   OutboxRecord,
   OutboxRepository,
-  PickLifecycleRecord,
-  PickRecord,
   PickRepository,
   SystemRunRecord,
   SystemRunRepository,

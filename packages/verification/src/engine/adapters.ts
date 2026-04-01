@@ -105,7 +105,7 @@ export interface FeedEvent {
   /** Monotonic ordering key for deterministic replay. */
   sequenceNumber?: number;
   /** Content hash for integrity validation. */
-  sourceHash?: string;
+  sourceHash?: string | undefined;
 }
 
 /**

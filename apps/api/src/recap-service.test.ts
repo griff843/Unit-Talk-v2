@@ -10,6 +10,7 @@ import {
   postRecapSummary,
 } from './recap-service.js';
 import {
+  checkForMissedRecapsForTests,
   checkAndPostRecapsForTests,
   markRecapPostedForTests,
   resetRecapSchedulerStateForTests,
@@ -241,6 +242,7 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
   const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
   const previousDryRun = process.env.RECAP_DRY_RUN;
   let capturedUrl = '';
+  let capturedBody = '';
 
   process.env.DISCORD_BOT_TOKEN = 'test-token';
   process.env.RECAP_DRY_RUN = 'false';
@@ -251,8 +253,9 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
   try {
     const result = await postRecapSummary('daily', repositories, {
       now: new Date('2026-03-28T11:00:00.000Z'),
-      fetchImpl: async (input) => {
+      fetchImpl: async (input, init) => {
         capturedUrl = String(input);
+        capturedBody = String(init?.body ?? '');
         return new Response(JSON.stringify({ id: 'message-1' }), {
           status: 200,
           headers: { 'content-type': 'application/json' },
@@ -263,10 +266,43 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
     assert.equal(result.ok, true);
     assert.equal(result.ok ? result.channel : null, 'discord:recaps');
     assert.equal(result.ok ? result.dryRun : null, false);
+    assert.equal(result.ok ? result.postsCount : null, 1);
     assert.equal(
       capturedUrl,
       'https://discord.com/api/v10/channels/1300411261854547968/messages',
     );
+    assert.ok(result.ok);
+    const recapOutboxRows = await repositories.outbox.listByPickId(result.summary.topPlay.pickId);
+    assert.equal(recapOutboxRows.length, 1);
+    assert.equal(recapOutboxRows[0]?.target, 'discord:recaps');
+    assert.equal(recapOutboxRows[0]?.status, 'sent');
+    assert.equal(
+      recapOutboxRows[0]?.idempotency_key,
+      'recap:daily:discord:recaps:2026-03-28T00:00:00.000Z',
+    );
+
+    const receipt = await repositories.receipts.findLatestByOutboxId(
+      recapOutboxRows[0]!.id,
+      'discord.message',
+    );
+    assert.ok(receipt);
+    assert.equal(receipt?.channel, 'discord:1300411261854547968');
+    assert.equal(receipt?.external_id, 'message-1');
+
+    const payload = JSON.parse(capturedBody) as {
+      embeds?: Array<{ title?: string; fields?: Array<{ name: string; value: string }> }>;
+    };
+    assert.equal(payload.embeds?.[0]?.title?.startsWith('Daily Recap - '), true);
+    assert.ok(
+      payload.embeds?.[0]?.fields?.some((field) => field.name === 'Record' && field.value === '1-0-0'),
+    );
+
+    const auditRecords = (repositories.audit as unknown as {
+      records: Array<{ entity_ref: string | null; action: string; payload: Record<string, unknown> }>;
+    }).records;
+    const recapAudit = auditRecords.find((record) => record.action === 'distribution.sent');
+    assert.ok(recapAudit);
+    assert.equal(recapAudit?.entity_ref, result.summary.topPlay.pickId);
   } finally {
     if (previousToken === undefined) {
       delete process.env.DISCORD_BOT_TOKEN;
@@ -288,7 +324,7 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
 
 test('postRecapSummary dry run computes recap without posting to Discord', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  await createSettledPick(repositories, {
+  const pickId = await createSettledPick(repositories, {
     selection: 'Over 24.5',
     market: 'points-all-game-ou',
     odds: 150,
@@ -321,6 +357,8 @@ test('postRecapSummary dry run computes recap without posting to Discord', async
     assert.equal(result.ok ? result.postsCount : null, 0);
     assert.equal(result.ok ? result.dryRun : null, true);
     assert.equal(fetchCalled, false);
+    const recapOutboxRows = await repositories.outbox.listByPickId(pickId);
+    assert.equal(recapOutboxRows.length, 0);
   } finally {
     if (previousDryRun === undefined) {
       delete process.env.RECAP_DRY_RUN;
@@ -502,6 +540,130 @@ test('DB-backed idempotency prevents duplicate post after in-memory state is res
   // Verify no additional system_runs records were written
   const runsAfter = await repositories.runs.listByType('recap.post', 10);
   assert.equal(runsAfter.length, 1, 'DB guard should prevent writing a second recap.post record');
+});
+
+test('checkForMissedRecaps posts catch-up recap for a missed daily trigger after restart', async () => {
+  resetRecapSchedulerStateForTests();
+
+  const repositories = createInMemoryRepositoryBundle();
+  await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 1,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+
+  const previousToken = process.env.DISCORD_BOT_TOKEN;
+  const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const previousDryRun = process.env.RECAP_DRY_RUN;
+  const previousFetch = globalThis.fetch;
+  const infoLogs: string[] = [];
+
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.RECAP_DRY_RUN = 'false';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
+    'discord:recaps': '1300411261854547968',
+  });
+  globalThis.fetch = async () =>
+    new Response(JSON.stringify({ id: 'catchup-message-1' }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  try {
+    await checkForMissedRecapsForTests(
+      repositories,
+      {
+        error: (_msg: string) => {},
+        info: (msg: string) => {
+          infoLogs.push(msg);
+        },
+      },
+      () => new Date('2026-03-28T13:00:00.000Z'),
+    );
+
+    const runs = await repositories.runs.listByType('recap.post', 10);
+    const dailyRun = runs.find((entry) => {
+      const details = entry.details as Record<string, unknown>;
+      return details['period'] === 'daily';
+    });
+    assert.ok(dailyRun, 'expected a daily recap.post run');
+    const details = dailyRun.details as Record<string, unknown>;
+    assert.equal(details['windowEndsAt'], '2026-03-28T00:00:00.000Z');
+
+    const catchupLog = infoLogs.find((entry) => {
+      const parsed = JSON.parse(entry) as Record<string, unknown>;
+      return parsed['event'] === 'catchup.posted';
+    });
+    assert.ok(catchupLog, 'expected catchup.posted log entry');
+  } finally {
+    if (previousToken === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = previousToken;
+    }
+    if (previousTargetMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
+    }
+    if (previousDryRun === undefined) {
+      delete process.env.RECAP_DRY_RUN;
+    } else {
+      process.env.RECAP_DRY_RUN = previousDryRun;
+    }
+    globalThis.fetch = previousFetch;
+  }
+});
+
+test('checkForMissedRecaps skips duplicate catch-up when the matching system run already exists', async () => {
+  resetRecapSchedulerStateForTests();
+
+  const repositories = createInMemoryRepositoryBundle();
+  const run = await repositories.runs.startRun({
+    runType: 'recap.post',
+    actor: 'recap-scheduler',
+    details: {
+      period: 'daily',
+      windowEndsAt: '2026-03-28T00:00:00.000Z',
+    },
+  });
+  await repositories.runs.completeRun({
+    runId: run.id,
+    status: 'succeeded',
+    details: {
+      period: 'daily',
+      windowEndsAt: '2026-03-28T00:00:00.000Z',
+    },
+  });
+
+  const infoLogs: string[] = [];
+  await checkForMissedRecapsForTests(
+    repositories,
+    {
+      error: (_msg: string) => {},
+      info: (msg: string) => {
+        infoLogs.push(msg);
+      },
+    },
+    () => new Date('2026-03-28T13:00:00.000Z'),
+  );
+
+  const dedupLog = infoLogs.find((entry) => {
+    const parsed = JSON.parse(entry) as Record<string, unknown>;
+    return parsed['event'] === 'catchup.db_dedup_skip' && parsed['period'] === 'daily';
+  });
+  assert.ok(dedupLog, 'expected catchup.db_dedup_skip log entry');
+
+  const runs = await repositories.runs.listByType('recap.post', 10);
+  const dailyRuns = runs.filter((entry) => {
+    const details = entry.details as Record<string, unknown>;
+    return details['period'] === 'daily';
+  });
+  assert.equal(dailyRuns.length, 1);
 });
 
 test('checkAndPostRecaps writes system_runs record after recap completion', async () => {

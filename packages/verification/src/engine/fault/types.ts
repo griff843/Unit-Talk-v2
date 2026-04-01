@@ -60,11 +60,11 @@ export interface FaultDefinition {
   /** When to activate. */
   activation: ActivationRule;
   /** Error message to throw (for type='throw'). */
-  errorMessage?: string;
+  errorMessage?: string | undefined;
   /** Stale marker payload (for type='return_stale'). */
-  stalePayload?: Record<string, unknown>;
+  stalePayload?: Record<string, unknown> | undefined;
   /** Degraded marker payload (for type='return_degraded'). */
-  degradedPayload?: Record<string, unknown>;
+  degradedPayload?: Record<string, unknown> | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -77,8 +77,8 @@ export interface FaultActivationRecord {
   faultType: FaultType;
   activatedAt: string; // WALL-CLOCK-ALLOWED: fault metadata, non-lifecycle
   callNumber: number;
-  pickId?: string;
-  errorThrown?: string;
+  pickId?: string | undefined;
+  errorThrown?: string | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -99,7 +99,7 @@ export interface AssertionResult {
   description: string;
   pass: boolean;
   evidence: AssertionEvidence[];
-  failureReason?: string;
+  failureReason?: string | undefined;
 }
 
 /** Specification for an assertion attached to a scenario. */
@@ -124,7 +124,7 @@ export interface PostScenarioState {
   errors: ReadonlyArray<{
     eventId: string;
     eventType: string;
-    pickId?: string;
+    pickId?: string | undefined;
     error: string;
     sequenceNumber: number;
   }>;
@@ -133,7 +133,7 @@ export interface PostScenarioState {
   settlementCheckCount: number;
   /** True when an immutability violation or drawdown freeze was detected. */
   freezeViolationDetected: boolean;
-  freezeViolationMessage?: string;
+  freezeViolationMessage?: string | undefined;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -179,7 +179,7 @@ export interface ScenarioResult {
   errors: ReadonlyArray<{
     eventId: string;
     eventType: string;
-    pickId?: string;
+    pickId?: string | undefined;
     error: string;
     sequenceNumber: number;
   }>;

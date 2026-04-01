@@ -139,7 +139,6 @@ export async function fetchOddsApiOdds(
   const response = await fetchFn(url.toString());
 
   const creditsRemaining = response.headers.get('x-requests-remaining');
-  const creditsUsed = response.headers.get('x-requests-used');
   const creditsLast = response.headers.get('x-requests-last');
 
   if (!response.ok) {

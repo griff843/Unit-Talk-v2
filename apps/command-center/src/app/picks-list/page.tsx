@@ -1,9 +1,11 @@
 import { Card } from '@/components/ui/Card';
 import { PickFilters } from '@/components/PickFilters';
+import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import Link from 'next/link';
 import { Suspense } from 'react';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 interface SearchResult {
   picks: Array<Record<string, unknown>>;
@@ -22,6 +24,15 @@ async function fetchPickSearch(params: Record<string, string>): Promise<SearchRe
   } catch {
     return { picks: [], total: 0, limit: 25, offset: 0 };
   }
+}
+
+function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
+  const raw = searchParams?.refresh;
+  const parsed = typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(Math.max(parsed, 5), 300) * 1000;
+  }
+  return DEFAULT_AUTO_REFRESH_INTERVAL_MS;
 }
 
 function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
@@ -66,10 +77,18 @@ export default async function PicksListPage({
   const page = Math.floor(offset / limit) + 1;
   const totalPages = Math.ceil(total / limit);
   const hasFilters = Object.keys(params).length > 0;
+  const intervalMs = readRefreshIntervalMs(searchParams);
+  const observedAt = new Date().toISOString();
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-lg font-bold text-gray-100">Picks</h1>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold text-gray-100">Picks</h1>
+          <p className="text-sm text-gray-500">{hasFilters ? `Filtered results (${total})` : `${total} picks in the search index`}</p>
+        </div>
+        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
+      </div>
 
       <Card>
         <Suspense fallback={<div className="text-xs text-gray-500">Loading filters...</div>}>

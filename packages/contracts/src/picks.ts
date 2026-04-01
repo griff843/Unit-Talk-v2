@@ -34,6 +34,7 @@ export interface CanonicalPick {
   promotionDecidedAt?: string | undefined;
   promotionDecidedBy?: string | undefined;
   lifecycleState: PickLifecycleState;
+  eventStartTime?: string | undefined;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
@@ -66,6 +67,10 @@ export function materializeCanonicalPick(
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
+    eventStartTime:
+      typeof payload.metadata?.['eventStartTime'] === 'string'
+        ? payload.metadata['eventStartTime']
+        : undefined,
     metadata: payload.metadata ?? {},
     createdAt: now,
   };

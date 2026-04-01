@@ -25,9 +25,9 @@ import type { ShadowPipelineResult } from './shadow-pipeline-runner.js';
 // ─────────────────────────────────────────────────────────────
 
 export interface DivergenceEntry {
-  pickId?: string;
+  pickId?: string | undefined;
   category: 'pick_state' | 'lifecycle_trace' | 'publish' | 'settlement' | 'recap';
-  field?: string;
+  field?: string | undefined;
   referenceValue: unknown;
   shadowValue: unknown;
   level: 'informational' | 'warning' | 'critical';

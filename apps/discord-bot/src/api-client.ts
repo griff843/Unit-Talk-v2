@@ -13,6 +13,8 @@
 export interface ApiClient {
   get<T>(path: string): Promise<T>;
   post<T>(path: string, body: unknown): Promise<T>;
+  getPicksByStatus?(statuses: string[], limit?: number): Promise<PicksQueryResponse>;
+  getRecentSettlements?(limit?: number): Promise<SettlementsRecentResponse>;
   getRecentAlerts?(
     limit?: number,
     minTier?: 'notable' | 'alert-worthy',
@@ -61,6 +63,40 @@ export interface AlertStatusResponse {
     notified: number;
   };
   lastDetectedAt: string | null;
+}
+
+export interface PicksQueryResponse {
+  picks: QueriedPick[];
+  count: number;
+}
+
+export interface QueriedPick {
+  id: string;
+  market: string;
+  selection: string;
+  odds: number | null;
+  stake_units: number | null;
+  status: string;
+  source: string;
+  created_at: string;
+  promotion_status: string;
+  promotion_target: string | null;
+  metadata: Record<string, unknown> | null;
+}
+
+export interface SettlementsRecentResponse {
+  settlements: RecentSettlement[];
+  count: number;
+}
+
+export interface RecentSettlement {
+  id: string;
+  pick_id: string;
+  status: string;
+  result: string | null;
+  settled_at: string;
+  created_at: string;
+  payload: Record<string, unknown> | null;
 }
 
 export class ApiClientError extends Error {
@@ -121,6 +157,22 @@ export function createApiClient(baseUrl: string, fetchImpl: FetchImpl = fetch): 
     },
     getAlertStatus(): Promise<AlertStatusResponse> {
       return request<AlertStatusResponse>('/api/alerts/status');
+    },
+    getPicksByStatus(
+      statuses: string[],
+      limit = 50,
+    ): Promise<PicksQueryResponse> {
+      const params = new URLSearchParams({
+        status: statuses.join(','),
+        limit: String(limit),
+      });
+      return request<PicksQueryResponse>(`/api/picks?${params.toString()}`);
+    },
+    getRecentSettlements(limit = 50): Promise<SettlementsRecentResponse> {
+      const params = new URLSearchParams({
+        limit: String(limit),
+      });
+      return request<SettlementsRecentResponse>(`/api/settlements/recent?${params.toString()}`);
     },
     async syncMemberTier(params: {
       discord_id: string;

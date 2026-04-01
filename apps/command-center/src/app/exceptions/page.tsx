@@ -1,9 +1,11 @@
 import { Card } from '@/components/ui/Card';
 import { InterventionAction } from '@/components/InterventionAction';
+import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { retryDelivery, rerunPromotion, overridePromotion } from '@/app/actions/intervention';
 import Link from 'next/link';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 interface ExceptionQueues {
   counts: {
@@ -29,6 +31,15 @@ async function fetchExceptionQueues(): Promise<ExceptionQueues | null> {
   } catch {
     return null;
   }
+}
+
+function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
+  const raw = searchParams?.refresh;
+  const parsed = typeof raw === 'string' ? Number(raw) : Number.NaN;
+  if (Number.isFinite(parsed) && parsed > 0) {
+    return Math.min(Math.max(parsed, 5), 300) * 1000;
+  }
+  return DEFAULT_AUTO_REFRESH_INTERVAL_MS;
 }
 
 function PickLink({ id }: { id: string }) {
@@ -63,12 +74,24 @@ function DeliveryRow({ row }: { row: Record<string, unknown> }) {
   );
 }
 
-export default async function ExceptionsPage() {
+export default async function ExceptionsPage({
+  searchParams,
+}: {
+  searchParams?: Record<string, string | string[] | undefined>;
+}) {
   const data = await fetchExceptionQueues();
+  const intervalMs = readRefreshIntervalMs(searchParams);
+  const observedAt = new Date().toISOString();
 
   return (
     <div className="flex flex-col gap-6">
-      <h1 className="text-lg font-bold text-gray-100">Exception Operations</h1>
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="space-y-1">
+          <h1 className="text-lg font-bold text-gray-100">Exception Operations</h1>
+          <p className="text-sm text-gray-500">Watch failed delivery, manual review, and rerun candidates without manual refresh.</p>
+        </div>
+        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
+      </div>
 
       {/* Summary counts */}
       <div className="grid grid-cols-5 gap-3">

@@ -317,18 +317,18 @@ test('readDomainAnalysisReadinessSignal returns null when kellyFraction is negat
   assert.equal(readDomainAnalysisReadinessSignal(metadata), null);
 });
 
-test('readDomainAnalysisReadinessSignal returns 85 when kellyFraction is positive', () => {
+test('readDomainAnalysisReadinessSignal maps positive kellyFraction onto the readiness gradient', () => {
   const metadata = {
     domainAnalysis: { kellyFraction: 0.03 },
   };
-  assert.equal(readDomainAnalysisReadinessSignal(metadata), 85);
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), 47);
 });
 
-test('readDomainAnalysisReadinessSignal returns 85 for small positive kellyFraction', () => {
+test('readDomainAnalysisReadinessSignal keeps very small positive kellyFraction near the floor', () => {
   const metadata = {
     domainAnalysis: { kellyFraction: 0.001 },
   };
-  assert.equal(readDomainAnalysisReadinessSignal(metadata), 85);
+  assert.equal(readDomainAnalysisReadinessSignal(metadata), 40);
 });
 
 // ── Integration tests: domain-aware trust/readiness in promotion (Week 21) ───
@@ -460,6 +460,6 @@ test('marginal domain edge gives lower trust than significant edge', async () =>
   // readiness: domain readiness = 85 (Kelly > 0)
   // ti: edge=63<85 → suppressed
   // bb: score = 63*0.35+65*0.25+85*0.2+84*0.1+89*0.1 = 22.05+16.25+17+8.4+8.9 = 72.6 ≥ 70 → qualifies
-  assert.equal(result.pick.promotionTarget, 'best-bets');
-  assert.equal(result.pick.promotionStatus, 'qualified');
+  assert.equal(result.pick.promotionTarget, undefined);
+  assert.equal(result.pick.promotionStatus, 'suppressed');
 });

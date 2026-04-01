@@ -51,9 +51,9 @@ export interface ScoreDivergence {
 // ─────────────────────────────────────────────────────────────
 
 export interface StructuralDivergence {
-  pickId?: string;
+  pickId?: string | undefined;
   category: string;
-  field?: string;
+  field?: string | undefined;
   referenceValue: unknown;
   shadowValue: unknown;
   level: 'CRITICAL';
@@ -101,9 +101,9 @@ export interface ShadowRunnerConfig {
   /** Receives a critical-severity alert when freezeRecommended=true. */
   notificationAdapter: NotificationAdapter;
   /** Repo root for proof bundle output path resolution. Defaults to cwd. */
-  repoRoot?: string;
-  from?: Date;
-  to?: Date;
+  repoRoot?: string | undefined;
+  from?: Date | undefined;
+  to?: Date | undefined;
 }
 
 export interface ShadowRunnerResult {

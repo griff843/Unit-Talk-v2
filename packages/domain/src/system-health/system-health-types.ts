@@ -5,8 +5,6 @@
  * This module only measures the system — it does NOT modify any
  * models, thresholds, or calibration parameters.
  */
-
-import type { ReliabilityBucket, CalibrationMetrics } from '../calibration/types.js';
 import type { BandTier } from '../bands/types.js';
 
 // ── Report Version ──────────────────────────────────────────────────────────
@@ -37,6 +35,22 @@ export interface SystemHealthRecord {
   edge_final: number;
   /** CLV percent if available. */
   clvPercent?: number | null;
+}
+
+export interface ReliabilityBucket {
+  predicted: number;
+  observed: number;
+  count: number;
+  lower: number;
+  upper: number;
+}
+
+export interface CalibrationMetrics {
+  brierScore: number;
+  logLoss: number;
+  ece: number;
+  reliabilityCurve: ReliabilityBucket[];
+  sampleSize: number;
 }
 
 // ── Section Types ───────────────────────────────────────────────────────────

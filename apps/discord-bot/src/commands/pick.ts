@@ -8,6 +8,8 @@ import { createApiClient, ApiClientError, type ApiClient } from '../api-client.j
 import { loadBotConfig } from '../config.js';
 import { UNAVAILABLE_REPLY } from '../router.js';
 import type { CommandHandler } from '../command-registry.js';
+import { buildPickUrgencyDisplay } from '../embeds/urgency-utils.js';
+import { buildBettorIntelligenceFields } from '../embeds/intelligence-display.js';
 
 interface SubmitPickApiResponse {
   ok: true;
@@ -68,6 +70,40 @@ export function createPickCommand(apiClient: ApiClient, capperRoleId: string): C
           .setDescription('Optional event or matchup label')
           .setRequired(false)
           .setMaxLength(100),
+      )
+      .addNumberOption((option) =>
+        option
+          .setName('confidence')
+          .setDescription('Optional confidence from 0.01 to 0.99')
+          .setRequired(false)
+          .setMinValue(0.01)
+          .setMaxValue(0.99),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('event_start_time')
+          .setDescription('Optional event start time in ISO-8601 UTC format')
+          .setRequired(false)
+          .setMaxLength(40),
+      )
+      .addNumberOption((option) =>
+        option
+          .setName('edge_percent')
+          .setDescription('Optional edge estimate vs market')
+          .setRequired(false)
+          .setMinValue(-100)
+          .setMaxValue(100),
+      )
+      .addStringOption((option) =>
+        option
+          .setName('clv_trend')
+          .setDescription('Optional recent close-line trend')
+          .setRequired(false)
+          .addChoices(
+            { name: 'Improving', value: 'improving' },
+            { name: 'Steady', value: 'steady' },
+            { name: 'Cooling', value: 'cooling' },
+          ),
       ),
     responseVisibility: 'private',
     async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -95,6 +131,23 @@ export function createPickCommand(apiClient: ApiClient, capperRoleId: string): C
 export function parsePickSubmission(
   interaction: PickInteractionOptions,
 ): SubmissionPayload {
+  const eventName = readOptionalString(interaction, 'event_name');
+  const confidence = readOptionalConfidence(interaction);
+  const eventStartTime = readOptionalIsoTimestamp(interaction, 'event_start_time');
+  const edgePercent = readOptionalNumber(interaction, 'edge_percent');
+  const clvTrend = readOptionalString(interaction, 'clv_trend');
+  const metadata: Record<string, unknown> = {};
+
+  if (eventStartTime) {
+    metadata.eventStartTime = eventStartTime;
+  }
+  if (edgePercent !== undefined) {
+    metadata.edgePercent = edgePercent;
+  }
+  if (clvTrend) {
+    metadata.clvTrend = clvTrend;
+  }
+
   return {
     source: 'discord-bot',
     submittedBy: interaction.user.username.trim(),
@@ -102,7 +155,9 @@ export function parsePickSubmission(
     selection: readRequiredString(interaction, 'selection'),
     odds: readOdds(interaction),
     stakeUnits: readStakeUnits(interaction),
-    eventName: readOptionalString(interaction, 'event_name'),
+    ...(confidence !== undefined ? { confidence } : {}),
+    eventName,
+    ...(Object.keys(metadata).length > 0 ? { metadata } : {}),
   };
 }
 
@@ -110,7 +165,7 @@ function buildSuccessEmbed(
   data: SubmitPickApiResponse['data'],
   payload: SubmissionPayload,
 ) {
-  return new EmbedBuilder()
+  const embed = new EmbedBuilder()
     .setTitle('Pick Submitted')
     .setColor(0x22c55e)
     .addFields(
@@ -119,6 +174,30 @@ function buildSuccessEmbed(
       { name: 'Market', value: payload.market, inline: false },
       { name: 'Selection', value: payload.selection, inline: false },
     );
+
+  const urgency = readUrgencyFromPayload(payload);
+  if (urgency) {
+    embed.addFields(
+      { name: 'Game Time', value: urgency.eventStartLabel, inline: false },
+      {
+        name: 'Timing',
+        value: urgency.countdownLabel
+          ? `${urgency.countdownLabel}\n${urgency.statusLabel}`
+          : urgency.statusLabel,
+        inline: false,
+      },
+    );
+  }
+
+  const intelligenceFields = buildBettorIntelligenceFields({
+    confidence: payload.confidence,
+    metadata: asRecord(payload.metadata),
+  });
+  if (intelligenceFields.length > 0) {
+    embed.addFields(intelligenceFields);
+  }
+
+  return embed;
 }
 
 function readRequiredString(
@@ -146,6 +225,22 @@ function readOptionalString(
   return trimmed.length > 0 ? trimmed : undefined;
 }
 
+function readOptionalNumber(
+  interaction: PickInteractionOptions,
+  name: string,
+): number | undefined {
+  const value = interaction.options.getNumber(name);
+  if (value == null) {
+    return undefined;
+  }
+
+  if (!Number.isFinite(value)) {
+    throw new Error(`${name} must be numeric.`);
+  }
+
+  return value;
+}
+
 function readOdds(interaction: PickInteractionOptions): number {
   const odds = interaction.options.getInteger('odds', true);
   if (odds === 0 || Math.abs(odds) < 100 || Math.abs(odds) > 50000) {
@@ -162,6 +257,44 @@ function readStakeUnits(interaction: PickInteractionOptions): number {
   }
 
   return stakeUnits;
+}
+
+function readOptionalConfidence(interaction: PickInteractionOptions): number | undefined {
+  const confidence = interaction.options.getNumber('confidence');
+  if (confidence == null) {
+    return undefined;
+  }
+
+  if (!Number.isFinite(confidence) || confidence <= 0 || confidence >= 1) {
+    throw new Error('confidence must be between 0.01 and 0.99.');
+  }
+
+  return confidence;
+}
+
+function readOptionalIsoTimestamp(
+  interaction: PickInteractionOptions,
+  name: string,
+): string | undefined {
+  const value = readOptionalString(interaction, name);
+  if (!value) {
+    return undefined;
+  }
+
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) {
+    throw new Error(`${name} must be a valid ISO-8601 timestamp.`);
+  }
+
+  return parsed.toISOString();
+}
+
+function readUrgencyFromPayload(payload: SubmissionPayload) {
+  const metadata = asRecord(payload.metadata);
+  const eventStartTime =
+    typeof metadata?.['eventStartTime'] === 'string' ? metadata['eventStartTime'] : null;
+
+  return eventStartTime ? buildPickUrgencyDisplay(eventStartTime) : null;
 }
 
 function formatFailureReply(error: unknown): string {
@@ -196,6 +329,12 @@ function extractApiErrorMessage(detail?: string): string | null {
   } catch {
     return detail.trim() || null;
   }
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
 }
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
