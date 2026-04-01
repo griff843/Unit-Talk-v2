@@ -44,7 +44,7 @@ async function seedSettlements(
       status: 'settled',
       result: 'win',
       source: 'grading',
-      confidence: 'high',
+      confidence: 'confirmed',
       evidenceRef: `grade-${i}`,
       settledBy: 'system',
       settledAt: new Date().toISOString(),
@@ -180,7 +180,7 @@ test('computeClvTrustAdjustment returns 0 adjustment for exactly neutral CLV', a
       status: 'settled',
       result: 'win',
       source: 'grading',
-      confidence: 'high',
+      confidence: 'confirmed',
       evidenceRef: `grade-${i}`,
       settledBy: 'system',
       settledAt: new Date().toISOString(),
@@ -252,8 +252,8 @@ test('computeClvTrustAdjustment ignores non-grading settlements', async () => {
       pickId,
       status: 'settled',
       result: 'win',
-      source: 'manual',  // not 'grading'
-      confidence: 'high',
+      source: 'operator',  // not 'grading'
+      confidence: 'confirmed',
       evidenceRef: `manual-${i}`,
       settledBy: 'operator',
       settledAt: new Date().toISOString(),

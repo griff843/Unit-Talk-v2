@@ -1,6 +1,6 @@
 export const settlementStatuses = ['settled', 'manual_review'] as const;
 export const settlementResults = ['win', 'loss', 'push', 'void', 'cancelled'] as const;
-export const settlementSources = ['operator', 'api', 'feed'] as const;
+export const settlementSources = ['operator', 'api', 'feed', 'grading'] as const;
 export const settlementConfidences = ['confirmed', 'estimated', 'pending'] as const;
 
 export type SettlementStatus = (typeof settlementStatuses)[number];

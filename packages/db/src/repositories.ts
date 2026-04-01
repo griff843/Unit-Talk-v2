@@ -34,7 +34,9 @@ import type {
   OutboxRecord,
   ProviderOfferRecord,
   ReceiptRecord,
+  SettlementConfidence,
   SettlementRecord,
+  SettlementSource,
   SubmissionEventRecord,
   SubmissionRecord,
   SystemRunRecord,
@@ -381,8 +383,8 @@ export interface SettlementCreateInput {
   pickId: string;
   status: 'settled' | 'manual_review';
   result?: string | null | undefined;
-  source: string;
-  confidence: string;
+  source: SettlementSource;
+  confidence: SettlementConfidence;
   evidenceRef: string;
   notes?: string | null | undefined;
   reviewReason?: string | null | undefined;
