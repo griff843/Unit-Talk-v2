@@ -14,12 +14,15 @@ export async function reviewPick(
   reason: string,
 ): Promise<ReviewResult> {
   const apiUrl = process.env.API_BASE_URL ?? 'http://localhost:3000';
-  // Operator identity for audit logs. Replace with real auth when implemented.
+  const apiKey = process.env.UNIT_TALK_CC_API_KEY ?? '';
   const operatorActor = process.env.OPERATOR_IDENTITY ?? 'command-center';
+
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
 
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/review`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       decision,
       reason,
