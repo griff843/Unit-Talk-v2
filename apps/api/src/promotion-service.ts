@@ -568,8 +568,9 @@ async function readPromotionScoreInputs(
   // Trust fallback priority: explicit promotionScores.trust > domain trust signal > confidence
   const trustFallback = readDomainAnalysisTrustSignal(pick.metadata) ?? confidenceScore;
 
-  // Readiness fallback priority: explicit promotionScores.readiness > domain readiness signal > 80
-  const readinessFallback = readDomainAnalysisReadinessSignal(pick.metadata) ?? 80;
+  // Readiness: uses Kelly fraction as gradient signal (higher Kelly = higher readiness)
+  // Falls back to 60 (neutral) when no Kelly data available
+  const readinessFallback = readKellyGradientReadiness(pick.metadata) ?? 60;
 
   let trust = readScore(configured, 'trust', trustFallback);
 
@@ -599,7 +600,9 @@ async function readPromotionScoreInputs(
     edge: readScore(configured, 'edge', edgeFallback),
     trust,
     readiness: readScore(configured, 'readiness', readinessFallback),
-    uniqueness: readScore(configured, 'uniqueness', 80),
+    // Uniqueness: no real signal wired yet — uses neutral default.
+    // Weight should be minimal until a market saturation signal exists.
+    uniqueness: readScore(configured, 'uniqueness', 50),
     boardFit,
   };
 }
@@ -686,20 +689,35 @@ export function readDomainAnalysisTrustSignal(
  * Returns null if domain analysis is absent or Kelly was not computed (falls
  * through to default 80).
  */
+/**
+ * Readiness signal from Kelly fraction as gradient (0-95 range).
+ * Kelly 0.01→45, 0.05→51, 0.10→62, 0.25+→95
+ */
+export function readKellyGradientReadiness(
+  metadata: Record<string, unknown>,
+): number | null {
+  const kellySizing = metadata['kellySizing'];
+  if (isRecord(kellySizing)) {
+    const fraction = kellySizing['kellyFraction'];
+    if (typeof fraction === 'number' && Number.isFinite(fraction) && fraction > 0) {
+      return Math.round(40 + 55 * Math.min(1, fraction / 0.25));
+    }
+  }
+  const domainAnalysis = metadata['domainAnalysis'];
+  if (isRecord(domainAnalysis)) {
+    const fraction = domainAnalysis['kellyFraction'];
+    if (typeof fraction === 'number' && Number.isFinite(fraction) && fraction > 0) {
+      return Math.round(40 + 55 * Math.min(1, fraction / 0.25));
+    }
+  }
+  return null;
+}
+
+/** @deprecated Use readKellyGradientReadiness */
 export function readDomainAnalysisReadinessSignal(
   metadata: Record<string, unknown>,
 ): number | null {
-  const domainAnalysis = metadata['domainAnalysis'];
-  if (!isRecord(domainAnalysis)) {
-    return null;
-  }
-
-  const kellyFraction = domainAnalysis['kellyFraction'];
-  if (typeof kellyFraction !== 'number' || !Number.isFinite(kellyFraction) || kellyFraction <= 0) {
-    return null;
-  }
-
-  return 85;
+  return readKellyGradientReadiness(metadata);
 }
 
 function readScore(
