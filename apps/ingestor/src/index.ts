@@ -28,10 +28,13 @@ function createIngestorRuntimeDependencies() {
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
   const apiUrl = env.UNIT_TALK_API_URL;
 
+  const runtimeMode = readIngestorRuntimeMode(env);
+
   try {
     const connection = createServiceRoleDatabaseConnectionConfig(env);
     return {
       persistenceMode: 'database' as const,
+      runtimeMode,
       repositories: createDatabaseIngestorRepositoryBundle(connection),
       leagues,
       pollIntervalMs,
@@ -42,9 +45,23 @@ function createIngestorRuntimeDependencies() {
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
     };
-  } catch {
+  } catch (error) {
+    if (runtimeMode === 'fail_closed') {
+      throw new Error(
+        'Ingestor runtime mode is fail_closed and database configuration could not be loaded. ' +
+        'Set UNIT_TALK_APP_ENV=local or UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_open to allow in-memory fallback.',
+        { cause: error },
+      );
+    }
+
+    logger.warn('falling back to in-memory ingestor runtime', {
+      persistenceMode: 'in-memory',
+      reason: error instanceof Error ? error.message : String(error),
+    });
+
     return {
       persistenceMode: 'in-memory' as const,
+      runtimeMode,
       repositories: createInMemoryIngestorRepositoryBundle(),
       leagues,
       pollIntervalMs,
@@ -64,6 +81,7 @@ export function createIngestorRuntimeSummary() {
     service: 'ingestor',
     status: 'ready',
     persistenceMode: runtime.persistenceMode,
+    runtimeMode: runtime.runtimeMode,
     providers: {
       sgo: runtime.apiKey ? 'configured' : 'missing',
       oddsApi: runtime.oddsApiKey ? 'configured' : 'missing',
@@ -123,6 +141,18 @@ if (runtime.autorun) {
     });
 } else {
   console.log(JSON.stringify(createIngestorRuntimeSummary(), null, 2));
+}
+
+type IngestorRuntimeMode = 'fail_open' | 'fail_closed';
+
+function readIngestorRuntimeMode(env: {
+  UNIT_TALK_INGESTOR_RUNTIME_MODE?: string;
+  UNIT_TALK_APP_ENV?: string;
+}): IngestorRuntimeMode {
+  const configured = env.UNIT_TALK_INGESTOR_RUNTIME_MODE?.trim().toLowerCase();
+  if (configured === 'fail_closed') return 'fail_closed';
+  if (configured === 'fail_open') return 'fail_open';
+  return env.UNIT_TALK_APP_ENV === 'local' ? 'fail_open' : 'fail_closed';
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number) {

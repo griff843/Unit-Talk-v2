@@ -317,7 +317,7 @@ async function runGoldenScenario(scenario: GoldenScenario) {
 
 function assertSubmissionGraph(result: SubmissionProcessingResult) {
   assert.equal(result.submissionRecord.id, result.submission.id);
-  assert.equal(result.submissionEventRecord.submission_id, result.submission.id);
+  assert.equal(result.submissionEventRecord!.submission_id, result.submission.id);
   assert.equal(result.pick.submissionId, result.submission.id);
   assert.equal(result.pickRecord.id, result.pick.id);
   assert.equal(result.pickRecord.submission_id, result.submission.id);
