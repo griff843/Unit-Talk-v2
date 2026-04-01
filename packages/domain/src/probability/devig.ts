@@ -129,30 +129,194 @@ export function proportionalDevig(
   };
 }
 
+/**
+ * Shin devig — models bookmaker margin as arising from insider trading.
+ *
+ * Iteratively solves for the Shin parameter z (the fraction of bettors who are
+ * insiders) such that the sum of fair probabilities equals 1.  For n outcomes
+ * with implied probabilities p_i and total overround S = sum(p_i):
+ *
+ *   fair_i = ( sqrt(z^2 + 4*(1-z)*(p_i^2 / S)) - z ) / ( 2*(1-z) )
+ *
+ * z is found by bisection on [0, 1) so that sum(fair_i) = 1.
+ *
+ * Generalised here for a 2-outcome market.
+ */
 export function shinDevig(
   overImplied: number,
   underImplied: number
 ): { overFair: number; underFair: number; overround: number } | null {
-  return proportionalDevig(overImplied, underImplied);
-}
-
-export function powerDevig(
-  overImplied: number,
-  underImplied: number,
-  k = 1.0
-): { overFair: number; underFair: number; overround: number } | null {
   const overround = calculateOverround(overImplied, underImplied);
-  const overPower = overImplied ** k;
-  const underPower = underImplied ** k;
-  const sumPower = overPower + underPower;
+  if (overround <= 1 || !Number.isFinite(overround)) {
+    // If overround <= 1, there is no margin to remove; fall back to proportional.
+    return proportionalDevig(overImplied, underImplied);
+  }
 
-  if (sumPower === 0 || !Number.isFinite(sumPower)) {
+  const probs = [overImplied, underImplied];
+  const S = overround; // sum of implied probabilities
+
+  function shinFair(z: number): number[] {
+    return probs.map(
+      (p) =>
+        (Math.sqrt(z * z + 4 * (1 - z) * (p * p) / S) - z) / (2 * (1 - z))
+    );
+  }
+
+  // Bisect to find z such that sum(shinFair(z)) == 1
+  let lo = 0;
+  let hi = 0.999;
+  for (let i = 0; i < 100; i++) {
+    const mid = (lo + hi) / 2;
+    const fairProbs = shinFair(mid);
+    const sum = fairProbs[0]! + fairProbs[1]!;
+    if (sum > 1) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+    if (Math.abs(sum - 1) < 1e-12) break;
+  }
+
+  const z = (lo + hi) / 2;
+  const fair = shinFair(z);
+
+  const overFair = fair[0]!;
+  const underFair = fair[1]!;
+
+  if (!Number.isFinite(overFair) || !Number.isFinite(underFair)) {
     return null;
   }
 
   return {
-    overFair: roundTo(overPower / sumPower, 6),
-    underFair: roundTo(underPower / sumPower, 6),
+    overFair: roundTo(overFair, 6),
+    underFair: roundTo(underFair, 6),
+    overround
+  };
+}
+
+/**
+ * Power devig — finds the exponent k such that sum(p_i^k) = 1.
+ *
+ * Each fair probability is p_i^k.  k > 1 always exists when the overround > 1.
+ * Found by bisection on k in [1, 100].
+ *
+ * The optional `k` parameter is kept for backward compatibility: when provided
+ * explicitly, the function uses the given k directly (legacy behaviour).
+ * When omitted (undefined), the function solves for the correct k.
+ */
+export function powerDevig(
+  overImplied: number,
+  underImplied: number,
+  k?: number
+): { overFair: number; underFair: number; overround: number } | null {
+  const overround = calculateOverround(overImplied, underImplied);
+
+  if (k !== undefined) {
+    // Legacy path: use the explicit k value
+    const overPower = overImplied ** k;
+    const underPower = underImplied ** k;
+    const sumPower = overPower + underPower;
+    if (sumPower === 0 || !Number.isFinite(sumPower)) return null;
+    return {
+      overFair: roundTo(overPower / sumPower, 6),
+      underFair: roundTo(underPower / sumPower, 6),
+      overround
+    };
+  }
+
+  // Solve for k such that overImplied^k + underImplied^k = 1
+  if (overround <= 1 || !Number.isFinite(overround)) {
+    return proportionalDevig(overImplied, underImplied);
+  }
+
+  let lo = 1.0;
+  let hi = 100.0;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    const sum = overImplied ** mid + underImplied ** mid;
+    if (sum > 1) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+    if (Math.abs(sum - 1) < 1e-12) break;
+  }
+
+  const solvedK = (lo + hi) / 2;
+  const overFair = overImplied ** solvedK;
+  const underFair = underImplied ** solvedK;
+
+  if (!Number.isFinite(overFair) || !Number.isFinite(underFair)) {
+    return null;
+  }
+
+  return {
+    overFair: roundTo(overFair, 6),
+    underFair: roundTo(underFair, 6),
+    overround
+  };
+}
+
+/**
+ * Logit (additive) devig — removes equal log-odds from each outcome.
+ *
+ * Converts implied probabilities to log-odds (logit), subtracts a constant c
+ * from each so that the resulting probabilities sum to 1, then converts back.
+ *
+ *   logit(p) = ln(p / (1 - p))
+ *   fair_logit_i = logit(p_i) - c
+ *   fair_i = 1 / (1 + exp(-fair_logit_i))
+ *
+ * c is found by bisection.
+ */
+export function logitDevig(
+  overImplied: number,
+  underImplied: number
+): { overFair: number; underFair: number; overround: number } | null {
+  const overround = calculateOverround(overImplied, underImplied);
+  if (overround <= 1 || !Number.isFinite(overround)) {
+    return proportionalDevig(overImplied, underImplied);
+  }
+
+  // Guard against extreme probabilities that would produce infinite logits
+  if (
+    overImplied <= 0 || overImplied >= 1 ||
+    underImplied <= 0 || underImplied >= 1
+  ) {
+    return null;
+  }
+
+  const logit = (p: number) => Math.log(p / (1 - p));
+  const invLogit = (x: number) => 1 / (1 + Math.exp(-x));
+
+  const overLogit = logit(overImplied);
+  const underLogit = logit(underImplied);
+
+  // Bisect for c such that invLogit(overLogit - c) + invLogit(underLogit - c) = 1
+  let lo = 0;
+  let hi = 20;
+  for (let i = 0; i < 200; i++) {
+    const mid = (lo + hi) / 2;
+    const sum = invLogit(overLogit - mid) + invLogit(underLogit - mid);
+    if (sum > 1) {
+      lo = mid;
+    } else {
+      hi = mid;
+    }
+    if (Math.abs(sum - 1) < 1e-12) break;
+  }
+
+  const c = (lo + hi) / 2;
+  const overFair = invLogit(overLogit - c);
+  const underFair = invLogit(underLogit - c);
+
+  if (!Number.isFinite(overFair) || !Number.isFinite(underFair)) {
+    return null;
+  }
+
+  return {
+    overFair: roundTo(overFair, 6),
+    underFair: roundTo(underFair, 6),
     overround
   };
 }
@@ -170,7 +334,7 @@ export function applyDevig(
     case 'power':
       return powerDevig(overImplied, underImplied);
     case 'logit':
-      return proportionalDevig(overImplied, underImplied);
+      return logitDevig(overImplied, underImplied);
     default:
       return proportionalDevig(overImplied, underImplied);
   }
