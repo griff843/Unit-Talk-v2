@@ -54,9 +54,6 @@ importers:
       '@unit-talk/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@unit-talk/discord-bot':
-        specifier: workspace:*
-        version: link:../discord-bot
       '@unit-talk/domain':
         specifier: workspace:*
         version: link:../../packages/domain
@@ -118,6 +115,9 @@ importers:
       '@unit-talk/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
+      '@unit-talk/domain':
+        specifier: workspace:*
+        version: link:../../packages/domain
       '@unit-talk/events':
         specifier: workspace:*
         version: link:../../packages/events

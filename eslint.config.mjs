@@ -32,6 +32,51 @@ export default tseslint.config(
       ],
     },
   },
+  // Architecture boundary: apps must not import from other apps
+  {
+    files: ['apps/*/src/**/*.ts', 'apps/*/src/**/*.tsx'],
+    rules: {
+      'no-restricted-imports': [
+        'error',
+        {
+          patterns: [
+            {
+              group: ['@unit-talk/api', '@unit-talk/api/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/worker', '@unit-talk/worker/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/operator-web', '@unit-talk/operator-web/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/command-center', '@unit-talk/command-center/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/smart-form', '@unit-talk/smart-form/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/discord-bot', '@unit-talk/discord-bot/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/alert-agent', '@unit-talk/alert-agent/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+            {
+              group: ['@unit-talk/ingestor', '@unit-talk/ingestor/*'],
+              message: 'Apps must not import from other apps. Move shared code to a package.',
+            },
+          ],
+        },
+      ],
+    },
+  },
   // Ported shadcn/ui + Radix UI components — intentional `any` usage in forwardRef/CVA patterns
   {
     files: ['apps/smart-form/components/ui/**'],

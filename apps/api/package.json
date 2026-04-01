@@ -21,7 +21,6 @@
     "@unit-talk/config": "workspace:*",
     "@unit-talk/contracts": "workspace:*",
     "@unit-talk/db": "workspace:*",
-    "@unit-talk/discord-bot": "workspace:*",
     "@unit-talk/domain": "workspace:*",
     "@unit-talk/events": "workspace:*",
     "@unit-talk/intelligence": "workspace:*",

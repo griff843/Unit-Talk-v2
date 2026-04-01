@@ -1,4 +1,4 @@
-import { resolveOutcome } from '@unit-talk/domain';
+import { resolveOutcome, buildRecapEmbedData } from '@unit-talk/domain';
 import type {
   EventRow,
   PickRecord,
@@ -6,7 +6,6 @@ import type {
   SettlementRecord,
 } from '@unit-talk/db';
 import { atomicClaimForTransition } from '@unit-talk/db';
-import { buildRecapEmbedData } from '@unit-talk/discord-bot';
 import { recordGradedSettlement } from './settlement-service.js';
 
 export interface GradingPickResult {

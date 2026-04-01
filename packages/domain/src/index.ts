@@ -29,6 +29,7 @@ export * from './rollups/index.js';
 export * from './system-health/index.js';
 export * from './risk/index.js';
 export * from './hedge-detection.js';
+export * from './recap-embed.js';
 export * from './multi-book-consensus.js';
 export * from './clv-weight-tuner.js';
 export * from './member-lifecycle.js';
