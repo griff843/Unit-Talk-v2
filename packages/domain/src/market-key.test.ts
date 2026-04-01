@@ -24,6 +24,11 @@ test('normalizeMarketKey passes unknown markets through unchanged', () => {
   assert.equal(normalizeMarketKey('Tennis aces'), 'Tennis aces');
 });
 
+test('normalizeMarketKey canonicalizes moneyline labels across surfaces', () => {
+  assert.equal(normalizeMarketKey('NBA - Moneyline'), 'moneyline');
+  assert.equal(normalizeMarketKey('NFL moneyline'), 'moneyline');
+});
+
 test('MARKET_KEY_MAP includes the full ratified translation table', () => {
   assert.equal(Object.keys(MARKET_KEY_MAP).length, 16);
   assert.equal(MARKET_KEY_MAP['NBA blocks'], 'blocks-all-game-ou');

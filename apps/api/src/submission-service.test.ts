@@ -271,6 +271,65 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
   assert.equal(deviggingResult?.overround, 1.04762);
 });
 
+test('processSubmission matches moneyline provider offers by canonical market key and selection team', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'odds-api:pinnacle',
+      providerEventId: 'evt-moneyline',
+      providerMarketKey: 'moneyline',
+      providerParticipantId: 'Bills',
+      sportKey: 'NFL',
+      line: null,
+      overOdds: -135,
+      underOdds: 115,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T16:00:00.000Z',
+      idempotencyKey: 'offer-bills',
+    },
+    {
+      providerKey: 'odds-api:pinnacle',
+      providerEventId: 'evt-moneyline',
+      providerMarketKey: 'moneyline',
+      providerParticipantId: 'Chiefs',
+      sportKey: 'NFL',
+      line: null,
+      overOdds: 115,
+      underOdds: -135,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T16:00:00.000Z',
+      idempotencyKey: 'offer-chiefs',
+    },
+  ]);
+
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NFL - Moneyline',
+      selection: 'Bills',
+      odds: -120,
+      confidence: 0.62,
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  const deviggingResult = metadata.deviggingResult as Record<string, unknown> | undefined;
+  const realEdgeSource = metadata.realEdgeSource;
+
+  assert.equal(result.pick.market, 'moneyline');
+  assert.ok(deviggingResult);
+  assert.equal(deviggingResult?.providerMarketKey, 'moneyline');
+  assert.equal(deviggingResult?.providerKey, 'odds-api:pinnacle');
+  assert.equal(deviggingResult?.overOdds, -135);
+  assert.equal(deviggingResult?.underOdds, 115);
+  assert.equal(realEdgeSource, 'pinnacle');
+});
+
 test('processSubmission attaches kellySizing when deviggingResult exists and odds are finite', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await repositories.providerOffers.upsertBatch([

@@ -65,6 +65,7 @@ export interface SubmissionAtomicInput {
 
 export interface SubmissionAtomicResult {
   submission: SubmissionRecord;
+  submissionEvent: SubmissionEventRecord | null;
   pick: PickRecord;
   lifecycleEvent: PickLifecycleRecord | null;
 }
@@ -464,7 +465,11 @@ export interface ClosingLineLookupCriteria {
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
   findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
-  findLatestByMarketKey(marketKey: string, providerKey?: string): Promise<ProviderOfferRecord | null>;
+  findLatestByMarketKey(
+    marketKey: string,
+    providerKey?: string,
+    providerParticipantId?: string | null,
+  ): Promise<ProviderOfferRecord | null>;
   listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
   /**

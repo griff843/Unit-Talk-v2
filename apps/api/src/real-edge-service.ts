@@ -111,8 +111,12 @@ async function tryProviderEdge(
   providerKey: string,
   providerOffers: ProviderOfferRepository,
 ): Promise<Omit<RealEdgeResult, 'marketSource'> | null> {
-  const offers = await providerOffers.listByProvider(providerKey);
-  const matching = offers.find((o) => o.provider_market_key === marketKey);
+  const participantKey = resolveSelectionParticipantKey(marketKey, selection);
+  const matching = await providerOffers.findLatestByMarketKey(
+    marketKey,
+    providerKey,
+    participantKey,
+  );
 
   if (!matching) return null;
   if (!Number.isFinite(matching.over_odds) || !Number.isFinite(matching.under_odds)) return null;
@@ -122,9 +126,7 @@ async function tryProviderEdge(
   const devigged = proportionalDevig(overImplied, underImplied);
   if (!devigged) return null;
 
-  // Determine which side the pick is on
-  const isUnder = /\bunder\b/i.test(selection);
-  const marketProbability = isUnder ? devigged.underFair : devigged.overFair;
+  const marketProbability = resolveSelectionFairProbability(marketKey, selection, devigged);
 
   const realEdge = roundTo(confidence - marketProbability, 6);
 
@@ -157,8 +159,12 @@ async function tryConsensusEdge(
   let bookCount = 0;
 
   for (const providerKey of consensusProviders) {
-    const offers = await providerOffers.listByProvider(providerKey);
-    const matching = offers.find((o) => o.provider_market_key === marketKey);
+    const participantKey = resolveSelectionParticipantKey(marketKey, selection);
+    const matching = await providerOffers.findLatestByMarketKey(
+      marketKey,
+      providerKey,
+      participantKey,
+    );
 
     if (!matching) continue;
     if (!Number.isFinite(matching.over_odds) || !Number.isFinite(matching.under_odds)) continue;
@@ -168,8 +174,7 @@ async function tryConsensusEdge(
     const devigged = proportionalDevig(overImplied, underImplied);
     if (!devigged) continue;
 
-    const isUnder = /\bunder\b/i.test(selection);
-    totalProb += isUnder ? devigged.underFair : devigged.overFair;
+    totalProb += resolveSelectionFairProbability(marketKey, selection, devigged);
     bookCount++;
   }
 
@@ -186,4 +191,25 @@ async function tryConsensusEdge(
     bookCount,
     hasRealEdge: realEdge > 0,
   };
+}
+
+function resolveSelectionParticipantKey(marketKey: string, selection: string): string | null | undefined {
+  if (marketKey !== 'moneyline') {
+    return undefined;
+  }
+
+  const normalized = selection.trim();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function resolveSelectionFairProbability(
+  marketKey: string,
+  selection: string,
+  devigged: { overFair: number; underFair: number },
+): number {
+  if (marketKey === 'moneyline') {
+    return devigged.overFair;
+  }
+
+  return /\bunder\b/i.test(selection) ? devigged.underFair : devigged.overFair;
 }

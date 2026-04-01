@@ -8,10 +8,17 @@ import {
 } from '@unit-talk/db';
 import { mapSGOStatus, resolveSgoEntities } from './entity-resolver.js';
 import { runHistoricalBackfill } from './historical-backfill.js';
-import { ingestOddsApiLeague } from './ingest-odds-api.js';
+import {
+  ingestOddsApiLeague,
+  mapOddsApiOfferToProviderOfferInsert,
+} from './ingest-odds-api.js';
 import { ingestLeague } from './ingest-league.js';
 import { runIngestorCycles } from './ingestor-runner.js';
-import { normalizeOddsApiToOffers, type OddsApiEvent } from './odds-api-fetcher.js';
+import {
+  normalizeOddsApiToOffers,
+  type NormalizedOddsOffer,
+  type OddsApiEvent,
+} from './odds-api-fetcher.js';
 import { fetchSGOResults, type SGOEventResult, type SGOResolvedEvent } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 import { resolveAndInsertResults } from './results-resolver.js';
@@ -183,7 +190,7 @@ test('InMemoryProviderOfferRepository.listByProvider can query a third odds-api 
   );
 
   const upsertInputs = offers.map((offer) => ({
-    idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${offer.snapshotAt}`,
+    idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${offer.providerParticipantId ?? ''}:${offer.snapshotAt}`,
     devigMode: 'PAIRED' as const,
     providerKey: offer.providerKey,
     providerEventId: offer.providerEventId,
@@ -200,10 +207,14 @@ test('InMemoryProviderOfferRepository.listByProvider can query a third odds-api 
 
   await repository.upsertBatch(upsertInputs);
   const rows = await repository.listByProvider('odds-api:fanduel');
+  const knicksRow = rows.find((row) => row.provider_participant_id === 'Knicks');
 
-  assert.equal(rows.length, 1);
-  assert.equal(rows[0]?.provider_key, 'odds-api:fanduel');
-  assert.equal(rows[0]?.provider_market_key, 'h2h');
+  assert.equal(rows.length, 2);
+  assert.ok(knicksRow);
+  assert.equal(knicksRow?.provider_key, 'odds-api:fanduel');
+  assert.equal(knicksRow?.provider_market_key, 'moneyline');
+  assert.equal(knicksRow?.over_odds, -120);
+  assert.equal(knicksRow?.under_odds, 102);
 });
 
 test('ingestOddsApiLeague persists Odds API offers using canonical provider-offer inputs', async () => {
@@ -266,6 +277,118 @@ test('ingestOddsApiLeague persists Odds API offers using canonical provider-offe
   assert.equal(rows[0]?.is_closing, false);
   assert.equal(rows[0]?.over_odds, -108);
   assert.equal(rows[0]?.under_odds, -112);
+});
+
+test('ingestOddsApiLeague persists moneyline rows as participant-specific paired offers', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+
+  const summary = await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'NBA',
+    repositories,
+    markets: ['h2h'],
+    bookmakers: ['pinnacle'],
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 'odds-event-4',
+            sport_key: 'basketball_nba',
+            sport_title: 'NBA',
+            commence_time: '2026-03-25T12:00:00.000Z',
+            home_team: 'Celtics',
+            away_team: 'Bulls',
+            bookmakers: [
+              {
+                key: 'pinnacle',
+                title: 'Pinnacle',
+                last_update: '2026-03-25T12:00:00.000Z',
+                markets: [
+                  {
+                    key: 'h2h',
+                    last_update: '2026-03-25T12:00:00.000Z',
+                    outcomes: [
+                      { name: 'Celtics', price: -145 },
+                      { name: 'Bulls', price: 125 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-requests-last': '1',
+            'x-requests-remaining': '499',
+          },
+        },
+      ),
+  });
+
+  const rows = await repositories.providerOffers.listByProvider('odds-api:pinnacle');
+  const celticsRow = rows.find((row) => row.provider_participant_id === 'Celtics');
+  const bullsRow = rows.find((row) => row.provider_participant_id === 'Bulls');
+
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(summary.insertedCount, 2);
+  assert.equal(rows.length, 2);
+  assert.equal(celticsRow?.provider_market_key, 'moneyline');
+  assert.equal(celticsRow?.over_odds, -145);
+  assert.equal(celticsRow?.under_odds, 125);
+  assert.equal(bullsRow?.provider_participant_id, 'Bulls');
+  assert.equal(bullsRow?.over_odds, 125);
+  assert.equal(bullsRow?.under_odds, -145);
+});
+
+test('mapOddsApiOfferToProviderOfferInsert maps moneyline side pricing into overOdds/underOdds', () => {
+  const offer: NormalizedOddsOffer = {
+    providerKey: 'odds-api:pinnacle',
+    providerEventId: 'odds-event-h2h',
+    providerMarketKey: 'moneyline',
+    providerParticipantId: 'Lakers',
+    sport: 'NBA',
+    line: null,
+    overOdds: -110,
+    underOdds: 105,
+    eventName: 'Lakers vs Celtics',
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+  };
+
+  const mapped = mapOddsApiOfferToProviderOfferInsert(offer);
+
+  assert.equal(mapped.overOdds, -110);
+  assert.equal(mapped.underOdds, 105);
+  assert.notEqual(mapped.overOdds, null);
+  assert.notEqual(mapped.underOdds, null);
+  assert.equal(mapped.providerMarketKey, 'moneyline');
+  assert.equal(
+    mapped.idempotencyKey,
+    'odds-api:pinnacle:odds-event-h2h:moneyline:Lakers:2026-03-25T12:00:00.000Z',
+  );
+});
+
+test('mapOddsApiOfferToProviderOfferInsert maps totals offer into overOdds/underOdds', () => {
+  const offer: NormalizedOddsOffer = {
+    providerKey: 'odds-api:betmgm',
+    providerEventId: 'odds-event-totals',
+    providerMarketKey: 'totals',
+    providerParticipantId: null,
+    sport: 'NBA',
+    line: 228.5,
+    overOdds: -108,
+    underOdds: -112,
+    eventName: 'Suns vs Warriors',
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+  };
+
+  const mapped = mapOddsApiOfferToProviderOfferInsert(offer);
+
+  assert.equal(mapped.overOdds, -108);
+  assert.equal(mapped.underOdds, -112);
+  assert.equal(mapped.line, 228.5);
 });
 
 test('ingestLeague returns gracefully with empty API response', async () => {
