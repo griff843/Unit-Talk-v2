@@ -66,17 +66,11 @@ Every provider option is scored against these dimensions:
 | Budget enforcement | **Absent** | Credits tracked in telemetry but not capped or alarmed |
 | Backup results source | **Absent** | If SGO results fail, grading stops |
 
-### 3.3 Critical unknown
+### 3.3 Provider key status
 
-> **We do not know whether Pinnacle data currently exists in the production `provider_offers` table.**
+`ODDS_API_KEY` is configured in `local.env` (confirmed 2026-04-01). The key exists and the ingestor code will attempt Odds API fetches when running.
 
-If `ODDS_API_KEY` is not configured in production:
-- `realEdge` falls back to confidence-delta on 100% of picks
-- CLV uses SGO closing line only (less accurate)
-- Consensus probability is unreachable
-- The entire Sprint D intelligence layer is inert
-
-**This must be verified as a Day 0 burn-in entry condition.**
+**Remaining Day 0 verification:** Confirm Pinnacle rows actually exist in `provider_offers` by querying the live database. Key presence does not prove data flow — the ingestor must have been running with `UNIT_TALK_INGESTOR_AUTORUN=true` and Odds API fetches must have succeeded.
 
 ---
 
@@ -387,7 +381,7 @@ This sub-claim is **not testable** without legacy V1 comparison data. V1 was fou
 
 | # | Action | Owner | Why |
 |---|--------|-------|-----|
-| 1 | Verify `ODDS_API_KEY` is set in production env | PM / Ops | Without it, the entire Sprint D intelligence layer is inert |
+| 1 | ~~Verify `ODDS_API_KEY` is set~~ **DONE** — confirmed in `local.env` (2026-04-01) | PM / Ops | Key exists; still need to verify Pinnacle rows in DB |
 | 2 | Query `provider_offers` for Pinnacle rows | Claude (verification lane) | Proves Odds API ingest is actually running |
 | 3 | Query `game_results` for recent rows | Claude (verification lane) | Proves SGO results are feeding grading |
 | 4 | Confirm ingestor is running with `UNIT_TALK_INGESTOR_AUTORUN=true` | PM / Ops | Without it, no data flows |
