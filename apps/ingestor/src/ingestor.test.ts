@@ -8,8 +8,10 @@ import {
 } from '@unit-talk/db';
 import { mapSGOStatus, resolveSgoEntities } from './entity-resolver.js';
 import { runHistoricalBackfill } from './historical-backfill.js';
+import { ingestOddsApiLeague } from './ingest-odds-api.js';
 import { ingestLeague } from './ingest-league.js';
 import { runIngestorCycles } from './ingestor-runner.js';
+import { normalizeOddsApiToOffers, type OddsApiEvent } from './odds-api-fetcher.js';
 import { fetchSGOResults, type SGOEventResult, type SGOResolvedEvent } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 import { resolveAndInsertResults } from './results-resolver.js';
@@ -94,6 +96,176 @@ test('InMemoryProviderOfferRepository.upsertBatch is idempotent on idempotency_k
   assert.deepEqual(second, { insertedCount: 0, updatedCount: 1, totalProcessed: 1 });
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.snapshot_at, '2026-03-25T12:05:00.000Z');
+});
+
+test('normalizeOddsApiToOffers preserves unique bookmaker provider keys', () => {
+  const events: OddsApiEvent[] = [
+    {
+      id: 'odds-event-1',
+      sport_key: 'basketball_nba',
+      sport_title: 'NBA',
+      commence_time: '2026-03-25T12:00:00.000Z',
+      home_team: 'Lakers',
+      away_team: 'Celtics',
+      bookmakers: [
+        {
+          key: 'pinnacle',
+          title: 'Pinnacle',
+          last_update: '2026-03-25T12:00:00.000Z',
+          markets: [
+            {
+              key: 'totals',
+              last_update: '2026-03-25T12:00:00.000Z',
+              outcomes: [
+                { name: 'Over', price: -110, point: 228.5 },
+                { name: 'Under', price: -110, point: 228.5 },
+              ],
+            },
+          ],
+        },
+        {
+          key: 'betmgm',
+          title: 'BetMGM',
+          last_update: '2026-03-25T12:01:00.000Z',
+          markets: [
+            {
+              key: 'totals',
+              last_update: '2026-03-25T12:01:00.000Z',
+              outcomes: [
+                { name: 'Over', price: -108, point: 228.5 },
+                { name: 'Under', price: -112, point: 228.5 },
+              ],
+            },
+          ],
+        },
+      ],
+    },
+  ];
+
+  const offers = normalizeOddsApiToOffers(events, '2026-03-25T12:05:00.000Z');
+  const providerKeys = Array.from(new Set(offers.map((offer) => offer.providerKey))).sort();
+
+  assert.equal(offers.length, 2);
+  assert.deepEqual(providerKeys, ['odds-api:betmgm', 'odds-api:pinnacle']);
+});
+
+test('InMemoryProviderOfferRepository.listByProvider can query a third odds-api bookmaker key', async () => {
+  const repository = new InMemoryProviderOfferRepository();
+  const offers = normalizeOddsApiToOffers(
+    [
+      {
+        id: 'odds-event-2',
+        sport_key: 'basketball_nba',
+        sport_title: 'NBA',
+        commence_time: '2026-03-25T12:00:00.000Z',
+        home_team: 'Knicks',
+        away_team: 'Heat',
+        bookmakers: [
+          {
+            key: 'fanduel',
+            title: 'FanDuel',
+            last_update: '2026-03-25T12:00:00.000Z',
+            markets: [
+              {
+                key: 'h2h',
+                last_update: '2026-03-25T12:00:00.000Z',
+                outcomes: [
+                  { name: 'Knicks', price: -120 },
+                  { name: 'Heat', price: 102 },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    ],
+    '2026-03-25T12:05:00.000Z',
+  );
+
+  const upsertInputs = offers.map((offer) => ({
+    idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${offer.snapshotAt}`,
+    devigMode: 'PAIRED' as const,
+    providerKey: offer.providerKey,
+    providerEventId: offer.providerEventId,
+    providerMarketKey: offer.providerMarketKey,
+    providerParticipantId: offer.providerParticipantId,
+    snapshotAt: offer.snapshotAt,
+    sportKey: offer.sport,
+    line: offer.line,
+    overOdds: offer.overOdds,
+    underOdds: offer.underOdds,
+    isOpening: false,
+    isClosing: false,
+  }));
+
+  await repository.upsertBatch(upsertInputs);
+  const rows = await repository.listByProvider('odds-api:fanduel');
+
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.provider_key, 'odds-api:fanduel');
+  assert.equal(rows[0]?.provider_market_key, 'h2h');
+});
+
+test('ingestOddsApiLeague persists Odds API offers using canonical provider-offer inputs', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+
+  const summary = await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'NBA',
+    repositories,
+    markets: ['totals'],
+    bookmakers: ['betmgm'],
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 'odds-event-3',
+            sport_key: 'basketball_nba',
+            sport_title: 'NBA',
+            commence_time: '2026-03-25T12:00:00.000Z',
+            home_team: 'Suns',
+            away_team: 'Warriors',
+            bookmakers: [
+              {
+                key: 'betmgm',
+                title: 'BetMGM',
+                last_update: '2026-03-25T12:00:00.000Z',
+                markets: [
+                  {
+                    key: 'totals',
+                    last_update: '2026-03-25T12:00:00.000Z',
+                    outcomes: [
+                      { name: 'Over', price: -108, point: 229.5 },
+                      { name: 'Under', price: -112, point: 229.5 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-requests-last': '1',
+            'x-requests-remaining': '499',
+          },
+        },
+      ),
+  });
+
+  const rows = await repositories.providerOffers.listByProvider('odds-api:betmgm');
+
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(summary.insertedCount, 1);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0]?.provider_key, 'odds-api:betmgm');
+  assert.equal(rows[0]?.devig_mode, 'PAIRED');
+  assert.equal(rows[0]?.is_opening, false);
+  assert.equal(rows[0]?.is_closing, false);
+  assert.equal(rows[0]?.over_odds, -108);
+  assert.equal(rows[0]?.under_odds, -112);
 });
 
 test('ingestLeague returns gracefully with empty API response', async () => {

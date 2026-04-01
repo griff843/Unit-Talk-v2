@@ -7,9 +7,11 @@
  * Issue: UTV2-197 (Sprint D)
  */
 
+import type { ProviderOfferInsert } from '@unit-talk/contracts';
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import {
   fetchOddsApiOdds,
+  type NormalizedOddsOffer,
   normalizeOddsApiToOffers,
   type OddsApiFetchOptions,
   type OddsApiTelemetry,
@@ -76,21 +78,9 @@ export async function ingestOddsApiLeague(
     logger?.info?.(`[odds-api] ${league}: ${result.eventsCount} events, ${offers.length} offers from ${result.telemetry.bookmakerCount} bookmakers`);
 
     // Batch upsert to provider_offers
-    const upsertInputs = offers.map((offer) => ({
-      idempotency_key: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${offer.snapshotAt}`,
-      devig_mode: 'proportional' as const,
-      provider_key: offer.providerKey,
-      provider_event_id: offer.providerEventId,
-      provider_market_key: offer.providerMarketKey,
-      ...(offer.providerParticipantId != null ? { provider_participant_id: offer.providerParticipantId } : {}),
-      snapshot_at: offer.snapshotAt,
-      ...(offer.line != null ? { line: offer.line } : {}),
-      ...(offer.overOdds != null ? { over_odds: offer.overOdds } : {}),
-      ...(offer.underOdds != null ? { under_odds: offer.underOdds } : {}),
-      ...(offer.sport ? { sport_key: offer.sport } : {}),
-    }));
+    const upsertInputs = offers.map(mapOddsApiOfferToProviderOfferInsert);
 
-    const upsertResult = await repositories.providerOffers.upsertBatch(upsertInputs as unknown as Parameters<typeof repositories.providerOffers.upsertBatch>[0]);
+    const upsertResult = await repositories.providerOffers.upsertBatch(upsertInputs);
     const inserted = upsertResult.insertedCount;
     const skipped = upsertResult.totalProcessed - upsertResult.insertedCount - upsertResult.updatedCount;
 
@@ -119,4 +109,22 @@ export async function ingestOddsApiLeague(
       error: message,
     };
   }
+}
+
+function mapOddsApiOfferToProviderOfferInsert(offer: NormalizedOddsOffer): ProviderOfferInsert {
+  return {
+    idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${offer.snapshotAt}`,
+    devigMode: 'PAIRED',
+    providerKey: offer.providerKey,
+    providerEventId: offer.providerEventId,
+    providerMarketKey: offer.providerMarketKey,
+    providerParticipantId: offer.providerParticipantId,
+    sportKey: offer.sport || null,
+    line: offer.line,
+    overOdds: offer.overOdds,
+    underOdds: offer.underOdds,
+    isOpening: false,
+    isClosing: false,
+    snapshotAt: offer.snapshotAt,
+  };
 }

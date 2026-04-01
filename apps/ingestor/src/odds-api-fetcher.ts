@@ -277,9 +277,7 @@ export function normalizeOddsApiToOffers(
         // Group outcomes by point/line for over/under pairing
         const outcomesByPoint = new Map<string, OddsApiOutcome[]>();
         for (const outcome of market.outcomes) {
-          const key = outcome.description
-            ? `${outcome.description}:${outcome.point ?? ''}`
-            : `${outcome.name}:${outcome.point ?? ''}`;
+          const key = buildOutcomePairingKey(market.key, outcome);
           const group = outcomesByPoint.get(key) ?? [];
           group.push(outcome);
           outcomesByPoint.set(key, group);
@@ -411,4 +409,14 @@ function americanToImplied(odds: number): number {
   if (odds >= 100) return 100 / (odds + 100);
   if (odds <= -100) return Math.abs(odds) / (Math.abs(odds) + 100);
   return 0.5;
+}
+
+function buildOutcomePairingKey(marketKey: string, outcome: OddsApiOutcome): string {
+  if (marketKey === 'spreads' || marketKey === 'totals') {
+    return `${outcome.description ?? ''}:${outcome.point ?? ''}`;
+  }
+
+  return outcome.description
+    ? `${outcome.description}:${outcome.point ?? ''}`
+    : `${outcome.name}:${outcome.point ?? ''}`;
 }
