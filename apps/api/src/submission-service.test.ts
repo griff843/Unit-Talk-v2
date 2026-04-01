@@ -1946,6 +1946,52 @@ test('checkExposureGate game limit takes priority over daily limit', () => {
   assert.equal(result, 'exposure-game-limit');
 });
 
+// ─── Exposure gate capper identity tests (UTV2-200) ─────────────────────────
+
+test('checkExposureGate uses metadata.capper for identity instead of source', () => {
+  // Pick submitted from source "intake-form" but with metadata.capper = "sharp-capper"
+  const pick = makeTestPick({
+    id: 'pick-new',
+    source: 'intake-form',
+    metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' },
+  });
+  // Open picks from the same capper identity (metadata.capper), different source
+  const openPicks = [
+    makeTestPick({ id: 'pick-1', source: 'discord', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-2', source: 'api', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-3', source: 'smart-form', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  // Should hit game limit because all share capper identity "sharp-capper"
+  assert.equal(result, 'exposure-game-limit');
+});
+
+test('checkExposureGate does not conflate picks with same source but different capper', () => {
+  // Pick with metadata.capper = "capper-A" submitted via "smart-form"
+  const pick = makeTestPick({
+    id: 'pick-new',
+    source: 'smart-form',
+    metadata: { capper: 'capper-A', eventName: 'Game A', sport: 'NFL' },
+  });
+  // Open picks from a different capper via the same source
+  const openPicks = [
+    makeTestPick({ id: 'pick-1', source: 'smart-form', metadata: { capper: 'capper-B', eventName: 'Game A', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-2', source: 'smart-form', metadata: { capper: 'capper-B', eventName: 'Game A', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-3', source: 'smart-form', metadata: { capper: 'capper-B', eventName: 'Game A', sport: 'NFL' } }),
+  ];
+  const result = checkExposureGate(pick, openPicks, {
+    maxPicksPerGame: 3,
+    maxPicksPerDay: 15,
+    enabled: true,
+  });
+  // Should NOT hit limit because cappers are different despite same source
+  assert.equal(result, null);
+});
+
 // ─── Submission idempotency tests (UTV2-183) ────────────────────────────────
 
 test('duplicate submission returns existing pick without creating a new row', async () => {
