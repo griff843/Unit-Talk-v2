@@ -77,7 +77,7 @@ test(
 
     try {
       assert.equal(result.submissionRecord.status, 'validated');
-      assert.equal(result.submissionEventRecord.event_name, 'submission.accepted');
+      assert.equal(result.submissionEventRecord!.event_name, 'submission.accepted');
       assert.equal(queued.lifecycleState, 'queued');
       assert.equal(posted.lifecycleState, 'posted');
       assert.equal(settlement.settlementRecord.status, 'settled');

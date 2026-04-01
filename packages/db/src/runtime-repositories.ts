@@ -56,6 +56,8 @@ import type {
   ReceiptRepository,
   SettlementCreateInput,
   SettlementRepository,
+  SubmissionAtomicInput,
+  SubmissionAtomicResult,
   SubmissionEventCreateInput,
   SubmissionCreateInput,
   SubmissionRepository,
@@ -180,6 +182,12 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
 
     this.submissionEvents.push(event);
     return event;
+  }
+
+  async processSubmissionAtomic(_input: SubmissionAtomicInput): Promise<SubmissionAtomicResult> {
+    throw new Error(
+      'processSubmissionAtomic is not supported in InMemory mode. Use the sequential path.',
+    );
   }
 }
 
@@ -1327,6 +1335,95 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
     }
 
     return data;
+  }
+
+  async processSubmissionAtomic(input: SubmissionAtomicInput): Promise<SubmissionAtomicResult> {
+    const pick = input.pick;
+    const sub = input.submission;
+    const evt = input.event;
+    const lce = input.lifecycleEvent;
+
+    const { data, error } = await this.client.rpc('process_submission_atomic', {
+      p_submission: {
+        id: sub.id,
+        source: sub.payload.source,
+        submitted_by: sub.payload.submittedBy ?? null,
+        payload: {
+          market: sub.payload.market,
+          selection: sub.payload.selection,
+          line: sub.payload.line,
+          odds: sub.payload.odds,
+          stakeUnits: sub.payload.stakeUnits,
+          confidence: sub.payload.confidence,
+          eventName: sub.payload.eventName,
+          metadata: toJsonObject(sub.payload.metadata ?? {}),
+        },
+        status: 'validated',
+        received_at: sub.receivedAt,
+        created_at: sub.receivedAt,
+        updated_at: sub.receivedAt,
+      },
+      p_event: {
+        submission_id: evt.submissionId,
+        event_name: evt.eventName,
+        payload: toJsonObject(evt.payload),
+        created_at: evt.createdAt,
+      },
+      p_pick: {
+        id: pick.id,
+        submission_id: pick.submissionId,
+        participant_id: null,
+        market: pick.market,
+        selection: pick.selection,
+        line: pick.line ?? null,
+        odds: pick.odds ?? null,
+        stake_units: pick.stakeUnits ?? null,
+        confidence: pick.confidence ?? null,
+        source: pick.source,
+        approval_status: pick.approvalStatus,
+        promotion_status: pick.promotionStatus,
+        promotion_target: pick.promotionTarget ?? null,
+        promotion_score: pick.promotionScore ?? null,
+        promotion_reason: pick.promotionReason ?? null,
+        promotion_version: pick.promotionVersion ?? null,
+        promotion_decided_at: pick.promotionDecidedAt ?? null,
+        promotion_decided_by: pick.promotionDecidedBy ?? null,
+        status: pick.lifecycleState,
+        posted_at: null,
+        settled_at: null,
+        metadata: toJsonObject(pick.metadata),
+        created_at: pick.createdAt,
+        updated_at: pick.createdAt,
+      },
+      p_idempotency_key: input.idempotencyKey ?? null,
+      p_lifecycle_event: lce
+        ? {
+            pick_id: lce.pickId,
+            from_state: lce.fromState ?? null,
+            to_state: lce.toState,
+            writer_role: lce.writerRole,
+            reason: lce.reason,
+            payload: {},
+            created_at: lce.createdAt,
+          }
+        : null,
+    });
+
+    if (error) {
+      throw new Error(`process_submission_atomic failed: ${error.message}`);
+    }
+
+    const result = data as {
+      submission: SubmissionRecord;
+      pick: PickRecord;
+      lifecycleEvent: PickLifecycleRecord | null;
+    };
+
+    return {
+      submission: result.submission,
+      pick: result.pick,
+      lifecycleEvent: result.lifecycleEvent,
+    };
   }
 }
 

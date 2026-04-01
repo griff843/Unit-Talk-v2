@@ -36,7 +36,7 @@ import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
 export interface SubmissionProcessingResult {
   submission: ValidatedSubmission;
   submissionRecord: SubmissionRecord;
-  submissionEventRecord: SubmissionEventRecord;
+  submissionEventRecord?: SubmissionEventRecord | undefined;
   pick: CanonicalPick;
   pickRecord: PickRecord;
   lifecycleEvent: LifecycleEvent;
@@ -197,35 +197,56 @@ export async function processSubmission(
     },
   };
 
-  // Step 1: persist the submission row — submission_events and pick_lifecycle
-  // both have NOT NULL FKs that require their parents to exist first.
-  const submissionRecord = await repositories.submissions.saveSubmission(
-    mapValidatedSubmissionToSubmissionCreateInput(submission),
-  );
+  // Persist submission + event + pick + lifecycle atomically when supported
+  // (Database mode uses a Postgres RPC; InMemory mode falls back to sequential).
+  const submissionInput = mapValidatedSubmissionToSubmissionCreateInput(submission);
+  const eventInput = {
+    submissionId: submission.id,
+    eventName: 'submission.accepted',
+    payload: {
+      source: submission.payload.source,
+      market: submission.payload.market,
+      selection: submission.payload.selection,
+    },
+    createdAt: submission.receivedAt,
+  };
 
-  // Step 2: submission_event (FK → submission) and pick (no hard FK dep) in parallel.
-  const [submissionEventRecord, pickRecord] = await Promise.all([
-    repositories.submissions.saveSubmissionEvent({
-      submissionId: submission.id,
-      eventName: 'submission.accepted',
-      payload: {
-        source: submission.payload.source,
-        market: submission.payload.market,
-        selection: submission.payload.selection,
-      },
-      createdAt: submission.receivedAt,
-    }),
-    repositories.picks.savePick(enrichedPick, idempotencyKey),
-  ]);
+  let submissionRecord: SubmissionRecord;
+  let pickRecord: PickRecord;
+  let lifecycleEventRecord: PickLifecycleRecord;
+  let submissionEventRecord: SubmissionEventRecord | undefined;
 
-  // Step 3: lifecycle event (FK → pick) must follow the pick insert.
-  const lifecycleEventRecord = await repositories.picks.saveLifecycleEvent(
-    materialized.lifecycleEvent,
-  );
+  try {
+    // Atomic path: all 4 inserts in a single Postgres transaction.
+    const atomicResult = await repositories.submissions.processSubmissionAtomic({
+      submission: submissionInput,
+      event: eventInput,
+      pick: enrichedPick,
+      idempotencyKey,
+      lifecycleEvent: materialized.lifecycleEvent,
+    });
 
-  // Step 4: eager promotion evaluation — all policies are evaluated in priority order.
+    submissionRecord = atomicResult.submission;
+    pickRecord = atomicResult.pick;
+    lifecycleEventRecord = atomicResult.lifecycleEvent!;
+  } catch {
+    // Sequential fallback (InMemory mode or RPC not deployed yet).
+    submissionRecord = await repositories.submissions.saveSubmission(submissionInput);
+
+    const [seqEventRecord, seqPickRecord] = await Promise.all([
+      repositories.submissions.saveSubmissionEvent(eventInput),
+      repositories.picks.savePick(enrichedPick, idempotencyKey),
+    ]);
+    submissionEventRecord = seqEventRecord;
+    pickRecord = seqPickRecord;
+
+    lifecycleEventRecord = await repositories.picks.saveLifecycleEvent(
+      materialized.lifecycleEvent,
+    );
+  }
+
+  // Eager promotion evaluation — all policies evaluated in priority order.
   // picks.promotion_target is set to the highest-priority qualified target (or null).
-  // Three pick_promotion_history rows are written, one per policy.
   const eagerResult = await evaluateAllPoliciesEagerAndPersist(
     pickRecord.id,
     'system',
