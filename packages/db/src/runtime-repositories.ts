@@ -35,6 +35,10 @@ import type {
   MemberTierActivateInput,
   MemberTierDeactivateInput,
   MemberTierRepository,
+  ConfirmDeliveryAtomicInput,
+  ConfirmDeliveryAtomicResult,
+  EnqueueDistributionAtomicInput,
+  EnqueueDistributionAtomicResult,
   OutboxCreateInput,
   OutboxRepository,
   ParticipantRepository,
@@ -56,6 +60,8 @@ import type {
   ReceiptRepository,
   SettlementCreateInput,
   SettlementRepository,
+  SettlePickAtomicInput,
+  SettlePickAtomicResult,
   SubmissionEventCreateInput,
   SubmissionCreateInput,
   SubmissionRepository,
@@ -403,6 +409,18 @@ export class InMemoryOutboxRepository implements OutboxRepository {
 
     this.entries.push(record);
     return record;
+  }
+
+  async enqueueDistributionAtomic(_input: EnqueueDistributionAtomicInput): Promise<EnqueueDistributionAtomicResult | null> {
+    throw new Error('enqueueDistributionAtomic is not supported in InMemory mode. Use the sequential path.');
+  }
+
+  async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+    throw new Error('claimNextAtomic is not supported in InMemory mode. Use claimNext.');
+  }
+
+  async confirmDeliveryAtomic(_input: ConfirmDeliveryAtomicInput): Promise<ConfirmDeliveryAtomicResult> {
+    throw new Error('confirmDeliveryAtomic is not supported in InMemory mode. Use the sequential path.');
   }
 
   async findByPickAndTarget(
@@ -879,6 +897,10 @@ export class InMemorySettlementRepository implements SettlementRepository {
 
     this.settlements.push(record);
     return record;
+  }
+
+  async settlePickAtomic(_input: SettlePickAtomicInput): Promise<SettlePickAtomicResult> {
+    throw new Error('settlePickAtomic is not supported in InMemory mode. Use the sequential path.');
   }
 
   async findLatestForPick(pickId: string): Promise<SettlementRecord | null> {
@@ -1700,6 +1722,86 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return data as OutboxRecord;
   }
 
+  async enqueueDistributionAtomic(input: EnqueueDistributionAtomicInput): Promise<EnqueueDistributionAtomicResult | null> {
+    const { data, error } = await this.client.rpc('enqueue_distribution_atomic', {
+      p_pick_id: input.pickId,
+      p_from_state: input.fromState,
+      p_to_state: input.toState,
+      p_writer_role: input.writerRole,
+      p_reason: input.reason,
+      p_lifecycle_created_at: input.lifecycleCreatedAt,
+      p_outbox_target: input.outboxTarget,
+      p_outbox_payload: input.outboxPayload,
+      p_outbox_idempotency_key: input.outboxIdempotencyKey,
+    });
+
+    if (error) {
+      throw new Error(`enqueue_distribution_atomic failed: ${error.message}`);
+    }
+
+    if (!data) return null;
+
+    const result = data as {
+      pick: PickRecord;
+      lifecycleEvent: PickLifecycleRecord;
+      outbox: OutboxRecord;
+    };
+
+    return result;
+  }
+
+  async claimNextAtomic(target: string, workerId: string): Promise<OutboxRecord | null> {
+    const { data, error } = await this.client.rpc('claim_next_outbox', {
+      p_target: target,
+      p_worker_id: workerId,
+    });
+
+    if (error) {
+      throw new Error(`claim_next_outbox failed: ${error.message}`);
+    }
+
+    if (!data) return null;
+    return data as OutboxRecord;
+  }
+
+  async confirmDeliveryAtomic(input: ConfirmDeliveryAtomicInput): Promise<ConfirmDeliveryAtomicResult> {
+    const { data, error } = await this.client.rpc('confirm_delivery_atomic', {
+      p_outbox_id: input.outboxId,
+      p_pick_id: input.pickId,
+      p_worker_id: input.workerId,
+      p_receipt_type: input.receiptType,
+      p_receipt_status: input.receiptStatus,
+      p_receipt_channel: input.receiptChannel,
+      p_receipt_external_id: input.receiptExternalId,
+      p_receipt_idempotency_key: input.receiptIdempotencyKey,
+      p_receipt_payload: input.receiptPayload,
+      p_lifecycle_from_state: input.lifecycleFromState,
+      p_lifecycle_to_state: input.lifecycleToState,
+      p_lifecycle_writer_role: input.lifecycleWriterRole,
+      p_lifecycle_reason: input.lifecycleReason,
+      p_audit_action: input.auditAction,
+      p_audit_payload: input.auditPayload,
+    });
+
+    if (error) {
+      throw new Error(`confirm_delivery_atomic failed: ${error.message}`);
+    }
+
+    const result = data as {
+      outbox: OutboxRecord;
+      lifecycleEvent?: PickLifecycleRecord;
+      receipt?: ReceiptRecord;
+      alreadyConfirmed: boolean;
+      error?: string;
+    };
+
+    if (result.error) {
+      throw new Error(`confirm_delivery_atomic: ${result.error}`);
+    }
+
+    return result;
+  }
+
   async findByPickAndTarget(
     pickId: string,
     target: string,
@@ -2338,6 +2440,45 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     }
 
     return data;
+  }
+
+  async settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult> {
+    const s = input.settlement;
+    const { data, error } = await this.client.rpc('settle_pick_atomic', {
+      p_pick_id: input.pickId,
+      p_settlement: {
+        result: s.result ?? null,
+        source: s.source,
+        confidence: s.confidence,
+        settled_by: s.settledBy,
+        evidence_ref: s.evidenceRef,
+        notes: s.notes ?? null,
+        review_reason: s.reviewReason ?? null,
+        payload: s.payload,
+        settled_at: s.settledAt,
+        corrects_id: s.correctsId ?? null,
+      },
+      p_lifecycle_from_state: input.lifecycleFromState,
+      p_lifecycle_to_state: input.lifecycleToState,
+      p_lifecycle_writer_role: input.lifecycleWriterRole,
+      p_lifecycle_reason: input.lifecycleReason,
+      p_audit_action: input.auditAction,
+      p_audit_actor: input.auditActor,
+      p_audit_payload: input.auditPayload,
+    });
+
+    if (error) {
+      throw new Error(`settle_pick_atomic failed: ${error.message}`);
+    }
+
+    const result = data as {
+      settlement: SettlementRecord;
+      pick: PickRecord;
+      lifecycleEvent: PickLifecycleRecord | null;
+      duplicate: boolean;
+    };
+
+    return result;
   }
 
   async findLatestForPick(pickId: string): Promise<SettlementRecord | null> {
