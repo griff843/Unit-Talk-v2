@@ -33,7 +33,7 @@ begin
       p_pick_id,
       p_settlement->>'result',
       p_settlement->>'source',
-      (p_settlement->>'confidence')::numeric(5,2),
+      p_settlement->>'confidence',
       p_settlement->>'settled_by',
       p_settlement->>'evidence_ref',
       p_settlement->>'notes',
