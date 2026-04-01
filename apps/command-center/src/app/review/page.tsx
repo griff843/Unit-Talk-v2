@@ -1,7 +1,6 @@
 import { Card } from '@/components/ui/Card';
-import { ReviewActions } from '@/components/ReviewActions';
 import { QueueFilters } from '@/components/QueueFilters';
-import Link from 'next/link';
+import { ReviewQueueClient } from '@/components/ReviewQueueClient';
 import { Suspense } from 'react';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
@@ -56,55 +55,7 @@ export default async function ReviewQueuePage({
         </Suspense>
       </Card>
 
-      {picks.length === 0 ? (
-        <Card>
-          <p className="text-sm text-gray-500">No picks awaiting review.</p>
-        </Card>
-      ) : (
-        picks.map((pick) => {
-          const scores = pick.metadata?.['promotionScores'] as Record<string, number> | undefined;
-          return (
-            <Card key={pick.id}>
-              <div className="flex flex-col gap-4">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <Link href={`/picks/${pick.id}`} className="font-mono text-sm text-blue-400 hover:underline" aria-label={`Pick ${pick.id}`}>
-                      {pick.id.slice(0, 12)}...
-                    </Link>
-                    <div className="mt-1 flex gap-4 text-xs text-gray-400">
-                      <span>Source: <span className="text-gray-300">{pick.source}</span></span>
-                      <span>Market: <span className="text-gray-300">{pick.market}</span></span>
-                      <span>Selection: <span className="text-gray-300">{pick.selection}</span></span>
-                    </div>
-                    <div className="mt-1 flex gap-4 text-xs text-gray-400">
-                      {pick.odds != null && <span>Odds: <span className="text-gray-300">{pick.odds}</span></span>}
-                      {pick.line != null && <span>Line: <span className="text-gray-300">{pick.line}</span></span>}
-                      {pick.stake_units != null && <span>Units: <span className="text-gray-300">{pick.stake_units}</span></span>}
-                      <span>Created: <span className="text-gray-300">{new Date(pick.created_at).toLocaleString()}</span></span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-sm font-bold text-gray-200">
-                      {pick.promotion_score != null ? pick.promotion_score.toFixed(1) : '—'}
-                    </div>
-                    <div className="text-[10px] text-gray-500">score</div>
-                  </div>
-                </div>
-
-                {scores && (
-                  <div className="flex gap-3 text-xs text-gray-400">
-                    {Object.entries(scores).map(([key, val]) => (
-                      <span key={key}>{key}: <span className="text-gray-300">{typeof val === 'number' ? val.toFixed(0) : String(val)}</span></span>
-                    ))}
-                  </div>
-                )}
-
-                <ReviewActions pickId={pick.id} decisions={['approve', 'deny', 'hold']} />
-              </div>
-            </Card>
-          );
-        })
-      )}
+      <ReviewQueueClient picks={picks} total={total} />
     </div>
   );
 }

@@ -49,3 +49,42 @@ export async function reviewPick(
     approvalStatus: body.data?.approvalStatus ?? '',
   };
 }
+
+export interface BulkReviewResult {
+  succeeded: string[];
+  failed: string[];
+}
+
+export async function bulkReviewPicks(
+  pickIds: string[],
+  decision: ReviewDecision,
+  reason: string,
+): Promise<BulkReviewResult> {
+  const succeeded: string[] = [];
+  const failed: string[] = [];
+
+  const results = await Promise.allSettled(
+    pickIds.map(async (pickId) => {
+      const res = await reviewPick(pickId, decision, reason);
+      return { pickId, res };
+    }),
+  );
+
+  for (const result of results) {
+    if (result.status === 'fulfilled' && result.value.res.ok) {
+      succeeded.push(result.value.pickId);
+    } else if (result.status === 'fulfilled') {
+      failed.push(result.value.pickId);
+    } else {
+      // Promise rejected — extract pickId from the settled array index
+      const idx = results.indexOf(result);
+      failed.push(pickIds[idx]);
+    }
+  }
+
+  revalidatePath('/');
+  revalidatePath('/review');
+  revalidatePath('/held');
+
+  return { succeeded, failed };
+}

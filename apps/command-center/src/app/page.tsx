@@ -5,6 +5,52 @@ import { PickLifecycleTable } from '@/components/PickLifecycleTable';
 import { fetchDashboardData } from '@/lib/api';
 import type { DashboardData, LifecycleSignal } from '@/lib/types';
 
+/** Build drilldown links for health signals that have actionable detail pages */
+function buildDrilldownLinks(
+  signals: LifecycleSignal[],
+): Partial<Record<LifecycleSignal['signal'], string>> {
+  const links: Partial<Record<LifecycleSignal['signal'], string>> = {};
+
+  for (const s of signals) {
+    switch (s.signal) {
+      case 'discord_delivery':
+        // Failed or dead-letter outbox rows -> exceptions page filtered to delivery
+        if (s.status !== 'WORKING') {
+          links.discord_delivery = '/exceptions';
+        }
+        break;
+      case 'submission':
+        // Drill down to picks list showing recently submitted
+        if (s.status !== 'WORKING') {
+          links.submission = '/picks-list?status=validated';
+        }
+        break;
+      case 'scoring':
+        // Drill to picks missing scores
+        if (s.status !== 'WORKING') {
+          links.scoring = '/picks-list?status=validated';
+        }
+        break;
+      case 'promotion':
+        // Drill to review queue for pending promotions
+        if (s.status !== 'WORKING') {
+          links.promotion = '/review';
+        }
+        break;
+      case 'settlement':
+        // Manual review items in exceptions
+        if (s.status !== 'WORKING') {
+          links.settlement = '/exceptions';
+        }
+        break;
+      default:
+        break;
+    }
+  }
+
+  return links;
+}
+
 const BROKEN_SIGNALS: LifecycleSignal[] = [
   { signal: 'submission', status: 'BROKEN', detail: 'API unreachable' },
   { signal: 'scoring', status: 'BROKEN', detail: 'API unreachable' },
@@ -44,7 +90,7 @@ export default async function DashboardPage() {
         </form>
       </div>
 
-      <HealthSignalsPanel signals={data.signals} />
+      <HealthSignalsPanel signals={data.signals} drilldownLinks={buildDrilldownLinks(data.signals)} />
 
       {data.exceptions.length > 0 && (
         <ExceptionPanel exceptions={data.exceptions} />
