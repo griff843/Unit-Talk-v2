@@ -350,3 +350,120 @@ test('computeAndAttachCLV logs market mismatches and returns null', async () => 
   assert.equal(warnings.length, 1);
   assert.match(warnings[0] ?? '', /market mismatch/i);
 });
+
+test('computeAndAttachCLV resolves participant from metadata.player when participant_id is null', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_META',
+    displayName: 'Meta Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-meta',
+    sportId: 'NBA',
+    eventName: 'Meta Player vs. Defense',
+    eventDate: '2026-03-29',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-03-29T23:30:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-meta',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_META',
+      sportKey: 'NBA',
+      line: 20.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-29T23:00:00.000Z',
+      idempotencyKey: 'meta-offer-1',
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-meta-1',
+      submission_id: 'submission-meta-1',
+      participant_id: null,           // ← intentionally null
+      market: 'points-all-game-ou',
+      selection: 'Over 20.5',
+      line: 20.5,
+      odds: -105,
+      stake_units: 1,
+      confidence: 0.65,
+      source: 'smart-form',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 85,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-03-29T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-03-29T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: {
+        player: 'Meta Player',   // ← resolved from here
+        sport: 'NBA',
+        eventName: 'Meta Player vs. Defense',
+      },
+      created_at: '2026-03-29T20:00:00.000Z',
+      updated_at: '2026-03-29T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'CLV should be computed via metadata fallback when participant_id is null');
+  assert.equal(result.providerKey, 'sgo');
+});
+
+test('computeAndAttachCLV returns null when metadata.player has no matching participant', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-no-participant',
+      submission_id: 'sub-no-participant',
+      participant_id: null,
+      market: 'points-all-game-ou',
+      selection: 'Over 25.5',
+      line: 25.5,
+      odds: -110,
+      stake_units: 1,
+      confidence: 0.6,
+      source: 'smart-form',
+      approval_status: 'approved',
+      promotion_status: 'not-evaluated',
+      promotion_target: null,
+      promotion_score: null,
+      promotion_reason: null,
+      promotion_version: null,
+      promotion_decided_at: null,
+      promotion_decided_by: null,
+      status: 'posted',
+      posted_at: '2026-03-29T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { player: 'Unknown Player' },
+      created_at: '2026-03-29T20:00:00.000Z',
+      updated_at: '2026-03-29T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.equal(result, null, 'CLV should be null when no participant matches');
+});

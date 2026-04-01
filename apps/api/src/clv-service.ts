@@ -102,16 +102,18 @@ async function resolvePickEventContext(
     eventParticipants: EventParticipantRepository;
   },
 ): Promise<PickEventContext | null> {
-  if (!pick.participant_id) {
+  // Resolve participant: use direct FK if set; otherwise fuzzy-match from metadata.player
+  const resolvedParticipantId = await resolveParticipantId(pick, repositories.participants);
+  if (!resolvedParticipantId) {
     return null;
   }
 
-  const participant = await repositories.participants.findById(pick.participant_id);
+  const participant = await repositories.participants.findById(resolvedParticipantId);
   if (!participant) {
     return null;
   }
 
-  const links = await repositories.eventParticipants.listByParticipant(pick.participant_id);
+  const links = await repositories.eventParticipants.listByParticipant(resolvedParticipantId);
   if (links.length === 0) {
     return null;
   }
@@ -198,6 +200,39 @@ async function logMarketMismatchIfNeeded(
   logger?.warn?.(
     `CLV market mismatch for pick ${pick.id}: pick.market="${pick.market}" available=${availableMarkets.join(', ')}`,
   );
+}
+
+/**
+ * Resolve participant_id for a pick.
+ * Priority: pick.participant_id → fuzzy name match from metadata.player + metadata.sport.
+ * Returns null if no unambiguous match is found (fail-open: CLV stays null).
+ */
+async function resolveParticipantId(
+  pick: PickRecord,
+  participants: ParticipantRepository,
+): Promise<string | null> {
+  if (pick.participant_id) {
+    return pick.participant_id;
+  }
+
+  const metadata = asRecord(pick.metadata);
+  const playerName = typeof metadata['player'] === 'string' ? metadata['player'].trim() : '';
+  if (!playerName) {
+    return null;
+  }
+
+  const sport = typeof metadata['sport'] === 'string' ? metadata['sport'].trim() : undefined;
+  const candidates = await participants.listByType('player', sport);
+  const matches = candidates.filter(
+    (c) => normalizeName(c.display_name) === normalizeName(playerName),
+  );
+
+  // Require exactly one match to avoid ambiguity (same logic as grading service)
+  return matches.length === 1 ? (matches[0]?.id ?? null) : null;
+}
+
+function normalizeName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
 function inferSelectionSide(selection: string) {
