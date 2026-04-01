@@ -7,7 +7,7 @@
 
 ## Last Updated
 
-2026-03-31 — **Sprint A + B COMPLETE.** Sprint A: 11 issues + 2 hotfixes (safety lock). Sprint B: 5 issues (control plane hardening). Operator identity, backend-authoritative actions, fail-closed health, aging/escalation. 1076 tests, all gates green. Sprint C (Honest Launch Package) next.
+2026-04-01 — **Sprint A through D COMPLETE.** Sprint D (Intelligence v1): real edge against market consensus, EdgeSource tracking in promotion snapshots, CLV participant fallback, walk-forward backtesting infrastructure, scoring weight validation, odds API moneyline normalization, submission atomicity hardening. All gates green. Phase 7 (Syndicate Lane) awaiting PM approval.
 
 ---
 
@@ -16,21 +16,21 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **1076 pass** — all unit test suites 0 failures. 188 Playwright e2e tests (not in verify chain). |
+| Tests | **All pass** — 0 failures. `pnpm test` green as of 2026-04-01. 188 Playwright e2e tests (not in verify chain). |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **M13 CLOSED.** Syndicate Roadmap active. |
-| Roadmap | **Sprint A + B COMPLETE** (18 issues). Sprint C next. 14 issues remaining (UTV2-194 through 211). |
+| Milestone | **Sprint A–D COMPLETE.** Phase 7 (Syndicate Lane) awaiting PM approval. |
+| Roadmap | **Sprint D COMPLETE** (Intelligence v1). Remaining backlog: UTV2-209, 210, 211 (T1 Phase 7 — not approved). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
 | Layer | Grade | Reality |
 |-------|-------|---------|
 | **Infrastructure** | 8/10 | Lifecycle FSM, outbox delivery, circuit breakers, atomic claims, rollout controls, simulation mode, writer authority — production-grade. |
-| **Intelligence** | 3/10 | Edge = confidence proxy (not market edge). 4/5 scoring components are hardcoded constants. Single odds provider. Calibration is dead code. Weights are unvalidated. |
+| **Intelligence** | 6/10 | Real edge live: model probability vs devigged Pinnacle/consensus/SGO market data. EdgeSource tracked in every promotion snapshot. Multiple odds providers (SGO + Odds API: Pinnacle, DK, FD, MGM). Walk-forward backtesting infrastructure in `clv-weight-tuner.ts` (not yet operationalized). Calibration still dead code. Scoring weights unvalidated against outcomes — infrastructure exists but no scheduled runs. |
 | **Product** | 5/10 | Discord delivery works but provides no decision support. No confidence, edge, thesis, or Kelly in pick embeds. Recaps lack sample size context. |
 
-**Launch positioning:** Pick operations + distribution + tracking platform. NOT autonomous edge engine or syndicate intelligence system — until Sprint D (Intelligence v1) is complete.
+**Launch positioning:** Pick operations + distribution + tracking platform with real market edge computation. Sprint D (Intelligence v1) is complete. NOT a syndicate-level intelligence system — that requires Phase 7 (feedback loop, 500+ graded picks, UX hardening).
 
 **Sprint A resolved:** Lint fixed (G1 unblocked). Submission dedup (UNIQUE index). Settlement dedup (atomic claim + UNIQUE constraint). Atomic promotion (compensating rollback). Retry model (pending + backoff). Post-send reconciliation. CLV capper identity hotfix. Exposure gate lifecycle fix.
 
@@ -38,7 +38,7 @@
 - `202603310001_submission_idempotency.sql` — adds `idempotency_key` column + UNIQUE index to `picks`
 - `202603310002_settlement_idempotency.sql` — adds UNIQUE partial index on `settlement_records(pick_id, source)`
 
-## Gate Notes (verified 2026-03-31 — Sprint A complete)
+## Gate Notes (verified 2026-04-01 — Sprint D complete)
 
 | Gate | Status | Notes |
 |------|--------|-------|
@@ -46,8 +46,8 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | All suites 0 failures. Verified 2026-03-31. |
-| `pnpm verify` (full chain) | PASS | Exit 0. Verified 2026-03-31. |
+| `pnpm test` | PASS | All suites 0 failures. Verified 2026-04-01 (main `8f80cdd`). |
+| `pnpm verify` (full chain) | PASS | Exit 0. |
 | Playwright e2e | PASS | **188/188** — all phases (Phase 1, Phase 2, Wave 3, Wave 4). Verified 2026-03-31. |
 
 ### Runner Architecture
@@ -217,7 +217,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ---
 
-## Key Capabilities (current as of 2026-03-31, post-M13 hardening)
+## Key Capabilities (current as of 2026-04-01, post-Sprint D)
 
 ### Submission and lifecycle
 - Canonical submission intake live (API + Smart Form)
@@ -232,6 +232,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 ### Promotion and delivery
 - Promotion evaluation: best-bets policy (min score 70) + trader-insights policy (min score 80)
 - Promotion scoring consumes domain analysis for edge, trust, and readiness
+- **Real edge integration (Sprint D):** `real-edge-service.ts` computes model probability vs devigged Pinnacle → multi-book consensus → SGO market data. Falls back to confidence-delta when no market data available.
+- **EdgeSource tracking (UTV2-222/223):** Every promotion snapshot records `scoreInputs.edgeSource` (`'real-edge' | 'consensus-edge' | 'sgo-edge' | 'confidence-delta' | 'explicit'`). `DomainAnalysis.confidenceDelta` is now the canonical field; `edge` kept for backward compat with existing DB records.
 - Distribution outbox, worker delivery, receipts, and audit logs live
 - 3 live Discord targets: canary, best-bets, trader-insights
 - Dead-letter promotion: `attempt_count >= 3` consecutive failures → `dead_letter` status via `markDeadLetter()` (UTV2-62)
@@ -242,6 +244,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - Settlement write path live: initial + correction chains + manual review
 - Downstream settlement truth computed (effective settlement + loss attribution)
 - CLV wired: `computeAndAttachCLV()` called at graded settlement; `clvRaw`/`clvPercent`/`beatsClosingLine` written as top-level payload keys (UTV2-46 CLOSED)
+- **CLV participant fallback (UTV2-224):** `resolveParticipantId()` falls back to `metadata.player` + `metadata.sport` for picks submitted without explicit `participant_id` (smart-form, discord-bot path)
+- **Walk-forward backtesting (UTV2-234):** `runWalkForwardBacktest()` + `testAllComponentSignificance()` in `packages/domain/src/clv-weight-tuner.ts`. Infrastructure live; not yet operationalized (no scheduled runs). Scoring profile weights remain static pending outcome data accumulation.
 
 ### Operator surface
 - `GET /api/operator/snapshot` — health, outbox, runs, settlements, entity health
@@ -269,6 +273,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 ### Data ingestion
 - `apps/ingestor/` live — populates `provider_offers` and `game_results` from SGO feed
+- **Odds API ingest live (Sprint D):** Pinnacle + DraftKings + FanDuel + BetMGM via `apps/ingestor/src/ingest-odds-api.ts`. Paired spreads/totals and moneyline offers all normalize to `overOdds`/`underOdds` in canonical `provider_offers`.
+- **Moneyline normalization (UTV2-249):** h2h markets use `buildMoneylineOffer()` → participant-specific `moneyline` market key with selection/opposing odds in `overOdds`/`underOdds`. Downstream `real-edge-service.ts` resolves by canonical market key + participant.
 - Entity resolution: events, participants, event_participants resolved from ingestor
 
 ### Member tier model
