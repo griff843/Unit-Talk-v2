@@ -58,3 +58,94 @@ export interface DashboardData {
   exceptions: OperationalException[];
   observedAt: string;
 }
+
+export interface IntelligenceCoverageMetric {
+  count: number;
+  rate: number;
+}
+
+export interface IntelligenceCoverage {
+  window: string;
+  totalPicks: number;
+  picksWithOdds: number;
+  domainAnalysis: IntelligenceCoverageMetric;
+  deviggingResult: IntelligenceCoverageMetric;
+  kellySizing: IntelligenceCoverageMetric;
+  realEdge: IntelligenceCoverageMetric;
+  edgeSourceDistribution: {
+    realEdge: number;
+    consensusEdge: number;
+    sgoEdge: number;
+    confidenceDelta: number;
+    explicit: number;
+    unknown: number;
+  };
+  clvCoverage: {
+    settledPicks: number;
+    withClv: number;
+    rate: number;
+  };
+}
+
+export interface ProviderQuotaSummary {
+  creditsUsed: number;
+  creditsRemaining: number | null;
+}
+
+export interface ProviderHealthRow {
+  providerKey: string;
+  totalRows: number;
+  last24hRows: number;
+  latestSnapshotAt: string | null;
+  minutesSinceLastSnapshot: number | null;
+  status: 'active' | 'stale' | 'absent';
+}
+
+export interface ProviderHealth {
+  providers: ProviderHealthRow[];
+  ingestorHealth: {
+    status: string;
+    lastRunAt: string | null;
+  };
+  quotaSummary: {
+    sgo: ProviderQuotaSummary | null;
+    oddsApi: ProviderQuotaSummary | null;
+  };
+  distinctEventsLast24h: number;
+}
+
+export interface DashboardRuntimeData {
+  outbox: {
+    pending: number;
+    processing: number;
+    sent: number;
+    failed: number;
+    deadLetter: number;
+    simulated: number;
+  };
+  worker: {
+    drainState: string;
+    detail: string;
+    latestRunAt: string | null;
+    latestReceiptAt: string | null;
+  };
+  aging: {
+    staleValidated: number;
+    stalePosted: number;
+    staleProcessing: number;
+  };
+  deliveryTargets: Array<{
+    target: string;
+    recentSentCount: number;
+    recentFailureCount: number;
+    latestSentAt: string | null;
+    healthy: boolean;
+  }>;
+  providerSummary: {
+    active: number;
+    stale: number;
+    absent: number;
+    distinctEventsLast24h: number;
+    ingestorStatus: string;
+  };
+}
