@@ -40,6 +40,7 @@ export const canonicalTables = [
 
 export type CanonicalTable = (typeof canonicalTables)[number];
 
+export * from './canonical-reference-bootstrap.js';
 export * from './client.js';
 export * from './database.types.js';
 export * from './lifecycle.js';
