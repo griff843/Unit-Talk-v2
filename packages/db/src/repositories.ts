@@ -585,8 +585,73 @@ export interface EventSearchResult {
   sportId: string;
 }
 
+export interface LeagueBrowseResult {
+  id: string;
+  sportId: string;
+  displayName: string;
+}
+
+export interface MatchupBrowseTeam {
+  participantId: string;
+  teamId: string | null;
+  displayName: string;
+  role: 'home' | 'away';
+}
+
+export interface MatchupBrowseResult {
+  eventId: string;
+  externalId: string | null;
+  eventName: string;
+  eventDate: string;
+  status: string;
+  sportId: string;
+  leagueId: string | null;
+  teams: MatchupBrowseTeam[];
+}
+
+export interface EventParticipantBrowseResult {
+  participantId: string;
+  canonicalId: string | null;
+  participantType: 'team' | 'player';
+  displayName: string;
+  role: string;
+  teamId: string | null;
+  teamName: string | null;
+}
+
+export interface EventOfferBrowseResult {
+  sportsbookId: string | null;
+  sportsbookName: string | null;
+  marketTypeId: string | null;
+  marketDisplayName: string;
+  participantId: string | null;
+  participantName: string | null;
+  line: number | null;
+  overOdds: number | null;
+  underOdds: number | null;
+  snapshotAt: string;
+  providerKey: string;
+  providerMarketKey: string;
+  providerParticipantId: string | null;
+}
+
+export interface EventBrowseResult {
+  eventId: string;
+  externalId: string | null;
+  eventName: string;
+  eventDate: string;
+  status: string;
+  sportId: string;
+  leagueId: string | null;
+  participants: EventParticipantBrowseResult[];
+  offers: EventOfferBrowseResult[];
+}
+
 export interface ReferenceDataRepository {
   getCatalog(): Promise<ReferenceDataCatalog>;
+  listLeagues(sportId: string): Promise<LeagueBrowseResult[]>;
+  listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]>;
+  getEventBrowse(eventId: string): Promise<EventBrowseResult | null>;
   searchTeams(sportId: string, query: string, limit?: number): Promise<TeamSearchResult[]>;
   searchPlayers(sportId: string, query: string, limit?: number): Promise<PlayerSearchResult[]>;
   listEvents(sportId: string, date: string): Promise<EventSearchResult[]>;

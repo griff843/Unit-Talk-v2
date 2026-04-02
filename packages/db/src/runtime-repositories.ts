@@ -37,10 +37,15 @@ import type {
   MemberTierRepository,
   ConfirmDeliveryAtomicInput,
   ConfirmDeliveryAtomicResult,
+  EventBrowseResult,
+  EventOfferBrowseResult,
+  EventParticipantBrowseResult,
   EnqueueDistributionAtomicInput,
   EnqueueDistributionAtomicResult,
+  LeagueBrowseResult,
   OutboxCreateInput,
   OutboxRepository,
+  MatchupBrowseResult,
   ParticipantRepository,
   ParticipantUpsertInput,
   PickRepository,
@@ -1293,21 +1298,48 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
   private readonly catalog: ReferenceDataCatalog;
   private readonly participants: ParticipantRow[];
   private readonly events: EventRow[];
+  private readonly leagues: LeagueBrowseResult[];
+  private readonly matchups: MatchupBrowseResult[];
+  private readonly eventBrowses: Map<string, EventBrowseResult>;
 
   constructor(
     catalog: ReferenceDataCatalog,
     options: {
       participants?: ParticipantRow[];
       events?: EventRow[];
+      leagues?: LeagueBrowseResult[];
+      matchups?: MatchupBrowseResult[];
+      eventBrowses?: EventBrowseResult[];
     } = {},
   ) {
     this.catalog = catalog;
     this.participants = options.participants ?? [];
     this.events = options.events ?? [];
+    this.leagues =
+      options.leagues ??
+      this.catalog.sports.map((sport) => ({
+        id: sport.id.toLowerCase(),
+        sportId: sport.id,
+        displayName: sport.name,
+      }));
+    this.matchups = options.matchups ?? [];
+    this.eventBrowses = new Map((options.eventBrowses ?? []).map((row) => [row.eventId, row]));
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
     return this.catalog;
+  }
+
+  async listLeagues(sportId: string): Promise<LeagueBrowseResult[]> {
+    return this.leagues.filter((league) => league.sportId === sportId);
+  }
+
+  async listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
+    return this.matchups.filter((matchup) => matchup.sportId === sportId && matchup.eventDate === date);
+  }
+
+  async getEventBrowse(eventId: string): Promise<EventBrowseResult | null> {
+    return this.eventBrowses.get(eventId) ?? null;
   }
 
   async searchTeams(sportId: string, query: string, limit = 20): Promise<TeamSearchResult[]> {
@@ -3401,40 +3433,228 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     return { sports, sportsbooks, ticketTypes, cappers };
   }
 
+  private fromUntyped(table: string) {
+    return (this.client as unknown as UntypedSupabaseClient).from(table);
+  }
+
+  async listLeagues(sportId: string): Promise<LeagueBrowseResult[]> {
+    const { data, error } = await this.fromUntyped('leagues')
+      .select('id,sport_id,display_name,sort_order,active')
+      .eq('sport_id', sportId)
+      .eq('active', true)
+      .order('sort_order');
+
+    if (error) throw new Error(`Failed to list leagues: ${error.message}`);
+
+    const leagueRows = (data ?? []) as CanonicalLeagueRow[];
+
+    return leagueRows.map((row) => ({
+      id: row.id as string,
+      sportId: row.sport_id as string,
+      displayName: row.display_name as string,
+    }));
+  }
+
+  async listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
+    const { data: events, error: eventsError } = await this.client
+      .from('events')
+      .select('id,event_name,event_date,status,sport_id,external_id')
+      .eq('sport_id', sportId)
+      .eq('event_date', date)
+      .order('event_name');
+
+    if (eventsError) throw new Error(`Failed to list matchups: ${eventsError.message}`);
+    if (!events || events.length === 0) {
+      return [];
+    }
+
+    const eventIds = events.map((row) => row.id as string);
+    const { data: eventParticipants, error: eventParticipantsError } = await this.client
+      .from('event_participants')
+      .select('event_id,participant_id,role')
+      .in('event_id', eventIds);
+    if (eventParticipantsError) {
+      throw new Error(`Failed to load matchup participants: ${eventParticipantsError.message}`);
+    }
+
+    const participantIds = Array.from(
+      new Set((eventParticipants ?? []).map((row) => row.participant_id as string)),
+    );
+    const participantMap = await this.loadParticipantsMap(participantIds);
+    const teamMap = await this.loadCanonicalTeamsByParticipantIds(participantIds);
+    const eventParticipantRows = eventParticipants ?? [];
+
+    return events.map((event) => {
+      const teams = eventParticipantRows
+        .filter(
+          (row) =>
+            row.event_id === event.id &&
+            (row.role === 'home' || row.role === 'away'),
+        )
+        .map((row) => {
+          const participant = participantMap.get(row.participant_id as string);
+          const team = teamMap.get(row.participant_id as string) ?? null;
+          return {
+            participantId: row.participant_id as string,
+            teamId: team?.id ?? null,
+            displayName: participant?.display_name ?? 'Unknown Team',
+            role: row.role as 'home' | 'away',
+          };
+        })
+        .sort((left, right) => roleSortOrder(left.role) - roleSortOrder(right.role));
+
+      const leagueId = teams
+        .map((team) => teamMap.get(team.participantId)?.league_id ?? null)
+        .find((value) => value !== null) ?? null;
+
+      return {
+        eventId: event.id as string,
+        externalId: (event.external_id as string | null) ?? null,
+        eventName: event.event_name as string,
+        eventDate: event.event_date as string,
+        status: event.status as string,
+        sportId: event.sport_id as string,
+        leagueId,
+        teams,
+      };
+    });
+  }
+
+  async getEventBrowse(eventId: string): Promise<EventBrowseResult | null> {
+    const { data: event, error: eventError } = await this.client
+      .from('events')
+      .select('id,event_name,event_date,status,sport_id,external_id')
+      .eq('id', eventId)
+      .maybeSingle();
+
+    if (eventError) throw new Error(`Failed to load event browse: ${eventError.message}`);
+    if (!event) {
+      return null;
+    }
+
+    const { data: eventParticipants, error: eventParticipantsError } = await this.client
+      .from('event_participants')
+      .select('event_id,participant_id,role')
+      .eq('event_id', eventId);
+    if (eventParticipantsError) {
+      throw new Error(`Failed to load event browse participants: ${eventParticipantsError.message}`);
+    }
+
+    const eventParticipantRows = eventParticipants ?? [];
+    const participantIds = Array.from(
+      new Set(eventParticipantRows.map((row) => row.participant_id as string)),
+    );
+    const participantMap = await this.loadParticipantsMap(participantIds);
+    const teamMap = await this.loadCanonicalTeamsByParticipantIds(participantIds);
+    const currentAssignments = await this.loadCurrentAssignments(participantIds);
+    const teamNameMap = new Map<string, string>(
+      Array.from(teamMap.values()).map((team) => [team.id, team.display_name]),
+    );
+
+    const participants: EventParticipantBrowseResult[] = [];
+    for (const row of eventParticipantRows) {
+      const participant = participantMap.get(row.participant_id as string);
+      if (!participant) {
+        continue;
+      }
+
+      if (participant.participant_type === 'team') {
+        const team = teamMap.get(participant.id) ?? null;
+        participants.push({
+          participantId: participant.id,
+          canonicalId: team?.id ?? null,
+          participantType: 'team',
+          displayName: participant.display_name,
+          role: row.role as string,
+          teamId: team?.id ?? null,
+          teamName: team?.display_name ?? null,
+        });
+        continue;
+      }
+
+      const assignment = currentAssignments.get(participant.id) ?? null;
+      participants.push({
+        participantId: participant.id,
+        canonicalId: participant.id,
+        participantType: 'player',
+        displayName: participant.display_name,
+        role: row.role as string,
+        teamId: assignment?.teamId ?? null,
+        teamName: assignment?.teamId ? teamNameMap.get(assignment.teamId) ?? null : null,
+      });
+    }
+
+    const offers = await this.loadEventOffers(
+      (event.external_id as string | null) ?? null,
+      participants,
+      event.sport_id as string,
+    );
+
+    const leagueId = participants
+      .map((participant) =>
+        participant.participantType === 'team'
+          ? teamMap.get(participant.participantId)?.league_id ?? null
+          : currentAssignments.get(participant.participantId)?.leagueId ?? null,
+      )
+      .find((value) => value !== null) ?? null;
+
+    return {
+      eventId: event.id as string,
+      externalId: (event.external_id as string | null) ?? null,
+      eventName: event.event_name as string,
+      eventDate: event.event_date as string,
+      status: event.status as string,
+      sportId: event.sport_id as string,
+      leagueId,
+      participants,
+      offers,
+    };
+  }
+
   async searchTeams(sportId: string, query: string, limit = 20): Promise<TeamSearchResult[]> {
-    const { data, error } = await this.client
-      .from('participants')
-      .select('id,display_name,sport')
-      .eq('participant_type', 'team')
-      .eq('sport', sportId)
+    const leagues = await this.listLeagues(sportId);
+    const leagueIds = leagues.map((league) => league.id);
+    if (leagueIds.length === 0) {
+      return [];
+    }
+
+    const { data, error } = await this.fromUntyped('teams')
+      .select('id,display_name,league_id')
+      .in('league_id', leagueIds)
       .ilike('display_name', `%${query}%`)
       .limit(limit);
 
     if (error) throw new Error(`Failed to search teams: ${error.message}`);
 
-    return (data ?? []).map((row) => ({
+    const teamRows = (data ?? []) as CanonicalTeamRow[];
+
+    return teamRows.map((row) => ({
       participantId: row.id as string,
       displayName: row.display_name as string,
-      sport: row.sport as string,
+      sport: sportId,
     }));
   }
 
   async searchPlayers(sportId: string, query: string, limit = 20): Promise<PlayerSearchResult[]> {
-    const { data, error } = await this.client
-      .from('participants')
-      .select('id,display_name,sport')
-      .eq('participant_type', 'player')
-      .eq('sport', sportId)
+    const { data, error } = await this.fromUntyped('players')
+      .select('id,display_name')
       .ilike('display_name', `%${query}%`)
-      .limit(limit);
+      .limit(limit * 5);
 
     if (error) throw new Error(`Failed to search players: ${error.message}`);
 
-    return (data ?? []).map((row) => ({
-      participantId: row.id as string,
-      displayName: row.display_name as string,
-      sport: row.sport as string,
-    }));
+    const playerRows = (data ?? []) as CanonicalPlayerRow[];
+    const candidateIds = playerRows.map((row) => row.id as string);
+    const currentAssignments = await this.loadCurrentAssignments(candidateIds);
+
+    return playerRows
+      .filter((row) => currentAssignments.get(row.id as string)?.sportId === sportId)
+      .slice(0, limit)
+      .map((row) => ({
+        participantId: row.id as string,
+        displayName: row.display_name as string,
+        sport: sportId,
+      }));
   }
 
   async listEvents(sportId: string, date: string): Promise<EventSearchResult[]> {
@@ -3455,6 +3675,268 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       sportId: row.sport_id as string,
     }));
   }
+
+  private async loadParticipantsMap(participantIds: string[]) {
+    if (participantIds.length === 0) {
+      return new Map<string, ParticipantRow>();
+    }
+
+    const { data, error } = await this.client
+      .from('participants')
+      .select('*')
+      .in('id', participantIds);
+    if (error) throw new Error(`Failed to load participants: ${error.message}`);
+    return new Map((data ?? []).map((row) => [row.id as string, row as ParticipantRow]));
+  }
+
+  private async loadCanonicalTeamsByParticipantIds(participantIds: string[]) {
+    const { data, error } = await this.fromUntyped('teams')
+      .select('id,league_id,display_name,metadata');
+    if (error) throw new Error(`Failed to load canonical teams: ${error.message}`);
+
+    const participantIdSet = new Set(participantIds);
+    const teamRows = (data ?? []) as CanonicalTeamRow[];
+    const rows = teamRows.filter((row) => {
+      const sourceParticipantId = readBootstrapSourceParticipantId(row.metadata);
+      return sourceParticipantId ? participantIdSet.has(sourceParticipantId) : false;
+    });
+
+    return new Map<string, CanonicalTeamRow>(
+      rows.map((row) => [readBootstrapSourceParticipantId(row.metadata) as string, row]),
+    );
+  }
+
+  private async loadCurrentAssignments(playerIds: string[]) {
+    if (playerIds.length === 0) {
+      return new Map<string, { teamId: string; leagueId: string; sportId: string | null }>();
+    }
+
+    const { data: assignments, error: assignmentsError } = await this.fromUntyped('player_team_assignments')
+      .select('player_id,team_id,league_id,effective_until')
+      .in('player_id', playerIds)
+      .is('effective_until', null);
+    if (assignmentsError) {
+      throw new Error(`Failed to load player assignments: ${assignmentsError.message}`);
+    }
+
+    const assignmentRows = (assignments ?? []) as PlayerTeamAssignmentRow[];
+    const leagueIds = Array.from(new Set(assignmentRows.map((row) => row.league_id as string)));
+    const { data: leagues, error: leaguesError } = await this.fromUntyped('leagues')
+      .select('id,sport_id')
+      .in('id', leagueIds);
+    if (leaguesError) {
+      throw new Error(`Failed to load assignment leagues: ${leaguesError.message}`);
+    }
+
+    const leagueRows = (leagues ?? []) as CanonicalLeagueRow[];
+    const leagueSportMap = new Map<string, string>(
+      leagueRows.map((row) => [row.id as string, row.sport_id as string]),
+    );
+    return new Map<string, { teamId: string; leagueId: string; sportId: string | null }>(
+      assignmentRows.map((row) => [
+        row.player_id as string,
+        {
+          teamId: row.team_id as string,
+          leagueId: row.league_id as string,
+          sportId: leagueSportMap.get(row.league_id as string) ?? null,
+        },
+      ]),
+    );
+  }
+
+  private async loadEventOffers(
+    providerEventId: string | null,
+    participants: EventParticipantBrowseResult[],
+    sportId: string,
+  ): Promise<EventOfferBrowseResult[]> {
+    if (!providerEventId) {
+      return [];
+    }
+
+    const { data: offers, error: offersError } = await this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('provider_event_id', providerEventId);
+    if (offersError) {
+      throw new Error(`Failed to load event offers: ${offersError.message}`);
+    }
+    if (!offers || offers.length === 0) {
+      return [];
+    }
+
+    const providerMarketKeys = Array.from(new Set(offers.map((row) => row.provider_market_key as string)));
+    const { data: marketAliases, error: marketAliasesError } = await this.fromUntyped('provider_market_aliases')
+      .select('provider,provider_market_key,provider_display_name,market_type_id,sport_id')
+      .in('provider_market_key', providerMarketKeys);
+    if (marketAliasesError) {
+      throw new Error(`Failed to load market aliases: ${marketAliasesError.message}`);
+    }
+
+    const marketAliasRows = (marketAliases ?? []) as ProviderMarketAliasRow[];
+    const marketTypeIds = Array.from(
+      new Set(
+        marketAliasRows
+          .map((row) => row.market_type_id)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
+    const { data: marketTypes, error: marketTypesError } = await this.fromUntyped('market_types')
+      .select('id,display_name')
+      .in('id', marketTypeIds);
+    if (marketTypesError) {
+      throw new Error(`Failed to load market types: ${marketTypesError.message}`);
+    }
+    const marketTypeRows = (marketTypes ?? []) as MarketTypeRow[];
+
+    const providerParticipantIds = Array.from(
+      new Set(
+        offers
+          .map((row) => row.provider_participant_id as string | null)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
+    const { data: entityAliases, error: entityAliasesError } = await this.fromUntyped('provider_entity_aliases')
+      .select('provider,entity_kind,provider_entity_key,team_id,player_id')
+      .in('provider_entity_key', providerParticipantIds);
+    if (entityAliasesError) {
+      throw new Error(`Failed to load entity aliases: ${entityAliasesError.message}`);
+    }
+    const entityAliasRows = (entityAliases ?? []) as ProviderEntityAliasRow[];
+
+    const bookAliasKeys = Array.from(
+      new Set(offers.map((row) => splitProviderBookKey(row.provider_key as string).bookKey)),
+    );
+    const { data: bookAliases, error: bookAliasesError } = await this.fromUntyped('provider_book_aliases')
+      .select('provider,provider_book_key,sportsbook_id')
+      .in('provider_book_key', bookAliasKeys);
+    if (bookAliasesError) {
+      throw new Error(`Failed to load book aliases: ${bookAliasesError.message}`);
+    }
+    const bookAliasRows = (bookAliases ?? []) as ProviderBookAliasRow[];
+
+    const sportsbookIds = Array.from(
+      new Set(
+        bookAliasRows
+          .map((row) => row.sportsbook_id)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
+    const { data: sportsbooks, error: sportsbooksError } = await this.client
+      .from('sportsbooks')
+      .select('id,display_name')
+      .in('id', sportsbookIds);
+    if (sportsbooksError) {
+      throw new Error(`Failed to load sportsbooks: ${sportsbooksError.message}`);
+    }
+
+    const participantNameMap = new Map(
+      participants
+        .flatMap((participant) => {
+          const pairs: Array<[string, string]> = [[participant.participantId, participant.displayName]];
+          if (participant.canonicalId) {
+            pairs.push([participant.canonicalId, participant.displayName]);
+          }
+          return pairs;
+        }),
+    );
+
+    const marketAliasMap = new Map(
+      marketAliasRows
+        .filter((row) => !row.sport_id || row.sport_id === sportId)
+        .map((row) => [`${row.provider}:${row.provider_market_key}`, row]),
+    );
+    const marketTypeMap = new Map<string, string>(
+      marketTypeRows.map((row) => [row.id as string, row.display_name as string]),
+    );
+    const entityAliasMap = new Map(
+      entityAliasRows.map((row) => [`${row.provider}:${row.provider_entity_key}`, row]),
+    );
+    const bookAliasMap = new Map<string, string | null>(
+      bookAliasRows.map((row) => [`${row.provider}:${row.provider_book_key}`, row.sportsbook_id]),
+    );
+    const sportsbookMap = new Map((sportsbooks ?? []).map((row) => [row.id as string, row.display_name as string]));
+
+    const grouped = new Map<string, EventOfferBrowseResult>();
+    for (const offer of offers) {
+      const providerKey = offer.provider_key as string;
+      const { provider, bookKey } = splitProviderBookKey(providerKey);
+      const providerMarketKey = offer.provider_market_key as string;
+      const providerParticipantId = (offer.provider_participant_id as string | null) ?? null;
+      const marketAlias = marketAliasMap.get(`${provider}:${providerMarketKey}`);
+      const entityAlias = providerParticipantId
+        ? entityAliasMap.get(`${provider}:${providerParticipantId}`)
+        : null;
+      const sportsbookId = bookAliasMap.get(`${provider}:${bookKey}`) ?? null;
+      const participantId =
+        entityAlias?.player_id ??
+        entityAlias?.team_id ??
+        null;
+      const key = [
+        sportsbookId ?? providerKey,
+        marketAlias?.market_type_id ?? providerMarketKey,
+        participantId ?? providerParticipantId ?? 'all',
+        offer.line ?? 'null',
+      ].join(':');
+      const existing = grouped.get(key);
+      if (existing && existing.snapshotAt >= (offer.snapshot_at as string)) {
+        continue;
+      }
+
+      grouped.set(key, {
+        sportsbookId,
+        sportsbookName: sportsbookId ? sportsbookMap.get(sportsbookId) ?? sportsbookId : providerKey,
+        marketTypeId: (marketAlias?.market_type_id as string | null) ?? null,
+        marketDisplayName:
+          (marketAlias?.market_type_id
+            ? marketTypeMap.get(marketAlias.market_type_id as string)
+            : null) ??
+          (marketAlias?.provider_display_name as string | null) ??
+          providerMarketKey,
+        participantId,
+        participantName: participantId ? participantNameMap.get(participantId) ?? null : null,
+        line: (offer.line as number | null) ?? null,
+        overOdds: (offer.over_odds as number | null) ?? null,
+        underOdds: (offer.under_odds as number | null) ?? null,
+        snapshotAt: offer.snapshot_at as string,
+        providerKey,
+        providerMarketKey,
+        providerParticipantId,
+      });
+    }
+
+    return Array.from(grouped.values()).sort((left, right) => {
+      const sportsbookCompare = (left.sportsbookName ?? '').localeCompare(right.sportsbookName ?? '');
+      if (sportsbookCompare !== 0) return sportsbookCompare;
+      const marketCompare = left.marketDisplayName.localeCompare(right.marketDisplayName);
+      if (marketCompare !== 0) return marketCompare;
+      const participantCompare = (left.participantName ?? '').localeCompare(right.participantName ?? '');
+      if (participantCompare !== 0) return participantCompare;
+      return (left.line ?? 0) - (right.line ?? 0);
+    });
+  }
+}
+
+function readBootstrapSourceParticipantId(metadata: unknown) {
+  if (!isRecord(metadata)) {
+    return null;
+  }
+  const bootstrap = metadata.bootstrap;
+  if (!isRecord(bootstrap)) {
+    return null;
+  }
+  const value = bootstrap.source_participant_id;
+  return typeof value === 'string' && value.length > 0 ? value : null;
+}
+
+function splitProviderBookKey(providerKey: string) {
+  const [provider, bookKey] = providerKey.includes(':')
+    ? providerKey.split(':', 2)
+    : [providerKey, providerKey];
+  return { provider, bookKey };
+}
+
+function roleSortOrder(role: string) {
+  return role === 'home' ? 0 : role === 'away' ? 1 : 2;
 }
 
 // ---------------------------------------------------------------------------
@@ -3701,7 +4183,80 @@ function metadataEventName(metadata: Json) {
   return typeof eventName === 'string' ? eventName : undefined;
 }
 
-function isRecord(value: Json): value is Record<string, Json | undefined> {
+type CanonicalLeagueRow = {
+  id: string;
+  sport_id: string;
+  display_name: string;
+  sort_order?: number | null;
+  active?: boolean | null;
+};
+
+type CanonicalTeamRow = {
+  id: string;
+  league_id: string;
+  display_name: string;
+  metadata: unknown;
+};
+
+type CanonicalPlayerRow = {
+  id: string;
+  display_name: string;
+};
+
+type PlayerTeamAssignmentRow = {
+  player_id: string;
+  team_id: string;
+  league_id: string;
+  effective_until: string | null;
+};
+
+type ProviderEntityAliasRow = {
+  provider: string;
+  entity_kind: string;
+  provider_entity_key: string;
+  team_id: string | null;
+  player_id: string | null;
+};
+
+type ProviderMarketAliasRow = {
+  provider: string;
+  provider_market_key: string;
+  provider_display_name: string | null;
+  market_type_id: string | null;
+  sport_id: string | null;
+};
+
+type ProviderBookAliasRow = {
+  provider: string;
+  provider_book_key: string;
+  sportsbook_id: string | null;
+};
+
+type MarketTypeRow = {
+  id: string;
+  display_name: string;
+};
+
+type UntypedQueryResult = {
+  data: unknown[] | null;
+  error: { message: string } | null;
+};
+
+type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
+  select(columns: string): UntypedQueryBuilder;
+  eq(column: string, value: unknown): UntypedQueryBuilder;
+  in(column: string, values: readonly unknown[]): UntypedQueryBuilder;
+  is(column: string, value: unknown): UntypedQueryBuilder;
+  order(column: string): UntypedQueryBuilder;
+  ilike(column: string, pattern: string): UntypedQueryBuilder;
+  limit(count: number): UntypedQueryBuilder;
+};
+
+type UntypedSupabaseClient = {
+  from(table: string): UntypedQueryBuilder;
+};
+
+function isRecord(value: unknown): value is Record<string, Json | undefined> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
