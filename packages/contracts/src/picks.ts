@@ -5,7 +5,7 @@ import type {
   PromotionTarget,
   WriterRole,
 } from './index.js';
-import type { SubmissionPayload, ValidatedSubmission } from './submission.js';
+import type { PickSource, SubmissionPayload, ValidatedSubmission } from './submission.js';
 
 export type PickLifecycleState =
   | 'draft'
@@ -24,7 +24,7 @@ export interface CanonicalPick {
   odds?: number | undefined;
   stakeUnits?: number | undefined;
   confidence?: number | undefined;
-  source: string;
+  source: PickSource;
   submittedBy?: string | undefined;
   approvalStatus: ApprovalStatus;
   promotionStatus: PromotionStatus;

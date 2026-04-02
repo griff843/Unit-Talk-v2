@@ -1,5 +1,16 @@
+export const pickSources = [
+  'smart-form',
+  'feed',
+  'system',
+  'alert-agent',
+  'model-driven',
+  'api',
+] as const;
+
+export type PickSource = (typeof pickSources)[number];
+
 export interface SubmissionPayload {
-  source: string;
+  source: PickSource;
   submittedBy?: string | undefined;
   market: string;
   selection: string;
