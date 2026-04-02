@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 import test from 'node:test';
 import { loadEnvironment } from '@unit-talk/config';
 import {
@@ -35,10 +36,12 @@ test(
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
     const repositories = createDatabaseRepositoryBundle(connection);
+    const smokeRunId = randomUUID();
 
     const result = await processSubmission(
       {
         source: 'db-smoke',
+        eventName: `db-smoke-${smokeRunId}`,
         submittedBy: 'codex',
         market: 'NBA points',
         selection: 'Player Over 21.5',
