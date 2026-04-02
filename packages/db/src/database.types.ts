@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.4"
+  }
   public: {
     Tables: {
       alert_detections: {
@@ -154,6 +159,96 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      combo_stat_type_components: {
+        Row: {
+          combo_stat_type_id: string
+          created_at: string
+          stat_type_id: string
+          weight: number
+        }
+        Insert: {
+          combo_stat_type_id: string
+          created_at?: string
+          stat_type_id: string
+          weight?: number
+        }
+        Update: {
+          combo_stat_type_id?: string
+          created_at?: string
+          stat_type_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combo_stat_type_components_combo_stat_type_id_fkey"
+            columns: ["combo_stat_type_id"]
+            isOneToOne: false
+            referencedRelation: "combo_stat_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_stat_type_components_stat_type_id_fkey"
+            columns: ["stat_type_id"]
+            isOneToOne: false
+            referencedRelation: "stat_types"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      combo_stat_types: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          market_type_id: string
+          metadata: Json
+          short_label: string
+          sort_order: number
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          market_type_id: string
+          metadata?: Json
+          short_label: string
+          sort_order?: number
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          market_type_id?: string
+          metadata?: Json
+          short_label?: string
+          sort_order?: number
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "combo_stat_types_market_type_id_fkey"
+            columns: ["market_type_id"]
+            isOneToOne: false
+            referencedRelation: "market_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "combo_stat_types_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       distribution_outbox: {
         Row: {
@@ -537,6 +632,96 @@ export type Database = {
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      market_families: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      market_types: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          market_family_id: string
+          metadata: Json
+          requires_line: boolean
+          requires_participant: boolean
+          selection_type_id: string
+          short_label: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          market_family_id: string
+          metadata?: Json
+          requires_line?: boolean
+          requires_participant?: boolean
+          selection_type_id: string
+          short_label: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          market_family_id?: string
+          metadata?: Json
+          requires_line?: boolean
+          requires_participant?: boolean
+          selection_type_id?: string
+          short_label?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_types_market_family_id_fkey"
+            columns: ["market_family_id"]
+            isOneToOne: false
+            referencedRelation: "market_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_types_selection_type_id_fkey"
+            columns: ["selection_type_id"]
+            isOneToOne: false
+            referencedRelation: "selection_types"
             referencedColumns: ["id"]
           },
         ]
@@ -943,6 +1128,13 @@ export type Database = {
             foreignKeyName: "player_team_assignments_league_id_fkey"
             columns: ["league_id"]
             isOneToOne: false
+            referencedRelation: "canonical_reference_bootstrap_summary"
+            referencedColumns: ["league_id"]
+          },
+          {
+            foreignKeyName: "player_team_assignments_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
             referencedRelation: "leagues"
             referencedColumns: ["id"]
           },
@@ -994,6 +1186,185 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      provider_book_aliases: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json
+          provider: string
+          provider_book_key: string
+          provider_display_name: string
+          sportsbook_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          provider: string
+          provider_book_key: string
+          provider_display_name: string
+          sportsbook_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json
+          provider?: string
+          provider_book_key?: string
+          provider_display_name?: string
+          sportsbook_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_book_aliases_sportsbook_id_fkey"
+            columns: ["sportsbook_id"]
+            isOneToOne: false
+            referencedRelation: "sportsbooks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_entity_aliases: {
+        Row: {
+          created_at: string
+          entity_kind: string
+          id: string
+          metadata: Json
+          participant_id: string | null
+          player_id: string | null
+          provider: string
+          provider_display_name: string
+          provider_entity_id: string | null
+          provider_entity_key: string
+          team_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          entity_kind: string
+          id?: string
+          metadata?: Json
+          participant_id?: string | null
+          player_id?: string | null
+          provider: string
+          provider_display_name: string
+          provider_entity_id?: string | null
+          provider_entity_key: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          entity_kind?: string
+          id?: string
+          metadata?: Json
+          participant_id?: string | null
+          player_id?: string | null
+          provider?: string
+          provider_display_name?: string
+          provider_entity_id?: string | null
+          provider_entity_key?: string
+          team_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_entity_aliases_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_entity_aliases_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_entity_aliases_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      provider_market_aliases: {
+        Row: {
+          combo_stat_type_id: string | null
+          created_at: string
+          id: string
+          market_type_id: string
+          metadata: Json
+          provider: string
+          provider_display_name: string
+          provider_market_key: string
+          sport_id: string | null
+          stat_type_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          combo_stat_type_id?: string | null
+          created_at?: string
+          id?: string
+          market_type_id: string
+          metadata?: Json
+          provider: string
+          provider_display_name: string
+          provider_market_key: string
+          sport_id?: string | null
+          stat_type_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          combo_stat_type_id?: string | null
+          created_at?: string
+          id?: string
+          market_type_id?: string
+          metadata?: Json
+          provider?: string
+          provider_display_name?: string
+          provider_market_key?: string
+          sport_id?: string | null
+          stat_type_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "provider_market_aliases_combo_stat_type_id_fkey"
+            columns: ["combo_stat_type_id"]
+            isOneToOne: false
+            referencedRelation: "combo_stat_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_market_aliases_market_type_id_fkey"
+            columns: ["market_type_id"]
+            isOneToOne: false
+            referencedRelation: "market_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_market_aliases_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "provider_market_aliases_stat_type_id_fkey"
+            columns: ["stat_type_id"]
+            isOneToOne: false
+            referencedRelation: "stat_types"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       provider_offers: {
         Row: {
@@ -1057,6 +1428,36 @@ export type Database = {
           },
         ]
       }
+      selection_types: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          id: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       settlement_records: {
         Row: {
           confidence: string
@@ -1119,6 +1520,51 @@ export type Database = {
             columns: ["pick_id"]
             isOneToOne: false
             referencedRelation: "picks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sport_market_type_availability: {
+        Row: {
+          active: boolean
+          created_at: string
+          market_type_id: string
+          metadata: Json
+          sort_order: number
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          market_type_id: string
+          metadata?: Json
+          sort_order?: number
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          market_type_id?: string
+          metadata?: Json
+          sort_order?: number
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sport_market_type_availability_market_type_id_fkey"
+            columns: ["market_type_id"]
+            isOneToOne: false
+            referencedRelation: "market_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sport_market_type_availability_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
             referencedColumns: ["id"]
           },
         ]
@@ -1218,25 +1664,34 @@ export type Database = {
       stat_types: {
         Row: {
           active: boolean
+          canonical_key: string
           created_at: string
+          display_name: string
           id: string
           name: string
+          short_label: string
           sort_order: number
           sport_id: string
         }
         Insert: {
           active?: boolean
+          canonical_key: string
           created_at?: string
+          display_name: string
           id?: string
           name: string
+          short_label: string
           sort_order?: number
           sport_id: string
         }
         Update: {
           active?: boolean
+          canonical_key?: string
           created_at?: string
+          display_name?: string
           id?: string
           name?: string
+          short_label?: string
           sort_order?: number
           sport_id?: string
         }
@@ -1399,6 +1854,13 @@ export type Database = {
             foreignKeyName: "teams_league_id_fkey"
             columns: ["league_id"]
             isOneToOne: false
+            referencedRelation: "canonical_reference_bootstrap_summary"
+            referencedColumns: ["league_id"]
+          },
+          {
+            foreignKeyName: "teams_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
             referencedRelation: "leagues"
             referencedColumns: ["id"]
           },
@@ -1406,9 +1868,28 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      canonical_reference_bootstrap_summary: {
+        Row: {
+          assigned_players_count: number | null
+          league_id: string | null
+          players_count: number | null
+          sport_id: string | null
+          teams_count: number | null
+          unassigned_players_count: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leagues_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
+      bootstrap_canonical_reference_data: { Args: never; Returns: undefined }
       claim_next_outbox: {
         Args: { p_target: string; p_worker_id: string }
         Returns: Json
@@ -1603,4 +2084,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-
