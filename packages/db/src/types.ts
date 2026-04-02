@@ -78,6 +78,10 @@ export type SystemRunRow = Tables<'system_runs'>;
 export type AuditLogRow = Tables<'audit_log'>;
 export type ParticipantRow = Tables<'participants'>;
 export type ParticipantMembershipRow = Tables<'participant_memberships'>;
+export type LeagueRow = Tables<'leagues'>;
+export type TeamRow = Tables<'teams'>;
+export type PlayerRow = Tables<'players'>;
+export type PlayerTeamAssignmentRow = Tables<'player_team_assignments'>;
 export type GradeResultRow = Tables<'game_results'>;
 export type MemberTierRow = Tables<'member_tiers'>;
 
@@ -129,6 +133,18 @@ export type ParticipantRecord = ParticipantRow;
 
 /** @see {@link ParticipantMembershipRow} */
 export type ParticipantMembershipRecord = ParticipantMembershipRow;
+
+/** @see {@link LeagueRow} */
+export type LeagueRecord = LeagueRow;
+
+/** @see {@link TeamRow} */
+export type TeamRecord = TeamRow;
+
+/** @see {@link PlayerRow} */
+export type PlayerRecord = PlayerRow;
+
+/** @see {@link PlayerTeamAssignmentRow} */
+export type PlayerTeamAssignmentRecord = PlayerTeamAssignmentRow;
 
 /** @see {@link GradeResultRow} */
 export type GradeResultRecord = GradeResultRow;

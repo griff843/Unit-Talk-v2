@@ -497,6 +497,50 @@ export type Database = {
           },
         ]
       }
+      leagues: {
+        Row: {
+          active: boolean
+          country: string | null
+          created_at: string
+          display_name: string
+          id: string
+          metadata: Json
+          sort_order: number
+          sport_id: string
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          country?: string | null
+          created_at?: string
+          display_name: string
+          id: string
+          metadata?: Json
+          sort_order?: number
+          sport_id: string
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          country?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          metadata?: Json
+          sort_order?: number
+          sport_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "leagues_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_tiers: {
         Row: {
           changed_by: string | null
@@ -717,6 +761,44 @@ export type Database = {
           },
         ]
       }
+      pick_reviews: {
+        Row: {
+          created_at: string
+          decided_at: string
+          decided_by: string
+          decision: string
+          id: string
+          pick_id: string
+          reason: string
+        }
+        Insert: {
+          created_at?: string
+          decided_at?: string
+          decided_by: string
+          decision: string
+          id?: string
+          pick_id: string
+          reason: string
+        }
+        Update: {
+          created_at?: string
+          decided_at?: string
+          decided_by?: string
+          decision?: string
+          id?: string
+          pick_id?: string
+          reason?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pick_reviews_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       picks: {
         Row: {
           approval_status: string
@@ -815,6 +897,103 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      player_team_assignments: {
+        Row: {
+          created_at: string
+          effective_from: string | null
+          effective_until: string | null
+          id: string
+          is_current: boolean
+          league_id: string
+          metadata: Json
+          player_id: string
+          source: string
+          team_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          effective_from?: string | null
+          effective_until?: string | null
+          id?: string
+          is_current?: boolean
+          league_id: string
+          metadata?: Json
+          player_id: string
+          source?: string
+          team_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          effective_from?: string | null
+          effective_until?: string | null
+          id?: string
+          is_current?: boolean
+          league_id?: string
+          metadata?: Json
+          player_id?: string
+          source?: string
+          team_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "player_team_assignments_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_team_assignments_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "player_team_assignments_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      players: {
+        Row: {
+          active: boolean
+          created_at: string
+          display_name: string
+          first_name: string | null
+          id: string
+          last_name: string | null
+          metadata: Json
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean
+          created_at?: string
+          display_name: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          metadata?: Json
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean
+          created_at?: string
+          display_name?: string
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          metadata?: Json
+          updated_at?: string
+        }
+        Relationships: []
       }
       provider_offers: {
         Row: {
@@ -1175,12 +1354,123 @@ export type Database = {
         }
         Relationships: []
       }
+      teams: {
+        Row: {
+          abbreviation: string | null
+          active: boolean
+          city: string | null
+          created_at: string
+          display_name: string
+          id: string
+          league_id: string
+          metadata: Json
+          short_name: string
+          sort_order: number
+          updated_at: string
+        }
+        Insert: {
+          abbreviation?: string | null
+          active?: boolean
+          city?: string | null
+          created_at?: string
+          display_name: string
+          id: string
+          league_id: string
+          metadata?: Json
+          short_name: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Update: {
+          abbreviation?: string | null
+          active?: boolean
+          city?: string | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          league_id?: string
+          metadata?: Json
+          short_name?: string
+          sort_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_league_id_fkey"
+            columns: ["league_id"]
+            isOneToOne: false
+            referencedRelation: "leagues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      claim_next_outbox: {
+        Args: { p_target: string; p_worker_id: string }
+        Returns: Json
+      }
+      confirm_delivery_atomic: {
+        Args: {
+          p_audit_action: string
+          p_audit_payload: Json
+          p_lifecycle_from_state: string
+          p_lifecycle_reason: string
+          p_lifecycle_to_state: string
+          p_lifecycle_writer_role: string
+          p_outbox_id: string
+          p_pick_id: string
+          p_receipt_channel: string
+          p_receipt_external_id: string
+          p_receipt_idempotency_key: string
+          p_receipt_payload: Json
+          p_receipt_status: string
+          p_receipt_type: string
+          p_worker_id: string
+        }
+        Returns: Json
+      }
+      enqueue_distribution_atomic: {
+        Args: {
+          p_from_state: string
+          p_lifecycle_created_at: string
+          p_outbox_idempotency_key: string
+          p_outbox_payload: Json
+          p_outbox_target: string
+          p_pick_id: string
+          p_reason: string
+          p_to_state: string
+          p_writer_role: string
+        }
+        Returns: Json
+      }
+      process_submission_atomic: {
+        Args: {
+          p_event: Json
+          p_idempotency_key?: string
+          p_lifecycle_event?: Json
+          p_pick: Json
+          p_submission: Json
+        }
+        Returns: Json
+      }
+      settle_pick_atomic: {
+        Args: {
+          p_audit_action: string
+          p_audit_actor: string
+          p_audit_payload: Json
+          p_lifecycle_from_state: string
+          p_lifecycle_reason: string
+          p_lifecycle_to_state: string
+          p_lifecycle_writer_role: string
+          p_pick_id: string
+          p_settlement: Json
+        }
+        Returns: Json
+      }
     }
     Enums: {
       [_ in never]: never
@@ -1313,3 +1603,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
