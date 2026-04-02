@@ -34,6 +34,7 @@ import {
   handleReferenceDataLeagues,
   handleReferenceDataMatchups,
   handleReferenceDataEventBrowse,
+  handleReferenceDataSearchBrowse,
   handleReferenceDataSearchTeams,
   handleReferenceDataSearchPlayers,
   handleReferenceDataEvents,
@@ -276,6 +277,10 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/reference-data/search/players') {
     return handleReferenceDataSearchPlayers(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/search') {
+    return handleReferenceDataSearchBrowse(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/reference-data/events') {

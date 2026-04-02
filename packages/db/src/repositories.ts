@@ -585,6 +585,16 @@ export interface EventSearchResult {
   sportId: string;
 }
 
+export interface BrowseSearchResult {
+  resultType: 'player' | 'team' | 'matchup';
+  participantId: string | null;
+  displayName: string;
+  contextLabel: string;
+  teamId: string | null;
+  teamName: string | null;
+  matchup: MatchupBrowseResult;
+}
+
 export interface LeagueBrowseResult {
   id: string;
   sportId: string;
@@ -655,6 +665,7 @@ export interface ReferenceDataRepository {
   searchTeams(sportId: string, query: string, limit?: number): Promise<TeamSearchResult[]>;
   searchPlayers(sportId: string, query: string, limit?: number): Promise<PlayerSearchResult[]>;
   listEvents(sportId: string, date: string): Promise<EventSearchResult[]>;
+  searchBrowse(sportId: string, date: string, query: string, limit?: number): Promise<BrowseSearchResult[]>;
 }
 
 export interface RepositoryBundle {

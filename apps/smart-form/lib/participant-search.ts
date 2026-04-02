@@ -3,12 +3,12 @@
  * No UI dependencies — safe to import in tests and server contexts.
  */
 
-const OPERATOR_WEB_URL = process.env.NEXT_PUBLIC_OPERATOR_WEB_URL ?? 'http://127.0.0.1:4200';
-const PARTICIPANT_LIMIT = 10;
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
 
 export type ParticipantSearchType = 'player' | 'team';
 
 export interface ParticipantSuggestion {
+  participantId: string;
   displayName: string;
   participantType: ParticipantSearchType;
 }
@@ -24,23 +24,22 @@ export function buildParticipantSearchUrl(
 ): string {
   const params = new URLSearchParams({
     q: query.trim(),
-    type: participantType,
-    limit: String(PARTICIPANT_LIMIT),
+    sport: sport?.trim() ?? '',
   });
-
-  if (sport?.trim()) {
-    params.set('sport', sport.trim());
+  if (params.get('sport') === '') {
+    params.delete('sport');
   }
+  const endpoint = participantType === 'player' ? 'players' : 'teams';
 
-  return `${OPERATOR_WEB_URL}/api/operator/participants?${params.toString()}`;
+  return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
 }
 
 export function normalizeParticipantSearchResults(
   payload: unknown,
   expectedType: ParticipantSearchType,
 ): ParticipantSuggestion[] {
-  const participants = isRecord(payload) && Array.isArray(payload.participants)
-    ? payload.participants
+  const participants = isRecord(payload) && Array.isArray(payload.data)
+    ? payload.data
     : [];
   const seen = new Set<string>();
 
@@ -50,7 +49,10 @@ export function normalizeParticipantSearchResults(
         return [];
       }
 
-      if (typeof row.displayName !== 'string' || row.participantType !== expectedType) {
+      if (
+        typeof row.participantId !== 'string' ||
+        typeof row.displayName !== 'string'
+      ) {
         return [];
       }
 
@@ -65,7 +67,7 @@ export function normalizeParticipantSearchResults(
       }
 
       seen.add(dedupeKey);
-      return [{ displayName, participantType: expectedType }];
+      return [{ participantId: row.participantId, displayName, participantType: expectedType }];
     })
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }

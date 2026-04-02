@@ -14,6 +14,7 @@ export {
   handleReferenceDataLeagues,
   handleReferenceDataMatchups,
   handleReferenceDataEventBrowse,
+  handleReferenceDataSearchBrowse,
   handleReferenceDataSearchTeams,
   handleReferenceDataSearchPlayers,
   handleReferenceDataEvents,

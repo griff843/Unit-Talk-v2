@@ -503,6 +503,66 @@ test('GET /api/reference-data/events/:id/browse returns grouped live offers with
   }
 });
 
+test('GET /api/reference-data/search returns canonical browse search results with matchup context', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.referenceData = {
+    ...repositories.referenceData,
+    async searchBrowse(sportId: string, date: string, query: string) {
+      if (sportId !== 'NBA' || date !== '2026-04-02' || query !== 'Jam') {
+        return [];
+      }
+
+      return [
+        {
+          resultType: 'player' as const,
+          participantId: 'player-murray',
+          displayName: 'Jamal Murray',
+          contextLabel: 'Nuggets · Jazz @ Nuggets · Apr 2, 7:00 PM',
+          teamId: 'nba:nuggets',
+          teamName: 'Nuggets',
+          matchup: {
+            eventId: 'event-1',
+            externalId: 'NBA_20260402_DEN_UTA',
+            eventName: 'Nuggets vs Jazz',
+            eventDate: '2026-04-02T23:00:00.000Z',
+            status: 'scheduled',
+            sportId: 'NBA',
+            leagueId: 'nba',
+            teams: [
+              { participantId: 'team-uta', teamId: 'nba:jazz', displayName: 'Jazz', role: 'away' as const },
+              { participantId: 'team-den', teamId: 'nba:nuggets', displayName: 'Nuggets', role: 'home' as const },
+            ],
+          },
+        },
+      ];
+    },
+  };
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/search?sport=NBA&date=2026-04-02&q=Jam`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: Array<{ resultType: string; displayName: string; matchup: { eventId: string } }>;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data?.[0]?.resultType, 'player');
+    assert.equal(body.data?.[0]?.displayName, 'Jamal Murray');
+    assert.equal(body.data?.[0]?.matchup.eventId, 'event-1');
+  } finally {
+    server.close();
+  }
+});
+
 test('GET /api/reference-data/search/teams returns 400 without sport param', async () => {
   const server = createApiServer({
     repositories: createInMemoryRepositoryBundle(),

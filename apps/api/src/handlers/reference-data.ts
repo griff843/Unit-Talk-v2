@@ -1,5 +1,6 @@
 import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
+  BrowseSearchResult,
   EventBrowseResult,
   EventSearchResult,
   LeagueBrowseResult,
@@ -57,6 +58,29 @@ export async function handleSearchPlayers(
 
   try {
     const results = await repository.searchPlayers(params.sport, params.q);
+    return successResponse(200, results);
+  } catch (error) {
+    const apiError = normalizeApiError(error);
+    return errorResponse(apiError.status, apiError.code, apiError.message);
+  }
+}
+
+export async function handleSearchBrowse(
+  params: { sport?: string; date?: string; q?: string },
+  repository: ReferenceDataRepository,
+): Promise<ApiResponse<BrowseSearchResult[]>> {
+  if (!params.sport) {
+    return errorResponse(400, 'MISSING_PARAM', 'Query parameter "sport" is required');
+  }
+  if (!params.date) {
+    return errorResponse(400, 'MISSING_PARAM', 'Query parameter "date" is required');
+  }
+  if (!params.q || params.q.length < 2) {
+    return errorResponse(400, 'QUERY_TOO_SHORT', 'Query parameter "q" must be at least 2 characters');
+  }
+
+  try {
+    const results = await repository.searchBrowse(params.sport, params.date, params.q);
     return successResponse(200, results);
   } catch (error) {
     const apiError = normalizeApiError(error);
