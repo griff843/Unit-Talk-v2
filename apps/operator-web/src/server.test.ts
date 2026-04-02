@@ -4266,3 +4266,253 @@ test('createSnapshotFromRows aging detects stuck processing outbox rows older th
   assert.ok(workerSignal, 'Expected degraded worker signal for stuck processing outbox');
   assert.equal(workerSignal.status, 'degraded');
 });
+
+test('GET /api/operator/intelligence-coverage returns burn-in enrichment aggregates', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-1',
+        created_at: '2026-04-02T02:00:00.000Z',
+        odds: -110,
+        metadata: {
+          domainAnalysis: {
+            realEdge: 0.06,
+            realEdgeSource: 'pinnacle',
+          },
+          deviggingResult: { impliedProbability: 0.54 },
+          kellySizing: { kellyFraction: 0.03 },
+        },
+      },
+      {
+        id: 'pick-2',
+        created_at: '2026-04-02T03:00:00.000Z',
+        odds: -120,
+        metadata: {
+          domainAnalysis: {
+            confidenceDelta: 0.08,
+            realEdgeSource: 'confidence-delta',
+          },
+        },
+      },
+      {
+        id: 'pick-3',
+        created_at: '2026-04-02T04:00:00.000Z',
+        odds: null,
+        metadata: {},
+      },
+    ],
+    settlement_records: [
+      {
+        id: 'settlement-1',
+        created_at: '2026-04-02T05:00:00.000Z',
+        status: 'settled',
+        payload: { clvRaw: 0.12 },
+      },
+      {
+        id: 'settlement-2',
+        created_at: '2026-04-02T06:00:00.000Z',
+        status: 'settled',
+        payload: {},
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/intelligence-coverage?window=7d');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      window: string;
+      totalPicks: number;
+      picksWithOdds: number;
+      domainAnalysis: { count: number; rate: number };
+      deviggingResult: { count: number; rate: number };
+      kellySizing: { count: number; rate: number };
+      realEdge: { count: number; rate: number };
+      edgeSourceDistribution: Record<string, number>;
+      clvCoverage: { settledPicks: number; withClv: number; rate: number };
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.window, '7d');
+  assert.equal(body.data.totalPicks, 3);
+  assert.equal(body.data.picksWithOdds, 2);
+  assert.equal(body.data.domainAnalysis.count, 2);
+  assert.equal(body.data.domainAnalysis.rate, 1);
+  assert.equal(body.data.deviggingResult.count, 1);
+  assert.equal(body.data.kellySizing.count, 1);
+  assert.equal(body.data.realEdge.count, 1);
+  assert.equal(body.data.edgeSourceDistribution.realEdge, 1);
+  assert.equal(body.data.edgeSourceDistribution.confidenceDelta, 1);
+  assert.equal(body.data.edgeSourceDistribution.unknown, 1);
+  assert.equal(body.data.clvCoverage.settledPicks, 2);
+  assert.equal(body.data.clvCoverage.withClv, 1);
+  assert.equal(body.data.clvCoverage.rate, 0.5);
+});
+
+test('GET /api/operator/provider-health returns provider freshness and quota truth', async () => {
+  const now = Date.now();
+  const provider = createAggregateProvider({
+    provider_offers: [
+      {
+        provider_key: 'sgo',
+        created_at: new Date(now - 10 * 60 * 1000).toISOString(),
+        snapshot_at: new Date(now - 5 * 60 * 1000).toISOString(),
+        provider_event_id: 'event-1',
+      },
+      {
+        provider_key: 'sgo',
+        created_at: new Date(now - 20 * 60 * 1000).toISOString(),
+        snapshot_at: new Date(now - 15 * 60 * 1000).toISOString(),
+        provider_event_id: 'event-2',
+      },
+      {
+        provider_key: 'odds-api:pinnacle',
+        created_at: new Date(now - 2 * 60 * 60 * 1000).toISOString(),
+        snapshot_at: new Date(now - 90 * 60 * 1000).toISOString(),
+        provider_event_id: 'event-1',
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/provider-health');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      providers: Array<{
+        providerKey: string;
+        totalRows: number;
+        last24hRows: number;
+        status: string;
+        latestSnapshotAt: string | null;
+      }>;
+      ingestorHealth: { status: string; lastRunAt: string | null };
+      quotaSummary: {
+        sgo: { creditsUsed: number; creditsRemaining: number | null } | null;
+        oddsApi: { creditsUsed: number; creditsRemaining: number | null } | null;
+      };
+      distinctEventsLast24h: number;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  const sgoRow = body.data.providers.find((row) => row.providerKey === 'sgo');
+  const oddsRow = body.data.providers.find((row) => row.providerKey === 'odds-api:pinnacle');
+  assert.ok(sgoRow);
+  assert.equal(sgoRow?.totalRows, 2);
+  assert.equal(sgoRow?.last24hRows, 2);
+  assert.equal(sgoRow?.status, 'active');
+  assert.ok(oddsRow);
+  assert.equal(oddsRow?.status, 'stale');
+  assert.equal(body.data.distinctEventsLast24h, 2);
+  assert.equal(typeof body.data.ingestorHealth.status, 'string');
+  assert.ok(body.data.quotaSummary.sgo === null || typeof body.data.quotaSummary.sgo.creditsUsed === 'number');
+});
+
+function createAggregateProvider(tables: Record<string, Array<Record<string, unknown>>>): OperatorSnapshotProvider {
+  return {
+    ...createStaticProvider(),
+    _supabaseClient: createMockSupabaseClient(tables),
+  };
+}
+
+function createMockSupabaseClient(tables: Record<string, Array<Record<string, unknown>>>) {
+  return {
+    from(table: string) {
+      return new MockSupabaseQuery(tables[table] ?? []);
+    },
+  };
+}
+
+class MockSupabaseQuery {
+  private readonly rows: Array<Record<string, unknown>>;
+  private filters: Array<(row: Record<string, unknown>) => boolean> = [];
+  private sortField: string | null = null;
+  private sortAscending = true;
+  private resultLimit: number | null = null;
+
+  constructor(rows: Array<Record<string, unknown>>) {
+    this.rows = rows.map((row) => ({ ...row }));
+  }
+
+  select() {
+    return this;
+  }
+
+  eq(field: string, value: unknown) {
+    this.filters.push((row) => row[field] === value);
+    return this;
+  }
+
+  gte(field: string, value: unknown) {
+    this.filters.push((row) => compareSortable(row[field], value) >= 0);
+    return this;
+  }
+
+  order(field: string, options?: { ascending?: boolean }) {
+    this.sortField = field;
+    this.sortAscending = options?.ascending ?? true;
+    return this;
+  }
+
+  limit(limit: number) {
+    this.resultLimit = limit;
+    return this;
+  }
+
+  then<TResult1 = { data: Array<Record<string, unknown>>; error: null }, TResult2 = never>(
+    onfulfilled?: ((value: { data: Array<Record<string, unknown>>; error: null }) => TResult1 | PromiseLike<TResult1>) | null,
+    onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null,
+  ) {
+    return Promise.resolve(this.execute()).then(onfulfilled, onrejected);
+  }
+
+  private execute() {
+    let rows = [...this.rows];
+    for (const filter of this.filters) {
+      rows = rows.filter(filter);
+    }
+
+    if (this.sortField) {
+      const field = this.sortField;
+      const direction = this.sortAscending ? 1 : -1;
+      rows.sort((left, right) => compareSortable(left[field], right[field]) * direction);
+    }
+
+    if (this.resultLimit != null) {
+      rows = rows.slice(0, this.resultLimit);
+    }
+
+    return { data: rows, error: null };
+  }
+}
+
+function compareSortable(left: unknown, right: unknown) {
+  if (typeof left === 'number' && typeof right === 'number') {
+    return left - right;
+  }
+
+  const leftValue = left == null ? '' : String(left);
+  const rightValue = right == null ? '' : String(right);
+  return leftValue.localeCompare(rightValue);
+}

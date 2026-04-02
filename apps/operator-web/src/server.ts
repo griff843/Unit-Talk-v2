@@ -43,6 +43,8 @@ import { handlePickSearchRequest } from './routes/pick-search.js';
 import { handleReviewHistoryRequest } from './routes/review-history.js';
 import { handlePerformanceRequest } from './routes/performance.js';
 import { handleIntelligenceRequest } from './routes/intelligence.js';
+import { handleIntelligenceCoverageRequest } from './routes/intelligence-coverage.js';
+import { handleProviderHealthRequest } from './routes/provider-health.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
 
 export interface OperatorHealthSignal {
@@ -455,6 +457,14 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/intelligence') {
     return handleIntelligenceRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/intelligence-coverage') {
+    return handleIntelligenceCoverageRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/provider-health') {
+    return handleProviderHealthRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/exception-queues') {
@@ -2390,4 +2400,4 @@ function computeStreak(rows: StatsRow[]) {
   }
 
   return firstResult === 'win' ? streak : -streak;
-}
+}

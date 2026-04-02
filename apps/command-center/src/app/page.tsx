@@ -2,9 +2,9 @@ import { Card } from '@/components/ui/Card';
 import { ExceptionPanel } from '@/components/ExceptionPanel';
 import { HealthSignalsPanel } from '@/components/HealthSignalsPanel';
 import { PickLifecycleTable } from '@/components/PickLifecycleTable';
-import { fetchDashboardData } from '@/lib/api';
+import { fetchDashboardData, fetchDashboardRuntimeData } from '@/lib/api';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
-import type { DashboardData, LifecycleSignal } from '@/lib/types';
+import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
@@ -78,8 +78,12 @@ export default async function DashboardPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   let data: DashboardData;
+  let runtime: DashboardRuntimeData;
   try {
-    data = await fetchDashboardData();
+    [data, runtime] = await Promise.all([
+      fetchDashboardData(),
+      fetchDashboardRuntimeData(),
+    ]);
   } catch {
     data = {
       signals: BROKEN_SIGNALS,
@@ -87,6 +91,35 @@ export default async function DashboardPage({
       stats: { total: 0, wins: 0, losses: 0, pushes: 0, roiPct: null },
       exceptions: [],
       observedAt: new Date().toISOString(),
+    };
+    runtime = {
+      outbox: {
+        pending: 0,
+        processing: 0,
+        sent: 0,
+        failed: 0,
+        deadLetter: 0,
+        simulated: 0,
+      },
+      worker: {
+        drainState: 'unknown',
+        detail: 'Unavailable',
+        latestRunAt: null,
+        latestReceiptAt: null,
+      },
+      aging: {
+        staleValidated: 0,
+        stalePosted: 0,
+        staleProcessing: 0,
+      },
+      deliveryTargets: [],
+      providerSummary: {
+        active: 0,
+        stale: 0,
+        absent: 0,
+        distinctEventsLast24h: 0,
+        ingestorStatus: 'unknown',
+      },
     };
   }
 
@@ -104,6 +137,57 @@ export default async function DashboardPage({
       </div>
 
       <HealthSignalsPanel signals={data.signals} drilldownLinks={buildDrilldownLinks(data.signals)} />
+
+      <div className="grid gap-4 xl:grid-cols-3">
+        <Card title="Delivery State">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><span className="text-gray-400">Pending</span> <span className="font-bold">{runtime.outbox.pending}</span></div>
+            <div><span className="text-gray-400">Processing</span> <span className="font-bold">{runtime.outbox.processing}</span></div>
+            <div><span className="text-gray-400">Sent</span> <span className="font-bold text-green-400">{runtime.outbox.sent}</span></div>
+            <div><span className="text-gray-400">Failed</span> <span className="font-bold text-yellow-400">{runtime.outbox.failed}</span></div>
+            <div><span className="text-gray-400">Dead-letter</span> <span className="font-bold text-red-400">{runtime.outbox.deadLetter}</span></div>
+            <div><span className="text-gray-400">Simulated</span> <span className="font-bold">{runtime.outbox.simulated}</span></div>
+          </div>
+          <div className="mt-4 space-y-1 text-xs text-gray-500">
+            <div>Stale validated: {runtime.aging.staleValidated}</div>
+            <div>Stale posted: {runtime.aging.stalePosted}</div>
+            <div>Stale processing: {runtime.aging.staleProcessing}</div>
+          </div>
+        </Card>
+
+        <Card title="Worker Runtime">
+          <div className="space-y-2 text-sm">
+            <div>
+              <span className="text-gray-400">Drain state</span>{' '}
+              <span className="font-bold text-gray-100">{runtime.worker.drainState}</span>
+            </div>
+            <div className="text-xs text-gray-500">{runtime.worker.detail}</div>
+            <div className="text-xs text-gray-500">
+              Latest run: {runtime.worker.latestRunAt ? new Date(runtime.worker.latestRunAt).toLocaleString() : '—'}
+            </div>
+            <div className="text-xs text-gray-500">
+              Latest receipt: {runtime.worker.latestReceiptAt ? new Date(runtime.worker.latestReceiptAt).toLocaleString() : '—'}
+            </div>
+          </div>
+        </Card>
+
+        <Card title="Provider Health">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><span className="text-gray-400">Active</span> <span className="font-bold text-green-400">{runtime.providerSummary.active}</span></div>
+            <div><span className="text-gray-400">Stale</span> <span className="font-bold text-yellow-400">{runtime.providerSummary.stale}</span></div>
+            <div><span className="text-gray-400">Absent</span> <span className="font-bold text-red-400">{runtime.providerSummary.absent}</span></div>
+            <div><span className="text-gray-400">Events (24h)</span> <span className="font-bold">{runtime.providerSummary.distinctEventsLast24h}</span></div>
+          </div>
+          <div className="mt-4 space-y-2 text-xs text-gray-500">
+            <div>Ingestor status: {runtime.providerSummary.ingestorStatus}</div>
+            {runtime.deliveryTargets.map((target) => (
+              <div key={target.target}>
+                {target.target}: {target.recentSentCount} sent / {target.recentFailureCount} failed
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
 
       {data.exceptions.length > 0 && (
         <ExceptionPanel exceptions={data.exceptions} />

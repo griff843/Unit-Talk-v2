@@ -1,10 +1,13 @@
 import type {
   DashboardData,
+  DashboardRuntimeData,
   DeliveryStatus,
+  IntelligenceCoverage,
   LifecycleSignal,
   LifecycleStatus,
   OperationalException,
   PickRow,
+  ProviderHealth,
   SettlementStatus,
   SignalStatus,
   StatsSnapshot,
@@ -15,8 +18,13 @@ const OPERATOR_WEB_BASE =
 
 // ── Raw fetch helpers ────────────────────────────────────────────────────────
 
-export async function fetchSnapshot(): Promise<unknown> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/snapshot`, {
+export async function fetchSnapshot(limit?: number): Promise<unknown> {
+  const params = new URLSearchParams();
+  if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
+    params.set('limit', String(Math.round(limit)));
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/snapshot${suffix}`, {
     cache: 'no-store',
   });
   if (!res.ok) throw new Error(`Snapshot fetch failed: ${res.status}`);
@@ -37,6 +45,38 @@ export async function fetchRecap(): Promise<unknown> {
   });
   if (!res.ok) throw new Error(`Recap fetch failed: ${res.status}`);
   return res.json();
+}
+
+export async function fetchExceptionQueues(): Promise<unknown> {
+  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/exception-queues`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Exception queues fetch failed: ${res.status}`);
+  return res.json();
+}
+
+export async function fetchIntelligenceCoverage(window = '7d'): Promise<IntelligenceCoverage> {
+  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/intelligence-coverage?window=${encodeURIComponent(window)}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Intelligence coverage fetch failed: ${res.status}`);
+  const json = (await res.json()) as { ok: boolean; data: IntelligenceCoverage };
+  if (!json.ok) {
+    throw new Error('Intelligence coverage fetch failed');
+  }
+  return json.data;
+}
+
+export async function fetchProviderHealth(): Promise<ProviderHealth> {
+  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/provider-health`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Provider health fetch failed: ${res.status}`);
+  const json = (await res.json()) as { ok: boolean; data: ProviderHealth };
+  if (!json.ok) {
+    throw new Error('Provider health fetch failed');
+  }
+  return json.data;
 }
 
 // ── Type-safe accessors (unknown → primitive) ────────────────────────────────
@@ -66,6 +106,10 @@ function asStringOrNull(v: unknown): string | null {
 
 function asNumberOrNull(v: unknown): number | null {
   return typeof v === 'number' ? v : null;
+}
+
+function asBoolean(v: unknown, fallback = false): boolean {
+  return typeof v === 'boolean' ? v : fallback;
 }
 
 // ── Signal derivation ────────────────────────────────────────────────────────
@@ -543,4 +587,74 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const observedAt = asString(snap['observedAt'], new Date().toISOString());
 
   return { signals, picks, stats, exceptions, observedAt };
+}
+
+export async function fetchDashboardRuntimeData(): Promise<DashboardRuntimeData> {
+  const [snapshot, providerHealth] = await Promise.all([
+    fetchSnapshot(),
+    fetchProviderHealth(),
+  ]);
+  const snap = unwrapResponse(snapshot);
+  const counts = asRecord(snap['counts']);
+  const workerRuntime = asRecord(snap['workerRuntime']);
+  const aging = asRecord(snap['aging']);
+  const canary = asRecord(snap['canary']);
+  const bestBets = asRecord(snap['bestBets']);
+  const traderInsights = asRecord(snap['traderInsights']);
+
+  const activeProviders = providerHealth.providers.filter((provider) => provider.status === 'active').length;
+  const staleProviders = providerHealth.providers.filter((provider) => provider.status === 'stale').length;
+  const absentProviders = providerHealth.providers.filter((provider) => provider.status === 'absent').length;
+
+  return {
+    outbox: {
+      pending: asNumber(counts['pendingOutbox']),
+      processing: asNumber(counts['processingOutbox']),
+      sent: asNumber(counts['sentOutbox']),
+      failed: asNumber(counts['failedOutbox']),
+      deadLetter: asNumber(counts['deadLetterOutbox']),
+      simulated: asNumber(counts['simulatedDeliveries']),
+    },
+    worker: {
+      drainState: asString(workerRuntime['drainState'], 'unknown'),
+      detail: asString(workerRuntime['detail'], 'Unavailable'),
+      latestRunAt: asStringOrNull(workerRuntime['latestDistributionRunAt']),
+      latestReceiptAt: asStringOrNull(workerRuntime['latestReceiptRecordedAt']),
+    },
+    aging: {
+      staleValidated: asNumber(aging['staleValidated']),
+      stalePosted: asNumber(aging['stalePosted']),
+      staleProcessing: asNumber(aging['staleProcessing']),
+    },
+    deliveryTargets: [
+      {
+        target: asString(canary['target'], 'discord:canary'),
+        recentSentCount: asNumber(canary['recentSentCount']),
+        recentFailureCount: asNumber(canary['recentFailureCount']),
+        latestSentAt: asStringOrNull(canary['latestSentAt']),
+        healthy: asBoolean(canary['graduationReady'], false),
+      },
+      {
+        target: asString(bestBets['target'], 'discord:best-bets'),
+        recentSentCount: asNumber(bestBets['recentSentCount']),
+        recentFailureCount: asNumber(bestBets['recentFailureCount']),
+        latestSentAt: asStringOrNull(bestBets['latestSentAt']),
+        healthy: asBoolean(bestBets['activationHealthy'], false),
+      },
+      {
+        target: asString(traderInsights['target'], 'discord:trader-insights'),
+        recentSentCount: asNumber(traderInsights['recentSentCount']),
+        recentFailureCount: asNumber(traderInsights['recentFailureCount']),
+        latestSentAt: asStringOrNull(traderInsights['latestSentAt']),
+        healthy: asBoolean(traderInsights['activationHealthy'], false),
+      },
+    ],
+    providerSummary: {
+      active: activeProviders,
+      stale: staleProviders,
+      absent: absentProviders,
+      distinctEventsLast24h: providerHealth.distinctEventsLast24h,
+      ingestorStatus: providerHealth.ingestorHealth.status,
+    },
+  };
 }
