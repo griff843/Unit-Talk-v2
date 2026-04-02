@@ -326,6 +326,183 @@ test('GET /api/reference-data/search/teams returns matching teams', async () => 
   }
 });
 
+test('GET /api/reference-data/leagues returns canonical leagues for a sport', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.referenceData = {
+    ...repositories.referenceData,
+    async listLeagues(sportId: string) {
+      return sportId === 'NBA'
+        ? [{ id: 'nba', sportId: 'NBA', displayName: 'NBA' }]
+        : [];
+    },
+    async listMatchups() {
+      return [];
+    },
+    async getEventBrowse() {
+      return null;
+    },
+  };
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/leagues?sport=NBA`,
+    );
+    const body = (await response.json()) as { ok: boolean; data?: Array<{ id: string; sportId: string }> };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.deepEqual(body.data, [{ id: 'nba', sportId: 'NBA', displayName: 'NBA' }]);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/reference-data/matchups returns canonical matchup browse rows', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.referenceData = {
+    ...repositories.referenceData,
+    async listLeagues() {
+      return [];
+    },
+    async listMatchups(sportId: string, date: string) {
+      if (sportId !== 'NBA' || date !== '2026-04-02') {
+        return [];
+      }
+      return [
+        {
+          eventId: 'event-1',
+          externalId: 'NBA_20260402_DEN_UTA',
+          eventName: 'Nuggets vs Jazz',
+          eventDate: '2026-04-02',
+          status: 'scheduled',
+          sportId: 'NBA',
+          leagueId: 'nba',
+          teams: [
+            { participantId: 'team-uta', teamId: 'nba:jazz', displayName: 'Jazz', role: 'home' as const },
+            { participantId: 'team-den', teamId: 'nba:nuggets', displayName: 'Nuggets', role: 'away' as const },
+          ],
+        },
+      ];
+    },
+    async getEventBrowse() {
+      return null;
+    },
+  };
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/matchups?sport=NBA&date=2026-04-02`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: Array<{ eventId: string; teams: Array<{ teamId: string | null; role: string }> }>;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data?.[0]?.eventId, 'event-1');
+    assert.equal(body.data?.[0]?.teams[0]?.teamId, 'nba:jazz');
+    assert.equal(body.data?.[0]?.teams[1]?.role, 'away');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/reference-data/events/:id/browse returns grouped live offers with canonical entities', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.referenceData = {
+    ...repositories.referenceData,
+    async listLeagues() {
+      return [];
+    },
+    async listMatchups() {
+      return [];
+    },
+    async getEventBrowse(eventId: string) {
+      if (eventId !== 'event-1') {
+        return null;
+      }
+      return {
+        eventId: 'event-1',
+        externalId: 'NBA_20260402_DEN_UTA',
+        eventName: 'Nuggets vs Jazz',
+        eventDate: '2026-04-02',
+        status: 'scheduled',
+        sportId: 'NBA',
+        leagueId: 'nba',
+        participants: [
+          {
+            participantId: 'player-murray',
+            canonicalId: 'player-murray',
+            participantType: 'player' as const,
+            displayName: 'Jamal Murray',
+            role: 'competitor',
+            teamId: 'nba:nuggets',
+            teamName: 'Nuggets',
+          },
+        ],
+        offers: [
+          {
+            sportsbookId: 'draftkings',
+            sportsbookName: 'DraftKings',
+            marketTypeId: 'player_assists_ou',
+            marketDisplayName: 'Player Assists',
+            participantId: 'player-murray',
+            participantName: 'Jamal Murray',
+            line: 7,
+            overOdds: -140,
+            underOdds: 110,
+            snapshotAt: '2026-04-02T00:00:00.000Z',
+            providerKey: 'odds-api:draftkings',
+            providerMarketKey: 'assists-all-game-ou',
+            providerParticipantId: 'JAMAL_MURRAY_1_NBA',
+          },
+        ],
+      };
+    },
+  };
+
+  const server = createApiServer({ repositories });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/events/event-1/browse`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: {
+        participants: Array<{ canonicalId: string | null }>;
+        offers: Array<{ sportsbookId: string | null; marketTypeId: string | null; participantName: string | null }>;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data?.participants[0]?.canonicalId, 'player-murray');
+    assert.equal(body.data?.offers[0]?.sportsbookId, 'draftkings');
+    assert.equal(body.data?.offers[0]?.marketTypeId, 'player_assists_ou');
+    assert.equal(body.data?.offers[0]?.participantName, 'Jamal Murray');
+  } finally {
+    server.close();
+  }
+});
+
 test('GET /api/reference-data/search/teams returns 400 without sport param', async () => {
   const server = createApiServer({
     repositories: createInMemoryRepositoryBundle(),

@@ -31,6 +31,9 @@ import {
   handleOverridePromotionRoute,
   handleRequeuePick,
   handleReferenceDataCatalog,
+  handleReferenceDataLeagues,
+  handleReferenceDataMatchups,
+  handleReferenceDataEventBrowse,
   handleReferenceDataSearchTeams,
   handleReferenceDataSearchPlayers,
   handleReferenceDataEvents,
@@ -259,6 +262,14 @@ export async function routeRequest(
     return handleReferenceDataCatalog(request, response, runtime);
   }
 
+  if (method === 'GET' && url.pathname === '/api/reference-data/leagues') {
+    return handleReferenceDataLeagues(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/reference-data/matchups') {
+    return handleReferenceDataMatchups(request, response, runtime);
+  }
+
   if (method === 'GET' && url.pathname === '/api/reference-data/search/teams') {
     return handleReferenceDataSearchTeams(request, response, runtime);
   }
@@ -269,6 +280,20 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/reference-data/events') {
     return handleReferenceDataEvents(request, response, runtime);
+  }
+
+  const referenceDataEventBrowseMatch =
+    method === 'GET'
+      ? /^\/api\/reference-data\/events\/([^/]+)\/browse$/.exec(url.pathname)
+      : null;
+
+  if (referenceDataEventBrowseMatch) {
+    return handleReferenceDataEventBrowse(
+      request,
+      response,
+      runtime,
+      referenceDataEventBrowseMatch[1] ?? '',
+    );
   }
 
   if (method === 'GET' && url.pathname === '/api/alerts/recent') {

@@ -1,6 +1,9 @@
 import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
+  EventBrowseResult,
   EventSearchResult,
+  LeagueBrowseResult,
+  MatchupBrowseResult,
   PlayerSearchResult,
   ReferenceDataRepository,
   TeamSearchResult,
@@ -55,6 +58,63 @@ export async function handleSearchPlayers(
   try {
     const results = await repository.searchPlayers(params.sport, params.q);
     return successResponse(200, results);
+  } catch (error) {
+    const apiError = normalizeApiError(error);
+    return errorResponse(apiError.status, apiError.code, apiError.message);
+  }
+}
+
+export async function handleListLeagues(
+  params: { sport?: string },
+  repository: ReferenceDataRepository,
+): Promise<ApiResponse<LeagueBrowseResult[]>> {
+  if (!params.sport) {
+    return errorResponse(400, 'MISSING_PARAM', 'Query parameter "sport" is required');
+  }
+
+  try {
+    const results = await repository.listLeagues(params.sport);
+    return successResponse(200, results);
+  } catch (error) {
+    const apiError = normalizeApiError(error);
+    return errorResponse(apiError.status, apiError.code, apiError.message);
+  }
+}
+
+export async function handleListMatchups(
+  params: { sport?: string; date?: string },
+  repository: ReferenceDataRepository,
+): Promise<ApiResponse<MatchupBrowseResult[]>> {
+  if (!params.sport) {
+    return errorResponse(400, 'MISSING_PARAM', 'Query parameter "sport" is required');
+  }
+  if (!params.date) {
+    return errorResponse(400, 'MISSING_PARAM', 'Query parameter "date" is required');
+  }
+
+  try {
+    const results = await repository.listMatchups(params.sport, params.date);
+    return successResponse(200, results);
+  } catch (error) {
+    const apiError = normalizeApiError(error);
+    return errorResponse(apiError.status, apiError.code, apiError.message);
+  }
+}
+
+export async function handleGetEventBrowse(
+  params: { eventId?: string },
+  repository: ReferenceDataRepository,
+): Promise<ApiResponse<EventBrowseResult>> {
+  if (!params.eventId) {
+    return errorResponse(400, 'MISSING_PARAM', 'Route parameter "eventId" is required');
+  }
+
+  try {
+    const result = await repository.getEventBrowse(params.eventId);
+    if (!result) {
+      return errorResponse(404, 'EVENT_NOT_FOUND', `Event not found: ${params.eventId}`);
+    }
+    return successResponse(200, result);
   } catch (error) {
     const apiError = normalizeApiError(error);
     return errorResponse(apiError.status, apiError.code, apiError.message);
