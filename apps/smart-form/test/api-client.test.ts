@@ -4,6 +4,7 @@ import {
   getCatalog,
   getEventBrowse,
   getMatchups,
+  searchBrowse,
   submitPick,
 } from '../lib/api-client.ts';
 import {
@@ -148,6 +149,47 @@ test('getEventBrowse calls the canonical event browse endpoint', async () => {
   assert.equal(
     capturedUrl,
     'http://127.0.0.1:4000/api/reference-data/events/evt-1/browse',
+  );
+
+  restoreFetch();
+});
+
+test('searchBrowse calls the canonical browse search endpoint', async () => {
+  let capturedUrl = '';
+  const restoreFetch = installFetchMock(async (url) => {
+    capturedUrl = url;
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            resultType: 'player',
+            participantId: 'player-jamal',
+            displayName: 'Jamal Murray',
+            contextLabel: 'Nuggets · Jazz @ Nuggets · Apr 2, 11:00 PM',
+            teamId: 'team-nuggets',
+            teamName: 'Nuggets',
+            matchup: {
+              eventId: 'evt-1',
+              externalId: 'nba-evt-1',
+              eventName: 'Nuggets vs Jazz',
+              eventDate: '2026-04-02T23:00:00.000Z',
+              status: 'scheduled',
+              sportId: 'NBA',
+              leagueId: 'nba',
+              teams: [],
+            },
+          },
+        ],
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  });
+
+  const result = await searchBrowse('NBA', '2026-04-02', 'Jam');
+  assert.equal(result[0]?.displayName, 'Jamal Murray');
+  assert.equal(
+    capturedUrl,
+    'http://127.0.0.1:4000/api/reference-data/search?sport=NBA&date=2026-04-02&q=Jam',
   );
 
   restoreFetch();

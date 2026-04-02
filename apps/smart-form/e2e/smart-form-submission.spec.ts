@@ -96,7 +96,30 @@ const eventBrowseResponse = {
   },
 };
 
-test('live-offer browse flow supports canonical matchup selection and successful submission', async ({ page }) => {
+const browseSearchResponse = {
+  data: [
+    {
+      resultType: 'player',
+      participantId: 'player-jamal',
+      displayName: 'Jamal Murray',
+      contextLabel: 'Nuggets · Jazz @ Nuggets · Apr 2, 11:00 PM',
+      teamId: 'team-nuggets',
+      teamName: 'Nuggets',
+      matchup: matchupResponse.data[0],
+    },
+    {
+      resultType: 'matchup',
+      participantId: null,
+      displayName: 'Jazz @ Nuggets',
+      contextLabel: 'NBA · Apr 2, 11:00 PM',
+      teamId: null,
+      teamName: null,
+      matchup: matchupResponse.data[0],
+    },
+  ],
+};
+
+test('live-offer search flow supports canonical entity selection and successful submission', async ({ page }) => {
   let submittedPayload: Record<string, unknown> | null = null;
 
   await page.route('**/api/reference-data/catalog', async (route) => {
@@ -120,6 +143,14 @@ test('live-offer browse flow supports canonical matchup selection and successful
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify(eventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(browseSearchResponse),
     });
   });
 
@@ -151,12 +182,16 @@ test('live-offer browse flow supports canonical matchup selection and successful
   await page.locator('button[role="combobox"]').nth(0).click();
   await page.getByRole('option', { name: 'NBA' }).click();
 
-  await expect(page.getByText('Jazz @ Nuggets')).toBeVisible();
-  await page.getByRole('button', { name: /Jazz @ Nuggets/i }).click();
+  await page.getByRole('button', { name: 'Search' }).click();
+  await expect(page.getByText('Search canonical players, teams, and matchups for NBA on 2026-04-02.')).toBeVisible();
+
+  await page.getByPlaceholder('Type a player, team, or matchup').fill('Jam');
+  await expect(page.getByRole('button', { name: /Jamal Murray/i })).toBeVisible();
+  await expect(page.getByText('Nuggets · Jazz @ Nuggets · Apr 2, 11:00 PM')).toBeVisible();
+  await page.getByRole('button', { name: /Jamal Murray/i }).click();
 
   await expect(page.getByRole('button', { name: /PROP Player Prop/i }).first()).toBeVisible();
-  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
-  await page.getByRole('button', { name: 'Jamal Murray' }).click();
+  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Nuggets vs Jazz' })).toBeVisible();
   await page.getByRole('button', { name: 'Over -140' }).click();
 
   await expect(page.getByText('Conviction (1-10)', { exact: true })).toBeVisible();

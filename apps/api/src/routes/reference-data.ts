@@ -6,6 +6,7 @@ import {
   handleListLeagues,
   handleListMatchups,
   handleListEvents,
+  handleSearchBrowse,
   handleSearchPlayers,
   handleSearchTeams,
 } from '../handlers/index.js';
@@ -45,6 +46,22 @@ export async function handleReferenceDataSearchPlayers(
   const q = url.searchParams.get('q');
   const apiResponse = await handleSearchPlayers(
     { ...(sport ? { sport } : {}), ...(q ? { q } : {}) },
+    runtime.repositories.referenceData,
+  );
+  writeJson(response, apiResponse.status, apiResponse.body);
+}
+
+export async function handleReferenceDataSearchBrowse(
+  request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+): Promise<void> {
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const sport = url.searchParams.get('sport');
+  const date = url.searchParams.get('date');
+  const q = url.searchParams.get('q');
+  const apiResponse = await handleSearchBrowse(
+    { ...(sport ? { sport } : {}), ...(date ? { date } : {}), ...(q ? { q } : {}) },
     runtime.repositories.referenceData,
   );
   writeJson(response, apiResponse.status, apiResponse.body);

@@ -26,6 +26,16 @@ export interface MatchupBrowseResult {
   teams: MatchupBrowseTeam[];
 }
 
+export interface BrowseSearchResult {
+  resultType: 'player' | 'team' | 'matchup';
+  participantId: string | null;
+  displayName: string;
+  contextLabel: string;
+  teamId: string | null;
+  teamName: string | null;
+  matchup: MatchupBrowseResult;
+}
+
 export interface EventParticipantBrowseResult {
   participantId: string;
   canonicalId: string | null;
@@ -113,6 +123,16 @@ export async function getMatchups(sportId: string, date: string): Promise<Matchu
 export async function getEventBrowse(eventId: string): Promise<EventBrowseResult> {
   const res = await fetch(`${API}/api/reference-data/events/${encodeURIComponent(eventId)}/browse`);
   return readJsonResponse<EventBrowseResult>(res, 'Event browse unavailable');
+}
+
+export async function searchBrowse(sportId: string, date: string, query: string): Promise<BrowseSearchResult[]> {
+  const params = new URLSearchParams({
+    sport: sportId,
+    date,
+    q: query.trim(),
+  });
+  const res = await fetch(`${API}/api/reference-data/search?${params.toString()}`);
+  return readJsonResponse<BrowseSearchResult[]>(res, 'Search unavailable');
 }
 
 export async function submitPick(payload: SubmitPickPayload): Promise<SubmitPickResult> {

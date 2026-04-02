@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type {
+  BrowseSearchResult,
   EventBrowseResult,
   EventOfferBrowseResult,
   MatchupBrowseResult,
@@ -13,6 +14,7 @@ import {
   getCatalog,
   getEventBrowse,
   getMatchups,
+  searchBrowse,
   submitPick,
 } from '@/lib/api-client';
 import type { CatalogData, SportDefinition, SportsbookDefinition } from '@/lib/catalog';
@@ -60,9 +62,11 @@ export { buildParticipantSearchUrl, normalizeParticipantSearchResults };
 
 const TODAY = new Date().toISOString().slice(0, 10);
 const PARTICIPANT_QUERY_MIN = 2;
+const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
 
 type BrowseMode = 'live-offer' | 'manual';
+type LiveEntryMode = 'browse' | 'search';
 type OfferSelectionSide = 'over' | 'under' | 'side';
 type ParticipantFieldName = 'playerName' | 'team';
 
@@ -105,6 +109,30 @@ function formatTimestampLabel(isoString: string) {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatSearchTimestamp(isoString: string) {
+  const timestamp = new Date(isoString);
+  if (Number.isNaN(timestamp.getTime())) {
+    return 'Unknown time';
+  }
+
+  return timestamp.toLocaleString([], {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+}
+
+function buildSearchResultTone(resultType: BrowseSearchResult['resultType']) {
+  if (resultType === 'player') {
+    return 'PLAYER';
+  }
+  if (resultType === 'team') {
+    return 'TEAM';
+  }
+  return 'MATCHUP';
 }
 
 function getOfferAgeMinutes(snapshotAt: string) {
@@ -343,6 +371,7 @@ export function BetForm() {
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('live-offer');
+  const [liveEntryMode, setLiveEntryMode] = useState<LiveEntryMode>('browse');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successResult, setSuccessResult] = useState<SubmitPickResult | null>(null);
   const [submittedValues, setSubmittedValues] = useState<BetFormValues | null>(null);
@@ -357,6 +386,12 @@ export function BetForm() {
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<SelectedOfferState | null>(null);
   const [selectedOfferParticipantId, setSelectedOfferParticipantId] = useState<string | null>(null);
+  const [suspendMarketReset, setSuspendMarketReset] = useState(false);
+  const [browseSearchQuery, setBrowseSearchQuery] = useState('');
+  const [browseSearchResults, setBrowseSearchResults] = useState<BrowseSearchResult[]>([]);
+  const [browseSearchError, setBrowseSearchError] = useState<string | null>(null);
+  const [isSearchingBrowse, setIsSearchingBrowse] = useState(false);
+  const [hasSearchedBrowse, setHasSearchedBrowse] = useState(false);
 
   const form = useForm<BetFormValues>({
     resolver: zodResolver(betFormSchema),
@@ -462,6 +497,10 @@ export function BetForm() {
     setSelectedOfferParticipantId(null);
     setSelectedPlayerId(null);
     setSelectedTeamId(null);
+    setBrowseSearchQuery('');
+    setBrowseSearchResults([]);
+    setBrowseSearchError(null);
+    setHasSearchedBrowse(false);
 
     form.resetField('marketType');
     form.setValue('eventName', '');
@@ -507,6 +546,59 @@ export function BetForm() {
   }, [browseMode, selectedSport, watchedValues.gameDate]);
 
   useEffect(() => {
+    const query = browseSearchQuery.trim();
+    if (
+      browseMode !== 'live-offer' ||
+      !selectedSport ||
+      !watchedValues.gameDate ||
+      query.length < BROWSE_SEARCH_MIN
+    ) {
+      setBrowseSearchResults([]);
+      setBrowseSearchError(null);
+      setHasSearchedBrowse(false);
+      setIsSearchingBrowse(false);
+      return;
+    }
+
+    let active = true;
+    const timeoutId = window.setTimeout(() => {
+      setIsSearchingBrowse(true);
+      setBrowseSearchError(null);
+
+      searchBrowse(selectedSport, watchedValues.gameDate, query)
+        .then((results) => {
+          if (!active) {
+            return;
+          }
+
+          setBrowseSearchResults(results);
+          setHasSearchedBrowse(true);
+        })
+        .catch((error: unknown) => {
+          if (!active) {
+            return;
+          }
+
+          setBrowseSearchResults([]);
+          setHasSearchedBrowse(true);
+          setBrowseSearchError(error instanceof Error ? error.message : 'Search unavailable');
+        })
+        .finally(() => {
+          if (!active) {
+            return;
+          }
+
+          setIsSearchingBrowse(false);
+        });
+    }, 200);
+
+    return () => {
+      active = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [browseMode, browseSearchQuery, selectedSport, watchedValues.gameDate]);
+
+  useEffect(() => {
     if (browseMode !== 'live-offer' || !selectedMatchupId) {
       setEventBrowse(null);
       setEventBrowseError(null);
@@ -539,6 +631,11 @@ export function BetForm() {
   }, [browseMode, selectedMatchupId]);
 
   useEffect(() => {
+    if (suspendMarketReset) {
+      setSuspendMarketReset(false);
+      return;
+    }
+
     form.setValue('playerName', '');
     form.setValue('statType', '');
     form.setValue('team', '');
@@ -548,9 +645,21 @@ export function BetForm() {
     setSelectedOfferParticipantId(null);
     setSelectedPlayerId(null);
     setSelectedTeamId(null);
-  }, [selectedMarketType, form]);
+  }, [form, selectedMarketType, suspendMarketReset]);
+
+  function upsertMatchup(matchup: MatchupBrowseResult) {
+    setMatchups((current) => {
+      const existing = current.find((row) => row.eventId === matchup.eventId);
+      if (existing) {
+        return current.map((row) => (row.eventId === matchup.eventId ? matchup : row));
+      }
+
+      return [...current, matchup];
+    });
+  }
 
   function applyMatchupSelection(matchup: MatchupBrowseResult) {
+    upsertMatchup(matchup);
     setSelectedMatchupId(matchup.eventId);
     form.setValue('eventName', matchup.eventName, {
       shouldDirty: true,
@@ -558,6 +667,63 @@ export function BetForm() {
       shouldValidate: true,
     });
     setSelectedOffer(null);
+  }
+
+  function applyBrowseSearchSelection(result: BrowseSearchResult) {
+    setLiveEntryMode('search');
+    applyMatchupSelection(result.matchup);
+    setBrowseSearchQuery(result.displayName);
+
+    if (result.resultType === 'player') {
+      if (selectedMarketType !== 'player-prop') {
+        setSuspendMarketReset(true);
+      }
+      setSelectedOfferParticipantId(result.participantId);
+      setSelectedPlayerId(result.participantId);
+      setSelectedTeamId(result.teamId);
+      form.setValue('marketType', 'player-prop', {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      form.setValue('playerName', result.displayName, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      if (result.teamName) {
+        form.setValue('team', result.teamName, {
+          shouldDirty: true,
+          shouldTouch: true,
+          shouldValidate: true,
+        });
+      }
+      return;
+    }
+
+    setSelectedOfferParticipantId(null);
+    setSelectedPlayerId(null);
+    form.setValue('playerName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    if (result.resultType === 'team') {
+      setSelectedTeamId(result.teamId ?? result.participantId);
+      form.setValue('team', result.displayName, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+      return;
+    }
+
+    setSelectedTeamId(null);
+    form.setValue('team', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
   }
 
   function applyLiveOfferSelection(offer: EventOfferBrowseResult, side: OfferSelectionSide) {
@@ -570,6 +736,9 @@ export function BetForm() {
     const inferredStatType = inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName);
 
     setSelectedOffer({ offer, side });
+    if (selectedMarketType !== derivedMarketType) {
+      setSuspendMarketReset(true);
+    }
     form.setValue('marketType', derivedMarketType, {
       shouldDirty: true,
       shouldTouch: true,
@@ -700,6 +869,11 @@ export function BetForm() {
             setSelectedPlayerId(null);
             setSelectedTeamId(null);
             setBrowseMode('live-offer');
+            setLiveEntryMode('browse');
+            setBrowseSearchQuery('');
+            setBrowseSearchResults([]);
+            setBrowseSearchError(null);
+            setHasSearchedBrowse(false);
             form.reset({
               sport: '',
               eventName: '',
@@ -746,7 +920,7 @@ export function BetForm() {
               Live Slate
             </h2>
             <p className="text-sm text-muted-foreground">
-              Browse canonical matchups and live offers first. Manual entry stays available when coverage is missing.
+              Browse or search canonical matchups first. Manual entry stays available when coverage is missing.
             </p>
           </div>
           <div
@@ -761,16 +935,111 @@ export function BetForm() {
           </div>
         </div>
 
-        {isLoadingMatchups ? (
+        <div className="inline-flex rounded-full border border-border bg-background p-1">
+          <button
+            type="button"
+            className={cn(
+              'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+              liveEntryMode === 'browse'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            onClick={() => setLiveEntryMode('browse')}
+          >
+            Browse slate
+          </button>
+          <button
+            type="button"
+            className={cn(
+              'rounded-full px-4 py-2 text-sm font-medium transition-colors',
+              liveEntryMode === 'search'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            onClick={() => setLiveEntryMode('search')}
+          >
+            Search
+          </button>
+        </div>
+
+        {liveEntryMode === 'search' ? (
+          <div className="space-y-3 rounded-xl border border-border bg-card p-4">
+            <div className="space-y-1">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Search
+              </p>
+              <p className="text-sm text-muted-foreground">
+                Search canonical players, teams, and matchups for {selectedSport} on {watchedValues.gameDate}.
+              </p>
+            </div>
+            <Input
+              value={browseSearchQuery}
+              placeholder="Type a player, team, or matchup"
+              onChange={(event) => {
+                setBrowseSearchQuery(event.target.value);
+                setBrowseSearchError(null);
+              }}
+            />
+            {isSearchingBrowse ? (
+              <p className="text-sm text-muted-foreground">Searching the live slate...</p>
+            ) : null}
+            {browseSearchError ? <p className="text-sm text-destructive">{browseSearchError}</p> : null}
+            {!isSearchingBrowse && !browseSearchError && hasSearchedBrowse && browseSearchResults.length === 0 ? (
+              <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+                No canonical results matched that search on the selected date. You can switch to browse or finish manually.
+              </div>
+            ) : null}
+            {browseSearchResults.length > 0 ? (
+              <div className="grid gap-2">
+                {browseSearchResults.map((result) => {
+                  const isSelected = result.matchup.eventId === selectedMatchupId;
+
+                  return (
+                    <button
+                      key={[
+                        result.resultType,
+                        result.participantId ?? 'matchup',
+                        result.matchup.eventId,
+                      ].join(':')}
+                      type="button"
+                      onClick={() => applyBrowseSearchSelection(result)}
+                      className={cn(
+                        'rounded-xl border px-4 py-3 text-left transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-card hover:border-primary/50',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="space-y-1">
+                          <p className="font-medium text-foreground">{result.displayName}</p>
+                          <p className="text-xs text-muted-foreground">{result.contextLabel}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {formatMatchup(result.matchup)} · {formatSearchTimestamp(result.matchup.eventDate)}
+                          </p>
+                        </div>
+                        <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
+                          {buildSearchResultTone(result.resultType)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+
+        {liveEntryMode === 'browse' && isLoadingMatchups ? (
           <p className="text-sm text-muted-foreground">Loading matchups...</p>
         ) : null}
-        {matchupsError ? <p className="text-sm text-destructive">{matchupsError}</p> : null}
-        {!isLoadingMatchups && !matchupsError && matchups.length === 0 ? (
+        {liveEntryMode === 'browse' && matchupsError ? <p className="text-sm text-destructive">{matchupsError}</p> : null}
+        {liveEntryMode === 'browse' && !isLoadingMatchups && !matchupsError && matchups.length === 0 ? (
           <div className="rounded-xl border border-dashed border-border bg-card px-4 py-5 text-sm text-muted-foreground">
             No matchups scheduled for {watchedValues.gameDate}. You can switch to manual entry and still submit against canonical sport and book selections.
           </div>
         ) : null}
-        {matchups.length > 0 ? (
+        {liveEntryMode === 'browse' && matchups.length > 0 ? (
           <div className="grid gap-2">
             {matchups.map((matchup) => {
               const isSelected = matchup.eventId === selectedMatchupId;

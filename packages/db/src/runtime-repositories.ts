@@ -19,6 +19,7 @@ import type {
   AlertNotificationUpdateInput,
   AuditLogCreateInput,
   AuditLogRepository,
+  BrowseSearchResult,
   ClosingLineLookupCriteria,
   EventParticipantRepository,
   EventParticipantUpsertInput,
@@ -1380,6 +1381,74 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         status: row.status,
         sportId: row.sport_id,
       }));
+  }
+
+  async searchBrowse(sportId: string, date: string, query: string, limit = 20): Promise<BrowseSearchResult[]> {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const matchups = await this.listMatchups(sportId, date);
+    const results: BrowseSearchResult[] = [];
+    const seen = new Set<string>();
+
+    for (const matchup of matchups) {
+      const matchupLabel = formatBrowseMatchup(matchup);
+      const matchupContext = buildMatchupContext(matchup);
+
+      if (matchesBrowseQuery(normalizedQuery, matchup.eventName, matchupLabel, matchup.teams.map((team) => team.displayName))) {
+        pushBrowseSearchResult(results, seen, {
+          resultType: 'matchup',
+          participantId: null,
+          displayName: matchupLabel,
+          contextLabel: matchupContext,
+          teamId: null,
+          teamName: null,
+          matchup,
+        });
+      }
+
+      for (const team of matchup.teams) {
+        if (!matchesBrowseQuery(normalizedQuery, team.displayName)) {
+          continue;
+        }
+
+        const opponent = matchup.teams.find((candidate) => candidate.participantId !== team.participantId);
+        pushBrowseSearchResult(results, seen, {
+          resultType: 'team',
+          participantId: team.teamId ?? team.participantId,
+          displayName: team.displayName,
+          contextLabel: `${opponent ? `vs ${opponent.displayName} · ` : ''}${matchupContext}`,
+          teamId: team.teamId ?? team.participantId,
+          teamName: team.displayName,
+          matchup,
+        });
+      }
+
+      const eventBrowse = this.eventBrowses.get(matchup.eventId);
+      if (!eventBrowse) {
+        continue;
+      }
+
+      for (const participant of eventBrowse.participants) {
+        if (participant.participantType !== 'player' || !matchesBrowseQuery(normalizedQuery, participant.displayName)) {
+          continue;
+        }
+
+        pushBrowseSearchResult(results, seen, {
+          resultType: 'player',
+          participantId: participant.canonicalId ?? participant.participantId,
+          displayName: participant.displayName,
+          contextLabel: `${participant.teamName ?? 'Unassigned'} · ${matchupLabel} · ${matchupContext}`,
+          teamId: participant.teamId,
+          teamName: participant.teamName,
+          matchup,
+        });
+      }
+    }
+
+    return results.slice(0, limit);
   }
 }
 
@@ -3676,6 +3745,132 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }));
   }
 
+  async searchBrowse(sportId: string, date: string, query: string, limit = 20): Promise<BrowseSearchResult[]> {
+    const normalizedQuery = query.trim().toLowerCase();
+    if (!normalizedQuery) {
+      return [];
+    }
+
+    const matchups = await this.listMatchups(sportId, date);
+    if (matchups.length === 0) {
+      return [];
+    }
+
+    const results: BrowseSearchResult[] = [];
+    const seen = new Set<string>();
+    const matchupByEventId = new Map(matchups.map((matchup) => [matchup.eventId, matchup]));
+    const eventIds = matchups.map((matchup) => matchup.eventId);
+
+    for (const matchup of matchups) {
+      const matchupLabel = formatBrowseMatchup(matchup);
+      if (
+        matchesBrowseQuery(
+          normalizedQuery,
+          matchup.eventName,
+          matchupLabel,
+          matchup.teams.map((team) => team.displayName),
+        )
+      ) {
+        pushBrowseSearchResult(results, seen, {
+          resultType: 'matchup',
+          participantId: null,
+          displayName: matchupLabel,
+          contextLabel: buildMatchupContext(matchup),
+          teamId: null,
+          teamName: null,
+          matchup,
+        });
+      }
+
+      for (const team of matchup.teams) {
+        if (!matchesBrowseQuery(normalizedQuery, team.displayName)) {
+          continue;
+        }
+
+        const opponent = matchup.teams.find((candidate) => candidate.participantId !== team.participantId);
+        pushBrowseSearchResult(results, seen, {
+          resultType: 'team',
+          participantId: team.teamId ?? team.participantId,
+          displayName: team.displayName,
+          contextLabel: `${opponent ? `vs ${opponent.displayName} · ` : ''}${buildMatchupContext(matchup)}`,
+          teamId: team.teamId ?? team.participantId,
+          teamName: team.displayName,
+          matchup,
+        });
+      }
+    }
+
+    const { data: eventParticipants, error: eventParticipantsError } = await this.client
+      .from('event_participants')
+      .select('event_id,participant_id')
+      .in('event_id', eventIds);
+    if (eventParticipantsError) {
+      throw new Error(`Failed to load search event participants: ${eventParticipantsError.message}`);
+    }
+
+    const playerParticipantRows = (eventParticipants ?? []).filter((row) => {
+      const matchup = matchupByEventId.get(row.event_id as string);
+      return Boolean(matchup);
+    });
+    const participantIds = Array.from(new Set(playerParticipantRows.map((row) => row.participant_id as string)));
+    const participantMap = await this.loadParticipantsMap(participantIds);
+    const playerIds = Array.from(
+      new Set(
+        participantIds.filter((participantId) => participantMap.get(participantId)?.participant_type === 'player'),
+      ),
+    );
+    const assignments = await this.loadCurrentAssignments(playerIds);
+    const teamIds = Array.from(
+      new Set(
+        Array.from(assignments.values())
+          .map((assignment) => assignment.teamId)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
+    const teamNameMap = new Map<string, string>();
+    if (teamIds.length > 0) {
+      const { data: teams, error: teamsError } = await this.fromUntyped('teams')
+        .select('id,display_name')
+        .in('id', teamIds);
+      if (teamsError) {
+        throw new Error(`Failed to load search teams: ${teamsError.message}`);
+      }
+
+      for (const row of (teams ?? []) as CanonicalTeamRow[]) {
+        teamNameMap.set(row.id as string, row.display_name as string);
+      }
+    }
+
+    for (const row of playerParticipantRows) {
+      const participant = participantMap.get(row.participant_id as string);
+      if (!participant || participant.participant_type !== 'player') {
+        continue;
+      }
+      if (!matchesBrowseQuery(normalizedQuery, participant.display_name)) {
+        continue;
+      }
+
+      const matchup = matchupByEventId.get(row.event_id as string);
+      if (!matchup) {
+        continue;
+      }
+
+      const assignment = assignments.get(participant.id) ?? null;
+      const matchupLabel = formatBrowseMatchup(matchup);
+      pushBrowseSearchResult(results, seen, {
+        resultType: 'player',
+        participantId: participant.id,
+        displayName: participant.display_name,
+        contextLabel: `${assignment?.teamId ? teamNameMap.get(assignment.teamId) ?? 'Unassigned' : 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
+        teamId: assignment?.teamId ?? null,
+        teamName: assignment?.teamId ? teamNameMap.get(assignment.teamId) ?? null : null,
+        matchup,
+      });
+    }
+
+    return results.slice(0, limit);
+  }
+
   private async loadParticipantsMap(participantIds: string[]) {
     if (participantIds.length === 0) {
       return new Map<string, ParticipantRow>();
@@ -3951,6 +4146,64 @@ function splitProviderBookKey(providerKey: string) {
     ? providerKey.split(':', 2)
     : [providerKey, providerKey];
   return { provider, bookKey };
+}
+
+function matchesBrowseQuery(
+  query: string,
+  ...values: Array<string | string[] | null | undefined>
+) {
+  return values.some((value) => {
+    if (Array.isArray(value)) {
+      return value.some((entry) => entry.toLowerCase().includes(query));
+    }
+
+    return value?.toLowerCase().includes(query);
+  });
+}
+
+function formatBrowseMatchup(matchup: MatchupBrowseResult) {
+  const orderedTeams = [...matchup.teams].sort(
+    (left, right) => roleSortOrder(left.role) - roleSortOrder(right.role),
+  );
+
+  if (orderedTeams.length >= 2) {
+    return `${orderedTeams[1]?.displayName ?? 'Away'} @ ${orderedTeams[0]?.displayName ?? 'Home'}`;
+  }
+
+  return matchup.eventName;
+}
+
+function buildMatchupContext(matchup: MatchupBrowseResult) {
+  const parsed = Date.parse(matchup.eventDate);
+  const timeLabel = Number.isNaN(parsed)
+    ? matchup.status
+    : new Date(parsed).toLocaleString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        hour: 'numeric',
+        minute: '2-digit',
+      });
+
+  return matchup.leagueId ? `${matchup.leagueId.toUpperCase()} · ${timeLabel}` : timeLabel;
+}
+
+function pushBrowseSearchResult(
+  results: BrowseSearchResult[],
+  seen: Set<string>,
+  result: BrowseSearchResult,
+) {
+  const dedupeKey = [
+    result.resultType,
+    result.participantId ?? 'matchup',
+    result.matchup.eventId,
+  ].join(':');
+
+  if (seen.has(dedupeKey)) {
+    return;
+  }
+
+  seen.add(dedupeKey);
+  results.push(result);
 }
 
 function roleSortOrder(role: string) {
