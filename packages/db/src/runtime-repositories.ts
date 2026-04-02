@@ -3690,19 +3690,49 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 
   private async loadCanonicalTeamsByParticipantIds(participantIds: string[]) {
-    const { data, error } = await this.fromUntyped('teams')
-      .select('id,league_id,display_name,metadata');
-    if (error) throw new Error(`Failed to load canonical teams: ${error.message}`);
+    if (participantIds.length === 0) {
+      return new Map<string, CanonicalTeamRow>();
+    }
 
-    const participantIdSet = new Set(participantIds);
-    const teamRows = (data ?? []) as CanonicalTeamRow[];
-    const rows = teamRows.filter((row) => {
-      const sourceParticipantId = readBootstrapSourceParticipantId(row.metadata);
-      return sourceParticipantId ? participantIdSet.has(sourceParticipantId) : false;
-    });
+    const { data: aliasData, error: aliasError } = await this.fromUntyped('provider_entity_aliases')
+      .select('participant_id,team_id')
+      .eq('entity_kind', 'team')
+      .in('participant_id', participantIds);
+    if (aliasError) {
+      throw new Error(`Failed to load canonical team aliases: ${aliasError.message}`);
+    }
+
+    const aliasRows = (aliasData ?? []) as ProviderEntityAliasRow[];
+    const teamIds = Array.from(
+      new Set(
+        aliasRows
+          .map((row) => row.team_id)
+          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+      ),
+    );
+    if (teamIds.length === 0) {
+      return new Map<string, CanonicalTeamRow>();
+    }
+
+    const { data: teamData, error: teamError } = await this.fromUntyped('teams')
+      .select('id,league_id,display_name,metadata')
+      .in('id', teamIds);
+    if (teamError) {
+      throw new Error(`Failed to load canonical teams: ${teamError.message}`);
+    }
+
+    const teamMap = new Map<string, CanonicalTeamRow>(
+      ((teamData ?? []) as CanonicalTeamRow[]).map((row) => [row.id, row]),
+    );
 
     return new Map<string, CanonicalTeamRow>(
-      rows.map((row) => [readBootstrapSourceParticipantId(row.metadata) as string, row]),
+      aliasRows.flatMap((row) => {
+        if (!row.participant_id || !row.team_id) {
+          return [];
+        }
+        const team = teamMap.get(row.team_id);
+        return team ? [[row.participant_id, team] as [string, CanonicalTeamRow]] : [];
+      }),
     );
   }
 
@@ -3914,18 +3944,6 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return (left.line ?? 0) - (right.line ?? 0);
     });
   }
-}
-
-function readBootstrapSourceParticipantId(metadata: unknown) {
-  if (!isRecord(metadata)) {
-    return null;
-  }
-  const bootstrap = metadata.bootstrap;
-  if (!isRecord(bootstrap)) {
-    return null;
-  }
-  const value = bootstrap.source_participant_id;
-  return typeof value === 'string' && value.length > 0 ? value : null;
 }
 
 function splitProviderBookKey(providerKey: string) {
@@ -4214,6 +4232,7 @@ type ProviderEntityAliasRow = {
   provider: string;
   entity_kind: string;
   provider_entity_key: string;
+  participant_id?: string | null;
   team_id: string | null;
   player_id: string | null;
 };
