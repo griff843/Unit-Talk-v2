@@ -78,6 +78,10 @@ export type SystemRunRow = Tables<'system_runs'>;
 export type AuditLogRow = Tables<'audit_log'>;
 export type ParticipantRow = Tables<'participants'>;
 export type ParticipantMembershipRow = Tables<'participant_memberships'>;
+export type LeagueRow = Tables<'leagues'>;
+export type TeamRow = Tables<'teams'>;
+export type PlayerRow = Tables<'players'>;
+export type PlayerTeamAssignmentRow = Tables<'player_team_assignments'>;
 export type GradeResultRow = Tables<'game_results'>;
 export type MemberTierRow = Tables<'member_tiers'>;
 
@@ -176,60 +180,6 @@ export interface SportRow {
   display_name: string;
   sort_order: number;
   active: boolean;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-// New canonical reference backbone tables are introduced by additive migrations.
-// We keep their application-facing row types here until the generated Supabase
-// types are refreshed in an environment with working CLI auth.
-export interface LeagueRow {
-  id: string;
-  sport_id: string;
-  display_name: string;
-  country: string | null;
-  active: boolean;
-  sort_order: number;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface TeamRow {
-  id: string;
-  league_id: string;
-  display_name: string;
-  short_name: string;
-  abbreviation: string | null;
-  city: string | null;
-  active: boolean;
-  sort_order: number;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlayerRow {
-  id: string;
-  display_name: string;
-  first_name: string | null;
-  last_name: string | null;
-  active: boolean;
-  metadata: Record<string, unknown>;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface PlayerTeamAssignmentRow {
-  id: string;
-  player_id: string;
-  team_id: string;
-  league_id: string;
-  effective_from: string | null;
-  effective_until: string | null;
-  is_current: boolean;
-  source: string;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;
