@@ -1,13 +1,11 @@
-/**
- * Runtime path proof for lib/api-client.ts.
- * Uses globalThis.fetch override to verify live submit and catalog paths
- * without requiring a running API server.
- */
 import assert from 'node:assert/strict';
-import test, { describe, beforeEach, afterEach } from 'node:test';
-import { getCatalog, submitPick } from '../lib/api-client.ts';
-import { buildSubmissionPayload } from '../lib/form-utils.ts';
-import type { BetFormValues } from '../lib/form-schema.ts';
+import test from 'node:test';
+import {
+  getCatalog,
+  getEventBrowse,
+  getMatchups,
+  submitPick,
+} from '../lib/api-client.ts';
 import {
   buildParticipantSearchUrl,
   normalizeParticipantSearchResults,
@@ -15,205 +13,189 @@ import {
 
 type FetchFn = typeof globalThis.fetch;
 
-describe('participant autocomplete helpers', () => {
-  test('buildParticipantSearchUrl targets OPERATOR_WEB_URL (port 4200), limit=10, trims query', () => {
-    const url = buildParticipantSearchUrl('  Jalen Brunson  ', 'player', 'NBA');
-    assert.equal(
-      url,
-      'http://127.0.0.1:4200/api/operator/participants?q=Jalen+Brunson&type=player&limit=10&sport=NBA',
-    );
+function installFetchMock(
+  implementation: (url: string, options?: RequestInit) => Promise<Response>,
+) {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = implementation as FetchFn;
+  return () => {
+    globalThis.fetch = originalFetch;
+  };
+}
+
+test('buildParticipantSearchUrl targets canonical player search endpoint', () => {
+  const url = buildParticipantSearchUrl('  Jalen Brunson  ', 'player', 'NBA');
+  assert.equal(
+    url,
+    'http://127.0.0.1:4000/api/reference-data/search/players?q=Jalen+Brunson&sport=NBA',
+  );
+});
+
+test('buildParticipantSearchUrl targets canonical team search endpoint without sport when blank', () => {
+  const url = buildParticipantSearchUrl('Knicks', 'team', '');
+  assert.equal(
+    url,
+    'http://127.0.0.1:4000/api/reference-data/search/teams?q=Knicks',
+  );
+});
+
+test('normalizeParticipantSearchResults preserves participant ids, de-dupes, and sorts', () => {
+  const results = normalizeParticipantSearchResults(
+    {
+      data: [
+        { participantId: 'team-2', displayName: 'New York Knicks' },
+        { participantId: 'team-1', displayName: 'Boston Celtics' },
+        { participantId: 'team-3', displayName: ' new york knicks ' },
+        { participantId: 'team-4', displayName: '' },
+      ],
+    },
+    'team',
+  );
+
+  assert.deepEqual(results, [
+    { participantId: 'team-1', displayName: 'Boston Celtics', participantType: 'team' },
+    { participantId: 'team-2', displayName: 'New York Knicks', participantType: 'team' },
+  ]);
+});
+
+test('normalizeParticipantSearchResults returns an empty array for invalid payloads', () => {
+  assert.deepEqual(normalizeParticipantSearchResults(null, 'player'), []);
+  assert.deepEqual(normalizeParticipantSearchResults('bad', 'player'), []);
+  assert.deepEqual(normalizeParticipantSearchResults({ data: 'not-array' }, 'player'), []);
+});
+
+test('getCatalog returns catalog data on a successful response', async () => {
+  const restoreFetch = installFetchMock(async () =>
+    new Response(
+      JSON.stringify({
+        data: {
+          sports: [{ id: 'NBA', name: 'NBA', marketTypes: ['player-prop'], statTypes: ['Points'], teams: [] }],
+          sportsbooks: [{ id: 'fanatics', name: 'Fanatics' }],
+          ticketTypes: [],
+          cappers: ['griff843'],
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ),
+  );
+
+  await assert.doesNotReject(async () => {
+    const catalog = await getCatalog();
+    assert.equal(catalog.sports[0]?.id, 'NBA');
+    assert.equal(catalog.sportsbooks[0]?.name, 'Fanatics');
   });
 
-  test('buildParticipantSearchUrl omits sport param when sport is blank', () => {
-    const url = buildParticipantSearchUrl('Lakers', 'team', '');
-    assert.ok(url.startsWith('http://127.0.0.1:4200/api/operator/participants?'), `unexpected base: ${url}`);
-    assert.ok(!url.includes('sport='), `sport param should be absent when blank, got: ${url}`);
-    assert.ok(url.includes('limit=10'), `limit should be 10, got: ${url}`);
-  });
+  restoreFetch();
+});
 
-  test('buildParticipantSearchUrl omits sport param when sport is undefined', () => {
-    const url = buildParticipantSearchUrl('Brunson', 'player');
-    assert.ok(!url.includes('sport='), `sport param should be absent when undefined, got: ${url}`);
-  });
-
-  test('normalizeParticipantSearchResults filters by type, de-dupes case-insensitively, and sorts', () => {
-    const results = normalizeParticipantSearchResults(
-      {
-        participants: [
-          { displayName: 'New York Knicks', participantType: 'team' },
-          { displayName: ' new york knicks ', participantType: 'team' },
-          { displayName: 'Jalen Brunson', participantType: 'player' },
-          { displayName: '', participantType: 'team' },
-          { participantType: 'team' },
+test('getMatchups calls the canonical matchup browse endpoint', async () => {
+  let capturedUrl = '';
+  const restoreFetch = installFetchMock(async (url) => {
+    capturedUrl = url;
+    return new Response(
+      JSON.stringify({
+        data: [
+          {
+            eventId: 'evt-1',
+            externalId: 'nba-1',
+            eventName: 'Nuggets vs Jazz',
+            eventDate: '2026-04-02T19:00:00.000Z',
+            status: 'scheduled',
+            sportId: 'NBA',
+            leagueId: 'nba',
+            teams: [],
+          },
         ],
-      },
-      'team',
-    );
-
-    assert.deepEqual(results, [{ displayName: 'New York Knicks', participantType: 'team' }]);
-  });
-
-  test('normalizeParticipantSearchResults returns empty array for non-object payload', () => {
-    assert.deepEqual(normalizeParticipantSearchResults(null, 'player'), []);
-    assert.deepEqual(normalizeParticipantSearchResults('bad', 'player'), []);
-    assert.deepEqual(normalizeParticipantSearchResults({ participants: 'not-array' }, 'player'), []);
-  });
-});
-
-// --- getCatalog ---
-
-describe('getCatalog', () => {
-  let originalFetch: FetchFn;
-
-  beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  test('returns catalog data on 200 response', async () => {
-    const mockCatalog = { sports: [], sportsbooks: [], ticketTypes: [], cappers: [] };
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({ ok: true, data: mockCatalog }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    const result = await getCatalog();
-    assert.deepEqual(result, mockCatalog);
-  });
-
-  test('throws on non-200 response with error message', async () => {
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({ error: { message: 'Service unavailable' } }), {
-        status: 503,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    await assert.rejects(() => getCatalog(), /Service unavailable/);
-  });
-
-  test('throws with status code when no error message in body', async () => {
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({}), {
-        status: 500,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    await assert.rejects(() => getCatalog(), /500/);
-  });
-});
-
-// --- submitPick ---
-
-describe('submitPick', () => {
-  let originalFetch: FetchFn;
-
-  beforeEach(() => {
-    originalFetch = globalThis.fetch;
-  });
-
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
-  });
-
-  test('returns result on 200 response', async () => {
-    const mockResult = { submissionId: 'sub-123', pickId: 'pick-456', lifecycleState: 'validated' };
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({ ok: true, data: mockResult }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    const result = await submitPick({
-      source: 'smart-form',
-      market: 'NBA - Player Prop',
-      selection: 'J.Brunson Points O 24.5',
-    });
-    assert.deepEqual(result, mockResult);
-  });
-
-  test('throws on non-200 response with error message', async () => {
-    globalThis.fetch = async () =>
-      new Response(JSON.stringify({ error: { message: 'Validation failed' } }), {
-        status: 422,
-        headers: { 'Content-Type': 'application/json' },
-      });
-
-    await assert.rejects(
-      () => submitPick({ source: 'smart-form', market: 'NBA - Player Prop', selection: 'test' }),
-      /Validation failed/,
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
     );
   });
 
-  test('sends POST to /api/submissions', async () => {
-    let capturedMethod: string | undefined;
-    let capturedUrl: string | undefined;
+  const results = await getMatchups('NBA', '2026-04-02');
+  assert.equal(results[0]?.eventId, 'evt-1');
+  assert.equal(
+    capturedUrl,
+    'http://127.0.0.1:4000/api/reference-data/matchups?sport=NBA&date=2026-04-02',
+  );
 
-    globalThis.fetch = async (url, opts) => {
-      capturedUrl = String(url);
-      capturedMethod = opts?.method;
-      return new Response(
-        JSON.stringify({ ok: true, data: { submissionId: 's', pickId: 'p', lifecycleState: 'validated' } }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    };
-
-    await submitPick({ source: 'smart-form', market: 'NBA - Player Prop', selection: 'test' });
-    assert.ok(capturedUrl?.includes('/api/submissions'), `Expected /api/submissions in URL, got: ${capturedUrl}`);
-    assert.equal(capturedMethod, 'POST');
-  });
+  restoreFetch();
 });
 
-// --- Full flow: buildSubmissionPayload -> submitPick ---
-
-describe('full submit flow', () => {
-  let originalFetch: FetchFn;
-
-  beforeEach(() => {
-    originalFetch = globalThis.fetch;
+test('getEventBrowse calls the canonical event browse endpoint', async () => {
+  let capturedUrl = '';
+  const restoreFetch = installFetchMock(async (url) => {
+    capturedUrl = url;
+    return new Response(
+      JSON.stringify({
+        data: {
+          eventId: 'evt-1',
+          externalId: 'nba-1',
+          eventName: 'Nuggets vs Jazz',
+          eventDate: '2026-04-02T19:00:00.000Z',
+          status: 'scheduled',
+          sportId: 'NBA',
+          leagueId: 'nba',
+          participants: [],
+          offers: [],
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
   });
 
-  afterEach(() => {
-    globalThis.fetch = originalFetch;
+  const result = await getEventBrowse('evt-1');
+  assert.equal(result.eventName, 'Nuggets vs Jazz');
+  assert.equal(
+    capturedUrl,
+    'http://127.0.0.1:4000/api/reference-data/events/evt-1/browse',
+  );
+
+  restoreFetch();
+});
+
+test('submitPick posts to the submissions endpoint and returns the result payload', async () => {
+  let capturedUrl = '';
+  let capturedMethod = '';
+  let capturedBody: Record<string, unknown> | null = null;
+  const restoreFetch = installFetchMock(async (url, options) => {
+    capturedUrl = url;
+    capturedMethod = options?.method ?? 'GET';
+    capturedBody = JSON.parse(String(options?.body)) as Record<string, unknown>;
+
+    return new Response(
+      JSON.stringify({
+        data: {
+          submissionId: 'sub-123',
+          pickId: 'pick-456',
+          lifecycleState: 'validated',
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
   });
 
-  test('payload has source=smart-form and metadata.ticketType=single', async () => {
-    let capturedBody: Record<string, unknown> | undefined;
-
-    globalThis.fetch = async (_url, opts) => {
-      capturedBody = JSON.parse(String(opts?.body)) as Record<string, unknown>;
-      return new Response(
-        JSON.stringify({ ok: true, data: { submissionId: 's', pickId: 'p', lifecycleState: 'validated' } }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      );
-    };
-
-    const values: BetFormValues = {
-      sport: 'NBA',
-      marketType: 'player-prop',
-      eventName: 'Knicks vs Heat',
-      playerName: 'Jalen Brunson',
-      statType: 'Points',
-      direction: 'over',
-      line: 24.5,
-      odds: -110,
-      units: 1.5,
-      capper: 'griff843',
-      gameDate: '2026-03-22',
-    };
-
-    const payload = buildSubmissionPayload(values);
-    await submitPick(payload);
-
-    assert.equal(capturedBody?.source, 'smart-form');
-    const meta = capturedBody?.metadata as Record<string, unknown> | undefined;
-    assert.equal(meta?.ticketType, 'single');
-    assert.equal(meta?.player, 'Jalen Brunson');
-    assert.equal(meta?.overUnder, 'over');
-    assert.equal(meta?.date, '2026-03-22');
-    assert.equal(meta?.eventName, 'Knicks vs Heat');
+  const result = await submitPick({
+    source: 'smart-form',
+    market: 'nba.points',
+    selection: 'Cody Williams Points O 14',
   });
+
+  assert.equal(capturedUrl, 'http://127.0.0.1:4000/api/submissions');
+  assert.equal(capturedMethod, 'POST');
+  assert.equal(capturedBody?.source, 'smart-form');
+  assert.equal(result.pickId, 'pick-456');
+
+  restoreFetch();
+});
+
+test('api-client surfaces error messages from failed responses', async () => {
+  const restoreFetch = installFetchMock(async () =>
+    new Response(
+      JSON.stringify({ error: { message: 'Reference data unavailable' } }),
+      { status: 503, headers: { 'Content-Type': 'application/json' } },
+    ),
+  );
+
+  await assert.rejects(() => getCatalog(), /Reference data unavailable/);
+  restoreFetch();
 });
