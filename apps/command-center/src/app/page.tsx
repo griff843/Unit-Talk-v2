@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/Card';
 import { ExceptionPanel } from '@/components/ExceptionPanel';
 import { HealthSignalsPanel } from '@/components/HealthSignalsPanel';
 import { PickLifecycleTable } from '@/components/PickLifecycleTable';
-import { fetchDashboardData, fetchDashboardRuntimeData } from '@/lib/api';
+import { fetchDashboardData, fetchDashboardRuntimeData, fetchExceptionQueues } from '@/lib/api';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
 
@@ -79,11 +79,21 @@ export default async function DashboardPage({
 }) {
   let data: DashboardData;
   let runtime: DashboardRuntimeData;
+  let aliasReviewCounts = { missingBookAliases: 0, missingMarketAliases: 0 };
   try {
-    [data, runtime] = await Promise.all([
+    const [dashboardData, dashboardRuntimeData, exceptionQueues] = await Promise.all([
       fetchDashboardData(),
       fetchDashboardRuntimeData(),
+      fetchExceptionQueues(),
     ]);
+    data = dashboardData;
+    runtime = dashboardRuntimeData;
+    const queueResponse = exceptionQueues as { data?: { counts?: Record<string, unknown> } };
+    const counts = queueResponse?.data?.counts ?? {};
+    aliasReviewCounts = {
+      missingBookAliases: typeof counts['missingBookAliases'] === 'number' ? counts['missingBookAliases'] : 0,
+      missingMarketAliases: typeof counts['missingMarketAliases'] === 'number' ? counts['missingMarketAliases'] : 0,
+    };
   } catch {
     data = {
       signals: BROKEN_SIGNALS,
@@ -121,6 +131,7 @@ export default async function DashboardPage({
         ingestorStatus: 'unknown',
       },
     };
+    aliasReviewCounts = { missingBookAliases: 0, missingMarketAliases: 0 };
   }
 
   const observedAt = data.observedAt ?? new Date().toISOString();
@@ -180,6 +191,7 @@ export default async function DashboardPage({
           </div>
           <div className="mt-4 space-y-2 text-xs text-gray-500">
             <div>Ingestor status: {runtime.providerSummary.ingestorStatus}</div>
+            <div>Alias review: {aliasReviewCounts.missingBookAliases} missing book / {aliasReviewCounts.missingMarketAliases} missing market</div>
             {runtime.deliveryTargets.map((target) => (
               <div key={target.target}>
                 {target.target}: {target.recentSentCount} sent / {target.recentFailureCount} failed

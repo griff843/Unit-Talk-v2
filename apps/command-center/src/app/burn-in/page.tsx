@@ -500,10 +500,13 @@ export default async function BurnInPage({
             <div>Dead-letter queue: <span className="font-bold text-gray-100">{asNumber(queueCounts['deadLetter'])}</span></div>
             <div>Pending manual review: <span className="font-bold text-gray-100">{asNumber(queueCounts['pendingManualReview'])}</span></div>
             <div>Stale validated picks: <span className="font-bold text-gray-100">{asNumber(queueCounts['staleValidated'])}</span></div>
+            <div>Missing book aliases: <span className="font-bold text-gray-100">{asNumber(queueCounts['missingBookAliases'])}</span></div>
+            <div>Missing market aliases: <span className="font-bold text-gray-100">{asNumber(queueCounts['missingMarketAliases'])}</span></div>
           </div>
           <div className="space-y-2 text-xs text-gray-500">
             <p>The burn-in incident log still lives outside the app in <code>out/controlled-validation/incidents.md</code>.</p>
-            <p>Canonical alias review remains partially blocked by current schema truth: unresolved entity aliases are not yet representable because <code>provider_entity_aliases</code> still requires a canonical target.</p>
+            <p>Market and book review visibility is now derived from live provider offers missing canonical alias coverage.</p>
+            <p>Canonical entity alias review remains partially blocked by current schema truth: unresolved entity aliases are not yet representable because <code>provider_entity_aliases</code> still requires a canonical target.</p>
           </div>
         </div>
       </Card>

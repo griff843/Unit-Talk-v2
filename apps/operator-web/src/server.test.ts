@@ -4429,6 +4429,80 @@ test('GET /api/operator/provider-health returns provider freshness and quota tru
   assert.ok(body.data.quotaSummary.sgo === null || typeof body.data.quotaSummary.sgo.creditsUsed === 'number');
 });
 
+test('GET /api/operator/exception-queues surfaces missing canonical market and book alias review counts', async () => {
+  const provider = createAggregateProvider({
+    provider_offers: [
+      {
+        provider_key: 'odds-api:fanatics',
+        provider_market_key: 'points-assists-all-game-ou',
+        created_at: '2026-04-02T03:00:00.000Z',
+      },
+      {
+        provider_key: 'odds-api:fanatics',
+        provider_market_key: 'points-assists-all-game-ou',
+        created_at: '2026-04-02T04:00:00.000Z',
+      },
+      {
+        provider_key: 'sgo',
+        provider_market_key: 'points-all-game-ou',
+        created_at: '2026-04-02T05:00:00.000Z',
+      },
+    ],
+    provider_book_aliases: [
+      {
+        provider: 'sgo',
+        provider_book_key: 'sgo',
+      },
+    ],
+    provider_market_aliases: [
+      {
+        provider: 'sgo',
+        provider_market_key: 'points-all-game-ou',
+        sport_id: 'NBA',
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/exception-queues');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      counts: {
+        missingBookAliases: number;
+        missingMarketAliases: number;
+      };
+      missingBookAliases: Array<{ provider: string; providerBookKey: string; occurrences: number }>;
+      missingMarketAliases: Array<{ provider: string; providerMarketKey: string; occurrences: number }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.counts.missingBookAliases, 1);
+  assert.equal(body.data.counts.missingMarketAliases, 1);
+  assert.deepEqual(body.data.missingBookAliases[0], {
+    provider: 'odds-api',
+    providerBookKey: 'fanatics',
+    occurrences: 2,
+    latestSeenAt: '2026-04-02T04:00:00.000Z',
+  });
+  assert.deepEqual(body.data.missingMarketAliases[0], {
+    provider: 'odds-api',
+    providerMarketKey: 'points-assists-all-game-ou',
+    occurrences: 2,
+    latestSeenAt: '2026-04-02T04:00:00.000Z',
+  });
+});
+
 function createAggregateProvider(tables: Record<string, Array<Record<string, unknown>>>): OperatorSnapshotProvider {
   return {
     ...createStaticProvider(),
@@ -4466,6 +4540,16 @@ class MockSupabaseQuery {
 
   gte(field: string, value: unknown) {
     this.filters.push((row) => compareSortable(row[field], value) >= 0);
+    return this;
+  }
+
+  lte(field: string, value: unknown) {
+    this.filters.push((row) => compareSortable(row[field], value) <= 0);
+    return this;
+  }
+
+  in(field: string, values: unknown[]) {
+    this.filters.push((row) => values.includes(row[field]));
     return this;
   }
 
