@@ -1,6 +1,8 @@
 -- Migration: Canonical reference bootstrap from governed participants + SGO-linked entities
 -- Description: Backfill canonical teams, players, provider aliases, and player-team assignments
 --   from the existing participants/events/event_participants source of truth.
+-- Note: execution is intentionally decoupled from migration time. Run the
+--   bootstrap function explicitly after schema deploy via a controlled script/job.
 -- Rollback: DROP VIEW canonical_reference_bootstrap_summary;
 --   DROP FUNCTION bootstrap_canonical_reference_data();
 
@@ -213,8 +215,6 @@ BEGIN
     );
 END;
 $$;
-
-SELECT public.bootstrap_canonical_reference_data();
 
 CREATE OR REPLACE VIEW public.canonical_reference_bootstrap_summary AS
 SELECT

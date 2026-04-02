@@ -7,6 +7,7 @@
   "scripts": {
     "backfill:sgo-history": "tsx scripts/backfill-sgo-history.ts",
     "build": "pnpm exec tsc -b tsconfig.json",
+    "bootstrap:canonical-reference": "tsx scripts/run-canonical-reference-bootstrap.ts",
     "deploy:check": "tsx scripts/deploy-check.ts",
     "clean": "pnpm -r --if-present run clean",
     "dev": "pnpm --filter @unit-talk/api dev",
