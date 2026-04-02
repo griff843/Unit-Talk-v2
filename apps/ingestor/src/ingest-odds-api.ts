@@ -77,8 +77,16 @@ export async function ingestOddsApiLeague(
 
     logger?.info?.(`[odds-api] ${league}: ${result.eventsCount} events, ${offers.length} offers from ${result.telemetry.bookmakerCount} bookmakers`);
 
-    // Batch upsert to provider_offers
-    const upsertInputs = offers.map(mapOddsApiOfferToProviderOfferInsert);
+    // Batch upsert to provider_offers — deduplicate by idempotency key to avoid
+    // "ON CONFLICT DO UPDATE cannot affect row a second time" errors when the
+    // normalizer emits multiple offers with the same key in a single batch.
+    const mapped = offers.map(mapOddsApiOfferToProviderOfferInsert);
+    const seen = new Set<string>();
+    const upsertInputs = mapped.filter((o) => {
+      if (seen.has(o.idempotencyKey)) return false;
+      seen.add(o.idempotencyKey);
+      return true;
+    });
 
     const upsertResult = await repositories.providerOffers.upsertBatch(upsertInputs);
     const inserted = upsertResult.insertedCount;
