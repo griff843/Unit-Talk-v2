@@ -489,6 +489,13 @@ export function BetForm() {
       .catch((err: unknown) => setCatalogError(err instanceof Error ? err.message : 'Reference data unavailable'));
   }, []);
 
+  // Auto-select capper when catalog loads with exactly one option and no capper is set yet.
+  useEffect(() => {
+    if (catalog && catalog.cappers.length === 1 && !form.getValues('capper')) {
+      form.setValue('capper', catalog.cappers[0]!, { shouldValidate: true });
+    }
+  }, [catalog, form]);
+
   useEffect(() => {
     setSelectedMatchupId(null);
     setEventBrowse(null);

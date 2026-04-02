@@ -583,3 +583,93 @@ test('promotion snapshot records edgeSource=explicit when promotionScores.edge i
     'promotion decision must have run',
   );
 });
+
+// ── Smart Form capper attribution and confidence floor bypass ─────────────────
+
+test('smart-form pick with low confidence is never blocked by confidence floor', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // capperConviction=3 → confidence=0.3, well below the policy floor of 0.6
+  // With all explicit scores passing thresholds, a non-smart-form pick would be blocked.
+  // smart-form picks must bypass the confidence floor gate.
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'NBA - Player Prop',
+      selection: 'Jalen Brunson Points O 28.5',
+      odds: -110,
+      confidence: 0.3, // below confidenceFloor of 0.6
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Knicks vs Celtics',
+        capper: 'griff843',
+        capperConviction: 3,
+        promotionScores: {
+          edge: 75,
+          trust: 75,
+          readiness: 80,
+          uniqueness: 75,
+          boardFit: 80,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // Smart Form bypasses the confidence floor — pick should qualify for best-bets.
+  assert.equal(result.pick.source, 'smart-form');
+  assert.equal(result.submission.payload.submittedBy, 'griff843');
+  assert.equal(result.submissionRecord.submitted_by, 'griff843');
+  assert.equal(result.pick.promotionStatus, 'qualified', 'smart-form capper pick must not be blocked by low confidence');
+});
+
+test('non-smart-form pick with low confidence is correctly suppressed by confidence floor', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // Same scores, same low confidence — but source is 'test' (system pick), not 'smart-form'.
+  // Should be blocked by the confidence floor.
+  const result = await processSubmission(
+    {
+      source: 'test',
+      market: 'NBA - Player Prop',
+      selection: 'Player Points O 28.5',
+      odds: -110,
+      confidence: 0.3, // below confidenceFloor of 0.6
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Knicks vs Celtics',
+        promotionScores: {
+          edge: 75,
+          trust: 75,
+          readiness: 80,
+          uniqueness: 75,
+          boardFit: 80,
+        },
+      },
+    },
+    repositories,
+  );
+
+  // Non-smart-form pick should be blocked: confidence 0.3 < floor 0.6.
+  assert.equal(result.pick.promotionStatus, 'not_eligible', 'system pick with low confidence must be blocked by confidence floor');
+});
+
+test('smart-form submission payload includes submittedBy from capper field', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'NBA - Player Prop',
+      selection: 'Player Points O 22.5',
+      odds: -115,
+      confidence: 0.8,
+      metadata: { capper: 'griff843', sport: 'NBA' },
+    },
+    repositories,
+  );
+
+  // submittedBy is persisted on the submission record (picks table lacks submitted_by column pre-migration).
+  assert.equal(result.submission.payload.submittedBy, 'griff843', 'submittedBy must flow through the submission payload');
+  assert.equal(result.submissionRecord.submitted_by, 'griff843', 'submitted_by must be persisted on the submission record');
+  assert.equal(result.pick.source, 'smart-form');
+});

@@ -25,6 +25,7 @@ export interface CanonicalPick {
   stakeUnits?: number | undefined;
   confidence?: number | undefined;
   source: string;
+  submittedBy?: string | undefined;
   approvalStatus: ApprovalStatus;
   promotionStatus: PromotionStatus;
   promotionTarget?: PromotionTarget | undefined;
@@ -64,6 +65,7 @@ export function materializeCanonicalPick(
     stakeUnits: payload.stakeUnits,
     confidence: payload.confidence,
     source: payload.source,
+    submittedBy: payload.submittedBy,
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',

@@ -157,7 +157,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
     riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
     scoreInputs,
     minimumScore: policy.minimumScore,
-    confidenceFloor: policy.confidenceFloor,
+    // Smart Form picks are deliberate human capper submissions — confidence is
+    // analytical metadata only and must never block delivery.
+    confidenceFloor: canonicalPick.source === 'smart-form' ? undefined : policy.confidenceFloor,
     boardCaps: policy.boardCaps,
     boardState,
     override: undefined,
@@ -434,7 +436,7 @@ async function persistPromotionDecisionForPick(
     riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
     scoreInputs,
     minimumScore: policy.minimumScore,
-    confidenceFloor: policy.confidenceFloor,
+    confidenceFloor: canonicalPick.source === 'smart-form' ? undefined : policy.confidenceFloor,
     boardCaps: policy.boardCaps,
     boardState,
     override: overrideState,
