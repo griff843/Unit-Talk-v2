@@ -130,6 +130,18 @@ export type ParticipantRecord = ParticipantRow;
 /** @see {@link ParticipantMembershipRow} */
 export type ParticipantMembershipRecord = ParticipantMembershipRow;
 
+/** @see {@link LeagueRow} */
+export type LeagueRecord = LeagueRow;
+
+/** @see {@link TeamRow} */
+export type TeamRecord = TeamRow;
+
+/** @see {@link PlayerRow} */
+export type PlayerRecord = PlayerRow;
+
+/** @see {@link PlayerTeamAssignmentRow} */
+export type PlayerTeamAssignmentRecord = PlayerTeamAssignmentRow;
+
 /** @see {@link GradeResultRow} */
 export type GradeResultRecord = GradeResultRow;
 
@@ -164,6 +176,60 @@ export interface SportRow {
   display_name: string;
   sort_order: number;
   active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+// New canonical reference backbone tables are introduced by additive migrations.
+// We keep their application-facing row types here until the generated Supabase
+// types are refreshed in an environment with working CLI auth.
+export interface LeagueRow {
+  id: string;
+  sport_id: string;
+  display_name: string;
+  country: string | null;
+  active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TeamRow {
+  id: string;
+  league_id: string;
+  display_name: string;
+  short_name: string;
+  abbreviation: string | null;
+  city: string | null;
+  active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlayerRow {
+  id: string;
+  display_name: string;
+  first_name: string | null;
+  last_name: string | null;
+  active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlayerTeamAssignmentRow {
+  id: string;
+  player_id: string;
+  team_id: string;
+  league_id: string;
+  effective_from: string | null;
+  effective_until: string | null;
+  is_current: boolean;
+  source: string;
   metadata: Record<string, unknown>;
   created_at: string;
   updated_at: string;

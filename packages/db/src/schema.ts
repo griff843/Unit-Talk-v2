@@ -196,6 +196,26 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'api',
   },
   {
+    name: 'leagues',
+    purpose: 'Canonical league definitions layered above the legacy sport-scoped taxonomy.',
+    owner: 'platform',
+  },
+  {
+    name: 'teams',
+    purpose: 'First-class canonical team records linked to leagues.',
+    owner: 'platform',
+  },
+  {
+    name: 'players',
+    purpose: 'First-class canonical player identities decoupled from provider labels.',
+    owner: 'platform',
+  },
+  {
+    name: 'player_team_assignments',
+    purpose: 'Effective-dated player-to-team roster history.',
+    owner: 'api',
+  },
+  {
     name: 'sports',
     purpose: 'Canonical sport definitions with ordering and activation state.',
     owner: 'platform',
