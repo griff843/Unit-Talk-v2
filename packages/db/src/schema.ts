@@ -221,6 +221,26 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'platform',
   },
   {
+    name: 'selection_types',
+    purpose: 'Sport-agnostic wager side semantics such as over/under and home/away.',
+    owner: 'platform',
+  },
+  {
+    name: 'market_families',
+    purpose: 'Top-level canonical grouping for market taxonomy.',
+    owner: 'platform',
+  },
+  {
+    name: 'market_types',
+    purpose: 'Canonical market definitions resolved across providers and consumers.',
+    owner: 'platform',
+  },
+  {
+    name: 'sport_market_type_availability',
+    purpose: 'Declares which canonical market types are active for each sport.',
+    owner: 'platform',
+  },
+  {
     name: 'sport_market_types',
     purpose: 'Maps which market types are available per sport.',
     owner: 'platform',
@@ -231,9 +251,34 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'platform',
   },
   {
+    name: 'combo_stat_types',
+    purpose: 'Canonical combo stat definitions such as PRA and Points + Assists.',
+    owner: 'platform',
+  },
+  {
+    name: 'combo_stat_type_components',
+    purpose: 'Defines the component stat makeup for each combo stat type.',
+    owner: 'platform',
+  },
+  {
     name: 'sportsbooks',
     purpose: 'Canonical sportsbook definitions.',
     owner: 'platform',
+  },
+  {
+    name: 'provider_entity_aliases',
+    purpose: 'Maps provider-specific team and player identities into canonical entities.',
+    owner: 'ingestor',
+  },
+  {
+    name: 'provider_market_aliases',
+    purpose: 'Maps provider-specific market keys into canonical market taxonomy.',
+    owner: 'ingestor',
+  },
+  {
+    name: 'provider_book_aliases',
+    purpose: 'Maps provider-specific book identifiers into canonical sportsbook ids.',
+    owner: 'ingestor',
   },
   {
     name: 'provider_offers',

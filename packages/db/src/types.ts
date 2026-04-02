@@ -203,9 +203,117 @@ export interface StatTypeRow {
   id: string;
   sport_id: string;
   name: string;
+  canonical_key: string;
+  display_name: string;
+  short_label: string;
   sort_order: number;
   active: boolean;
   created_at: string;
+}
+
+export interface SelectionTypeRow {
+  id: string;
+  display_name: string;
+  sort_order: number;
+  active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketFamilyRow {
+  id: string;
+  display_name: string;
+  sort_order: number;
+  active: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface MarketCatalogTypeRow {
+  id: string;
+  market_family_id: string;
+  selection_type_id: string;
+  display_name: string;
+  short_label: string;
+  requires_line: boolean;
+  requires_participant: boolean;
+  active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SportMarketTypeAvailabilityRow {
+  sport_id: string;
+  market_type_id: string;
+  active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComboStatTypeRow {
+  id: string;
+  sport_id: string;
+  market_type_id: string;
+  display_name: string;
+  short_label: string;
+  active: boolean;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ComboStatTypeComponentRow {
+  combo_stat_type_id: string;
+  stat_type_id: string;
+  weight: number;
+  created_at: string;
+}
+
+export interface ProviderEntityAliasRow {
+  id: string;
+  provider: string;
+  entity_kind: 'team' | 'player' | 'participant';
+  provider_entity_key: string;
+  provider_entity_id: string | null;
+  provider_display_name: string;
+  participant_id: string | null;
+  team_id: string | null;
+  player_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderMarketAliasRow {
+  id: string;
+  provider: string;
+  provider_market_key: string;
+  provider_display_name: string;
+  market_type_id: string;
+  sport_id: string | null;
+  stat_type_id: string | null;
+  combo_stat_type_id: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ProviderBookAliasRow {
+  id: string;
+  provider: string;
+  provider_book_key: string;
+  provider_display_name: string;
+  sportsbook_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface SportsbookRow {
