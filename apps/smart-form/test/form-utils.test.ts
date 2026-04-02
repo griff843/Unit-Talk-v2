@@ -155,3 +155,18 @@ test('buildSubmissionPayload records canonical browse metadata for live-offer se
     snapshotAt: '2026-04-02T18:30:00.000Z',
   });
 });
+
+// UTV2-255: conviction=8/9/4 trust mapping proof
+test('conviction=9 maps to trust=90 and confidence=0.9', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ capperConviction: 9 }));
+  assert.equal(payload.confidence, 0.9);
+  assert.equal(payload.metadata?.capperConviction, 9);
+  assert.deepEqual(payload.metadata?.promotionScores, { trust: 90 });
+});
+
+test('conviction=4 maps to trust=40 and confidence=0.4', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ capperConviction: 4 }));
+  assert.equal(payload.confidence, 0.4);
+  assert.equal(payload.metadata?.capperConviction, 4);
+  assert.deepEqual(payload.metadata?.promotionScores, { trust: 40 });
+});
