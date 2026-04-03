@@ -57,6 +57,8 @@ function CountBadge({ count, color }: { count: number; color: string }) {
 function DeliveryRow({ row }: { row: Record<string, unknown> }) {
   const pickId = String(row['pick_id'] ?? '');
   const pick = row['pick'] as Record<string, unknown> | null;
+  const pickSource = pick ? String(pick['source'] ?? '') : null;
+  const isProofSource = pickSource && (pickSource.includes('proof') || pickSource.includes('test'));
   return (
     <tr className="border-b border-gray-800 hover:bg-gray-800/50">
       <td className="py-2 pr-3"><PickLink id={pickId} /></td>
@@ -66,6 +68,13 @@ function DeliveryRow({ row }: { row: Record<string, unknown> }) {
       <td className="py-2 pr-3 text-xs text-gray-400 max-w-[200px] truncate" title={String(row['last_error'] ?? '')}>{String(row['last_error'] ?? '—')}</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{row['ageHours'] as number}h</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{pick ? String(pick['status']) : '—'}</td>
+      <td className="py-2 pr-3">
+        {pickSource ? (
+          <span className={`rounded px-1.5 py-0.5 text-xs font-medium ${isProofSource ? 'bg-yellow-500/20 text-yellow-400' : 'bg-gray-700 text-gray-300'}`}>
+            {pickSource}
+          </span>
+        ) : <span className="text-xs text-gray-500">—</span>}
+      </td>
       <td className="py-2">
         <InterventionAction label="Retry" variant="primary" pickId={pickId} action="retry_delivery" />
       </td>
@@ -117,7 +126,7 @@ export default async function ExceptionsPage({
                 <tr className="border-b border-gray-700 text-xs uppercase text-gray-400">
                   <th className="py-2 pr-3">Pick</th><th className="py-2 pr-3">Target</th><th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Attempts</th><th className="py-2 pr-3">Error</th><th className="py-2 pr-3">Age</th>
-                  <th className="py-2 pr-3">Lifecycle</th><th className="py-2">Action</th>
+                  <th className="py-2 pr-3">Lifecycle</th><th className="py-2 pr-3">Source</th><th className="py-2">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -139,7 +148,7 @@ export default async function ExceptionsPage({
                 <tr className="border-b border-gray-700 text-xs uppercase text-gray-400">
                   <th className="py-2 pr-3">Pick</th><th className="py-2 pr-3">Target</th><th className="py-2 pr-3">Status</th>
                   <th className="py-2 pr-3">Attempts</th><th className="py-2 pr-3">Error</th><th className="py-2 pr-3">Age</th>
-                  <th className="py-2 pr-3">Lifecycle</th><th className="py-2">Action</th>
+                  <th className="py-2 pr-3">Lifecycle</th><th className="py-2 pr-3">Source</th><th className="py-2">Action</th>
                 </tr>
               </thead>
               <tbody>
