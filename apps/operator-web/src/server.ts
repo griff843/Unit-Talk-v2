@@ -1,4 +1,6 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 /**
  * Outbox rows created before this date are excluded from operator snapshot queries
@@ -383,6 +385,14 @@ export interface OperatorServerOptions {
 
 export type OperatorRuntimeMode = 'fail_open' | 'fail_closed';
 
+export function resolveOperatorWorkspaceRoot(fromFileUrl = import.meta.url) {
+  return path.resolve(path.dirname(fileURLToPath(fromFileUrl)), '..', '..', '..');
+}
+
+function loadOperatorEnvironment() {
+  return loadEnvironment(resolveOperatorWorkspaceRoot());
+}
+
 export function createOperatorServer(options: OperatorServerOptions = {}) {
   const provider = options.provider ?? createOperatorSnapshotProvider();
   const statsProvider = options.statsProvider ?? createOperatorStatsProvider();
@@ -507,7 +517,7 @@ export function createOperatorSnapshotProvider(
   let environment = options.environment;
 
   try {
-    environment ??= loadEnvironment();
+    environment ??= loadOperatorEnvironment();
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
@@ -755,7 +765,7 @@ export function createOperatorStatsProvider(
   let environment = options.environment;
 
   try {
-    environment ??= loadEnvironment();
+    environment ??= loadOperatorEnvironment();
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
@@ -845,7 +855,7 @@ export function createOperatorLeaderboardProvider(
   let environment = options.environment;
 
   try {
-    environment ??= loadEnvironment();
+    environment ??= loadOperatorEnvironment();
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
@@ -935,7 +945,7 @@ export function createOperatorCapperRecapProvider(
   let environment = options.environment;
 
   try {
-    environment ??= loadEnvironment();
+    environment ??= loadOperatorEnvironment();
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
 
@@ -1052,8 +1062,7 @@ export function createSnapshotFromRows(input: {
     simulatedDeliveries,
   };
 
-  const mostRecentRun = input.recentRuns[0];
-  const workerStatus = inferWorkerStatus(mostRecentRun, counts, input.recentRuns);
+  const workerStatus = inferWorkerStatus(counts, input.recentRuns);
   const workerRuntime = summarizeWorkerRuntime(
     input.recentRuns,
     input.recentOutbox,
@@ -1407,23 +1416,21 @@ export function detectIncidents(
     });
   }
 
-  // 2. stale-worker: most recent distribution-worker run finished more than 10 minutes ago, or no run exists
-  const workerRuns = snapshot.recentRuns.filter((row) => row.run_type === 'distribution-worker');
-  const latestWorkerRun = workerRuns[0] ?? null;
+  // 2. stale-worker: no worker heartbeat/distribution activity within 10 minutes
+  const latestWorkerRun = findLatestWorkerRun(snapshot.recentRuns);
   const isStaleWorker =
     latestWorkerRun === null
       ? true
-      : (latestWorkerRun.status === 'succeeded' || latestWorkerRun.status === 'failed') &&
-        latestWorkerRun.finished_at !== null &&
-        nowMs - new Date(latestWorkerRun.finished_at).getTime() > STALE_WORKER_THRESHOLD_MS;
+      : nowMs - new Date(resolveWorkerRunObservedAt(latestWorkerRun)).getTime() >
+        STALE_WORKER_THRESHOLD_MS;
   if (isStaleWorker) {
     incidents.push({
       type: 'stale-worker',
       severity: 'warning',
       summary:
         latestWorkerRun === null
-          ? 'No distribution-worker runs are visible — worker may be offline'
-          : 'Most recent distribution-worker run finished more than 10 minutes ago',
+          ? 'No worker heartbeat or distribution runs are visible — worker may be offline'
+          : `Most recent worker activity (${latestWorkerRun.run_type}) is older than 10 minutes`,
       affectedCount: 1,
     });
   }
@@ -1494,7 +1501,10 @@ function summarizeChannelLane(
   const relatedOutboxIds = new Set(targetOutbox.map((row) => row.id));
   const targetReceipts = receiptRows.filter(
     (row) =>
-      row.channel === channelId || (row.outbox_id !== null && relatedOutboxIds.has(row.outbox_id)),
+      row.receipt_type === 'discord.message' &&
+      (row.channel === target ||
+        row.channel === channelId ||
+        (row.outbox_id !== null && relatedOutboxIds.has(row.outbox_id))),
   );
   const blockers: string[] = [];
   if (sentRows.length < 1) {
@@ -1740,7 +1750,6 @@ function outboxRowsToChannelId(
 }
 
 function inferWorkerStatus(
-  mostRecentRun: SystemRunRecord | undefined,
   counts: OperatorSnapshot['counts'],
   allRuns: SystemRunRecord[] = [],
   staleHeartbeatThresholdSeconds: number = 120,
@@ -1779,11 +1788,13 @@ function inferWorkerStatus(
     }
   }
 
+  const mostRecentRun = findLatestWorkerRun(allRuns);
+
   if (!mostRecentRun) {
     return {
       component: 'worker',
       status: 'degraded',
-      detail: 'no system runs recorded yet',
+      detail: 'no worker activity recorded yet',
     };
   }
 
@@ -1816,6 +1827,24 @@ function inferWorkerStatus(
     status: 'healthy',
     detail: `latest run ${mostRecentRun.run_type} is ${mostRecentRun.status}`,
   };
+}
+
+function findLatestWorkerRun(runs: SystemRunRecord[]): SystemRunRecord | null {
+  const workerRuns = runs.filter(
+    (row) => row.run_type === 'distribution.process' || row.run_type === 'worker.heartbeat',
+  );
+
+  if (workerRuns.length === 0) {
+    return null;
+  }
+
+  return [...workerRuns].sort((left, right) =>
+    resolveWorkerRunObservedAt(right).localeCompare(resolveWorkerRunObservedAt(left)),
+  )[0] ?? null;
+}
+
+function resolveWorkerRunObservedAt(run: SystemRunRecord): string {
+  return run.finished_at ?? run.started_at;
 }
 
 export interface StatsRow {

@@ -1,7 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import { InterventionAction } from '@/components/InterventionAction';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
-import { retryDelivery, rerunPromotion, overridePromotion } from '@/app/actions/intervention';
 import Link from 'next/link';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
@@ -68,7 +67,7 @@ function DeliveryRow({ row }: { row: Record<string, unknown> }) {
       <td className="py-2 pr-3 text-xs text-gray-300">{row['ageHours'] as number}h</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{pick ? String(pick['status']) : '—'}</td>
       <td className="py-2">
-        <InterventionAction label="Retry" variant="primary" onExecute={retryDelivery.bind(null, pickId)} />
+        <InterventionAction label="Retry" variant="primary" pickId={pickId} action="retry_delivery" />
       </td>
     </tr>
   );
@@ -209,8 +208,8 @@ export default async function ExceptionsPage({
                       <td className="py-2 pr-3 text-xs text-gray-300">{String(row['promotion_target'] ?? '—')}</td>
                       <td className="py-2">
                         <div className="flex gap-2">
-                          <InterventionAction label="Rerun" variant="primary" onExecute={rerunPromotion.bind(null, pickId)} />
-                          <InterventionAction label="Force Promote" variant="success" onExecute={overridePromotion.bind(null, pickId, 'force_promote')} />
+                          <InterventionAction label="Rerun" variant="primary" pickId={pickId} action="rerun_promotion" />
+                          <InterventionAction label="Force Promote" variant="success" pickId={pickId} action="force_promote" />
                         </div>
                       </td>
                     </tr>
@@ -244,7 +243,7 @@ export default async function ExceptionsPage({
                       <td className="py-2 pr-3 text-xs text-gray-300">{row['promotion_score'] != null ? Number(row['promotion_score']).toFixed(1) : '—'}</td>
                       <td className="py-2 pr-3 text-xs text-yellow-400">{row['ageHours'] as number}h</td>
                       <td className="py-2">
-                        <InterventionAction label="Rerun Promo" variant="primary" onExecute={rerunPromotion.bind(null, pickId)} />
+                        <InterventionAction label="Rerun Promo" variant="primary" pickId={pickId} action="rerun_promotion" />
                       </td>
                     </tr>
                   );

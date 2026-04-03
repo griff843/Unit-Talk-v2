@@ -11,12 +11,18 @@ import {
   createSnapshotFromRows,
   createStatsRows,
   readOperatorSimulationMode,
+  resolveOperatorWorkspaceRoot,
   type OperatorCapperRecapProvider,
   type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
   type OperatorSnapshotProvider,
   type OutboxFilter,
 } from './server.js';
+
+test('resolveOperatorWorkspaceRoot targets repo root from operator server module path', () => {
+  const root = resolveOperatorWorkspaceRoot('file:///C:/Dev/Unit-Talk-v2-main/apps/operator-web/src/server.ts');
+  assert.equal(root, 'C:\\Dev\\Unit-Talk-v2-main');
+});
 
 test('createOperatorSnapshotProvider fails closed when database config is unavailable', () => {
   assert.throws(
@@ -3088,7 +3094,7 @@ test('createSnapshotFromRows marks worker degraded when a worker.circuit-open ru
   );
 });
 
-test('createSnapshotFromRows does not degrade worker when worker.circuit-open run is succeeded', () => {
+test('createSnapshotFromRows does not degrade worker when worker.circuit-open run is succeeded and fresh worker activity exists', () => {
   const closedCircuitRun: SystemRunRecord = {
     id: 'circuit-run-2',
     run_type: 'worker.circuit-open',
@@ -3102,13 +3108,13 @@ test('createSnapshotFromRows does not degrade worker when worker.circuit-open ru
   };
   const normalRun: SystemRunRecord = {
     id: 'normal-run-1',
-    run_type: 'worker.cycle',
+    run_type: 'worker.heartbeat',
     status: 'succeeded',
-    started_at: '2026-03-29T10:05:01.000Z',
-    finished_at: '2026-03-29T10:05:02.000Z',
+    started_at: new Date(Date.now() - 10_000).toISOString(),
+    finished_at: new Date(Date.now() - 9_000).toISOString(),
     actor: 'worker-dev',
     details: null,
-    created_at: '2026-03-29T10:05:01.000Z',
+    created_at: new Date(Date.now() - 10_000).toISOString(),
     idempotency_key: null,
   };
 
@@ -3358,7 +3364,7 @@ test('detectIncidents does not raise stuck-outbox when pending row is recent', (
   );
 });
 
-test('detectIncidents returns stale-worker incident when most recent distribution-worker run finished more than 10 minutes ago', () => {
+test('detectIncidents returns stale-worker incident when most recent distribution.process run finished more than 10 minutes ago', () => {
   const now = new Date('2026-03-30T12:15:00.000Z');
   const snapshot = createSnapshotFromRows({
     persistenceMode: 'database',
@@ -3368,7 +3374,7 @@ test('detectIncidents returns stale-worker incident when most recent distributio
     recentRuns: [
       {
         id: 'run-worker-stale-1',
-        run_type: 'distribution-worker',
+        run_type: 'distribution.process',
         status: 'succeeded',
         started_at: '2026-03-30T12:00:00.000Z',
         finished_at: '2026-03-30T12:00:30.000Z',
@@ -3390,7 +3396,7 @@ test('detectIncidents returns stale-worker incident when most recent distributio
   assert.match(staleIncident.summary, /10 minutes/i);
 });
 
-test('detectIncidents returns stale-worker incident when no distribution-worker runs exist', () => {
+test('detectIncidents returns stale-worker incident when no worker runs exist', () => {
   const now = new Date('2026-03-30T12:00:00.000Z');
   const snapshot = createSnapshotFromRows({
     persistenceMode: 'database',
@@ -3404,9 +3410,51 @@ test('detectIncidents returns stale-worker incident when no distribution-worker 
   });
 
   const staleIncident = snapshot.incidents.find((i) => i.type === 'stale-worker');
-  assert.ok(staleIncident, 'stale-worker incident should be present when no distribution-worker runs');
+  assert.ok(staleIncident, 'stale-worker incident should be present when no worker runs exist');
   assert.equal(staleIncident.severity, 'warning');
   assert.match(staleIncident.summary, /offline/i);
+});
+
+test('detectIncidents does not return stale-worker when worker heartbeat is fresh even without distribution work', () => {
+  const now = new Date();
+  const heartbeatCreatedAt = new Date(now.getTime() - 30_000).toISOString();
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [
+      {
+        id: 'run-hb-1',
+        run_type: 'worker.heartbeat',
+        status: 'succeeded',
+        started_at: heartbeatCreatedAt,
+        finished_at: new Date(now.getTime() - 29_000).toISOString(),
+        actor: 'worker-dev',
+        details: {},
+        created_at: heartbeatCreatedAt,
+        idempotency_key: null,
+      },
+      {
+        id: 'run-ingestor-1',
+        run_type: 'ingestor.cycle',
+        status: 'failed',
+        started_at: new Date(now.getTime() - 60_000).toISOString(),
+        finished_at: new Date(now.getTime() - 50_000).toISOString(),
+        actor: 'ingestor',
+        details: {},
+        created_at: new Date(now.getTime() - 60_000).toISOString(),
+        idempotency_key: null,
+      },
+    ],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(snapshot.incidents.some((i) => i.type === 'stale-worker'), false);
+  const workerHealth = snapshot.health.find((signal) => signal.component === 'worker');
+  assert.equal(workerHealth?.status, 'healthy');
 });
 
 test('detectIncidents returns open-dead-letter incident when dead_letter rows exist', () => {
@@ -3501,7 +3549,7 @@ test('detectIncidents returns circuit-open incident when bestBets circuit is ope
 });
 
 test('detectIncidents returns empty array when everything is healthy', () => {
-  const now = new Date('2026-03-30T12:01:00.000Z');
+  const now = new Date();
   // A recent successful distribution-worker run and sent outbox rows
   const snapshot = createSnapshotFromRows({
     persistenceMode: 'database',
@@ -3527,13 +3575,13 @@ test('detectIncidents returns empty array when everything is healthy', () => {
     recentRuns: [
       {
         id: 'run-worker-healthy-1',
-        run_type: 'distribution-worker',
+        run_type: 'distribution.process',
         status: 'succeeded',
-        started_at: '2026-03-30T12:00:00.000Z',
-        finished_at: '2026-03-30T12:00:30.000Z',
+        started_at: new Date(now.getTime() - 30_000).toISOString(),
+        finished_at: new Date(now.getTime() - 20_000).toISOString(),
         actor: 'worker-dev',
         details: null,
-        created_at: '2026-03-30T12:00:00.000Z',
+        created_at: new Date(now.getTime() - 30_000).toISOString(),
         idempotency_key: null,
       },
     ],
@@ -4503,6 +4551,140 @@ test('GET /api/operator/exception-queues surfaces missing canonical market and b
   });
 });
 
+test('GET /api/operator/picks/:id returns canonical submittedBy from submission identity', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-detail-1',
+        submission_id: 'submission-detail-1',
+        source: 'smart-form',
+        market: 'points-all-game-ou',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -120,
+        stake_units: 2,
+        status: 'posted',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: 'best-bets',
+        promotion_score: 81,
+        posted_at: '2026-04-02T18:00:00.000Z',
+        settled_at: null,
+        created_at: '2026-04-02T17:55:00.000Z',
+        metadata: {
+          capper: 'griff843',
+        },
+      },
+    ],
+    submissions: [
+      {
+        id: 'submission-detail-1',
+        submitted_by: 'griff843',
+        payload: {
+          submittedBy: 'griff843',
+        },
+        created_at: '2026-04-02T17:54:00.000Z',
+      },
+    ],
+    pick_lifecycle: [],
+    pick_promotion_history: [],
+    distribution_outbox: [],
+    settlement_records: [],
+    audit_log: [],
+    distribution_receipts: [],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/picks/pick-detail-1');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      pick: {
+        submittedBy: string | null;
+        source: string;
+      };
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.pick.submittedBy, 'griff843');
+  assert.equal(body.data.pick.source, 'smart-form');
+});
+
+test('GET /api/operator/pick-search surfaces submitter separately from intake source', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-search-1',
+        submission_id: 'submission-search-1',
+        source: 'smart-form',
+        market: 'points-all-game-ou',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -110,
+        stake_units: 1.5,
+        status: 'posted',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: 'best-bets',
+        promotion_score: 79,
+        created_at: '2026-04-02T18:00:00.000Z',
+        metadata: {
+          sport: 'NBA',
+          capper: 'griff843',
+        },
+      },
+    ],
+    submissions: [
+      {
+        id: 'submission-search-1',
+        submitted_by: 'griff843',
+        payload: {
+          submittedBy: 'griff843',
+        },
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/pick-search?capper=griff&sport=NBA');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      total: number;
+      picks: Array<{
+        source: string;
+        submitter: string | null;
+        sport: string | null;
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.total, 1);
+  assert.equal(body.data.picks[0]?.source, 'smart-form');
+  assert.equal(body.data.picks[0]?.submitter, 'griff843');
+  assert.equal(body.data.picks[0]?.sport, 'NBA');
+});
+
 function createAggregateProvider(tables: Record<string, Array<Record<string, unknown>>>): OperatorSnapshotProvider {
   return {
     ...createStaticProvider(),
@@ -4524,6 +4706,8 @@ class MockSupabaseQuery {
   private sortField: string | null = null;
   private sortAscending = true;
   private resultLimit: number | null = null;
+  private rangeStart: number | null = null;
+  private rangeEnd: number | null = null;
 
   constructor(rows: Array<Record<string, unknown>>) {
     this.rows = rows.map((row) => ({ ...row }));
@@ -4531,6 +4715,14 @@ class MockSupabaseQuery {
 
   select() {
     return this;
+  }
+
+  single() {
+    const { data, error } = this.execute();
+    return Promise.resolve({
+      data: data[0] ?? null,
+      error: error ?? (data.length === 0 ? { message: 'Row not found' } : null),
+    });
   }
 
   eq(field: string, value: unknown) {
@@ -4553,6 +4745,30 @@ class MockSupabaseQuery {
     return this;
   }
 
+  ilike(field: string, pattern: string) {
+    const needle = pattern.replaceAll('%', '').toLowerCase();
+    this.filters.push((row) => String(row[field] ?? '').toLowerCase().includes(needle));
+    return this;
+  }
+
+  or(expression: string) {
+    const clauses = expression
+      .split(',')
+      .map((clause) => clause.trim())
+      .filter((clause) => clause.length > 0)
+      .map((clause) => {
+        const parts = clause.split('.');
+        const field = parts[0] ?? '';
+        const needle = parts.slice(2).join('.').replaceAll('%', '').toLowerCase();
+        return { field, needle };
+      });
+
+    this.filters.push((row) =>
+      clauses.some(({ field, needle }) => String(row[field] ?? '').toLowerCase().includes(needle)),
+    );
+    return this;
+  }
+
   order(field: string, options?: { ascending?: boolean }) {
     this.sortField = field;
     this.sortAscending = options?.ascending ?? true;
@@ -4561,6 +4777,12 @@ class MockSupabaseQuery {
 
   limit(limit: number) {
     this.resultLimit = limit;
+    return this;
+  }
+
+  range(from: number, to: number) {
+    this.rangeStart = from;
+    this.rangeEnd = to;
     return this;
   }
 
@@ -4585,6 +4807,10 @@ class MockSupabaseQuery {
 
     if (this.resultLimit != null) {
       rows = rows.slice(0, this.resultLimit);
+    }
+
+    if (this.rangeStart != null && this.rangeEnd != null) {
+      rows = rows.slice(this.rangeStart, this.rangeEnd + 1);
     }
 
     return { data: rows, error: null };
