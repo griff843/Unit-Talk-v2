@@ -108,7 +108,7 @@ test('POST /api/submissions returns created submission payload', async () => {
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        source: 'server-test',
+        source: 'api',
         market: 'NBA points',
         selection: 'Player Over 18.5',
       }),
@@ -228,7 +228,7 @@ test('POST /api/picks/:id/settle settles a posted pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
     {
-      source: 'server-test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 10.5',
     },
@@ -645,7 +645,7 @@ test('POST /api/picks/:id/settle returns downstream loss attribution when inputs
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
     {
-      source: 'server-test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 10.5',
       metadata: {
@@ -742,7 +742,7 @@ test('POST /api/picks/:id/requeue returns 422 when pick is not qualified', async
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
     {
-      source: 'server-test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 18.5',
     },
@@ -1037,7 +1037,7 @@ async function createQualifiedPick(
 ) {
   return processSubmission(
     {
-      source: 'server-test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 8.5',
       confidence: 0.9,
@@ -1071,7 +1071,7 @@ async function createSettledRecapPick(
 ) {
   const created = await processSubmission(
     {
-      source: 'server-test',
+      source: 'api',
       market: input.market,
       selection: input.selection,
       odds: input.odds,
@@ -1139,7 +1139,7 @@ test('GET /api/picks returns 400 without status param', async () => {
 test('GET /api/picks?status=validated returns picks in that state', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await processSubmission(
-    { source: 'test', market: 'NBA', selection: 'Over 200.5' },
+    { source: 'api', market: 'NBA', selection: 'Over 200.5' },
     repositories,
   );
 
@@ -1167,7 +1167,7 @@ test('GET /api/picks?status=validated returns picks in that state', async () => 
 test('GET /api/picks?status=settled returns empty when no settled picks', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await processSubmission(
-    { source: 'test', market: 'NBA', selection: 'Over 200.5' },
+    { source: 'api', market: 'NBA', selection: 'Over 200.5' },
     repositories,
   );
 

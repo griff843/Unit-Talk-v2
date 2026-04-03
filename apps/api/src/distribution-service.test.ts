@@ -14,7 +14,7 @@ function makePick(overrides: Partial<CanonicalPick> = {}): CanonicalPick {
   return {
     id: 'pick-001',
     submissionId: 'sub-001',
-    source: 'test',
+    source: 'api',
     market: 'NFL passing yards',
     selection: 'QB Over 287.5',
     line: 287.5,

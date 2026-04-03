@@ -40,7 +40,7 @@ test(
 
     const result = await processSubmission(
       {
-        source: 'db-smoke',
+        source: 'api',
         eventName: `db-smoke-${smokeRunId}`,
         submittedBy: 'codex',
         market: 'NBA points',

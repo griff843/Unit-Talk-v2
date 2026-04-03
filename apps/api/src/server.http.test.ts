@@ -82,7 +82,7 @@ test('POST /api/submissions with valid body returns 201 and pick id', async () =
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          source: 'http-test',
+          source: 'api',
           market: 'NBA points',
           selection: 'Player Over 22.5',
         }),
@@ -180,7 +180,7 @@ test('POST /api/submissions with oversized body returns 413', async () => {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          source: 'http-test',
+          source: 'api',
           market: 'NBA points',
           selection: 'Player Over 22.5',
           notes: 'x'.repeat(512),
@@ -205,7 +205,7 @@ test('POST /api/picks/:id/settle with valid posted pick returns 201', async () =
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
     {
-      source: 'http-test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 9.5',
     },
@@ -271,7 +271,7 @@ test('POST /api/picks/:id/settle with empty body returns 400', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
     {
-      source: 'http-test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 6.5',
     },

@@ -98,7 +98,7 @@ export async function processSubmission(
       odds: existingPick.odds ?? undefined,
       stakeUnits: existingPick.stake_units ?? undefined,
       confidence: existingPick.confidence ?? undefined,
-      source: existingPick.source,
+      source: existingPick.source as CanonicalPick['source'],
       approvalStatus: existingPick.approval_status as CanonicalPick['approvalStatus'],
       promotionStatus: existingPick.promotion_status as CanonicalPick['promotionStatus'],
       promotionTarget: (existingPick.promotion_target ?? undefined) as CanonicalPick['promotionTarget'],

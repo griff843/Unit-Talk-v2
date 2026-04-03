@@ -121,7 +121,7 @@ test('snapshot is returned in PromotionEvaluationResult', async () => {
     {
       market: 'NBA Moneyline',
       selection: 'Lakers ML',
-      source: 'operator',
+      source: 'api',
       metadata: {
         promotionScores: { edge: 90, trust: 85, readiness: 82, uniqueness: 78, boardFit: 75 },
       },
@@ -154,7 +154,7 @@ test('snapshot scoreInputs match the score inputs used for the decision', async 
     {
       market: 'NBA Moneyline',
       selection: 'Celtics ML',
-      source: 'operator',
+      source: 'api',
       metadata: {
         promotionScores: { edge: 88, trust: 82, readiness: 79, uniqueness: 76, boardFit: 72 },
       },

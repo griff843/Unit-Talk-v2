@@ -5,7 +5,7 @@ import { computeClvTrustAdjustment } from './clv-feedback.js';
 
 async function seedSettlements(
   repositories: ReturnType<typeof createInMemoryRepositoryBundle> extends Promise<infer T> ? T : ReturnType<typeof createInMemoryRepositoryBundle>,
-  source: string,
+  source: import('@unit-talk/contracts').PickSource,
   count: number,
   avgClvPercent: number,
 ) {
@@ -207,7 +207,7 @@ test('computeClvTrustAdjustment filters by source (submittedBy)', async () => {
   const repositories = createInMemoryRepositoryBundle();
 
   // Seed 15 settlements for 'discord' source with strong positive CLV
-  await seedSettlements(repositories, 'discord', 15, 5.0);
+  await seedSettlements(repositories, 'api', 15, 5.0);
 
   // Query for a different source — should have no matching settlements
   const result = await computeClvTrustAdjustment(

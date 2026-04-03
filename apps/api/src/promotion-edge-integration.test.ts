@@ -80,7 +80,7 @@ test('explicit promotionScores.edge wins over domain analysis edge', async () =>
   // Submitting with odds (domain analysis will compute edge) AND explicit promotionScores.edge
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 22.5',
       odds: 150, // +150 → implied 0.4, with confidence 0.65 → raw edge 0.25 → domain score 100
@@ -113,7 +113,7 @@ test('domain analysis edge is used when promotionScores.edge is absent and odds 
   // Domain-derived edge score = 100 ≥ 85 → trader-insights edge threshold passes
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 8.5',
       odds: 150,
@@ -146,7 +146,7 @@ test('domain analysis edge below ti threshold routes to best-bets when explicit 
   // Domain-derived edge score ≈ 63 < 85 → trader-insights edge suppressed → best-bets
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 10.5',
       odds: -200,
@@ -177,7 +177,7 @@ test('confidence fallback is used when both promotionScores.edge and domain anal
   // No odds → no domain analysis → no domain edge → confidence fallback
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA steals',
       selection: 'Player Over 1.5',
       confidence: 0.90,
@@ -209,7 +209,7 @@ test('negative domain edge suppresses promotion correctly', async () => {
   // odds -300 → implied 0.75, confidence 0.60 → raw edge = -0.15 → score = clamp(50+(-0.15)*400) = -10 → 0
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA threes',
       selection: 'Player Over 3.5',
       odds: -300,
@@ -342,7 +342,7 @@ test('domain trust signal elevates trust when no explicit trust score and positi
   // So domain trust (80) > confidence trust (65) — domain signal wins
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA blocks',
       selection: 'Player Over 1.5',
       odds: 150,
@@ -376,7 +376,7 @@ test('domain readiness signal activates when Kelly fraction is present', async (
   // Domain readiness = 85 (vs default 80)
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA dunks',
       selection: 'Player Over 0.5',
       odds: 150,
@@ -408,7 +408,7 @@ test('without odds, trust and readiness use non-domain fallbacks', async () => {
   // No odds → no domain analysis → trust falls back to confidence, readiness falls back to 80
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA turnovers',
       selection: 'Player Under 3.5',
       confidence: 0.90,
@@ -439,7 +439,7 @@ test('marginal domain edge gives lower trust than significant edge', async () =>
   // Domain trust signal = 65 (marginal positive edge)
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA fouls',
       selection: 'Player Over 3.5',
       odds: -200,
@@ -538,7 +538,7 @@ test('promotion snapshot records edgeSource=confidence-delta when no market data
   // No odds → domain analysis absent → confidence-delta source
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 20.5',
       confidence: 0.75,
@@ -564,7 +564,7 @@ test('promotion snapshot records edgeSource=explicit when promotionScores.edge i
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
       odds: 110,
@@ -629,7 +629,7 @@ test('non-smart-form pick with low confidence is correctly suppressed by confide
   // Should be blocked by the confidence floor.
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA - Player Prop',
       selection: 'Player Points O 28.5',
       odds: -110,

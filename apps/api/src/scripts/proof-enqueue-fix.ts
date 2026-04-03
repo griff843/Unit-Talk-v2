@@ -14,7 +14,7 @@ console.log('=== T1 Proof V2 — Enqueue Gap Fix Verification ===\n');
 
 const result = await submitPickController(
   {
-    source: 't1-proof-v2',
+    source: 'api',
     submittedBy: 'griff',
     market: 'Tennis aces',
     selection: 'Player Over 10.5',

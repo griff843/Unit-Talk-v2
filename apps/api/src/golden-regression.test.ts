@@ -42,7 +42,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     sport: 'NBA',
     edgeCases: ['dual-policy-promotion', 'domain-analysis', 'devig', 'kelly'],
     submission: {
-      source: 'golden-suite',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 8.5',
       odds: 150,
@@ -130,7 +130,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     sport: 'MLB',
     edgeCases: ['explicit-edge', 'push'],
     submission: {
-      source: 'golden-suite',
+      source: 'api',
       market: 'MLB batting hits',
       selection: 'Player Over 1.5',
       confidence: 0.72,
@@ -179,7 +179,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     sport: 'NFL',
     edgeCases: ['negative-domain-edge', 'void'],
     submission: {
-      source: 'golden-suite',
+      source: 'api',
       market: 'passing-yards-all-game-ou',
       selection: 'QB Over 275.5',
       odds: -300,
@@ -243,7 +243,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     sport: 'NHL',
     edgeCases: ['confidence-fallback', 'correction'],
     submission: {
-      source: 'golden-suite',
+      source: 'api',
       market: 'shots-on-goal-all-game-ou',
       selection: 'Skater Over 3.5',
       confidence: 0.9,

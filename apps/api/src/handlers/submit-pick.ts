@@ -34,7 +34,7 @@ function coerceSubmissionPayload(body: unknown): SubmissionPayload {
   const payload = isRecord(body) ? body : {};
 
   return {
-    source: readString(payload.source),
+    source: readString(payload.source) as SubmissionPayload['source'],
     submittedBy: readOptionalString(payload.submittedBy),
     market: readString(payload.market),
     selection: readString(payload.selection),

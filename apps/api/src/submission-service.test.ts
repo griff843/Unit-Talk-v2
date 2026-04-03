@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { validateSubmissionPayload } from '@unit-talk/contracts';
-import type { CanonicalPick } from '@unit-talk/contracts';
+import type { CanonicalPick, SubmissionPayload } from '@unit-talk/contracts';
 import {
   evaluatePromotionEligibility,
   exclusiveInsightsPromotionPolicy,
@@ -252,7 +252,7 @@ test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets
 
 test('validateSubmissionPayload rejects empty required fields', () => {
   const result = validateSubmissionPayload({
-    source: '',
+    source: '' as import('@unit-talk/contracts').PickSource,
     market: '',
     selection: '',
   });
@@ -269,7 +269,7 @@ test('processSubmission materializes canonical records and submission event', as
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       submittedBy: 'tester',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
@@ -292,7 +292,7 @@ test('processSubmission normalizes known market keys before persisting the pick'
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'MLB batting hits',
       selection: 'Player Over 1.5',
     },
@@ -308,7 +308,7 @@ test('processSubmission leaves unknown market keys unchanged', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'exotic market type',
       selection: 'Player Over 1.5',
     },
@@ -356,7 +356,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
 
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
     },
@@ -411,7 +411,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
 
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NFL - Moneyline',
       selection: 'Bills',
       odds: -120,
@@ -455,7 +455,7 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
 
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
       odds: 150,
@@ -495,7 +495,7 @@ test('processSubmission stores null kellySizing when odds are missing', async ()
 
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
     },
@@ -511,7 +511,7 @@ test('processSubmission leaves deviggingResult absent when no matching market of
 
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
     },
@@ -530,7 +530,7 @@ test('processSubmission fails closed when provider offer lookup throws', async (
 
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
     },
@@ -546,7 +546,7 @@ test('transitionPickLifecycle allows valid transitions', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Under 10.5',
     },
@@ -569,7 +569,7 @@ test('transitionPickLifecycle rejects invalid transitions', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA threes',
       selection: 'Player Over 2.5',
     },
@@ -592,7 +592,7 @@ test('enqueueDistributionWork creates an outbox record with idempotency key', as
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA steals',
       selection: 'Player Over 1.5',
     },
@@ -670,7 +670,7 @@ test('enqueueDistributionWithRunTracking records run and audit metadata', async 
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA blocks',
       selection: 'Player Over 1.5',
     },
@@ -714,7 +714,7 @@ test('claimDistributionWork claims the next pending outbox record for a worker',
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 11.5',
     },
@@ -742,7 +742,7 @@ test('failDistributionWork marks claimed work failed and increments attempt coun
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Under 6.5',
     },
@@ -779,7 +779,7 @@ test('completeDistributionWork marks claimed work sent', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA threes',
       selection: 'Player Under 3.5',
     },
@@ -812,7 +812,7 @@ test('recordDistributionReceipt stores a first-class delivery receipt', async ()
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Under 25.5',
     },
@@ -860,7 +860,7 @@ test('approval does not imply best-bets promotion in runtime', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 23.5',
       confidence: 0.82,
@@ -900,7 +900,7 @@ test('non-qualified picks are blocked from best-bets enqueue during tracked runt
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 11.5',
       confidence: 0.42,
@@ -951,7 +951,7 @@ test('qualified picks are allowed to route to best-bets', async () => {
   // edge=78 < 85 → trader-insights suppressed; bb qualifies → promotion_target = 'best-bets'.
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 8.5',
       confidence: 0.9,
@@ -990,7 +990,7 @@ test('force-promote override persists and allows best-bets routing', async () =>
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA steals',
       selection: 'Player Over 1.5',
       confidence: 0.31,
@@ -1041,7 +1041,7 @@ test('suppression override persists and blocks best-bets routing', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA threes',
       selection: 'Player Over 2.5',
       confidence: 0.88,
@@ -1094,7 +1094,7 @@ test('qualified picks are allowed to route to trader-insights', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 9.5',
       confidence: 0.93,
@@ -1134,7 +1134,7 @@ test('trader-insights blocks picks below minimum score', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 8.5',
       confidence: 0.9,
@@ -1178,7 +1178,7 @@ test('trader-insights blocks picks below edge threshold', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 21.5',
       confidence: 0.92,
@@ -1222,7 +1222,7 @@ test('trader-insights blocks picks below trust threshold', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 10.5',
       confidence: 0.92,
@@ -1266,7 +1266,7 @@ test('best-bets qualified pick does not automatically qualify for trader-insight
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 24.5',
       confidence: 0.88,
@@ -1315,7 +1315,7 @@ test('force-promote override persists and allows trader-insights routing', async
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA steals',
       selection: 'Player Over 1.5',
       confidence: 0.35,
@@ -1366,7 +1366,7 @@ test('generic suppression override persists and blocks trader-insights routing',
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA threes',
       selection: 'Player Over 3.5',
       confidence: 0.94,
@@ -1456,7 +1456,7 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
   // Neither qualifies; bb's suppression data (board cap) is persisted on picks.
   const candidate = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Over 9.5',
       confidence: 0.92,
@@ -1675,7 +1675,7 @@ test('dual-qualifying pick routes exclusively to trader-insights and is blocked 
   // best-bets (overall ≥ 70) thresholds. Priority order: trader-insights wins.
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 30.5',
       confidence: 0.95,
@@ -1733,7 +1733,7 @@ test('exclusive-insights qualifies at its minimum threshold', () => {
     market: 'NBA points',
     selection: 'Player Over 30.5',
     confidence: 0.95,
-    source: 'test',
+    source: 'api',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
@@ -1786,7 +1786,7 @@ test('exclusive-insights rejects picks below its score threshold', () => {
     market: 'NBA points',
     selection: 'Player Over 30.5',
     confidence: 0.95,
-    source: 'test',
+    source: 'api',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
@@ -1836,7 +1836,7 @@ test('exclusive-insights outranks trader-insights in eager evaluation', async ()
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 31.5',
       confidence: 0.96,
@@ -1877,7 +1877,7 @@ test('distribution gate accepts discord:exclusive-insights for qualified picks',
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 11.5',
       confidence: 0.95,
@@ -1928,7 +1928,7 @@ test('best-bets qualified pick with absent edge and trust scores still qualifies
   // absent scores (fallback to confidence-based score) satisfy the threshold.
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 6.5',
       confidence: 0.85,
@@ -1973,7 +1973,7 @@ function makeTestPick(overrides: Partial<CanonicalPick> = {}): CanonicalPick {
     submissionId: 'sub-1',
     market: 'NFL passing yards',
     selection: 'Over 287.5',
-    source: 'capper-1',
+    source: 'smart-form',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
@@ -2013,11 +2013,11 @@ test('checkExposureGate returns exposure-game-limit when at game limit', () => {
 });
 
 test('checkExposureGate does not count picks from different submitters', () => {
-  const pick = makeTestPick({ id: 'pick-new', source: 'capper-1' });
+  const pick = makeTestPick({ id: 'pick-new', source: 'smart-form' });
   const openPicks = [
-    makeTestPick({ id: 'pick-1', source: 'capper-2' }),
-    makeTestPick({ id: 'pick-2', source: 'capper-2' }),
-    makeTestPick({ id: 'pick-3', source: 'capper-2' }),
+    makeTestPick({ id: 'pick-1', source: 'smart-form', metadata: { eventName: 'Game A', sport: 'NFL', capper: 'other-capper' } }),
+    makeTestPick({ id: 'pick-2', source: 'smart-form', metadata: { eventName: 'Game A', sport: 'NFL', capper: 'other-capper' } }),
+    makeTestPick({ id: 'pick-3', source: 'smart-form', metadata: { eventName: 'Game A', sport: 'NFL', capper: 'other-capper' } }),
   ];
   const result = checkExposureGate(pick, openPicks, {
     maxPicksPerGame: 3,
@@ -2114,12 +2114,12 @@ test('checkExposureGate uses metadata.capper for identity instead of source', ()
   // Pick submitted from source "intake-form" but with metadata.capper = "sharp-capper"
   const pick = makeTestPick({
     id: 'pick-new',
-    source: 'intake-form',
+    source: 'smart-form',
     metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' },
   });
   // Open picks from the same capper identity (metadata.capper), different source
   const openPicks = [
-    makeTestPick({ id: 'pick-1', source: 'discord', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
+    makeTestPick({ id: 'pick-1', source: 'api', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
     makeTestPick({ id: 'pick-2', source: 'api', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
     makeTestPick({ id: 'pick-3', source: 'smart-form', metadata: { capper: 'sharp-capper', eventName: 'Game A', sport: 'NFL' } }),
   ];
@@ -2158,8 +2158,8 @@ test('checkExposureGate does not conflate picks with same source but different c
 
 test('duplicate submission returns existing pick without creating a new row', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  const payload = {
-    source: 'idempotency-test',
+  const payload: SubmissionPayload = {
+    source: 'api',
     market: 'NFL passing yards',
     selection: 'QB Over 287.5',
     line: 287.5,
@@ -2194,7 +2194,7 @@ test('submissions with different payloads produce different picks', async () => 
 
   const first = await processSubmission(
     {
-      source: 'idempotency-test',
+      source: 'api',
       market: 'NFL passing yards',
       selection: 'QB Over 287.5',
       line: 287.5,
@@ -2205,7 +2205,7 @@ test('submissions with different payloads produce different picks', async () => 
 
   const second = await processSubmission(
     {
-      source: 'idempotency-test',
+      source: 'api',
       market: 'NFL passing yards',
       selection: 'QB Over 300.5',
       line: 300.5,

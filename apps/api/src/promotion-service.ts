@@ -487,7 +487,7 @@ async function buildSmartFormQualifiedResult(
       boardFit: policy.weights.boardFit,
     },
     ...(toSnapshotOverride(override) ? { override: toSnapshotOverride(override) } : {}),
-  });
+  }) as PromotionDecisionSnapshot;
 
   const winnerDecision = decisions[bestBetsIndex]!;
   const winnerBoardState = boardStates[bestBetsIndex]!;
@@ -756,7 +756,7 @@ function mapPickRecordToCanonicalPick(pick: PickRecord): CanonicalPick {
     odds: pick.odds ?? undefined,
     stakeUnits: pick.stake_units ?? undefined,
     confidence: pick.confidence ?? undefined,
-    source: pick.source,
+    source: pick.source as CanonicalPick['source'],
     approvalStatus: pick.approval_status as CanonicalPick['approvalStatus'],
     promotionStatus: pick.promotion_status as CanonicalPick['promotionStatus'],
     promotionTarget: (pick.promotion_target ?? undefined) as CanonicalPick['promotionTarget'],

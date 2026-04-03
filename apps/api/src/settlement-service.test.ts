@@ -8,7 +8,7 @@ import { recordPickSettlement } from './settlement-service.js';
 async function createPickInState(
   state: 'validated' | 'queued' | 'posted',
   overrides?: {
-    source?: string;
+    source?: import('@unit-talk/contracts').PickSource;
     market?: string;
     selection?: string;
     metadata?: Record<string, unknown>;
@@ -17,7 +17,7 @@ async function createPickInState(
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: overrides?.source ?? 'settlement-test',
+      source: overrides?.source ?? 'api',
       market: overrides?.market ?? 'NBA points',
       selection: overrides?.selection ?? 'Player Over 24.5',
       metadata: overrides?.metadata,
@@ -56,7 +56,7 @@ async function createPickInState(
 }
 
 async function createPostedPick(overrides?: {
-  source?: string;
+  source?: import('@unit-talk/contracts').PickSource;
   market?: string;
   selection?: string;
   metadata?: Record<string, unknown>;

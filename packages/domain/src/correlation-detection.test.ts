@@ -12,7 +12,7 @@ function makePick(overrides: Partial<CanonicalPick> & { id: string }): Canonical
     submissionId: 'sub-1',
     market: 'spread',
     selection: 'over',
-    source: 'analyst-1',
+    source: 'api',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
@@ -124,13 +124,13 @@ test('detectCorrelatedPicks: same-game-different-market', () => {
 test('detectCorrelatedPicks: skips picks from different sources', () => {
   const newPick = makePick({
     id: 'pick-new',
-    source: 'analyst-1',
+    source: 'api',
     metadata: { eventName: 'LAL vs BOS 2026-01-15' },
   });
   const openPicks = [
     makePick({
       id: 'pick-existing',
-      source: 'analyst-2',
+      source: 'api',
       metadata: { eventName: 'LAL vs BOS 2026-01-15' },
     }),
   ];

@@ -15,7 +15,7 @@ function makePick(overrides: Partial<CanonicalPick> = {}): CanonicalPick {
     submissionId: 'test-sub-1',
     market: 'NBA points',
     selection: 'Player Over 22.5',
-    source: 'test',
+    source: 'api',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
@@ -125,7 +125,7 @@ test('processSubmission enriches metadata with domainAnalysis when odds are pres
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 7.5',
       odds: -115,
@@ -151,7 +151,7 @@ test('processSubmission skips domainAnalysis when odds are absent', async () => 
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA rebounds',
       selection: 'Player Under 10.5',
     },

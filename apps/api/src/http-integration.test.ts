@@ -46,7 +46,7 @@ test('POST /api/submissions rejects request bodies larger than the configured ca
         'content-type': 'application/json',
       },
       body: JSON.stringify({
-        source: 'server-test',
+        source: 'api',
         market: 'NBA points',
         selection: 'Player Over 18.5',
         notes: 'x'.repeat(512),
@@ -254,7 +254,7 @@ test('POST /api/submissions accepts a body within the configured cap', async () 
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
-        source: 'body-size-test',
+        source: 'api',
         market: 'NBA points',
         selection: 'Player Over 18.5',
       }),
@@ -271,7 +271,7 @@ test('POST /api/submissions accepts a body within the configured cap', async () 
 test('POST /api/picks/:id/settle rejects bodies exceeding the configured cap', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
-    { source: 'body-size-test', market: 'NBA rebounds', selection: 'Player Over 10.5' },
+    { source: 'api', market: 'NBA rebounds', selection: 'Player Over 10.5' },
     repositories,
   );
   await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
@@ -357,7 +357,7 @@ test('POST /api/member-tiers rejects bodies exceeding the configured cap', async
         discord_id: 'user-123',
         tier: 'vip',
         action: 'activate',
-        source: 'discord-role',
+        source: 'api',
         notes: 'x'.repeat(256),
       }),
     });
@@ -456,7 +456,7 @@ async function submitTestPick(port: number, headers: Record<string, string>) {
       ...headers,
     },
     body: JSON.stringify({
-      source: 'server-test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 18.5',
     }),
@@ -512,7 +512,7 @@ test('POST /api/member-tiers activates a valid tier and returns 200', async () =
         discord_id: 'user-123',
         tier: 'vip',
         action: 'activate',
-        source: 'discord-role',
+        source: 'api',
       }),
     });
     const body = (await response.json()) as { ok: boolean; tier: string; action: string };
@@ -539,7 +539,7 @@ test('POST /api/member-tiers deactivates a valid tier and returns 200', async ()
         discord_id: 'user-456',
         tier: 'trial',
         action: 'deactivate',
-        source: 'discord-role',
+        source: 'api',
       }),
     });
     const body = (await response.json()) as { ok: boolean; tier: string; action: string };
@@ -565,7 +565,7 @@ test('POST /api/member-tiers returns 400 for invalid tier', async () => {
         discord_id: 'user-789',
         tier: 'super-premium-tier',
         action: 'activate',
-        source: 'discord-role',
+        source: 'api',
       }),
     });
     const body = (await response.json()) as { error: string };
@@ -590,7 +590,7 @@ test('POST /api/member-tiers returns 400 for invalid action', async () => {
         discord_id: 'user-789',
         tier: 'vip',
         action: 'grant',
-        source: 'discord-role',
+        source: 'api',
       }),
     });
     const body = (await response.json()) as { error: string };
@@ -614,7 +614,7 @@ test('POST /api/member-tiers returns 400 when discord_id is missing', async () =
       body: JSON.stringify({
         tier: 'vip',
         action: 'activate',
-        source: 'discord-role',
+        source: 'api',
       }),
     });
     const body = (await response.json()) as { error: string };

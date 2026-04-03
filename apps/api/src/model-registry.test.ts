@@ -49,7 +49,7 @@ function makeBaseInput(
       submissionId: 'sub-1',
       market: 'NBA points',
       selection: 'Player Over 22.5',
-      source: 'test',
+      source: 'api',
       approvalStatus: 'approved',
       promotionStatus: 'not_eligible',
       lifecycleState: 'validated',
@@ -186,7 +186,7 @@ test('scoringProfile written to pick_promotion_history payload via evaluateAndPe
   // First create a pick via processSubmission so the pick exists
   const subResult = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA points',
       selection: 'Player Over 22.5',
       confidence: 0.75,
@@ -237,7 +237,7 @@ test('scoringProfile in promotion history is "default" when no env override', as
   const repositories = createInMemoryRepositoryBundle();
   const subResult = await processSubmission(
     {
-      source: 'test',
+      source: 'api',
       market: 'NBA blocks',
       selection: 'Player Over 0.5',
       confidence: 0.70,

@@ -773,7 +773,7 @@ async function createSettledPick(
 ) {
   const created = await processSubmission(
     {
-      source: 'recap-test',
+      source: 'api',
       market: input.market,
       selection: input.selection,
       odds: input.odds,

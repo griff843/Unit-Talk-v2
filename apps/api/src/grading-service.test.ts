@@ -19,7 +19,7 @@ async function createPostedPickFixture(
   const eventName = overrides.eventName ?? 'Fixture Event';
   const created = await processSubmission(
     {
-      source: 'grading-test',
+      source: 'api',
       market: overrides.market ?? 'points-all-game-ou',
       selection: overrides.selection ?? 'Over 24.5',
       ...(overrides.line === null
@@ -740,7 +740,7 @@ test('runGradingPass counts write failures as errors and continues grading later
 
   const secondCreated = await processSubmission(
     {
-      source: 'grading-test',
+      source: 'api',
       market: 'points-all-game-ou',
       selection: 'Over 24.5',
       line: 24.5,
@@ -846,7 +846,7 @@ test('runGradingPass writes grading.run row with failed count when errors occur'
 
   const created = await processSubmission(
     {
-      source: 'grading-test',
+      source: 'api',
       market: 'points-all-game-ou',
       selection: 'Over 24.5',
       line: 24.5,

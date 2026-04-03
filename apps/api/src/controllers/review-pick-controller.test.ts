@@ -11,7 +11,7 @@ function makePendingPick(overrides: Partial<CanonicalPick> = {}): CanonicalPick 
     submissionId: 'sub-1',
     market: 'NFL moneyline',
     selection: 'Team A',
-    source: 'test',
+    source: 'api',
     approvalStatus: 'pending',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
