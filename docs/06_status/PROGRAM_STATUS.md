@@ -7,6 +7,10 @@
 
 ## Last Updated
 
+2026-04-03 — **Sprint D+ hardening and Smart Form UX complete.** Contracts ratified: Recap (UTV2-311), Discord Embed (UTV2-312), Event Identity (UTV2-309), Board Cap Policy (UTV2-284). Odds API player-prop canonicalization shipped (UTV2-308, PR #136). Smart Form UX: DB-backed capper dropdown (UTV2-261), sport button UI (UTV2-262), math runtime proof (UTV2-257) — all merged PR #137. CI baseline fixed (operator-web path test platform-agnostic). Board cap: `perSport: 3` currently saturating for single-capper NBA — PM decision pending on UTV2-284. Next: UTV2-303 (Smart Form participant/stat constraint, Codex).
+
+2026-04-03 — **Branch/worktree convergence complete.** All Sprint A–D feature branches and ~60 stale worktrees cleared. `main` is the single source of truth.
+
 2026-04-01 — **Sprint A through D COMPLETE.** Sprint D (Intelligence v1): real edge against market consensus, EdgeSource tracking in promotion snapshots, CLV participant fallback, walk-forward backtesting infrastructure, scoring weight validation, odds API moneyline normalization, submission atomicity hardening. All gates green. Phase 7 (Syndicate Lane) awaiting PM approval.
 
 ---
@@ -16,11 +20,11 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **All pass** — 0 failures. `pnpm test` green as of 2026-04-01. 188 Playwright e2e tests (not in verify chain). |
+| Tests | **All pass** — 0 failures. `pnpm test` green as of 2026-04-03 (main `fbae181`). 37 ingestor tests. CI fixed (operator-web path test). |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **Sprint A–D COMPLETE.** Phase 7 (Syndicate Lane) awaiting PM approval. |
-| Roadmap | **Sprint D COMPLETE** (Intelligence v1). Remaining backlog: UTV2-209, 210, 211 (T1 Phase 7 — not approved). |
+| Milestone | **Sprint D+ hardening complete.** Active: CS-M5 (Smart Form Production Ready). UTV2-303 in flight (Codex). UTV2-284 pending PM decision. |
+| Roadmap | Sprint D+ shipped: contracts (311/312/309/284), player-prop canonicalization (308), Smart Form UX (257/261/262). Next: UTV2-303 participant constraint. |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
@@ -46,7 +50,7 @@
 | `pnpm lint` | PASS | 0 errors. |
 | `pnpm type-check` | PASS | 0 errors. |
 | `pnpm build` | PASS | Exit 0. |
-| `pnpm test` | PASS | All suites 0 failures. Verified 2026-04-01 (main `8f80cdd`). |
+| `pnpm test` | PASS | All suites 0 failures. Verified 2026-04-03 (main `fbae181`). CI fixed — operator-web test was hardcoding Windows path. |
 | `pnpm verify` (full chain) | PASS | Exit 0. |
 | Playwright e2e | PASS | **188/188** — all phases (Phase 1, Phase 2, Wave 3, Wave 4). Verified 2026-03-31. |
 
@@ -204,6 +208,7 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 
 | Risk | Severity | Status |
 |------|----------|--------|
+| Board cap `perSport: 3` will saturate for single-capper NBA system after 3 qualifying picks | Medium | **Open** — UTV2-284 In Review. PM decision required: keep 3 (document as intentional) or raise to ~10. Board currently at 100% (5/5 perSlate cap). |
 | Discord CLIENT_ID mismatch — `deploy-commands` may fail | Low | **CLOSED** — UTV2-59 verified 3 commands, UTV2-65 confirmed 5 commands (post /help + /recap). Guild deploy current. |
 | Smart Form `confidence` field missing | Resolved | **CLOSED** — UTV2-49 merged. `confidence = capperConviction / 10` wired. Score avg lifted ~20pts. |
 | Board caps (perSlate=5) may re-saturate | Low | **CLOSED** — UTV2-169 shipped. Board utilization in operator snapshot with warning at >= 80%, configurable cap. |
@@ -275,6 +280,8 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - `apps/ingestor/` live — populates `provider_offers` and `game_results` from SGO feed
 - **Odds API ingest live (Sprint D):** Pinnacle + DraftKings + FanDuel + BetMGM via `apps/ingestor/src/ingest-odds-api.ts`. Paired spreads/totals and moneyline offers all normalize to `overOdds`/`underOdds` in canonical `provider_offers`.
 - **Moneyline normalization (UTV2-249):** h2h markets use `buildMoneylineOffer()` → participant-specific `moneyline` market key with selection/opposing odds in `overOdds`/`underOdds`. Downstream `real-edge-service.ts` resolves by canonical market key + participant.
+- **Player-prop canonicalization (UTV2-308, PR #136):** Odds API ingest now fetches `player_points`, `player_rebounds`, `player_assists`, `player_threes` markets. Player participants matched by display name to canonical `participants` records; linked as `role: 'competitor'` in `event_participants`. Unmatched players skip with warning. 37 ingestor tests.
+- **Event identity contract ratified (UTV2-309):** `docs/05_operations/EVENT_IDENTITY_CONTRACT.md` — provider-scoped `external_id`, no cross-provider dedup, Option B1 (name-match only) authorized for player canonicalization.
 - Entity resolution: events, participants, event_participants resolved from ingestor
 
 ### Member tier model
@@ -323,6 +330,9 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - Browser submission surface live (Next.js 14)
 - Conviction field 1–10 wired
 - Participant autocomplete typeahead (debounced, calls `/api/operator/participants`)
+- **Sport button UI (UTV2-262, PR #137):** sport selector replaced with button grid — faster selection, drives downstream field filtering
+- **DB-backed capper dropdown (UTV2-261, PR #137):** `CapperDefinition { id, displayName }` type in contracts; searchable dropdown replaces free-text; `isValidCapper()` updated to `.some(c => c.id === capper)`
+- **Math runtime proof (UTV2-257, PR #137):** `scripts/utv2-257-runtime-proof.ts` verifies live operator surfaces for domain analysis, promotion, delivery chain
 
 ### Domain and computation foundation
 - Pure computation: probability, devig, calibration, features, models, signals, bands, scoring, outcomes, evaluation, edge-validation, rollups, system-health, risk, strategy
@@ -376,6 +386,10 @@ These files are no longer maintained and should not be used as current-state tru
 | Proof template (T1) | `docs/06_status/PROOF_TEMPLATE.md` |
 | Rollback template (T1) | `docs/06_status/ROLLBACK_TEMPLATE.md` |
 | /leaderboard contract | `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` |
+| Recap contract | `docs/05_operations/RECAP_CONTRACT.md` |
+| Discord embed contract | `docs/discord/DISCORD_EMBED_CONTRACT.md` |
+| Event identity contract | `docs/05_operations/EVENT_IDENTITY_CONTRACT.md` |
+| Board cap policy | `docs/05_operations/BOARD_CAP_POLICY.md` |
 | CLV wiring contract | `docs/05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md` |
 | Discord routing | `docs/05_operations/discord_routing.md` |
 | Migration ledger | `docs/05_operations/migration_ledger.md` |
