@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { request } from 'node:http';
+import { fileURLToPath } from 'node:url';
+import path from 'node:path';
 import type { SystemRunRecord } from '@unit-talk/db';
 import {
   buildCapperRecapResponse,
@@ -20,8 +22,10 @@ import {
 } from './server.js';
 
 test('resolveOperatorWorkspaceRoot targets repo root from operator server module path', () => {
-  const root = resolveOperatorWorkspaceRoot('file:///C:/Dev/Unit-Talk-v2-main/apps/operator-web/src/server.ts');
-  assert.equal(root, 'C:\\Dev\\Unit-Talk-v2-main');
+  const root = resolveOperatorWorkspaceRoot();
+  // test lives at apps/operator-web/src/server.test.ts — repo root is 3 levels up
+  const expected = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+  assert.equal(root, expected);
 });
 
 test('createOperatorSnapshotProvider fails closed when database config is unavailable', () => {
