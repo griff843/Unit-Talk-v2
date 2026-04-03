@@ -1,3 +1,4 @@
+import { loadEnvironment } from '@unit-talk/config';
 import type { OutboxRecord } from '@unit-talk/db';
 import type { DeliveryAdapter } from './runner.js';
 
@@ -64,8 +65,13 @@ export function createDiscordDeliveryAdapter(options?: {
   fetchImpl?: typeof fetch;
 }): DeliveryAdapter {
   const dryRun = options?.dryRun ?? true;
-  const botToken = options?.botToken ?? process.env.DISCORD_BOT_TOKEN;
-  const targetMap = options?.targetMap ?? readDiscordTargetMap();
+  const environment = loadDeliveryEnvironment();
+  const botToken = options?.botToken ?? environment?.DISCORD_BOT_TOKEN ?? process.env.DISCORD_BOT_TOKEN;
+  const targetMap =
+    options?.targetMap ??
+    readDiscordTargetMap(
+      environment?.UNIT_TALK_DISCORD_TARGET_MAP ?? process.env.UNIT_TALK_DISCORD_TARGET_MAP,
+    );
   const apiBaseUrl = options?.apiBaseUrl ?? 'https://discord.com/api/v10';
   const fetchImpl = options?.fetchImpl ?? fetch;
 
@@ -96,7 +102,7 @@ export function createDiscordDeliveryAdapter(options?: {
           return {
             receiptType: 'discord.message',
             status: isTerminal ? 'terminal-failure' : 'retryable-failure',
-            channel: `discord:${channelId}`,
+            channel: outbox.target,
             reason: `HTTP ${response.status}: ${errorText}`,
             payload: {
               adapter: 'discord',
@@ -114,9 +120,9 @@ export function createDiscordDeliveryAdapter(options?: {
         return {
           receiptType: 'discord.message',
           status: 'sent',
-          channel: `discord:${channelId}`,
+          channel: outbox.target,
           externalId: body.id,
-          idempotencyKey: `${outbox.id}:discord:${channelId}:receipt`,
+          idempotencyKey: `${outbox.id}:${outbox.target}:receipt`,
           payload: {
             adapter: 'discord',
             dryRun: false,
@@ -130,7 +136,7 @@ export function createDiscordDeliveryAdapter(options?: {
         return {
           receiptType: 'discord.message',
           status: 'retryable-failure',
-          channel: `discord:${channelId}`,
+          channel: outbox.target,
           reason: error instanceof Error ? error.message : 'network error',
           payload: {
             adapter: 'discord',
@@ -146,9 +152,9 @@ export function createDiscordDeliveryAdapter(options?: {
     return {
       receiptType: 'discord.message',
       status: 'sent',
-      channel: resolvedChannelId ? `discord:${resolvedChannelId}` : outbox.target,
+      channel: outbox.target,
       externalId: `discord-dry:${outbox.id}`,
-      idempotencyKey: `${outbox.id}:discord:dry-receipt`,
+      idempotencyKey: `${outbox.id}:${outbox.target}:dry-receipt`,
       payload: {
         adapter: 'discord',
         dryRun: true,
@@ -159,8 +165,16 @@ export function createDiscordDeliveryAdapter(options?: {
   };
 }
 
-function readDiscordTargetMap() {
-  const raw = process.env.UNIT_TALK_DISCORD_TARGET_MAP?.trim();
+function loadDeliveryEnvironment() {
+  try {
+    return loadEnvironment();
+  } catch {
+    return undefined;
+  }
+}
+
+function readDiscordTargetMap(rawValue?: string) {
+  const raw = rawValue?.trim();
   if (!raw) {
     return {};
   }

@@ -106,6 +106,7 @@ if (runtime.autorun) {
     repositories: runtime.repositories,
     leagues: runtime.leagues,
     ...(runtime.apiKey ? { apiKey: runtime.apiKey } : {}),
+    ...(runtime.oddsApiKey ? { oddsApiKey: runtime.oddsApiKey } : {}),
     ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
     ...(runtime.maxCycles !== undefined ? { maxCycles: runtime.maxCycles } : {}),
     skipResults: runtime.skipResults,
@@ -146,8 +147,8 @@ if (runtime.autorun) {
 type IngestorRuntimeMode = 'fail_open' | 'fail_closed';
 
 function readIngestorRuntimeMode(env: {
-  UNIT_TALK_INGESTOR_RUNTIME_MODE?: string;
-  UNIT_TALK_APP_ENV?: string;
+  UNIT_TALK_INGESTOR_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_APP_ENV?: string | undefined;
 }): IngestorRuntimeMode {
   const configured = env.UNIT_TALK_INGESTOR_RUNTIME_MODE?.trim().toLowerCase();
   if (configured === 'fail_closed') return 'fail_closed';

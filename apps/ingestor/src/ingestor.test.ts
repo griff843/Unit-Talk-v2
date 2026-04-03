@@ -279,6 +279,71 @@ test('ingestOddsApiLeague persists Odds API offers using canonical provider-offe
   assert.equal(rows[0]?.under_odds, -112);
 });
 
+test('ingestOddsApiLeague records an ingestor.cycle run with odds-api quota details', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+
+  const summary = await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'NBA',
+    repositories,
+    markets: ['totals'],
+    bookmakers: ['betmgm'],
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 'odds-event-run-1',
+            sport_key: 'basketball_nba',
+            sport_title: 'NBA',
+            commence_time: '2026-03-25T12:00:00.000Z',
+            home_team: 'Suns',
+            away_team: 'Warriors',
+            bookmakers: [
+              {
+                key: 'betmgm',
+                title: 'BetMGM',
+                last_update: '2026-03-25T12:00:00.000Z',
+                markets: [
+                  {
+                    key: 'totals',
+                    last_update: '2026-03-25T12:00:00.000Z',
+                    outcomes: [
+                      { name: 'Over', price: -108, point: 229.5 },
+                      { name: 'Under', price: -112, point: 229.5 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-requests-last': '1',
+            'x-requests-remaining': '499',
+          },
+        },
+      ),
+  });
+
+  const storedRuns = Array.from(
+    ((repositories.runs as unknown as { runs: Map<string, { details: unknown; status: string; run_type: string }> }).runs
+      ?? new Map()).values(),
+  );
+  const run = storedRuns[0] as { details: { provider?: string; quota?: { provider?: string; requestCount?: number; remaining?: number | null } }; status: string; run_type: string } | undefined;
+
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(storedRuns.length, 1);
+  assert.equal(run?.run_type, 'ingestor.cycle');
+  assert.equal(run?.status, 'succeeded');
+  assert.equal(run?.details.provider, 'odds-api');
+  assert.equal(run?.details.quota?.provider, 'odds-api');
+  assert.equal(run?.details.quota?.requestCount, 1);
+  assert.equal(run?.details.quota?.remaining, 499);
+});
+
 test('ingestOddsApiLeague persists moneyline rows as participant-specific paired offers', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
 
@@ -341,6 +406,126 @@ test('ingestOddsApiLeague persists moneyline rows as participant-specific paired
   assert.equal(bullsRow?.provider_participant_id, 'Bulls');
   assert.equal(bullsRow?.over_odds, 125);
   assert.equal(bullsRow?.under_odds, -145);
+});
+
+test('ingestOddsApiLeague hydrates team events for browse when canonical teams exist', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const seededTeams = await repositories.participants.listByType('team', 'NBA');
+  const home = seededTeams.find((row) => row.display_name === 'Celtics');
+  const away = seededTeams.find((row) => row.display_name === 'Bulls');
+
+  const summary = await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'NBA',
+    repositories,
+    markets: ['h2h'],
+    bookmakers: ['pinnacle'],
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 'odds-event-browse-1',
+            sport_key: 'basketball_nba',
+            sport_title: 'NBA',
+            commence_time: '2026-04-02T23:30:00.000Z',
+            home_team: 'Celtics',
+            away_team: 'Bulls',
+            bookmakers: [
+              {
+                key: 'pinnacle',
+                title: 'Pinnacle',
+                last_update: '2026-04-02T20:00:00.000Z',
+                markets: [
+                  {
+                    key: 'h2h',
+                    last_update: '2026-04-02T20:00:00.000Z',
+                    outcomes: [
+                      { name: 'Celtics', price: -145 },
+                      { name: 'Bulls', price: 125 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-requests-last': '1',
+            'x-requests-remaining': '499',
+          },
+        },
+      ),
+  });
+
+  const events = await repositories.events.listUpcoming('NBA', 7);
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(events.length, 1);
+  assert.equal(events[0]?.external_id, 'odds-event-browse-1');
+  assert.equal(events[0]?.event_name, 'Bulls @ Celtics');
+  assert.ok(home);
+  assert.ok(away);
+
+  const eventParticipants = await repositories.eventParticipants.listByEvent(events[0]!.id);
+  assert.equal(eventParticipants.length, 2);
+  assert.ok(eventParticipants.some((row) => row.participant_id === home.id && row.role === 'home'));
+  assert.ok(eventParticipants.some((row) => row.participant_id === away.id && row.role === 'away'));
+});
+
+test('ingestOddsApiLeague skips event hydration when canonical teams are missing', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+
+  const summary = await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'NBA',
+    repositories,
+    markets: ['h2h'],
+    bookmakers: ['pinnacle'],
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify([
+          {
+            id: 'odds-event-browse-2',
+            sport_key: 'basketball_nba',
+            sport_title: 'NBA',
+            commence_time: '2026-04-02T23:30:00.000Z',
+            home_team: 'Mystics',
+            away_team: 'Storm',
+            bookmakers: [
+              {
+                key: 'pinnacle',
+                title: 'Pinnacle',
+                last_update: '2026-04-02T20:00:00.000Z',
+                markets: [
+                  {
+                    key: 'h2h',
+                    last_update: '2026-04-02T20:00:00.000Z',
+                    outcomes: [
+                      { name: 'Mystics', price: -145 },
+                      { name: 'Storm', price: 125 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-requests-last': '1',
+            'x-requests-remaining': '499',
+          },
+        },
+      ),
+  });
+
+  const events = await repositories.events.listUpcoming('NBA', 7);
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(events.length, 0);
 });
 
 test('mapOddsApiOfferToProviderOfferInsert maps moneyline side pricing into overOdds/underOdds', () => {
