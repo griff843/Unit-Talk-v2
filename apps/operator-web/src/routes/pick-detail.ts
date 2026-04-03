@@ -16,6 +16,7 @@ export interface PickDetailView {
     line: number | null;
     odds: number | null;
     stakeUnits: number | null;
+    submittedBy: string | null;
     createdAt: string;
     postedAt: string | null;
     settledAt: string | null;
@@ -101,6 +102,7 @@ export const PICK_DETAIL_FIXTURE: PickDetailView = {
     line: 25.5,
     odds: -110,
     stakeUnits: 1,
+    submittedBy: 'griff843',
     createdAt: '2026-03-20T10:00:00.000Z',
     postedAt: '2026-03-20T10:05:00.000Z',
     settledAt: null,
@@ -279,6 +281,7 @@ export async function handlePickDetailRequest(
   const audit = ((auditResult as { data: unknown[] }).data ?? []) as Array<Record<string, unknown>>;
   const receipts = ((receiptsResult as { data: unknown[] }).data ?? []) as Array<Record<string, unknown>>;
   const submission = submissionResult ? (submissionResult.data as Record<string, unknown> | null) : null;
+  const submittedBy = readSubmittedBy(pick, submission);
 
   const view: PickDetailView = {
     pick: {
@@ -294,6 +297,7 @@ export async function handlePickDetailRequest(
       line: (pick['line'] as number | null) ?? null,
       odds: (pick['odds'] as number | null) ?? null,
       stakeUnits: (pick['stake_units'] as number | null) ?? null,
+      submittedBy,
       createdAt: pick['created_at'] as string,
       postedAt: (pick['posted_at'] as string | null) ?? null,
       settledAt: (pick['settled_at'] as string | null) ?? null,
@@ -367,4 +371,39 @@ export async function handlePickDetailRequest(
   };
 
   writeJson(response, 200, { ok: true, data: view });
+}
+
+function readSubmittedBy(
+  pick: Record<string, unknown>,
+  submission: Record<string, unknown> | null,
+): string | null {
+  const metadata =
+    typeof pick['metadata'] === 'object' &&
+    pick['metadata'] !== null &&
+    !Array.isArray(pick['metadata'])
+      ? (pick['metadata'] as Record<string, unknown>)
+      : null;
+  const submissionPayload =
+    submission != null &&
+    typeof submission['payload'] === 'object' &&
+    submission['payload'] !== null &&
+    !Array.isArray(submission['payload'])
+      ? (submission['payload'] as Record<string, unknown>)
+      : null;
+
+  const candidates = [
+    pick['submitted_by'],
+    submission?.['submitted_by'],
+    metadata?.['capper'],
+    metadata?.['submittedBy'],
+    submissionPayload?.['submittedBy'],
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
 }

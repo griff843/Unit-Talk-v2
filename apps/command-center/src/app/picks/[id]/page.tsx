@@ -2,6 +2,7 @@ import { Card } from '@/components/ui/Card';
 import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
+import { InterventionAction } from '@/components/InterventionAction';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
 
@@ -86,6 +87,7 @@ interface PickDetail {
   line: number | null;
   odds: number | null;
   stakeUnits: number | null;
+  submittedBy: string | null;
   createdAt: string;
   postedAt: string | null;
   settledAt: string | null;
@@ -206,10 +208,36 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         )}
       </div>
 
+      <Card title="Promotion Controls">
+        <div className="flex flex-col gap-3">
+          <div className="flex flex-col gap-1">
+            <KV label="Promotion Status" value={pick.promotionStatus} />
+            <KV label="Promotion Target" value={pick.promotionTarget} />
+            <KV label="Promotion Score" value={pick.promotionScore != null ? String(pick.promotionScore) : null} />
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <InterventionAction
+              label="Rerun Promotion"
+              variant="primary"
+              pickId={pickId}
+              action="rerun_promotion"
+            />
+            <InterventionAction
+              label="Force Promote to Best Bets"
+              variant="success"
+              pickId={pickId}
+              action="force_promote"
+              target="best-bets"
+            />
+          </div>
+        </div>
+      </Card>
+
       {/* Section 1: Submission Details */}
       <Card title="Submission Details">
         <div className="flex flex-col gap-1">
           <KV label="ID" value={pick.id} />
+          <KV label="Submitted By" value={pick.submittedBy} />
           <KV label="Source" value={pick.source} />
           <KV label="Market" value={pick.market} />
           <KV label="Selection" value={pick.selection} />

@@ -1,6 +1,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import {
+  resolveApiBaseUrl,
+  resolveCommandCenterApiHeaders,
+  resolveOperatorIdentity,
+} from '@/lib/server-api';
 
 export type ReviewDecision = 'approve' | 'deny' | 'hold' | 'return';
 
@@ -13,12 +18,9 @@ export async function reviewPick(
   decision: ReviewDecision,
   reason: string,
 ): Promise<ReviewResult> {
-  const apiUrl = process.env.API_BASE_URL ?? 'http://localhost:3000';
-  const apiKey = process.env.UNIT_TALK_CC_API_KEY ?? '';
-  const operatorActor = process.env.OPERATOR_IDENTITY ?? 'command-center';
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (apiKey) headers['Authorization'] = `Bearer ${apiKey}`;
+  const apiUrl = resolveApiBaseUrl();
+  const operatorActor = resolveOperatorIdentity();
+  const headers = resolveCommandCenterApiHeaders();
 
   const res = await fetch(`${apiUrl}/api/picks/${pickId}/review`, {
     method: 'POST',

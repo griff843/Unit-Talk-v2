@@ -1,19 +1,21 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import {
+  resolveApiBaseUrl,
+  resolveCommandCenterApiHeaders,
+  resolveOperatorIdentity,
+} from '@/lib/server-api';
 
 export type InterventionResult =
   | { ok: true; data: Record<string, unknown> }
   | { ok: false; error: string };
 
-const API_BASE = process.env.API_BASE_URL ?? 'http://localhost:3000';
-const API_KEY = process.env.UNIT_TALK_CC_API_KEY ?? '';
-const OPERATOR_ACTOR = process.env.OPERATOR_IDENTITY ?? 'command-center';
+const API_BASE = resolveApiBaseUrl();
+const OPERATOR_ACTOR = resolveOperatorIdentity();
 
 function authHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (API_KEY) headers['Authorization'] = `Bearer ${API_KEY}`;
-  return headers;
+  return resolveCommandCenterApiHeaders();
 }
 
 export async function retryDelivery(pickId: string, reason: string): Promise<InterventionResult> {
@@ -25,6 +27,7 @@ export async function retryDelivery(pickId: string, reason: string): Promise<Int
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
   revalidatePath('/exceptions');
+  revalidatePath(`/picks/${pickId}`);
   return { ok: true, data: (body as { data?: Record<string, unknown> }).data ?? {} };
 }
 
@@ -37,6 +40,7 @@ export async function rerunPromotion(pickId: string, reason: string): Promise<In
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
   revalidatePath('/exceptions');
+  revalidatePath(`/picks/${pickId}`);
   return { ok: true, data: (body as { data?: Record<string, unknown> }).data ?? {} };
 }
 
@@ -54,6 +58,7 @@ export async function overridePromotion(
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
   revalidatePath('/exceptions');
+  revalidatePath(`/picks/${pickId}`);
   return { ok: true, data: (body as { data?: Record<string, unknown> }).data ?? {} };
 }
 
@@ -65,5 +70,6 @@ export async function requeueDelivery(pickId: string): Promise<InterventionResul
   const body = await res.json().catch(() => ({}));
   if (!res.ok) return { ok: false, error: (body as { error?: { message?: string } }).error?.message ?? `Error ${res.status}` };
   revalidatePath('/exceptions');
+  revalidatePath(`/picks/${pickId}`);
   return { ok: true, data: (body as { data?: Record<string, unknown> }).data ?? {} };
 }

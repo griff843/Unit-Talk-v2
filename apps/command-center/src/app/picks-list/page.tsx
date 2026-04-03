@@ -40,6 +40,7 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
   const status = String(pick['status'] ?? '');
   const approval = String(pick['approval_status'] ?? '');
   const source = String(pick['source'] ?? '');
+  const submitter = String(pick['submitter'] ?? '—');
   const market = String(pick['market'] ?? '');
   const selection = String(pick['selection'] ?? '');
   const score = pick['promotion_score'] as number | null;
@@ -53,6 +54,7 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
         </Link>
       </td>
       <td className="py-2 pr-3 text-xs text-gray-300">{source}</td>
+      <td className="py-2 pr-3 text-xs text-gray-300">{submitter}</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{market}</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{selection}</td>
       <td className="py-2 pr-3 text-xs text-gray-300">{score != null ? score.toFixed(1) : '—'}</td>
@@ -109,6 +111,7 @@ export default async function PicksListPage({
                   <tr className="border-b border-gray-700 text-xs uppercase text-gray-400">
                     <th className="py-2 pr-3">Pick ID</th>
                     <th className="py-2 pr-3">Source</th>
+                    <th className="py-2 pr-3">Submitted By</th>
                     <th className="py-2 pr-3">Market</th>
                     <th className="py-2 pr-3">Selection</th>
                     <th className="py-2 pr-3">Score</th>
