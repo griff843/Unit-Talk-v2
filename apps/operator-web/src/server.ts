@@ -239,7 +239,7 @@ export interface ChannelHealthSummary {
 }
 
 export interface OperatorIncident {
-  type: 'stuck-outbox' | 'stale-worker' | 'open-dead-letter' | 'circuit-open';
+  type: 'stuck-outbox' | 'stale-worker' | 'open-dead-letter' | 'circuit-open' | 'delivery-stall';
   severity: 'warning' | 'critical';
   summary: string;
   affectedCount: number;
@@ -1428,7 +1428,25 @@ export function detectIncidents(
     });
   }
 
-  // 2. stale-worker: no worker heartbeat/distribution activity within 10 minutes
+  // 2. delivery-stall: pending rows older than 15 minutes with no receipts in that window
+  // Catches the case where the worker is alive (heartbeating) but not processing the outbox.
+  if (stuckRows.length > 0) {
+    const stalledSince = nowMs - STUCK_OUTBOX_THRESHOLD_MS;
+    const recentReceiptExists = snapshot.recentReceipts.some((row) => {
+      const recordedAt = new Date(row.recorded_at).getTime();
+      return recordedAt >= stalledSince;
+    });
+    if (!recentReceiptExists) {
+      incidents.push({
+        type: 'delivery-stall',
+        severity: 'critical',
+        summary: `${stuckRows.length} pending outbox row(s) have been waiting more than 15 minutes with no recent delivery receipts — worker may be alive but not processing`,
+        affectedCount: stuckRows.length,
+      });
+    }
+  }
+
+  // 4. stale-worker: no worker heartbeat/distribution activity within 10 minutes
   const latestWorkerRun = findLatestWorkerRun(snapshot.recentRuns);
   const isStaleWorker =
     latestWorkerRun === null
@@ -1447,7 +1465,7 @@ export function detectIncidents(
     });
   }
 
-  // 3. open-dead-letter: any dead_letter outbox rows
+  // 5. open-dead-letter: any dead_letter outbox rows
   const deadLetterRows = snapshot.recentOutbox.filter((row) => row.status === 'dead_letter');
   if (deadLetterRows.length > 0) {
     incidents.push({
@@ -1458,7 +1476,7 @@ export function detectIncidents(
     });
   }
 
-  // 4. circuit-open: bestBets or traderInsights circuit is open
+  // 6. circuit-open: bestBets or traderInsights circuit is open
   const openCircuits: string[] = [];
   if (snapshot.bestBets.circuitBreaker.status === 'open') {
     openCircuits.push(snapshot.bestBets.target);

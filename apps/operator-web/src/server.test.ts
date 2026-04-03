@@ -3364,6 +3364,129 @@ test('detectIncidents does not raise stuck-outbox when pending row is recent', (
   );
 });
 
+test('detectIncidents returns delivery-stall incident when pending rows are old and no receipts exist in window', () => {
+  const now = new Date('2026-03-30T12:20:00.000Z');
+  // pending row created 20 minutes ago, no receipts in last 15 minutes
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-stall-1',
+        pick_id: 'pick-stall-1',
+        target: 'discord:best-bets',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        updated_at: '2026-03-30T12:00:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  const stallIncident = snapshot.incidents.find((i) => i.type === 'delivery-stall');
+  assert.ok(stallIncident, 'delivery-stall incident should be present');
+  assert.equal(stallIncident.severity, 'critical');
+  assert.equal(stallIncident.affectedCount, 1);
+  assert.match(stallIncident.summary, /not processing/i);
+});
+
+test('detectIncidents does not raise delivery-stall when recent receipt exists in window', () => {
+  const now = new Date('2026-03-30T12:20:00.000Z');
+  // pending row is old, but a receipt was written 5 minutes ago
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-stall-2',
+        pick_id: 'pick-stall-2',
+        target: 'discord:best-bets',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        updated_at: '2026-03-30T12:00:00.000Z',
+      },
+    ],
+    recentReceipts: [
+      {
+        id: 'receipt-recent-1',
+        outbox_id: 'outbox-other',
+        external_id: null,
+        idempotency_key: null,
+        receipt_type: 'discord.message',
+        status: 'sent',
+        channel: 'discord:canary',
+        payload: {},
+        recorded_at: '2026-03-30T12:15:00.000Z',
+      },
+    ],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(
+    snapshot.incidents.some((i) => i.type === 'delivery-stall'),
+    false,
+    'no delivery-stall when a receipt was written recently',
+  );
+});
+
+test('detectIncidents does not raise delivery-stall when pending rows are fresh', () => {
+  const now = new Date('2026-03-30T12:05:00.000Z');
+  // pending row created 5 minutes ago (under 15-minute threshold)
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-fresh-stall',
+        pick_id: 'pick-fresh-stall',
+        target: 'discord:best-bets',
+        status: 'pending',
+        attempt_count: 0,
+        next_attempt_at: null,
+        last_error: null,
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: null,
+        created_at: '2026-03-30T12:00:00.000Z',
+        updated_at: '2026-03-30T12:00:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentSettlements: [],
+    recentRuns: [],
+    recentPicks: [],
+    recentAudit: [],
+    now,
+  });
+
+  assert.equal(
+    snapshot.incidents.some((i) => i.type === 'delivery-stall'),
+    false,
+    'no delivery-stall when pending rows are under threshold',
+  );
+});
+
 test('detectIncidents returns stale-worker incident when most recent distribution.process run finished more than 10 minutes ago', () => {
   const now = new Date('2026-03-30T12:15:00.000Z');
   const snapshot = createSnapshotFromRows({
