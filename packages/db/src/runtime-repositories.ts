@@ -3488,7 +3488,13 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       name: sb.display_name as string,
     }));
 
-    const cappers = (cappersRes.data ?? []).map((c) => c.id as string);
+      const cappers = (cappersRes.data ?? []).map((capper) => ({
+        id: capper.id as string,
+        displayName:
+          typeof capper.display_name === 'string' && capper.display_name.trim().length > 0
+            ? capper.display_name
+            : (capper.id as string),
+      }));
 
     // ticketTypes are a UI concept — not stored in DB
     const ticketTypes: ReferenceDataCatalog['ticketTypes'] = [

@@ -38,11 +38,16 @@ export interface TicketTypeDefinition {
   enabled: boolean;
 }
 
+export interface CapperDefinition {
+  id: string;
+  displayName: string;
+}
+
 export interface ReferenceDataCatalog {
   sports: SportDefinition[];
   sportsbooks: SportsbookDefinition[];
   ticketTypes: TicketTypeDefinition[];
-  cappers: string[];
+  cappers: CapperDefinition[];
 }
 
 // ---------------------------------------------------------------------------
@@ -169,7 +174,12 @@ export const V1_REFERENCE_DATA: ReferenceDataCatalog = {
     { id: 'round-robin', name: 'Round Robin', enabled: false },
     { id: 'future', name: 'Future', enabled: false },
   ],
-  cappers: ['griff843'],
+  cappers: [
+    {
+      id: 'griff843',
+      displayName: 'griff843',
+    },
+  ],
 };
 
 // ---------------------------------------------------------------------------
@@ -214,7 +224,7 @@ export function isValidCapper(
   catalog: ReferenceDataCatalog,
   capper: string,
 ): boolean {
-  return catalog.cappers.includes(capper);
+  return catalog.cappers.some((entry) => entry.id === capper);
 }
 
 export function isValidSportsbook(

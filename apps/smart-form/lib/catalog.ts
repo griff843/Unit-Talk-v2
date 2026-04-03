@@ -29,9 +29,14 @@ export interface TicketTypeDefinition {
   enabled: boolean;
 }
 
+export interface CapperDefinition {
+  id: string;
+  displayName: string;
+}
+
 export interface CatalogData {
   sports: SportDefinition[];
   sportsbooks: SportsbookDefinition[];
   ticketTypes: TicketTypeDefinition[];
-  cappers: string[];
+  cappers: CapperDefinition[];
 }
