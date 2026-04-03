@@ -90,6 +90,27 @@ test('getCatalog returns catalog data on a successful response', async () => {
   restoreFetch();
 });
 
+test('getCatalog normalizes legacy string capper entries', async () => {
+  const restoreFetch = installFetchMock(async () =>
+    new Response(
+      JSON.stringify({
+        data: {
+          sports: [],
+          sportsbooks: [],
+          ticketTypes: [],
+          cappers: ['griff843'],
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ),
+  );
+
+  const catalog = await getCatalog();
+  assert.deepEqual(catalog.cappers, [{ id: 'griff843', displayName: 'griff843' }]);
+
+  restoreFetch();
+});
+
 test('getMatchups calls the canonical matchup browse endpoint', async () => {
   let capturedUrl = '';
   const restoreFetch = installFetchMock(async (url) => {

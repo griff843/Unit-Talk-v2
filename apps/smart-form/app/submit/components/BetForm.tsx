@@ -83,6 +83,7 @@ interface ParticipantAutocompleteFieldProps {
   searchType: ParticipantSearchType;
   eventId?: string | null;
   sport: string;
+  allowedParticipantIds?: ReadonlySet<string> | null;
   onSuggestionSelected: (suggestion: ParticipantSuggestion) => void;
   onManualChange: () => void;
 }
@@ -179,6 +180,7 @@ function ParticipantAutocompleteField({
   searchType,
   eventId,
   sport,
+  allowedParticipantIds,
   onSuggestionSelected,
   onManualChange,
 }: ParticipantAutocompleteFieldProps) {
@@ -224,11 +226,14 @@ function ParticipantAutocompleteField({
           throw new Error(message);
         }
 
+        const normalizedSuggestions = normalizeParticipantSearchResults(
+          isRecord(json) ? json : { data: [] },
+          searchType,
+        );
         setSuggestions(
-          normalizeParticipantSearchResults(
-            isRecord(json) ? json : { data: [] },
-            searchType,
-          ),
+          allowedParticipantIds && allowedParticipantIds.size > 0
+            ? normalizedSuggestions.filter((suggestion) => allowedParticipantIds.has(suggestion.participantId))
+            : normalizedSuggestions,
         );
         setHasSearched(true);
       } catch (error) {
@@ -248,7 +253,7 @@ function ParticipantAutocompleteField({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [eventId, name, searchType, sport, value]);
+  }, [allowedParticipantIds, eventId, name, searchType, sport, value]);
 
   const shouldShowMenu =
     isFocused &&
@@ -543,6 +548,26 @@ export function BetForm() {
   const availableStatTypes = selectedSport
     ? getStatTypesForSport(catalog ?? emptyCatalog, selectedSport)
     : [];
+  const allowedPlayerIds = useMemo(() => {
+    if (!eventBrowse) {
+      return null;
+    }
+    return new Set(
+      eventBrowse.participants
+        .filter((participant) => participant.participantType === 'player')
+        .map((participant) => participant.participantId),
+    );
+  }, [eventBrowse]);
+  const allowedTeamIds = useMemo(() => {
+    if (!eventBrowse) {
+      return null;
+    }
+    return new Set(
+      eventBrowse.participants
+        .filter((participant) => participant.participantType === 'team')
+        .map((participant) => participant.participantId),
+    );
+  }, [eventBrowse]);
   const availableOfferFamilies = useMemo(() => {
     if (!eventBrowse) {
       return [] as MarketTypeId[];
@@ -595,6 +620,32 @@ export function BetForm() {
       return true;
     });
   }, [eventBrowse, selectedMarketType, selectedOfferParticipantId]);
+  const availablePlayerPropStatTypes = useMemo(() => {
+    if (selectedMarketType !== 'player-prop') {
+      return [] as string[];
+    }
+    if (!eventBrowse) {
+      return availableStatTypes;
+    }
+
+    const inferredStatTypes = Array.from(
+      new Set(
+        eventBrowse.offers
+          .filter((offer) => mapOfferToFormMarketType(offer) === 'player-prop')
+          .filter((offer) => !selectedOfferParticipantId || offer.participantId === selectedOfferParticipantId)
+          .flatMap((offer) => {
+            const statType = inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName);
+            return statType ? [statType] : [];
+          }),
+      ),
+    );
+
+    if (inferredStatTypes.length === 0) {
+      return availableStatTypes;
+    }
+
+    return availableStatTypes.filter((statType) => inferredStatTypes.includes(statType));
+  }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse);
   const shouldShowManualFallback =
     browseMode === 'manual' ||
@@ -773,6 +824,20 @@ export function BetForm() {
     setSelectedTeamId(null);
   }, [form, selectedMarketType, suspendMarketReset]);
 
+  useEffect(() => {
+    if (
+      selectedMarketType === 'player-prop' &&
+      watchedValues.statType &&
+      !availablePlayerPropStatTypes.includes(watchedValues.statType)
+    ) {
+      form.setValue('statType', '', {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  }, [availablePlayerPropStatTypes, form, selectedMarketType, watchedValues.statType]);
+
   function upsertMatchup(matchup: MatchupBrowseResult) {
     setMatchups((current) => {
       const existing = current.find((row) => row.eventId === matchup.eventId);
@@ -787,13 +852,34 @@ export function BetForm() {
   function applyMatchupSelection(matchup: MatchupBrowseResult) {
     upsertMatchup(matchup);
     setSelectedMatchupId(matchup.eventId);
+    setSelectedOffer(null);
+    setSelectedOfferParticipantId(null);
+    setSelectedPlayerId(null);
+    setSelectedTeamId(null);
     form.setValue('eventName', matchup.eventName, {
       shouldDirty: true,
       shouldTouch: true,
       shouldValidate: true,
     });
+    form.setValue('playerName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('statType', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('team', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.resetField('direction');
+    form.resetField('line');
+    form.resetField('odds');
     form.clearErrors('eventName');
-    setSelectedOffer(null);
   }
 
   function applyBrowseSearchSelection(result: BrowseSearchResult) {
@@ -1388,6 +1474,7 @@ export function BetForm() {
             searchType="player"
             eventId={selectedMatchupId}
             sport={selectedSport}
+            allowedParticipantIds={allowedPlayerIds}
             onSuggestionSelected={(suggestion) => setSelectedPlayerId(suggestion.participantId)}
             onManualChange={() => setSelectedPlayerId(null)}
           />
@@ -1411,14 +1498,18 @@ export function BetForm() {
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Stat Type</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                  <Select
+                    disabled={availablePlayerPropStatTypes.length === 0}
+                    onValueChange={field.onChange}
+                    value={field.value ?? ''}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue placeholder="Select stat" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {availableStatTypes.map((statType) => (
+                      {availablePlayerPropStatTypes.map((statType) => (
                         <SelectItem key={statType} value={statType}>
                           {statType}
                         </SelectItem>
@@ -1501,6 +1592,7 @@ export function BetForm() {
             searchType="team"
             eventId={selectedMatchupId}
             sport={selectedSport}
+            allowedParticipantIds={allowedTeamIds}
             onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
             onManualChange={() => setSelectedTeamId(null)}
           />
@@ -1533,6 +1625,7 @@ export function BetForm() {
               searchType="team"
               eventId={selectedMatchupId}
               sport={selectedSport}
+              allowedParticipantIds={allowedTeamIds}
               onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
               onManualChange={() => setSelectedTeamId(null)}
             />
@@ -1649,6 +1742,7 @@ export function BetForm() {
               searchType="team"
               eventId={selectedMatchupId}
               sport={selectedSport}
+              allowedParticipantIds={allowedTeamIds}
               onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
               onManualChange={() => setSelectedTeamId(null)}
             />

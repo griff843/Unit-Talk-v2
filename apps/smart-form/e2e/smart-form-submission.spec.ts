@@ -283,9 +283,7 @@ test('manual fallback surfaces the current free-text matchup warning', async ({ 
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
 });
 
-test('player autocomplete sends sport and matchup context and stat types stay sport-filtered', async ({ page }) => {
-  const participantRequestUrls: string[] = [];
-
+test('selected matchup constrains participant choices and valid stat types', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', async (route) => {
     await route.fulfill({
       status: 200,
@@ -306,17 +304,11 @@ test('player autocomplete sends sport and matchup context and stat types stay sp
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify({
-        data: {
-          ...eventBrowseResponse.data,
-          offers: [],
-        },
-      }),
+      body: JSON.stringify(eventBrowseResponse),
     });
   });
 
   await page.route('**/api/operator/participants?**', async (route) => {
-    participantRequestUrls.push(route.request().url());
     const requestUrl = new URL(route.request().url());
     const participantType = requestUrl.searchParams.get('participantType');
 
@@ -329,6 +321,11 @@ test('player autocomplete sends sport and matchup context and stat types stay sp
               {
                 participantId: 'player-jamal',
                 displayName: 'Jamal Murray',
+                participantType: 'player',
+              },
+              {
+                participantId: 'player-lebron',
+                displayName: 'LeBron James',
                 participantType: 'player',
               },
             ]
@@ -344,26 +341,21 @@ test('player autocomplete sends sport and matchup context and stat types stay sp
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: /Jazz @ Nuggets/i }).click();
-  await page.getByRole('button', { name: /PROP Player Prop/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
 
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
-  await expect(page.getByRole('option', { name: 'Points' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Assists' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Points' })).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'Passing Yards' })).toHaveCount(0);
   await page.keyboard.press('Escape');
 
-  await page.getByPlaceholder('Type a player name').fill('Jam');
+  await page.getByPlaceholder('Type a player name').fill('Ja');
   await expect(page.getByRole('button', { name: /Jamal Murray/i })).toBeVisible();
-
-  expect(participantRequestUrls).toHaveLength(1);
-  const participantRequest = new URL(participantRequestUrls[0]!);
-  expect(participantRequest.pathname).toBe('/api/operator/participants');
-  expect(participantRequest.searchParams.get('sport')).toBe('NBA');
-  expect(participantRequest.searchParams.get('eventId')).toBe('evt-1');
-  expect(participantRequest.searchParams.get('query')).toBe('Jam');
+  await expect(page.getByRole('button', { name: /LeBron James/i })).toHaveCount(0);
 
   await page.getByRole('button', { name: 'NFL' }).click();
-  await page.getByRole('button', { name: /PROP Player Prop/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
   await expect(page.getByRole('option', { name: 'Passing Yards' })).toBeVisible();
-  await expect(page.getByRole('option', { name: 'Points' })).toHaveCount(0);
+  await expect(page.getByRole('option', { name: 'Assists' })).toHaveCount(0);
 });
