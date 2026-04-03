@@ -17,7 +17,7 @@ import {
   searchBrowse,
   submitPick,
 } from '@/lib/api-client';
-import type { CatalogData, SportDefinition, SportsbookDefinition } from '@/lib/catalog';
+import type { CapperDefinition, CatalogData, SportDefinition, SportsbookDefinition } from '@/lib/catalog';
 import {
   buildParticipantSearchUrl,
   isRecord,
@@ -370,6 +370,113 @@ function OfferButton({
   );
 }
 
+function SearchableCapperField({
+  form,
+  cappers,
+}: {
+  form: UseFormReturn<BetFormValues>;
+  cappers: CapperDefinition[];
+}) {
+  const selectedCapperId = useWatch({ control: form.control, name: 'capper' }) ?? '';
+  const [query, setQuery] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+
+  const selectedCapper = useMemo(
+    () => cappers.find((capper) => capper.id === selectedCapperId) ?? null,
+    [cappers, selectedCapperId],
+  );
+  const filteredCappers = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    if (normalizedQuery.length === 0) {
+      return cappers;
+    }
+
+    return cappers.filter((capper) => {
+      const displayName = capper.displayName.toLocaleLowerCase();
+      const canonicalId = capper.id.toLocaleLowerCase();
+      return displayName.includes(normalizedQuery) || canonicalId.includes(normalizedQuery);
+    });
+  }, [cappers, query]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setQuery(selectedCapper?.displayName ?? '');
+    }
+  }, [isFocused, selectedCapper]);
+
+  return (
+    <FormField
+      control={form.control}
+      name="capper"
+      render={({ field }) => (
+        <FormItem className="relative">
+          <FormLabel>Capper</FormLabel>
+          <FormControl>
+            <Input
+              autoComplete="off"
+              placeholder="Search capper"
+              value={query}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setIsFocused(false);
+                  setQuery(selectedCapper?.displayName ?? '');
+                }, 120);
+              }}
+              onChange={(event) => {
+                const nextQuery = event.target.value;
+                setQuery(nextQuery);
+                if (field.value) {
+                  form.setValue('capper', '', {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: false,
+                  });
+                }
+              }}
+            />
+          </FormControl>
+          {isFocused ? (
+            <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+              {filteredCappers.length > 0 ? (
+                <div className="py-1">
+                  {filteredCappers.map((capper) => (
+                    <button
+                      key={capper.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        field.onChange(capper.id);
+                        setQuery(capper.displayName);
+                        setIsFocused(false);
+                        form.clearErrors('capper');
+                      }}
+                    >
+                      <span>{capper.displayName}</span>
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {capper.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  No matching cappers found.
+                </div>
+              )}
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            Search by display name or canonical id. Submissions persist the selected capper id.
+          </p>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 export function BetForm() {
   const { toast } = useToast();
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
@@ -496,7 +603,7 @@ export function BetForm() {
   // Auto-select capper when catalog loads with exactly one option and no capper is set yet.
   useEffect(() => {
     if (catalog && catalog.cappers.length === 1 && !form.getValues('capper')) {
-      form.setValue('capper', catalog.cappers[0]!, { shouldValidate: true });
+      form.setValue('capper', catalog.cappers[0]!.id, { shouldValidate: true });
     }
   }, [catalog, form]);
 
@@ -1647,20 +1754,31 @@ export function BetForm() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Sport</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select sport" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {catalog.sports.map((sport: SportDefinition) => (
-                              <SelectItem key={sport.id} value={sport.id}>
-                                {sport.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <FormControl>
+                          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                            {catalog.sports.map((sport: SportDefinition) => {
+                              const isSelected = field.value === sport.id;
+                              return (
+                                <button
+                                  key={sport.id}
+                                  type="button"
+                                  className={cn(
+                                    'rounded-xl border px-3 py-3 text-left text-sm font-medium transition-colors',
+                                    isSelected
+                                      ? 'border-primary bg-primary text-primary-foreground shadow-sm'
+                                      : 'border-border bg-background text-foreground hover:border-foreground/30 hover:bg-muted',
+                                  )}
+                                  onClick={() => field.onChange(sport.id)}
+                                >
+                                  {sport.name}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </FormControl>
+                        <p className="text-xs text-muted-foreground">
+                          Pick a sport first so matchups, participants, and market families stay filtered correctly.
+                        </p>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -1828,30 +1946,7 @@ export function BetForm() {
                     )}
                   />
 
-                  <FormField
-                    control={form.control}
-                    name="capper"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Capper</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select capper" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {catalog.cappers.map((capper: string) => (
-                              <SelectItem key={capper} value={capper}>
-                                {capper}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <SearchableCapperField form={form} cappers={catalog.cappers} />
                 </div>
               </section>
             </form>

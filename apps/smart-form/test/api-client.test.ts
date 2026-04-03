@@ -73,7 +73,7 @@ test('getCatalog returns catalog data on a successful response', async () => {
           sports: [{ id: 'NBA', name: 'NBA', marketTypes: ['player-prop'], statTypes: ['Points'], teams: [] }],
           sportsbooks: [{ id: 'fanatics', name: 'Fanatics' }],
           ticketTypes: [],
-          cappers: ['griff843'],
+          cappers: [{ id: 'griff843', displayName: 'griff843' }],
         },
       }),
       { status: 200, headers: { 'Content-Type': 'application/json' } },
@@ -84,6 +84,7 @@ test('getCatalog returns catalog data on a successful response', async () => {
     const catalog = await getCatalog();
     assert.equal(catalog.sports[0]?.id, 'NBA');
     assert.equal(catalog.sportsbooks[0]?.name, 'Fanatics');
+    assert.equal(catalog.cappers[0]?.id, 'griff843');
   });
 
   restoreFetch();

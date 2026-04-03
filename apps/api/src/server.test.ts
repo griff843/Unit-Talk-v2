@@ -305,20 +305,20 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/reference-data/catalog`);
     const body = (await response.json()) as {
       ok: boolean;
-      data?: {
-        sports: { id: string; name: string; marketTypes: string[]; statTypes: string[]; teams: string[] }[];
-        sportsbooks: { id: string; name: string }[];
-        cappers: string[];
-        ticketTypes: { id: string; name: string; enabled: boolean }[];
+        data?: {
+          sports: { id: string; name: string; marketTypes: string[]; statTypes: string[]; teams: string[] }[];
+          sportsbooks: { id: string; name: string }[];
+          cappers: { id: string; displayName: string }[];
+          ticketTypes: { id: string; name: string; enabled: boolean }[];
+        };
       };
-    };
 
     assert.equal(response.status, 200);
-    assert.equal(body.ok, true);
-    assert.ok(body.data);
-    assert.equal(body.data.sports.length, 9);
-    assert.equal(body.data.sportsbooks.length, 11);
-    assert.ok(body.data.cappers.includes('griff843'));
+      assert.equal(body.ok, true);
+      assert.ok(body.data);
+      assert.equal(body.data.sports.length, 9);
+      assert.equal(body.data.sportsbooks.length, 11);
+      assert.ok(body.data.cappers.some((capper) => capper.id === 'griff843'));
 
     const nba = body.data.sports.find((s) => s.id === 'NBA');
     assert.ok(nba);

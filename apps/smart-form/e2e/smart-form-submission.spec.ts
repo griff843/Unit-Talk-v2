@@ -16,7 +16,7 @@ const catalogResponse = {
       { id: 'draftkings', name: 'DraftKings' },
     ],
     ticketTypes: [],
-    cappers: ['griff843'],
+    cappers: [{ id: 'griff843', displayName: 'griff843' }],
   },
 };
 
@@ -179,8 +179,8 @@ test('live-offer search flow supports canonical entity selection and successful 
 
   await page.goto('/submit');
 
-  await page.locator('button[role="combobox"]').nth(0).click();
-  await page.getByRole('option', { name: 'NBA' }).click();
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
 
   await page.getByRole('button', { name: 'Search' }).click();
   await expect(page.getByText('Search canonical players, teams, and matchups for NBA on 2026-04-02.')).toBeVisible();
@@ -203,8 +203,8 @@ test('live-offer search flow supports canonical entity selection and successful 
 
   await page.locator('input[name="capperConviction"]').fill('8');
   await page.locator('input[name="units"]').fill('1');
-  await page.locator('button[role="combobox"]').last().click();
-  await page.getByRole('option', { name: 'griff843' }).click();
+  await page.getByPlaceholder('Search capper').fill('grif');
+  await page.getByRole('button', { name: /griff843/i }).click();
 
   await page.getByRole('button', { name: 'Submit Pick' }).first().click();
 
@@ -268,8 +268,8 @@ test('manual fallback surfaces the current free-text matchup warning', async ({ 
 
   await page.goto('/submit');
 
-  await page.locator('button[role="combobox"]').nth(0).click();
-  await page.getByRole('option', { name: 'NBA' }).click();
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: 'Manual fallback' }).click();
 
   await expect(page.getByText('Manual fallback is active. Matchup is still required, and current fallback uses free-text event entry until structured matchup selection is available.')).toBeVisible();

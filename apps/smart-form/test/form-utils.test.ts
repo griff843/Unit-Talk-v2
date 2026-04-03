@@ -37,7 +37,7 @@ const catalog: CatalogData = {
     { id: 'draftkings', name: 'DraftKings' },
   ],
   ticketTypes: [],
-  cappers: ['griff843'],
+  cappers: [{ id: 'griff843', displayName: 'griff843' }],
 };
 
 test('calcPayout returns profit for positive American odds', () => {
