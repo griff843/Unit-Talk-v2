@@ -166,6 +166,10 @@ function buildOfferStatus(eventBrowse: EventBrowseResult | null) {
   return { tone: 'live' as const, label: 'Live offers available' };
 }
 
+function normalizeParticipantKey(value: string | null | undefined) {
+  return value?.trim().toLocaleLowerCase() ?? null;
+}
+
 function ParticipantAutocompleteField({
   form,
   name,
@@ -742,6 +746,14 @@ export function BetForm() {
     }
 
     const inferredStatType = inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName);
+    const resolvedTeamParticipantId =
+      offer.participantId ??
+      eventBrowse?.participants.find((participant) => (
+        participant.participantType === 'team' &&
+        normalizeParticipantKey(participant.displayName) ===
+          normalizeParticipantKey(offer.providerParticipantId)
+      ))?.participantId ??
+      offer.providerParticipantId;
 
     setSelectedOffer({ offer, side });
     if (selectedMarketType !== derivedMarketType) {
@@ -814,7 +826,7 @@ export function BetForm() {
           shouldValidate: true,
         },
       );
-      setSelectedTeamId(offer.participantId);
+      setSelectedTeamId(resolvedTeamParticipantId);
       setSelectedPlayerId(null);
       return;
     }
