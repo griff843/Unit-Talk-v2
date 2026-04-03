@@ -93,6 +93,43 @@ export interface SubmitPickResult {
   lifecycleState: string;
 }
 
+function normalizeCatalogData(data: unknown): CatalogData {
+  const catalog = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
+  const rawCappers = Array.isArray(catalog.cappers) ? catalog.cappers : [];
+
+  const cappers = rawCappers.flatMap((entry) => {
+      if (typeof entry === 'string') {
+        const normalizedId = entry.trim();
+        return normalizedId ? [{ id: normalizedId, displayName: normalizedId }] : [];
+      }
+
+      if (!entry || typeof entry !== 'object') {
+        return [];
+      }
+
+      const capper = entry as { id?: unknown; displayName?: unknown };
+      const normalizedId = typeof capper.id === 'string' ? capper.id.trim() : '';
+      const normalizedDisplayName =
+        typeof capper.displayName === 'string' ? capper.displayName.trim() : '';
+
+      if (!normalizedId && !normalizedDisplayName) {
+        return [];
+      }
+
+      return [{
+        id: normalizedId || normalizedDisplayName,
+        displayName: normalizedDisplayName || normalizedId,
+      }];
+    });
+
+  return {
+    sports: Array.isArray(catalog.sports) ? catalog.sports : [],
+    sportsbooks: Array.isArray(catalog.sportsbooks) ? catalog.sportsbooks : [],
+    ticketTypes: Array.isArray(catalog.ticketTypes) ? catalog.ticketTypes : [],
+    cappers,
+  };
+}
+
 async function readJsonResponse<T>(res: Response, fallbackMessage: string): Promise<T> {
   const json = await res.json();
   if (!res.ok) {
@@ -103,7 +140,7 @@ async function readJsonResponse<T>(res: Response, fallbackMessage: string): Prom
 
 export async function getCatalog(): Promise<CatalogData> {
   const res = await fetch(`${API}/api/reference-data/catalog`);
-  return readJsonResponse<CatalogData>(res, 'Reference data unavailable');
+  return normalizeCatalogData(await readJsonResponse<unknown>(res, 'Reference data unavailable'));
 }
 
 export async function getLeagues(sportId: string): Promise<LeagueBrowseResult[]> {
