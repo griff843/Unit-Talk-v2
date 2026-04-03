@@ -623,6 +623,68 @@ test('smart-form pick with low confidence is never blocked by confidence floor',
   assert.equal(result.pick.promotionStatus, 'qualified', 'smart-form capper pick must not be blocked by low confidence');
 });
 
+test('alert-agent pick with baseline confidence is not floor-clamped', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'alert-agent',
+      submittedBy: 'system:alert-agent',
+      market: 'NBA Spread',
+      selection: 'over',
+      line: 6.5,
+      confidence: 0.65,
+      eventName: 'Knicks vs Celtics',
+      metadata: {
+        sport: 'NBA',
+        alertSignalIdempotencyKey: 'alert-key-65',
+        alertTier: 'alert-worthy',
+        promotionScores: {
+          edge: 75,
+          trust: 75,
+          readiness: 80,
+          uniqueness: 75,
+          boardFit: 80,
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.source, 'alert-agent');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+});
+
+test('alert-agent pick with low confidence bypasses the confidence floor entirely', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'alert-agent',
+      submittedBy: 'system:alert-agent',
+      market: 'NBA Spread',
+      selection: 'over',
+      line: 6.5,
+      confidence: 0.3,
+      eventName: 'Knicks vs Celtics',
+      metadata: {
+        sport: 'NBA',
+        alertSignalIdempotencyKey: 'alert-key-30',
+        alertTier: 'alert-worthy',
+        promotionScores: {
+          edge: 75,
+          trust: 75,
+          readiness: 80,
+          uniqueness: 75,
+          boardFit: 80,
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.source, 'alert-agent');
+  assert.equal(result.pick.promotionStatus, 'qualified');
+});
+
 test('non-smart-form pick with low confidence is correctly suppressed by confidence floor', async () => {
   const repositories = createInMemoryRepositoryBundle();
   // Same scores, same low confidence — but source is 'test' (system pick), not 'smart-form'.

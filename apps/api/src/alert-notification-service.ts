@@ -33,6 +33,7 @@ export interface AlertNotificationPassOptions {
   now?: Date;
   fetchImpl?: typeof fetch;
   runs?: SystemRunRepository;
+  onNotified?: ((detection: AlertDetectionRecord) => Promise<void> | void) | undefined;
 }
 
 /**
@@ -256,6 +257,7 @@ export async function runAlertNotificationPass(
       cooldownExpiresAt,
     });
 
+    await options.onNotified?.(detection);
     result.notified++;
   }
 

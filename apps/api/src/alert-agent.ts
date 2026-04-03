@@ -9,6 +9,7 @@ import {
   type AlertAgentConfig,
 } from './alert-agent-service.js';
 import { runAlertNotificationPass } from './alert-notification-service.js';
+import { createAlertSubmissionPublisher } from './alert-submission.js';
 import {
   type HedgeAgentConfig,
   loadHedgeAgentConfig,
@@ -17,6 +18,12 @@ import {
 import { runHedgeNotificationPass } from './hedge-notification-service.js';
 
 const ALERT_AGENT_INTERVAL_MS = 60_000;
+type AlertAgentRuntimeConfig = Partial<AlertAgentConfig & HedgeAgentConfig> & {
+  systemPicksEnabled?: boolean;
+  systemPicksApiUrl?: string | undefined;
+  systemPicksApiKey?: string | undefined;
+  submissionFetch?: typeof fetch | undefined;
+};
 
 export function startAlertAgent(
   repositories: Pick<
@@ -24,7 +31,7 @@ export function startAlertAgent(
     'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs'
   >,
   logger: Pick<Console, 'error' | 'info'> = console,
-  config: Partial<AlertAgentConfig & HedgeAgentConfig> = {},
+  config: AlertAgentRuntimeConfig = {},
 ) {
   const resolvedAlertConfig = {
     ...loadAlertAgentConfig(),
@@ -34,6 +41,15 @@ export function startAlertAgent(
     ...loadHedgeAgentConfig(),
     ...config,
   };
+  const publishSystemPick = createAlertSubmissionPublisher({
+    enabled: config.systemPicksEnabled === true,
+    events: repositories.events,
+    participants: repositories.participants,
+    logger,
+    ...(config.systemPicksApiUrl ? { apiUrl: config.systemPicksApiUrl } : {}),
+    ...(config.systemPicksApiKey ? { apiKey: config.systemPicksApiKey } : {}),
+    ...(config.submissionFetch ? { fetchImpl: config.submissionFetch } : {}),
+  });
 
   if (!resolvedAlertConfig.enabled && !resolvedHedgeConfig.enabled) {
     logger.info(
@@ -52,6 +68,7 @@ export function startAlertAgent(
       logger,
       resolvedAlertConfig,
       resolvedHedgeConfig,
+      publishSystemPick,
     );
   }, ALERT_AGENT_INTERVAL_MS);
 
@@ -78,6 +95,7 @@ async function runAlertAgentTick(
   logger: Pick<Console, 'error' | 'info'>,
   alertConfig: ReturnType<typeof loadAlertAgentConfig>,
   hedgeConfig: ReturnType<typeof loadHedgeAgentConfig>,
+  publishSystemPick: (detection: AlertDetectionRecord) => Promise<void>,
 ) {
   let alertPersistedSignals: AlertDetectionRecord[] = [];
   let hedgePersistedOpportunities: HedgeOpportunityRecord[] = [];
@@ -143,7 +161,11 @@ async function runAlertAgentTick(
       const notificationResult = await runAlertNotificationPass(
         alertPersistedSignals,
         repositories.alertDetections,
-        { dryRun: alertConfig.dryRun, runs: repositories.runs },
+        {
+          dryRun: alertConfig.dryRun,
+          runs: repositories.runs,
+          onNotified: publishSystemPick,
+        },
       );
 
       logger.info(

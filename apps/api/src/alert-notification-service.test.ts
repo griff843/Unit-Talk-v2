@@ -237,6 +237,59 @@ test('runAlertNotificationPass — notable routes to canary only', async () => {
   }
 });
 
+test('runAlertNotificationPass invokes onNotified only for successful alert-worthy notifications', async () => {
+  const repo = new InMemoryAlertDetectionRepository();
+  const notifiedIds: string[] = [];
+  const saved = await repo.saveDetection({
+    idempotencyKey: 'aw-key-submit-1',
+    eventId: 'evt-submit-1',
+    marketKey: 'total',
+    bookmakerKey: 'fanduel',
+    baselineSnapshotAt: '2026-03-28T10:00:00.000Z',
+    currentSnapshotAt: '2026-03-28T10:10:00.000Z',
+    oldLine: 220.5,
+    newLine: 224.0,
+    lineChange: 3.5,
+    lineChangeAbs: 3.5,
+    velocity: 0.35,
+    timeElapsedMinutes: 10,
+    direction: 'up',
+    marketType: 'total',
+    tier: 'alert-worthy',
+    metadata: {},
+  });
+
+  assert.ok(saved !== null);
+
+  const originalEnv = process.env.DISCORD_BOT_TOKEN;
+  const originalMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = makeTargetMap();
+
+  try {
+    await runAlertNotificationPass([saved!], repo, {
+      dryRun: false,
+      fetchImpl: async () => new Response('', { status: 200 }),
+      onNotified: async (detection) => {
+        notifiedIds.push(detection.id);
+      },
+    });
+
+    assert.deepEqual(notifiedIds, [saved!.id]);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = originalEnv;
+    }
+    if (originalMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalMap;
+    }
+  }
+});
+
 test('runAlertNotificationPass — alert-worthy routes to canary and trader-insights', async () => {
   const repo = new InMemoryAlertDetectionRepository();
   const calledChannels: string[] = [];

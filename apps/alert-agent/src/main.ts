@@ -8,7 +8,13 @@ const runtime = createApiRuntimeDependencies();
 let stop: (() => void) | null = null;
 let shuttingDown = false;
 
-stop = startAlertAgent(runtime.repositories);
+stop = startAlertAgent(runtime.repositories, console, {
+  systemPicksEnabled: process.env.SYSTEM_PICKS_ENABLED === 'true',
+  ...(process.env.UNIT_TALK_API_URL ? { systemPicksApiUrl: process.env.UNIT_TALK_API_URL } : {}),
+  ...(process.env.UNIT_TALK_API_KEY_SUBMITTER
+    ? { systemPicksApiKey: process.env.UNIT_TALK_API_KEY_SUBMITTER }
+    : {}),
+});
 
 console.log(
   JSON.stringify({
