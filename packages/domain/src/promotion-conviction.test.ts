@@ -72,7 +72,11 @@ test('conviction=9: trust=90 qualifies for trader-insights', () => {
   const pick = makeMinimalPick(0.9);
   const input = makeInput(pick, 90);
   const decision = evaluatePromotionEligibility(input, traderInsightsPromotionPolicy);
-  assert.equal(decision.qualified, true, `Expected qualified but got: ${JSON.stringify(decision.suppressionReasons)}`);
+  assert.equal(
+    decision.qualified,
+    true,
+    `Expected qualified but got: ${JSON.stringify(decision.explanation.suppressionReasons)}`,
+  );
   assert.equal(decision.status, 'qualified');
 });
 
@@ -125,7 +129,11 @@ test('conviction=4: trust=40 qualifies for best-bets (minimumTrust=0)', () => {
     boardState: { currentBoardCount: 0, sameSportCount: 0, sameGameCount: 0, duplicateCount: 0 },
   };
   const decision = evaluatePromotionEligibility(input, bestBetsPromotionPolicy);
-  assert.equal(decision.qualified, true, `Expected qualified but got: ${JSON.stringify(decision.suppressionReasons)}`);
+  assert.equal(
+    decision.qualified,
+    true,
+    `Expected qualified but got: ${JSON.stringify(decision.explanation.suppressionReasons)}`,
+  );
   assert.equal(decision.status, 'qualified');
 });
 
@@ -148,5 +156,9 @@ test('conviction=8: trust=80 qualifies for best-bets (minimumTrust=0)', () => {
     boardState: { currentBoardCount: 0, sameSportCount: 0, sameGameCount: 0, duplicateCount: 0 },
   };
   const decision = evaluatePromotionEligibility(input, bestBetsPromotionPolicy);
-  assert.equal(decision.qualified, true, `Expected qualified but got: ${JSON.stringify(decision.suppressionReasons)}`);
+  assert.equal(
+    decision.qualified,
+    true,
+    `Expected qualified but got: ${JSON.stringify(decision.explanation.suppressionReasons)}`,
+  );
 });

@@ -127,7 +127,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
 
   // Exposure gate — blocks before scoring if limits exceeded
   const exposureGateConfig = resolveExposureGateConfig();
-  if (exposureGateConfig.enabled) {
+  if (canonicalPick.source !== 'smart-form' && exposureGateConfig.enabled) {
     const exposureRejection = checkExposureGate(canonicalPick, openPicks, exposureGateConfig);
     if (exposureRejection) {
       return buildExposureSuppressedResult(
@@ -142,6 +142,20 @@ export async function evaluateAllPoliciesEagerAndPersist(
     settlementRepository ? { settlements: settlementRepository, picks: pickRepository } : undefined,
   );
   const decidedAt = new Date().toISOString();
+
+  if (canonicalPick.source === 'smart-form') {
+    return buildSmartFormQualifiedResult(
+      canonicalPick,
+      pickRecord,
+      actor,
+      pickRepository,
+      auditLogRepository,
+      policies,
+      boardStates,
+      scoreInputs,
+      decidedAt,
+    );
+  }
 
   const makeInput = (
     policy: PromotionPolicy,
@@ -362,6 +376,211 @@ export async function evaluateAllPoliciesEagerAndPersist(
     pick: mapPickRecordToCanonicalPick(persisted.pick),
     pickRecord: persisted.pick,
     resolvedTarget,
+    exclusiveInsightsDecision: decisionByTarget.get('exclusive-insights')!,
+    traderInsightsDecision: decisionByTarget.get('trader-insights')!,
+    bestBetsDecision: decisionByTarget.get('best-bets')!,
+  };
+}
+
+async function buildSmartFormQualifiedResult(
+  canonicalPick: CanonicalPick,
+  pickRecord: PickRecord,
+  actor: string,
+  pickRepository: PickRepository,
+  auditLogRepository: AuditLogRepository,
+  policies: readonly PromotionPolicy[],
+  boardStates: Awaited<ReturnType<PickRepository['getPromotionBoardState']>>[],
+  scoreInputs: Awaited<ReturnType<typeof readPromotionScoreInputs>>,
+  decidedAt: string,
+): Promise<EagerPromotionAllPoliciesResult> {
+  const bestBetsPolicy = policies.find((policy) => policy.target === 'best-bets');
+  const bestBetsIndex = policies.findIndex((policy) => policy.target === 'best-bets');
+  if (!bestBetsPolicy || bestBetsIndex < 0) {
+    throw new Error('best-bets policy must be active for smart-form submissions');
+  }
+
+  const makeInput = (
+    policy: PromotionPolicy,
+    boardState: (typeof boardStates)[number],
+    override: BoardPromotionEvaluationInput['override'],
+  ): BoardPromotionEvaluationInput => ({
+    target: policy.target,
+    pick: canonicalPick,
+    approvalStatus: canonicalPick.approvalStatus,
+    hasRequiredFields: hasRequiredFields(canonicalPick),
+    isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
+    withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+    marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
+    riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+    scoreInputs,
+    minimumScore: policy.minimumScore,
+    confidenceFloor: undefined,
+    boardCaps: policy.boardCaps,
+    boardState,
+    override,
+    decidedAt,
+    decidedBy: actor,
+    version: policy.version,
+  });
+
+  const decisions = policies.map((policy, index) => {
+    const boardState = boardStates[index]!;
+    if (policy.target === 'best-bets') {
+      return evaluatePromotionEligibility(
+        makeInput(policy, boardState, {
+          forcePromote: true,
+          reason: 'smart-form submissions route directly to best-bets',
+        }),
+        policy,
+      );
+    }
+
+    return evaluatePromotionEligibility(
+      makeInput(policy, boardState, {
+        suppress: true,
+        reason: 'smart-form submissions route directly to best-bets',
+      }),
+      policy,
+    );
+  });
+
+  const decisionByTarget = new Map(
+    policies.map((policy, index) => [policy.target, decisions[index]!] as const),
+  );
+
+  const makeSnapshot = (
+    policy: PromotionPolicy,
+    boardState: (typeof boardStates)[number],
+    override: BoardPromotionEvaluationInput['override'],
+  ): PromotionDecisionSnapshot => ({
+    scoringProfile: activeScoringProfile.name,
+    policyVersion: policy.version,
+    scoreInputs: {
+      edge: scoreInputs.edge,
+      trust: scoreInputs.trust,
+      readiness: scoreInputs.readiness,
+      uniqueness: scoreInputs.uniqueness,
+      boardFit: scoreInputs.boardFit,
+      edgeSource: scoreInputs.edgeSource,
+    },
+    gateInputs: {
+      approvalStatus: canonicalPick.approvalStatus,
+      hasRequiredFields: hasRequiredFields(canonicalPick),
+      isStale: readMetadataBoolean(canonicalPick.metadata, 'isStale') ?? false,
+      withinPostingWindow: !(readMetadataBoolean(canonicalPick.metadata, 'postingWindowClosed') ?? false),
+      marketStillValid: readMetadataBoolean(canonicalPick.metadata, 'marketStillValid') ?? true,
+      riskBlocked: readMetadataBoolean(canonicalPick.metadata, 'riskBlocked') ?? false,
+      confidenceFloor: null,
+      pickConfidence: canonicalPick.confidence ?? null,
+    },
+    boardStateAtDecision: {
+      currentBoardCount: boardState.currentBoardCount,
+      sameSportCount: boardState.sameSportCount,
+      sameGameCount: boardState.sameGameCount,
+      duplicateCount: boardState.duplicateCount,
+    },
+    weightsUsed: {
+      edge: policy.weights.edge,
+      trust: policy.weights.trust,
+      readiness: policy.weights.readiness,
+      uniqueness: policy.weights.uniqueness,
+      boardFit: policy.weights.boardFit,
+    },
+    ...(toSnapshotOverride(override) ? { override: toSnapshotOverride(override) } : {}),
+  });
+
+  const winnerDecision = decisions[bestBetsIndex]!;
+  const winnerBoardState = boardStates[bestBetsIndex]!;
+  const winnerSnapshot = makeSnapshot(bestBetsPolicy, winnerBoardState, {
+    forcePromote: true,
+    reason: 'smart-form submissions route directly to best-bets',
+  });
+  const winnerReason = summarizePromotionReason(winnerDecision);
+
+  const persisted = await pickRepository.persistPromotionDecision({
+    pickId: canonicalPick.id,
+    target: bestBetsPolicy.target,
+    approvalStatus: canonicalPick.approvalStatus,
+    promotionStatus: winnerDecision.status,
+    promotionTarget: 'best-bets',
+    promotionScore: winnerDecision.score,
+    promotionReason: winnerReason,
+    promotionVersion: winnerDecision.version,
+    promotionDecidedAt: winnerDecision.decidedAt,
+    promotionDecidedBy: winnerDecision.decidedBy,
+    overrideAction: 'force_promote',
+    payload: {
+      ...winnerSnapshot,
+      explanation: winnerDecision.explanation,
+      policy: bestBetsPolicy,
+    },
+  });
+
+  await auditLogRepository.record({
+    entityType: 'pick_promotion_history',
+    entityId: persisted.history.id,
+    entityRef: canonicalPick.id,
+    action: 'promotion.force_promote',
+    actor,
+    payload: {
+      pickId: canonicalPick.id,
+      target: 'best-bets',
+      status: winnerDecision.status,
+      score: winnerDecision.score,
+      resolvedTarget: 'best-bets',
+      reason: 'smart-form submissions route directly to best-bets',
+    },
+  });
+
+  for (let index = 0; index < policies.length; index += 1) {
+    if (index === bestBetsIndex) {
+      continue;
+    }
+
+    const policy = policies[index]!;
+    const decision = decisions[index]!;
+    const boardState = boardStates[index]!;
+    const history = await pickRepository.insertPromotionHistoryRow({
+      pickId: canonicalPick.id,
+      target: policy.target,
+      promotionStatus: decision.status,
+      promotionScore: decision.score,
+      promotionReason: summarizePromotionReason(decision),
+      promotionVersion: decision.version,
+      promotionDecidedAt: decision.decidedAt,
+      promotionDecidedBy: decision.decidedBy,
+      overrideAction: null,
+      payload: {
+        ...makeSnapshot(policy, boardState, {
+          suppress: true,
+          reason: 'smart-form submissions route directly to best-bets',
+        }),
+        explanation: decision.explanation,
+        policy,
+      },
+    });
+
+    await auditLogRepository.record({
+      entityType: 'pick_promotion_history',
+      entityId: history.id,
+      entityRef: canonicalPick.id,
+      action: 'promotion.suppress',
+      actor,
+      payload: {
+        pickId: canonicalPick.id,
+        target: policy.target,
+        status: decision.status,
+        score: decision.score,
+        resolvedTarget: 'best-bets',
+        reason: 'smart-form submissions route directly to best-bets',
+      },
+    });
+  }
+
+  return {
+    pick: mapPickRecordToCanonicalPick(persisted.pick),
+    pickRecord: persisted.pick,
+    resolvedTarget: 'best-bets',
     exclusiveInsightsDecision: decisionByTarget.get('exclusive-insights')!,
     traderInsightsDecision: decisionByTarget.get('trader-insights')!,
     bestBetsDecision: decisionByTarget.get('best-bets')!,
@@ -803,7 +1022,7 @@ function mapOverrideState(
   override:
     | {
         action: PromotionOverrideAction;
-        reason: string;
+      reason: string;
       }
     | undefined,
 ) {
@@ -822,6 +1041,30 @@ function mapOverrideState(
     suppress: true,
     reason: override.reason,
   };
+}
+
+function toSnapshotOverride(
+  override: BoardPromotionEvaluationInput['override'],
+): PromotionDecisionSnapshot['override'] {
+  if (!override) {
+    return undefined;
+  }
+
+  if (override.forcePromote) {
+    return {
+      forcePromote: true,
+      ...(override.reason ? { reason: override.reason } : {}),
+    };
+  }
+
+  if (override.suppress) {
+    return {
+      suppress: true,
+      ...(override.reason ? { reason: override.reason } : {}),
+    };
+  }
+
+  return override.reason ? { reason: override.reason } : undefined;
 }
 
 function summarizePromotionReason(decision: BoardPromotionDecision) {

@@ -673,6 +673,7 @@ export function BetForm() {
       shouldTouch: true,
       shouldValidate: true,
     });
+    form.clearErrors('eventName');
     setSelectedOffer(null);
   }
 
@@ -1708,7 +1709,7 @@ export function BetForm() {
 
                 {!selectedMatchup && browseMode === 'manual' ? (
                   <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-                    Manual fallback is active without a canonical matchup selection. Event entry is free-text until browse selection is made.
+                    Manual fallback is active. Matchup is still required, and current fallback uses free-text event entry until structured matchup selection is available.
                   </div>
                 ) : null}
 

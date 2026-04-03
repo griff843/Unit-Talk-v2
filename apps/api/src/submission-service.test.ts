@@ -145,6 +145,109 @@ test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', a
   assert.equal(claimed.outboxRecord?.target, 'discord:best-bets');
 });
 
+test('handleSubmitPick smart-form pick below promotion threshold still enqueues to best-bets', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await handleSubmitPick(
+    {
+      body: {
+        source: 'smart-form',
+        submittedBy: 'griff843',
+        market: 'NBA total',
+        selection: 'Over 224.5',
+        odds: -110,
+        stakeUnits: 1.5,
+        confidence: 0.4,
+        eventName: 'Knicks vs Celtics',
+        metadata: {
+          sport: 'NBA',
+          capper: 'griff843',
+          capperConviction: 4,
+          promotionScores: { edge: 45, trust: 40, readiness: 50, uniqueness: 40, boardFit: 35 },
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(response.status, 201);
+  if (!response.body.ok) throw new Error('expected ok response');
+
+  const data = response.body.data as SubmitPickControllerResult;
+  assert.equal(data.promotionStatus, 'qualified');
+  assert.equal(data.promotionTarget, 'best-bets');
+  assert.equal(data.outboxEnqueued, true);
+  assert.equal(data.lifecycleState, 'queued');
+
+  const claimed = await claimDistributionWork(
+    repositories.outbox,
+    'discord:best-bets',
+    'test-worker-smart-form-threshold',
+  );
+  assert.ok(claimed.outboxRecord);
+  assert.equal(claimed.outboxRecord?.pick_id, data.pickId);
+});
+
+test('handleSubmitPick smart-form duplicate exposure still enqueues to best-bets', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const first = await handleSubmitPick(
+    {
+      body: {
+        source: 'smart-form',
+        submittedBy: 'griff843',
+        market: 'NBA moneyline',
+        selection: 'Lakers',
+        odds: 120,
+        stakeUnits: 1,
+        confidence: 0.8,
+        eventName: 'Lakers vs Celtics',
+        metadata: {
+          sport: 'NBA',
+          capper: 'griff843',
+          capperConviction: 8,
+          promotionScores: { edge: 78, trust: 80, readiness: 85, uniqueness: 82, boardFit: 83 },
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(first.status, 201);
+  if (!first.body.ok) throw new Error('expected ok response');
+
+  const second = await handleSubmitPick(
+    {
+      body: {
+        source: 'smart-form',
+        submittedBy: 'griff843',
+        market: 'NBA spread',
+        selection: 'Lakers -4.5',
+        line: -4.5,
+        odds: -110,
+        stakeUnits: 1,
+        confidence: 0.7,
+        eventName: 'Lakers vs Celtics',
+        metadata: {
+          sport: 'NBA',
+          capper: 'griff843',
+          capperConviction: 7,
+          promotionScores: { edge: 55, trust: 70, readiness: 65, uniqueness: 50, boardFit: 45 },
+        },
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(second.status, 201);
+  if (!second.body.ok) throw new Error('expected ok response');
+
+  const data = second.body.data as SubmitPickControllerResult;
+  assert.equal(data.promotionStatus, 'qualified');
+  assert.equal(data.promotionTarget, 'best-bets');
+  assert.equal(data.outboxEnqueued, true);
+  assert.equal(data.lifecycleState, 'queued');
+});
+
 // ─── End enqueue-gap fix tests ────────────────────────────────────────────────
 
 test('validateSubmissionPayload rejects empty required fields', () => {
@@ -1353,7 +1456,7 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
   // Neither qualifies; bb's suppression data (board cap) is persisted on picks.
   const candidate = await processSubmission(
     {
-      source: 'smart-form',
+      source: 'test',
       market: 'NBA rebounds',
       selection: 'Player Over 9.5',
       confidence: 0.92,
