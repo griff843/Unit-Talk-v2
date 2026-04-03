@@ -857,6 +857,62 @@ export type Database = {
         }
         Relationships: []
       }
+      model_health_snapshots: {
+        Row: {
+          alert_level: string
+          calibration_score: number | null
+          created_at: string
+          drift_score: number | null
+          id: string
+          market_family: string
+          metadata: Json
+          model_id: string
+          roi: number | null
+          sample_size: number
+          snapshot_at: string
+          sport: string
+          win_rate: number | null
+        }
+        Insert: {
+          alert_level?: string
+          calibration_score?: number | null
+          created_at?: string
+          drift_score?: number | null
+          id?: string
+          market_family: string
+          metadata?: Json
+          model_id: string
+          roi?: number | null
+          sample_size?: number
+          snapshot_at?: string
+          sport: string
+          win_rate?: number | null
+        }
+        Update: {
+          alert_level?: string
+          calibration_score?: number | null
+          created_at?: string
+          drift_score?: number | null
+          id?: string
+          market_family?: string
+          metadata?: Json
+          model_id?: string
+          roi?: number | null
+          sample_size?: number
+          snapshot_at?: string
+          sport?: string
+          win_rate?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "model_health_snapshots_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "model_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       participant_memberships: {
         Row: {
           created_at: string

@@ -29,6 +29,7 @@ import type {
   EventUpsertInput,
   ExperimentLedgerCreateInput,
   ExperimentLedgerRepository,
+  ExecutionQualityRepository,
   GradeResultInsertInput,
   GradeResultLookupCriteria,
   GradeResultRepository,
@@ -39,6 +40,8 @@ import type {
   MemberTierActivateInput,
   MemberTierDeactivateInput,
   MemberTierRepository,
+  ModelHealthSnapshotCreateInput,
+  ModelHealthSnapshotRepository,
   ModelRegistryCreateInput,
   ModelRegistryRepository,
   ConfirmDeliveryAtomicInput,
@@ -90,8 +93,10 @@ import type {
   AuditLogRow,
   EventParticipantRow,
   ExperimentLedgerRecord,
+  ExecutionQualityReport,
   EventRow,
   GradeResultRecord,
+  ModelHealthSnapshotRecord,
   MemberTierRecord,
   ModelRegistryRecord,
   ParticipantRow,
@@ -1630,6 +1635,68 @@ export class InMemoryExperimentLedgerRepository implements ExperimentLedgerRepos
 
     this.runs.set(id, updated);
     return updated;
+  }
+}
+
+export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapshotRepository {
+  private readonly snapshots = new Map<string, ModelHealthSnapshotRecord>();
+
+  async create(
+    input: ModelHealthSnapshotCreateInput,
+  ): Promise<ModelHealthSnapshotRecord> {
+    const now = new Date().toISOString();
+    const record: ModelHealthSnapshotRecord = {
+      id: crypto.randomUUID(),
+      model_id: input.modelId,
+      sport: input.sport,
+      market_family: input.marketFamily,
+      snapshot_at: now,
+      win_rate: input.winRate ?? null,
+      roi: input.roi ?? null,
+      sample_size: input.sampleSize ?? 0,
+      drift_score: input.driftScore ?? null,
+      calibration_score: input.calibrationScore ?? null,
+      alert_level: input.alertLevel ?? 'none',
+      metadata: toJsonObject(input.metadata ?? {}),
+      created_at: now,
+    };
+
+    this.snapshots.set(record.id, record);
+    return record;
+  }
+
+  async findLatestByModel(modelId: string): Promise<ModelHealthSnapshotRecord | null> {
+    return (
+      Array.from(this.snapshots.values())
+        .filter((record) => record.model_id === modelId)
+        .sort(compareModelHealthSnapshotsDescending)[0] ?? null
+    );
+  }
+
+  async listByModel(modelId: string, limit?: number): Promise<ModelHealthSnapshotRecord[]> {
+    const records = Array.from(this.snapshots.values())
+      .filter((record) => record.model_id === modelId)
+      .sort(compareModelHealthSnapshotsDescending);
+
+    return limit === undefined ? records : records.slice(0, limit);
+  }
+
+  async listAlerted(level?: 'warning' | 'critical'): Promise<ModelHealthSnapshotRecord[]> {
+    return Array.from(this.snapshots.values())
+      .filter((record) => (level ? record.alert_level === level : record.alert_level !== 'none'))
+      .sort(compareModelHealthSnapshotsDescending);
+  }
+}
+
+export class InMemoryExecutionQualityRepository implements ExecutionQualityRepository {
+  constructor(private readonly seedReports: ExecutionQualityReport[] = []) {}
+
+  async summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]> {
+    return this.seedReports.filter((report) => sport === undefined || report.sportKey === sport);
+  }
+
+  async summarizeByMarketFamily(providerKey: string): Promise<ExecutionQualityReport[]> {
+    return this.seedReports.filter((report) => report.providerKey === providerKey);
   }
 }
 
@@ -4737,6 +4804,122 @@ export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepos
   }
 }
 
+export class DatabaseModelHealthSnapshotRepository implements ModelHealthSnapshotRepository {
+  constructor(private readonly client: UnitTalkSupabaseClient) {}
+
+  async create(
+    input: ModelHealthSnapshotCreateInput,
+  ): Promise<ModelHealthSnapshotRecord> {
+    const { data, error } = await this.client
+      .from('model_health_snapshots')
+      .insert({
+        model_id: input.modelId,
+        sport: input.sport,
+        market_family: input.marketFamily,
+        win_rate: input.winRate ?? null,
+        roi: input.roi ?? null,
+        sample_size: input.sampleSize ?? 0,
+        drift_score: input.driftScore ?? null,
+        calibration_score: input.calibrationScore ?? null,
+        alert_level: input.alertLevel ?? 'none',
+        metadata: toJsonObject(input.metadata ?? {}),
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to create model health snapshot: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as ModelHealthSnapshotRecord;
+  }
+
+  async findLatestByModel(modelId: string): Promise<ModelHealthSnapshotRecord | null> {
+    const { data, error } = await this.client
+      .from('model_health_snapshots')
+      .select('*')
+      .eq('model_id', modelId)
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find latest model health snapshot: ${error.message}`);
+    }
+
+    return (data as ModelHealthSnapshotRecord | null) ?? null;
+  }
+
+  async listByModel(modelId: string, limit?: number): Promise<ModelHealthSnapshotRecord[]> {
+    let query = this.client
+      .from('model_health_snapshots')
+      .select('*')
+      .eq('model_id', modelId)
+      .order('snapshot_at', { ascending: false });
+
+    if (limit !== undefined) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`Failed to list model health snapshots: ${error.message}`);
+    }
+
+    return (data ?? []) as ModelHealthSnapshotRecord[];
+  }
+
+  async listAlerted(level?: 'warning' | 'critical'): Promise<ModelHealthSnapshotRecord[]> {
+    let query = this.client
+      .from('model_health_snapshots')
+      .select('*')
+      .order('snapshot_at', { ascending: false });
+
+    query = level ? query.eq('alert_level', level) : query.neq('alert_level', 'none');
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`Failed to list alerted model health snapshots: ${error.message}`);
+    }
+
+    return (data ?? []) as ModelHealthSnapshotRecord[];
+  }
+}
+
+export class DatabaseExecutionQualityRepository implements ExecutionQualityRepository {
+  constructor(private readonly client: UnitTalkSupabaseClient) {}
+
+  async summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]> {
+    let query = this.client
+      .from('provider_offers')
+      .select('provider_key, sport_key, provider_market_key, line, is_opening, is_closing');
+
+    if (sport !== undefined) {
+      query = query.eq('sport_key', sport);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      throw new Error(`Failed to summarize execution quality by provider: ${error.message}`);
+    }
+
+    return buildExecutionQualityReports(data ?? []);
+  }
+
+  async summarizeByMarketFamily(providerKey: string): Promise<ExecutionQualityReport[]> {
+    const { data, error } = await this.client
+      .from('provider_offers')
+      .select('provider_key, sport_key, provider_market_key, line, is_opening, is_closing')
+      .eq('provider_key', providerKey);
+
+    if (error) {
+      throw new Error(`Failed to summarize execution quality by market family: ${error.message}`);
+    }
+
+    return buildExecutionQualityReports(data ?? []);
+  }
+}
+
 export function createModelRegistryRepositories(
   client?: SupabaseClient,
 ): { modelRegistry: ModelRegistryRepository; experimentLedger: ExperimentLedgerRepository } {
@@ -4751,6 +4934,32 @@ export function createModelRegistryRepositories(
   return {
     modelRegistry: new DatabaseModelRegistryRepository(typedClient),
     experimentLedger: new DatabaseExperimentLedgerRepository(typedClient),
+  };
+}
+
+export function createModelOpsRepositories(
+  client?: SupabaseClient,
+): {
+  modelRegistry: ModelRegistryRepository;
+  experimentLedger: ExperimentLedgerRepository;
+  modelHealthSnapshots: ModelHealthSnapshotRepository;
+  executionQuality: ExecutionQualityRepository;
+} {
+  if (!client) {
+    return {
+      modelRegistry: new InMemoryModelRegistryRepository(),
+      experimentLedger: new InMemoryExperimentLedgerRepository(),
+      modelHealthSnapshots: new InMemoryModelHealthSnapshotRepository(),
+      executionQuality: new InMemoryExecutionQualityRepository(),
+    };
+  }
+
+  const typedClient = client as UnitTalkSupabaseClient;
+  return {
+    modelRegistry: new DatabaseModelRegistryRepository(typedClient),
+    experimentLedger: new DatabaseExperimentLedgerRepository(typedClient),
+    modelHealthSnapshots: new DatabaseModelHealthSnapshotRepository(typedClient),
+    executionQuality: new DatabaseExecutionQualityRepository(typedClient),
   };
 }
 
@@ -4989,6 +5198,18 @@ function compareSettlementRecordsDescending(
   return right.id.localeCompare(left.id);
 }
 
+function compareModelHealthSnapshotsDescending(
+  left: ModelHealthSnapshotRecord,
+  right: ModelHealthSnapshotRecord,
+) {
+  const snapshotComparison = right.snapshot_at.localeCompare(left.snapshot_at);
+  if (snapshotComparison !== 0) {
+    return snapshotComparison;
+  }
+
+  return right.id.localeCompare(left.id);
+}
+
 function mapProviderOfferInsertToRecord(
   offer: ProviderOfferInsert,
   id: string = crypto.randomUUID(),
@@ -5029,6 +5250,72 @@ function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
     snapshot_at: offer.snapshotAt,
     idempotency_key: offer.idempotencyKey,
   };
+}
+
+type ExecutionQualityOfferRow = Pick<
+  ProviderOfferRecord,
+  'provider_key' | 'sport_key' | 'provider_market_key' | 'line' | 'is_opening' | 'is_closing'
+>;
+
+function buildExecutionQualityReports(
+  offers: ExecutionQualityOfferRow[],
+): ExecutionQualityReport[] {
+  const grouped = new Map<string, ExecutionQualityOfferRow[]>();
+
+  for (const offer of offers) {
+    const key = `${offer.provider_key}::${offer.sport_key ?? ''}::${offer.provider_market_key}`;
+    const group = grouped.get(key);
+    if (group) {
+      group.push(offer);
+    } else {
+      grouped.set(key, [offer]);
+    }
+  }
+
+  return Array.from(grouped.values())
+    .map((group) => {
+      const first = group[0]!;
+      const avgEntryLine = averageNumbers(
+        group
+          .filter((offer) => offer.is_opening)
+          .map((offer) => offer.line)
+          .filter((line): line is number => line !== null),
+      );
+      const avgClosingLine = averageNumbers(
+        group
+          .filter((offer) => offer.is_closing)
+          .map((offer) => offer.line)
+          .filter((line): line is number => line !== null),
+      );
+
+      return {
+        providerKey: first.provider_key,
+        sportKey: first.sport_key,
+        marketFamily: first.provider_market_key,
+        sampleSize: group.length,
+        avgEntryLine,
+        avgClosingLine,
+        avgLineDelta:
+          avgEntryLine !== null && avgClosingLine !== null
+            ? avgEntryLine - avgClosingLine
+            : null,
+        winRate: null,
+        roi: null,
+      };
+    })
+    .sort((left, right) =>
+      left.providerKey.localeCompare(right.providerKey) ||
+      (left.sportKey ?? '').localeCompare(right.sportKey ?? '') ||
+      left.marketFamily.localeCompare(right.marketFamily),
+    );
+}
+
+function averageNumbers(values: number[]): number | null {
+  if (values.length === 0) {
+    return null;
+  }
+
+  return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
 // =============================================================================

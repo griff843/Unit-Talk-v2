@@ -22,7 +22,9 @@ import type {
   HedgeOpportunityRecord,
   HedgeOpportunityType,
   MemberTierRecord,
+  AlertLevel,
   ModelRegistryRecord,
+  ModelHealthSnapshotRecord,
   ModelStatus,
   ParticipantRow,
   PickReviewRecord,
@@ -44,6 +46,7 @@ import type {
   SystemRunRecord,
   ExperimentLedgerRecord,
   ExperimentRunType,
+  ExecutionQualityReport,
 } from './types.js';
 
 export interface SubmissionCreateInput {
@@ -595,6 +598,31 @@ export interface ExperimentLedgerRepository {
   fail(id: string, notes?: string): Promise<ExperimentLedgerRecord>;
 }
 
+export interface ModelHealthSnapshotCreateInput {
+  modelId: string;
+  sport: string;
+  marketFamily: string;
+  winRate?: number;
+  roi?: number;
+  sampleSize?: number;
+  driftScore?: number;
+  calibrationScore?: number;
+  alertLevel?: AlertLevel;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ModelHealthSnapshotRepository {
+  create(input: ModelHealthSnapshotCreateInput): Promise<ModelHealthSnapshotRecord>;
+  findLatestByModel(modelId: string): Promise<ModelHealthSnapshotRecord | null>;
+  listByModel(modelId: string, limit?: number): Promise<ModelHealthSnapshotRecord[]>;
+  listAlerted(level?: Exclude<AlertLevel, 'none'>): Promise<ModelHealthSnapshotRecord[]>;
+}
+
+export interface ExecutionQualityRepository {
+  summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]>;
+  summarizeByMarketFamily(providerKey: string): Promise<ExecutionQualityReport[]>;
+}
+
 export interface SubmissionPersistenceResult {
   submission: SubmissionRecord;
   submissionEvent: SubmissionEventRecord;
@@ -725,6 +753,8 @@ export interface RepositoryBundle {
   reviews: PickReviewRepository;
   modelRegistry?: ModelRegistryRepository;
   experimentLedger?: ExperimentLedgerRepository;
+  modelHealthSnapshots?: ModelHealthSnapshotRepository;
+  executionQuality?: ExecutionQualityRepository;
 }
 
 export interface IngestorRepositoryBundle {

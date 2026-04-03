@@ -12,6 +12,7 @@
 // =============================================================================
 
 import {
+  alertLevels,
   alertDetectionMarketTypes,
   alertDetectionTiers,
   approvalStatuses,
@@ -69,6 +70,7 @@ export type MarketTypeId = (typeof marketTypes)[number];
 export type ModelStatus = (typeof modelStatuses)[number];
 export type ExperimentRunType = (typeof experimentRunTypes)[number];
 export type ExperimentStatus = (typeof experimentStatuses)[number];
+export type AlertLevel = (typeof alertLevels)[number];
 
 export type SubmissionRow = Tables<'submissions'>;
 export type SubmissionEventRow = Tables<'submission_events'>;
@@ -92,6 +94,7 @@ export type GradeResultRow = Tables<'game_results'>;
 export type MemberTierRow = Tables<'member_tiers'>;
 export type ModelRegistryRow = Tables<'model_registry'>;
 export type ExperimentLedgerRow = Tables<'experiment_ledger'>;
+export type ModelHealthSnapshotRow = Tables<'model_health_snapshots'>;
 
 // ---------------------------------------------------------------------------
 // Record aliases (backward-compatible names used by existing application code)
@@ -165,6 +168,21 @@ export type ModelRegistryRecord = ModelRegistryRow;
 
 /** @see {@link ExperimentLedgerRow} */
 export type ExperimentLedgerRecord = ExperimentLedgerRow;
+
+/** @see {@link ModelHealthSnapshotRow} */
+export type ModelHealthSnapshotRecord = ModelHealthSnapshotRow;
+
+export type ExecutionQualityReport = {
+  providerKey: string;
+  sportKey: string | null;
+  marketFamily: string;
+  sampleSize: number;
+  avgEntryLine: number | null;
+  avgClosingLine: number | null;
+  avgLineDelta: number | null;
+  winRate: number | null;
+  roi: number | null;
+};
 
 // ---------------------------------------------------------------------------
 // Pick review types (not generated — table added in migration 018)

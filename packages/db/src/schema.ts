@@ -124,6 +124,8 @@ export const experimentRunTypes = ['training', 'eval', 'backtest', 'calibration'
 
 export const experimentStatuses = ['running', 'completed', 'failed', 'cancelled'] as const;
 
+export const alertLevels = ['none', 'warning', 'critical'] as const;
+
 export interface TableDefinition {
   name: string;
   purpose: string;
