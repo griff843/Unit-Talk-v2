@@ -22,6 +22,23 @@ export interface DistributionSkippedResult {
  */
 const ACTIVE_OUTBOX_STATUSES = ['pending', 'processing'] as const;
 
+export function resolveDeliveryTarget(
+  target: string,
+  env: { UNIT_TALK_APP_ENV?: string } = process.env,
+) {
+  // In local/dev execution we preserve business truth on picks.promotion_target, but
+  // delivery itself must fail-closed to discord:canary so nothing reaches a live lane.
+  if (
+    env.UNIT_TALK_APP_ENV === 'local' &&
+    target.startsWith('discord:') &&
+    target !== 'discord:canary'
+  ) {
+    return 'discord:canary';
+  }
+
+  return target;
+}
+
 export async function enqueueDistributionWork(
   pick: CanonicalPick,
   outboxRepository: OutboxRepository,
@@ -30,6 +47,7 @@ export async function enqueueDistributionWork(
 ): Promise<DistributionEnqueueResult | DistributionSkippedResult> {
   const registry = targetRegistry ?? resolveTargetRegistry();
   const requestedPromotionTarget = parseGovernedPromotionTarget(target);
+  const resolvedTarget = resolveDeliveryTarget(target);
 
   if (requestedPromotionTarget && !isTargetEnabled(requestedPromotionTarget, registry)) {
     return { enqueued: false, reason: 'target-disabled', target };
@@ -53,7 +71,7 @@ export async function enqueueDistributionWork(
   // Idempotency guard: reject enqueue if a pending or processing row already exists
   const existingActive = await outboxRepository.findByPickAndTarget(
     pick.id,
-    target,
+    resolvedTarget,
     ACTIVE_OUTBOX_STATUSES,
   );
 
@@ -66,7 +84,7 @@ export async function enqueueDistributionWork(
     };
   }
 
-  const workItem = buildDistributionWorkItem(pick, target);
+  const workItem = buildDistributionWorkItem(pick, resolvedTarget);
   const outboxRecord = await outboxRepository.enqueue({
     pickId: workItem.pickId,
     target: workItem.target,
@@ -76,7 +94,7 @@ export async function enqueueDistributionWork(
 
   return {
     pickId: pick.id,
-    target,
+    target: resolvedTarget,
     outboxRecord,
   };
 }

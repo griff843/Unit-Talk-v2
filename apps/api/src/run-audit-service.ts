@@ -13,7 +13,11 @@ import {
   exclusiveInsightsPromotionPolicy,
   traderInsightsPromotionPolicy,
 } from '@unit-talk/domain';
-import { enqueueDistributionWork, type DistributionEnqueueResult } from './distribution-service.js';
+import {
+  enqueueDistributionWork,
+  resolveDeliveryTarget,
+  type DistributionEnqueueResult,
+} from './distribution-service.js';
 import { ensurePickLifecycleState } from './lifecycle-service.js';
 import { evaluateAndPersistPromotion } from './promotion-service.js';
 
@@ -33,14 +37,15 @@ export async function enqueueDistributionWithRunTracking(
   systemRunRepository: SystemRunRepository,
   auditLogRepository: AuditLogRepository,
 ): Promise<DistributionRunResult> {
+  const resolvedTarget = resolveDeliveryTarget(target);
   const run = await systemRunRepository.startRun({
     runType: 'distribution.enqueue',
     actor,
     details: {
       pickId: pick.id,
-      target,
+      target: resolvedTarget,
     },
-    idempotencyKey: `${pick.id}:${target}:enqueue-run`,
+    idempotencyKey: `${pick.id}:${resolvedTarget}:enqueue-run`,
   });
 
   try {
@@ -66,7 +71,7 @@ export async function enqueueDistributionWithRunTracking(
       // Validation (target-disabled, promotion checks) is done by
       // enqueueDistributionWork — we call it in the catch fallback only.
       const { buildDistributionWorkItem } = await import('@unit-talk/domain');
-      const workItem = buildDistributionWorkItem(pickForDistribution, target);
+      const workItem = buildDistributionWorkItem(pickForDistribution, resolvedTarget);
 
       const atomicResult = await outboxRepository.enqueueDistributionAtomic({
         pickId: pick.id,
@@ -75,14 +80,14 @@ export async function enqueueDistributionWithRunTracking(
         writerRole: 'promoter',
         reason: 'ready for downstream distribution',
         lifecycleCreatedAt: new Date().toISOString(),
-        outboxTarget: target,
+        outboxTarget: resolvedTarget,
         outboxPayload: workItem.payload,
         outboxIdempotencyKey: workItem.idempotencyKey,
       });
 
       if (!atomicResult) {
         // Pick already transitioned — find existing outbox record
-        const existing = await outboxRepository.findByPickAndTarget(pick.id, target);
+        const existing = await outboxRepository.findByPickAndTarget(pick.id, resolvedTarget);
         if (!existing) throw new Error('Pick already queued but no outbox record found');
         outboxRecord = existing;
       } else {
@@ -112,16 +117,16 @@ export async function enqueueDistributionWithRunTracking(
         const completedRun = await systemRunRepository.completeRun({
           runId: run.id,
           status: 'succeeded',
-          details: { target, reason: 'target-disabled' },
+          details: { target: resolvedTarget, reason: 'target-disabled' },
         });
         const audit = await auditLogRepository.record({
           entityType: 'distribution_outbox',
           entityId: run.id,
           action: 'distribution.enqueue',
           actor,
-          payload: { pickId: pick.id, target, skipped: true, reason: 'target-disabled' },
+          payload: { pickId: pick.id, target: resolvedTarget, skipped: true, reason: 'target-disabled' },
         });
-        return { run: completedRun, audit, target, pickId: pick.id };
+        return { run: completedRun, audit, target: resolvedTarget, pickId: pick.id };
       }
 
       outboxRecord = (distribution as DistributionEnqueueResult).outboxRecord;
@@ -133,7 +138,7 @@ export async function enqueueDistributionWithRunTracking(
       status: 'succeeded',
       details: {
         outboxId: outboxRecord.id,
-        target,
+        target: resolvedTarget,
         queuedLifecycleEventId,
       },
     });
@@ -145,14 +150,14 @@ export async function enqueueDistributionWithRunTracking(
       payload: {
         pickId: pick.id,
         outboxId: outboxRecord.id,
-        target,
+        target: resolvedTarget,
       },
     });
 
     return {
       run: completedRun,
       audit,
-      target,
+      target: resolvedTarget,
       pickId: pick.id,
     };
   } catch (error) {
@@ -160,7 +165,7 @@ export async function enqueueDistributionWithRunTracking(
       runId: run.id,
       status: 'failed',
       details: {
-        target,
+        target: resolvedTarget,
         error: error instanceof Error ? error.message : 'unknown error',
       },
     });
