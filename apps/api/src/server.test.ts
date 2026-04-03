@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
-import { createApiServer } from './server.js';
+import { createApiRuntimeDependencies, createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
@@ -55,6 +55,38 @@ test('GET /health response body includes persistence mode indicators', async () 
     assert.ok('persistenceMode' in body, 'response must include persistenceMode');
     assert.ok('dbReachable' in body, 'response must include dbReachable');
     assert.ok('runtimeMode' in body, 'response must include runtimeMode');
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /health uses a valid UUID probe when persistenceMode is database', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  let probedPickId: string | null = null;
+  repositories.picks.findPickById = async (pickId: string) => {
+    probedPickId = pickId;
+    return null;
+  };
+
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.persistenceMode = 'database';
+  const server = createApiServer({ runtime });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+    const body = (await response.json()) as {
+      status: string;
+      dbReachable: boolean;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.status, 'healthy');
+    assert.equal(body.dbReachable, true);
+    assert.equal(probedPickId, '00000000-0000-0000-0000-000000000000');
   } finally {
     server.close();
   }

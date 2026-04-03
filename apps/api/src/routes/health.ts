@@ -2,6 +2,8 @@ import type { ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from '../server.js';
 import { writeJson } from '../http-utils.js';
 
+const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
+
 /**
  * Probes DB connectivity by issuing a lightweight query through the picks
  * repository.  Returns true only when persistence is backed by a real database
@@ -13,9 +15,9 @@ async function probeDbConnectivity(runtime: ApiRuntimeDependencies): Promise<boo
   }
 
   try {
-    // A lookup by a non-existent ID is the cheapest round-trip we can make —
-    // it exercises the full Supabase client path without returning rows.
-    await runtime.repositories.picks.findPickById('health-probe');
+    // Probe with a syntactically valid UUID so database-backed repositories can
+    // round-trip cleanly even when the row does not exist.
+    await runtime.repositories.picks.findPickById(HEALTH_PROBE_PICK_ID);
     return true;
   } catch {
     return false;
