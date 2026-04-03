@@ -1,4 +1,5 @@
 import crypto from 'node:crypto';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import {
   V1_REFERENCE_DATA,
   type ProviderOfferInsert,
@@ -26,6 +27,8 @@ import type {
   EventRepository,
   EventSearchResult,
   EventUpsertInput,
+  ExperimentLedgerCreateInput,
+  ExperimentLedgerRepository,
   GradeResultInsertInput,
   GradeResultLookupCriteria,
   GradeResultRepository,
@@ -36,6 +39,8 @@ import type {
   MemberTierActivateInput,
   MemberTierDeactivateInput,
   MemberTierRepository,
+  ModelRegistryCreateInput,
+  ModelRegistryRepository,
   ConfirmDeliveryAtomicInput,
   ConfirmDeliveryAtomicResult,
   EventBrowseResult,
@@ -84,9 +89,11 @@ import type {
   AlertDetectionRecord,
   AuditLogRow,
   EventParticipantRow,
+  ExperimentLedgerRecord,
   EventRow,
   GradeResultRecord,
   MemberTierRecord,
+  ModelRegistryRecord,
   ParticipantRow,
   SystemRunRecord,
   OutboxRecord,
@@ -1448,7 +1455,181 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       }
     }
 
-    return results.slice(0, limit);
+  return results.slice(0, limit);
+  }
+}
+
+export class InMemoryModelRegistryRepository implements ModelRegistryRepository {
+  private readonly models = new Map<string, ModelRegistryRecord>();
+
+  async create(input: ModelRegistryCreateInput): Promise<ModelRegistryRecord> {
+    const now = new Date().toISOString();
+    const record: ModelRegistryRecord = {
+      id: crypto.randomUUID(),
+      model_name: input.modelName,
+      version: input.version,
+      sport: input.sport,
+      market_family: input.marketFamily,
+      status: input.status ?? 'staged',
+      champion_since: input.status === 'champion' ? now : null,
+      metadata: toJsonObject(input.metadata ?? {}),
+      created_at: now,
+      updated_at: now,
+    };
+
+    if (record.status === 'champion') {
+      this.archiveChampionForSlot(record.sport, record.market_family, record.id, now);
+    }
+
+    this.models.set(record.id, record);
+    return record;
+  }
+
+  async findById(id: string): Promise<ModelRegistryRecord | null> {
+    return this.models.get(id) ?? null;
+  }
+
+  async findChampion(sport: string, marketFamily: string): Promise<ModelRegistryRecord | null> {
+    for (const record of this.models.values()) {
+      if (
+        record.sport === sport &&
+        record.market_family === marketFamily &&
+        record.status === 'champion'
+      ) {
+        return record;
+      }
+    }
+
+    return null;
+  }
+
+  async listBySport(sport: string): Promise<ModelRegistryRecord[]> {
+    return Array.from(this.models.values())
+      .filter((record) => record.sport === sport)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+  }
+
+  async updateStatus(
+    id: string,
+    status: ModelRegistryRecord['status'],
+    championSince?: string,
+  ): Promise<ModelRegistryRecord> {
+    const existing = this.models.get(id);
+    if (!existing) {
+      throw new Error(`Model registry record not found: ${id}`);
+    }
+
+    const now = new Date().toISOString();
+    const nextChampionSince =
+      status === 'champion' ? (championSince ?? now) : null;
+
+    if (status === 'champion') {
+      this.archiveChampionForSlot(existing.sport, existing.market_family, existing.id, now);
+    }
+
+    const updated: ModelRegistryRecord = {
+      ...existing,
+      status,
+      champion_since: nextChampionSince,
+      updated_at: now,
+    };
+
+    this.models.set(id, updated);
+    return updated;
+  }
+
+  private archiveChampionForSlot(
+    sport: string,
+    marketFamily: string,
+    excludeId: string,
+    now: string,
+  ) {
+    for (const [id, record] of this.models.entries()) {
+      if (
+        id !== excludeId &&
+        record.sport === sport &&
+        record.market_family === marketFamily &&
+        record.status === 'champion'
+      ) {
+        this.models.set(id, {
+          ...record,
+          status: 'archived',
+          champion_since: null,
+          updated_at: now,
+        });
+      }
+    }
+  }
+}
+
+export class InMemoryExperimentLedgerRepository implements ExperimentLedgerRepository {
+  private readonly runs = new Map<string, ExperimentLedgerRecord>();
+
+  async create(input: ExperimentLedgerCreateInput): Promise<ExperimentLedgerRecord> {
+    const now = new Date().toISOString();
+    const record: ExperimentLedgerRecord = {
+      id: crypto.randomUUID(),
+      model_id: input.modelId,
+      run_type: input.runType,
+      sport: input.sport,
+      market_family: input.marketFamily,
+      status: 'running',
+      started_at: now,
+      finished_at: null,
+      metrics: toJsonObject({}),
+      notes: input.notes ?? null,
+      created_at: now,
+    };
+
+    this.runs.set(record.id, record);
+    return record;
+  }
+
+  async findById(id: string): Promise<ExperimentLedgerRecord | null> {
+    return this.runs.get(id) ?? null;
+  }
+
+  async listByModelId(modelId: string): Promise<ExperimentLedgerRecord[]> {
+    return Array.from(this.runs.values())
+      .filter((record) => record.model_id === modelId)
+      .sort((left, right) => left.started_at.localeCompare(right.started_at));
+  }
+
+  async complete(
+    id: string,
+    metrics: Record<string, unknown>,
+  ): Promise<ExperimentLedgerRecord> {
+    const existing = this.runs.get(id);
+    if (!existing) {
+      throw new Error(`Experiment ledger record not found: ${id}`);
+    }
+
+    const updated: ExperimentLedgerRecord = {
+      ...existing,
+      status: 'completed',
+      finished_at: new Date().toISOString(),
+      metrics: toJsonObject(metrics),
+    };
+
+    this.runs.set(id, updated);
+    return updated;
+  }
+
+  async fail(id: string, notes?: string): Promise<ExperimentLedgerRecord> {
+    const existing = this.runs.get(id);
+    if (!existing) {
+      throw new Error(`Experiment ledger record not found: ${id}`);
+    }
+
+    const updated: ExperimentLedgerRecord = {
+      ...existing,
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+      notes: notes ?? existing.notes,
+    };
+
+    this.runs.set(id, updated);
+    return updated;
   }
 }
 
@@ -4313,6 +4494,264 @@ export class DatabasePickReviewRepository implements PickReviewRepository {
     if (error) throw new Error(`Failed to list recent reviews: ${error.message}`);
     return (data ?? []) as unknown as PickReviewRecord[];
   }
+}
+
+export class DatabaseModelRegistryRepository implements ModelRegistryRepository {
+  constructor(private readonly client: UnitTalkSupabaseClient) {}
+
+  async create(input: ModelRegistryCreateInput): Promise<ModelRegistryRecord> {
+    const now = new Date().toISOString();
+    const status = input.status ?? 'staged';
+    if (status === 'champion') {
+      await this.archiveChampionForSlot(input.sport, input.marketFamily, null, now);
+    }
+
+    const { data, error } = await this.client
+      .from('model_registry')
+      .insert({
+        model_name: input.modelName,
+        version: input.version,
+        sport: input.sport,
+        market_family: input.marketFamily,
+        status,
+        champion_since: status === 'champion' ? now : null,
+        metadata: toJsonObject(input.metadata ?? {}),
+        updated_at: now,
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to create model registry record: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as ModelRegistryRecord;
+  }
+
+  async findById(id: string): Promise<ModelRegistryRecord | null> {
+    const { data, error } = await this.client
+      .from('model_registry')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find model registry record: ${error.message}`);
+    }
+
+    return (data as ModelRegistryRecord | null) ?? null;
+  }
+
+  async findChampion(sport: string, marketFamily: string): Promise<ModelRegistryRecord | null> {
+    const { data, error } = await this.client
+      .from('model_registry')
+      .select('*')
+      .eq('sport', sport)
+      .eq('market_family', marketFamily)
+      .eq('status', 'champion')
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find champion model: ${error.message}`);
+    }
+
+    return (data as ModelRegistryRecord | null) ?? null;
+  }
+
+  async listBySport(sport: string): Promise<ModelRegistryRecord[]> {
+    const { data, error } = await this.client
+      .from('model_registry')
+      .select('*')
+      .eq('sport', sport)
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to list model registry records by sport: ${error.message}`);
+    }
+
+    return (data ?? []) as ModelRegistryRecord[];
+  }
+
+  async updateStatus(
+    id: string,
+    status: ModelRegistryRecord['status'],
+    championSince?: string,
+  ): Promise<ModelRegistryRecord> {
+    const existing = await this.findById(id);
+    if (!existing) {
+      throw new Error(`Model registry record not found: ${id}`);
+    }
+
+    const now = new Date().toISOString();
+    if (status === 'champion') {
+      await this.archiveChampionForSlot(existing.sport, existing.market_family, id, now);
+    }
+
+    const { data, error } = await this.client
+      .from('model_registry')
+      .update({
+        status,
+        champion_since: status === 'champion' ? (championSince ?? now) : null,
+        updated_at: now,
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to update model registry status: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as ModelRegistryRecord;
+  }
+
+  private async archiveChampionForSlot(
+    sport: string,
+    marketFamily: string,
+    excludeId: string | null,
+    now: string,
+  ) {
+    let query = this.client
+      .from('model_registry')
+      .update({
+        status: 'archived',
+        champion_since: null,
+        updated_at: now,
+      })
+      .eq('sport', sport)
+      .eq('market_family', marketFamily)
+      .eq('status', 'champion');
+
+    if (excludeId) {
+      query = query.neq('id', excludeId);
+    }
+
+    const { error } = await query;
+    if (error) {
+      throw new Error(`Failed to archive existing champion: ${error.message}`);
+    }
+  }
+}
+
+export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepository {
+  constructor(private readonly client: UnitTalkSupabaseClient) {}
+
+  async create(input: ExperimentLedgerCreateInput): Promise<ExperimentLedgerRecord> {
+    const { data, error } = await this.client
+      .from('experiment_ledger')
+      .insert({
+        model_id: input.modelId,
+        run_type: input.runType,
+        sport: input.sport,
+        market_family: input.marketFamily,
+        status: 'running',
+        metrics: toJsonObject({}),
+        notes: input.notes ?? null,
+      })
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to create experiment ledger record: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as ExperimentLedgerRecord;
+  }
+
+  async findById(id: string): Promise<ExperimentLedgerRecord | null> {
+    const { data, error } = await this.client
+      .from('experiment_ledger')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find experiment ledger record: ${error.message}`);
+    }
+
+    return (data as ExperimentLedgerRecord | null) ?? null;
+  }
+
+  async listByModelId(modelId: string): Promise<ExperimentLedgerRecord[]> {
+    const { data, error } = await this.client
+      .from('experiment_ledger')
+      .select('*')
+      .eq('model_id', modelId)
+      .order('started_at', { ascending: true });
+
+    if (error) {
+      throw new Error(`Failed to list experiment ledger records by model: ${error.message}`);
+    }
+
+    return (data ?? []) as ExperimentLedgerRecord[];
+  }
+
+  async complete(
+    id: string,
+    metrics: Record<string, unknown>,
+  ): Promise<ExperimentLedgerRecord> {
+    const { data, error } = await this.client
+      .from('experiment_ledger')
+      .update({
+        status: 'completed',
+        finished_at: new Date().toISOString(),
+        metrics: toJsonObject(metrics),
+      })
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to complete experiment ledger record: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as ExperimentLedgerRecord;
+  }
+
+  async fail(id: string, notes?: string): Promise<ExperimentLedgerRecord> {
+    const updates: {
+      status: 'failed';
+      finished_at: string;
+      notes?: string;
+    } = {
+      status: 'failed',
+      finished_at: new Date().toISOString(),
+    };
+
+    if (notes !== undefined) {
+      updates.notes = notes;
+    }
+
+    const { data, error } = await this.client
+      .from('experiment_ledger')
+      .update(updates)
+      .eq('id', id)
+      .select('*')
+      .single();
+
+    if (error || !data) {
+      throw new Error(`Failed to fail experiment ledger record: ${error?.message ?? 'unknown error'}`);
+    }
+
+    return data as ExperimentLedgerRecord;
+  }
+}
+
+export function createModelRegistryRepositories(
+  client?: SupabaseClient,
+): { modelRegistry: ModelRegistryRepository; experimentLedger: ExperimentLedgerRepository } {
+  if (!client) {
+    return {
+      modelRegistry: new InMemoryModelRegistryRepository(),
+      experimentLedger: new InMemoryExperimentLedgerRepository(),
+    };
+  }
+
+  const typedClient = client as UnitTalkSupabaseClient;
+  return {
+    modelRegistry: new DatabaseModelRegistryRepository(typedClient),
+    experimentLedger: new DatabaseExperimentLedgerRepository(typedClient),
+  };
 }
 
 export function createInMemoryRepositoryBundle(): RepositoryBundle {

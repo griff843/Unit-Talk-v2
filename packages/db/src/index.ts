@@ -29,6 +29,8 @@ export const canonicalTables = [
   'provider_market_aliases',
   'provider_book_aliases',
   'provider_offers',
+  'model_registry',
+  'experiment_ledger',
   'cappers',
   'events',
   'event_participants',

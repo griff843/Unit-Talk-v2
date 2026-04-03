@@ -389,6 +389,56 @@ export type Database = {
           },
         ]
       }
+      experiment_ledger: {
+        Row: {
+          created_at: string
+          finished_at: string | null
+          id: string
+          market_family: string
+          metrics: Json
+          model_id: string
+          notes: string | null
+          run_type: string
+          sport: string
+          started_at: string
+          status: string
+        }
+        Insert: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          market_family: string
+          metrics?: Json
+          model_id: string
+          notes?: string | null
+          run_type: string
+          sport: string
+          started_at?: string
+          status?: string
+        }
+        Update: {
+          created_at?: string
+          finished_at?: string | null
+          id?: string
+          market_family?: string
+          metrics?: Json
+          model_id?: string
+          notes?: string | null
+          run_type?: string
+          sport?: string
+          started_at?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experiment_ledger_model_id_fkey"
+            columns: ["model_id"]
+            isOneToOne: false
+            referencedRelation: "model_registry"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       events: {
         Row: {
           created_at: string
@@ -765,6 +815,45 @@ export type Database = {
           reason?: string | null
           source?: string
           tier?: string
+        }
+        Relationships: []
+      }
+      model_registry: {
+        Row: {
+          champion_since: string | null
+          created_at: string
+          id: string
+          market_family: string
+          metadata: Json
+          model_name: string
+          sport: string
+          status: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          champion_since?: string | null
+          created_at?: string
+          id?: string
+          market_family: string
+          metadata?: Json
+          model_name: string
+          sport: string
+          status?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          champion_since?: string | null
+          created_at?: string
+          id?: string
+          market_family?: string
+          metadata?: Json
+          model_name?: string
+          sport?: string
+          status?: string
+          updated_at?: string
+          version?: string
         }
         Relationships: []
       }

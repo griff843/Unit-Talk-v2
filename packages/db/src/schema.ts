@@ -118,6 +118,12 @@ export const marketTypes = [
   'team-total',
 ] as const;
 
+export const modelStatuses = ['champion', 'challenger', 'staged', 'archived'] as const;
+
+export const experimentRunTypes = ['training', 'eval', 'backtest', 'calibration'] as const;
+
+export const experimentStatuses = ['running', 'completed', 'failed', 'cancelled'] as const;
+
 export interface TableDefinition {
   name: string;
   purpose: string;
