@@ -27,6 +27,13 @@ import {
   createSimulationDeliveryAdapter,
   createStubDeliveryAdapter,
 } from './delivery-adapters.js';
+import {
+  createWorkerRuntimeDependencies,
+  readCircuitBreakerCooldownMs,
+  readCircuitBreakerThreshold,
+  readSimulationMode,
+  readWorkerHeartbeatIntervalMs,
+} from './runtime.js';
 import { processNextDistributionWork } from './distribution-worker.js';
 import { runWorkerCycles } from './runner.js';
 import { DeliveryCircuitBreaker } from './circuit-breaker.js';
@@ -920,7 +927,7 @@ test('createDiscordDeliveryAdapter returns dry-run Discord-shaped receipt metada
   assert.equal(receipt.status, 'sent');
   assert.equal(receipt.channel, outbox.target);
   assert.equal(receipt.externalId, `discord-dry:${outbox.id}`);
-  assert.equal(receipt.idempotencyKey, `${outbox.id}:discord:dry-receipt`);
+  assert.equal(receipt.idempotencyKey, `${outbox.id}:${outbox.target}:dry-receipt`);
 });
 
 test('createDiscordDeliveryAdapter sends a live Discord embed when configured', async () => {
@@ -975,11 +982,11 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
   assert.ok(!fieldNames.includes('State'), 'must NOT show State');
   assert.ok(!fieldNames.includes('Source'), 'must NOT show Source');
   assert.equal(receipt.receiptType, 'discord.message');
-  assert.equal(receipt.channel, 'discord:1234567890');
+  assert.equal(receipt.channel, outbox.target);
   assert.equal(receipt.externalId, 'discord-message-1');
   assert.equal(
     receipt.idempotencyKey,
-    `${outbox.id}:discord:1234567890:receipt`,
+    `${outbox.id}:${outbox.target}:receipt`,
   );
 });
 
@@ -1014,6 +1021,66 @@ test('createDeliveryAdapter selects the requested adapter kind', async () => {
 
   assert.equal(stubReceipt.receiptType, 'worker.dry-run');
   assert.equal(discordReceipt.receiptType, 'discord.message');
+});
+
+test('createWorkerRuntimeDependencies reads worker config from loaded environment values', () => {
+  const runtime = createWorkerRuntimeDependencies({
+    environment: {
+      NODE_ENV: 'test',
+      UNIT_TALK_APP_ENV: 'ci',
+      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+      LINEAR_TEAM_KEY: 'UTV2',
+      LINEAR_TEAM_NAME: 'unit-talk-v2',
+      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+      UNIT_TALK_WORKER_ID: 'worker-live',
+      UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:canary,discord:best-bets',
+      UNIT_TALK_WORKER_ADAPTER: 'discord',
+      UNIT_TALK_WORKER_POLL_MS: '2500',
+      UNIT_TALK_WORKER_MAX_CYCLES: '9',
+      UNIT_TALK_WORKER_DRY_RUN: 'false',
+      UNIT_TALK_WORKER_AUTORUN: 'true',
+      UNIT_TALK_WORKER_STALE_CLAIM_MS: '60000',
+      UNIT_TALK_WORKER_HEARTBEAT_MS: '1500',
+      UNIT_TALK_WORKER_WATCHDOG_MS: '9000',
+      UNIT_TALK_SIMULATION_MODE: 'true',
+    },
+  });
+
+  assert.equal(runtime.workerId, 'worker-live');
+  assert.deepEqual(runtime.distributionTargets, ['discord:canary', 'discord:best-bets']);
+  assert.equal(runtime.adapterKind, 'discord');
+  assert.equal(runtime.pollIntervalMs, 2500);
+  assert.equal(runtime.maxCyclesPerRun, 9);
+  assert.equal(runtime.dryRun, false);
+  assert.equal(runtime.autorun, true);
+  assert.equal(runtime.staleClaimMs, 60000);
+  assert.equal(runtime.heartbeatMs, 1500);
+  assert.equal(runtime.watchdogMs, 9000);
+  assert.equal(runtime.simulationMode, true);
+});
+
+test('worker runtime helper readers honor loaded environment values', () => {
+  const environment = {
+    NODE_ENV: 'test' as const,
+    UNIT_TALK_APP_ENV: 'ci' as const,
+    UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+    UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+    LINEAR_TEAM_KEY: 'UTV2',
+    LINEAR_TEAM_NAME: 'unit-talk-v2',
+    NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+    SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+    UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD: '7',
+    UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS: '120000',
+    WORKER_HEARTBEAT_INTERVAL_MS: '45000',
+    UNIT_TALK_SIMULATION_MODE: 'true',
+  };
+
+  assert.equal(readCircuitBreakerThreshold(environment), 7);
+  assert.equal(readCircuitBreakerCooldownMs(environment), 120000);
+  assert.equal(readWorkerHeartbeatIntervalMs(environment), 45000);
+  assert.equal(readSimulationMode(environment), true);
 });
 
 test('processNextDistributionWork does not advance pick lifecycle on delivery failure', async () => {
@@ -1190,7 +1257,7 @@ test('processNextDistributionWork fails hung deliveries when watchdog expires', 
   }
 });
 
-test('createDiscordDeliveryAdapter dry-run with mapped target uses discord:{channelId} channel format', async () => {
+test('createDiscordDeliveryAdapter dry-run with mapped target preserves canonical target key', async () => {
   const outbox = createOutboxRecord('discord:canary');
   const adapter = createDiscordDeliveryAdapter({
     dryRun: true,
@@ -1199,9 +1266,9 @@ test('createDiscordDeliveryAdapter dry-run with mapped target uses discord:{chan
 
   const receipt = await adapter(outbox);
 
-  assert.equal(receipt.channel, 'discord:1296531122234327100');
+  assert.equal(receipt.channel, outbox.target);
   assert.equal(receipt.receiptType, 'discord.message');
-  assert.equal(receipt.idempotencyKey, `${outbox.id}:discord:dry-receipt`);
+  assert.equal(receipt.idempotencyKey, `${outbox.id}:${outbox.target}:dry-receipt`);
 });
 
 test('createDiscordDeliveryAdapter resolves discord:<numericId> target directly without target map', async () => {
@@ -1233,7 +1300,7 @@ test('createDiscordDeliveryAdapter classifies 4xx responses as terminal failures
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'terminal-failure');
-  assert.equal(result.channel, 'discord:1234567890');
+  assert.equal(result.channel, outbox.target);
   assert.equal(result.reason, 'HTTP 403: {"message":"Missing Access"}');
 });
 
@@ -1253,7 +1320,7 @@ test('createDiscordDeliveryAdapter classifies 429 responses as retryable failure
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'retryable-failure');
-  assert.equal(result.channel, 'discord:1234567890');
+  assert.equal(result.channel, outbox.target);
   assert.equal(result.reason, 'HTTP 429: {"message":"rate limited"}');
 });
 
@@ -1271,7 +1338,7 @@ test('createDiscordDeliveryAdapter classifies network errors as retryable failur
   const result = await adapter(outbox);
 
   assert.equal(result.status, 'retryable-failure');
-  assert.equal(result.channel, 'discord:1234567890');
+  assert.equal(result.channel, outbox.target);
   assert.equal(result.reason, 'socket hang up');
 });
 

@@ -12,11 +12,18 @@
  *   DISCORD_BOT_TOKEN=<token> npx tsx apps/worker/src/canary-live-proof.ts
  */
 
+import { loadEnvironment } from '@unit-talk/config';
 import { createDiscordDeliveryAdapter } from './delivery-adapters.js';
 import type { OutboxRecord } from '@unit-talk/db';
 
-const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
-const canaryChannelId = process.env.CANARY_CHANNEL_ID?.trim() || '1296531122234327100';
+const environment = loadEnvironment();
+const targetMap = readTargetMap(environment.UNIT_TALK_DISCORD_TARGET_MAP);
+const botToken = process.env.DISCORD_BOT_TOKEN?.trim() || environment.DISCORD_BOT_TOKEN?.trim();
+const canaryChannelId =
+  process.env.CANARY_CHANNEL_ID?.trim() ||
+  targetMap['discord:canary'] ||
+  '1296531122234327100';
+const canaryTarget = targetMap['discord:canary'] ? 'discord:canary' : `discord:${canaryChannelId}`;
 
 if (!botToken) {
   console.error(JSON.stringify({
@@ -29,7 +36,7 @@ if (!botToken) {
 const syntheticOutbox: OutboxRecord = {
   id: `canary-live-proof-${Date.now()}`,
   pick_id: `canary-pick-${Date.now()}`,
-  target: `discord:${canaryChannelId}`,
+  target: canaryTarget,
   status: 'processing',
   attempt_count: 0,
   next_attempt_at: null,
@@ -57,7 +64,7 @@ const syntheticOutbox: OutboxRecord = {
 const adapter = createDiscordDeliveryAdapter({
   dryRun: false,
   botToken,
-  targetMap: {},
+  targetMap,
 });
 
 console.log(JSON.stringify({
@@ -84,4 +91,16 @@ try {
     timestamp: new Date().toISOString(),
   }, null, 2));
   process.exit(1);
+}
+
+function readTargetMap(rawValue: string | undefined) {
+  if (!rawValue) {
+    return {} as Record<string, string>;
+  }
+
+  try {
+    return JSON.parse(rawValue) as Record<string, string>;
+  } catch {
+    return {} as Record<string, string>;
+  }
 }

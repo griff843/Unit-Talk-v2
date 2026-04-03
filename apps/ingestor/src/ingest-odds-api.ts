@@ -8,7 +8,7 @@
  */
 
 import type { ProviderOfferInsert } from '@unit-talk/contracts';
-import type { IngestorRepositoryBundle } from '@unit-talk/db';
+import type { EventParticipantRole, IngestorRepositoryBundle, ParticipantRow } from '@unit-talk/db';
 import {
   fetchOddsApiOdds,
   type NormalizedOddsOffer,
@@ -61,6 +61,17 @@ export async function ingestOddsApiLeague(
     };
   }
 
+  const snapshotAt = new Date().toISOString();
+  const run = await repositories.runs.startRun({
+    runType: 'ingestor.cycle',
+    actor: 'ingestor',
+    details: {
+      provider: 'odds-api',
+      league,
+      snapshotAt,
+    },
+  });
+
   try {
     const fetchOptions: OddsApiFetchOptions = {
       apiKey,
@@ -72,7 +83,7 @@ export async function ingestOddsApiLeague(
     };
 
     const result = await fetchOddsApiOdds(fetchOptions);
-    const snapshotAt = new Date().toISOString();
+    await resolveOddsApiEvents(result.events, league, repositories, logger);
     const offers = normalizeOddsApiToOffers(result.events, snapshotAt);
 
     logger?.info?.(`[odds-api] ${league}: ${result.eventsCount} events, ${offers.length} offers from ${result.telemetry.bookmakerCount} bookmakers`);
@@ -92,6 +103,37 @@ export async function ingestOddsApiLeague(
     const inserted = upsertResult.insertedCount;
     const skipped = upsertResult.totalProcessed - upsertResult.insertedCount - upsertResult.updatedCount;
 
+    await repositories.runs.completeRun({
+      runId: run.id,
+      status: 'succeeded',
+      details: {
+        provider: 'odds-api',
+        league,
+        snapshotAt,
+        eventsCount: result.eventsCount,
+        offersCount: offers.length,
+        insertedCount: inserted,
+        updatedCount: upsertResult.updatedCount,
+        skippedCount: skipped,
+        quota: {
+          provider: 'odds-api',
+          requestCount: result.telemetry.requestCount,
+          successfulRequests: result.telemetry.requestCount,
+          creditsUsed: result.telemetry.creditsUsed,
+          limit: null,
+          remaining: result.telemetry.creditsRemaining,
+          resetAt: null,
+          lastStatus: 200,
+          rateLimitHitCount: 0,
+          backoffCount: 0,
+          backoffMs: 0,
+          retryAfterMs: null,
+          throttled: false,
+          headersSeen: true,
+        },
+      },
+    });
+
     return {
       league,
       provider: 'odds-api',
@@ -104,6 +146,16 @@ export async function ingestOddsApiLeague(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    await repositories.runs.completeRun({
+      runId: run.id,
+      status: 'failed',
+      details: {
+        provider: 'odds-api',
+        league,
+        snapshotAt,
+        error: message,
+      },
+    });
     logger?.warn?.(`[odds-api] ${league} ingest failed: ${message}`);
     return {
       league,
@@ -117,6 +169,90 @@ export async function ingestOddsApiLeague(
       error: message,
     };
   }
+}
+
+async function resolveOddsApiEvents(
+  events: Awaited<ReturnType<typeof fetchOddsApiOdds>>['events'],
+  league: string,
+  repositories: IngestorRepositoryBundle,
+  logger?: Pick<Console, 'warn' | 'info'>,
+) {
+  const sportId = normalizeOddsApiLeague(league);
+  if (!sportId) {
+    return;
+  }
+
+  const teams = await repositories.participants.listByType('team', sportId);
+  if (teams.length === 0) {
+    logger?.warn?.(`[odds-api] ${league}: no canonical team participants available for event hydration`);
+    return;
+  }
+
+  for (const event of events) {
+    const home = findTeamParticipant(teams, event.home_team);
+    const away = findTeamParticipant(teams, event.away_team);
+    if (!home || !away) {
+      logger?.warn?.(
+        `[odds-api] ${league}: skipping event ${event.id} because canonical teams could not be matched (${event.away_team} @ ${event.home_team})`,
+      );
+      continue;
+    }
+
+    const resolvedEvent = await repositories.events.upsertByExternalId({
+      externalId: event.id,
+      sportId,
+      eventName: `${event.away_team} @ ${event.home_team}`,
+      eventDate: event.commence_time.slice(0, 10),
+      status: 'scheduled',
+      metadata: {
+        provider: 'odds-api',
+        sport_key: event.sport_key,
+        sport_title: event.sport_title,
+        starts_at: event.commence_time,
+        home_team_name: event.home_team,
+        away_team_name: event.away_team,
+      },
+    });
+
+    await linkOddsApiTeamParticipant(repositories, resolvedEvent.id, home.id, 'home');
+    await linkOddsApiTeamParticipant(repositories, resolvedEvent.id, away.id, 'away');
+  }
+}
+
+async function linkOddsApiTeamParticipant(
+  repositories: IngestorRepositoryBundle,
+  eventId: string,
+  participantId: string,
+  role: Extract<EventParticipantRole, 'home' | 'away'>,
+) {
+  await repositories.eventParticipants.upsert({
+    eventId,
+    participantId,
+    role,
+  });
+}
+
+function normalizeOddsApiLeague(value: string) {
+  const normalized = value.trim().toUpperCase();
+  return normalized.length > 0 ? normalized : null;
+}
+
+function findTeamParticipant(teams: ParticipantRow[], displayName: string) {
+  return teams.find((row) => namesMatch(row.display_name, displayName)) ?? null;
+}
+
+function normalizeName(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
+function namesMatch(left: string, right: string) {
+  const normalizedLeft = normalizeName(left);
+  const normalizedRight = normalizeName(right);
+  return (
+    normalizedLeft === normalizedRight ||
+    normalizedLeft.endsWith(normalizedRight) ||
+    normalizedRight.endsWith(normalizedLeft)
+  );
 }
 
 export function mapOddsApiOfferToProviderOfferInsert(

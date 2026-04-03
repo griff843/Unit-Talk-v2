@@ -1,4 +1,4 @@
-import { loadEnvironment } from '@unit-talk/config';
+import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
   createInMemoryRepositoryBundle,
@@ -22,65 +22,62 @@ export interface WorkerRuntimeDependencies {
   simulationMode: boolean;
 }
 
-export function createWorkerRuntimeDependencies(): WorkerRuntimeDependencies {
-  if (!hasDatabaseEnvironment()) {
+export function createWorkerRuntimeDependencies(
+  options: { environment?: AppEnv } = {},
+): WorkerRuntimeDependencies {
+  const environment = options.environment ?? loadEnvironment();
+
+  if (!hasDatabaseEnvironment(environment)) {
     return {
       repositories: createInMemoryRepositoryBundle(),
       persistenceMode: 'in_memory',
-      workerId: readWorkerId(),
-      distributionTargets: readDistributionTargets(),
-      adapterKind: readAdapterKind(),
-      pollIntervalMs: readPollIntervalMs(),
-      maxCyclesPerRun: readMaxCyclesPerRun(),
-      staleClaimMs: readStaleClaimMs(),
-      heartbeatMs: readHeartbeatMs(),
-      watchdogMs: readWatchdogMs(),
-      dryRun: readDryRun(),
-      autorun: readAutorun(),
-      simulationMode: readSimulationMode(),
+      workerId: readWorkerId(environment),
+      distributionTargets: readDistributionTargets(environment),
+      adapterKind: readAdapterKind(environment),
+      pollIntervalMs: readPollIntervalMs(environment),
+      maxCyclesPerRun: readMaxCyclesPerRun(environment),
+      staleClaimMs: readStaleClaimMs(environment),
+      heartbeatMs: readHeartbeatMs(environment),
+      watchdogMs: readWatchdogMs(environment),
+      dryRun: readDryRun(environment),
+      autorun: readAutorun(environment),
+      simulationMode: readSimulationMode(environment),
     };
   }
 
-  const environment = loadEnvironment();
   const connection = createServiceRoleDatabaseConnectionConfig(environment);
 
   return {
     repositories: createDatabaseRepositoryBundle(connection),
     persistenceMode: 'database',
-    workerId: readWorkerId(),
-    distributionTargets: readDistributionTargets(),
-    adapterKind: readAdapterKind(),
-    pollIntervalMs: readPollIntervalMs(),
-    maxCyclesPerRun: readMaxCyclesPerRun(),
-    staleClaimMs: readStaleClaimMs(),
-    heartbeatMs: readHeartbeatMs(),
-    watchdogMs: readWatchdogMs(),
-    dryRun: readDryRun(),
-    autorun: readAutorun(),
-    simulationMode: readSimulationMode(),
+    workerId: readWorkerId(environment),
+    distributionTargets: readDistributionTargets(environment),
+    adapterKind: readAdapterKind(environment),
+    pollIntervalMs: readPollIntervalMs(environment),
+    maxCyclesPerRun: readMaxCyclesPerRun(environment),
+    staleClaimMs: readStaleClaimMs(environment),
+    heartbeatMs: readHeartbeatMs(environment),
+    watchdogMs: readWatchdogMs(environment),
+    dryRun: readDryRun(environment),
+    autorun: readAutorun(environment),
+    simulationMode: readSimulationMode(environment),
   };
 }
 
-function hasDatabaseEnvironment() {
-  try {
-    const environment = loadEnvironment();
-    return Boolean(
-      environment.SUPABASE_URL &&
-        environment.SUPABASE_ANON_KEY &&
-        environment.SUPABASE_SERVICE_ROLE_KEY,
-    );
-  } catch {
-    return false;
-  }
+function hasDatabaseEnvironment(environment: AppEnv) {
+  return Boolean(
+    environment.SUPABASE_URL &&
+      environment.SUPABASE_ANON_KEY &&
+      environment.SUPABASE_SERVICE_ROLE_KEY,
+  );
 }
 
-function readWorkerId() {
-  return process.env.UNIT_TALK_WORKER_ID?.trim() || 'worker-dev';
+function readWorkerId(environment: AppEnv) {
+  return environment.UNIT_TALK_WORKER_ID?.trim() || 'worker-dev';
 }
 
-function readDistributionTargets() {
-  const rawTargets =
-    process.env.UNIT_TALK_DISTRIBUTION_TARGETS?.trim() || 'discord:canary';
+function readDistributionTargets(environment: AppEnv) {
+  const rawTargets = environment.UNIT_TALK_DISTRIBUTION_TARGETS?.trim() || 'discord:canary';
 
   return rawTargets
     .split(',')
@@ -88,8 +85,8 @@ function readDistributionTargets() {
     .filter((target) => target.length > 0);
 }
 
-function readPollIntervalMs() {
-  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_POLL_MS ?? '5000', 10);
+function readPollIntervalMs(environment: AppEnv) {
+  const parsed = Number.parseInt(environment.UNIT_TALK_WORKER_POLL_MS ?? '5000', 10);
 
   if (Number.isNaN(parsed) || parsed <= 0) {
     return 5000;
@@ -98,8 +95,8 @@ function readPollIntervalMs() {
   return parsed;
 }
 
-function readMaxCyclesPerRun() {
-  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_MAX_CYCLES ?? '1', 10);
+function readMaxCyclesPerRun(environment: AppEnv) {
+  const parsed = Number.parseInt(environment.UNIT_TALK_WORKER_MAX_CYCLES ?? '1', 10);
 
   if (Number.isNaN(parsed) || parsed <= 0) {
     return 1;
@@ -108,8 +105,8 @@ function readMaxCyclesPerRun() {
   return parsed;
 }
 
-function readStaleClaimMs() {
-  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_STALE_CLAIM_MS ?? '300000', 10);
+function readStaleClaimMs(environment: AppEnv) {
+  const parsed = Number.parseInt(environment.UNIT_TALK_WORKER_STALE_CLAIM_MS ?? '300000', 10);
 
   if (Number.isNaN(parsed) || parsed <= 0) {
     return 300000;
@@ -118,8 +115,8 @@ function readStaleClaimMs() {
   return parsed;
 }
 
-function readHeartbeatMs() {
-  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_HEARTBEAT_MS ?? '5000', 10);
+function readHeartbeatMs(environment: AppEnv) {
+  const parsed = Number.parseInt(environment.UNIT_TALK_WORKER_HEARTBEAT_MS ?? '5000', 10);
 
   if (Number.isNaN(parsed) || parsed <= 0) {
     return 5000;
@@ -128,8 +125,8 @@ function readHeartbeatMs() {
   return parsed;
 }
 
-function readWatchdogMs() {
-  const parsed = Number.parseInt(process.env.UNIT_TALK_WORKER_WATCHDOG_MS ?? '30000', 10);
+function readWatchdogMs(environment: AppEnv) {
+  const parsed = Number.parseInt(environment.UNIT_TALK_WORKER_WATCHDOG_MS ?? '30000', 10);
 
   if (Number.isNaN(parsed) || parsed <= 0) {
     return 30000;
@@ -138,25 +135,25 @@ function readWatchdogMs() {
   return parsed;
 }
 
-function readDryRun() {
-  return process.env.UNIT_TALK_WORKER_DRY_RUN !== 'false';
+function readDryRun(environment: AppEnv) {
+  return environment.UNIT_TALK_WORKER_DRY_RUN !== 'false';
 }
 
-function readAutorun() {
-  return process.env.UNIT_TALK_WORKER_AUTORUN === 'true';
+function readAutorun(environment: AppEnv) {
+  return environment.UNIT_TALK_WORKER_AUTORUN === 'true';
 }
 
-function readAdapterKind(): 'stub' | 'discord' {
-  return process.env.UNIT_TALK_WORKER_ADAPTER === 'discord' ? 'discord' : 'stub';
+function readAdapterKind(environment: AppEnv): 'stub' | 'discord' {
+  return environment.UNIT_TALK_WORKER_ADAPTER === 'discord' ? 'discord' : 'stub';
 }
 
-export function readSimulationMode(): boolean {
-  return process.env.UNIT_TALK_SIMULATION_MODE === 'true';
+export function readSimulationMode(environment: AppEnv = loadEnvironment()): boolean {
+  return environment.UNIT_TALK_SIMULATION_MODE === 'true';
 }
 
-export function readCircuitBreakerThreshold(): number {
+export function readCircuitBreakerThreshold(environment: AppEnv = loadEnvironment()): number {
   const parsed = Number.parseInt(
-    process.env.UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD ?? '5',
+    environment.UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD ?? '5',
     10,
   );
 
@@ -167,9 +164,9 @@ export function readCircuitBreakerThreshold(): number {
   return parsed;
 }
 
-export function readCircuitBreakerCooldownMs(): number {
+export function readCircuitBreakerCooldownMs(environment: AppEnv = loadEnvironment()): number {
   const parsed = Number.parseInt(
-    process.env.UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS ?? '300000',
+    environment.UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS ?? '300000',
     10,
   );
 
@@ -180,8 +177,10 @@ export function readCircuitBreakerCooldownMs(): number {
   return parsed;
 }
 
-export function readWorkerHeartbeatIntervalMs(): number {
-  const parsed = Number.parseInt(process.env.WORKER_HEARTBEAT_INTERVAL_MS ?? '30000', 10);
+export function readWorkerHeartbeatIntervalMs(
+  environment: AppEnv = loadEnvironment(),
+): number {
+  const parsed = Number.parseInt(environment.WORKER_HEARTBEAT_INTERVAL_MS ?? '30000', 10);
 
   if (Number.isNaN(parsed) || parsed < 0) {
     return 30000;
