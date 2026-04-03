@@ -160,7 +160,7 @@ export const bestBetsPromotionPolicy: PromotionPolicy = {
   confidenceFloor: 0.6,
   boardCaps: {
     perSlate: 5,
-    perSport: 3,
+    perSport: 10,
     perGame: 1,
   },
   weights: bestBetsScoreWeights,
@@ -175,7 +175,7 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
   confidenceFloor: 0.6,
   boardCaps: {
     perSlate: 5,
-    perSport: 3,
+    perSport: 10,
     perGame: 1,
   },
   weights: {
@@ -196,7 +196,7 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
   confidenceFloor: 0.6,
   boardCaps: {
     perSlate: 5,
-    perSport: 3,
+    perSport: 10,
     perGame: 1,
   },
   weights: {
