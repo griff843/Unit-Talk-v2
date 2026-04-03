@@ -1045,6 +1045,7 @@ test('createWorkerRuntimeDependencies reads worker config from loaded environmen
       UNIT_TALK_WORKER_HEARTBEAT_MS: '1500',
       UNIT_TALK_WORKER_WATCHDOG_MS: '9000',
       UNIT_TALK_SIMULATION_MODE: 'true',
+      WORKER_HEARTBEAT_INTERVAL_MS: '45000',
     },
   });
 
@@ -1058,7 +1059,25 @@ test('createWorkerRuntimeDependencies reads worker config from loaded environmen
   assert.equal(runtime.staleClaimMs, 60000);
   assert.equal(runtime.heartbeatMs, 1500);
   assert.equal(runtime.watchdogMs, 9000);
+  assert.equal(runtime.workerHeartbeatIntervalMs, 45000);
   assert.equal(runtime.simulationMode, true);
+});
+
+test('createWorkerRuntimeDependencies defaults workerHeartbeatIntervalMs to 30000', () => {
+  const runtime = createWorkerRuntimeDependencies({
+    environment: {
+      NODE_ENV: 'test',
+      UNIT_TALK_APP_ENV: 'ci',
+      UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+      UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+      LINEAR_TEAM_KEY: 'UTV2',
+      LINEAR_TEAM_NAME: 'unit-talk-v2',
+      NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+      SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+    },
+  });
+
+  assert.equal(runtime.workerHeartbeatIntervalMs, 30000);
 });
 
 test('worker runtime helper readers honor loaded environment values', () => {

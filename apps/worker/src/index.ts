@@ -46,6 +46,7 @@ if (runtime.autorun) {
     staleClaimMs: runtime.staleClaimMs,
     heartbeatMs: runtime.heartbeatMs,
     watchdogMs: runtime.watchdogMs,
+    workerHeartbeatIntervalMs: runtime.workerHeartbeatIntervalMs,
   })
     .then((cycles) => {
       console.log(

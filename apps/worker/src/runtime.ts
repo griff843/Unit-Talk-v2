@@ -17,6 +17,7 @@ export interface WorkerRuntimeDependencies {
   staleClaimMs: number;
   heartbeatMs: number;
   watchdogMs: number;
+  workerHeartbeatIntervalMs: number;
   dryRun: boolean;
   autorun: boolean;
   simulationMode: boolean;
@@ -39,6 +40,7 @@ export function createWorkerRuntimeDependencies(
       staleClaimMs: readStaleClaimMs(environment),
       heartbeatMs: readHeartbeatMs(environment),
       watchdogMs: readWatchdogMs(environment),
+      workerHeartbeatIntervalMs: readWorkerHeartbeatIntervalMs(environment),
       dryRun: readDryRun(environment),
       autorun: readAutorun(environment),
       simulationMode: readSimulationMode(environment),
@@ -58,6 +60,7 @@ export function createWorkerRuntimeDependencies(
     staleClaimMs: readStaleClaimMs(environment),
     heartbeatMs: readHeartbeatMs(environment),
     watchdogMs: readWatchdogMs(environment),
+    workerHeartbeatIntervalMs: readWorkerHeartbeatIntervalMs(environment),
     dryRun: readDryRun(environment),
     autorun: readAutorun(environment),
     simulationMode: readSimulationMode(environment),
