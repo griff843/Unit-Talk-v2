@@ -17,6 +17,16 @@ import {
   type OddsApiTelemetry,
 } from './odds-api-fetcher.js';
 
+const DEFAULT_ODDS_API_MARKETS = [
+  'h2h',
+  'spreads',
+  'totals',
+  'player_points',
+  'player_rebounds',
+  'player_assists',
+  'player_threes',
+] as const;
+
 export interface OddsApiIngestOptions {
   apiKey: string;
   league: string;
@@ -76,7 +86,7 @@ export async function ingestOddsApiLeague(
     const fetchOptions: OddsApiFetchOptions = {
       apiKey,
       league,
-      markets: options.markets ?? ['h2h', 'spreads', 'totals'],
+      markets: options.markets ?? [...DEFAULT_ODDS_API_MARKETS],
       bookmakers: options.bookmakers ?? ['pinnacle', 'draftkings', 'fanduel', 'betmgm'],
       oddsFormat: 'american',
       ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
@@ -183,6 +193,7 @@ async function resolveOddsApiEvents(
   }
 
   const teams = await repositories.participants.listByType('team', sportId);
+  const players = await repositories.participants.listByType('player', sportId);
   if (teams.length === 0) {
     logger?.warn?.(`[odds-api] ${league}: no canonical team participants available for event hydration`);
     return;
@@ -216,6 +227,23 @@ async function resolveOddsApiEvents(
 
     await linkOddsApiTeamParticipant(repositories, resolvedEvent.id, home.id, 'home');
     await linkOddsApiTeamParticipant(repositories, resolvedEvent.id, away.id, 'away');
+
+    const playerNames = collectOddsApiPlayerParticipantNames(event);
+    for (const playerName of playerNames) {
+      const player = findParticipantByDisplayName(players, playerName);
+      if (!player) {
+        logger?.warn?.(
+          `[odds-api] ${league}: skipping unmatched player participant "${playerName}" for event ${event.id}`,
+        );
+        continue;
+      }
+
+      await repositories.eventParticipants.upsert({
+        eventId: resolvedEvent.id,
+        participantId: player.id,
+        role: 'competitor',
+      });
+    }
   }
 }
 
@@ -238,7 +266,30 @@ function normalizeOddsApiLeague(value: string) {
 }
 
 function findTeamParticipant(teams: ParticipantRow[], displayName: string) {
-  return teams.find((row) => namesMatch(row.display_name, displayName)) ?? null;
+  return findParticipantByDisplayName(teams, displayName);
+}
+
+function findParticipantByDisplayName(participants: ParticipantRow[], displayName: string) {
+  return participants.find((row) => namesMatch(row.display_name, displayName)) ?? null;
+}
+
+function collectOddsApiPlayerParticipantNames(
+  event: Awaited<ReturnType<typeof fetchOddsApiOdds>>['events'][number],
+) {
+  const playerNames = new Set<string>();
+
+  for (const bookmaker of event.bookmakers) {
+    for (const market of bookmaker.markets) {
+      for (const outcome of market.outcomes) {
+        const playerName = outcome.description?.trim();
+        if (playerName) {
+          playerNames.add(playerName);
+        }
+      }
+    }
+  }
+
+  return [...playerNames];
 }
 
 function normalizeName(value: string) {

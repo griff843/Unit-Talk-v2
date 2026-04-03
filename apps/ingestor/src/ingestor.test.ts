@@ -474,6 +474,104 @@ test('ingestOddsApiLeague hydrates team events for browse when canonical teams e
   assert.ok(eventParticipants.some((row) => row.participant_id === away.id && row.role === 'away'));
 });
 
+test('ingestOddsApiLeague fetches default player prop markets and links matched player participants to events', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  // Seed a player participant so we can verify deterministic name matching
+  const jalenBrunson = await repositories.participants.upsertByExternalId({
+    externalId: 'nba-player-jalen-brunson',
+    displayName: 'Jalen Brunson',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'nba',
+    metadata: {},
+  });
+  const warnings: string[] = [];
+  let capturedUrl = '';
+
+  const summary = await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'NBA',
+    repositories,
+    bookmakers: ['pinnacle'],
+    logger: {
+      info: () => {},
+      warn: (message) => warnings.push(message),
+    },
+    fetchImpl: async (input) => {
+      capturedUrl = String(input);
+      return new Response(
+        JSON.stringify([
+          {
+            id: 'odds-event-browse-player-1',
+            sport_key: 'basketball_nba',
+            sport_title: 'NBA',
+            commence_time: '2026-04-02T23:30:00.000Z',
+            home_team: 'Boston Celtics',
+            away_team: 'New York Knicks',
+            bookmakers: [
+              {
+                key: 'pinnacle',
+                title: 'Pinnacle',
+                last_update: '2026-04-02T20:00:00.000Z',
+                markets: [
+                  {
+                    key: 'h2h',
+                    last_update: '2026-04-02T20:00:00.000Z',
+                    outcomes: [
+                      { name: 'Boston Celtics', price: -145 },
+                      { name: 'New York Knicks', price: 125 },
+                    ],
+                  },
+                  {
+                    key: 'player_points',
+                    last_update: '2026-04-02T20:00:00.000Z',
+                    outcomes: [
+                      { name: 'Over', description: 'Jalen Brunson', price: -120, point: 27.5 },
+                      { name: 'Under', description: 'Jalen Brunson', price: 100, point: 27.5 },
+                    ],
+                  },
+                  {
+                    key: 'player_assists',
+                    last_update: '2026-04-02T20:00:00.000Z',
+                    outcomes: [
+                      { name: 'Over', description: 'Mystery Player', price: -110, point: 6.5 },
+                      { name: 'Under', description: 'Mystery Player', price: -110, point: 6.5 },
+                    ],
+                  },
+                ],
+              },
+            ],
+          },
+        ]),
+        {
+          status: 200,
+          headers: {
+            'content-type': 'application/json',
+            'x-requests-last': '1',
+            'x-requests-remaining': '499',
+          },
+        },
+      );
+    },
+  });
+
+  const url = new URL(capturedUrl);
+  const events = await repositories.events.listUpcoming('NBA', 7);
+  const rows = await repositories.providerOffers.listByProvider('odds-api:pinnacle');
+
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(url.searchParams.get('markets'), 'h2h,spreads,totals,player_points,player_rebounds,player_assists,player_threes');
+  assert.equal(rows.length, 4);
+  assert.ok(rows.some((row) => row.provider_market_key === 'player_points:Jalen Brunson' && row.provider_participant_id === 'Jalen Brunson'));
+  assert.ok(rows.some((row) => row.provider_market_key === 'player_assists:Mystery Player' && row.provider_participant_id === 'Mystery Player'));
+  assert.equal(events.length, 1);
+
+  const eventParticipants = await repositories.eventParticipants.listByEvent(events[0]!.id);
+  assert.equal(eventParticipants.length, 3);
+  assert.ok(eventParticipants.some((row) => row.participant_id === jalenBrunson.id && row.role === 'competitor'));
+  assert.ok(warnings.some((warning) => warning.includes('Mystery Player')));
+});
+
 test('ingestOddsApiLeague skips event hydration when canonical teams are missing', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
 
