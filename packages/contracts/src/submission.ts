@@ -5,6 +5,7 @@ export const pickSources = [
   'alert-agent',
   'model-driven',
   'api',
+  'discord-bot',
 ] as const;
 
 export type PickSource = (typeof pickSources)[number];
@@ -55,4 +56,3 @@ export function validateSubmissionPayload(
     errors,
   };
 }
-
