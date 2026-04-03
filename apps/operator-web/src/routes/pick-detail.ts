@@ -142,7 +142,7 @@ export const PICK_DETAIL_FIXTURE: PickDetailView = {
       target: 'best-bets',
       status: 'qualified',
       score: 82.5,
-      version: 'best-bets-v1',
+      version: 'best-bets-v2',
       decidedAt: '2026-03-20T10:00:30.000Z',
       decidedBy: 'promotion-service',
       overrideAction: null,

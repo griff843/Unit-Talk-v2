@@ -83,7 +83,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       promotionTarget: 'exclusive-insights',
       promotionScore: 93.65,
       promotionReason: 'hard eligibility checks passed | promotion score 93.65 meets threshold 90.00',
-      promotionVersion: 'exclusive-insights-v1',
+      promotionVersion: 'exclusive-insights-v2',
       metadata: {
         sport: 'NBA',
         eventName: 'Bulls vs Knicks',
@@ -153,7 +153,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       promotionTarget: 'best-bets',
       promotionScore: 81.85000000000001,
       promotionReason: 'hard eligibility checks passed | promotion score 81.85 meets threshold 70.00',
-      promotionVersion: 'best-bets-v1',
+      promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'MLB',
         eventName: 'Dodgers vs Padres',
@@ -203,7 +203,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       promotionTarget: null,
       promotionScore: 57.4,
       promotionReason: 'promotion score 57.40 is below threshold 70.00',
-      promotionVersion: 'best-bets-v1',
+      promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'NFL',
         eventName: 'Bills vs Jets',
@@ -267,7 +267,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       promotionTarget: 'trader-insights',
       promotionScore: 89.05000000000001,
       promotionReason: 'hard eligibility checks passed | promotion score 89.05 meets threshold 80.00',
-      promotionVersion: 'trader-insights-v1',
+      promotionVersion: 'trader-insights-v2',
       metadata: {
         sport: 'NHL',
         eventName: 'Rangers vs Bruins',

@@ -293,9 +293,9 @@ class FakePickRepository implements PickRepository {
         promotion_reason:
           isGovernedTarget(entry.target) ? 'test qualification' : null,
         promotion_version: entry.target === 'discord:trader-insights'
-          ? 'trader-insights-v1'
+          ? 'trader-insights-v2'
           : entry.target === 'discord:best-bets'
-            ? 'best-bets-v1'
+            ? 'best-bets-v2'
             : null,
         promotion_decided_at: isGovernedTarget(entry.target) ? now : null,
         promotion_decided_by: isGovernedTarget(entry.target) ? 'test' : null,

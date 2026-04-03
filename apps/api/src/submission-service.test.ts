@@ -1173,7 +1173,7 @@ test('qualified picks are allowed to route to trader-insights', async () => {
   const stored = await repositories.picks.findPickById(result.pick.id);
   assert.equal(stored?.promotion_status, 'qualified');
   assert.equal(stored?.promotion_target, 'trader-insights');
-  assert.equal(stored?.promotion_version, 'trader-insights-v1');
+  assert.equal(stored?.promotion_version, 'trader-insights-v2');
   assert.equal(tracked.target, 'discord:trader-insights');
 });
 
@@ -1465,7 +1465,9 @@ test('generic suppression override persists and blocks trader-insights routing',
 
 test('board cap suppresses otherwise qualified best-bets candidates', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  for (let index = 0; index < 5; index += 1) {
+  const seededSports = ['NBA', 'NFL', 'NHL', 'MLB', 'NCAAB'];
+
+  for (let index = 0; index < 15; index += 1) {
     const seeded = await processSubmission(
       {
         source: 'smart-form',
@@ -1473,7 +1475,7 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
         selection: `Player Over ${20 + index}.5`,
         confidence: 0.95,
         metadata: {
-          sport: 'NBA',
+          sport: seededSports[index % seededSports.length],
           eventName: `Game ${index}`,
           promotionScores: {
             edge: 95,
@@ -1499,7 +1501,7 @@ test('board cap suppresses otherwise qualified best-bets candidates', async () =
     );
   }
 
-  // edge=78 < 85 → trader-insights suppressed; bb hits the board cap of 5.
+  // edge=78 < 85 → trader-insights suppressed; bb hits the board cap of 15.
   // Neither qualifies; bb's suppression data (board cap) is persisted on picks.
   const candidate = await processSubmission(
     {

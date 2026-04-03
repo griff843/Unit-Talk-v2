@@ -45,7 +45,7 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
   minimumScore: 90,
   minimumEdge: 90,
   minimumTrust: 88,
-  version: 'exclusive-insights-v1',
+  version: 'exclusive-insights-v2',
 };
 ```
 

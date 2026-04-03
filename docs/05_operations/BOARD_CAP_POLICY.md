@@ -1,22 +1,22 @@
 # Board Cap Policy
 
-**Status:** RATIFIED — `perSport` raised to 10 (2026-04-03, PM direction)
+**Status:** RATIFIED - expanded board caps for proving loop (2026-04-03, PM direction)
 **Authority:** Runtime (`packages/contracts/src/promotion.ts`)  
 **Updated:** 2026-04-03
 
 ---
 
-## 1. Current Values (as of `best-bets-v1`)
+## 1. Current Values (as of `best-bets-v2`)
 
 | Cap | Value | Applies to |
 |-----|-------|-----------|
 | `perSport` | **10** | Max qualified picks on the best-bets board from the same sport |
-| `perSlate` | 5 | Max total qualified picks on the best-bets board at any time |
-| `perGame` | 1 | Max qualified picks on the best-bets board from the same game |
+| `perSlate` | **15** | Max total qualified picks on the best-bets board at any time |
+| `perGame` | **2** | Max qualified picks on the best-bets board from the same game |
 
-The same caps apply to `trader-insights-v1` and `exclusive-insights-v1`.
+The same caps apply to `trader-insights-v2` and `exclusive-insights-v2`.
 
-**Rationale:** `perSlate: 5` is the binding overall constraint. `perSport: 3` was unnecessarily restrictive for a single-capper NBA-focused system — it blocked the 4th qualifying NBA pick even when slate slots were available. At `perSport: 10`, the per-sport cap becomes non-binding in practice (perSlate:5 fires first), giving full slate flexibility without removing the overall board size guard.
+**Rationale:** the proving loop needs realistic submission throughput while still fail-closing obvious overconcentration. `perSport: 10` keeps one sport from being artificially throttled, `perSlate: 15` raises total board capacity for burn-in, and `perGame: 2` allows limited same-game stacking without opening the floodgates.
 
 These values are policy-in-code, not in the database. Changing them requires a code change + version bump in `packages/contracts/src/promotion.ts`.
 
@@ -49,4 +49,4 @@ The `boardUtilization` field shows `currentOpenPicks`, `capPerSlate`, and `utili
 | Date | Change | Authority |
 |------|--------|-----------|
 | 2026-04-02 | Initial policy documented: `perSport: 3` | Claude (runtime truth) |
-| 2026-04-03 | Raised `perSport: 3 → 10` across all three targets | PM direction |
+| 2026-04-03 | Expanded caps to `perSport: 10`, `perSlate: 15`, `perGame: 2` across all three targets and bumped policy versions to `*-v2` | PM direction |

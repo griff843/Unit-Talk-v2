@@ -14,7 +14,7 @@ import { createInMemoryRepositoryBundle } from './persistence.js';
 function makeQualifyingSnapshot(): PromotionDecisionSnapshot {
   return {
     scoringProfile: 'default',
-    policyVersion: 'best-bets-v1',
+    policyVersion: 'best-bets-v2',
     scoreInputs: {
       edge: 90,
       trust: 85,
@@ -58,7 +58,7 @@ test('replayPromotion: returns qualified=true given snapshot that produced a qua
   assert.equal(result.status, 'qualified');
   assert.equal(result.decidedAt, '2026-01-01T00:00:00.000Z');
   assert.equal(result.decidedBy, 'replay');
-  assert.equal(result.version, 'best-bets-v1');
+  assert.equal(result.version, 'best-bets-v2');
 });
 
 test('replayPromotion: score matches expected weighted calculation', () => {
@@ -140,7 +140,7 @@ test('snapshot is returned in PromotionEvaluationResult', async () => {
 
   assert.ok(evalResult.snapshot, 'snapshot should be present on result');
   assert.equal(evalResult.snapshot.scoringProfile, 'default');
-  assert.equal(evalResult.snapshot.policyVersion, 'best-bets-v1');
+  assert.equal(evalResult.snapshot.policyVersion, 'best-bets-v2');
   assert.ok(typeof evalResult.snapshot.scoreInputs.edge === 'number', 'scoreInputs.edge should be a number');
   assert.ok(typeof evalResult.snapshot.gateInputs.approvalStatus === 'string', 'gateInputs.approvalStatus should be a string');
   assert.ok(typeof evalResult.snapshot.boardStateAtDecision.currentBoardCount === 'number');

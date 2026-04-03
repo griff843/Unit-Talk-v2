@@ -159,12 +159,12 @@ export const bestBetsPromotionPolicy: PromotionPolicy = {
   minimumTrust: 0,
   confidenceFloor: 0.6,
   boardCaps: {
-    perSlate: 5,
+    perSlate: 15,
     perSport: 10,
-    perGame: 1,
+    perGame: 2,
   },
   weights: bestBetsScoreWeights,
-  version: 'best-bets-v1',
+  version: 'best-bets-v2',
 };
 
 export const traderInsightsPromotionPolicy: PromotionPolicy = {
@@ -174,9 +174,9 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
   minimumTrust: 85,
   confidenceFloor: 0.6,
   boardCaps: {
-    perSlate: 5,
+    perSlate: 15,
     perSport: 10,
-    perGame: 1,
+    perGame: 2,
   },
   weights: {
     edge: 0.40,
@@ -185,7 +185,7 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
     uniqueness: 0.10,
     boardFit: 0.05,
   },
-  version: 'trader-insights-v1',
+  version: 'trader-insights-v2',
 };
 
 export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
@@ -195,9 +195,9 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
   minimumTrust: 88,
   confidenceFloor: 0.6,
   boardCaps: {
-    perSlate: 5,
+    perSlate: 15,
     perSport: 10,
-    perGame: 1,
+    perGame: 2,
   },
   weights: {
     edge: 0.45,
@@ -206,7 +206,7 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
     uniqueness: 0.10,
     boardFit: 0.05,
   },
-  version: 'exclusive-insights-v1',
+  version: 'exclusive-insights-v2',
 };
 
 /**
@@ -242,10 +242,10 @@ export interface ScoringProfile {
  */
 export const defaultScoringProfile: ScoringProfile = {
   name: 'default',
-  description: 'Production baseline weights — edge-dominant with CLV feedback trust adjustment',
-  version: '2.0.0',
-  lastModifiedAt: '2026-04-01',
-  rationale: 'Sprint D intelligence: real edge (Pinnacle/consensus), Kelly gradient readiness, CLV trust feedback. Uniqueness reduced to neutral (no real signal).',
+  description: 'Production baseline weights and expanded board caps for live proving',
+  version: '2.1.0',
+  lastModifiedAt: '2026-04-03',
+  rationale: 'Sprint D intelligence plus PM-ratified board cap expansion to perSport 10, perSlate 15, perGame 2 for proving-loop throughput.',
   policies: {
     'best-bets': bestBetsPromotionPolicy,
     'trader-insights': traderInsightsPromotionPolicy,
@@ -307,7 +307,7 @@ export function resolveScoringProfile(name: string | undefined): ScoringProfile 
 export interface PromotionDecisionSnapshot {
   /** Scoring profile name used at decision time (from UTV2-136). */
   scoringProfile: string;
-  /** Policy version used at decision time (e.g. 'best-bets-v1'). */
+  /** Policy version used at decision time (e.g. 'best-bets-v2'). */
   policyVersion: string;
 
   /** Raw 0–100 score component inputs before weighting. */

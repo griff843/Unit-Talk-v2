@@ -59,9 +59,9 @@ export const bestBetsPromotionPolicy: PromotionPolicy = {
   minimumEdge: 0,
   minimumTrust: 0,
   confidenceFloor: 0.6,
-  boardCaps: { perSlate: 5, perSport: 3, perGame: 1 },
+  boardCaps: { perSlate: 15, perSport: 10, perGame: 2 },
   weights: bestBetsScoreWeights,   // { edge: 0.35, trust: 0.25, readiness: 0.20, uniqueness: 0.10, boardFit: 0.10 }
-  version: 'best-bets-v1',
+  version: 'best-bets-v2',
 };
 
 export const traderInsightsPromotionPolicy: PromotionPolicy = {
@@ -70,7 +70,7 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
   minimumEdge: 85,
   minimumTrust: 85,
   confidenceFloor: 0.6,
-  boardCaps: { perSlate: 5, perSport: 3, perGame: 1 },
+  boardCaps: { perSlate: 15, perSport: 10, perGame: 2 },
   weights: {
     edge: 0.40,        // ← higher edge weight for sharper market-alerts lane
     trust: 0.30,
@@ -78,7 +78,7 @@ export const traderInsightsPromotionPolicy: PromotionPolicy = {
     uniqueness: 0.10,
     boardFit: 0.05,
   },
-  version: 'trader-insights-v1',
+  version: 'trader-insights-v2',
 };
 
 export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
@@ -87,7 +87,7 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
   minimumEdge: 90,
   minimumTrust: 88,
   confidenceFloor: 0.6,
-  boardCaps: { perSlate: 5, perSport: 3, perGame: 1 },
+  boardCaps: { perSlate: 15, perSport: 10, perGame: 2 },
   weights: {
     edge: 0.45,        // ← highest edge weight for top-tier VIP lane
     trust: 0.30,
@@ -95,7 +95,7 @@ export const exclusiveInsightsPromotionPolicy: PromotionPolicy = {
     uniqueness: 0.10,
     boardFit: 0.05,
   },
-  version: 'exclusive-insights-v1',
+  version: 'exclusive-insights-v2',
 };
 ```
 
@@ -176,7 +176,7 @@ Add to `packages/contracts/src/promotion.ts`:
  */
 export const defaultScoringProfile: ScoringProfile = {
   name: 'default',
-  description: 'Production baseline weights (best-bets-v1, trader-insights-v1, exclusive-insights-v1)',
+  description: 'Production baseline weights (best-bets-v2, trader-insights-v2, exclusive-insights-v2)',
   policies: {
     'best-bets': bestBetsPromotionPolicy,
     'trader-insights': traderInsightsPromotionPolicy,
