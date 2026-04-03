@@ -15,11 +15,14 @@ import {
   alertDetectionMarketTypes,
   alertDetectionTiers,
   approvalStatuses,
+  experimentRunTypes,
+  experimentStatuses,
   eventParticipantRoles,
   eventStatuses,
   hedgeOpportunityPriorities,
   hedgeOpportunityTypes,
   marketTypes,
+  modelStatuses,
   outboxStatuses,
   participantTypes,
   pickStatuses,
@@ -63,6 +66,9 @@ export type ParticipantType = (typeof participantTypes)[number];
 export type EventStatus = (typeof eventStatuses)[number];
 export type EventParticipantRole = (typeof eventParticipantRoles)[number];
 export type MarketTypeId = (typeof marketTypes)[number];
+export type ModelStatus = (typeof modelStatuses)[number];
+export type ExperimentRunType = (typeof experimentRunTypes)[number];
+export type ExperimentStatus = (typeof experimentStatuses)[number];
 
 export type SubmissionRow = Tables<'submissions'>;
 export type SubmissionEventRow = Tables<'submission_events'>;
@@ -84,6 +90,8 @@ export type PlayerRow = Tables<'players'>;
 export type PlayerTeamAssignmentRow = Tables<'player_team_assignments'>;
 export type GradeResultRow = Tables<'game_results'>;
 export type MemberTierRow = Tables<'member_tiers'>;
+export type ModelRegistryRow = Tables<'model_registry'>;
+export type ExperimentLedgerRow = Tables<'experiment_ledger'>;
 
 // ---------------------------------------------------------------------------
 // Record aliases (backward-compatible names used by existing application code)
@@ -151,6 +159,12 @@ export type GradeResultRecord = GradeResultRow;
 
 /** @see {@link MemberTierRow} */
 export type MemberTierRecord = MemberTierRow;
+
+/** @see {@link ModelRegistryRow} */
+export type ModelRegistryRecord = ModelRegistryRow;
+
+/** @see {@link ExperimentLedgerRow} */
+export type ExperimentLedgerRecord = ExperimentLedgerRow;
 
 // ---------------------------------------------------------------------------
 // Pick review types (not generated — table added in migration 018)

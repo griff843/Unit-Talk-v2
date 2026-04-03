@@ -22,6 +22,8 @@ import type {
   HedgeOpportunityRecord,
   HedgeOpportunityType,
   MemberTierRecord,
+  ModelRegistryRecord,
+  ModelStatus,
   ParticipantRow,
   PickReviewRecord,
   ParticipantType,
@@ -40,6 +42,8 @@ import type {
   SubmissionEventRecord,
   SubmissionRecord,
   SystemRunRecord,
+  ExperimentLedgerRecord,
+  ExperimentRunType,
 } from './types.js';
 
 export interface SubmissionCreateInput {
@@ -558,6 +562,39 @@ export interface AuditLogRepository {
   record(input: AuditLogCreateInput): Promise<AuditLogRow>;
 }
 
+export interface ModelRegistryCreateInput {
+  modelName: string;
+  version: string;
+  sport: string;
+  marketFamily: string;
+  status?: ModelStatus;
+  metadata?: Record<string, unknown>;
+}
+
+export interface ModelRegistryRepository {
+  create(input: ModelRegistryCreateInput): Promise<ModelRegistryRecord>;
+  findById(id: string): Promise<ModelRegistryRecord | null>;
+  findChampion(sport: string, marketFamily: string): Promise<ModelRegistryRecord | null>;
+  listBySport(sport: string): Promise<ModelRegistryRecord[]>;
+  updateStatus(id: string, status: ModelStatus, championSince?: string): Promise<ModelRegistryRecord>;
+}
+
+export interface ExperimentLedgerCreateInput {
+  modelId: string;
+  runType: ExperimentRunType;
+  sport: string;
+  marketFamily: string;
+  notes?: string;
+}
+
+export interface ExperimentLedgerRepository {
+  create(input: ExperimentLedgerCreateInput): Promise<ExperimentLedgerRecord>;
+  findById(id: string): Promise<ExperimentLedgerRecord | null>;
+  listByModelId(modelId: string): Promise<ExperimentLedgerRecord[]>;
+  complete(id: string, metrics: Record<string, unknown>): Promise<ExperimentLedgerRecord>;
+  fail(id: string, notes?: string): Promise<ExperimentLedgerRecord>;
+}
+
 export interface SubmissionPersistenceResult {
   submission: SubmissionRecord;
   submissionEvent: SubmissionEventRecord;
@@ -686,6 +723,8 @@ export interface RepositoryBundle {
   referenceData: ReferenceDataRepository;
   tiers: MemberTierRepository;
   reviews: PickReviewRepository;
+  modelRegistry?: ModelRegistryRepository;
+  experimentLedger?: ExperimentLedgerRepository;
 }
 
 export interface IngestorRepositoryBundle {
