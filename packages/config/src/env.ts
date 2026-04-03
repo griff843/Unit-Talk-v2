@@ -26,10 +26,19 @@ export interface AppEnv {
   UNIT_TALK_WORKER_ID?: string | undefined;
   UNIT_TALK_DISTRIBUTION_TARGETS?: string | undefined;
   UNIT_TALK_DISCORD_TARGET_MAP?: string | undefined;
+  UNIT_TALK_WORKER_ADAPTER?: string | undefined;
   UNIT_TALK_WORKER_POLL_MS?: string | undefined;
   UNIT_TALK_WORKER_MAX_CYCLES?: string | undefined;
   UNIT_TALK_WORKER_DRY_RUN?: string | undefined;
   UNIT_TALK_WORKER_AUTORUN?: string | undefined;
+  UNIT_TALK_WORKER_STALE_CLAIM_MS?: string | undefined;
+  UNIT_TALK_WORKER_HEARTBEAT_MS?: string | undefined;
+  UNIT_TALK_WORKER_WATCHDOG_MS?: string | undefined;
+  UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD?: string | undefined;
+  UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS?: string | undefined;
+  WORKER_HEARTBEAT_INTERVAL_MS?: string | undefined;
+  UNIT_TALK_SIMULATION_MODE?: string | undefined;
+  UNIT_TALK_INGESTOR_RUNTIME_MODE?: string | undefined;
   UNIT_TALK_API_RUNTIME_MODE?: string | undefined;
   UNIT_TALK_API_MAX_BODY_BYTES?: string | undefined;
   UNIT_TALK_API_BODY_LIMIT_BYTES?: string | undefined;
@@ -126,10 +135,25 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_WORKER_ID: optionalEnv('UNIT_TALK_WORKER_ID', merged),
     UNIT_TALK_DISTRIBUTION_TARGETS: optionalEnv('UNIT_TALK_DISTRIBUTION_TARGETS', merged),
     UNIT_TALK_DISCORD_TARGET_MAP: optionalEnv('UNIT_TALK_DISCORD_TARGET_MAP', merged),
+    UNIT_TALK_WORKER_ADAPTER: optionalEnv('UNIT_TALK_WORKER_ADAPTER', merged),
     UNIT_TALK_WORKER_POLL_MS: optionalEnv('UNIT_TALK_WORKER_POLL_MS', merged),
     UNIT_TALK_WORKER_MAX_CYCLES: optionalEnv('UNIT_TALK_WORKER_MAX_CYCLES', merged),
     UNIT_TALK_WORKER_DRY_RUN: optionalEnv('UNIT_TALK_WORKER_DRY_RUN', merged),
     UNIT_TALK_WORKER_AUTORUN: optionalEnv('UNIT_TALK_WORKER_AUTORUN', merged),
+    UNIT_TALK_WORKER_STALE_CLAIM_MS: optionalEnv('UNIT_TALK_WORKER_STALE_CLAIM_MS', merged),
+    UNIT_TALK_WORKER_HEARTBEAT_MS: optionalEnv('UNIT_TALK_WORKER_HEARTBEAT_MS', merged),
+    UNIT_TALK_WORKER_WATCHDOG_MS: optionalEnv('UNIT_TALK_WORKER_WATCHDOG_MS', merged),
+    UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD: optionalEnv(
+      'UNIT_TALK_WORKER_CIRCUIT_BREAKER_THRESHOLD',
+      merged,
+    ),
+    UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS: optionalEnv(
+      'UNIT_TALK_WORKER_CIRCUIT_BREAKER_COOLDOWN_MS',
+      merged,
+    ),
+    WORKER_HEARTBEAT_INTERVAL_MS: optionalEnv('WORKER_HEARTBEAT_INTERVAL_MS', merged),
+    UNIT_TALK_SIMULATION_MODE: optionalEnv('UNIT_TALK_SIMULATION_MODE', merged),
+    UNIT_TALK_INGESTOR_RUNTIME_MODE: optionalEnv('UNIT_TALK_INGESTOR_RUNTIME_MODE', merged),
     UNIT_TALK_API_RUNTIME_MODE: optionalEnv('UNIT_TALK_API_RUNTIME_MODE', merged),
     UNIT_TALK_API_MAX_BODY_BYTES: optionalEnv('UNIT_TALK_API_MAX_BODY_BYTES', merged),
     UNIT_TALK_API_BODY_LIMIT_BYTES: optionalEnv('UNIT_TALK_API_BODY_LIMIT_BYTES', merged),
