@@ -69,6 +69,7 @@ export interface PickDetailView {
     correctsId: string | null;
     settledBy: string | null;
     settledAt: string | null;
+    hasClv: boolean;
     createdAt: string;
   }>;
   auditTrail: Array<{
@@ -350,6 +351,7 @@ export async function handlePickDetailRequest(
       correctsId: (row['corrects_id'] as string | null) ?? null,
       settledBy: (row['settled_by'] as string | null) ?? null,
       settledAt: (row['settled_at'] as string | null) ?? null,
+      hasClv: hasClvPayload(row['payload']),
       createdAt: row['created_at'] as string,
     })),
     auditTrail: audit.map((row) => ({
@@ -371,6 +373,15 @@ export async function handlePickDetailRequest(
   };
 
   writeJson(response, 200, { ok: true, data: view });
+}
+
+function hasClvPayload(payload: unknown): boolean {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return false;
+  }
+
+  const record = payload as Record<string, unknown>;
+  return typeof record['clvRaw'] === 'number' || typeof record['clvPercent'] === 'number';
 }
 
 function readSubmittedBy(

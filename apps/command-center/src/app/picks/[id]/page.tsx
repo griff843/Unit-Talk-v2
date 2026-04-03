@@ -61,6 +61,7 @@ interface SettlementRow {
   correctsId: string | null;
   settledBy: string | null;
   settledAt: string | null;
+  hasClv: boolean;
   createdAt: string;
 }
 
@@ -110,7 +111,7 @@ function KV({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex gap-2 text-sm">
       <span className="w-36 shrink-0 text-gray-400">{label}</span>
-      <span className="font-mono text-gray-200 break-all">{value ?? '—'}</span>
+      <span className="font-mono break-all text-gray-200">{value ?? '—'}</span>
     </div>
   );
 }
@@ -118,51 +119,57 @@ function KV({ label, value }: { label: string; value: React.ReactNode }) {
 function EmptyRow({ cols }: { cols: number }) {
   return (
     <tr>
-      <td colSpan={cols} className="py-2 text-xs text-gray-500 italic">
+      <td colSpan={cols} className="py-2 text-xs italic text-gray-500">
         No rows.
       </td>
     </tr>
   );
 }
 
+function readObject(value: unknown): Record<string, unknown> | null {
+  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+    return value as Record<string, unknown>;
+  }
+
+  return null;
+}
+
 async function fetchPickDetail(pickId: string): Promise<PickDetailViewResponse | null> {
   const operatorWebUrl = process.env['OPERATOR_WEB_URL'] ?? 'http://localhost:4200';
   try {
-    const res = await fetch(`${operatorWebUrl}/api/operator/picks/${pickId}`, {
+    const response = await fetch(`${operatorWebUrl}/api/operator/picks/${pickId}`, {
       cache: 'no-store',
     });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; data: PickDetailViewResponse };
+    if (!response.ok) {
+      return null;
+    }
+
+    const json = (await response.json()) as { ok: boolean; data: PickDetailViewResponse };
     return json.ok ? json.data : null;
   } catch {
     return null;
   }
 }
 
-/**
- * Pick detail page.
- *
- * Renders the full lifecycle trace (8 sections) fetched from operator-web,
- * plus the appropriate settlement or correction surface based on pick status.
- *
- * - status not yet settled → SettlementForm
- * - status === 'settled'   → CorrectionForm
- * - status === 'voided'    → informational message only
- */
 export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const pickId = params.id;
-
   const detail = await fetchPickDetail(pickId);
 
   if (detail == null) {
     return (
       <div className="flex flex-col gap-6">
-        <Breadcrumb items={[{ label: 'Dashboard', href: '/' }, { label: 'Picks', href: '/picks-list' }, { label: pickId.slice(0, 8) + '...' }]} />
+        <Breadcrumb
+          items={[
+            { label: 'Dashboard', href: '/' },
+            { label: 'Picks', href: '/picks-list' },
+            { label: `${pickId.slice(0, 8)}...` },
+          ]}
+        />
         <div>
           <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
           <p className="mt-1 font-mono text-sm text-gray-400">{pickId}</p>
         </div>
-        <div className="text-red-400 text-sm">
+        <div className="text-sm text-red-400">
           Pick not found or operator-web unavailable: {pickId}
         </div>
       </div>
@@ -171,22 +178,32 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
 
   const { pick } = detail;
   const allowedActions = getAllowedActions(pick.status);
-  const corrections = detail.settlements.filter((s) => s.correctsId != null);
-  const breadcrumbs = [
-    { label: 'Dashboard', href: '/' },
-    { label: 'Picks', href: '/picks-list' },
-    { label: pick.id.slice(0, 12) + '...' },
-  ];
-  const promotionScores =
-    pick.metadata['promotionScores'] != null &&
-    typeof pick.metadata['promotionScores'] === 'object' &&
-    !Array.isArray(pick.metadata['promotionScores'])
-      ? (pick.metadata['promotionScores'] as Record<string, unknown>)
-      : null;
+  const corrections = detail.settlements.filter((settlement) => settlement.correctsId != null);
+  const promotionScores = readObject(pick.metadata['promotionScores']);
+  const domainAnalysis = readObject(pick.metadata['domainAnalysis']);
+  const deviggingResult = readObject(pick.metadata['deviggingResult']);
+  const kellySizing = readObject(pick.metadata['kellySizing']);
+  const hasRealEdge =
+    typeof domainAnalysis?.['realEdge'] === 'number' ||
+    typeof pick.metadata['realEdge'] === 'number';
+  const edgeSource =
+    typeof domainAnalysis?.['realEdgeSource'] === 'string'
+      ? domainAnalysis['realEdgeSource']
+      : typeof pick.metadata['edgeSource'] === 'string'
+        ? pick.metadata['edgeSource']
+        : null;
+  const hasClv = detail.settlements.some((settlement) => settlement.hasClv);
 
   return (
     <div className="flex flex-col gap-6">
-      <Breadcrumb items={breadcrumbs} />
+      <Breadcrumb
+        items={[
+          { label: 'Dashboard', href: '/' },
+          { label: 'Picks', href: '/picks-list' },
+          { label: `${pick.id.slice(0, 12)}...` },
+        ]}
+      />
+
       <div>
         <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
         <p className="mt-1 font-mono text-xs text-gray-400">{pick.id}</p>
@@ -195,10 +212,9 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </p>
       </div>
 
-      {/* Settlement / Correction surface — derived from canonical pick state */}
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
         {allowedActions.length === 0 ? (
-          <p className="text-sm text-gray-400">Pick is {pick.status} — no further action available.</p>
+          <p className="text-sm text-gray-400">Pick is {pick.status}; no further action available.</p>
         ) : allowedActions.includes('correct') ? (
           <CorrectionForm pickId={pickId} />
         ) : allowedActions.includes('settle') ? (
@@ -213,7 +229,10 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <div className="flex flex-col gap-1">
             <KV label="Promotion Status" value={pick.promotionStatus} />
             <KV label="Promotion Target" value={pick.promotionTarget} />
-            <KV label="Promotion Score" value={pick.promotionScore != null ? String(pick.promotionScore) : null} />
+            <KV
+              label="Promotion Score"
+              value={pick.promotionScore != null ? String(pick.promotionScore) : null}
+            />
           </div>
           <div className="flex flex-wrap gap-2">
             <InterventionAction
@@ -233,7 +252,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </div>
       </Card>
 
-      {/* Section 1: Submission Details */}
       <Card title="Submission Details">
         <div className="flex flex-col gap-1">
           <KV label="ID" value={pick.id} />
@@ -251,7 +269,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </div>
       </Card>
 
-      {/* Section 2: Lifecycle Transitions */}
       <Card title="Lifecycle Transitions">
         <Table>
           <TableHead>
@@ -279,7 +296,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </Table>
       </Card>
 
-      {/* Section 3: Promotion State */}
       <Card title="Promotion State">
         <Table>
           <TableHead>
@@ -309,7 +325,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </Table>
       </Card>
 
-      {/* Section 4: Discord Delivery Status */}
       <Card title="Discord Delivery Status">
         <div className="flex flex-col gap-4">
           <div>
@@ -367,7 +382,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </div>
       </Card>
 
-      {/* Section 5: Score + Metadata */}
       <Card title="Score + Metadata">
         <div className="flex flex-col gap-1">
           <KV label="Promotion Status" value={pick.promotionStatus} />
@@ -381,36 +395,48 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <div className="mt-4">
             <p className="mb-2 text-xs uppercase text-gray-500">Promotion Score Components</p>
             <div className="flex flex-col gap-1">
-              {Object.entries(promotionScores).map(([key, val]) => (
-                <KV key={key} label={key} value={String(val)} />
+              {Object.entries(promotionScores).map(([key, value]) => (
+                <KV key={key} label={key} value={String(value)} />
               ))}
             </div>
           </div>
         ) : (
-          <p className="mt-3 text-xs text-gray-500">No promotionScores in metadata.</p>
+          <p className="mt-3 text-xs text-gray-500">No promotion scores in metadata.</p>
         )}
       </Card>
 
-      {/* Section 6: Settlement Records */}
+      <Card title="Intelligence Presence">
+        <div className="flex flex-col gap-1">
+          <KV label="Domain Analysis" value={domainAnalysis ? 'present' : 'missing'} />
+          <KV label="Real Edge" value={hasRealEdge ? 'present' : 'missing'} />
+          <KV label="Edge Source" value={edgeSource} />
+          <KV label="Devigging Result" value={deviggingResult ? 'present' : 'missing'} />
+          <KV label="Kelly Sizing" value={kellySizing ? 'present' : 'missing'} />
+          <KV label="CLV" value={hasClv ? 'present' : 'missing'} />
+        </div>
+      </Card>
+
       <Card title="Settlement Records">
         <Table>
           <TableHead>
             <Th>Result</Th>
             <Th>Status</Th>
             <Th>Confidence</Th>
+            <Th>CLV</Th>
             <Th>Corrects ID</Th>
             <Th>Settled By</Th>
             <Th>Settled At</Th>
           </TableHead>
           <TableBody>
             {detail.settlements.length === 0 ? (
-              <EmptyRow cols={6} />
+              <EmptyRow cols={7} />
             ) : (
               detail.settlements.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
                   <Td>{row.result ?? '—'}</Td>
                   <Td>{row.status}</Td>
                   <Td>{row.confidence ?? '—'}</Td>
+                  <Td>{row.hasClv ? 'present' : '—'}</Td>
                   <Td>{row.correctsId ?? '—'}</Td>
                   <Td>{row.settledBy ?? '—'}</Td>
                   <Td>{row.settledAt ?? '—'}</Td>
@@ -421,7 +447,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         </Table>
       </Card>
 
-      {/* Section 7: Correction History */}
       <Card title="Correction History">
         {corrections.length === 0 ? (
           <p className="text-xs text-gray-500">No corrections for this pick.</p>
@@ -449,7 +474,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         )}
       </Card>
 
-      {/* Section 8: Audit Trail */}
       <Card title="Audit Trail">
         <Table>
           <TableHead>
@@ -471,8 +495,8 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
                   <Td>
                     <span className="font-mono text-xs text-gray-400">
                       {(() => {
-                        const s = JSON.stringify(row.payload);
-                        return s.length > 80 ? s.slice(0, 80) + '…' : s;
+                        const payload = JSON.stringify(row.payload);
+                        return payload.length > 80 ? `${payload.slice(0, 80)}...` : payload;
                       })()}
                     </span>
                   </Td>

@@ -10,12 +10,21 @@ export type DeliveryStatus = 'not_promoted' | 'queued' | 'delivered' | 'failed' 
 export type SettlementStatus = 'pending' | 'settled' | 'corrected' | 'manual_review';
 export type LifecycleStatus = 'submitted' | 'validated' | 'queued' | 'posted' | 'settled' | 'voided';
 
+export interface PickIntelligenceSummary {
+  domainAnalysis: boolean;
+  deviggingResult: boolean;
+  kellySizing: boolean;
+  realEdge: boolean;
+  edgeSource: string | null;
+  clv: boolean;
+}
+
 export interface PickRow {
   id: string;
   submittedAt: string;
   submitter: string;
   source: string;
-  sport: string;
+  sport: string | null;
   pickDetails: {
     market: string;
     selection: string;
@@ -27,9 +36,13 @@ export interface PickRow {
   lifecycleStatus: LifecycleStatus;
   promotionStatus: 'qualified' | 'not_eligible' | 'suppressed' | 'expired' | 'pending';
   promotionReason: string | null;
+  promotionTarget: string | null;
   deliveryStatus: DeliveryStatus;
+  receiptStatus: string | null;
+  receiptChannel: string | null;
   settlementStatus: SettlementStatus;
   result: string | null;
+  intelligence: PickIntelligenceSummary;
 }
 
 export interface StatsSnapshot {

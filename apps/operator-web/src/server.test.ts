@@ -4743,6 +4743,85 @@ test('GET /api/operator/picks/:id returns canonical submittedBy from submission 
   assert.equal(body.data.pick.source, 'smart-form');
 });
 
+test('GET /api/operator/picks/:id marks settlement rows with CLV presence', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-detail-clv',
+        submission_id: 'submission-detail-clv',
+        source: 'smart-form',
+        market: 'points-all-game-ou',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -120,
+        stake_units: 2,
+        status: 'settled',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: 'best-bets',
+        promotion_score: 81,
+        posted_at: '2026-04-02T18:00:00.000Z',
+        settled_at: '2026-04-02T19:00:00.000Z',
+        created_at: '2026-04-02T17:55:00.000Z',
+        metadata: {},
+      },
+    ],
+    submissions: [
+      {
+        id: 'submission-detail-clv',
+        submitted_by: 'griff843',
+        payload: {},
+        created_at: '2026-04-02T17:54:00.000Z',
+      },
+    ],
+    pick_lifecycle: [],
+    pick_promotion_history: [],
+    distribution_outbox: [],
+    settlement_records: [
+      {
+        id: 'settlement-clv',
+        pick_id: 'pick-detail-clv',
+        result: 'win',
+        status: 'settled',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        corrects_id: null,
+        settled_by: 'grader',
+        settled_at: '2026-04-02T19:00:00.000Z',
+        created_at: '2026-04-02T19:00:00.000Z',
+        payload: {
+          clvRaw: 0.11,
+        },
+      },
+    ],
+    audit_log: [],
+    distribution_receipts: [],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/picks/pick-detail-clv');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      settlements: Array<{
+        hasClv: boolean;
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.settlements[0]?.hasClv, true);
+});
+
 test('GET /api/operator/pick-search surfaces submitter separately from intake source', async () => {
   const provider = createAggregateProvider({
     picks: [
