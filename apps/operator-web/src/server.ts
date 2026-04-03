@@ -108,6 +108,7 @@ export interface OperatorSnapshot {
     deadLetterOutbox: number;
     sentOutbox: number;
     simulatedDeliveries: number;
+    pendingOutboxAgeMaxMinutes: number | null;
   };
   recentOutbox: OutboxRecord[];
   recentReceipts: ReceiptRecord[];
@@ -1051,8 +1052,18 @@ export function createSnapshotFromRows(input: {
   const filteredOutbox = input.recentOutbox.filter(
     (row) => row.created_at >= OUTBOX_HISTORY_CUTOFF,
   );
+  const pendingOutboxRows = filteredOutbox.filter((row) => row.status === 'pending');
+  const pendingNowMs = Date.now();
+  const pendingOutboxAgeMaxMinutes =
+    pendingOutboxRows.length > 0
+      ? Math.max(
+          ...pendingOutboxRows.map((row) =>
+            Math.floor((pendingNowMs - new Date(row.created_at).getTime()) / 60_000),
+          ),
+        )
+      : null;
   const counts = {
-    pendingOutbox: filteredOutbox.filter((row) => row.status === 'pending').length,
+    pendingOutbox: pendingOutboxRows.length,
     processingOutbox: filteredOutbox.filter((row) => row.status === 'processing').length,
     failedOutbox: filteredOutbox.filter((row) => row.status === 'failed').length,
     deadLetterOutbox: filteredOutbox.filter((row) => row.status === 'dead_letter').length,
@@ -1060,6 +1071,7 @@ export function createSnapshotFromRows(input: {
       (row) => row.status === 'sent' && !simulatedOutboxIds.has(row.id),
     ).length,
     simulatedDeliveries,
+    pendingOutboxAgeMaxMinutes,
   };
 
   const workerStatus = inferWorkerStatus(counts, input.recentRuns);

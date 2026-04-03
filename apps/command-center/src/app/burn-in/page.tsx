@@ -126,7 +126,12 @@ function countReceiptsSentToday(rows: unknown[], cutoffMs: number) {
   return rows.filter((row) => {
     const record = asRecord(row);
     const recordedAt = Date.parse(asString(record['recorded_at']));
-    return Number.isFinite(recordedAt) && recordedAt >= cutoffMs && asString(record['status']) === 'sent';
+    return (
+      Number.isFinite(recordedAt) &&
+      recordedAt >= cutoffMs &&
+      asString(record['status']) === 'sent' &&
+      asString(record['receipt_type']) === 'discord.message'
+    );
   }).length;
 }
 
