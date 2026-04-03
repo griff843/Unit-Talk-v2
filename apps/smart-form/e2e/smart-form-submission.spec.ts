@@ -232,3 +232,46 @@ test('live-offer search flow supports canonical entity selection and successful 
     },
   });
 });
+
+test('manual fallback surfaces the current free-text matchup warning', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ data: [] }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.locator('button[role="combobox"]').nth(0).click();
+  await page.getByRole('option', { name: 'NBA' }).click();
+  await page.getByRole('button', { name: 'Manual fallback' }).click();
+
+  await expect(page.getByText('Manual fallback is active. Matchup is still required, and current fallback uses free-text event entry until structured matchup selection is available.')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
+});
