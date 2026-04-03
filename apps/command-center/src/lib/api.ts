@@ -112,6 +112,14 @@ function asBoolean(v: unknown, fallback = false): boolean {
   return typeof v === 'boolean' ? v : fallback;
 }
 
+function readJsonObject(v: unknown): Record<string, unknown> | null {
+  if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
+    return v as Record<string, unknown>;
+  }
+
+  return null;
+}
+
 // ── Signal derivation ────────────────────────────────────────────────────────
 
 function unwrapResponse(raw: unknown): Record<string, unknown> {
@@ -344,6 +352,69 @@ function mapSettlementStatus(
   return 'settled';
 }
 
+function readSubmittedBy(pick: Record<string, unknown>): string {
+  const metadata = readJsonObject(pick['metadata']);
+  const candidates = [
+    pick['submitted_by'],
+    metadata?.['submittedBy'],
+    metadata?.['submitted_by'],
+    metadata?.['capper'],
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return asString(pick['source'], 'unknown');
+}
+
+function readSport(pick: Record<string, unknown>): string | null {
+  const metadata = readJsonObject(pick['metadata']);
+  const candidates = [metadata?.['sport'], metadata?.['league']];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === 'string' && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function buildIntelligenceSummary(
+  pick: Record<string, unknown>,
+  settlementRows: Array<Record<string, unknown>>,
+): PickRow['intelligence'] {
+  const metadata = readJsonObject(pick['metadata']);
+  const domainAnalysis = readJsonObject(metadata?.['domainAnalysis']);
+  const deviggingResult = readJsonObject(metadata?.['deviggingResult']);
+  const kellySizing = readJsonObject(metadata?.['kellySizing']);
+  const realEdge =
+    typeof domainAnalysis?.['realEdge'] === 'number' ||
+    typeof metadata?.['realEdge'] === 'number';
+  const edgeSource =
+    typeof domainAnalysis?.['realEdgeSource'] === 'string'
+      ? domainAnalysis['realEdgeSource']
+      : typeof metadata?.['edgeSource'] === 'string'
+        ? metadata['edgeSource']
+        : null;
+  const clv = settlementRows.some((row) => {
+    const payload = readJsonObject(row['payload']);
+    return typeof payload?.['clvRaw'] === 'number' || typeof payload?.['clvPercent'] === 'number';
+  });
+
+  return {
+    domainAnalysis: domainAnalysis !== null,
+    deviggingResult: deviggingResult !== null,
+    kellySizing: kellySizing !== null,
+    realEdge,
+    edgeSource,
+    clv,
+  };
+}
+
 // ── Pick rows mapping ────────────────────────────────────────────────────────
 //
 // Uses snapshot.recentPicks (full PickRecord with all DB columns, snake_case)
@@ -351,11 +422,12 @@ function mapSettlementStatus(
 // line/odds/stake_units). Settlement result is resolved from the pipeline
 // endpoint which applies correction-aware effective settlement logic.
 
-function mapPickRows(
+export function mapPickRows(
   snapshotPicks: unknown[],
   pipelinePicks: unknown[],
   outbox: unknown[],
   recentSettlements: unknown[],
+  recentReceipts: unknown[],
 ): PickRow[] {
   // Build a lookup from pipeline picks for settlement result (correction-aware)
   const pipelineByPickId = new Map<string, Record<string, unknown>>();
@@ -381,6 +453,7 @@ function mapPickRows(
     const promotionScore = asNumberOrNull(p['promotion_score']);
     const promotionStatus = asString(p['promotion_status'], 'pending');
     const promotionReason = asStringOrNull(p['promotion_reason']);
+    const promotionTarget = asStringOrNull(p['promotion_target']);
 
     // Settlement result from pipeline (correction-aware effective result)
     const pipelineRow = pipelineByPickId.get(pickId);
@@ -393,13 +466,21 @@ function mapPickRows(
       outbox
         .map(asRecord)
         .find((o) => asString(o['pick_id']) === pickId) ?? null;
+    const outboxId = outboxRow ? asString(outboxRow['id']) : '';
+    const receiptRow =
+      recentReceipts
+        .map(asRecord)
+        .find((receipt) => asString(receipt['outbox_id']) === outboxId) ?? null;
+    const settlementRows = recentSettlements
+      .map(asRecord)
+      .filter((settlement) => asString(settlement['pick_id']) === pickId);
 
     return {
       id: pickId,
       submittedAt: createdAt,
-      submitter: source,
+      submitter: readSubmittedBy(p),
       source,
-      sport: market,
+      sport: readSport(p),
       pickDetails: {
         market,
         selection,
@@ -411,9 +492,13 @@ function mapPickRows(
       lifecycleStatus: mapLifecycleStatus(status),
       promotionStatus: mapPromotionStatus(promotionStatus),
       promotionReason,
+      promotionTarget,
       deliveryStatus: mapDeliveryStatus(outboxRow),
+      receiptStatus: receiptRow ? asStringOrNull(receiptRow['status']) : null,
+      receiptChannel: receiptRow ? asStringOrNull(receiptRow['channel']) : null,
       settlementStatus: mapSettlementStatus(pickId, settlementResult, recentSettlements),
       result: settlementResult,
+      intelligence: buildIntelligenceSummary(p, settlementRows),
     };
   });
 }
@@ -573,6 +658,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
 
   const snap = unwrapResponse(snapshot);
   const outbox = asArray(snap['recentOutbox']);
+  const recentReceipts = asArray(snap['recentReceipts']);
   const recentSettlements = asArray(snap['recentSettlements']);
   const snapshotPicks = asArray(snap['recentPicks']);
 
@@ -581,7 +667,7 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const pipelinePicks = asArray(pipelineData['recentPicks']);
 
   const signals = deriveSignals(snapshot, recap, pipeline);
-  const picks = mapPickRows(snapshotPicks, pipelinePicks, outbox, recentSettlements);
+  const picks = mapPickRows(snapshotPicks, pipelinePicks, outbox, recentSettlements, recentReceipts);
   const stats = mapStats(recap);
   const exceptions = detectExceptions(snapshot, recap, picks);
   const observedAt = asString(snap['observedAt'], new Date().toISOString());
