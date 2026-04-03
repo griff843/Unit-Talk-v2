@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { CanonicalPick } from '@unit-talk/contracts';
 import { InMemoryOutboxRepository } from '@unit-talk/db';
-import { enqueueDistributionWork, type DistributionSkippedResult } from './distribution-service.js';
+import {
+  enqueueDistributionWork,
+  resolveDeliveryTarget,
+  type DistributionSkippedResult,
+} from './distribution-service.js';
 import { retryDeliveryController } from './controllers/retry-delivery-controller.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
@@ -49,6 +53,46 @@ test('enqueueDistributionWork: first enqueue succeeds', async () => {
   assert.ok('outboxRecord' in result, 'expected enqueue result');
   assert.equal(result.pickId, pick.id);
   assert.equal(result.target, TARGET_CANARY);
+});
+
+test('resolveDeliveryTarget rewrites governed discord targets to canary in local env', () => {
+  assert.equal(
+    resolveDeliveryTarget('discord:best-bets', { UNIT_TALK_APP_ENV: 'local' }),
+    'discord:canary',
+  );
+  assert.equal(
+    resolveDeliveryTarget('discord:trader-insights', { UNIT_TALK_APP_ENV: 'local' }),
+    'discord:canary',
+  );
+  assert.equal(
+    resolveDeliveryTarget('discord:canary', { UNIT_TALK_APP_ENV: 'local' }),
+    'discord:canary',
+  );
+  assert.equal(
+    resolveDeliveryTarget('discord:best-bets', { UNIT_TALK_APP_ENV: 'production' }),
+    'discord:best-bets',
+  );
+});
+
+test('enqueueDistributionWork rewrites governed discord targets to canary in local env', async () => {
+  const previousAppEnv = process.env.UNIT_TALK_APP_ENV;
+  process.env.UNIT_TALK_APP_ENV = 'local';
+
+  try {
+    const outbox = new InMemoryOutboxRepository();
+    const pick = makePick();
+    const result = await enqueueDistributionWork(pick, outbox, 'discord:best-bets');
+
+    assert.ok('outboxRecord' in result, 'expected enqueue result');
+    assert.equal(result.target, TARGET_CANARY);
+    assert.equal(result.outboxRecord.target, TARGET_CANARY);
+  } finally {
+    if (previousAppEnv === undefined) {
+      delete process.env.UNIT_TALK_APP_ENV;
+    } else {
+      process.env.UNIT_TALK_APP_ENV = previousAppEnv;
+    }
+  }
 });
 
 test('enqueueDistributionWork: duplicate enqueue for same pick+target is rejected when pending row exists', async () => {

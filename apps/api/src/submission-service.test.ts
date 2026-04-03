@@ -145,6 +145,53 @@ test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', a
   assert.equal(claimed.outboxRecord?.target, 'discord:best-bets');
 });
 
+test('handleSubmitPick in local env keeps promotion target but enqueues to discord:canary', async () => {
+  const previousAppEnv = process.env.UNIT_TALK_APP_ENV;
+  process.env.UNIT_TALK_APP_ENV = 'local';
+
+  try {
+    const repositories = createInMemoryRepositoryBundle();
+    const response = await handleSubmitPick(
+      {
+        body: {
+          source: 'enqueue-gap-test',
+          market: 'NBA assists',
+          selection: 'Player Over 8.5',
+          confidence: 0.9,
+          metadata: {
+            sport: 'NBA',
+            eventName: 'Suns vs Nuggets',
+            promotionScores: { edge: 78, trust: 79, readiness: 88, uniqueness: 82, boardFit: 90 },
+          },
+        },
+      },
+      repositories,
+    );
+
+    assert.equal(response.status, 201);
+    if (!response.body.ok) throw new Error('expected ok response');
+
+    const data = response.body.data as SubmitPickControllerResult;
+    assert.equal(data.promotionStatus, 'qualified');
+    assert.equal(data.promotionTarget, 'best-bets');
+    assert.equal(data.outboxEnqueued, true);
+
+    const claimed = await claimDistributionWork(
+      repositories.outbox,
+      'discord:canary',
+      'test-worker-local',
+    );
+    assert.ok(claimed.outboxRecord);
+    assert.equal(claimed.outboxRecord?.target, 'discord:canary');
+  } finally {
+    if (previousAppEnv === undefined) {
+      delete process.env.UNIT_TALK_APP_ENV;
+    } else {
+      process.env.UNIT_TALK_APP_ENV = previousAppEnv;
+    }
+  }
+});
+
 test('handleSubmitPick smart-form pick below promotion threshold still enqueues to best-bets', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const response = await handleSubmitPick(
