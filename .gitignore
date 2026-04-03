@@ -21,6 +21,7 @@ scripts/BOT_MANAGEMENT.md
 .augment/
 .claude/skills/
 .claude/settings.local.json
+.claude/worktrees/
 skills-lock.json
 # Supabase local branch tracking
 supabase/.branches/
