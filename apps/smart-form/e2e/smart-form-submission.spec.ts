@@ -10,6 +10,13 @@ const catalogResponse = {
         statTypes: ['Points', 'Assists', 'Points + Assists'],
         teams: [],
       },
+      {
+        id: 'NFL',
+        name: 'NFL',
+        marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+        statTypes: ['Passing Yards', 'Rushing Yards', 'Receiving Yards'],
+        teams: [],
+      },
     ],
     sportsbooks: [
       { id: 'fanatics', name: 'Fanatics' },
@@ -274,4 +281,89 @@ test('manual fallback surfaces the current free-text matchup warning', async ({ 
 
   await expect(page.getByText('Manual fallback is active. Matchup is still required, and current fallback uses free-text event entry until structured matchup selection is available.')).toBeVisible();
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
+});
+
+test('player autocomplete sends sport and matchup context and stat types stay sport-filtered', async ({ page }) => {
+  const participantRequestUrls: string[] = [];
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(matchupResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-1/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          ...eventBrowseResponse.data,
+          offers: [],
+        },
+      }),
+    });
+  });
+
+  await page.route('**/api/operator/participants?**', async (route) => {
+    participantRequestUrls.push(route.request().url());
+    const requestUrl = new URL(route.request().url());
+    const participantType = requestUrl.searchParams.get('participantType');
+
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: participantType === 'player'
+          ? [
+              {
+                participantId: 'player-jamal',
+                displayName: 'Jamal Murray',
+                participantType: 'player',
+              },
+            ]
+          : [],
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await expect(page.getByText('Select a sport first')).toBeVisible();
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Jazz @ Nuggets/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).click();
+
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await expect(page.getByRole('option', { name: 'Points' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Passing Yards' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+
+  await page.getByPlaceholder('Type a player name').fill('Jam');
+  await expect(page.getByRole('button', { name: /Jamal Murray/i })).toBeVisible();
+
+  expect(participantRequestUrls).toHaveLength(1);
+  const participantRequest = new URL(participantRequestUrls[0]!);
+  expect(participantRequest.pathname).toBe('/api/operator/participants');
+  expect(participantRequest.searchParams.get('sport')).toBe('NBA');
+  expect(participantRequest.searchParams.get('eventId')).toBe('evt-1');
+  expect(participantRequest.searchParams.get('query')).toBe('Jam');
+
+  await page.getByRole('button', { name: 'NFL' }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await expect(page.getByRole('option', { name: 'Passing Yards' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Points' })).toHaveCount(0);
 });

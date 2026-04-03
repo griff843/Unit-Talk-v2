@@ -81,6 +81,7 @@ interface ParticipantAutocompleteFieldProps {
   label: string;
   placeholder: string;
   searchType: ParticipantSearchType;
+  eventId?: string | null;
   sport: string;
   onSuggestionSelected: (suggestion: ParticipantSuggestion) => void;
   onManualChange: () => void;
@@ -176,6 +177,7 @@ function ParticipantAutocompleteField({
   label,
   placeholder,
   searchType,
+  eventId,
   sport,
   onSuggestionSelected,
   onManualChange,
@@ -204,7 +206,7 @@ function ParticipantAutocompleteField({
       setSearchError(null);
 
       try {
-        const response = await fetch(buildParticipantSearchUrl(query, searchType, sport), {
+        const response = await fetch(buildParticipantSearchUrl(query, searchType, { sport, eventId }), {
           signal: controller.signal,
         });
         let json: unknown = null;
@@ -246,7 +248,7 @@ function ParticipantAutocompleteField({
       controller.abort();
       window.clearTimeout(timeoutId);
     };
-  }, [name, searchType, sport, value]);
+  }, [eventId, name, searchType, sport, value]);
 
   const shouldShowMenu =
     isFocused &&
@@ -264,7 +266,8 @@ function ParticipantAutocompleteField({
             <Input
               {...field}
               autoComplete="off"
-              placeholder={placeholder}
+              disabled={!sport}
+              placeholder={sport ? placeholder : 'Select a sport first'}
               value={field.value ?? ''}
               onFocus={() => setIsFocused(true)}
               onBlur={() => {
@@ -277,6 +280,11 @@ function ParticipantAutocompleteField({
               }}
             />
           </FormControl>
+          {!sport ? (
+            <p className="text-xs text-muted-foreground">
+              Select a sport before searching canonical participants.
+            </p>
+          ) : null}
           {shouldShowMenu ? (
             <div className="absolute inset-x-0 top-full z-20 mt-2 rounded-md border border-border bg-background shadow-lg">
               {isLoading ? (
@@ -1378,6 +1386,7 @@ export function BetForm() {
             label="Player Name"
             placeholder="Type a player name"
             searchType="player"
+            eventId={selectedMatchupId}
             sport={selectedSport}
             onSuggestionSelected={(suggestion) => setSelectedPlayerId(suggestion.participantId)}
             onManualChange={() => setSelectedPlayerId(null)}
@@ -1490,6 +1499,7 @@ export function BetForm() {
             label="Team to Win"
             placeholder="Type a team name"
             searchType="team"
+            eventId={selectedMatchupId}
             sport={selectedSport}
             onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
             onManualChange={() => setSelectedTeamId(null)}
@@ -1521,6 +1531,7 @@ export function BetForm() {
               label="Team"
               placeholder="Type a team name"
               searchType="team"
+              eventId={selectedMatchupId}
               sport={selectedSport}
               onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
               onManualChange={() => setSelectedTeamId(null)}
@@ -1636,6 +1647,7 @@ export function BetForm() {
               label="Team"
               placeholder="Type a team name"
               searchType="team"
+              eventId={selectedMatchupId}
               sport={selectedSport}
               onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
               onManualChange={() => setSelectedTeamId(null)}

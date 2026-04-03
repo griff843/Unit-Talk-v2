@@ -7,6 +7,11 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4
 
 export type ParticipantSearchType = 'player' | 'team';
 
+interface OperatorParticipantSearchOptions {
+  eventId?: string | null;
+  sport?: string;
+}
+
 export interface ParticipantSuggestion {
   participantId: string;
   displayName: string;
@@ -20,27 +25,42 @@ export function isRecord(value: unknown): value is Record<string, unknown> {
 export function buildParticipantSearchUrl(
   query: string,
   participantType: ParticipantSearchType,
-  sport?: string,
+  sportOrOptions?: string | OperatorParticipantSearchOptions,
 ): string {
+  if (typeof sportOrOptions === 'string' || sportOrOptions === undefined) {
+    const params = new URLSearchParams({
+      q: query.trim(),
+      sport: sportOrOptions?.trim() ?? '',
+    });
+    if (params.get('sport') === '') {
+      params.delete('sport');
+    }
+
+    const endpoint = participantType === 'player' ? 'players' : 'teams';
+    return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
+  }
+
   const params = new URLSearchParams({
-    q: query.trim(),
-    sport: sport?.trim() ?? '',
+    participantType,
+    query: query.trim(),
+    sport: sportOrOptions.sport?.trim() ?? '',
+    eventId: sportOrOptions.eventId?.trim() ?? '',
   });
   if (params.get('sport') === '') {
     params.delete('sport');
   }
-  const endpoint = participantType === 'player' ? 'players' : 'teams';
+  if (params.get('eventId') === '') {
+    params.delete('eventId');
+  }
 
-  return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
+  return `${API_BASE_URL}/api/operator/participants?${params.toString()}`;
 }
 
 export function normalizeParticipantSearchResults(
   payload: unknown,
   expectedType: ParticipantSearchType,
 ): ParticipantSuggestion[] {
-  const participants = isRecord(payload) && Array.isArray(payload.data)
-    ? payload.data
-    : [];
+  const participants = isRecord(payload) && Array.isArray(payload.data) ? payload.data : [];
   const seen = new Set<string>();
 
   return participants
@@ -49,15 +69,26 @@ export function normalizeParticipantSearchResults(
         return [];
       }
 
-      if (
-        typeof row.participantId !== 'string' ||
-        typeof row.displayName !== 'string'
-      ) {
+      const participantId = typeof row.participantId === 'string'
+        ? row.participantId
+        : typeof row.id === 'string'
+          ? row.id
+          : null;
+      const displayName = typeof row.displayName === 'string'
+        ? row.displayName.trim()
+        : typeof row.name === 'string'
+          ? row.name.trim()
+          : '';
+      const participantType = typeof row.participantType === 'string'
+        ? row.participantType
+        : typeof row.type === 'string'
+          ? row.type
+          : expectedType;
+
+      if (!participantId || !displayName) {
         return [];
       }
-
-      const displayName = row.displayName.trim();
-      if (!displayName) {
+      if (participantType !== expectedType) {
         return [];
       }
 
@@ -67,7 +98,7 @@ export function normalizeParticipantSearchResults(
       }
 
       seen.add(dedupeKey);
-      return [{ participantId: row.participantId, displayName, participantType: expectedType }];
+      return [{ participantId, displayName, participantType: expectedType }];
     })
     .sort((left, right) => left.displayName.localeCompare(right.displayName));
 }
