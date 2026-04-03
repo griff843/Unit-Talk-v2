@@ -8,6 +8,12 @@ Requires: sprint tier (T1 / T2 / T3) and sprint name.
 
 ## Step 0 — Confirm gates are green
 
+Recommended first command:
+```bash
+pnpm ops:brief -- --issue <UTV2-ID> --pick <pick-id>
+```
+Use it to confirm current branch, runtime health, proof inputs, and the likely next action before closing.
+
 Run `pnpm verify` and confirm exit 0. Do not proceed if any gate fails.
 
 ```
@@ -84,6 +90,10 @@ For T1/T2 closes:
 - Find the relevant Linear issue in the `unit-talk-v2` (UTV2) team
 - Mark it Done
 - Add a comment with: test count, verdict, key finding or link to proof
+
+CLI-first preference:
+- `pnpm linear:close -- <issue-id> --comment "test count, verdict, key finding"`
+- or `pnpm linear:update -- <issue-id> --state Done` plus `pnpm linear:comment -- <issue-id> --body "..."`
 
 For T3 sprints:
 - Batch the update into the next T2 or T1 close — no immediate sync required

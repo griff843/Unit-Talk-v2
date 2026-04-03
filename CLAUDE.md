@@ -36,10 +36,17 @@ Claude Code is the execution orchestrator for Unit Talk V2. The job is to work t
 
 ### Start-of-Session Checklist
 
+0. Run `pnpm ops:brief`
 1. Read Linear issues in Ready, In Progress, and In Review states
 2. Reconcile Linear state against repo truth on main (mark already-merged issues Done, detect stale states)
 3. Read `docs/06_status/PROGRAM_STATUS.md` for current milestone context
 4. Read `docs/05_operations/docs_authority_map.md` for authority tiers
+
+CLI-first helpers for these checks:
+- `pnpm ops:brief` ← default one-command snapshot
+- `pnpm linear:work`
+- `pnpm queue:status`
+- `pnpm github:current`
 
 Then answer:
 - What milestone is active?
@@ -70,6 +77,14 @@ Repeat until no executable issues remain:
 9. Merge according to risk tier
 10. Update Linear with PR/commit/merge truth
 11. Repeat
+
+CLI-first preference:
+- start with `pnpm ops:brief`; only drill down if the brief flags risk, ambiguity, or missing context
+- use `pnpm linear:work` or `pnpm linear:issues` to read queue state
+- use `pnpm linear:update` / `pnpm linear:comment` / `pnpm linear:close` for routine Linear sync
+- use `pnpm github:current`, `pnpm github:summary -- <pr>`, or `pnpm github:checks -- <pr>` for PR status/check truth
+- use `pnpm proof:t1` as the default T1 proof/verification bundle
+- use repo scripts or API routes for Supabase/runtime verification before reaching for MCP
 
 ### Classification Rules
 
@@ -344,7 +359,7 @@ If something exists only in docs, say `docs-only`. If something exists only in c
 Independent verification should prefer live DB truth over runtime self-report.
 
 **Preferred order:**
-1. Supabase MCP / live DB query
+1. Repo CLI / API route / live DB query
 2. operator surface
 3. runtime/API response
 4. worker log last

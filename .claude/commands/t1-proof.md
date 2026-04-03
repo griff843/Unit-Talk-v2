@@ -27,6 +27,12 @@ Answers: what changed, what was verified, what evidence exists, what remains unv
 
 Before assembling any proof, verify all three gates.
 
+Recommended first command:
+```bash
+pnpm ops:brief -- --issue <UTV2-ID> --pick <pick-id>
+```
+Use it as the high-level snapshot before drilling into the full proof bundle.
+
 **Gate 1 — Contract exists?**
 Check `docs/05_operations/` for a contract file for this sprint (e.g. `week_NN_*_contract.md` or `SPRINT-<NAME>_contract.md`).
 - PASS → note the file path
@@ -131,7 +137,12 @@ If a flow was NOT run for a lifecycle-affecting change: flag as gap and explain 
 
 ### Standard + full — DB evidence
 
-Query live DB via Supabase MCP. Relevant tables depend on change type:
+Preferred bundler:
+```bash
+pnpm proof:t1 -- --issue <UTV2-ID> --change "<summary>" --pick <pick-id>
+```
+
+Query live DB via repo CLI / API / direct DB script. Relevant tables depend on change type:
 
 | Change type | Tables to check |
 |-------------|----------------|
@@ -167,7 +178,7 @@ Concrete, specific references only. Each item: **VERIFIED / UNVERIFIED / NOT APP
 - Lifecycle reached `posted`: YES / NO / NOT RUN
 - Discord message ID(s): `<id>` / NOT RUN / UNVERIFIED
 
-### DB truth (Supabase MCP)
+### DB truth (CLI / API)
 Record specific row IDs and key field values for each relevant table. Example:
 ```
 distribution_receipts row <uuid>: channel=discord:best-bets, message_id=<discord_id>
@@ -186,13 +197,13 @@ Flag any expected row that is missing.
 
 ## Step 4 — Pick Verification (if pick_ids given)
 
-If the change involves lifecycle, distribution, settlement, or promotion behavior, use `/verify-pick`.
+If the change involves lifecycle, distribution, settlement, or promotion behavior, use the proof bundler first.
 
 For each pick_id:
 ```
-/verify-pick <pick_id> depth=full
+pnpm proof:t1 -- --issue <UTV2-ID> --change "<summary>" --pick <pick_id>
 ```
-Use `depth=full` for T1 proof — it includes the audit log, which is required to confirm transition evidence. Use `depth=standard` only if audit log access is unavailable and note the gap.
+If you are verifying multiple picks, repeat `--pick`. The bundler runs gate verification, pipeline summary, and pick verification together. If one of those surfaces is skipped or unavailable, note the gap explicitly in the proof.
 
 Summarize results here — do not re-implement verification logic:
 

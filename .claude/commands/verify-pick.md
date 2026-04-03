@@ -209,8 +209,8 @@ If pick is not settled: state "Not settled — downstream recap not applicable."
 If operator surface is not available in this session: mark UNVERIFIED.
 
 **Verification preference order (per CLAUDE.md):**
-1. Supabase MCP / live DB query ← preferred
-2. Operator surface
+1. `pnpm verify:pick -- <pick_id>` or direct repo CLI / live DB query ← preferred
+2. `GET /api/picks/:id/trace` or operator surface
 3. Runtime/API response
 4. Worker log ← last resort
 
