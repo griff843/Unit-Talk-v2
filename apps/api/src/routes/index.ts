@@ -1,5 +1,5 @@
 export { handleHealth } from './health.js';
-export { handleAlertsRecent, handleAlertsStatus } from './alerts.js';
+export { handleAlertsRecent, handleAlertsStatus, handleAlertSignalQuality } from './alerts.js';
 export { handleSubmissions } from './submissions.js';
 export {
   handleSettlePickRoute,

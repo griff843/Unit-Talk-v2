@@ -280,6 +280,99 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
   }
 });
 
+test('GET /api/alerts/signal-quality returns insufficient-data empty state when no settled alert-agent picks exist', async () => {
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/signal-quality`);
+    const body = (await response.json()) as {
+      periods: Record<string, { count: number; sufficientSample: boolean; avgClvPct: number | null; winRate: number | null }>;
+      bySport: Record<string, unknown>;
+      insufficientData: boolean;
+      minimumSampleRequired: number;
+      dataGaps: string[];
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.periods['30d']?.count, 0);
+    assert.equal(body.periods['30d']?.sufficientSample, false);
+    assert.equal(body.periods['30d']?.avgClvPct, null);
+    assert.equal(body.periods['30d']?.winRate, null);
+    assert.deepEqual(body.bySport, {});
+    assert.equal(body.insufficientData, true);
+    assert.equal(body.minimumSampleRequired, 10);
+    assert.deepEqual(body.dataGaps, [
+      'rlm_public_money_pct_not_available',
+      'sharp_book_classification_requires_longitudinal_first_mover_data',
+    ]);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/alerts/signal-quality returns aggregated alert-agent CLV and bySport metrics', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  for (let index = 0; index < 10; index += 1) {
+    await createSettledAlertAgentPick(repositories, {
+      selection: `NBA signal ${index}`,
+      sport: 'NBA',
+      settledAt: `2026-03-${String(index + 10).padStart(2, '0')}T12:00:00.000Z`,
+      result: index < 7 ? 'win' : 'loss',
+      clvPercent: 2,
+    });
+  }
+  await createSettledAlertAgentPick(repositories, {
+    selection: 'MLB signal',
+    sport: 'MLB',
+    settledAt: '2026-03-15T12:00:00.000Z',
+    result: 'push',
+    clvPercent: 1,
+  });
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/signal-quality`);
+    const body = (await response.json()) as {
+      periods: Record<string, { count: number; avgClvPct: number | null; winRate: number | null; sufficientSample: boolean }>;
+      bySport: Record<string, { count: number; avgClvPct: number | null; winRate: number | null }>;
+      insufficientData: boolean;
+    };
+
+    assert.equal(response.status, 200);
+    assert.deepEqual(body.periods['30d'], {
+      count: 11,
+      avgClvPct: 1.9091,
+      winRate: 0.6364,
+      sufficientSample: true,
+    });
+    assert.deepEqual(body.bySport, {
+      MLB: {
+        count: 1,
+        avgClvPct: null,
+        winRate: null,
+      },
+      NBA: {
+        count: 10,
+        avgClvPct: 2,
+        winRate: 0.7,
+      },
+    });
+    assert.equal(body.insufficientData, false);
+  } finally {
+    server.close();
+  }
+});
+
 test('GET /api/shadow-models/summary returns grouped model-driven shadow outcomes', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const first = await processShadowSubmission(
@@ -1168,6 +1261,44 @@ async function createQualifiedPick(
     },
     repositories,
   );
+}
+
+async function createSettledAlertAgentPick(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  input: {
+    selection: string;
+    sport: string;
+    settledAt: string;
+    result: 'win' | 'loss' | 'push';
+    clvPercent: number;
+  },
+) {
+  const created = await processSubmission(
+    {
+      source: 'alert-agent',
+      market: `${input.sport} moneyline`,
+      selection: input.selection,
+      confidence: 0.65,
+      metadata: {
+        sport: input.sport,
+      },
+    },
+    repositories,
+  );
+
+  await repositories.settlements.record({
+    pickId: created.pick.id,
+    status: 'settled',
+    result: input.result,
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: `server-alert-signal://${created.pick.id}`,
+    settledBy: 'server-test',
+    settledAt: input.settledAt,
+    payload: {
+      clvPercent: input.clvPercent,
+    },
+  });
 }
 
 async function createSettledRecapPick(
