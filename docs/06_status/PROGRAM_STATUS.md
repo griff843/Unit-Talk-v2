@@ -7,6 +7,10 @@
 
 ## Last Updated
 
+2026-04-04 — **SGO Pro trial active (6-day window). Results pipeline rewritten.** SGO Pro trial started; Odds API disabled for trial period. Results pipeline (`results-resolver.ts`) rewritten to use `odds.<oddID>.score` per SGO support recommendation — replaces incorrect `event.results.game` approach. `extractScoredMarkets()` added to sgo-fetcher. 90-day historical backfill running (`scripts/backfill-sgo-history.ts`, 2026-01-04 → 2026-04-03). New Linear issues: UTV2-384 (auto-settle E2E proof), UTV2-385 (game-line grading schema), UTV2-386 (byBookmaker capture). Provider knowledge base documented at `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. All gates green. 47 ingestor tests passing.
+
+2026-04-04 — **All GP, SG, CS, DS milestones closed.** GP-M1 through GP-M5 Done (system-generated pick engine complete). SG-M1 through SG-M5 Done (settlement/grading/recaps — manual settlement proven). CS-M5 Done (Smart Form production-ready). DS-M4/M5 Done. Active: UTV2-321 (MLB baseline model, In Progress, needs backfill data). UTV2-384 (auto-settle E2E proof via SGO odds.score, next priority). Phase 7 (Syndicate Lane) awaiting PM approval.
+
 2026-04-03 — **Sprint D+ hardening and Smart Form UX complete.** Contracts ratified: Recap (UTV2-311), Discord Embed (UTV2-312), Event Identity (UTV2-309), Board Cap Policy (UTV2-284). Odds API player-prop canonicalization shipped (UTV2-308, PR #136). Smart Form UX: DB-backed capper dropdown (UTV2-261), sport button UI (UTV2-262), math runtime proof (UTV2-257) — all merged PR #137. CI baseline fixed (operator-web path test platform-agnostic). Board cap: `perSport: 3` currently saturating for single-capper NBA — PM decision pending on UTV2-284. Next: UTV2-303 (Smart Form participant/stat constraint, Codex).
 
 2026-04-03 — **Branch/worktree convergence complete.** All Sprint A–D feature branches and ~60 stale worktrees cleared. `main` is the single source of truth.
@@ -20,11 +24,12 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **All pass** — 0 failures. `pnpm test` green as of 2026-04-03 (main `fbae181`). 37 ingestor tests. CI fixed (operator-web path test). |
+| Tests | **All pass** — 0 failures. `pnpm test` green as of 2026-04-04 (main `c68e124`). 47 ingestor tests. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **Sprint D+ hardening complete.** Active: CS-M5 (Smart Form Production Ready). UTV2-303 in flight (Codex). UTV2-284 pending PM decision. |
-| Roadmap | Sprint D+ shipped: contracts (311/312/309/284), player-prop canonicalization (308), Smart Form UX (257/261/262). Next: UTV2-303 participant constraint. |
+| Milestone | **SGO Pro trial (6-day window, 2026-04-04).** All GP/SG/CS/DS milestones Done. Active: UTV2-384 (auto-settle E2E proof), UTV2-321 (MLB baseline, awaiting backfill data). Phase 7 awaiting PM approval. |
+| Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill running (90 days). Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. |
+| Roadmap | Next: UTV2-384 (auto-settle proof) → UTV2-385 (game-line grading schema) → UTV2-386 (byBookmaker capture) → UTV2-321 (MLB baseline). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
