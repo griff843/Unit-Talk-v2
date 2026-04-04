@@ -1,6 +1,7 @@
 # Provider & Data Decision Record
 
-**Status:** RATIFIED — 2026-04-01
+**Status:** UPDATED — 2026-04-04 (see Amendment A)
+**Originally ratified:** 2026-04-01
 **Authority:** T1 strategic decision record. Owned by PM (A Griffin).
 **Cross-references:** `CONTROLLED_VALIDATION_PACKET.md`, `production_readiness_checklist.md` §7–§8, `T1_PROVIDER_INGESTION_CONTRACT.md`, `MODEL_REGISTRY_CONTRACT.md`
 
@@ -123,7 +124,7 @@ This table locks which provider is canonical for each data domain. Changes requi
 | Live pricing richness | 8/10 | Multi-book odds (Pinnacle, DK, FD, MGM); h2h, spreads, totals |
 | Prop coverage | 5/10 | Player props via description matching (less structured than SGO) |
 | Settlement reliability | 3/10 | Scores endpoint exists; not wired to grading |
-| Historical depth | **8/10** | Historical odds endpoint for any past date; 1 credit per fetch |
+| Historical depth | **8/10** | Historical odds endpoint for any past date; cost = 10 × markets × regions per call |
 | Backfill suitability | **8/10** | Can seed historical Pinnacle lines for CLV backtesting |
 | Latency | 7/10 | 2–10s per cycle; 5-min poll interval |
 | Cost structure | 7/10 | Request-based (per-API-call credits); `x-requests-remaining` tracked |
@@ -240,7 +241,7 @@ Five domain modules exist only as tested code with **zero runtime consumers** in
 ### Historical / backfill provider: The Odds API (historical endpoint)
 
 **Role:** Seed historical Pinnacle closing lines for CLV backtesting.
-**Cost:** 1 credit per historical fetch.
+**Cost:** 10 × markets × regions per call (e.g. 3 markets × 1 region = 30 credits/call). Each call returns ALL events for the requested sport at that timestamp.
 **Priority:** Low during burn-in. Valuable for Phase 7 CLV optimization analysis.
 
 ### Results backup provider: Not assigned
@@ -448,3 +449,149 @@ Updates requiring PM approval:
 - Changing canonical provider for any data domain
 - Authorizing spend on third provider evaluation
 - Changing CLV or edge benchmark source
+
+---
+
+## Amendment A — Provider Strategy Lock (2026-04-04)
+
+**Authored by:** PM (A Griffin) + Claude Code session  
+**Status:** RATIFIED — supersedes Section 7 provider roles and Section 8.1 spend model where they conflict.
+
+### A.1 SGO Plan Tier Reality — Pinnacle Availability
+
+SGO has four plan tiers. Pinnacle (the sharp benchmark required for valid CLV and real edge) is **not available on all tiers**:
+
+| Plan | Price | Objects/month | Pinnacle included | Notes |
+|------|-------|--------------|-------------------|-------|
+| Amateur | Free | 2,500 | No | Development/sandbox only |
+| Rookie | $99/mo | 100,000 | **No** | 77 bookmakers — Pinnacle excluded |
+| Pro | $299–499/mo | Unlimited | **Yes** | 82 bookmakers including Pinnacle + Circa |
+| AllStar | Custom | Unlimited | Yes | Adds WebSocket streams |
+
+**Critical finding:** SGO Rookie was previously considered a viable dev-tier option. It is not. Without Pinnacle:
+- `real-edge-service.ts` falls back to confidence-delta — not a market edge
+- `clv-service.ts` has no sharp closing line — CLV is null or unreliable
+- Promotion scores are meaningfully degraded
+
+**Rookie is ruled out permanently.** It cannot serve as a dev or production tier for Unit Talk V2.
+
+### A.2 Locked Provider Strategy
+
+The two-phase strategy is locked as of 2026-04-04:
+
+#### Phase 1: Dev (now — until production flip)
+
+**Primary provider: The Odds API (paid plan)**
+
+- Pinnacle included on all standard paid plans
+- Already integrated and working (`providerKey: 'odds-api:pinnacle'`)
+- Provides sharp edge reference, multi-book consensus, and historical backfill
+- SGO Rookie used for player props and game results only (results are not Pinnacle-dependent)
+
+**Secondary: SGO Rookie**
+- Player props (13 stat types, NBA/NFL/MLB/NHL)
+- Game results (sole settlement authority — independent of Pinnacle)
+- Does NOT provide valid edge/CLV inputs
+
+#### Phase 2: Production (flip when ready)
+
+**Primary provider: SGO Pro ($299–499/mo)**
+
+- Pinnacle included — valid sharp reference line
+- 82 bookmakers total (highest breadth available)
+- Unlimited objects — no polling throttle concerns
+- Sub-minute update capability
+- Game lines + player props + results from a single provider
+- Requires SGO normalizer fix before flip (see A.4)
+
+**Odds API role after flip:** Optional supplementary source. May be kept for historical endpoint access and as a consensus cross-check. Not required for core pipeline operation under SGO Pro.
+
+### A.3 Corrected Historical Credit Math
+
+Section 5.2 previously stated "1 credit per historical fetch" — this is incorrect. Correct pricing:
+
+```
+cost per historical call = 10 × (number of markets) × (number of regions)
+```
+
+| Scenario | Markets | Regions | Credits/call | Calls for 90-day backfill (4 sports, 6h intervals) | Total credits |
+|----------|---------|---------|-------------|-----------------------------------------------------|---------------|
+| Minimal (h2h only) | 1 | 1 | 10 | 4 sports × 360 intervals = 1,440 | 14,400 |
+| Standard (h2h + spreads + totals) | 3 | 1 | 30 | 1,440 | 43,200 |
+| Full (+ player props) | 4+ | 1 | 40+ | 1,440 | 57,600+ |
+
+**Each call returns ALL events for the requested sport at that timestamp.** There is no per-event charge.
+
+**Verdict: 100k Odds API credits is sufficient for complete historical backfill.** Standard 3-market scenario costs ~43,200 credits for 90 days across all 4 sports. Full scenario with player props fits within 60,000 credits. Ample headroom remains for live polling during dev.
+
+### A.4 Live Polling Credit Budget (Dev)
+
+At MLB-only (one active sport), 15-minute polling, 14 active hours/day:
+
+```
+calls/day = 14h × (60min/15min) = 56 calls
+credits/day (3 markets × 1 region) = 56 × 30 = 1,680 credits/day
+credits/month = 1,680 × 30 = ~50,400 credits/month
+```
+
+During spring overlap (MLB + NBA + NHL):
+
+```
+calls/day = 56 × 3 sports = 168 calls
+credits/day = 168 × 30 = 5,040 credits/day  
+credits/month = 5,040 × 30 = ~151,000 credits/month
+```
+
+**Finding:** 100k credits/month is insufficient for continuous live polling of 3 sports simultaneously at 15-min intervals. Mitigation options:
+- Increase poll interval to 30 min during multi-sport overlap (halves consumption)
+- Poll only active game windows (~6h/day) rather than 14h: reduces to ~54,000/month for 3 sports
+- Accept that dev polling is lower-frequency than production — this is expected
+
+**Historical backfill and live dev polling combined easily fit within 100k/month if polling is scoped to active game windows.** Spring 3-sport overlap at full 14h polling would require a higher tier or reduced frequency.
+
+### A.5 SGO Normalizer Game-Line Bug (Deferred)
+
+During audit (2026-04-04), a bug was identified in `apps/ingestor/src/sgo-normalizer.ts`:
+
+- `stripSideSuffix()` only removes `-over`/`-under` suffixes
+- `inferSide()` only returns `'over'` or `'under'` — returns `null` for `-home`/`-away`
+- SGO game-line market keys end in `-home`/`-away` (e.g. `points-away-game-ml-away`)
+- Result: **all SGO moneyline and spread markets are silently discarded** — only player props survive normalization
+
+This is a bounded T2 fix — extend `inferSide()` and `stripSideSuffix()` to handle `-home`/`-away` sides.
+
+**Deferred until SGO Pro plan activation.** SGO game lines are not canonical during Phase 1 (Odds API provides sharper game-line data). Fix is required before the Phase 2 flip.
+
+**Linear issue to create:** "Fix SGO normalizer: handle -home/-away sides for game-line markets" — T2, blocked on SGO Pro plan.
+
+### A.6 SGO MCP Server (Dev Research Tool)
+
+SGO provides an MCP server for dev workflow use:
+
+```bash
+claude mcp add sports-game-odds \
+  --env SPORTS_ODDS_API_KEY_HEADER="<your-api-key>" \
+  -- npx -y sports-odds-api-mcp
+```
+
+This exposes SGO live data fetching, documentation search, and usage monitoring directly within Claude Code sessions. Use for data exploration and market research without burning production ingestor credits.
+
+### A.7 Updated Provider Role Summary
+
+| Provider | Phase 1 (dev) | Phase 2 (production) | Critical dependency |
+|----------|--------------|---------------------|---------------------|
+| Odds API | **Primary** — edge, CLV, historical | Optional supplement | Pinnacle on paid plan |
+| SGO Rookie | Props + results only | Not used | No Pinnacle |
+| SGO Pro | Not yet active | **Primary** — all markets | Requires normalizer fix |
+| SGO Rookie as primary | **Ruled out** | **Ruled out** | No Pinnacle = no CLV |
+
+### A.8 Production Flip Criteria
+
+The switch from Odds API primary → SGO Pro primary requires ALL of the following:
+
+1. SGO Pro plan active (PM authorization + billing)
+2. SGO normalizer fix shipped and verified (`-home`/`-away` sides working)
+3. Pinnacle rows appearing in `provider_offers` via SGO Pro ingest
+4. Real edge source distribution confirming `pinnacle` (not `confidence-delta`) as dominant edge source
+5. CLV populated rate ≥80% on settled picks using SGO Pro as source
+6. At least 7-day parallel run period with both providers active to validate parity

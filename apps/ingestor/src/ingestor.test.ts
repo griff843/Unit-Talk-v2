@@ -19,7 +19,7 @@ import {
   type NormalizedOddsOffer,
   type OddsApiEvent,
 } from './odds-api-fetcher.js';
-import { fetchSGOResults, type SGOEventResult, type SGOResolvedEvent } from './sgo-fetcher.js';
+import { fetchSGOResults, type SGOEventResult, type SGOMarketScore, type SGOResolvedEvent } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 import { resolveAndInsertResults } from './results-resolver.js';
 
@@ -1232,6 +1232,22 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
             stats: { points: 9 },
           },
         ],
+        scoredMarkets: [
+          {
+            oddId: 'points-player-UNKNOWN_PLAYER-game-ou-over',
+            baseMarketKey: 'points-all-game-ou',
+            providerParticipantId: 'UNKNOWN_PLAYER',
+            score: 9,
+            scoringSupported: true,
+          },
+          {
+            oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+            baseMarketKey: 'points-all-game-ou',
+            providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+            score: 9,
+            scoringSupported: true,
+          },
+        ],
         resolvedEvent: null,
       },
     ],
@@ -1441,6 +1457,54 @@ test('InMemoryReferenceDataRepository.listEvents returns resolved event rows', a
   assert.equal(events[0]?.eventName, 'New York Knicks vs. Boston Celtics');
 });
 
+test('ingestLeague extracts scored markets from finalized event odds', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+
+  const eventWithScoredOdds = {
+    ...createSgoApiEvent(),
+    status: {
+      startsAt: '2026-03-24T23:30:00.000Z',
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+    odds: {
+      'points-player-JALEN_BRUNSON_1_NBA-game-ou-over': {
+        scoringSupported: true,
+        score: 28,
+        odds: -115,
+      },
+    },
+  };
+
+  const summary = await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    skipResults: false,
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ data: [eventWithScoredOdds] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent, 'event should be stored');
+
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  assert.equal(summary.status, 'succeeded');
+  assert.equal(summary.resultsEventsCount, 1);
+  assert.ok(results.length > 0, 'at least one grade result should be inserted');
+
+  const pointsRow = results.find((r) => r.market_key === 'points-all-game-ou');
+  assert.ok(pointsRow, 'grade result for points-all-game-ou should exist');
+  assert.equal(pointsRow.actual_value, 28);
+});
+
 function createResolvedEvent(
   overrides: Partial<SGOResolvedEvent> = {},
 ): SGOResolvedEvent {
@@ -1597,10 +1661,35 @@ function createCompletedSgoResultsEvent() {
         },
       },
     },
+    odds: {
+      market: {
+        'points-player-JALEN_BRUNSON_1_NBA-game-ou-over': {
+          playerID: 'JALEN_BRUNSON_1_NBA',
+          scoringSupported: true,
+          score: 31,
+          line: 27.5,
+          odds: -115,
+        },
+        'points-player-JALEN_BRUNSON_1_NBA-game-ou-under': {
+          playerID: 'JALEN_BRUNSON_1_NBA',
+          line: 27.5,
+          odds: -105,
+        },
+      },
+    },
   };
 }
 
 function createCompletedEventResult(): SGOEventResult {
+  const scoredMarkets: SGOMarketScore[] = [
+    { oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'points-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 31, scoringSupported: true },
+    { oddId: 'assists-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'assists-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 7, scoringSupported: true },
+    { oddId: 'rebounds-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'rebounds-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 4, scoringSupported: true },
+    { oddId: 'pra-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'pra-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 42, scoringSupported: true },
+    { oddId: 'pts-rebs-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'pts-rebs-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 35, scoringSupported: true },
+    { oddId: 'pts-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'pts-asts-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 38, scoringSupported: true },
+    { oddId: 'rebs-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'rebs-asts-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 11, scoringSupported: true },
+  ];
   return {
     providerEventId: 'evt-entity-1',
     status: {
@@ -1623,6 +1712,7 @@ function createCompletedEventResult(): SGOEventResult {
         },
       },
     ],
+    scoredMarkets,
     resolvedEvent: createResolvedEvent({
       status: {
         started: true,

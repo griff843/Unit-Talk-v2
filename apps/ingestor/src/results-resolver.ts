@@ -1,6 +1,8 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import type { SGOEventResult } from './results-fetcher.js';
 
+// @deprecated — stat-field accumulation approach replaced by odds.<oddId>.score grading.
+// This map will be removed once the score-based approach is proven stable.
 export const SGO_MARKET_KEY_TO_STAT_FIELDS: Record<string, string[]> = {
   'points-all-game-ou': ['points'],
   'assists-all-game-ou': ['assists'],
@@ -46,38 +48,37 @@ export async function resolveAndInsertResults(
     try {
       const event = await repositories.events.findByExternalId(eventResult.providerEventId);
       if (!event || event.status !== 'completed') {
-        summary.skippedResults += eventResult.playerStats.length;
+        summary.skippedResults += eventResult.scoredMarkets.length;
         continue;
       }
 
       summary.completedEvents += 1;
+      const now = new Date().toISOString();
 
-      for (const playerStatRow of eventResult.playerStats) {
+      for (const scoredMarket of eventResult.scoredMarkets) {
+        // Game-level markets (null providerParticipantId) require schema work tracked separately
+        if (scoredMarket.providerParticipantId === null) {
+          summary.skippedResults += 1;
+          continue;
+        }
+
         const participant = await repositories.participants.findByExternalId(
-          playerStatRow.providerParticipantId,
+          scoredMarket.providerParticipantId,
         );
         if (!participant) {
           summary.skippedResults += 1;
           continue;
         }
 
-        for (const [marketKey, statFields] of Object.entries(SGO_MARKET_KEY_TO_STAT_FIELDS)) {
-          const actualValue = sumStatFields(playerStatRow.stats, statFields);
-          if (actualValue === null) {
-            summary.skippedResults += 1;
-            continue;
-          }
-
-          await repositories.gradeResults.insert({
-            eventId: event.id,
-            participantId: participant.id,
-            marketKey,
-            actualValue,
-            source: 'sgo',
-            sourcedAt: new Date().toISOString(),
-          });
-          summary.insertedResults += 1;
-        }
+        await repositories.gradeResults.insert({
+          eventId: event.id,
+          participantId: participant.id,
+          marketKey: scoredMarket.baseMarketKey,
+          actualValue: scoredMarket.score,
+          source: 'sgo',
+          sourcedAt: now,
+        });
+        summary.insertedResults += 1;
       }
     } catch (error) {
       summary.errors += 1;
@@ -90,16 +91,4 @@ export async function resolveAndInsertResults(
   }
 
   return summary;
-}
-
-function sumStatFields(stats: Record<string, number>, fields: string[]) {
-  let total = 0;
-  for (const field of fields) {
-    const value = stats[field];
-    if (typeof value !== 'number' || !Number.isFinite(value)) {
-      return null;
-    }
-    total += value;
-  }
-  return total;
 }

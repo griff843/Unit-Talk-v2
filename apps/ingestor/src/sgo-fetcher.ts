@@ -80,10 +80,19 @@ export interface SGOPlayerStatRow {
   stats: Record<string, number>;
 }
 
+export interface SGOMarketScore {
+  oddId: string;
+  baseMarketKey: string;
+  providerParticipantId: string | null;
+  score: number;
+  scoringSupported: boolean;
+}
+
 export interface SGOEventResult {
   providerEventId: string;
   status: SGOEventStatus | null;
   playerStats: SGOPlayerStatRow[];
+  scoredMarkets: SGOMarketScore[];
   resolvedEvent: SGOResolvedEvent | null;
 }
 
@@ -589,8 +598,62 @@ function extractEventResult(event: Record<string, unknown>): SGOEventResult | nu
     providerEventId,
     status,
     playerStats: extractPlayerStatRows(event.results),
+    scoredMarkets: extractScoredMarkets(event.odds),
     resolvedEvent: extractResolvedEvent(event),
   };
+}
+
+function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
+  const markets: SGOMarketScore[] = [];
+
+  if (!isRecord(odds)) {
+    return markets;
+  }
+
+  for (const [oddId, oddValue] of Object.entries(odds)) {
+    if (!isRecord(oddValue)) {
+      continue;
+    }
+
+    // Recursively handle nested market groups (e.g. odds.market.{oddId: ...})
+    // If the value doesn't have scoringSupported, it may be a group — recurse into it
+    if (!('scoringSupported' in oddValue)) {
+      const nested = extractScoredMarkets(oddValue);
+      markets.push(...nested);
+      continue;
+    }
+
+    if (oddValue.scoringSupported !== true) {
+      continue;
+    }
+
+    const score = firstNumber(oddValue.score);
+    if (score === null) {
+      continue;
+    }
+
+    const baseMarketKey = normalizeMarketKey(oddId);
+    const providerParticipantId = inferParticipantId(oddId);
+
+    markets.push({
+      oddId,
+      baseMarketKey,
+      providerParticipantId,
+      score,
+      scoringSupported: true,
+    });
+  }
+
+  return markets;
+}
+
+function normalizeMarketKey(oddId: string): string {
+  const base = stripSideSuffix(oddId);
+  const segments = base.split('-');
+  if (segments.length >= 4) {
+    return [segments[0], 'all', ...segments.slice(-2)].join('-');
+  }
+  return base;
 }
 
 function extractStatus(value: unknown): SGOEventStatus | null {
