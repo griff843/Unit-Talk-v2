@@ -302,6 +302,16 @@ export class InMemoryPickRepository implements PickRepository {
     return limit === undefined ? matches : matches.slice(0, limit);
   }
 
+  async listBySource(
+    source: CanonicalPick['source'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    const matches = Array.from(this.picks.values())
+      .filter((pick) => pick.source === source)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+    return limit === undefined ? matches : matches.slice(0, limit);
+  }
+
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
@@ -2061,6 +2071,29 @@ export class DatabasePickRepository implements PickRepository {
 
     if (error) {
       throw new Error(`Failed to list picks by lifecycle states: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listBySource(
+    source: CanonicalPick['source'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    let query = this.client
+      .from('picks')
+      .select('*')
+      .eq('source', source)
+      .order('created_at', { ascending: true });
+
+    if (limit !== undefined) {
+      query = query.limit(limit);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to list picks by source: ${error.message}`);
     }
 
     return data ?? [];

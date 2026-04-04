@@ -40,6 +40,7 @@ server.listen(port, () => {
           'GET /health',
           'GET /api/alerts/recent',
           'GET /api/alerts/status',
+          'GET /api/shadow-models/summary',
           'POST /api/submissions',
           'POST /api/grading/run',
           'POST /api/recap/post',

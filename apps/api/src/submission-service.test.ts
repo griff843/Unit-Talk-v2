@@ -18,7 +18,11 @@ import {
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
-import { computeSubmissionIdempotencyKey, processSubmission } from './submission-service.js';
+import {
+  computeSubmissionIdempotencyKey,
+  processShadowSubmission,
+  processSubmission,
+} from './submission-service.js';
 import type { SubmitPickControllerResult } from './controllers/submit-pick-controller.js';
 
 // ─── Enqueue-gap fix tests ────────────────────────────────────────────────────
@@ -104,6 +108,67 @@ test('handleSubmitPick does not enqueue a not-eligible pick and returns outboxEn
     'test-worker-2',
   );
   assert.equal(claimed.outboxRecord, null);
+});
+
+test('handleSubmitPick model-driven pick in routing shadow mode persists without promotion or enqueue', async () => {
+  const previousShadowMode = process.env.UNIT_TALK_SHADOW_MODE;
+  process.env.UNIT_TALK_SHADOW_MODE = 'routing';
+
+  try {
+    const repositories = createInMemoryRepositoryBundle();
+    const response = await handleSubmitPick(
+      {
+        body: {
+          source: 'model-driven',
+          market: 'NBA spread',
+          selection: 'Knicks -4.5',
+          line: -4.5,
+          confidence: 0.81,
+          eventName: 'Knicks vs Celtics',
+          metadata: {
+            sport: 'NBA',
+            modelName: 'nba-spread-shadow',
+          },
+        },
+      },
+      repositories,
+    );
+
+    assert.equal(response.status, 201);
+    if (!response.body.ok) throw new Error('expected ok response');
+
+    const data = response.body.data as SubmitPickControllerResult;
+    assert.equal(data.lifecycleState, 'validated');
+    assert.equal(data.promotionStatus, 'not_eligible');
+    assert.equal(data.promotionTarget, null);
+    assert.equal(data.outboxEnqueued, false);
+    assert.equal(data.shadowMode, true);
+
+    const stored = await repositories.picks.findPickById(data.pickId);
+    assert.equal(stored?.status, 'validated');
+    assert.equal(stored?.promotion_status, 'not_eligible');
+
+    const metadata = stored?.metadata as Record<string, unknown> | null;
+    assert.ok(metadata);
+    const shadowMode = metadata?.['shadowMode'] as Record<string, unknown> | undefined;
+    assert.equal(shadowMode?.['enabled'], true);
+    assert.equal(shadowMode?.['subsystem'], 'routing');
+    assert.equal(shadowMode?.['publicPromotionBlocked'], true);
+    assert.equal(typeof shadowMode?.['recordedAt'], 'string');
+
+    const claimed = await claimDistributionWork(
+      repositories.outbox,
+      'discord:best-bets',
+      'test-worker-shadow',
+    );
+    assert.equal(claimed.outboxRecord, null);
+  } finally {
+    if (previousShadowMode === undefined) {
+      delete process.env.UNIT_TALK_SHADOW_MODE;
+    } else {
+      process.env.UNIT_TALK_SHADOW_MODE = previousShadowMode;
+    }
+  }
 });
 
 test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', async () => {
@@ -2265,4 +2330,38 @@ test('submissions with different payloads produce different picks', async () => 
 
   assert.notEqual(first.pickRecord.id, second.pickRecord.id, 'different payloads create different picks');
   assert.equal(second.duplicate, undefined, 'different payload is not a duplicate');
+});
+
+test('processShadowSubmission records a shadow capture audit row', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  let capturedAuditAction: string | null = null;
+  let capturedAuditRef: string | null = null;
+  const originalAuditRecord = repositories.audit.record.bind(repositories.audit);
+  repositories.audit.record = async (input) => {
+    capturedAuditAction = input.action;
+    capturedAuditRef = input.entityRef ?? null;
+    return originalAuditRecord(input);
+  };
+
+  const result = await processShadowSubmission(
+    {
+      source: 'model-driven',
+      market: 'MLB total',
+      selection: 'Over 8.5',
+      line: 8.5,
+      confidence: 0.7,
+      eventName: 'Yankees vs Red Sox',
+      metadata: {
+        sport: 'MLB',
+        modelName: 'mlb-total-v1',
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.lifecycleState, 'validated');
+  assert.equal(result.pick.promotionStatus, 'not_eligible');
+  assert.equal(result.shadowMode.subsystem, 'routing');
+  assert.equal(capturedAuditAction, 'shadow.prediction.recorded');
+  assert.equal(capturedAuditRef, result.pick.id);
 });

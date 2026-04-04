@@ -4,7 +4,7 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { createApiRuntimeDependencies, createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
-import { processSubmission } from './submission-service.js';
+import { processShadowSubmission, processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 
@@ -234,6 +234,63 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     restoreEnv('ALERT_MIN_TIER', previousMinTier);
     restoreEnv('ALERT_LOOKBACK_MINUTES', previousLookback);
     restoreEnv('SYSTEM_PICKS_ENABLED', previousSystemPicks);
+  }
+});
+
+test('GET /api/shadow-models/summary returns grouped model-driven shadow outcomes', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const first = await processShadowSubmission(
+    {
+      source: 'model-driven',
+      market: 'NBA spread',
+      selection: 'Knicks -4.5',
+      confidence: 0.82,
+      eventName: 'Knicks vs Celtics',
+      metadata: {
+        sport: 'NBA',
+        modelName: 'nba-spread-shadow',
+      },
+    },
+    repositories,
+  );
+
+  await repositories.settlements.record({
+    pickId: first.pick.id,
+    status: 'settled',
+    result: 'win',
+    source: 'operator',
+    confidence: 'confirmed',
+    evidenceRef: 'shadow://route-test',
+    settledBy: 'server-test',
+    settledAt: '2026-04-03T19:15:00.000Z',
+    payload: {},
+  });
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/shadow-models/summary`);
+    const body = (await response.json()) as {
+      summaries: Array<{
+        modelName: string;
+        sport: string | null;
+        wins: number;
+        settledPredictions: number;
+      }>;
+      count: number;
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.count, 1);
+    assert.equal(body.summaries[0]?.modelName, 'nba-spread-shadow');
+    assert.equal(body.summaries[0]?.sport, 'NBA');
+    assert.equal(body.summaries[0]?.wins, 1);
+    assert.equal(body.summaries[0]?.settledPredictions, 1);
+  } finally {
+    server.close();
   }
 });
 

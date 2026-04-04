@@ -419,6 +419,14 @@ class FakePickRepository implements PickRepository {
     return [];
   }
 
+  async listBySource(
+    source: string,
+    limit?: number | undefined,
+  ): Promise<PickRecord[]> {
+    const records = [...this.picks.values()].filter((pick) => pick.source === source);
+    return limit !== undefined ? records.slice(0, limit) : records;
+  }
+
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
