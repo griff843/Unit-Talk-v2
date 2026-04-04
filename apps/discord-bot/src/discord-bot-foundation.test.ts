@@ -1891,8 +1891,13 @@ test('/alerts-setup command requires operator role and registers private visibil
     getAlertStatus: async () => ({
       enabled: true,
       dryRun: true,
+      systemPicksEnabled: false,
+      effectiveMode: 'dry-run',
       minTier: 'notable',
       lookbackMinutes: 60,
+      activeSports: ['NBA', 'NHL', 'MLB'],
+      systemPickEligibleMarketTypes: ['moneyline', 'spread', 'total'],
+      systemPickBlockedMarketTypes: ['player_prop'],
       last1h: { notable: 0, alertWorthy: 0, notified: 0 },
       lastDetectedAt: null,
     }),
@@ -1909,8 +1914,13 @@ test('buildAlertsSetupEmbed renders current status fields', () => {
   const embed = buildAlertsSetupEmbed({
     enabled: true,
     dryRun: false,
+    systemPicksEnabled: true,
+    effectiveMode: 'live',
     minTier: 'alert-worthy',
     lookbackMinutes: 90,
+    activeSports: ['NBA', 'NHL', 'MLB'],
+    systemPickEligibleMarketTypes: ['moneyline', 'spread', 'total'],
+    systemPickBlockedMarketTypes: ['player_prop'],
     last1h: {
       notable: 4,
       alertWorthy: 2,
@@ -1923,7 +1933,9 @@ test('buildAlertsSetupEmbed renders current status fields', () => {
   assert.equal(embed.fields?.[0]?.name, 'Agent');
   assert.equal(embed.fields?.[0]?.value, 'Enabled');
   assert.equal(embed.fields?.[1]?.value, 'LIVE');
-  assert.equal(embed.fields?.[7]?.value, '2026-03-28T12:10:00.000Z');
+  assert.equal(embed.fields?.[2]?.value, 'Enabled');
+  assert.equal(embed.fields?.[6]?.value, 'moneyline, spread, total');
+  assert.equal(embed.fields?.[10]?.value, '2026-03-28T12:10:00.000Z');
 });
 
 test('loadCommandRegistry also loads the help command from the commands directory', async () => {

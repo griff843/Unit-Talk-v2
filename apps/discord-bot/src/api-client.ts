@@ -55,8 +55,13 @@ export interface AlertsRecentResponse {
 export interface AlertStatusResponse {
   enabled: boolean;
   dryRun: boolean;
+  systemPicksEnabled: boolean;
+  effectiveMode: 'disabled' | 'dry-run' | 'live';
   minTier: string;
   lookbackMinutes: number;
+  activeSports: string[];
+  systemPickEligibleMarketTypes: string[];
+  systemPickBlockedMarketTypes: string[];
   last1h: {
     notable: number;
     alertWorthy: number;

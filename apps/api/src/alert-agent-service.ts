@@ -13,7 +13,10 @@ import type {
 
 const DEFAULT_LOOKBACK_MINUTES = 60;
 const IDENTITY_BUCKET_MS = 5 * 60 * 1000;
-const ACTIVE_ALERT_SPORTS = new Set(['NBA', 'NHL', 'MLB']);
+export const ACTIVE_ALERT_SPORTS = ['NBA', 'NHL', 'MLB'] as const;
+export const SYSTEM_PICK_ELIGIBLE_MARKET_TYPES = ['moneyline', 'spread', 'total'] as const;
+export const SYSTEM_PICK_BLOCKED_MARKET_TYPES = ['player_prop'] as const;
+const ACTIVE_ALERT_SPORT_SET: ReadonlySet<string> = new Set(ACTIVE_ALERT_SPORTS);
 
 const tierRank: Record<AlertDetectionTier, number> = {
   watch: 1,
@@ -367,7 +370,7 @@ export async function runAlertDetectionPass(
 }
 
 export function isAlertSportActive(sport: string | null | undefined) {
-  return typeof sport === 'string' && ACTIVE_ALERT_SPORTS.has(sport.trim().toUpperCase());
+  return typeof sport === 'string' && ACTIVE_ALERT_SPORT_SET.has(sport.trim().toUpperCase());
 }
 
 function buildAlertDetectionCreateInput(

@@ -86,6 +86,7 @@ test('getAlertStatus reads env-driven flags and recent counts correctly', async 
       ALERT_DRY_RUN: 'false',
       ALERT_MIN_TIER: 'alert-worthy',
       ALERT_LOOKBACK_MINUTES: '90',
+      SYSTEM_PICKS_ENABLED: 'true',
     },
     new Date('2026-03-28T12:00:00.000Z'),
   );
@@ -93,8 +94,13 @@ test('getAlertStatus reads env-driven flags and recent counts correctly', async 
   assert.deepEqual(status, {
     enabled: false,
     dryRun: false,
+    systemPicksEnabled: true,
+    effectiveMode: 'disabled',
     minTier: 'alert-worthy',
     lookbackMinutes: 90,
+    activeSports: ['NBA', 'NHL', 'MLB'],
+    systemPickEligibleMarketTypes: ['moneyline', 'spread', 'total'],
+    systemPickBlockedMarketTypes: ['player_prop'],
     last1h: {
       notable: 1,
       alertWorthy: 1,

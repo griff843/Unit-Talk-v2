@@ -50,9 +50,29 @@ export function buildAlertsSetupEmbed(status: AlertStatusResponse): EmbedBuilder
     .setColor(0x5865f2)
     .addFields(
       { name: 'Agent', value: status.enabled ? 'Enabled' : 'Disabled', inline: false },
-      { name: 'Mode', value: status.dryRun ? 'DRY RUN' : 'LIVE', inline: false },
+      { name: 'Mode', value: status.effectiveMode.toUpperCase(), inline: false },
+      {
+        name: 'System Picks',
+        value:
+          status.systemPicksEnabled && status.effectiveMode === 'live'
+            ? 'Enabled'
+            : status.systemPicksEnabled
+              ? 'Configured (suppressed outside LIVE mode)'
+              : 'Disabled',
+        inline: false,
+      },
       { name: 'Min Tier', value: status.minTier, inline: false },
       { name: 'Lookback', value: `${status.lookbackMinutes} minutes`, inline: false },
+      {
+        name: 'Active Sports',
+        value: status.activeSports.join(', '),
+        inline: false,
+      },
+      {
+        name: 'System Pick Markets',
+        value: status.systemPickEligibleMarketTypes.join(', '),
+        inline: false,
+      },
       { name: 'Last Hour - Notable', value: `${status.last1h.notable} signals`, inline: false },
       {
         name: 'Last Hour - Alert-Worthy',

@@ -1,4 +1,7 @@
 import {
+  ACTIVE_ALERT_SPORTS,
+  SYSTEM_PICK_BLOCKED_MARKET_TYPES,
+  SYSTEM_PICK_ELIGIBLE_MARKET_TYPES,
   loadAlertAgentConfig,
   type AlertAgentConfig,
 } from './alert-agent-service.js';
@@ -33,8 +36,13 @@ export interface AlertsRecentResponse {
 export interface AlertStatusResponse {
   enabled: boolean;
   dryRun: boolean;
+  systemPicksEnabled: boolean;
+  effectiveMode: 'disabled' | 'dry-run' | 'live';
   minTier: string;
   lookbackMinutes: number;
+  activeSports: string[];
+  systemPickEligibleMarketTypes: string[];
+  systemPickBlockedMarketTypes: string[];
   last1h: {
     notable: number;
     alertWorthy: number;
@@ -105,8 +113,14 @@ export async function getAlertStatus(
   return {
     enabled: config.enabled,
     dryRun: config.dryRun,
+    systemPicksEnabled: env.SYSTEM_PICKS_ENABLED === 'true',
+    effectiveMode:
+      !config.enabled ? 'disabled' : config.dryRun ? 'dry-run' : 'live',
     minTier: config.minTier,
     lookbackMinutes: config.lookbackMinutes,
+    activeSports: [...ACTIVE_ALERT_SPORTS],
+    systemPickEligibleMarketTypes: [...SYSTEM_PICK_ELIGIBLE_MARKET_TYPES],
+    systemPickBlockedMarketTypes: [...SYSTEM_PICK_BLOCKED_MARKET_TYPES],
     last1h: summary.counts,
     lastDetectedAt: summary.lastDetectedAt,
   };
