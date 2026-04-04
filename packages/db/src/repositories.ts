@@ -102,6 +102,10 @@ export interface PickRepository {
     lifecycleStates: CanonicalPick['lifecycleState'][],
     limit?: number | undefined,
   ): Promise<PickRecord[]>;
+  listBySource(
+    source: CanonicalPick['source'],
+    limit?: number | undefined,
+  ): Promise<PickRecord[]>;
   persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult>;

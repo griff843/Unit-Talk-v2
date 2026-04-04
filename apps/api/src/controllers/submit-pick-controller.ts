@@ -1,8 +1,9 @@
 import type { SubmissionPayload } from '@unit-talk/contracts';
+import { isShadowEnabled, parseShadowModeEnv } from '@unit-talk/domain';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { ApiError } from '../errors.js';
-import { processSubmission } from '../submission-service.js';
+import { processShadowSubmission, processSubmission } from '../submission-service.js';
 import { enqueueDistributionWithRunTracking } from '../run-audit-service.js';
 
 export interface SubmitPickControllerResult {
@@ -12,13 +13,17 @@ export interface SubmitPickControllerResult {
   promotionStatus: string;
   promotionTarget: string | null;
   outboxEnqueued: boolean;
+  shadowMode?: boolean;
 }
 
 export async function submitPickController(
   payload: SubmissionPayload,
   repositories: RepositoryBundle,
 ): Promise<ApiResponse<SubmitPickControllerResult>> {
-  const result = await processSubmission(payload, repositories);
+  const routingShadowEnabled = isModelDrivenRoutingShadowEnabled(payload);
+  const result = routingShadowEnabled
+    ? await processShadowSubmission(payload, repositories)
+    : await processSubmission(payload, repositories);
 
   if (!result.pick.id) {
     throw new ApiError(500, 'PICK_CREATION_FAILED', 'Canonical pick was not created');
@@ -32,7 +37,7 @@ export async function submitPickController(
   // The failed run is recorded by enqueueDistributionWithRunTracking before it re-throws.
   let outboxEnqueued = false;
 
-  if (result.pick.promotionStatus === 'qualified' && result.pick.promotionTarget != null) {
+  if (!routingShadowEnabled && result.pick.promotionStatus === 'qualified' && result.pick.promotionTarget != null) {
     const distributionTarget = `discord:${result.pick.promotionTarget}`;
     try {
       await enqueueDistributionWithRunTracking(
@@ -76,10 +81,19 @@ export async function submitPickController(
         promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
         promotionTarget: result.pick.promotionTarget ?? null,
         outboxEnqueued,
+        ...(routingShadowEnabled ? { shadowMode: true } : {}),
         ...(outboxEnqueued === false && result.pick.promotionStatus === 'qualified'
           ? { warning: 'Pick qualified but distribution enqueue failed. Manual intervention may be required.' }
           : {}),
       },
     },
   };
+}
+
+function isModelDrivenRoutingShadowEnabled(payload: SubmissionPayload) {
+  if (payload.source !== 'model-driven') {
+    return false;
+  }
+
+  return isShadowEnabled(parseShadowModeEnv(process.env.UNIT_TALK_SHADOW_MODE), 'routing');
 }

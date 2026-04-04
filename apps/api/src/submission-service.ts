@@ -45,6 +45,13 @@ export interface SubmissionProcessingResult {
   duplicate?: boolean;
 }
 
+export interface ShadowSubmissionProcessingResult extends SubmissionProcessingResult {
+  shadowMode: {
+    subsystem: 'routing';
+    recordedAt: string;
+  };
+}
+
 function nextSubmissionId() {
   return randomUUID();
 }
@@ -267,6 +274,199 @@ export async function processSubmission(
   };
 }
 
+export async function processShadowSubmission(
+  payload: SubmissionPayload,
+  repositories: {
+    submissions: SubmissionRepository;
+    picks: PickRepository;
+    audit: AuditLogRepository;
+    providerOffers: ProviderOfferRepository;
+  },
+): Promise<ShadowSubmissionProcessingResult> {
+  const normalizedMarketKey = normalizeMarketKey(payload.market);
+  const shadowRecordedAt = new Date().toISOString();
+  const shadowPayload: SubmissionPayload = {
+    ...payload,
+    market: normalizedMarketKey,
+    metadata: {
+      ...(payload.metadata ?? {}),
+      shadowMode: {
+        enabled: true,
+        subsystem: 'routing',
+        recordedAt: shadowRecordedAt,
+        publicPromotionBlocked: true,
+      },
+    },
+  };
+
+  const idempotencyKey = computeSubmissionIdempotencyKey(shadowPayload);
+  const existingPick = await repositories.picks.findPickByIdempotencyKey(idempotencyKey);
+  if (existingPick) {
+    const duplicateResult = await processSubmissionDuplicate(existingPick, shadowPayload);
+    return {
+      ...duplicateResult,
+      shadowMode: {
+        subsystem: 'routing',
+        recordedAt: readShadowRecordedAt(existingPick.metadata) ?? shadowRecordedAt,
+      },
+    };
+  }
+
+  const submission = createValidatedSubmission(nextSubmissionId(), shadowPayload);
+  const materialized = createCanonicalPickFromSubmission(submission);
+  const domainAnalysis = computeSubmissionDomainAnalysis(materialized.pick);
+  const deviggingResult = await resolveDeviggingResult(
+    normalizedMarketKey,
+    materialized.pick.selection,
+    repositories.providerOffers,
+  );
+  const kellySizing = resolveKellySizing(
+    deviggingResult,
+    materialized.pick.odds,
+    normalizedMarketKey,
+  );
+
+  const enrichedMetadata = enrichMetadataWithDomainAnalysis(
+    materialized.pick.metadata,
+    domainAnalysis,
+  );
+
+  const enrichedPick: CanonicalPick = {
+    ...materialized.pick,
+    metadata: {
+      ...enrichedMetadata,
+      ...(deviggingResult ? { deviggingResult } : {}),
+      kellySizing,
+    },
+  };
+
+  const submissionInput = mapValidatedSubmissionToSubmissionCreateInput(submission);
+  const eventInput = {
+    submissionId: submission.id,
+    eventName: 'submission.accepted',
+    payload: {
+      source: submission.payload.source,
+      market: submission.payload.market,
+      selection: submission.payload.selection,
+      shadowMode: true,
+    },
+    createdAt: submission.receivedAt,
+  };
+
+  let submissionRecord: SubmissionRecord;
+  let pickRecord: PickRecord;
+  let lifecycleEventRecord: PickLifecycleRecord;
+  let submissionEventRecord: SubmissionEventRecord | undefined;
+
+  try {
+    const atomicResult = await repositories.submissions.processSubmissionAtomic({
+      submission: submissionInput,
+      event: eventInput,
+      pick: enrichedPick,
+      idempotencyKey,
+      lifecycleEvent: materialized.lifecycleEvent,
+    });
+
+    submissionRecord = atomicResult.submission;
+    submissionEventRecord = atomicResult.submissionEvent ?? undefined;
+    pickRecord = atomicResult.pick;
+    lifecycleEventRecord = atomicResult.lifecycleEvent!;
+  } catch {
+    submissionRecord = await repositories.submissions.saveSubmission(submissionInput);
+    const [seqEventRecord, seqPickRecord] = await Promise.all([
+      repositories.submissions.saveSubmissionEvent(eventInput),
+      repositories.picks.savePick(enrichedPick, idempotencyKey),
+    ]);
+    submissionEventRecord = seqEventRecord;
+    pickRecord = seqPickRecord;
+    lifecycleEventRecord = await repositories.picks.saveLifecycleEvent(
+      materialized.lifecycleEvent,
+    );
+  }
+
+  await repositories.audit.record({
+    entityType: 'pick',
+    entityId: pickRecord.id,
+    entityRef: pickRecord.id,
+    action: 'shadow.prediction.recorded',
+    actor: 'system:model-shadow',
+    payload: {
+      submissionId: submission.id,
+      source: payload.source,
+      subsystem: 'routing',
+      recordedAt: shadowRecordedAt,
+      market: normalizedMarketKey,
+      selection: payload.selection,
+    },
+  });
+
+  return {
+    submission,
+    submissionRecord,
+    submissionEventRecord,
+    pick: enrichedPick,
+    pickRecord,
+    lifecycleEvent: materialized.lifecycleEvent,
+    lifecycleEventRecord,
+    shadowMode: {
+      subsystem: 'routing',
+      recordedAt: shadowRecordedAt,
+    },
+  };
+}
+
+async function processSubmissionDuplicate(
+  existingPick: PickRecord,
+  payload: SubmissionPayload,
+): Promise<SubmissionProcessingResult> {
+  const submission = createValidatedSubmission(existingPick.submission_id ?? existingPick.id, payload);
+  const stubPick: CanonicalPick = {
+    id: existingPick.id,
+    submissionId: existingPick.submission_id ?? existingPick.id,
+    market: existingPick.market,
+    selection: existingPick.selection,
+    line: existingPick.line ?? undefined,
+    odds: existingPick.odds ?? undefined,
+    stakeUnits: existingPick.stake_units ?? undefined,
+    confidence: existingPick.confidence ?? undefined,
+    source: existingPick.source as CanonicalPick['source'],
+    approvalStatus: existingPick.approval_status as CanonicalPick['approvalStatus'],
+    promotionStatus: existingPick.promotion_status as CanonicalPick['promotionStatus'],
+    promotionTarget: (existingPick.promotion_target ?? undefined) as CanonicalPick['promotionTarget'],
+    lifecycleState: existingPick.status as CanonicalPick['lifecycleState'],
+    metadata: (existingPick.metadata ?? {}) as Record<string, unknown>,
+    createdAt: existingPick.created_at,
+  };
+  return {
+    submission,
+    submissionRecord: { id: existingPick.submission_id ?? existingPick.id } as SubmissionRecord,
+    submissionEventRecord: {} as SubmissionEventRecord,
+    pick: stubPick,
+    pickRecord: existingPick,
+    lifecycleEvent: {
+      pickId: existingPick.id,
+      toState: existingPick.status as CanonicalPick['lifecycleState'],
+      writerRole: 'submitter' as const,
+      reason: 'idempotent-duplicate',
+      createdAt: existingPick.created_at,
+    },
+    lifecycleEventRecord: {} as PickLifecycleRecord,
+    duplicate: true,
+  };
+}
+
+function readShadowRecordedAt(metadata: unknown) {
+  if (!isRecord(metadata)) {
+    return null;
+  }
+  const shadowMode = metadata['shadowMode'];
+  if (!isRecord(shadowMode)) {
+    return null;
+  }
+  const recordedAt = shadowMode['recordedAt'];
+  return typeof recordedAt === 'string' ? recordedAt : null;
+}
+
 async function resolveDeviggingResult(
   normalizedMarketKey: string,
   selection: string,
@@ -339,6 +539,10 @@ async function findLatestMatchingOffer(
 function normalizeSelectionParticipantKey(selection: string): string | null {
   const normalized = selection.trim();
   return normalized.length > 0 ? normalized : null;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function resolveKellySizing(

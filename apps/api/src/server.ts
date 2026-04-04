@@ -43,6 +43,7 @@ import {
   handleMemberTiers,
   handlePicksQuery,
   handleSettlementsRecent,
+  handleShadowModelSummaries,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 
@@ -324,6 +325,10 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/settlements/recent') {
     return handleSettlementsRecent(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/shadow-models/summary') {
+    return handleShadowModelSummaries(request, response, runtime);
   }
 
   // --- Auth gate: all POST routes require authentication ---
