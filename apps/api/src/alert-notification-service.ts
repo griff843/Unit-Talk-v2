@@ -56,7 +56,8 @@ export function buildAlertEmbed(
   channelName: string,
 ): Record<string, unknown> {
   const tier = detection.tier as AlertDetectionTier;
-  const color = tier === 'alert-worthy' ? 0xff6600 : 0xff9900;
+  const effectiveTier: AlertDetectionTier = detection.steam_detected ? 'alert-worthy' : tier;
+  const color = effectiveTier === 'alert-worthy' ? 0xff6600 : 0xff9900;
 
   const metadata = asRecord(detection.metadata) ?? {};
   const eventLabel =
@@ -78,7 +79,7 @@ export function buildAlertEmbed(
       value: detection.direction === 'up' ? '⬆️ Up' : '⬇️ Down',
       inline: true,
     },
-    { name: 'Tier', value: tier, inline: true },
+    { name: 'Tier', value: effectiveTier, inline: true },
     { name: 'Book', value: detection.bookmaker_key, inline: true },
     {
       name: 'Time Elapsed',
@@ -95,7 +96,7 @@ export function buildAlertEmbed(
     });
   }
 
-  if (tier === 'alert-worthy') {
+  if (effectiveTier === 'alert-worthy') {
     fields.push({
       name: 'First mover',
       value: detection.first_mover_book ?? detection.bookmaker_key,
@@ -103,8 +104,20 @@ export function buildAlertEmbed(
     });
   }
 
+  if (detection.steam_detected) {
+    const steamBookCount =
+      typeof metadata.steamBookCount === 'number' ? metadata.steamBookCount : 0;
+    const steamWindowMinutes =
+      typeof metadata.steamWindowMinutes === 'number' ? metadata.steamWindowMinutes : 0;
+    fields.push({
+      name: 'Steam',
+      value: `${steamBookCount} books same direction in ${steamWindowMinutes}m`,
+      inline: false,
+    });
+  }
+
   return {
-    title: `📈 LINE MOVEMENT — ${eventLabel.toUpperCase()}`,
+    title: `${detection.steam_detected ? '🔥 STEAM — ' : '📈 LINE MOVEMENT — '}${eventLabel.toUpperCase()}`,
     description: `**${detection.market_key}**: ${detection.old_line} → ${detection.new_line} (${changeLabel})`,
     color,
     fields,
@@ -211,10 +224,13 @@ export async function runAlertNotificationPass(
 
   for (const detection of persistedSignals) {
     const tier = detection.tier as AlertDetectionTier;
+    const effectiveTier: AlertDetectionTier = detection.steam_detected ? 'alert-worthy' : tier;
 
     if (tier === 'watch') {
-      result.skippedWatch++;
-      continue;
+      if (!detection.steam_detected) {
+        result.skippedWatch++;
+        continue;
+      }
     }
 
     if (detection.notified) {
@@ -223,21 +239,23 @@ export async function runAlertNotificationPass(
     }
 
     // Cooldown check
-    const activeCooldown = await repository.findActiveCooldown({
-      eventId: detection.event_id,
-      participantId: detection.participant_id,
-      marketKey: detection.market_key,
-      bookmakerKey: detection.bookmaker_key,
-      tier,
-      now: nowIso,
-    });
+    if (!detection.steam_detected) {
+      const activeCooldown = await repository.findActiveCooldown({
+        eventId: detection.event_id,
+        participantId: detection.participant_id,
+        marketKey: detection.market_key,
+        bookmakerKey: detection.bookmaker_key,
+        tier,
+        now: nowIso,
+      });
 
-    if (activeCooldown) {
-      result.skippedCooldown++;
-      continue;
+      if (activeCooldown) {
+        result.skippedCooldown++;
+        continue;
+      }
     }
 
-    const channels = resolveChannels(tier);
+    const channels = resolveChannels(effectiveTier);
 
     if (dryRun) {
       // In dry-run: record counts but do not post or write cooldown
@@ -278,7 +296,7 @@ export async function runAlertNotificationPass(
     }
 
     // Write cooldown only after at least one channel succeeds
-    const cooldownMs = COOLDOWN_MINUTES[tier as 'notable' | 'alert-worthy'] * 60 * 1000;
+    const cooldownMs = COOLDOWN_MINUTES[effectiveTier as 'notable' | 'alert-worthy'] * 60 * 1000;
     const cooldownExpiresAt = new Date(now.getTime() + cooldownMs).toISOString();
 
     await repository.updateNotified({

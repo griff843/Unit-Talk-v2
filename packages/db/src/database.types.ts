@@ -37,6 +37,7 @@ export type Database = {
           notified_channels: string[] | null
           old_line: number
           participant_id: string | null
+          steam_detected: boolean
           tier: string
           time_elapsed_minutes: number
           velocity: number | null
@@ -63,6 +64,7 @@ export type Database = {
           notified_channels?: string[] | null
           old_line: number
           participant_id?: string | null
+          steam_detected?: boolean
           tier: string
           time_elapsed_minutes: number
           velocity?: number | null
@@ -89,6 +91,7 @@ export type Database = {
           notified_channels?: string[] | null
           old_line?: number
           participant_id?: string | null
+          steam_detected?: boolean
           tier?: string
           time_elapsed_minutes?: number
           velocity?: number | null

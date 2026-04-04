@@ -48,6 +48,7 @@ export interface AlertStatusResponse {
     alertWorthy: number;
     notified: number;
     failedDeliveries: number;
+    steamEvents: number;
   };
   lastDetectedAt: string | null;
 }

@@ -72,6 +72,7 @@ test('getAlertStatus reads env-driven flags and recent counts correctly', async 
     idempotencyKey: 'recent-alert-worthy',
     tier: 'alert-worthy',
     currentSnapshotAt: '2026-03-28T11:50:00.000Z',
+    steamDetected: true,
   });
   await repositories.audit.record({
     entityType: 'alert_notification',
@@ -120,6 +121,7 @@ test('getAlertStatus reads env-driven flags and recent counts correctly', async 
       alertWorthy: 1,
       notified: 0,
       failedDeliveries: 1,
+      steamEvents: 1,
     },
     lastDetectedAt: '2026-03-28T11:50:00.000Z',
   });
@@ -132,6 +134,7 @@ async function seedDetection(
     tier: 'watch' | 'notable' | 'alert-worthy';
     currentSnapshotAt: string;
     notified?: boolean;
+    steamDetected?: boolean;
   },
 ) {
   const created = await repository.saveDetection({
@@ -151,6 +154,7 @@ async function seedDetection(
     direction: 'down',
     marketType: 'spread',
     tier: overrides.tier,
+    steamDetected: overrides.steamDetected,
     notified: overrides.notified,
     metadata: {},
   });

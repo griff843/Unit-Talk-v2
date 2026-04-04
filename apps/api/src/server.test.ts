@@ -176,9 +176,10 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     timeElapsedMinutes: 30,
     direction: 'up',
     marketType: 'total',
-      tier: 'notable',
-      metadata: {},
-    });
+    tier: 'notable',
+    steamDetected: false,
+    metadata: {},
+  });
   const failedDetection = await repositories.alertDetections.saveDetection({
     idempotencyKey: 'status-failed',
     eventId: 'event-2',
@@ -196,6 +197,7 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     direction: 'up',
     marketType: 'spread',
     tier: 'alert-worthy',
+    steamDetected: true,
     metadata: {},
     notified: false,
   });
@@ -242,7 +244,13 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
       activeSports: string[];
       systemPickEligibleMarketTypes: string[];
       systemPickBlockedMarketTypes: string[];
-      last1h: { notable: number; alertWorthy: number; notified: number; failedDeliveries: number };
+      last1h: {
+        notable: number;
+        alertWorthy: number;
+        notified: number;
+        failedDeliveries: number;
+        steamEvents: number;
+      };
       lastDetectedAt: string | null;
     };
 
@@ -260,6 +268,7 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     assert.equal(body.last1h.alertWorthy, 1);
     assert.equal(body.last1h.notified, 0);
     assert.equal(body.last1h.failedDeliveries, 1);
+    assert.equal(body.last1h.steamEvents, 1);
     assert.equal(body.lastDetectedAt, currentSnapshotAt);
   } finally {
     server.close();

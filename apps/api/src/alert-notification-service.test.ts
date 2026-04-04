@@ -35,6 +35,7 @@ function makeDetection(
     direction: 'up',
     market_type: 'spread',
     tier: 'notable',
+    steam_detected: false,
     notified: false,
     notified_at: null,
     notified_channels: null,
@@ -146,6 +147,20 @@ test('buildAlertEmbed — alert-worthy includes first mover field', () => {
   const firstMoverField = fields.find((field) => field.name === 'First mover');
   assert.ok(firstMoverField !== undefined);
   assert.equal(firstMoverField?.value, 'draftkings');
+});
+
+test('buildAlertEmbed — steam detections use steam title and summary field', () => {
+  const detection = makeDetection({
+    tier: 'watch',
+    steam_detected: true,
+    metadata: { steamBookCount: 3, steamWindowMinutes: 10 },
+  });
+  const embed = buildAlertEmbed(detection, 'discord:canary');
+  assert.ok(String(embed.title).includes('STEAM'));
+  const fields = embed.fields as Array<{ name: string; value: string }>;
+  const steamField = fields.find((field) => field.name === 'Steam');
+  assert.ok(steamField !== undefined);
+  assert.equal(steamField?.value, '3 books same direction in 10m');
 });
 
 // ---------------------------------------------------------------------------
@@ -470,6 +485,64 @@ test('runAlertNotificationPass — cooldown suppresses re-notification', async (
     assert.equal(discordCalled, false, 'Discord should not be called — cooldown active');
     assert.equal(result.skippedCooldown, 1);
     assert.equal(result.notified, 0);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = originalEnv;
+    }
+    if (originalMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalMap;
+    }
+  }
+});
+
+test('runAlertNotificationPass — steam bypasses watch suppression and cooldown', async () => {
+  const repo = new InMemoryAlertDetectionRepository();
+  const detection = await repo.saveDetection({
+    idempotencyKey: 'steam-bypass-key',
+    eventId: 'evt-steam',
+    marketKey: 'spread',
+    bookmakerKey: 'draftkings',
+    firstMoverBook: 'draftkings',
+    baselineSnapshotAt: '2026-03-28T10:00:00.000Z',
+    currentSnapshotAt: '2026-03-28T10:10:00.000Z',
+    oldLine: 4.5,
+    newLine: 5.0,
+    lineChange: 0.5,
+    lineChangeAbs: 0.5,
+    velocity: 0.05,
+    timeElapsedMinutes: 10,
+    direction: 'up',
+    marketType: 'spread',
+    tier: 'watch',
+    steamDetected: true,
+    notified: false,
+    metadata: { steamBookCount: 3, steamWindowMinutes: 10 },
+  });
+  assert.ok(detection);
+
+  const originalEnv = process.env.DISCORD_BOT_TOKEN;
+  const originalMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = makeTargetMap();
+
+  const requests: string[] = [];
+  try {
+    const result = await runAlertNotificationPass([detection!], repo, {
+      dryRun: false,
+      fetchImpl: async (url) => {
+        requests.push(String(url));
+        return new Response('', { status: 200 });
+      },
+    });
+
+    assert.equal(result.notified, 1);
+    assert.equal(result.skippedWatch, 0);
+    assert.equal(result.skippedCooldown, 0);
+    assert.equal(requests.length, 2);
   } finally {
     if (originalEnv === undefined) {
       delete process.env.DISCORD_BOT_TOKEN;

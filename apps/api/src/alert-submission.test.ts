@@ -269,6 +269,7 @@ function makeDetection(
     direction: 'up',
     market_type: 'spread',
     tier: 'alert-worthy',
+    steam_detected: false,
     notified: false,
     notified_at: null,
     notified_channels: null,
