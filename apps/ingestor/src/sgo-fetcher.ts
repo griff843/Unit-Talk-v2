@@ -1,6 +1,7 @@
 import type { SGOPairedProp } from './sgo-normalizer.js';
 
 const SGO_EVENTS_ENDPOINT = 'https://api.sportsgameodds.com/v2/events';
+const SGO_USAGE_ENDPOINT = 'https://api.sportsgameodds.com/v2/account/usage';
 
 export interface SGOFetchOptions {
   apiKey: string;
@@ -653,6 +654,46 @@ function getNestedString(value: Record<string, unknown>, path: string[]) {
 function buildDisplayName(firstName: string | null, lastName: string | null) {
   const fullName = [firstName, lastName].filter(Boolean).join(' ').trim();
   return fullName.length > 0 ? fullName : undefined;
+}
+
+export interface SGOAccountUsage {
+  plan: string | null;
+  objectsUsed: number | null;
+  objectsLimit: number | null;
+  creditsUsed: number | null;
+  creditsLimit: number | null;
+  resetAt: string | null;
+  raw: unknown;
+}
+
+export async function fetchSGOAccountUsage(
+  apiKey: string,
+  fetchImpl: typeof fetch = fetch,
+): Promise<SGOAccountUsage> {
+  const url = new URL(SGO_USAGE_ENDPOINT);
+  url.searchParams.set('apiKey', apiKey);
+
+  const response = await fetchImpl(url.toString(), {
+    method: 'GET',
+    headers: { accept: 'application/json' },
+  });
+
+  if (!response.ok) {
+    throw new Error(`SGO account/usage fetch failed: ${response.status} ${response.statusText}`);
+  }
+
+  const raw = (await response.json()) as unknown;
+  const data = isRecord(raw) ? raw : {};
+
+  return {
+    plan: firstString(data.plan, data.planName, data.tier) ?? null,
+    objectsUsed: firstNumber(data.objectsUsed, data.objects_used, data.used) ?? null,
+    objectsLimit: firstNumber(data.objectsLimit, data.objects_limit, data.limit) ?? null,
+    creditsUsed: firstNumber(data.creditsUsed, data.credits_used) ?? null,
+    creditsLimit: firstNumber(data.creditsLimit, data.credits_limit) ?? null,
+    resetAt: firstString(data.resetAt, data.reset_at, data.periodEnd, data.period_end) ?? null,
+    raw,
+  };
 }
 
 export function deriveDisplayNameFromProviderId(providerParticipantId: string) {

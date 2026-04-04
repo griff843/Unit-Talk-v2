@@ -1,6 +1,7 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
+import { fetchSGOAccountUsage, type SGOAccountUsage } from './sgo-fetcher.js';
 
 export const SUPPORTED_SGO_LEAGUES = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
 
@@ -30,6 +31,7 @@ export interface IngestorCycleSummary {
   results: IngestLeagueSummary[];
   oddsApiResults: OddsApiIngestSummary[];
   gradingTrigger: IngestorGradingTriggerSummary;
+  sgoUsage: SGOAccountUsage | null;
 }
 
 export async function runIngestorCycles(
@@ -73,7 +75,22 @@ export async function runIngestorCycles(
     }
 
     const gradingTrigger = await triggerGradingForCycle(results, options);
-    summaries.push({ cycle, results, oddsApiResults, gradingTrigger });
+
+    let sgoUsage: SGOAccountUsage | null = null;
+    if (options.apiKey) {
+      try {
+        sgoUsage = await fetchSGOAccountUsage(
+          options.apiKey,
+          options.fetchImpl ?? fetch,
+        );
+      } catch (error) {
+        options.logger?.warn?.(
+          `Failed to fetch SGO account usage: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    }
+
+    summaries.push({ cycle, results, oddsApiResults, gradingTrigger, sgoUsage });
 
     if (cycle < maxCycles) {
       await sleep(pollIntervalMs);
