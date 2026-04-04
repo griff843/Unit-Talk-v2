@@ -7,6 +7,7 @@ import {
   runAlertNotificationPass,
 } from './alert-notification-service.js';
 import type { AlertDetectionRecord } from '@unit-talk/db';
+import type { AuditLogCreateInput, AuditLogRow, AuditLogRepository, Json } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -49,6 +50,38 @@ function makeTargetMap(): string {
     'discord:trader-insights': '1356613995175481405',
     'discord:recaps': '1300411261854547968',
   });
+}
+
+class FakeAuditLogRepository implements AuditLogRepository {
+  readonly records: AuditLogRow[] = [];
+
+  async record(input: AuditLogCreateInput): Promise<AuditLogRow> {
+    const row: AuditLogRow = {
+      id: crypto.randomUUID(),
+      entity_type: input.entityType,
+      entity_id: input.entityId ?? null,
+      entity_ref: input.entityRef ?? null,
+      action: input.action,
+      actor: input.actor ?? null,
+      payload: input.payload as Json,
+      created_at: new Date().toISOString(),
+    };
+    this.records.push(row);
+    return row;
+  }
+
+  async listRecentByEntityType(
+    entityType: string,
+    since: string,
+    action?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    return this.records.filter(
+      (row) =>
+        row.entity_type === entityType &&
+        row.created_at >= since &&
+        (action === undefined || row.action === action),
+    );
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -480,6 +513,143 @@ test('runAlertNotificationPass — Discord failure leaves notified=false', async
     const updated = (await repo.listRecent(10)).find((r) => r.id === saved!.id);
     assert.equal(updated?.notified, false, 'notified must remain false on Discord failure');
     assert.equal(updated?.cooldown_expires_at, null);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = originalEnv;
+    }
+    if (originalMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalMap;
+    }
+  }
+});
+
+test('runAlertNotificationPass retries and succeeds on a later attempt', async () => {
+  const repo = new InMemoryAlertDetectionRepository();
+  const audit = new FakeAuditLogRepository();
+  let attempts = 0;
+
+  const saved = await repo.saveDetection({
+    idempotencyKey: 'retry-success-key',
+    eventId: 'evt-retry-1',
+    marketKey: 'spread',
+    bookmakerKey: 'caesars',
+    baselineSnapshotAt: '2026-03-28T10:00:00.000Z',
+    currentSnapshotAt: '2026-03-28T10:20:00.000Z',
+    oldLine: 3.0,
+    newLine: 5.5,
+    lineChange: 2.5,
+    lineChangeAbs: 2.5,
+    velocity: 0.125,
+    timeElapsedMinutes: 20,
+    direction: 'up',
+    marketType: 'spread',
+    tier: 'notable',
+    metadata: {},
+  });
+
+  assert.ok(saved !== null);
+
+  const fakeFetch = async () => {
+    attempts += 1;
+    return new Response('', { status: attempts < 3 ? 500 : 200 });
+  };
+
+  const originalEnv = process.env.DISCORD_BOT_TOKEN;
+  const originalMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = makeTargetMap();
+
+  try {
+    const result = await runAlertNotificationPass([saved!], repo, {
+      dryRun: false,
+      fetchImpl: fakeFetch as typeof fetch,
+      sleepImpl: async () => {},
+      audit,
+    });
+
+    assert.equal(result.notified, 1);
+    assert.equal(result.failed, 0);
+    assert.equal(attempts, 3);
+    assert.equal(audit.records.length, 2);
+
+    const updated = (await repo.listRecent(10)).find((r) => r.id === saved!.id);
+    assert.equal(updated?.notified, true);
+  } finally {
+    if (originalEnv === undefined) {
+      delete process.env.DISCORD_BOT_TOKEN;
+    } else {
+      process.env.DISCORD_BOT_TOKEN = originalEnv;
+    }
+    if (originalMap === undefined) {
+      delete process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+    } else {
+      process.env.UNIT_TALK_DISCORD_TARGET_MAP = originalMap;
+    }
+  }
+});
+
+test('runAlertNotificationPass writes an audit row for each failed delivery attempt', async () => {
+  const repo = new InMemoryAlertDetectionRepository();
+  const audit = new FakeAuditLogRepository();
+
+  const saved = await repo.saveDetection({
+    idempotencyKey: 'retry-fail-key',
+    eventId: 'evt-retry-2',
+    marketKey: 'spread',
+    bookmakerKey: 'caesars',
+    baselineSnapshotAt: '2026-03-28T10:00:00.000Z',
+    currentSnapshotAt: '2026-03-28T10:20:00.000Z',
+    oldLine: 3.0,
+    newLine: 5.5,
+    lineChange: 2.5,
+    lineChangeAbs: 2.5,
+    velocity: 0.125,
+    timeElapsedMinutes: 20,
+    direction: 'up',
+    marketType: 'spread',
+    tier: 'notable',
+    metadata: {},
+  });
+
+  assert.ok(saved !== null);
+
+  const originalEnv = process.env.DISCORD_BOT_TOKEN;
+  const originalMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.UNIT_TALK_DISCORD_TARGET_MAP = makeTargetMap();
+
+  try {
+    const result = await runAlertNotificationPass([saved!], repo, {
+      dryRun: false,
+      fetchImpl: async () => new Response('', { status: 500 }),
+      sleepImpl: async () => {},
+      audit,
+    });
+
+    assert.equal(result.failed, 1);
+    assert.equal(result.notified, 0);
+    assert.equal(audit.records.length, 4);
+    assert.deepEqual(
+      audit.records.map((row) => ({
+        entityType: row.entity_type,
+        entityId: row.entity_id,
+        action: row.action,
+        attempt: (row.payload as Record<string, unknown>).attempt,
+      })),
+      [
+        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 1 },
+        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 2 },
+        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 3 },
+        { entityType: 'alert_notification', entityId: saved!.id, action: 'notify_attempt', attempt: 4 },
+      ],
+    );
+
+    const updated = (await repo.listRecent(10)).find((r) => r.id === saved!.id);
+    assert.equal(updated?.notified, false);
   } finally {
     if (originalEnv === undefined) {
       delete process.env.DISCORD_BOT_TOKEN;

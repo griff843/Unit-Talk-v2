@@ -2,6 +2,7 @@ import type {
   AlertDetectionRecord,
   AlertDetectionRepository,
   AlertDetectionTier,
+  AuditLogRepository,
   SystemRunRepository,
 } from '@unit-talk/db';
 
@@ -10,6 +11,8 @@ const COOLDOWN_MINUTES: Record<'notable' | 'alert-worthy', number> = {
   notable: 30,
   'alert-worthy': 15,
 };
+const DELIVERY_RETRY_COUNT = 3;
+const DELIVERY_RETRY_BACKOFF_MS = [1000, 2000, 4000] as const;
 
 // Routing table — per contract §8.1
 // watch → never notified
@@ -32,6 +35,8 @@ export interface AlertNotificationPassOptions {
   dryRun?: boolean;
   now?: Date;
   fetchImpl?: typeof fetch;
+  sleepImpl?: ((ms: number) => Promise<void>) | undefined;
+  audit?: AuditLogRepository | undefined;
   runs?: SystemRunRepository;
   onNotified?: ((detection: AlertDetectionRecord) => Promise<void> | void) | undefined;
 }
@@ -134,7 +139,7 @@ async function postToDiscord(
   embed: Record<string, unknown>,
   botToken: string,
   fetchImpl: typeof fetch,
-): Promise<boolean> {
+): Promise<{ ok: boolean; statusCode: number | null; error: string | null }> {
   try {
     const response = await fetchImpl(
       `https://discord.com/api/v10/channels/${channelId}/messages`,
@@ -147,9 +152,17 @@ async function postToDiscord(
         body: JSON.stringify({ embeds: [embed] }),
       },
     );
-    return response.ok;
-  } catch {
-    return false;
+    return {
+      ok: response.ok,
+      statusCode: response.status,
+      error: response.ok ? null : `discord returned ${response.status}`,
+    };
+  } catch (error) {
+    return {
+      ok: false,
+      statusCode: null,
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
 }
 
@@ -179,6 +192,7 @@ export async function runAlertNotificationPass(
   const nowIso = now.toISOString();
   const dryRun = options.dryRun ?? true;
   const fetchImpl = options.fetchImpl ?? fetch;
+  const sleepImpl = options.sleepImpl ?? defaultSleep;
   const botToken = process.env.DISCORD_BOT_TOKEN?.trim();
   const run = options.runs
     ? await options.runs.startRun({
@@ -235,8 +249,17 @@ export async function runAlertNotificationPass(
       if (!channelId) continue;
 
       const embed = buildAlertEmbed(detection, channel);
-      const ok = await postToDiscord(channelId, embed, botToken, fetchImpl);
-      if (ok) {
+      const delivery = await postToDiscordWithRetry({
+        detection,
+        channel,
+        channelId,
+        embed,
+        botToken,
+        fetchImpl,
+        sleepImpl,
+        audit: options.audit,
+      });
+      if (delivery.ok) {
         successChannels.push(channel);
       }
     }
@@ -279,4 +302,64 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : null;
+}
+
+async function postToDiscordWithRetry(input: {
+  detection: AlertDetectionRecord;
+  channel: string;
+  channelId: string;
+  embed: Record<string, unknown>;
+  botToken: string;
+  fetchImpl: typeof fetch;
+  sleepImpl: (ms: number) => Promise<void>;
+  audit?: AuditLogRepository | undefined;
+}) {
+  let lastResult: { ok: boolean; statusCode: number | null; error: string | null } = {
+    ok: false,
+    statusCode: null,
+    error: null,
+  };
+
+  const totalAttempts = DELIVERY_RETRY_COUNT + 1;
+
+  for (let index = 0; index < totalAttempts; index += 1) {
+    lastResult = await postToDiscord(
+      input.channelId,
+      input.embed,
+      input.botToken,
+      input.fetchImpl,
+    );
+
+    if (lastResult.ok) {
+      return lastResult;
+    }
+
+    await input.audit?.record({
+      entityType: 'alert_notification',
+      entityId: input.detection.id,
+      entityRef: input.detection.id,
+      action: 'notify_attempt',
+      actor: 'system:alert-agent',
+      payload: {
+        detectionId: input.detection.id,
+        channel: input.channel,
+        attempt: index + 1,
+        statusCode: lastResult.statusCode,
+        error: lastResult.error,
+      },
+    });
+
+    const backoffMs = DELIVERY_RETRY_BACKOFF_MS[index];
+    if (backoffMs !== undefined && index < totalAttempts - 1) {
+      await input.sleepImpl(backoffMs);
+    }
+  }
+
+  return lastResult;
+}
+
+function defaultSleep(ms: number) {
+  return new Promise<void>((resolve) => {
+    setTimeout(resolve, ms);
+  });
 }

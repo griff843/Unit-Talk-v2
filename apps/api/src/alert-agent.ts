@@ -28,7 +28,7 @@ type AlertAgentRuntimeConfig = Partial<AlertAgentConfig & HedgeAgentConfig> & {
 export function startAlertAgent(
   repositories: Pick<
     RepositoryBundle,
-    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs'
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs' | 'audit'
   >,
   logger: Pick<Console, 'error' | 'info'> = console,
   config: AlertAgentRuntimeConfig = {},
@@ -90,7 +90,7 @@ export async function runAlertDetectionPassForTests(
 async function runAlertAgentTick(
   repositories: Pick<
     RepositoryBundle,
-    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs'
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs' | 'audit'
   >,
   logger: Pick<Console, 'error' | 'info'>,
   alertConfig: ReturnType<typeof loadAlertAgentConfig>,
@@ -163,6 +163,7 @@ async function runAlertAgentTick(
         repositories.alertDetections,
         {
           dryRun: alertConfig.dryRun,
+          audit: repositories.audit,
           runs: repositories.runs,
           onNotified: publishSystemPick,
         },

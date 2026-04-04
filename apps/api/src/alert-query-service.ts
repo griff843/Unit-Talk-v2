@@ -5,7 +5,7 @@ import {
   loadAlertAgentConfig,
   type AlertAgentConfig,
 } from './alert-agent-service.js';
-import type { AlertDetectionRepository } from '@unit-talk/db';
+import type { AlertDetectionRepository, AuditLogRepository } from '@unit-talk/db';
 
 export type RecentAlertTier = 'notable' | 'alert-worthy';
 
@@ -47,6 +47,7 @@ export interface AlertStatusResponse {
     notable: number;
     alertWorthy: number;
     notified: number;
+    failedDeliveries: number;
   };
   lastDetectedAt: string | null;
 }
@@ -103,12 +104,27 @@ export async function getRecentAlerts(
 
 export async function getAlertStatus(
   repository: AlertDetectionRepository,
+  auditRepository: AuditLogRepository,
   env: NodeJS.ProcessEnv = process.env,
   now: Date = new Date(),
 ): Promise<AlertStatusResponse> {
   const config = loadAlertAgentConfig(env);
   const lastHourWindowStart = new Date(now.getTime() - 60 * 60 * 1000).toISOString();
   const summary = await repository.getStatusSummary(lastHourWindowStart);
+  const failedAttemptRows = await auditRepository.listRecentByEntityType(
+    'alert_notification',
+    lastHourWindowStart,
+    'notify_attempt',
+  );
+  const failedDetectionIds = [
+    ...new Set(
+      failedAttemptRows
+        .map((row) => row.entity_id)
+        .filter((entityId): entityId is string => typeof entityId === 'string' && entityId.length > 0),
+    ),
+  ];
+  const failedDetections = await repository.findByIds(failedDetectionIds);
+  const failedDeliveries = [...failedDetections.values()].filter((record) => record.notified === false).length;
 
   return {
     enabled: config.enabled,
@@ -121,7 +137,10 @@ export async function getAlertStatus(
     activeSports: [...ACTIVE_ALERT_SPORTS],
     systemPickEligibleMarketTypes: [...SYSTEM_PICK_ELIGIBLE_MARKET_TYPES],
     systemPickBlockedMarketTypes: [...SYSTEM_PICK_BLOCKED_MARKET_TYPES],
-    last1h: summary.counts,
+    last1h: {
+      ...summary.counts,
+      failedDeliveries,
+    },
     lastDetectedAt: summary.lastDetectedAt,
   };
 }

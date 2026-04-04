@@ -713,6 +713,19 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
     );
   }
 
+  async findByIds(ids: string[]): Promise<Map<string, AlertDetectionRecord>> {
+    const wanted = new Set(ids);
+    const result = new Map<string, AlertDetectionRecord>();
+
+    for (const record of this.records.values()) {
+      if (wanted.has(record.id)) {
+        result.set(record.id, record);
+      }
+    }
+
+    return result;
+  }
+
   async listRecent(
     limit = 20,
     options: AlertDetectionListOptions = {},
@@ -1315,6 +1328,21 @@ export class InMemoryAuditLogRepository implements AuditLogRepository {
     this.records.push(record);
     return record;
   }
+
+  async listRecentByEntityType(
+    entityType: string,
+    since: string,
+    action?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    return this.records
+      .filter(
+        (record) =>
+          record.entity_type === entityType &&
+          record.created_at >= since &&
+          (action === undefined || record.action === action),
+      )
+      .sort((left, right) => right.created_at.localeCompare(left.created_at));
+  }
 }
 
 export class InMemoryReferenceDataRepository implements ReferenceDataRepository {
@@ -1745,6 +1773,23 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
     }
 
     return data;
+  }
+
+  async findByIds(ids: string[]): Promise<Map<string, AlertDetectionRecord>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .select('*')
+      .in('id', ids);
+
+    if (error) {
+      throw new Error(`Failed to load alert detections by id: ${error.message}`);
+    }
+
+    return new Map((data ?? []).map((record) => [record.id, record]));
   }
 
   async saveSubmissionEvent(
@@ -2723,6 +2768,23 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     return data;
   }
 
+  async findByIds(ids: string[]): Promise<Map<string, AlertDetectionRecord>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .select('*')
+      .in('id', ids);
+
+    if (error) {
+      throw new Error(`Failed to load alert detections by id: ${error.message}`);
+    }
+
+    return new Map((data ?? []).map((record) => [record.id, record]));
+  }
+
   async listRecent(
     limit = 20,
     options: AlertDetectionListOptions = {},
@@ -3455,6 +3517,31 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
     }
 
     return data;
+  }
+
+  async listRecentByEntityType(
+    entityType: string,
+    since: string,
+    action?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    let query = this.client
+      .from('audit_log')
+      .select('*')
+      .eq('entity_type', entityType)
+      .gte('created_at', since)
+      .order('created_at', { ascending: false });
+
+    if (action !== undefined) {
+      query = query.eq('action', action);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Failed to list audit log rows: ${error.message}`);
+    }
+
+    return data ?? [];
   }
 }
 

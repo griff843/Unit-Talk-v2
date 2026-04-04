@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { InMemoryAlertDetectionRepository } from '@unit-talk/db';
+import type { AlertDetectionRepository } from '@unit-talk/db';
+import { createInMemoryRepositoryBundle } from './persistence.js';
 import { getAlertStatus, getRecentAlerts } from './alert-query-service.js';
 
 test('getRecentAlerts returns empty state when no detections exist', async () => {
@@ -60,19 +62,30 @@ test('getRecentAlerts clamps the requested limit to 10', async () => {
 });
 
 test('getAlertStatus reads env-driven flags and recent counts correctly', async () => {
-  const repository = new InMemoryAlertDetectionRepository();
-  await seedDetection(repository, {
+  const repositories = createInMemoryRepositoryBundle();
+  await seedDetection(repositories.alertDetections, {
     idempotencyKey: 'recent-notable',
     tier: 'notable',
     currentSnapshotAt: '2026-03-28T11:40:00.000Z',
   });
-  await seedDetection(repository, {
+  const failed = await seedDetection(repositories.alertDetections, {
     idempotencyKey: 'recent-alert-worthy',
     tier: 'alert-worthy',
     currentSnapshotAt: '2026-03-28T11:50:00.000Z',
-    notified: true,
   });
-  await seedDetection(repository, {
+  await repositories.audit.record({
+    entityType: 'alert_notification',
+    entityId: failed.id,
+    entityRef: failed.id,
+    action: 'notify_attempt',
+    actor: 'system:test',
+    payload: {
+      attempt: 3,
+      statusCode: 500,
+      error: 'discord returned 500',
+    },
+  });
+  await seedDetection(repositories.alertDetections, {
     idempotencyKey: 'older-alert-worthy',
     tier: 'alert-worthy',
     currentSnapshotAt: '2026-03-28T09:00:00.000Z',
@@ -80,7 +93,8 @@ test('getAlertStatus reads env-driven flags and recent counts correctly', async 
   });
 
   const status = await getAlertStatus(
-    repository,
+    repositories.alertDetections,
+    repositories.audit,
     {
       ALERT_AGENT_ENABLED: 'false',
       ALERT_DRY_RUN: 'false',
@@ -104,14 +118,15 @@ test('getAlertStatus reads env-driven flags and recent counts correctly', async 
     last1h: {
       notable: 1,
       alertWorthy: 1,
-      notified: 1,
+      notified: 0,
+      failedDeliveries: 1,
     },
     lastDetectedAt: '2026-03-28T11:50:00.000Z',
   });
 });
 
 async function seedDetection(
-  repository: InMemoryAlertDetectionRepository,
+  repository: Pick<AlertDetectionRepository, 'saveDetection'>,
   overrides: {
     idempotencyKey: string;
     tier: 'watch' | 'notable' | 'alert-worthy';
