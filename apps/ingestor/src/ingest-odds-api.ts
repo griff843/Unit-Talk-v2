@@ -98,10 +98,19 @@ export async function ingestOddsApiLeague(
 
     logger?.info?.(`[odds-api] ${league}: ${result.eventsCount} events, ${offers.length} offers from ${result.telemetry.bookmakerCount} bookmakers`);
 
+    // Determine which (providerKey, eventId, marketKey, participantId) combinations
+    // already exist in provider_offers so we can tag is_opening correctly.
+    const providerEventIds = [...new Set(offers.map((o) => o.providerEventId))];
+    const existingCombinations = await repositories.providerOffers.findExistingCombinations(
+      providerEventIds,
+    );
+
     // Batch upsert to provider_offers — deduplicate by idempotency key to avoid
     // "ON CONFLICT DO UPDATE cannot affect row a second time" errors when the
     // normalizer emits multiple offers with the same key in a single batch.
-    const mapped = offers.map(mapOddsApiOfferToProviderOfferInsert);
+    const mapped = offers.map((offer) =>
+      mapOddsApiOfferToProviderOfferInsert(offer, existingCombinations),
+    );
     const seen = new Set<string>();
     const upsertInputs = mapped.filter((o) => {
       if (seen.has(o.idempotencyKey)) return false;
@@ -110,6 +119,13 @@ export async function ingestOddsApiLeague(
     });
 
     const upsertResult = await repositories.providerOffers.upsertBatch(upsertInputs);
+
+    // Mark closing lines for any events that have already started
+    const eventsForClosing = result.events.map((e) => ({
+      providerEventId: e.id,
+      commenceTime: e.commence_time,
+    }));
+    await repositories.providerOffers.markClosingLines(eventsForClosing, snapshotAt);
     const inserted = upsertResult.insertedCount;
     const skipped = upsertResult.totalProcessed - upsertResult.insertedCount - upsertResult.updatedCount;
 
@@ -308,8 +324,10 @@ function namesMatch(left: string, right: string) {
 
 export function mapOddsApiOfferToProviderOfferInsert(
   offer: NormalizedOddsOffer,
+  existingCombinations: Set<string> = new Set(),
 ): ProviderOfferInsert {
   const participantKey = offer.providerParticipantId ?? '';
+  const combinationKey = `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${participantKey}`;
 
   return {
     idempotencyKey: `${offer.providerKey}:${offer.providerEventId}:${offer.providerMarketKey}:${participantKey}:${offer.snapshotAt}`,
@@ -322,8 +340,8 @@ export function mapOddsApiOfferToProviderOfferInsert(
     line: offer.line,
     overOdds: offer.overOdds,
     underOdds: offer.underOdds,
-    isOpening: false,
-    isClosing: false,
+    isOpening: !existingCombinations.has(combinationKey),
+    isClosing: false, // set post-insert by markClosingLines for started events
     snapshotAt: offer.snapshotAt,
   };
 }
