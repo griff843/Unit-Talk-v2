@@ -6,6 +6,8 @@ import {
   classifyMovement,
   detectLineMovement,
   isAlertSportActive,
+  loadAlertAgentConfig,
+  loadAlertThresholds,
   runAlertDetectionPass,
   shouldNotify,
 } from './alert-agent-service.js';
@@ -117,6 +119,65 @@ test('classifyMovement discards detections below the watch threshold', () => {
   });
 
   assert.equal(signal, null);
+});
+
+test('loadAlertThresholds returns the current hardcoded defaults when env is absent', () => {
+  const thresholds = loadAlertThresholds({});
+
+  assert.deepEqual(thresholds, {
+    markets: {
+      spread: { watch: 0.5, notable: 2.0, alertWorthy: 3.5, velocityElevate: 0.5 },
+      total: { watch: 0.5, notable: 1.5, alertWorthy: 3.0, velocityElevate: 0.5 },
+      moneyline: { watch: 5, notable: 10, alertWorthy: 20, velocityElevate: 10 },
+      player_prop: { watch: 0.25, notable: 0.5, alertWorthy: 1.5, velocityElevate: 0.25 },
+    },
+    velocityWindowMinutes: 15,
+  });
+});
+
+test('classifyMovement uses env-backed threshold overrides via config loader', () => {
+  const config = loadAlertAgentConfig({
+    ALERT_THRESHOLD_SPREAD_WATCH: '1.0',
+    ALERT_THRESHOLD_SPREAD_NOTABLE: '2.5',
+    ALERT_THRESHOLD_SPREAD_ALERT_WORTHY: '4.0',
+    ALERT_THRESHOLD_SPREAD_VELOCITY: '1.25',
+    ALERT_VELOCITY_WINDOW_MINUTES: '8',
+  });
+
+  const watchSignal = classifyMovement(
+    {
+      ...baseDetection(),
+      marketType: 'spread',
+      lineChange: 1,
+      lineChangeAbs: 1,
+    },
+    config.thresholds,
+  );
+  const elevatedSignal = classifyMovement(
+    {
+      ...baseDetection(),
+      marketType: 'spread',
+      lineChange: 2.5,
+      lineChangeAbs: 2.5,
+      timeElapsedMinutes: 7,
+      velocity: 0.3571,
+    },
+    config.thresholds,
+  );
+
+  assert.equal(watchSignal?.tier, 'watch');
+  assert.equal(elevatedSignal?.tier, 'alert-worthy');
+  assert.equal(elevatedSignal?.metadata.velocityElevated, true);
+});
+
+test('loadAlertThresholds throws on invalid numeric env values', () => {
+  assert.throws(
+    () =>
+      loadAlertThresholds({
+        ALERT_THRESHOLD_ML_WATCH: 'abc',
+      }),
+    /ALERT_THRESHOLD_ML_WATCH must be a positive number/,
+  );
 });
 
 test('shouldNotify returns false when a matching notified row is still in cooldown', async () => {
