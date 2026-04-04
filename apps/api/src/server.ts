@@ -22,6 +22,7 @@ import { authenticateRequest, authorizeRoute, loadAuthConfig, type AuthConfig, t
 import {
   handleHealth,
   handleAlertsRecent,
+  handleAlertSignalQuality,
   handleAlertsStatus,
   handleSubmissions,
   handleSettlePickRoute,
@@ -308,6 +309,10 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/alerts/status') {
     return handleAlertsStatus(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/alerts/signal-quality') {
+    return handleAlertSignalQuality(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/picks') {

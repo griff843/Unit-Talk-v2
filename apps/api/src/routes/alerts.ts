@@ -1,6 +1,6 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies } from '../server.js';
-import { getAlertStatus, getRecentAlerts } from '../alert-query-service.js';
+import { getAlertSignalQuality, getAlertStatus, getRecentAlerts } from '../alert-query-service.js';
 import { writeJson, readOptionalInteger } from '../http-utils.js';
 
 export async function handleAlertsRecent(
@@ -28,5 +28,17 @@ export async function handleAlertsStatus(
     runtime.repositories.audit,
     process.env,
   );
+  writeJson(response, 200, body);
+}
+
+export async function handleAlertSignalQuality(
+  _request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+): Promise<void> {
+  const body = await getAlertSignalQuality({
+    picks: runtime.repositories.picks,
+    settlements: runtime.repositories.settlements,
+  });
   writeJson(response, 200, body);
 }
