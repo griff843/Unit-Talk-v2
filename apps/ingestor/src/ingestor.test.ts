@@ -1339,6 +1339,64 @@ test('ingestLeague does not create player participants for home away market keys
   assert.equal(resolvedPlayers[0]?.display_name, 'Jalen Brunson');
 });
 
+test('ingestLeague persists game-line ML offers with -home/-away market keys', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    skipResults: true,
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              ...createSgoApiEvent(),
+              odds: {
+                market: {
+                  'points-home-game-ml-home': {
+                    line: null,
+                    odds: -140,
+                  },
+                  'points-home-game-ml-away': {
+                    line: null,
+                    odds: 120,
+                  },
+                  'points-home-game-sp-home': {
+                    line: -3.5,
+                    odds: -110,
+                  },
+                  'points-home-game-sp-away': {
+                    line: -3.5,
+                    odds: -110,
+                  },
+                },
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+  });
+
+  const offers = await repositories.providerOffers.listByProvider('sgo');
+  // Moneyline and spread both paired: 2 offers
+  assert.equal(offers.length, 2);
+
+  const mlOffer = offers.find((o) => o.provider_market_key.includes('game-ml'));
+  assert.ok(mlOffer, 'moneyline offer should be stored');
+  assert.equal(mlOffer.over_odds, -140);
+  assert.equal(mlOffer.under_odds, 120);
+  assert.equal(mlOffer.provider_participant_id, null);
+
+  const spOffer = offers.find((o) => o.provider_market_key.includes('game-sp'));
+  assert.ok(spOffer, 'spread offer should be stored');
+  assert.equal(spOffer.line, -3.5);
+  assert.equal(spOffer.over_odds, -110);
+  assert.equal(spOffer.under_odds, -110);
+});
+
 test('InMemoryReferenceDataRepository.searchPlayers returns resolved player rows', async () => {
   const repository = new InMemoryReferenceDataRepository(V1_REFERENCE_DATA, {
     participants: [

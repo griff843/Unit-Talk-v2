@@ -90,11 +90,14 @@ function inferParticipantId(marketKey: string) {
   }
 
   const candidate = segments.slice(1, -2).join('-');
-  return candidate && candidate !== 'all' ? candidate : null;
+  if (!candidate || candidate === 'all' || /^(player[-_])?(home|away)$/i.test(candidate)) {
+    return null;
+  }
+  return candidate;
 }
 
 function stripSideSuffix(marketKey: string) {
-  return marketKey.replace(/-(over|under)$/i, '');
+  return marketKey.replace(/-(over|under|home|away)$/i, '');
 }
 
 function parseLineValue(value: number | string | null) {

@@ -681,10 +681,10 @@ function inferSide(marketKey: string | undefined) {
   if (!marketKey) {
     return null;
   }
-  if (marketKey.endsWith('-over')) {
+  if (marketKey.endsWith('-over') || marketKey.endsWith('-home')) {
     return 'over';
   }
-  if (marketKey.endsWith('-under')) {
+  if (marketKey.endsWith('-under') || marketKey.endsWith('-away')) {
     return 'under';
   }
   return null;
@@ -710,7 +710,7 @@ function inferParticipantId(marketKey: string) {
 }
 
 function stripSideSuffix(marketKey: string) {
-  return marketKey.replace(/-(over|under)$/i, '');
+  return marketKey.replace(/-(over|under|home|away)$/i, '');
 }
 
 function formatLine(line: number | string | null) {
