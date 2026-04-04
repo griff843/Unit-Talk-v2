@@ -184,10 +184,12 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
   const previousDryRun = process.env.ALERT_DRY_RUN;
   const previousMinTier = process.env.ALERT_MIN_TIER;
   const previousLookback = process.env.ALERT_LOOKBACK_MINUTES;
+  const previousSystemPicks = process.env.SYSTEM_PICKS_ENABLED;
   process.env.ALERT_AGENT_ENABLED = 'false';
   process.env.ALERT_DRY_RUN = 'false';
   process.env.ALERT_MIN_TIER = 'alert-worthy';
   process.env.ALERT_LOOKBACK_MINUTES = '120';
+  process.env.SYSTEM_PICKS_ENABLED = 'true';
 
   const server = createApiServer({ repositories });
 
@@ -200,8 +202,13 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     const body = (await response.json()) as {
       enabled: boolean;
       dryRun: boolean;
+      systemPicksEnabled: boolean;
+      effectiveMode: 'disabled' | 'dry-run' | 'live';
       minTier: string;
       lookbackMinutes: number;
+      activeSports: string[];
+      systemPickEligibleMarketTypes: string[];
+      systemPickBlockedMarketTypes: string[];
       last1h: { notable: number; alertWorthy: number; notified: number };
       lastDetectedAt: string | null;
     };
@@ -209,8 +216,13 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     assert.equal(response.status, 200);
     assert.equal(body.enabled, false);
     assert.equal(body.dryRun, false);
+    assert.equal(body.systemPicksEnabled, true);
+    assert.equal(body.effectiveMode, 'disabled');
     assert.equal(body.minTier, 'alert-worthy');
     assert.equal(body.lookbackMinutes, 120);
+    assert.deepEqual(body.activeSports, ['NBA', 'NHL', 'MLB']);
+    assert.deepEqual(body.systemPickEligibleMarketTypes, ['moneyline', 'spread', 'total']);
+    assert.deepEqual(body.systemPickBlockedMarketTypes, ['player_prop']);
     assert.equal(body.last1h.notable, 1);
     assert.equal(body.last1h.alertWorthy, 0);
     assert.equal(body.last1h.notified, 0);
@@ -221,6 +233,7 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     restoreEnv('ALERT_DRY_RUN', previousDryRun);
     restoreEnv('ALERT_MIN_TIER', previousMinTier);
     restoreEnv('ALERT_LOOKBACK_MINUTES', previousLookback);
+    restoreEnv('SYSTEM_PICKS_ENABLED', previousSystemPicks);
   }
 });
 
