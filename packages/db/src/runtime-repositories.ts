@@ -1175,6 +1175,54 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
         .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null
     );
   }
+
+  async findExistingCombinations(providerEventIds: string[]): Promise<Set<string>> {
+    const eventIdSet = new Set(providerEventIds);
+    const result = new Set<string>();
+    for (const offer of this.offers.values()) {
+      if (eventIdSet.has(offer.provider_event_id)) {
+        const participantKey = offer.provider_participant_id ?? '';
+        result.add(
+          `${offer.provider_key}:${offer.provider_event_id}:${offer.provider_market_key}:${participantKey}`,
+        );
+      }
+    }
+    return result;
+  }
+
+  async markClosingLines(
+    events: Array<{ providerEventId: string; commenceTime: string }>,
+    snapshotAt: string,
+  ): Promise<number> {
+    let updated = 0;
+    for (const { providerEventId, commenceTime } of events) {
+      if (snapshotAt < commenceTime) continue;
+
+      // Find all pre-commence offers for this event
+      const candidates = Array.from(this.offers.values()).filter(
+        (o) => o.provider_event_id === providerEventId && o.snapshot_at < commenceTime,
+      );
+
+      // Group by combination key, keep latest per group
+      const latestByKey = new Map<string, ProviderOfferRecord>();
+      for (const offer of candidates) {
+        const participantKey = offer.provider_participant_id ?? '';
+        const key = `${offer.provider_key}:${offer.provider_market_key}:${participantKey}`;
+        const existing = latestByKey.get(key);
+        if (!existing || offer.snapshot_at > existing.snapshot_at) {
+          latestByKey.set(key, offer);
+        }
+      }
+
+      for (const offer of latestByKey.values()) {
+        if (!offer.is_closing) {
+          this.offers.set(offer.idempotency_key, { ...offer, is_closing: true });
+          updated += 1;
+        }
+      }
+    }
+    return updated;
+  }
 }
 
 export class InMemoryParticipantRepository implements ParticipantRepository {
@@ -3659,6 +3707,92 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     }
 
     return data;
+  }
+
+  async findExistingCombinations(providerEventIds: string[]): Promise<Set<string>> {
+    const result = new Set<string>();
+    if (providerEventIds.length === 0) return result;
+
+    // Chunk to avoid URL length limits
+    for (let i = 0; i < providerEventIds.length; i += 100) {
+      const chunk = providerEventIds.slice(i, i + 100);
+      const { data, error } = await this.client
+        .from('provider_offers')
+        .select('provider_key, provider_event_id, provider_market_key, provider_participant_id')
+        .in('provider_event_id', chunk);
+
+      if (error) {
+        throw new Error(`Failed to find existing combinations: ${error.message}`);
+      }
+
+      for (const row of data ?? []) {
+        const participantKey = row.provider_participant_id ?? '';
+        result.add(
+          `${row.provider_key}:${row.provider_event_id}:${row.provider_market_key}:${participantKey}`,
+        );
+      }
+    }
+
+    return result;
+  }
+
+  async markClosingLines(
+    events: Array<{ providerEventId: string; commenceTime: string }>,
+    snapshotAt: string,
+  ): Promise<number> {
+    const startedEvents = events.filter((e) => snapshotAt >= e.commenceTime);
+    if (startedEvents.length === 0) return 0;
+
+    let totalUpdated = 0;
+
+    for (const { providerEventId, commenceTime } of startedEvents) {
+      // Fetch all pre-commence offers for this event
+      const { data, error } = await this.client
+        .from('provider_offers')
+        .select('id, provider_key, provider_market_key, provider_participant_id, snapshot_at, is_closing')
+        .eq('provider_event_id', providerEventId)
+        .lt('snapshot_at', commenceTime)
+        .eq('is_closing', false)
+        .order('snapshot_at', { ascending: false });
+
+      if (error) {
+        throw new Error(`Failed to fetch offers for closing line marking: ${error.message}`);
+      }
+
+      const rows = data ?? [];
+      if (rows.length === 0) continue;
+
+      // Find the latest snapshot per combination key
+      const latestIdByKey = new Map<string, string>();
+      for (const row of rows) {
+        const participantKey = row.provider_participant_id ?? '';
+        const key = `${row.provider_key}:${row.provider_market_key}:${participantKey}`;
+        if (!latestIdByKey.has(key)) {
+          // rows are ordered descending — first seen is latest
+          latestIdByKey.set(key, row.id);
+        }
+      }
+
+      const idsToMark = [...latestIdByKey.values()];
+      if (idsToMark.length === 0) continue;
+
+      // Batch update in chunks of 100
+      for (let i = 0; i < idsToMark.length; i += 100) {
+        const chunk = idsToMark.slice(i, i + 100);
+        const { error: updateError, count } = await this.client
+          .from('provider_offers')
+          .update({ is_closing: true })
+          .in('id', chunk);
+
+        if (updateError) {
+          throw new Error(`Failed to mark closing lines: ${updateError.message}`);
+        }
+
+        totalUpdated += count ?? chunk.length;
+      }
+    }
+
+    return totalUpdated;
   }
 }
 

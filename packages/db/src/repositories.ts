@@ -508,6 +508,22 @@ export interface ProviderOfferRepository {
    * An optional limit caps the result set as a safety net (default: 10 000).
    */
   listRecentOffers(since: string, limit?: number): Promise<ProviderOfferRecord[]>;
+  /**
+   * Returns a Set of combination keys in the format
+   * "providerKey:providerEventId:marketKey:participantId" for which at least
+   * one row already exists in provider_offers for the given event IDs.
+   * Used before a batch insert to determine which offers are opening lines.
+   */
+  findExistingCombinations(providerEventIds: string[]): Promise<Set<string>>;
+  /**
+   * For each event in the list where commenceTime <= snapshotAt (game has started),
+   * marks the latest pre-commence snapshot per (providerKey, marketKey, participantId)
+   * as is_closing = true. Returns the total count of rows updated.
+   */
+  markClosingLines(
+    events: Array<{ providerEventId: string; commenceTime: string }>,
+    snapshotAt: string,
+  ): Promise<number>;
 }
 
 export interface ParticipantUpsertInput {
