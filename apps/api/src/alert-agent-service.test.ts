@@ -5,6 +5,7 @@ import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
   classifyMovement,
   detectLineMovement,
+  isAlertSportActive,
   runAlertDetectionPass,
   shouldNotify,
 } from './alert-agent-service.js';
@@ -209,6 +210,54 @@ test('runAlertDetectionPass persists rows and deduplicates on repeated passes', 
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.tier, 'watch');
   assert.equal(rows[0]?.line_change_abs, 1.5);
+});
+
+test('runAlertDetectionPass skips detections for disabled sports like NFL', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-nfl',
+    sportId: 'NFL',
+    eventName: 'Bills vs Chiefs',
+    eventDate: '2026-09-10',
+    status: 'scheduled',
+    metadata: {},
+  });
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-nfl',
+      providerMarketKey: 'spread',
+      line: 2.5,
+      snapshotAt: '2026-09-10T09:00:00.000Z',
+      idempotencyKey: 'evt-nfl:spread:sgo:all:2.5:0900',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-nfl',
+      providerMarketKey: 'spread',
+      line: 6,
+      snapshotAt: '2026-09-10T10:00:00.000Z',
+      idempotencyKey: 'evt-nfl:spread:sgo:all:6.0:1000',
+    }),
+  ]);
+
+  const result = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-09-10T10:30:00.000Z',
+  });
+
+  assert.equal(result.detections, 1);
+  assert.equal(result.persisted, 0);
+  assert.equal(result.disabledSportCount, 1);
+  assert.equal((await repositories.alertDetections.listRecent()).length, 0);
+});
+
+test('isAlertSportActive only enables the current live sports set', () => {
+  assert.equal(isAlertSportActive('NBA'), true);
+  assert.equal(isAlertSportActive('nhl'), true);
+  assert.equal(isAlertSportActive('MLB'), true);
+  assert.equal(isAlertSportActive('NFL'), false);
+  assert.equal(isAlertSportActive('WNBA'), false);
 });
 
 test('runAlertDetectionPass uses earliest baseline within the lookback window', async () => {

@@ -6,6 +6,7 @@ import type {
   ParticipantRepository,
   ParticipantRow,
 } from '@unit-talk/db';
+import { isAlertSportActive } from './alert-agent-service.js';
 
 export interface AlertSubmissionPublisherOptions {
   enabled: boolean;
@@ -76,6 +77,20 @@ export function createAlertSubmissionPublisher(options: AlertSubmissionPublisher
         return;
       }
 
+      if (!isSystemPickEligible(detection, event)) {
+        logger.info(
+          JSON.stringify({
+            service: 'alert-agent',
+            event: 'system_pick_submission.skipped',
+            reason: 'ineligible-alert-signal',
+            detectionId: detection.id,
+            sport: event.sport_id,
+            marketType: detection.market_type,
+          }),
+        );
+        return;
+      }
+
       const participant = detection.participant_id
         ? await options.participants.findById(detection.participant_id)
         : null;
@@ -124,6 +139,17 @@ export function createAlertSubmissionPublisher(options: AlertSubmissionPublisher
       );
     }
   };
+}
+
+export function isSystemPickEligible(
+  detection: Pick<AlertDetectionRecord, 'tier' | 'market_type'>,
+  event: Pick<EventRow, 'sport_id'>,
+) {
+  return (
+    detection.tier === 'alert-worthy' &&
+    isAlertSportActive(event.sport_id) &&
+    detection.market_type !== 'player_prop'
+  );
 }
 
 function buildAlertMarketString(

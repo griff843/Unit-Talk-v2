@@ -13,6 +13,7 @@ import type {
 
 const DEFAULT_LOOKBACK_MINUTES = 60;
 const IDENTITY_BUCKET_MS = 5 * 60 * 1000;
+const ACTIVE_ALERT_SPORTS = new Set(['NBA', 'NHL', 'MLB']);
 
 const tierRank: Record<AlertDetectionTier, number> = {
   watch: 1,
@@ -69,6 +70,7 @@ export interface RunAlertDetectionPassResult {
   unresolvedEvents: number;
   shouldNotifyCount: number;
   persistedSignals: AlertDetectionRecord[];
+  disabledSportCount: number;
 }
 
 export function loadAlertAgentConfig(env: NodeJS.ProcessEnv = process.env): AlertAgentConfig {
@@ -254,6 +256,7 @@ export async function runAlertDetectionPass(
       unresolvedEvents: 0,
       shouldNotifyCount: 0,
       persistedSignals: [],
+      disabledSportCount: 0,
     };
   }
 
@@ -277,6 +280,7 @@ export async function runAlertDetectionPass(
   let belowMinTier = 0;
   let unresolvedEvents = 0;
   let shouldNotifyCount = 0;
+  let disabledSportCount = 0;
 
   for (const group of offerGroups.values()) {
     const currentOffer = selectCurrentOffer(group, nowIso);
@@ -312,6 +316,11 @@ export async function runAlertDetectionPass(
       continue;
     }
 
+    if (!isAlertSportActive(event.sport_id)) {
+      disabledSportCount += 1;
+      continue;
+    }
+
     const idempotencyKey = buildIdempotencyKey(event.id, signal);
     const created = await repositories.alertDetections.saveDetection(
       buildAlertDetectionCreateInput(event.id, signal, idempotencyKey),
@@ -340,6 +349,7 @@ export async function runAlertDetectionPass(
       alertWorthy,
       notable,
       watch,
+      disabledSportCount,
     },
   });
 
@@ -352,7 +362,12 @@ export async function runAlertDetectionPass(
     unresolvedEvents,
     shouldNotifyCount,
     persistedSignals,
+    disabledSportCount,
   };
+}
+
+export function isAlertSportActive(sport: string | null | undefined) {
+  return typeof sport === 'string' && ACTIVE_ALERT_SPORTS.has(sport.trim().toUpperCase());
 }
 
 function buildAlertDetectionCreateInput(

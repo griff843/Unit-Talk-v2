@@ -108,10 +108,6 @@ function asNumberOrNull(v: unknown): number | null {
   return typeof v === 'number' ? v : null;
 }
 
-function asBoolean(v: unknown, fallback = false): boolean {
-  return typeof v === 'boolean' ? v : fallback;
-}
-
 function readJsonObject(v: unknown): Record<string, unknown> | null {
   if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
     return v as Record<string, unknown>;
@@ -129,7 +125,7 @@ function unwrapResponse(raw: unknown): Record<string, unknown> {
   return data !== undefined ? asRecord(data) : top;
 }
 
-function deriveSignals(
+export function deriveSignals(
   snapshot: unknown,
   recap: unknown,
   pipeline?: unknown,
@@ -235,8 +231,8 @@ function deriveSignals(
   let settlementStatus: SignalStatus;
   let settlementDetail: string;
   if (total === 0) {
-    settlementStatus = 'BROKEN';
-    settlementDetail = 'No settled picks';
+    settlementStatus = 'WORKING';
+    settlementDetail = 'No settled picks yet';
   } else if (pendingManualReview > 0 || recentSettlements.some(
     (s) => asRecord(s)['status'] === 'manual_review',
   )) {
@@ -286,6 +282,29 @@ function deriveSignals(
     { signal: 'settlement', status: settlementStatus, detail: settlementDetail },
     { signal: 'stats_propagation', status: statsStatus, detail: statsDetail },
   ];
+}
+
+export function resolveLaneHealth(
+  lane: Record<string, unknown>,
+  kind: 'canary' | 'activation',
+): boolean {
+  const explicit = kind === 'canary'
+    ? lane['graduationReady']
+    : lane['activationHealthy'];
+  if (typeof explicit === 'boolean') {
+    return explicit;
+  }
+
+  const failures =
+    asNumber(lane['recentFailureCount']) +
+    asNumber(lane['recentDeadLetterCount']);
+  const sent = asNumber(lane['recentSentCount']);
+
+  if (kind === 'canary') {
+    return failures === 0 && sent > 0;
+  }
+
+  return failures === 0;
 }
 
 // ── Lifecycle status mapping ─────────────────────────────────────────────────
@@ -718,21 +737,21 @@ export async function fetchDashboardRuntimeData(): Promise<DashboardRuntimeData>
         recentSentCount: asNumber(canary['recentSentCount']),
         recentFailureCount: asNumber(canary['recentFailureCount']),
         latestSentAt: asStringOrNull(canary['latestSentAt']),
-        healthy: asBoolean(canary['graduationReady'], false),
+        healthy: resolveLaneHealth(canary, 'canary'),
       },
       {
         target: asString(bestBets['target'], 'discord:best-bets'),
         recentSentCount: asNumber(bestBets['recentSentCount']),
         recentFailureCount: asNumber(bestBets['recentFailureCount']),
         latestSentAt: asStringOrNull(bestBets['latestSentAt']),
-        healthy: asBoolean(bestBets['activationHealthy'], false),
+        healthy: resolveLaneHealth(bestBets, 'activation'),
       },
       {
         target: asString(traderInsights['target'], 'discord:trader-insights'),
         recentSentCount: asNumber(traderInsights['recentSentCount']),
         recentFailureCount: asNumber(traderInsights['recentFailureCount']),
         latestSentAt: asStringOrNull(traderInsights['latestSentAt']),
-        healthy: asBoolean(traderInsights['activationHealthy'], false),
+        healthy: resolveLaneHealth(traderInsights, 'activation'),
       },
     ],
     providerSummary: {
