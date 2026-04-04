@@ -682,6 +682,7 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
       direction: input.direction,
       market_type: input.marketType,
       tier: input.tier,
+      steam_detected: input.steamDetected ?? false,
       notified: input.notified ?? false,
       notified_at: input.notifiedAt ?? null,
       notified_channels: input.notifiedChannels ?? null,
@@ -751,6 +752,51 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
     );
   }
 
+  async findRecentByEventMarketDirection(
+    eventId: string,
+    marketKey: string,
+    direction: 'up' | 'down',
+    since: string,
+  ): Promise<AlertDetectionRecord[]> {
+    return Array.from(this.records.values())
+      .filter(
+        (record) =>
+          record.event_id === eventId &&
+          record.market_key === marketKey &&
+          record.direction === direction &&
+          record.current_snapshot_at >= since,
+      )
+      .sort((left, right) => right.current_snapshot_at.localeCompare(left.current_snapshot_at));
+  }
+
+  async markSteamDetected(
+    ids: string[],
+    steamBookCount: number,
+    steamWindowMinutes: number,
+  ): Promise<Map<string, AlertDetectionRecord>> {
+    const updated = new Map<string, AlertDetectionRecord>();
+
+    for (const [key, record] of this.records.entries()) {
+      if (!ids.includes(record.id)) {
+        continue;
+      }
+
+      const nextRecord: AlertDetectionRecord = {
+        ...record,
+        steam_detected: true,
+        metadata: toJsonObject({
+          ...asJsonObjectRecord(record.metadata),
+          steamBookCount,
+          steamWindowMinutes,
+        }),
+      };
+      this.records.set(key, nextRecord);
+      updated.set(nextRecord.id, nextRecord);
+    }
+
+    return updated;
+  }
+
   async listRecent(
     limit = 20,
     options: AlertDetectionListOptions = {},
@@ -786,6 +832,7 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
         notable: inWindow.filter((record) => record.tier === 'notable').length,
         alertWorthy: inWindow.filter((record) => record.tier === 'alert-worthy').length,
         notified: inWindow.filter((record) => record.notified === true).length,
+        steamEvents: inWindow.filter((record) => record.steam_detected === true).length,
       },
     };
   }
@@ -2752,6 +2799,7 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
         direction: input.direction,
         market_type: input.marketType,
         tier: input.tier,
+        steam_detected: input.steamDetected ?? false,
         notified: input.notified ?? false,
         notified_at: input.notifiedAt ?? null,
         notified_channels: input.notifiedChannels ?? null,
@@ -2834,6 +2882,65 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     return data?.first_mover_book ?? data?.bookmaker_key ?? null;
   }
 
+  async findRecentByEventMarketDirection(
+    eventId: string,
+    marketKey: string,
+    direction: 'up' | 'down',
+    since: string,
+  ): Promise<AlertDetectionRecord[]> {
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .select('*')
+      .eq('event_id', eventId)
+      .eq('market_key', marketKey)
+      .eq('direction', direction)
+      .gte('current_snapshot_at', since)
+      .order('current_snapshot_at', { ascending: false });
+
+    if (error) {
+      throw new Error(`Failed to load steam candidates: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async markSteamDetected(
+    ids: string[],
+    steamBookCount: number,
+    steamWindowMinutes: number,
+  ): Promise<Map<string, AlertDetectionRecord>> {
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const existing = await this.findByIds(ids);
+
+    for (const id of ids) {
+      const record = existing.get(id);
+      if (!record) {
+        continue;
+      }
+
+      const { error } = await this.client
+        .from('alert_detections')
+        .update({
+          steam_detected: true,
+          metadata: toJsonObject({
+            ...asJsonObjectRecord(record.metadata),
+            steamBookCount,
+            steamWindowMinutes,
+          }),
+        })
+        .eq('id', id);
+
+      if (error) {
+        throw new Error(`Failed to mark steam detection: ${error.message}`);
+      }
+    }
+
+    return this.findByIds(ids);
+  }
+
   async listRecent(
     limit = 20,
     options: AlertDetectionListOptions = {},
@@ -2861,7 +2968,13 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
   }
 
   async getStatusSummary(windowStart: string): Promise<AlertDetectionStatusSummary> {
-    const [lastDetectedResponse, notableResponse, alertWorthyResponse, notifiedResponse] =
+    const [
+      lastDetectedResponse,
+      notableResponse,
+      alertWorthyResponse,
+      notifiedResponse,
+      steamResponse,
+    ] =
       await Promise.all([
         this.client
           .from('alert_detections')
@@ -2884,6 +2997,11 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
           .select('*', { count: 'exact', head: true })
           .eq('notified', true)
           .gt('current_snapshot_at', windowStart),
+        this.client
+          .from('alert_detections')
+          .select('*', { count: 'exact', head: true })
+          .eq('steam_detected', true)
+          .gt('current_snapshot_at', windowStart),
       ]);
 
     if (lastDetectedResponse.error) {
@@ -2902,6 +3020,9 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     if (notifiedResponse.error) {
       throw new Error(`Failed to count notified alert detections: ${notifiedResponse.error.message}`);
     }
+    if (steamResponse.error) {
+      throw new Error(`Failed to count steam alert detections: ${steamResponse.error.message}`);
+    }
 
     return {
       lastDetectedAt: lastDetectedResponse.data?.current_snapshot_at ?? null,
@@ -2909,6 +3030,7 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
         notable: notableResponse.count ?? 0,
         alertWorthy: alertWorthyResponse.count ?? 0,
         notified: notifiedResponse.count ?? 0,
+        steamEvents: steamResponse.count ?? 0,
       },
     };
   }
@@ -5227,6 +5349,12 @@ function createSeededTeamParticipants(): ParticipantRow[] {
 
 function toJsonObject(value: Record<string, unknown>): Json {
   return JSON.parse(JSON.stringify(value)) as Json;
+}
+
+function asJsonObjectRecord(value: Json): Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : {};
 }
 
 function eventParticipantKey(eventId: string, participantId: string) {

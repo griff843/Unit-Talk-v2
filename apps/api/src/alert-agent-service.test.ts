@@ -132,6 +132,8 @@ test('loadAlertThresholds returns the current hardcoded defaults when env is abs
       player_prop: { watch: 0.25, notable: 0.5, alertWorthy: 1.5, velocityElevate: 0.25 },
     },
     velocityWindowMinutes: 15,
+    steamMinBooks: 3,
+    steamWindowMinutes: 10,
   });
 });
 
@@ -501,6 +503,85 @@ test('runAlertDetectionPass records the earliest prior book as first mover for l
   assert.equal(secondPass.persisted, 1);
   assert.equal(secondPass.persistedSignals[0]?.bookmaker_key, 'fanduel');
   assert.equal(secondPass.persistedSignals[0]?.first_mover_book, 'draftkings');
+});
+
+test('runAlertDetectionPass marks same-direction cross-book clusters as steam at threshold', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-steam-1',
+    sportId: 'NBA',
+    eventName: 'Cavs vs Knicks',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-steam-1',
+      providerKey: 'draftkings',
+      providerMarketKey: 'spread',
+      line: 3.5,
+      snapshotAt: '2026-03-28T09:00:00.000Z',
+      idempotencyKey: 'evt-steam-1:spread:draftkings:all:3.5:0900',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-steam-1',
+      providerKey: 'draftkings',
+      providerMarketKey: 'spread',
+      line: 5.5,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'evt-steam-1:spread:draftkings:all:5.5:1000',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-steam-1',
+      providerKey: 'fanduel',
+      providerMarketKey: 'spread',
+      line: 4.0,
+      snapshotAt: '2026-03-28T09:05:00.000Z',
+      idempotencyKey: 'evt-steam-1:spread:fanduel:all:4.0:0905',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-steam-1',
+      providerKey: 'fanduel',
+      providerMarketKey: 'spread',
+      line: 6.0,
+      snapshotAt: '2026-03-28T10:05:00.000Z',
+      idempotencyKey: 'evt-steam-1:spread:fanduel:all:6.0:1005',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-steam-1',
+      providerKey: 'betmgm',
+      providerMarketKey: 'spread',
+      line: 4.5,
+      snapshotAt: '2026-03-28T09:10:00.000Z',
+      idempotencyKey: 'evt-steam-1:spread:betmgm:all:4.5:0910',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-steam-1',
+      providerKey: 'betmgm',
+      providerMarketKey: 'spread',
+      line: 6.5,
+      snapshotAt: '2026-03-28T10:10:00.000Z',
+      idempotencyKey: 'evt-steam-1:spread:betmgm:all:6.5:1010',
+    }),
+  ]);
+
+  const result = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-03-28T10:30:00.000Z',
+  });
+
+  assert.equal(result.persisted, 3);
+  const rows = await repositories.alertDetections.listRecent();
+  assert.equal(rows.length, 3);
+  assert.ok(rows.every((row) => row.steam_detected === true));
+  assert.deepEqual(
+    rows.map((row) => (row.metadata as Record<string, unknown>).steamBookCount),
+    [3, 3, 3],
+  );
 });
 
 test('shouldNotify scopes cooldown by participant identity as well as market tuple', async () => {

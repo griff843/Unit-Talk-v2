@@ -18,6 +18,8 @@ export const SYSTEM_PICK_ELIGIBLE_MARKET_TYPES = ['moneyline', 'spread', 'total'
 export const SYSTEM_PICK_BLOCKED_MARKET_TYPES = ['player_prop'] as const;
 const ACTIVE_ALERT_SPORT_SET: ReadonlySet<string> = new Set(ACTIVE_ALERT_SPORTS);
 const DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES = 15;
+const DEFAULT_ALERT_STEAM_MIN_BOOKS = 3;
+const DEFAULT_ALERT_STEAM_WINDOW_MINUTES = 10;
 
 const tierRank: Record<AlertDetectionTier, number> = {
   watch: 1,
@@ -35,6 +37,8 @@ export interface AlertMarketThresholds {
 export interface AlertThresholdConfig {
   markets: Record<AlertDetectionMarketType, AlertMarketThresholds>;
   velocityWindowMinutes: number;
+  steamMinBooks: number;
+  steamWindowMinutes: number;
 }
 
 const DEFAULT_ALERT_THRESHOLDS: Record<
@@ -138,6 +142,14 @@ export function loadAlertThresholds(
       DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES,
       'ALERT_VELOCITY_WINDOW_MINUTES',
     ),
+    steamMinBooks: normalizePositiveInteger(
+      env.ALERT_STEAM_MIN_BOOKS,
+      DEFAULT_ALERT_STEAM_MIN_BOOKS,
+    ),
+    steamWindowMinutes: normalizePositiveInteger(
+      env.ALERT_STEAM_WINDOW_MINUTES,
+      DEFAULT_ALERT_STEAM_WINDOW_MINUTES,
+    ),
   };
 }
 
@@ -230,6 +242,8 @@ export function classifyMovement(
   thresholdsConfig: AlertThresholdConfig = {
     markets: DEFAULT_ALERT_THRESHOLDS,
     velocityWindowMinutes: DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES,
+    steamMinBooks: DEFAULT_ALERT_STEAM_MIN_BOOKS,
+    steamWindowMinutes: DEFAULT_ALERT_STEAM_WINDOW_MINUTES,
   },
 ): AlertSignal | null {
   const thresholds = thresholdsConfig.markets[detection.marketType];
@@ -399,8 +413,16 @@ export async function runAlertDetectionPass(
       continue;
     }
 
+    const steamUpdated = await markSteamIfNeeded(
+      repositories.alertDetections,
+      created,
+      resolved.thresholds.steamWindowMinutes,
+      resolved.thresholds.steamMinBooks,
+    );
+    const persistedSignal = steamUpdated.get(created.id) ?? created;
+
     persisted += 1;
-    persistedSignals.push(created);
+    persistedSignals.push(persistedSignal);
     if (await shouldNotify(signal, repositories.alertDetections, { eventId: event.id, now: nowIso })) {
       shouldNotifyCount += 1;
     }
@@ -465,6 +487,34 @@ function buildAlertDetectionCreateInput(
     tier: signal.tier,
     metadata: signal.metadata,
   };
+}
+
+async function markSteamIfNeeded(
+  repository: AlertDetectionRepository,
+  created: AlertDetectionRecord,
+  steamWindowMinutes: number,
+  steamMinBooks: number,
+) {
+  const since = new Date(
+    Date.parse(created.current_snapshot_at) - steamWindowMinutes * 60 * 1000,
+  ).toISOString();
+  const candidates = await repository.findRecentByEventMarketDirection(
+    created.event_id,
+    created.market_key,
+    created.direction as 'up' | 'down',
+    since,
+  );
+
+  const uniqueBooks = new Set(candidates.map((candidate) => candidate.bookmaker_key));
+  if (uniqueBooks.size < steamMinBooks) {
+    return new Map<string, AlertDetectionRecord>();
+  }
+
+  return repository.markSteamDetected(
+    candidates.map((candidate) => candidate.id),
+    uniqueBooks.size,
+    steamWindowMinutes,
+  );
 }
 
 function buildIdempotencyKey(eventId: string, signal: AlertSignal) {

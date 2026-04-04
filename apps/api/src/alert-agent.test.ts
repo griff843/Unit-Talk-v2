@@ -218,6 +218,7 @@ test('runAlertNotificationPass writes a system_runs row when runs repo provided'
     direction: 'up',
     market_type: 'spread',
     tier: 'notable',
+    steam_detected: false,
     notified: false,
     notified_at: null,
     notified_channels: null,

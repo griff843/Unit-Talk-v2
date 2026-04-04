@@ -278,6 +278,7 @@ export interface AlertDetectionCreateInput {
   direction: 'up' | 'down';
   marketType: AlertDetectionMarketType;
   tier: AlertDetectionTier;
+  steamDetected?: boolean | undefined;
   notified?: boolean | undefined;
   notifiedAt?: string | null | undefined;
   notifiedChannels?: string[] | null | undefined;
@@ -311,6 +312,7 @@ export interface AlertDetectionStatusSummary {
     notable: number;
     alertWorthy: number;
     notified: number;
+    steamEvents: number;
   };
 }
 
@@ -323,6 +325,17 @@ export interface AlertDetectionRepository {
     marketKey: string,
     since: string,
   ): Promise<string | null>;
+  findRecentByEventMarketDirection(
+    eventId: string,
+    marketKey: string,
+    direction: 'up' | 'down',
+    since: string,
+  ): Promise<AlertDetectionRecord[]>;
+  markSteamDetected(
+    ids: string[],
+    steamBookCount: number,
+    steamWindowMinutes: number,
+  ): Promise<Map<string, AlertDetectionRecord>>;
   listRecent(
     limit?: number | undefined,
     options?: AlertDetectionListOptions | undefined,
