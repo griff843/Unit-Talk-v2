@@ -23,6 +23,7 @@ function makeDetection(
     participant_id: null,
     market_key: 'spread',
     bookmaker_key: 'draftkings',
+    first_mover_book: 'draftkings',
     baseline_snapshot_at: '2026-03-28T10:00:00.000Z',
     current_snapshot_at: '2026-03-28T10:30:00.000Z',
     old_line: 4.5,
@@ -132,6 +133,19 @@ test('buildAlertEmbed — velocity elevated flag shown in field name', () => {
   const velocityField = fields.find((f) => f.name.includes('Velocity'));
   assert.ok(velocityField !== undefined);
   assert.ok(velocityField.name.includes('elevated'));
+});
+
+test('buildAlertEmbed — alert-worthy includes first mover field', () => {
+  const detection = makeDetection({
+    tier: 'alert-worthy',
+    bookmaker_key: 'fanduel',
+    first_mover_book: 'draftkings',
+  });
+  const embed = buildAlertEmbed(detection, 'discord:canary');
+  const fields = embed.fields as Array<{ name: string; value: string }>;
+  const firstMoverField = fields.find((field) => field.name === 'First mover');
+  assert.ok(firstMoverField !== undefined);
+  assert.equal(firstMoverField?.value, 'draftkings');
 });
 
 // ---------------------------------------------------------------------------

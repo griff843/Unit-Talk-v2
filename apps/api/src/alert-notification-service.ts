@@ -95,6 +95,14 @@ export function buildAlertEmbed(
     });
   }
 
+  if (tier === 'alert-worthy') {
+    fields.push({
+      name: 'First mover',
+      value: detection.first_mover_book ?? detection.bookmaker_key,
+      inline: true,
+    });
+  }
+
   return {
     title: `📈 LINE MOVEMENT — ${eventLabel.toUpperCase()}`,
     description: `**${detection.market_key}**: ${detection.old_line} → ${detection.new_line} (${changeLabel})`,
