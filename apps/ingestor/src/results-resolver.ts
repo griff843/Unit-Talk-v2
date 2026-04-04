@@ -23,6 +23,41 @@ export const SGO_MARKET_KEY_TO_STAT_FIELDS: Record<string, string[]> = {
   'pitching-innings-pitched-all-game-ou': ['pitching_inningsPitched'],
 };
 
+/**
+ * Maps SGO provider market keys to canonical market_type_ids.
+ *
+ * This mirrors the `provider_market_aliases` table (provider='sgo') so that
+ * game_results rows are stored with the same key that `pick.market` uses,
+ * enabling the grading-service to match them without a provider-specific join.
+ *
+ * Keep in sync with: provider_market_aliases WHERE provider='sgo'
+ * Related issue: UTV2-384 (auto-settle E2E proof), UTV2-385 (game-line grading schema)
+ */
+export const SGO_MARKET_KEY_TO_CANONICAL_ID: Record<string, string> = {
+  // NBA / NCAAB
+  'points-all-game-ou': 'player_points_ou',
+  'rebounds-all-game-ou': 'player_rebounds_ou',
+  'assists-all-game-ou': 'player_assists_ou',
+  'steals-all-game-ou': 'player_steals_ou',
+  'blocks-all-game-ou': 'player_blocks_ou',
+  'turnovers-all-game-ou': 'player_turnovers_ou',
+  'threes-all-game-ou': 'player_3pm_ou',
+  'pra-all-game-ou': 'player_pra_ou',
+  'pts-rebs-all-game-ou': 'player_pts_rebs_ou',
+  'pts-asts-all-game-ou': 'player_pts_asts_ou',
+  'rebs-asts-all-game-ou': 'player_rebs_asts_ou',
+  // MLB batting
+  'batting-hits-all-game-ou': 'player_batting_hits_ou',
+  'batting-home-runs-all-game-ou': 'player_batting_home_runs_ou',
+  'batting-rbi-all-game-ou': 'player_batting_rbi_ou',
+  'batting-walks-all-game-ou': 'player_batting_walks_ou',
+  'batting-total-bases-all-game-ou': 'player_batting_total_bases_ou',
+  'batting-strikeouts-all-game-ou': 'player_batting_strikeouts_ou',
+  // MLB pitching
+  'pitching-strikeouts-all-game-ou': 'player_pitching_strikeouts_ou',
+  'pitching-innings-pitched-all-game-ou': 'player_pitching_innings_pitched_ou',
+};
+
 export interface ResultsResolutionSummary {
   processedEvents: number;
   completedEvents: number;
@@ -70,10 +105,15 @@ export async function resolveAndInsertResults(
           continue;
         }
 
+        // Resolve to canonical market_type_id so pick.market matches game_results.market_key.
+        // Falls back to the SGO key if no alias is registered (new markets won't block grading data).
+        const canonicalMarketKey =
+          SGO_MARKET_KEY_TO_CANONICAL_ID[scoredMarket.baseMarketKey] ?? scoredMarket.baseMarketKey;
+
         await repositories.gradeResults.insert({
           eventId: event.id,
           participantId: participant.id,
-          marketKey: scoredMarket.baseMarketKey,
+          marketKey: canonicalMarketKey,
           actualValue: scoredMarket.score,
           source: 'sgo',
           sourcedAt: now,

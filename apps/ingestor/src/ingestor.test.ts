@@ -1500,8 +1500,9 @@ test('ingestLeague extracts scored markets from finalized event odds', async () 
   assert.equal(summary.resultsEventsCount, 1);
   assert.ok(results.length > 0, 'at least one grade result should be inserted');
 
-  const pointsRow = results.find((r) => r.market_key === 'points-all-game-ou');
-  assert.ok(pointsRow, 'grade result for points-all-game-ou should exist');
+  // results-resolver now stores canonical market_type_id (matches pick.market) not raw SGO key
+  const pointsRow = results.find((r) => r.market_key === 'player_points_ou');
+  assert.ok(pointsRow, 'grade result for player_points_ou should exist (canonical ID, not SGO key)');
   assert.equal(pointsRow.actual_value, 28);
 });
 
@@ -1919,7 +1920,7 @@ test('ingestOddsApiLeague: started event marks latest pre-commence snapshot as i
   const _preGameSnapshot = '2026-04-04T17:00:00.000Z';
   const startedEvent = {
     ...ODDS_API_MLB_EVENT,
-    commence_time: '2026-04-04T16:00:00.000Z', // game already started
+    commence_time: '2020-01-01T16:00:00.000Z', // clearly in the past — game already started
   };
 
   await ingestOddsApiLeague({
