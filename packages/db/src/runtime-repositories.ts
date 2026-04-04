@@ -670,6 +670,7 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
       participant_id: input.participantId ?? null,
       market_key: input.marketKey,
       bookmaker_key: input.bookmakerKey,
+      first_mover_book: input.firstMoverBook ?? input.bookmakerKey,
       baseline_snapshot_at: input.baselineSnapshotAt,
       current_snapshot_at: input.currentSnapshotAt,
       old_line: input.oldLine,
@@ -724,6 +725,30 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
     }
 
     return result;
+  }
+
+  async findFirstMoverBook(
+    eventId: string,
+    marketKey: string,
+    since: string,
+  ): Promise<string | null> {
+    return (
+      Array.from(this.records.values())
+        .filter(
+          (record) =>
+            record.event_id === eventId &&
+            record.market_key === marketKey &&
+            record.current_snapshot_at >= since,
+        )
+        .sort((left, right) => {
+          const detectedOrder = left.current_snapshot_at.localeCompare(right.current_snapshot_at);
+          if (detectedOrder !== 0) {
+            return detectedOrder;
+          }
+
+          return left.created_at.localeCompare(right.created_at);
+        })[0]?.first_mover_book ?? null
+    );
   }
 
   async listRecent(
@@ -2715,6 +2740,7 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
         participant_id: input.participantId ?? null,
         market_key: input.marketKey,
         bookmaker_key: input.bookmakerKey,
+        first_mover_book: input.firstMoverBook ?? input.bookmakerKey,
         baseline_snapshot_at: input.baselineSnapshotAt,
         current_snapshot_at: input.currentSnapshotAt,
         old_line: input.oldLine,
@@ -2783,6 +2809,29 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     }
 
     return new Map((data ?? []).map((record) => [record.id, record]));
+  }
+
+  async findFirstMoverBook(
+    eventId: string,
+    marketKey: string,
+    since: string,
+  ): Promise<string | null> {
+    const { data, error } = await this.client
+      .from('alert_detections')
+      .select('first_mover_book,bookmaker_key')
+      .eq('event_id', eventId)
+      .eq('market_key', marketKey)
+      .gte('current_snapshot_at', since)
+      .order('current_snapshot_at', { ascending: true })
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to load first mover book: ${error.message}`);
+    }
+
+    return data?.first_mover_book ?? data?.bookmaker_key ?? null;
   }
 
   async listRecent(

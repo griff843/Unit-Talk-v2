@@ -326,6 +326,9 @@ export async function runAlertDetectionPass(
   });
 
   const nowIso = resolved.now ?? new Date().toISOString();
+  const firstMoverWindowStartIso = new Date(
+    Date.parse(nowIso) - resolved.lookbackMinutes * 60 * 1000,
+  ).toISOString();
   // Use 2x lookback so baseline offers (within lookbackMinutes of the current
   // offer, not of now) are included. This is still bounded and far better than
   // a full-table scan.
@@ -382,8 +385,14 @@ export async function runAlertDetectionPass(
     }
 
     const idempotencyKey = buildIdempotencyKey(event.id, signal);
+    const firstMoverBook =
+      (await repositories.alertDetections.findFirstMoverBook(
+        event.id,
+        signal.marketKey,
+        firstMoverWindowStartIso,
+      )) ?? signal.bookmakerKey;
     const created = await repositories.alertDetections.saveDetection(
-      buildAlertDetectionCreateInput(event.id, signal, idempotencyKey),
+      buildAlertDetectionCreateInput(event.id, signal, idempotencyKey, firstMoverBook),
     );
     if (!created) {
       duplicateSignals += 1;
@@ -434,6 +443,7 @@ function buildAlertDetectionCreateInput(
   eventId: string,
   signal: AlertSignal,
   idempotencyKey: string,
+  firstMoverBook: string,
 ): AlertDetectionCreateInput {
   return {
     idempotencyKey,
@@ -441,6 +451,7 @@ function buildAlertDetectionCreateInput(
     participantId: signal.participantId,
     marketKey: signal.marketKey,
     bookmakerKey: signal.bookmakerKey,
+    firstMoverBook,
     baselineSnapshotAt: signal.baselineSnapshotAt,
     currentSnapshotAt: signal.currentSnapshotAt,
     oldLine: signal.oldLine,

@@ -206,6 +206,7 @@ test('runAlertNotificationPass writes a system_runs row when runs repo provided'
     participant_id: null,
     market_key: 'spread',
     bookmaker_key: 'draftkings',
+    first_mover_book: 'draftkings',
     baseline_snapshot_at: '2026-03-28T10:00:00.000Z',
     current_snapshot_at: '2026-03-28T10:30:00.000Z',
     old_line: 4.5,

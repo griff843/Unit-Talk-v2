@@ -23,6 +23,7 @@ export type Database = {
           current_snapshot_at: string
           direction: string
           event_id: string
+          first_mover_book: string | null
           id: string
           idempotency_key: string
           line_change: number
@@ -48,6 +49,7 @@ export type Database = {
           current_snapshot_at: string
           direction: string
           event_id: string
+          first_mover_book?: string | null
           id?: string
           idempotency_key: string
           line_change: number
@@ -73,6 +75,7 @@ export type Database = {
           current_snapshot_at?: string
           direction?: string
           event_id?: string
+          first_mover_book?: string | null
           id?: string
           idempotency_key?: string
           line_change?: number
@@ -389,6 +392,50 @@ export type Database = {
           },
         ]
       }
+      events: {
+        Row: {
+          created_at: string
+          event_date: string
+          event_name: string
+          external_id: string | null
+          id: string
+          metadata: Json
+          sport_id: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          event_date: string
+          event_name: string
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          sport_id: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          event_date?: string
+          event_name?: string
+          external_id?: string | null
+          id?: string
+          metadata?: Json
+          sport_id?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "events_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       experiment_ledger: {
         Row: {
           created_at: string
@@ -435,50 +482,6 @@ export type Database = {
             columns: ["model_id"]
             isOneToOne: false
             referencedRelation: "model_registry"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      events: {
-        Row: {
-          created_at: string
-          event_date: string
-          event_name: string
-          external_id: string | null
-          id: string
-          metadata: Json
-          sport_id: string
-          status: string
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          event_date: string
-          event_name: string
-          external_id?: string | null
-          id?: string
-          metadata?: Json
-          sport_id: string
-          status?: string
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          event_date?: string
-          event_name?: string
-          external_id?: string | null
-          id?: string
-          metadata?: Json
-          sport_id?: string
-          status?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "events_sport_id_fkey"
-            columns: ["sport_id"]
-            isOneToOne: false
-            referencedRelation: "sports"
             referencedColumns: ["id"]
           },
         ]
@@ -818,45 +821,6 @@ export type Database = {
         }
         Relationships: []
       }
-      model_registry: {
-        Row: {
-          champion_since: string | null
-          created_at: string
-          id: string
-          market_family: string
-          metadata: Json
-          model_name: string
-          sport: string
-          status: string
-          updated_at: string
-          version: string
-        }
-        Insert: {
-          champion_since?: string | null
-          created_at?: string
-          id?: string
-          market_family: string
-          metadata?: Json
-          model_name: string
-          sport: string
-          status?: string
-          updated_at?: string
-          version: string
-        }
-        Update: {
-          champion_since?: string | null
-          created_at?: string
-          id?: string
-          market_family?: string
-          metadata?: Json
-          model_name?: string
-          sport?: string
-          status?: string
-          updated_at?: string
-          version?: string
-        }
-        Relationships: []
-      }
       model_health_snapshots: {
         Row: {
           alert_level: string
@@ -912,6 +876,45 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      model_registry: {
+        Row: {
+          champion_since: string | null
+          created_at: string
+          id: string
+          market_family: string
+          metadata: Json
+          model_name: string
+          sport: string
+          status: string
+          updated_at: string
+          version: string
+        }
+        Insert: {
+          champion_since?: string | null
+          created_at?: string
+          id?: string
+          market_family: string
+          metadata?: Json
+          model_name: string
+          sport: string
+          status?: string
+          updated_at?: string
+          version: string
+        }
+        Update: {
+          champion_since?: string | null
+          created_at?: string
+          id?: string
+          market_family?: string
+          metadata?: Json
+          model_name?: string
+          sport?: string
+          status?: string
+          updated_at?: string
+          version?: string
+        }
+        Relationships: []
       }
       participant_memberships: {
         Row: {

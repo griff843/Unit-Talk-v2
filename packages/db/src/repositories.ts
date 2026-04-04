@@ -266,6 +266,7 @@ export interface AlertDetectionCreateInput {
   participantId?: string | null | undefined;
   marketKey: string;
   bookmakerKey: string;
+  firstMoverBook?: string | null | undefined;
   baselineSnapshotAt: string;
   currentSnapshotAt: string;
   oldLine: number;
@@ -317,6 +318,11 @@ export interface AlertDetectionRepository {
   saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null>;
   findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null>;
   findByIds(ids: string[]): Promise<Map<string, AlertDetectionRecord>>;
+  findFirstMoverBook(
+    eventId: string,
+    marketKey: string,
+    since: string,
+  ): Promise<string | null>;
   listRecent(
     limit?: number | undefined,
     options?: AlertDetectionListOptions | undefined,

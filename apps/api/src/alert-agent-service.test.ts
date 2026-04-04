@@ -271,6 +271,7 @@ test('runAlertDetectionPass persists rows and deduplicates on repeated passes', 
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.tier, 'watch');
   assert.equal(rows[0]?.line_change_abs, 1.5);
+  assert.equal(rows[0]?.first_mover_book, 'sgo');
 });
 
 test('runAlertDetectionPass skips detections for disabled sports like NFL', async () => {
@@ -429,6 +430,77 @@ test('runAlertDetectionPass persists separate signals for distinct bookmaker tup
     rows.map((row) => row.bookmaker_key).sort(),
     ['draftkings', 'fanduel'],
   );
+  assert.equal(rows.find((row) => row.bookmaker_key === 'draftkings')?.first_mover_book, 'draftkings');
+  assert.equal(rows.find((row) => row.bookmaker_key === 'fanduel')?.first_mover_book, 'draftkings');
+});
+
+test('runAlertDetectionPass records the earliest prior book as first mover for later detections', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-4',
+    sportId: 'NBA',
+    eventName: 'Suns vs Warriors',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {},
+  });
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-4',
+      providerKey: 'draftkings',
+      providerMarketKey: 'spread',
+      line: 3.5,
+      snapshotAt: '2026-03-28T09:00:00.000Z',
+      idempotencyKey: 'evt-4:spread:draftkings:all:3.5:0900',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-4',
+      providerKey: 'draftkings',
+      providerMarketKey: 'spread',
+      line: 6.0,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'evt-4:spread:draftkings:all:6.0:1000',
+    }),
+  ]);
+
+  const firstPass = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-03-28T10:30:00.000Z',
+  });
+  assert.equal(firstPass.persisted, 1);
+  assert.equal(firstPass.persistedSignals[0]?.first_mover_book, 'draftkings');
+
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-4',
+      providerKey: 'fanduel',
+      providerMarketKey: 'spread',
+      line: 4.0,
+      snapshotAt: '2026-03-28T10:05:00.000Z',
+      idempotencyKey: 'evt-4:spread:fanduel:all:4.0:1005',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-4',
+      providerKey: 'fanduel',
+      providerMarketKey: 'spread',
+      line: 6.5,
+      snapshotAt: '2026-03-28T10:20:00.000Z',
+      idempotencyKey: 'evt-4:spread:fanduel:all:6.5:1020',
+    }),
+  ]);
+
+  const secondPass = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-03-28T10:30:00.000Z',
+  });
+
+  assert.equal(secondPass.persisted, 1);
+  assert.equal(secondPass.persistedSignals[0]?.bookmaker_key, 'fanduel');
+  assert.equal(secondPass.persistedSignals[0]?.first_mover_book, 'draftkings');
 });
 
 test('shouldNotify scopes cooldown by participant identity as well as market tuple', async () => {
