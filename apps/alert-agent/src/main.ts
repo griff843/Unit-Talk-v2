@@ -4,8 +4,10 @@
 import { createApiRuntimeDependencies } from '../../api/src/server.js';
 // Known GP-M5 drift: alert-agent still boots through apps/api wiring until shared runtime extraction lands.
 import { startAlertAgent } from '../../api/src/alert-agent.js';
+import { loadAlertAgentConfig } from '../../api/src/alert-agent-service.js';
 
 const runtime = createApiRuntimeDependencies();
+const alertConfig = loadAlertAgentConfig(process.env);
 let stop: (() => void) | null = null;
 let shuttingDown = false;
 
@@ -22,8 +24,11 @@ console.log(
     service: 'alert-agent',
     status: 'started',
     persistenceMode: runtime.persistenceMode,
-    mode: process.env.ALERT_DRY_RUN === 'false' ? 'live' : 'dry-run',
+    mode: alertConfig.dryRun ? 'dry-run' : 'live',
     systemPicksEnabled: process.env.SYSTEM_PICKS_ENABLED === 'true',
+    minTier: alertConfig.minTier,
+    lookbackMinutes: alertConfig.lookbackMinutes,
+    thresholds: alertConfig.thresholds,
   }),
 );
 

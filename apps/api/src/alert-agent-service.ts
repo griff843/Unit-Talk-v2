@@ -17,6 +17,7 @@ export const ACTIVE_ALERT_SPORTS = ['NBA', 'NHL', 'MLB'] as const;
 export const SYSTEM_PICK_ELIGIBLE_MARKET_TYPES = ['moneyline', 'spread', 'total'] as const;
 export const SYSTEM_PICK_BLOCKED_MARKET_TYPES = ['player_prop'] as const;
 const ACTIVE_ALERT_SPORT_SET: ReadonlySet<string> = new Set(ACTIVE_ALERT_SPORTS);
+const DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES = 15;
 
 const tierRank: Record<AlertDetectionTier, number> = {
   watch: 1,
@@ -24,9 +25,21 @@ const tierRank: Record<AlertDetectionTier, number> = {
   'alert-worthy': 3,
 };
 
-const tierThresholds: Record<
+export interface AlertMarketThresholds {
+  watch: number;
+  notable: number;
+  alertWorthy: number;
+  velocityElevate: number;
+}
+
+export interface AlertThresholdConfig {
+  markets: Record<AlertDetectionMarketType, AlertMarketThresholds>;
+  velocityWindowMinutes: number;
+}
+
+const DEFAULT_ALERT_THRESHOLDS: Record<
   AlertDetectionMarketType,
-  { watch: number; notable: number; alertWorthy: number; velocityElevate: number }
+  AlertMarketThresholds
 > = {
   spread: { watch: 0.5, notable: 2.0, alertWorthy: 3.5, velocityElevate: 0.5 },
   total: { watch: 0.5, notable: 1.5, alertWorthy: 3.0, velocityElevate: 0.5 },
@@ -61,6 +74,7 @@ export interface AlertAgentConfig {
   lookbackMinutes: number;
   dryRun: boolean;
   minTier: AlertDetectionTier;
+  thresholds: AlertThresholdConfig;
   now?: string;
 }
 
@@ -85,6 +99,45 @@ export function loadAlertAgentConfig(env: NodeJS.ProcessEnv = process.env): Aler
     ),
     dryRun: env.ALERT_DRY_RUN !== 'false',
     minTier: normalizeTier(env.ALERT_MIN_TIER),
+    thresholds: loadAlertThresholds(env),
+  };
+}
+
+export function loadAlertThresholds(
+  env: NodeJS.ProcessEnv = process.env,
+): AlertThresholdConfig {
+  return {
+    markets: {
+      spread: {
+        watch: normalizePositiveNumber(env.ALERT_THRESHOLD_SPREAD_WATCH, DEFAULT_ALERT_THRESHOLDS.spread.watch, 'ALERT_THRESHOLD_SPREAD_WATCH'),
+        notable: normalizePositiveNumber(env.ALERT_THRESHOLD_SPREAD_NOTABLE, DEFAULT_ALERT_THRESHOLDS.spread.notable, 'ALERT_THRESHOLD_SPREAD_NOTABLE'),
+        alertWorthy: normalizePositiveNumber(env.ALERT_THRESHOLD_SPREAD_ALERT_WORTHY, DEFAULT_ALERT_THRESHOLDS.spread.alertWorthy, 'ALERT_THRESHOLD_SPREAD_ALERT_WORTHY'),
+        velocityElevate: normalizePositiveNumber(env.ALERT_THRESHOLD_SPREAD_VELOCITY, DEFAULT_ALERT_THRESHOLDS.spread.velocityElevate, 'ALERT_THRESHOLD_SPREAD_VELOCITY'),
+      },
+      total: {
+        watch: normalizePositiveNumber(env.ALERT_THRESHOLD_TOTAL_WATCH, DEFAULT_ALERT_THRESHOLDS.total.watch, 'ALERT_THRESHOLD_TOTAL_WATCH'),
+        notable: normalizePositiveNumber(env.ALERT_THRESHOLD_TOTAL_NOTABLE, DEFAULT_ALERT_THRESHOLDS.total.notable, 'ALERT_THRESHOLD_TOTAL_NOTABLE'),
+        alertWorthy: normalizePositiveNumber(env.ALERT_THRESHOLD_TOTAL_ALERT_WORTHY, DEFAULT_ALERT_THRESHOLDS.total.alertWorthy, 'ALERT_THRESHOLD_TOTAL_ALERT_WORTHY'),
+        velocityElevate: normalizePositiveNumber(env.ALERT_THRESHOLD_TOTAL_VELOCITY, DEFAULT_ALERT_THRESHOLDS.total.velocityElevate, 'ALERT_THRESHOLD_TOTAL_VELOCITY'),
+      },
+      moneyline: {
+        watch: normalizePositiveNumber(env.ALERT_THRESHOLD_ML_WATCH, DEFAULT_ALERT_THRESHOLDS.moneyline.watch, 'ALERT_THRESHOLD_ML_WATCH'),
+        notable: normalizePositiveNumber(env.ALERT_THRESHOLD_ML_NOTABLE, DEFAULT_ALERT_THRESHOLDS.moneyline.notable, 'ALERT_THRESHOLD_ML_NOTABLE'),
+        alertWorthy: normalizePositiveNumber(env.ALERT_THRESHOLD_ML_ALERT_WORTHY, DEFAULT_ALERT_THRESHOLDS.moneyline.alertWorthy, 'ALERT_THRESHOLD_ML_ALERT_WORTHY'),
+        velocityElevate: normalizePositiveNumber(env.ALERT_THRESHOLD_ML_VELOCITY, DEFAULT_ALERT_THRESHOLDS.moneyline.velocityElevate, 'ALERT_THRESHOLD_ML_VELOCITY'),
+      },
+      player_prop: {
+        watch: normalizePositiveNumber(env.ALERT_THRESHOLD_PROP_WATCH, DEFAULT_ALERT_THRESHOLDS.player_prop.watch, 'ALERT_THRESHOLD_PROP_WATCH'),
+        notable: normalizePositiveNumber(env.ALERT_THRESHOLD_PROP_NOTABLE, DEFAULT_ALERT_THRESHOLDS.player_prop.notable, 'ALERT_THRESHOLD_PROP_NOTABLE'),
+        alertWorthy: normalizePositiveNumber(env.ALERT_THRESHOLD_PROP_ALERT_WORTHY, DEFAULT_ALERT_THRESHOLDS.player_prop.alertWorthy, 'ALERT_THRESHOLD_PROP_ALERT_WORTHY'),
+        velocityElevate: normalizePositiveNumber(env.ALERT_THRESHOLD_PROP_VELOCITY, DEFAULT_ALERT_THRESHOLDS.player_prop.velocityElevate, 'ALERT_THRESHOLD_PROP_VELOCITY'),
+      },
+    },
+    velocityWindowMinutes: normalizePositiveNumber(
+      env.ALERT_VELOCITY_WINDOW_MINUTES,
+      DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES,
+      'ALERT_VELOCITY_WINDOW_MINUTES',
+    ),
   };
 }
 
@@ -174,8 +227,12 @@ export function detectLineMovement(
 
 export function classifyMovement(
   detection: LineMovementDetection,
+  thresholdsConfig: AlertThresholdConfig = {
+    markets: DEFAULT_ALERT_THRESHOLDS,
+    velocityWindowMinutes: DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES,
+  },
 ): AlertSignal | null {
-  const thresholds = tierThresholds[detection.marketType];
+  const thresholds = thresholdsConfig.markets[detection.marketType];
   let tier: AlertDetectionTier | null = null;
 
   if (detection.lineChangeAbs >= thresholds.alertWorthy) {
@@ -192,7 +249,7 @@ export function classifyMovement(
 
   const velocityElevated =
     tier === 'notable' &&
-    detection.timeElapsedMinutes <= 15 &&
+    detection.timeElapsedMinutes <= thresholdsConfig.velocityWindowMinutes &&
     detection.lineChangeAbs >= thresholds.velocityElevate;
 
   return {
@@ -301,7 +358,7 @@ export async function runAlertDetectionPass(
       continue;
     }
 
-    const signal = classifyMovement(detection);
+    const signal = classifyMovement(detection, resolved.thresholds);
     if (!signal) {
       continue;
     }
@@ -541,6 +598,30 @@ function normalizePositiveInteger(rawValue: string | number | undefined, fallbac
 
   const parsed = Number.parseInt(rawValue, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function normalizePositiveNumber(
+  rawValue: string | number | undefined,
+  fallback: number,
+  envName: string,
+) {
+  if (typeof rawValue === 'number') {
+    if (Number.isFinite(rawValue) && rawValue > 0) {
+      return rawValue;
+    }
+    throw new Error(`${envName} must be a positive number`);
+  }
+
+  if (typeof rawValue !== 'string' || rawValue.trim().length === 0) {
+    return fallback;
+  }
+
+  const parsed = Number(rawValue);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`${envName} must be a positive number`);
+  }
+
+  return parsed;
 }
 
 function normalizeTier(rawValue: string | undefined): AlertDetectionTier {
