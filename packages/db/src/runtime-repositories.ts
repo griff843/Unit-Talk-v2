@@ -1345,6 +1345,13 @@ export class InMemoryEventRepository implements EventRepository {
       )
       .sort((left, right) => left.event_date.localeCompare(right.event_date));
   }
+
+  async listByName(eventName: string): Promise<EventRow[]> {
+    const normalized = eventName.trim().toLowerCase();
+    return Array.from(this.events.values()).filter(
+      (row) => row.event_name.trim().toLowerCase() === normalized,
+    );
+  }
 }
 
 export class InMemoryEventParticipantRepository implements EventParticipantRepository {
@@ -4043,6 +4050,19 @@ export class DatabaseEventRepository implements EventRepository {
     const { data, error } = await query.order('event_date', { ascending: true });
     if (error) {
       throw new Error(`Failed to list upcoming events: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listByName(eventName: string): Promise<EventRow[]> {
+    const { data, error } = await this.client
+      .from('events')
+      .select('*')
+      .ilike('event_name', eventName.trim());
+
+    if (error) {
+      throw new Error(`Failed to list events by name: ${error.message}`);
     }
 
     return data ?? [];

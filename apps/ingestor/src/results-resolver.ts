@@ -24,7 +24,26 @@ export const SGO_MARKET_KEY_TO_STAT_FIELDS: Record<string, string[]> = {
 };
 
 /**
- * Maps SGO provider market keys to canonical market_type_ids.
+ * Maps SGO provider market keys to canonical market_type_ids for game-line markets
+ * (where providerParticipantId === null).
+ *
+ * These must be distinct from player-prop canonical IDs even when the baseMarketKey
+ * is the same (e.g. both a player points O/U and a game total normalize to
+ * 'points-all-game-ou' — the game-line version maps to 'game_total_ou').
+ *
+ * Related issue: UTV2-385 (game-line grading schema)
+ */
+export const SGO_GAME_LINE_CANONICAL_ID: Record<string, string> = {
+  // Game totals — score = total combined points; grade with O/U logic
+  'points-all-game-ou': 'game_total_ou',
+  // Moneyline and spread — score format TBD (see PROVIDER_KNOWLEDGE_BASE.md §4)
+  // Stored with raw SGO key until score format is confirmed for grading
+  // 'points-all-game-ml': 'game_ml',
+  // 'points-all-game-sp': 'game_spread',
+};
+
+/**
+ * Maps SGO provider market keys to canonical market_type_ids for player-prop markets.
  *
  * This mirrors the `provider_market_aliases` table (provider='sgo') so that
  * game_results rows are stored with the same key that `pick.market` uses,
@@ -91,9 +110,20 @@ export async function resolveAndInsertResults(
       const now = new Date().toISOString();
 
       for (const scoredMarket of eventResult.scoredMarkets) {
-        // Game-level markets (null providerParticipantId) require schema work tracked separately
         if (scoredMarket.providerParticipantId === null) {
-          summary.skippedResults += 1;
+          // Game-level market (ML, spread, game total) — no participant FK
+          const canonicalMarketKey =
+            SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ?? scoredMarket.baseMarketKey;
+
+          await repositories.gradeResults.insert({
+            eventId: event.id,
+            participantId: null,
+            marketKey: canonicalMarketKey,
+            actualValue: scoredMarket.score,
+            source: 'sgo',
+            sourcedAt: now,
+          });
+          summary.insertedResults += 1;
           continue;
         }
 

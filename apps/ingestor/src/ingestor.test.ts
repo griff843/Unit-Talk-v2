@@ -1259,6 +1259,114 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
   assert.ok(summary.skippedResults > 0);
 });
 
+test('resolveAndInsertResults inserts game-line result with null participant_id', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const event = createResolvedEvent({
+    status: {
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+  });
+  await resolveSgoEntities([event], repositories);
+
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-entity-1',
+        status: {
+          started: true,
+          completed: true,
+          cancelled: false,
+          ended: true,
+          live: false,
+          delayed: false,
+          finalized: true,
+          oddsAvailable: false,
+        },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-all-game-ou-over',
+            baseMarketKey: 'points-all-game-ou',
+            providerParticipantId: null,
+            score: 227,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+  );
+
+  assert.equal(summary.insertedResults, 1);
+  assert.equal(summary.skippedResults, 0);
+
+  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  assert.equal(results.length, 1);
+  assert.equal(results[0]?.participant_id, null);
+  assert.equal(results[0]?.market_key, 'game_total_ou');
+  assert.equal(results[0]?.actual_value, 227);
+});
+
+test('resolveAndInsertResults deduplicates game-line results (idempotent for null participant)', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const event = createResolvedEvent({
+    status: {
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+  });
+  await resolveSgoEntities([event], repositories);
+
+  const gameTotalMarket = {
+    oddId: 'points-all-game-ou-over',
+    baseMarketKey: 'points-all-game-ou',
+    providerParticipantId: null as null,
+    score: 227,
+    scoringSupported: true,
+  };
+  const eventResult = {
+    providerEventId: 'evt-entity-1',
+    status: {
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+    playerStats: [],
+    scoredMarkets: [gameTotalMarket],
+    resolvedEvent: null as null,
+  };
+
+  await resolveAndInsertResults([eventResult], repositories);
+  await resolveAndInsertResults([eventResult], repositories);
+
+  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  // Should still be exactly 1 row — deduplication by (event, null, market_key)
+  assert.equal(results.length, 1);
+});
+
 test('ingestLeague can skip results phase without breaking offer/entity ingest', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const summary = await ingestLeague('NBA', 'test-key', repositories, {
