@@ -7,7 +7,9 @@
 
 ## Last Updated
 
-2026-04-04 — **UTV2-385 shipped (game-line results).** Migration `202604040003` adds partial unique index for null-participant game_results. `results-resolver.ts` no longer skips game-line markets — ML/spread/totals now write to DB with null participant_id. `EventRepository.listByName()` added. Grading service handles `game_total_ou` picks end-to-end via event-name resolution. ML/spread grading deferred pending SGO score format confirmation. 188 tests passing. **T1: migration `202604040003` needs Supabase apply before full grading proof.** UTV2-384 marked Done. Next: UTV2-386 (byBookmaker capture) or UTV2-321 (MLB baseline — backfill data confirmed: 329k offers).
+2026-04-04 — **Full state reconciliation.** Linear queue, repo, and docs aligned as of `bdc237f`. UTV2-386 shipped (per-bookmaker odds capture — `bookmaker_key` column live in Supabase, SGO byBookmaker extraction active, CLV now prefers Pinnacle closing line). UTV2-387 (Smart Form autocomplete) marked Done — fix was in commit `239781c`. All M5 production-readiness closure issues (UTV2-335, 343, 353, 356, 360, 364, 369) moved to Ready for PM assessment. NBA/NFL/NHL baseline models (UTV2-320, 322, 323) moved to Ready alongside active UTV2-321 (MLB, In Progress). Test baseline: `pnpm test` 188 pass, smart-form 87 pass, ingestor 51 pass. All gates green.
+
+2026-04-04 — **UTV2-385 shipped (game-line results).** Migration `202604040003` adds partial unique index for null-participant game_results. `results-resolver.ts` no longer skips game-line markets — ML/spread/totals now write to DB with null participant_id. `EventRepository.listByName()` added. Grading service handles `game_total_ou` picks end-to-end via event-name resolution. ML/spread grading deferred pending SGO score format confirmation. **T1: migration `202604040003` needs Supabase apply before full grading proof.** UTV2-384 marked Done.
 
 2026-04-04 — **SGO Pro trial active (6-day window). Results pipeline rewritten.** SGO Pro trial started; Odds API disabled for trial period. Results pipeline (`results-resolver.ts`) rewritten to use `odds.<oddID>.score` per SGO support recommendation — replaces incorrect `event.results.game` approach. `extractScoredMarkets()` added to sgo-fetcher. 90-day historical backfill running (`scripts/backfill-sgo-history.ts`, 2026-01-04 → 2026-04-03). New Linear issues: UTV2-384 (auto-settle E2E proof), UTV2-385 (game-line grading schema), UTV2-386 (byBookmaker capture). Provider knowledge base documented at `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. All gates green. 47 ingestor tests passing.
 
@@ -26,12 +28,12 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **All pass** — 0 failures. `pnpm test` green as of 2026-04-04 (main `c68e124`). 47 ingestor tests. All gates green. |
+| Tests | **All pass** — 0 failures. `pnpm test` 188 pass (main `bdc237f`). Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **SGO Pro trial (6-day window, 2026-04-04).** All GP/SG/CS/DS milestones Done. Active: UTV2-384 (auto-settle E2E proof), UTV2-321 (MLB baseline, awaiting backfill data). Phase 7 awaiting PM approval. |
-| Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill running (90 days). Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. |
-| Roadmap | Next: UTV2-384 (auto-settle proof) → UTV2-385 (game-line grading schema) → UTV2-386 (byBookmaker capture) → UTV2-321 (MLB baseline). |
+| Milestone | **SGO Pro trial (6-day window, 2026-04-04).** UTV2-384/385/386 Done. UTV2-321 (MLB baseline) In Progress. All M5 production-readiness closure issues now Ready for assessment. Phase 7 awaiting PM approval. |
+| Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill complete: 329k provider_offers rows (2026-01-05 → 2026-04-04). Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) now captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. |
+| Roadmap | Active: UTV2-321 (MLB baseline, lane:codex). Ready: UTV2-320/322/323 (NBA/NFL/NHL baselines), UTV2-388 (Smart Form catalog expansion), M5 production-readiness closure batch. Phase 7 (Syndicate Lane) awaiting PM approval. |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
