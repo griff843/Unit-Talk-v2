@@ -40,17 +40,23 @@ export function buildParticipantSearchUrl(
     return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
   }
 
+  // If no eventId, fall back to the canonical participants search which queries
+  // our participants table directly — no event context needed.
+  if (!sportOrOptions.eventId?.trim()) {
+    const params = new URLSearchParams({ q: query.trim() });
+    if (sportOrOptions.sport?.trim()) params.set('sport', sportOrOptions.sport.trim());
+    const endpoint = participantType === 'player' ? 'players' : 'teams';
+    return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
+  }
+
   const params = new URLSearchParams({
     participantType,
     query: query.trim(),
     sport: sportOrOptions.sport?.trim() ?? '',
-    eventId: sportOrOptions.eventId?.trim() ?? '',
+    eventId: sportOrOptions.eventId.trim(),
   });
   if (params.get('sport') === '') {
     params.delete('sport');
-  }
-  if (params.get('eventId') === '') {
-    params.delete('eventId');
   }
 
   return `${API_BASE_URL}/api/operator/participants?${params.toString()}`;
