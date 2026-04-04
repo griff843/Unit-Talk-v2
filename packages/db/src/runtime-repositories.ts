@@ -3593,7 +3593,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         existingKeys.add(row.idempotency_key);
       }
     }
-    const rows = offers.map(mapProviderOfferInsertToRow);
+    // Deduplicate by idempotency_key before upsert — includeAltLine=true can produce
+    // multiple entries with the same key in one batch, which Postgres rejects.
+    const deduped = [...new Map(offers.map((o) => [o.idempotencyKey, o])).values()];
+    const rows = deduped.map(mapProviderOfferInsertToRow);
 
     const { error } = await this.client
       .from('provider_offers')
@@ -4054,33 +4057,22 @@ export class DatabaseEventParticipantRepository implements EventParticipantRepos
   }
 
   async upsert(input: EventParticipantUpsertInput): Promise<EventParticipantRow> {
-    const existing = await this.client
-      .from('event_participants')
-      .select('*')
-      .eq('event_id', input.eventId)
-      .eq('participant_id', input.participantId)
-      .maybeSingle();
-
-    if (existing.error) {
-      throw new Error(`Failed to load event participant: ${existing.error.message}`);
-    }
-    if (existing.data) {
-      return existing.data;
-    }
-
     const { data, error } = await this.client
       .from('event_participants')
-      .insert({
-        event_id: input.eventId,
-        participant_id: input.participantId,
-        role: input.role,
-      })
+      .upsert(
+        {
+          event_id: input.eventId,
+          participant_id: input.participantId,
+          role: input.role,
+        },
+        { onConflict: 'event_id,participant_id', ignoreDuplicates: false },
+      )
       .select()
       .single();
 
     if (error || !data) {
       throw new Error(
-        `Failed to insert event participant link: ${error?.message ?? 'unknown error'}`,
+        `Failed to upsert event participant link: ${error?.message ?? 'unknown error'}`,
       );
     }
 
