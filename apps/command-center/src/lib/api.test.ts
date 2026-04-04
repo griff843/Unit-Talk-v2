@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { mapPickRows } from './api.js';
+import { deriveSignals, mapPickRows, resolveLaneHealth } from './api.js';
 
 test('mapPickRows surfaces smart form truth for submitter, delivery, and intelligence', () => {
   const rows = mapPickRows(
@@ -101,4 +101,85 @@ test('mapPickRows surfaces smart form truth for submitter, delivery, and intelli
       clv: true,
     },
   });
+});
+
+test('deriveSignals treats zero settled picks as working during an active slate', () => {
+  const signals = deriveSignals(
+    {
+      data: {
+        counts: {
+          deadLetterOutbox: 0,
+          failedOutbox: 0,
+          pendingManualReview: 0,
+        },
+        recentPicks: [
+          {
+            id: 'pick-1',
+            promotion_score: 81,
+            promotion_status: 'qualified',
+          },
+        ],
+        recentReceipts: [{ id: 'receipt-1' }],
+        recentSettlements: [],
+      },
+    },
+    {
+      data: {
+        by_result: {},
+        total_picks: 0,
+      },
+    },
+    {
+      data: {
+        counts: {
+          settled: 0,
+        },
+      },
+    },
+  );
+
+  const settlement = signals.find((signal) => signal.signal === 'settlement');
+  assert.deepEqual(settlement, {
+    signal: 'settlement',
+    status: 'WORKING',
+    detail: 'No settled picks yet',
+  });
+});
+
+test('resolveLaneHealth falls back to failure-free activation lanes when snapshot booleans are absent', () => {
+  assert.equal(
+    resolveLaneHealth(
+      {
+        recentSentCount: 0,
+        recentFailureCount: 0,
+        recentDeadLetterCount: 0,
+      },
+      'activation',
+    ),
+    true,
+  );
+
+  assert.equal(
+    resolveLaneHealth(
+      {
+        recentSentCount: 0,
+        recentFailureCount: 1,
+        recentDeadLetterCount: 0,
+      },
+      'activation',
+    ),
+    false,
+  );
+
+  assert.equal(
+    resolveLaneHealth(
+      {
+        recentSentCount: 0,
+        recentFailureCount: 0,
+        recentDeadLetterCount: 0,
+      },
+      'canary',
+    ),
+    false,
+  );
 });

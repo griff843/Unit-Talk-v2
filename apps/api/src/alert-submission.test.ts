@@ -4,6 +4,7 @@ import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
   buildAlertAgentSubmissionPayload,
   createAlertSubmissionPublisher,
+  isSystemPickEligible,
 } from './alert-submission.js';
 import type { AlertDetectionRecord } from '@unit-talk/db';
 
@@ -152,6 +153,98 @@ test('createAlertSubmissionPublisher posts alert-worthy payloads once per proces
   assert.equal(body.source, 'alert-agent');
   assert.equal(body.submittedBy, 'system:alert-agent');
   assert.equal(body.selection, 'New York Knicks');
+});
+
+test('createAlertSubmissionPublisher skips player prop detections for autonomous system picks', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-player-prop-skip',
+    sportId: 'NBA',
+    eventName: 'Knicks vs Celtics',
+    eventDate: '2026-04-03',
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  const requests: Array<{ url: string; init?: unknown }> = [];
+  const publish = createAlertSubmissionPublisher({
+    enabled: true,
+    apiUrl: 'http://127.0.0.1:4000/',
+    events: repositories.events,
+    participants: repositories.participants,
+    fetchImpl: async (url, init) => {
+      requests.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), { status: 201 });
+    },
+    logger: { error() {}, info() {} },
+  });
+
+  await publish(
+    makeDetection({
+      market_type: 'player_prop',
+      event_id: event.id,
+    }),
+  );
+
+  assert.equal(requests.length, 0);
+});
+
+test('createAlertSubmissionPublisher skips disabled sports like NFL', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-nfl-skip',
+    sportId: 'NFL',
+    eventName: 'Bills vs Chiefs',
+    eventDate: '2026-09-10',
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  const requests: Array<{ url: string; init?: unknown }> = [];
+  const publish = createAlertSubmissionPublisher({
+    enabled: true,
+    apiUrl: 'http://127.0.0.1:4000/',
+    events: repositories.events,
+    participants: repositories.participants,
+    fetchImpl: async (url, init) => {
+      requests.push({ url: String(url), init });
+      return new Response(JSON.stringify({ ok: true }), { status: 201 });
+    },
+    logger: { error() {}, info() {} },
+  });
+
+  await publish(
+    makeDetection({
+      market_type: 'moneyline',
+      event_id: event.id,
+    }),
+  );
+
+  assert.equal(requests.length, 0);
+});
+
+test('isSystemPickEligible excludes player props and disabled sports', () => {
+  assert.equal(
+    isSystemPickEligible(
+      { tier: 'alert-worthy', market_type: 'moneyline' },
+      { sport_id: 'NBA' },
+    ),
+    true,
+  );
+  assert.equal(
+    isSystemPickEligible(
+      { tier: 'alert-worthy', market_type: 'player_prop' },
+      { sport_id: 'NBA' },
+    ),
+    false,
+  );
+  assert.equal(
+    isSystemPickEligible(
+      { tier: 'alert-worthy', market_type: 'moneyline' },
+      { sport_id: 'NFL' },
+    ),
+    false,
+  );
 });
 
 function makeDetection(
