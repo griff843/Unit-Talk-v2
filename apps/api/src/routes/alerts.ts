@@ -23,6 +23,10 @@ export async function handleAlertsStatus(
   response: ServerResponse,
   runtime: ApiRuntimeDependencies,
 ): Promise<void> {
-  const body = await getAlertStatus(runtime.repositories.alertDetections, process.env);
+  const body = await getAlertStatus(
+    runtime.repositories.alertDetections,
+    runtime.repositories.audit,
+    process.env,
+  );
   writeJson(response, 200, body);
 }

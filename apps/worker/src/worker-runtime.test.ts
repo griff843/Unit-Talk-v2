@@ -577,6 +577,19 @@ class FakeAuditLogRepository implements AuditLogRepository {
     this.records.push(record);
     return record;
   }
+
+  async listRecentByEntityType(
+    entityType: string,
+    since: string,
+    action?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    return this.records.filter(
+      (record) =>
+        record.entity_type === entityType &&
+        record.created_at >= since &&
+        (action === undefined || record.action === action),
+    );
+  }
 }
 
 function createWorkerTestRepositories(entries: OutboxRecord[]): {

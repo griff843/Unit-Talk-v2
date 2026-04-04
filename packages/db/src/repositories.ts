@@ -316,6 +316,7 @@ export interface AlertDetectionStatusSummary {
 export interface AlertDetectionRepository {
   saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null>;
   findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null>;
+  findByIds(ids: string[]): Promise<Map<string, AlertDetectionRecord>>;
   listRecent(
     limit?: number | undefined,
     options?: AlertDetectionListOptions | undefined,
@@ -567,6 +568,11 @@ export interface AuditLogCreateInput {
 
 export interface AuditLogRepository {
   record(input: AuditLogCreateInput): Promise<AuditLogRow>;
+  listRecentByEntityType(
+    entityType: string,
+    since: string,
+    action?: string | undefined,
+  ): Promise<AuditLogRow[]>;
 }
 
 export interface ModelRegistryCreateInput {

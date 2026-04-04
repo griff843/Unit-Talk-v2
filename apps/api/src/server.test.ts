@@ -176,8 +176,41 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     timeElapsedMinutes: 30,
     direction: 'up',
     marketType: 'total',
-    tier: 'notable',
+      tier: 'notable',
+      metadata: {},
+    });
+  const failedDetection = await repositories.alertDetections.saveDetection({
+    idempotencyKey: 'status-failed',
+    eventId: 'event-2',
+    participantId: null,
+    marketKey: 'spreads/nba',
+    bookmakerKey: 'fanduel',
+    baselineSnapshotAt,
+    currentSnapshotAt,
+    oldLine: 4.5,
+    newLine: 7,
+    lineChange: 2.5,
+    lineChangeAbs: 2.5,
+    velocity: 0.083,
+    timeElapsedMinutes: 30,
+    direction: 'up',
+    marketType: 'spread',
+    tier: 'alert-worthy',
     metadata: {},
+    notified: false,
+  });
+  assert.ok(failedDetection);
+  await repositories.audit.record({
+    entityType: 'alert_notification',
+    entityId: failedDetection.id,
+    entityRef: failedDetection.id,
+    action: 'notify_attempt',
+    actor: 'system:test',
+    payload: {
+      attempt: 3,
+      statusCode: 500,
+      error: 'discord returned 500',
+    },
   });
 
   const previousEnabled = process.env.ALERT_AGENT_ENABLED;
@@ -209,7 +242,7 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
       activeSports: string[];
       systemPickEligibleMarketTypes: string[];
       systemPickBlockedMarketTypes: string[];
-      last1h: { notable: number; alertWorthy: number; notified: number };
+      last1h: { notable: number; alertWorthy: number; notified: number; failedDeliveries: number };
       lastDetectedAt: string | null;
     };
 
@@ -224,8 +257,9 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     assert.deepEqual(body.systemPickEligibleMarketTypes, ['moneyline', 'spread', 'total']);
     assert.deepEqual(body.systemPickBlockedMarketTypes, ['player_prop']);
     assert.equal(body.last1h.notable, 1);
-    assert.equal(body.last1h.alertWorthy, 0);
+    assert.equal(body.last1h.alertWorthy, 1);
     assert.equal(body.last1h.notified, 0);
+    assert.equal(body.last1h.failedDeliveries, 1);
     assert.equal(body.lastDetectedAt, currentSnapshotAt);
   } finally {
     server.close();

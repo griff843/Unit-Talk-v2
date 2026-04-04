@@ -26,6 +26,19 @@ class TrackingAuditLogRepository implements AuditLogRepository {
     this.entries.push(row);
     return row;
   }
+
+  async listRecentByEntityType(
+    entityType: string,
+    since: string,
+    action?: string | undefined,
+  ): Promise<AuditLogRow[]> {
+    return this.entries.filter(
+      (row) =>
+        row.entity_type === entityType &&
+        row.created_at >= since &&
+        (action === undefined || row.action === action),
+    );
+  }
 }
 
 function makeIso(offsetDays: number, base: Date = new Date('2026-03-29T12:00:00Z')): string {
