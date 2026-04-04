@@ -1768,7 +1768,7 @@ test('ingestOddsApiLeague: started event marks latest pre-commence snapshot as i
   const repositories = createInMemoryIngestorRepositoryBundle();
 
   // Simulate a pre-game snapshot
-  const preGameSnapshot = '2026-04-04T17:00:00.000Z';
+  const _preGameSnapshot = '2026-04-04T17:00:00.000Z';
   const startedEvent = {
     ...ODDS_API_MLB_EVENT,
     commence_time: '2026-04-04T16:00:00.000Z', // game already started
