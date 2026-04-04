@@ -11,6 +11,12 @@ export interface SGOFetchOptions {
   startsBefore?: string;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  /**
+   * When true, switches from live-odds mode (oddsAvailable=true) to historical
+   * mode (finalized=true + includeAltLine=true). Use for backfill of completed events.
+   * Historical events have oddsAvailable=false so they are excluded by the live filter.
+   */
+  historical?: boolean;
 }
 
 export interface SGOFetchResult {
@@ -130,7 +136,14 @@ export async function fetchAndPairSGOProps(
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('includeOpposingOdds', 'true');
-  url.searchParams.set('oddsAvailable', 'true');
+  if (options.historical) {
+    // Historical mode: target finalized/completed events with scores.
+    // oddsAvailable=false on historical events, so the live filter excludes them.
+    url.searchParams.set('finalized', 'true');
+    url.searchParams.set('includeAltLine', 'true');
+  } else {
+    url.searchParams.set('oddsAvailable', 'true');
+  }
   url.searchParams.set('startsAfter', options.startsAfter ?? options.snapshotAt);
   url.searchParams.set(
     'startsBefore',

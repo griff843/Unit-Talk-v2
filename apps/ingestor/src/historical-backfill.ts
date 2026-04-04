@@ -54,6 +54,7 @@ export async function runHistoricalBackfill(
         resultsStartsAfter: startsAfter,
         resultsStartsBefore: nextDate,
         resultsLookbackHours: 24,
+        historical: true,
         ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
         ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         ...(options.logger ? { logger: options.logger } : {}),

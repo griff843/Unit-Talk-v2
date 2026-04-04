@@ -24,6 +24,11 @@ export interface IngestLeagueOptions {
     odds?: CircuitBreaker<SGOFetchResult>;
     results?: CircuitBreaker<Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>>;
   };
+  /**
+   * When true, fetches in historical mode: finalized=true + includeAltLine=true.
+   * Use for backfill of completed events. Live ingest should leave this unset.
+   */
+  historical?: boolean;
 }
 
 export interface IngestQuotaSummary {
@@ -109,6 +114,7 @@ export async function ingestLeague(
         ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
         ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         ...(options.sleep ? { sleep: options.sleep } : {}),
+        ...(options.historical ? { historical: true } : {}),
       });
 
     const oddsCb = options.circuitBreakers?.odds ??
