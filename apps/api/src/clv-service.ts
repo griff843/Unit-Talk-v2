@@ -53,12 +53,21 @@ export async function computeAndAttachCLV(
     return null;
   }
 
-  const closingLine = await repositories.providerOffers.findClosingLine({
+  const baseLineCriteria = {
     providerEventId: eventContext.providerEventId,
     providerMarketKey: pick.market,
     providerParticipantId: eventContext.participantExternalId,
     before: eventContext.eventStartTime,
+  };
+
+  // Prefer Pinnacle closing line for highest-quality CLV; fall back to consensus
+  let closingLine = await repositories.providerOffers.findClosingLine({
+    ...baseLineCriteria,
+    bookmakerKey: 'pinnacle',
   });
+  if (!closingLine) {
+    closingLine = await repositories.providerOffers.findClosingLine(baseLineCriteria);
+  }
 
   if (!closingLine) {
     await logMarketMismatchIfNeeded(pick, eventContext, repositories.providerOffers, options.logger);

@@ -343,5 +343,6 @@ export function mapOddsApiOfferToProviderOfferInsert(
     isOpening: !existingCombinations.has(combinationKey),
     isClosing: false, // set post-insert by markClosingLines for started events
     snapshotAt: offer.snapshotAt,
+    bookmakerKey: null,
   };
 }

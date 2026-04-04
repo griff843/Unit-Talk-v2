@@ -150,6 +150,7 @@ async function seedClosingLine(
       isClosing: true,
       snapshotAt: input.snapshotAt ?? '2026-03-26T23:20:00.000Z',
       idempotencyKey: `closing-line:${input.providerEventId}:${input.marketKey}`,
+      bookmakerKey: null,
     },
   ]);
 }

@@ -491,6 +491,7 @@ export interface ClosingLineLookupCriteria {
   providerMarketKey: string;
   providerParticipantId?: string | null | undefined;
   before: string;
+  bookmakerKey?: string | null;
 }
 
 export interface ProviderOfferRepository {

@@ -203,6 +203,7 @@ test('InMemoryProviderOfferRepository.listByProvider can query a third odds-api 
     underOdds: offer.underOdds,
     isOpening: false,
     isClosing: false,
+    bookmakerKey: null,
   }));
 
   await repository.upsertBatch(upsertInputs);
@@ -2112,4 +2113,85 @@ test('mapOddsApiOfferToProviderOfferInsert: null participantId uses empty string
 
   const resultFirst = mapOddsApiOfferToProviderOfferInsert(offer, new Set());
   assert.equal(resultFirst.isOpening, true);
+});
+
+test('normalizeSGOPairedProp passes bookmakerKey through to NormalizedProviderOffer', () => {
+  const base = {
+    providerEventId: 'evt-bk-1',
+    marketKey: 'points-player-42-game-ou',
+    providerParticipantId: 'player-42',
+    sportKey: 'NBA',
+    line: 27.5,
+    overOdds: -120,
+    underOdds: 100,
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+  };
+
+  const withKey = normalizeSGOPairedProp({ ...base, bookmakerKey: 'pinnacle' });
+  assert.ok(withKey);
+  assert.equal(withKey.bookmakerKey, 'pinnacle');
+  assert.ok(withKey.idempotencyKey.includes('pinnacle'), 'idempotencyKey should include bookmakerKey');
+
+  const noKey = normalizeSGOPairedProp({ ...base });
+  assert.ok(noKey);
+  assert.equal(noKey.bookmakerKey, null);
+  assert.ok(!noKey.idempotencyKey.includes('pinnacle'), 'consensus idempotencyKey should not include bookmakerKey');
+
+  // Consensus and Pinnacle rows must have different idempotency keys
+  assert.notEqual(withKey.idempotencyKey, noKey.idempotencyKey);
+});
+
+test('findClosingLine filters by bookmakerKey when specified', async () => {
+  const repository = new InMemoryProviderOfferRepository();
+
+  const base = {
+    providerEventId: 'evt-bk-clv',
+    providerMarketKey: 'points-all-game-ou',
+    providerParticipantId: 'player-42',
+    sportKey: 'NBA',
+    line: 27.5,
+    overOdds: -120,
+    underOdds: 100,
+    devigMode: 'PAIRED' as const,
+    isOpening: false,
+    isClosing: false,
+    snapshotAt: '2026-03-25T23:00:00.000Z',
+  };
+
+  await repository.upsertBatch([
+    { ...base, providerKey: 'sgo', idempotencyKey: 'bk-consensus', bookmakerKey: null },
+    { ...base, providerKey: 'sgo', idempotencyKey: 'bk-pinnacle', bookmakerKey: 'pinnacle', overOdds: -115, underOdds: 105 },
+  ]);
+
+  const before = '2026-03-26T00:00:00.000Z';
+
+  const pinnacle = await repository.findClosingLine({
+    providerEventId: base.providerEventId,
+    providerMarketKey: base.providerMarketKey,
+    providerParticipantId: base.providerParticipantId,
+    before,
+    bookmakerKey: 'pinnacle',
+  });
+  assert.ok(pinnacle);
+  assert.equal(pinnacle.over_odds, -115);
+  assert.equal(pinnacle.bookmaker_key, 'pinnacle');
+
+  const consensus = await repository.findClosingLine({
+    providerEventId: base.providerEventId,
+    providerMarketKey: base.providerMarketKey,
+    providerParticipantId: base.providerParticipantId,
+    before,
+  });
+  assert.ok(consensus);
+  assert.equal(consensus.over_odds, -120);
+  assert.equal(consensus.bookmaker_key, null);
+
+  const missing = await repository.findClosingLine({
+    providerEventId: base.providerEventId,
+    providerMarketKey: base.providerMarketKey,
+    providerParticipantId: base.providerParticipantId,
+    before,
+    bookmakerKey: 'draftkings',
+  });
+  assert.equal(missing, null);
 });

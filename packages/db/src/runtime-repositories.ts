@@ -1170,7 +1170,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             offer.provider_event_id === criteria.providerEventId &&
             offer.provider_market_key === criteria.providerMarketKey &&
             offer.snapshot_at <= criteria.before &&
-            offer.provider_participant_id === providerParticipantId,
+            offer.provider_participant_id === providerParticipantId &&
+            (criteria.bookmakerKey === undefined ||
+              offer.bookmaker_key === criteria.bookmakerKey),
         )
         .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null
     );
@@ -3707,6 +3709,14 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       query = query.eq('provider_participant_id', criteria.providerParticipantId);
     }
 
+    if (criteria.bookmakerKey !== undefined) {
+      if (criteria.bookmakerKey === null) {
+        query = query.is('bookmaker_key', null);
+      } else {
+        query = query.eq('bookmaker_key', criteria.bookmakerKey);
+      }
+    }
+
     const { data, error } = await query
       .order('snapshot_at', { ascending: false })
       .limit(1)
@@ -5674,6 +5684,7 @@ function mapProviderOfferInsertToRecord(
     snapshot_at: offer.snapshotAt,
     idempotency_key: offer.idempotencyKey,
     created_at: createdAt,
+    bookmaker_key: offer.bookmakerKey ?? null,
   };
 }
 
@@ -5692,6 +5703,7 @@ function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
     is_closing: offer.isClosing,
     snapshot_at: offer.snapshotAt,
     idempotency_key: offer.idempotencyKey,
+    bookmaker_key: offer.bookmakerKey ?? null,
   };
 }
 

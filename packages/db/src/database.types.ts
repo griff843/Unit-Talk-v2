@@ -1519,6 +1519,7 @@ export type Database = {
       }
       provider_offers: {
         Row: {
+          bookmaker_key: string | null
           created_at: string
           devig_mode: string
           id: string
@@ -1536,6 +1537,7 @@ export type Database = {
           under_odds: number | null
         }
         Insert: {
+          bookmaker_key?: string | null
           created_at?: string
           devig_mode: string
           id?: string
@@ -1553,6 +1555,7 @@ export type Database = {
           under_odds?: number | null
         }
         Update: {
+          bookmaker_key?: string | null
           created_at?: string
           devig_mode?: string
           id?: string

@@ -381,6 +381,7 @@ function makeOfferInsert(input: {
     isClosing: false,
     snapshotAt: input.snapshotAt,
     idempotencyKey: input.idempotencyKey,
+    bookmakerKey: null,
   };
 }
 

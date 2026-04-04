@@ -448,6 +448,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       isClosing: false,
       snapshotAt: '2026-03-27T15:00:00.000Z',
       idempotencyKey: 'offer-old',
+      bookmakerKey: null,
     },
     {
       providerKey: 'sgo',
@@ -463,6 +464,7 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
       isClosing: false,
       snapshotAt: '2026-03-27T16:00:00.000Z',
       idempotencyKey: 'offer-new',
+      bookmakerKey: null,
     },
   ]);
 
@@ -503,6 +505,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       isClosing: false,
       snapshotAt: '2026-03-27T16:00:00.000Z',
       idempotencyKey: 'offer-bills',
+      bookmakerKey: null,
     },
     {
       providerKey: 'odds-api:pinnacle',
@@ -518,6 +521,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
       isClosing: false,
       snapshotAt: '2026-03-27T16:00:00.000Z',
       idempotencyKey: 'offer-chiefs',
+      bookmakerKey: null,
     },
   ]);
 
@@ -562,6 +566,7 @@ test('processSubmission attaches kellySizing when deviggingResult exists and odd
       isClosing: false,
       snapshotAt: '2026-03-27T16:00:00.000Z',
       idempotencyKey: 'offer-new',
+      bookmakerKey: null,
     },
   ]);
 
@@ -602,6 +607,7 @@ test('processSubmission stores null kellySizing when odds are missing', async ()
       isClosing: false,
       snapshotAt: '2026-03-27T16:00:00.000Z',
       idempotencyKey: 'offer-new',
+      bookmakerKey: null,
     },
   ]);
 
