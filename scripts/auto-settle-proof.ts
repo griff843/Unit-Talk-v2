@@ -38,13 +38,13 @@ async function main() {
   // Latest SGO snapshot
   const poLatest = await db
     .from('provider_offers')
-    .select('snapshot_at,market_key,is_opening,is_closing')
+    .select('snapshot_at,provider_market_key,is_opening,is_closing')
     .eq('provider_key', 'sgo')
     .order('snapshot_at', { ascending: false })
     .limit(3);
   if (poLatest.data?.length) {
     for (const r of poLatest.data) {
-      console.log(`  latest: ${r.market_key} | opening=${r.is_opening} closing=${r.is_closing} | ${r.snapshot_at}`);
+      console.log(`  latest: ${r.provider_market_key} | opening=${r.is_opening} closing=${r.is_closing} | ${r.snapshot_at}`);
     }
   }
 
@@ -62,14 +62,14 @@ async function main() {
     }
   }
 
-  // Auto-settlement records (source = 'sgo')
+  // Auto-settlement records (source = 'grading', backed by SGO game_results)
   const autoSettle = await db
     .from('settlement_records')
     .select('id,pick_id,result,source,created_at')
-    .eq('source', 'sgo')
+    .eq('source', 'grading')
     .order('created_at', { ascending: false })
     .limit(5);
-  console.log(`\nauto-settlement records (source='sgo'): ${autoSettle.data?.length ?? 0}`);
+  console.log(`\nauto-settlement records (source='grading'): ${autoSettle.data?.length ?? 0}`);
   if (autoSettle.data?.length) {
     for (const r of autoSettle.data) {
       console.log(`  ${r.id.slice(0, 8)} | pick=${r.pick_id.slice(0, 8)} | result=${r.result} | ${r.created_at}`);
@@ -98,8 +98,8 @@ async function main() {
   if (!hasSGOOffers) console.log('⚠  No SGO provider_offers yet — backfill still running or ingestor not run');
   if (!hasGameResults) console.log('⚠  No game_results yet — need finalized SGO events with scoringSupported=true');
   if (!hasOpenPicks) console.log('⚠  No open picks to auto-settle');
-  if (hasAutoSettle) console.log('✓  Auto-settlement records with source=sgo FOUND — pipeline working!');
-  if (hasGameResults && !hasAutoSettle) console.log('→  game_results exist but no sgo auto-settlements yet — run POST /api/grading/run');
+  if (hasAutoSettle) console.log('✓  Auto-settlement records with source=grading FOUND — pipeline working!');
+  if (hasGameResults && !hasAutoSettle) console.log('→  game_results exist but no grading auto-settlements yet — run POST /api/grading/run');
   if (hasGameResults && hasOpenPicks) console.log('→  Ready to attempt grading: game_results + open picks both present');
 }
 
