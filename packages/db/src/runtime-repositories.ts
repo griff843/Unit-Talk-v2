@@ -4242,7 +4242,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   async listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
     const { data: events, error: eventsError } = await this.client
       .from('events')
-      .select('id,event_name,event_date,status,sport_id,external_id')
+      .select('id,event_name,event_date,status,sport_id,external_id,metadata')
       .eq('sport_id', sportId)
       .eq('event_date', date)
       .order('event_name');
@@ -4296,6 +4296,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         externalId: (event.external_id as string | null) ?? null,
         eventName: event.event_name as string,
         eventDate: event.event_date as string,
+        startTime: extractStartsAt(event.metadata),
         status: event.status as string,
         sportId: event.sport_id as string,
         leagueId,
@@ -4307,7 +4308,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   async getEventBrowse(eventId: string): Promise<EventBrowseResult | null> {
     const { data: event, error: eventError } = await this.client
       .from('events')
-      .select('id,event_name,event_date,status,sport_id,external_id')
+      .select('id,event_name,event_date,status,sport_id,external_id,metadata')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -4387,6 +4388,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       externalId: (event.external_id as string | null) ?? null,
       eventName: event.event_name as string,
       eventDate: event.event_date as string,
+      startTime: extractStartsAt(event.metadata),
       status: event.status as string,
       sportId: event.sport_id as string,
       leagueId,
@@ -4875,6 +4877,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return (left.line ?? 0) - (right.line ?? 0);
     });
   }
+}
+
+function extractStartsAt(metadata: unknown): string | null {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const raw = (metadata as Record<string, unknown>)['starts_at'];
+    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  }
+  return null;
 }
 
 function splitProviderBookKey(providerKey: string) {

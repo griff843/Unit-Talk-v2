@@ -1876,7 +1876,7 @@ export function BetForm() {
                     <div>
                       <p className="font-medium text-foreground">{formatMatchup(matchup)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatTimestampLabel(matchup.eventDate)} · {matchup.status}
+                        {formatTimestampLabel(matchup.startTime ?? matchup.eventDate)} · {matchup.status}
                       </p>
                     </div>
                     {matchup.leagueId ? (
@@ -1897,7 +1897,7 @@ export function BetForm() {
               <div>
                 <p className="text-sm font-semibold text-foreground">{selectedMatchup.eventName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatTimestampLabel(selectedMatchup.eventDate)}
+                  {formatTimestampLabel(selectedMatchup.startTime ?? selectedMatchup.eventDate)}
                 </p>
               </div>
               <div className="flex items-center gap-2">

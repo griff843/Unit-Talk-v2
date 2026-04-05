@@ -726,6 +726,8 @@ export interface MatchupBrowseResult {
   externalId: string | null;
   eventName: string;
   eventDate: string;
+  /** Full ISO timestamp from events.metadata.starts_at. Null when not yet populated. */
+  startTime: string | null;
   status: string;
   sportId: string;
   leagueId: string | null;
@@ -763,6 +765,8 @@ export interface EventBrowseResult {
   externalId: string | null;
   eventName: string;
   eventDate: string;
+  /** Full ISO timestamp from events.metadata.starts_at. Null when not yet populated. */
+  startTime: string | null;
   status: string;
   sportId: string;
   leagueId: string | null;
