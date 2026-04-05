@@ -119,12 +119,17 @@ import {
   type DatabaseConnectionConfig,
   type UnitTalkSupabaseClient,
 } from './client.js';
+import { derivePickForeignKeyCandidates } from './pick-foreign-keys.js';
 
 function mapPickToRecord(pick: CanonicalPick, idempotencyKey?: string | null): PickRecord {
+  const foreignKeyCandidates = derivePickForeignKeyCandidates(pick);
   return {
     id: pick.id,
     submission_id: pick.submissionId,
     participant_id: null,
+    capper_id: foreignKeyCandidates.capperCandidate,
+    sport_id: foreignKeyCandidates.sportId,
+    market_type_id: foreignKeyCandidates.marketTypeId,
     market: pick.market,
     selection: pick.selection,
     line: pick.line ?? null,
@@ -147,7 +152,7 @@ function mapPickToRecord(pick: CanonicalPick, idempotencyKey?: string | null): P
     metadata: toJsonObject(pick.metadata),
     created_at: pick.createdAt,
     updated_at: pick.createdAt,
-  };
+  } as PickRecord;
 }
 
 function mapLifecycleEventToRecord(event: LifecycleEvent): PickLifecycleRecord {
@@ -160,6 +165,41 @@ function mapLifecycleEventToRecord(event: LifecycleEvent): PickLifecycleRecord {
     reason: event.reason,
     payload: {},
     created_at: event.createdAt,
+  };
+}
+
+async function resolvePickForeignKeys(
+  client: UnitTalkSupabaseClient,
+  pick: CanonicalPick,
+): Promise<{
+  capperId: string | null;
+  sportId: string | null;
+  marketTypeId: string | null;
+}> {
+  const candidates = derivePickForeignKeyCandidates(pick);
+
+  if (!candidates.capperCandidate) {
+    return {
+      capperId: null,
+      sportId: candidates.sportId,
+      marketTypeId: candidates.marketTypeId,
+    };
+  }
+
+  const { data, error } = await client
+    .from('cappers')
+    .select('id')
+    .eq('id', candidates.capperCandidate)
+    .maybeSingle();
+
+  if (error) {
+    throw new Error(`Failed to resolve capper foreign key: ${error.message}`);
+  }
+
+  return {
+    capperId: data?.id ?? null,
+    sportId: candidates.sportId,
+    marketTypeId: candidates.marketTypeId,
   };
 }
 
@@ -1874,6 +1914,10 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
+  private fromUntyped(table: string) {
+    return fromUntyped(this.client, table);
+  }
+
   async saveSubmission(input: SubmissionCreateInput): Promise<SubmissionRecord> {
     const { data, error } = await this.client
       .from('submissions')
@@ -1949,6 +1993,7 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
     const sub = input.submission;
     const evt = input.event;
     const lce = input.lifecycleEvent;
+    const foreignKeys = await resolvePickForeignKeys(this.client, pick);
 
     const { data, error } = await this.client.rpc('process_submission_atomic', {
       p_submission: {
@@ -1980,6 +2025,9 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
         id: pick.id,
         submission_id: pick.submissionId,
         participant_id: null,
+        capper_id: foreignKeys.capperId,
+        sport_id: foreignKeys.sportId,
+        market_type_id: foreignKeys.marketTypeId,
         market: pick.market,
         selection: pick.selection,
         line: pick.line ?? null,
@@ -2055,13 +2103,20 @@ export class DatabasePickRepository implements PickRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
+  private fromUntyped(table: string) {
+    return fromUntyped(this.client, table);
+  }
+
   async savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord> {
-    const { data, error } = await this.client
-      .from('picks')
+    const foreignKeys = await resolvePickForeignKeys(this.client, pick);
+    const { data, error } = await this.fromUntyped('picks')
       .insert({
         id: pick.id,
         submission_id: pick.submissionId,
         participant_id: null,
+        capper_id: foreignKeys.capperId,
+        sport_id: foreignKeys.sportId,
+        market_type_id: foreignKeys.marketTypeId,
         market: pick.market,
         selection: pick.selection,
         line: pick.line ?? null,
@@ -2092,7 +2147,7 @@ export class DatabasePickRepository implements PickRepository {
       throw new Error(`Failed to save pick: ${error?.message ?? 'unknown error'}`);
     }
 
-    return data;
+    return data as PickRecord;
   }
 
   async saveLifecycleEvent(event: LifecycleEvent): Promise<PickLifecycleRecord> {
@@ -5662,23 +5717,31 @@ type MarketTypeRow = {
 };
 
 type UntypedQueryResult = {
-  data: unknown[] | null;
+  data: unknown | null;
   error: { message: string } | null;
 };
 
 type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
-  select(columns: string): UntypedQueryBuilder;
+  select(columns?: string): UntypedQueryBuilder;
+  insert(values: Record<string, unknown> | readonly Record<string, unknown>[]): UntypedQueryBuilder;
+  update(values: Record<string, unknown>): UntypedQueryBuilder;
   eq(column: string, value: unknown): UntypedQueryBuilder;
   in(column: string, values: readonly unknown[]): UntypedQueryBuilder;
   is(column: string, value: unknown): UntypedQueryBuilder;
-  order(column: string): UntypedQueryBuilder;
+  order(column: string, options?: { ascending?: boolean }): UntypedQueryBuilder;
   ilike(column: string, pattern: string): UntypedQueryBuilder;
   limit(count: number): UntypedQueryBuilder;
+  single(): UntypedQueryBuilder;
+  maybeSingle(): UntypedQueryBuilder;
 };
 
 type UntypedSupabaseClient = {
   from(table: string): UntypedQueryBuilder;
 };
+
+function fromUntyped(client: UnitTalkSupabaseClient, table: string) {
+  return (client as unknown as UntypedSupabaseClient).from(table);
+}
 
 function isRecord(value: unknown): value is Record<string, Json | undefined> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
