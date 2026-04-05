@@ -249,8 +249,10 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'platform',
   },
   {
+    // DEPRECATED 2026-04-05: superseded by sport_market_type_availability which adds
+    // active flag, sort_order, and metadata. Migrate consumers and drop in a follow-on migration.
     name: 'sport_market_types',
-    purpose: 'Maps which market types are available per sport.',
+    purpose: 'Maps which market types are available per sport. DEPRECATED — use sport_market_type_availability.',
     owner: 'platform',
   },
   {

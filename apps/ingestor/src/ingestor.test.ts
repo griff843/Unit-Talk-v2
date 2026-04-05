@@ -1863,7 +1863,7 @@ const ODDS_API_MLB_EVENT = {
   id: 'mlb-event-1',
   sport_key: 'baseball_mlb',
   sport_title: 'MLB',
-  commence_time: '2026-04-05T18:00:00.000Z',
+  commence_time: '2026-12-31T18:00:00.000Z',
   home_team: 'Yankees',
   away_team: 'Red Sox',
   bookmakers: [
@@ -2006,7 +2006,7 @@ test('ingestOddsApiLeague: each book is tracked independently for is_opening', a
 
 test('ingestOddsApiLeague: event that has not started has no is_closing rows', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
-  // snapshotAt (now) is before commence_time (2026-04-05)
+  // snapshotAt (now) is before commence_time (2026-12-31)
   await ingestOddsApiLeague({
     apiKey: 'test-key',
     league: 'MLB',

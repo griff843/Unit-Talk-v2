@@ -9,6 +9,7 @@
 ## Table of Contents
 
 1. [SGO (Sports Game Odds)](#1-sgo-sports-game-odds)
+   - [1.13 SGO MCP Server](#113-sgo-mcp-server--in-session-live-api-access)
 2. [The Odds API](#2-the-odds-api)
 3. [Integration Patterns](#3-integration-patterns)
 4. [Discovered Unlocks Log](#4-discovered-unlocks-log)
@@ -245,6 +246,75 @@ The `results` object on an event contains raw stat values (final scores, player 
 
 Use `odds.<oddID>.score` for grading. Use `event.results` for display.
 
+### 1.13 SGO MCP Server — In-Session Live API Access
+
+**Package:** `sports-odds-api-mcp` (npm)  
+**Config:** `.mcp.json` at repo root (gitignored). Do not commit — contains API key.  
+**Env var:** `SPORTS_ODDS_API_KEY_HEADER`
+
+```json
+{
+  "mcpServers": {
+    "sports-game-odds": {
+      "command": "npx",
+      "args": ["-y", "sports-odds-api-mcp@latest"],
+      "env": { "SPORTS_ODDS_API_KEY_HEADER": "<your-api-key>" }
+    }
+  }
+}
+```
+
+**Available MCP tools:**
+
+| Tool | Description |
+|---|---|
+| `get_sports` | Enumerate all sport IDs (e.g. `BASKETBALL`, `HOCKEY`, `FOOTBALL`) |
+| `get_leagues` | All league IDs per sport (e.g. `NBA`, `NHL`, `NFL`) |
+| `get_stats` | All statIDs per sport — use before writing normalizer/alias code |
+| `get_teams` | Teams per league — use to validate `provider_entity_aliases` |
+| `get_players` | Players per league — use to validate player aliases |
+| `get_events` | Full event data with odds, participants, results |
+| `get_usage_account` | Current rate limit consumption across all windows |
+| `search_docs` | Search SGO API documentation in-context |
+| `events_stream` | Live event stream (WebSocket — AllStar plan only) |
+
+**Important:** SGO sport IDs are NOT the same as league IDs. Always call `get_sports` first to confirm. Correct IDs: `BASKETBALL`, `HOCKEY`, `FOOTBALL`, `BASEBALL`. NOT `NBA`, `NHL`, `NFL`.
+
+#### High-Value Use Cases
+
+**1. Live market key verification (most impactful)**  
+Before writing `provider_market_aliases`, call `get_events` with a live event to confirm exact oddID format. Example: `passing_yards-JALEN_GREEN_1_NFL-game-ou-over` → normalizes to `passing_yards-all-game-ou`. Zero guesswork vs. multiple rounds of DB sampling.
+
+```
+get_events(sportID: "FOOTBALL", leagueID: "NFL", oddsAvailable: true, limit: 1)
+→ inspect event.odds keys → derive normalized form → write alias
+```
+
+**2. New sport/stat onboarding**  
+Before writing normalizer code for a new sport, call `get_stats` to enumerate ALL statIDs. Prevents missing mappings or misspelled stat keys.
+
+**3. Usage monitoring in-session**  
+Call `get_usage_account` directly instead of running a script. Check consumption before expensive batch operations.
+
+**4. Entity validation**  
+Call `get_players(leagueID: "NBA")` or `get_teams(leagueID: "NHL")` to confirm SGO's canonical entity IDs before writing `provider_entity_aliases`. Prevents silent mismatches.
+
+**5. Grading debugging**  
+Call `get_events(eventID: "<id>", finalized: true)` and inspect `odds.<oddID>.score` and `scoringSupported` for a specific pick. Confirms grading data is present without running a script.
+
+**6. Line movement investigation**  
+Call `get_events` with `includeOpenCloseOdds: true` and `bookmakerID: "pinnacle"` to see opening vs. closing lines for any event. Direct alert-agent calibration.
+
+**7. Documentation search in-context**  
+Call `search_docs` for any SGO API question during implementation. Faster than switching browser tabs.
+
+**8. Pre-flight alias validation**  
+Before a DB migration, verify the alias key you're about to insert actually matches live SGO offer keys. Prevents deploying aliases that never match.
+
+**Proven efficiency gain (UTV2-388, 2026-04-05):** NHL and NFL player prop aliases written correctly in one pass using `get_events` MCP calls. Previous approach required multiple DB samples + guessing + correction cycles.
+
+---
+
 ### 1.12 SGO Normalizer — Known Behavior (Unit Talk V2)
 
 In our ingestor (`apps/ingestor/src/`):
@@ -453,6 +523,16 @@ Chronological record of capabilities discovered. Each entry = something that cha
 **Source:** SGO pricing page + plan research  
 **What it changes:** SGO Rookie ($99/mo, 100k objects) excludes Pinnacle. Without Pinnacle: no real edge, CLV degrades. Rookie permanently ruled out. Dev strategy: Odds API paid (Pinnacle included). Production: SGO Pro.  
 **Documented in:** `PROVIDER_DATA_DECISION_RECORD.md` Amendment A.
+
+---
+
+### 2026-04-05: SGO MCP server available (`sports-odds-api-mcp`)
+
+**Source:** SGO AI/vibe-coding docs at `sportsgameodds.com/docs/info/ai-vibe-coding`  
+**What it unlocks:** In-session live API access via MCP tools — no script required. Eliminates the "write script → run → iterate" cycle for market key discovery, entity validation, usage checks, and grading debugging. All SGO REST capabilities accessible as MCP calls from Claude Code.  
+**Key insight:** oddID format confirmed live during UTV2-388 (e.g. `passing_yards-JALEN_GREEN_1_NFL-game-ou-over`). NHL/NFL aliases written correctly in one pass — zero iteration cycles.  
+**Setup:** `.mcp.json` at repo root with `sports-game-odds` server config (gitignored). See §1.13.  
+**Action:** Use `get_stats` + `get_events` before writing any new normalizer mappings or provider_market_aliases. Use `get_usage_account` for in-session consumption checks.
 
 ---
 

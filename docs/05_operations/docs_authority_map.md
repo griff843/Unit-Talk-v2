@@ -13,7 +13,7 @@ When documents conflict:
 | Owner | Program Owner |
 | Status | Ratified |
 | Ratified | 2026-03-20 |
-| Last Updated | 2026-03-29 (UTV2-163 post-docs-phase closeout — member role access authority ratified) |
+| Last Updated | 2026-04-05 (full architecture audit — added missing post-2026-03-29 entries, marked deprecated docs, noted schema debt) |
 
 ## Tier 1 - Principles
 
@@ -102,8 +102,6 @@ When documents conflict:
 
 | File | Purpose | Owner |
 |---|---|---|
-| `docs/04_roadmap/active_roadmap.md` | **SUPERSEDED 2026-03-21** — replaced by PROGRAM_STATUS.md | historical |
-| `docs/04_roadmap/bootstrap_plan.md` | Initial bootstrap reference (archive) | historical |
 | `docs/05_operations/AGENT_OPERATING_MODEL.md` | **Active** agent operating model — Linear-first, role boundaries, reporting rules | Program Owner |
 | `docs/05_operations/codex_wave_execution_playbook.md` | Default Codex wave execution model — issue triage, lane ownership, stacked PR discipline, Linear update rules | Program Owner |
 | `docs/05_operations/delivery_operating_model.md` | Cross-tool sync rules and lane ownership | Program Owner |
@@ -113,24 +111,23 @@ When documents conflict:
 | `docs/05_operations/legacy_repo_reference_boundary.md` | Legacy repo usage boundary and non-authority rule | Program Owner |
 | `docs/05_operations/migration_ledger.md` | Repo-native ledger of deliberate legacy salvage into V2 | Program Owner |
 | `docs/05_operations/risk_register.md` | Open risks and mitigation state | Program Owner |
-| `docs/05_operations/migration_cutover_plan.md` | V1 to V2 cutover plan | Platform |
 | `docs/05_operations/runtime_restart_and_deploy_sop.md` | Deploy and restart SOP | Platform |
-| `docs/05_operations/docs_authority_map.md` | This file — updated 2026-03-29 (drift audit) | Program Owner |
+| `docs/05_operations/docs_authority_map.md` | This file — updated 2026-04-05 (full architecture audit) | Program Owner |
 | `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md` | Worker runtime ownership and operator proof expectations | Architecture |
 | `docs/05_operations/SPRINT_MODEL_v2.md` | Risk-tiered sprint model (T1/T2/T3) | Program Owner |
 | `docs/05_operations/QUEUE_ORCHESTRATION_DESIGN.md` | Queue/orchestration system design — ratified 2026-03-26 | Claude |
-| `docs/05_operations/agent_delegation_policy.md` | **SUPERSEDED 2026-03-28** — replaced by `AGENT_OPERATING_MODEL.md` | historical |
 | `docs/05_operations/PRODUCTION_READINESS_CANARY_PLAN.md` | **Active** — production readiness canary: live grading verification, delivery health, evidence bundle | UTV2-25 |
-| `docs/05_operations/SHADOW_VALIDATION_PLAN.md` | **SUPERSEDED** — replaced by PRODUCTION_READINESS_CANARY_PLAN.md (V1 synthetic data invalidated parity comparison) | UTV2-25 |
 | `docs/05_operations/ROLLOUT_CONTROLS_CONTRACT.md` | Per-target rollout %, sport filters, deterministic sampling for gradual activation | UTV2-154 |
 | `docs/05_operations/SIMULATION_MODE_CONTRACT.md` | System-wide simulation delivery mode for pre-activation validation | UTV2-156 |
-| `docs/05_operations/V1_DATA_EXTRACTION_AUDIT.md` | V1 data surface map — tables, fields, extraction queries for shadow validation | UTV2-172 |
-| `docs/05_operations/V1_LIFECYCLE_REUSE_AUDIT.md` | V1 lifecycle logic inventory — PORT/ENHANCE/SKIP decisions for V2 | UTV2-24 |
-| `docs/05_operations/LOGGING_INFRASTRUCTURE.md` | Loki + Grafana centralized logging — dual writer, batching, docker-compose | UTV2-153 |
-| `docs/05_operations/DEPLOYMENT_TELEMETRY_CONTRACT.md` | Metrics endpoint, deploy gate script, staging env config | UTV2-137 |
-| `docs/05_operations/SPRINT_MODEL_v2_PROPOSAL.md` | **SUPERSEDED 2026-03-29** — pre-ratification draft; replaced by `SPRINT_MODEL_v2.md` | historical |
+| `docs/05_operations/LOGGING_INFRASTRUCTURE.md` | Loki + Grafana centralized logging — docs-only, not yet deployed | UTV2-153 |
+| `docs/05_operations/DEPLOYMENT_TELEMETRY_CONTRACT.md` | Metrics endpoint, deploy gate script, staging env config — docs-only, not yet deployed | UTV2-137 |
+| `docs/05_operations/BOARD_CAP_POLICY.md` | Board cap enforcement — `perSport: 3` active; see UTV2-284 for PM policy decision | Platform |
+| `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` | **Active** — SGO grading truth, odds format, CLV methodology, Pinnacle preference | Platform |
+| `docs/05_operations/PROVIDER_DATA_DECISION_RECORD.md` | Historical record of SGO vs Odds API provider decisions | Platform |
+| `docs/05_operations/lane-manager.md` | **Active** — lane registry and Codex lane management reference | Program Owner |
+| `docs/05_operations/migration_cutover_plan.md` | V1→V2 cutover plan — completed, kept for reference | historical |
 
-### Wave 1 Hardening Contracts (ratified 2026-03-29)
+### Wave 1 Hardening Contracts (ratified 2026-03-29, shipped)
 
 | File | Purpose | Issue |
 |---|---|---|
@@ -138,16 +135,82 @@ When documents conflict:
 | `docs/05_operations/ALERT_AGENT_EXTRACTION_CONTRACT.md` | Extract alert agent from API process | UTV2-125 |
 | `docs/05_operations/RUNTIME_MODE_CONTRACT.md` | Fail-closed startup mode + `getRuntimeMode()` | UTV2-147 |
 
-### Wave 2 Hardening Contracts (ratified 2026-03-29)
+### Wave 2 Hardening Contracts (ratified 2026-03-29, shipped)
 
 | File | Purpose | Issue |
 |---|---|---|
 | `docs/05_operations/DELIVERY_ADAPTER_HARDENING_CONTRACT.md` | Typed `DeliveryResult`, retry classification | UTV2-148 |
 | `docs/05_operations/DISCORD_CIRCUIT_BREAKER_CONTRACT.md` | Per-target circuit breaker for worker | UTV2-124 |
-| `docs/05_operations/MODEL_REGISTRY_CONTRACT.md` | Named scoring profiles + score weights bug fix | UTV2-136 |
+| `docs/05_operations/MODEL_REGISTRY_CONTRACT.md` | Named scoring profiles + score weights — shipped, `model_registry` table live | UTV2-136 |
 | `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md` | Deterministic promotion replay from stored snapshot | UTV2-145 |
 | `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` | `member_tiers` table + Discord role sync | UTV2-149 |
 | `docs/05_operations/PROMOTION_TARGET_REGISTRY_CONTRACT.md` | Runtime target enable/disable registry | UTV2-129 |
+
+### Smart Form Contracts (ratified 2026-04-01+, active)
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/T1_SMART_FORM_V1_CONTRACT.md` | **Primary** — Smart Form V1 canonical contract | UTV2-303 |
+| `docs/05_operations/T1_SMART_FORM_LIVE_OFFER_UX_CONTRACT.md` | Live offer browse UX contract — SGO event/offer surfacing | UTV2-389 |
+| `docs/05_operations/SMART_FORM_V1_OPERATOR_SUBMISSION_CONTRACT.md` | Operator submission flow — field contracts, validation rules | UTV2-303 |
+| `docs/05_operations/SMART_FORM_V1_PHASE2_SPORT_FILTERING_AND_BETSLIP_UX_CONTRACT.md` | Phase 2 sport filtering and betslip UX — shipped in CS-M5 | CS-M5 |
+| `docs/05_operations/SMART_FORM_SPORTSBOOK_CONSTRAINT_CONTRACT.md` | Sportsbook browse-first constraint — active as of UTV2-390 | UTV2-390 |
+
+### Intelligence and Modeling Contracts (ratified 2026-03-31+)
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/T1_CLV_CLOSING_LINE_WIRING_CONTRACT.md` | CLV computation, closing line wiring, Pinnacle preference | UTV2-386 |
+| `docs/05_operations/T2_CLV_SETTLEMENT_WIRING_CONTRACT.md` | CLV settlement integration contract | active |
+| `docs/05_operations/T2_MARKET_KEY_NORMALIZATION_CONTRACT.md` | Market key normalization rules | active |
+| `docs/05_operations/T1_CANONICAL_BETTING_TAXONOMY_CONTRACT.md` | Canonical betting taxonomy — market_types, stat_types, combo_stat_types | UTV2-388 |
+| `docs/05_operations/T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md` | Participant/player migration compatibility rules — **OPEN DEBT** | see §C audit |
+| `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md` | Deterministic promotion replay | UTV2-145 |
+| `docs/05_operations/MP_M8_SYNDICATE_MODEL_GOVERNANCE_CONTRACT.md` | Sports Modeling Program — Phase 8 syndicate governance | Phase 7+ |
+
+### Alert and Hedge Contracts (ratified 2026-04-04)
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/T1_ALERTAGENT_LINE_MOVEMENT_CONTRACT.md` | AlertAgent line movement detection contract | UTV2-125 |
+| `docs/05_operations/T1_ALERT_COMMANDS_CONTRACT.md` | Alert command surface contract | active |
+| `docs/05_operations/T2_HEDGE_DETECTION_CONTRACT.md` | Hedge/middle/arbitrage detection contract | active |
+| `docs/05_operations/GP_M2_ALERT_AGENT_SUBMISSION_CONTRACT.md` | Alert agent submission flow | UTV2-125 |
+
+### Provider and Ingestion Contracts
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/T1_PROVIDER_INGESTION_CONTRACT.md` | SGO feed ingest canonical contract | active |
+| `docs/05_operations/T1_FEED_ENTITY_RESOLUTION_CONTRACT.md` | Entity resolution — provider name → canonical player/team | active |
+| `docs/05_operations/T2_SGO_RESULTS_INGEST_CONTRACT.md` | SGO results ingest for automated grading | UTV2-385 |
+| `docs/05_operations/T1_AUTOMATED_GRADING_CONTRACT.md` | Automated grading from game_results | UTV2-384 |
+| `docs/05_operations/T2_OPERATOR_ENTITY_INGEST_HEALTH_CONTRACT.md` | Entity resolution health monitoring | active |
+
+### Governance and Operator Contracts
+
+| File | Purpose | Issue |
+|---|---|---|
+| `docs/05_operations/T1_CANONICAL_OPERATOR_REVIEW_QUEUE_CONTRACT.md` | Operator review queue — `pick_reviews` + approval_status gate | active |
+| `docs/05_operations/T1_CAPPER_ONBOARDING_CONTRACT.md` | Capper onboarding flow | active |
+| `docs/05_operations/T1_CAPPER_TIER_SYSTEM_CONTRACT.md` | Capper tier system | active |
+| `docs/05_operations/KELLY_POLICY.md` | Kelly criterion stake sizing policy | active |
+| `docs/05_operations/RECAP_CONTRACT.md` | Recap generation and delivery contract | active |
+| `docs/05_operations/T1_DISCORDRECAPS_ACTIVATION_CONTRACT.md` | Discord recaps activation contract | active |
+| `docs/05_operations/T1_EXCLUSIVE_INSIGHTS_ACTIVATION_CONTRACT.md` | Exclusive insights deferred activation contract | deferred |
+| `docs/05_operations/T1_REFERENCE_DATA_SEEDING_AND_RECONCILIATION_POLICY.md` | Reference data seeding and reconciliation | active |
+| `docs/05_operations/t1_recap_stats_consumer_closeout.md` | Recap stats consumer closeout proof | historical |
+| `docs/05_operations/SUPABASE_CONNECTION_STRATEGY.md` | Supabase connection strategy | Platform |
+| `docs/05_operations/supabase_setup.md` | Supabase setup runbook | Platform |
+| `docs/05_operations/EVENT_IDENTITY_CONTRACT.md` | Event identity resolution contract | active |
+| `docs/05_operations/SYSTEM_PICK_CONTRACT.md` | System-generated pick contract | active |
+| `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` | Member tier model — `member_tiers` table + Discord role sync | UTV2-149 |
+| `docs/05_operations/T2_TRIAL_MANAGEMENT_COMMANDS_CONTRACT.md` | Trial management command surface | active |
+| `docs/05_operations/T2_DISCORD_LEADERBOARD_CONTRACT.md` | Discord leaderboard contract | active |
+| `docs/05_operations/T2_DISCORD_STATS_CONTRACT.md` | Discord stats command contract | active |
+| `docs/05_operations/T2_SMART_FORM_CONFIDENCE_CONTRACT.md` | Smart Form confidence field contract | active |
+| `docs/05_operations/PS_M1_COMMERCIAL_FOUNDATION_CONTRACT.md` | Commercial foundation contract | active |
+| `docs/05_operations/FASTIFY_EVALUATION.md` | Fastify evaluation — decision made (stayed with node:http) | historical |
 
 ## Tier 5 - Current Status
 
@@ -155,13 +218,24 @@ When documents conflict:
 |---|---|---|
 | `docs/06_status/PROGRAM_STATUS.md` | Canonical active program status — milestone, capabilities, risks | **Primary — high-level** |
 | `docs/06_status/ISSUE_QUEUE.md` | **DEPRECATED 2026-03-31** — historical work queue record; Linear is the live execution queue | Historical only |
-| `docs/06_status/system_snapshot.md` | Evidence record — specific IDs, receipts, historical proof | Evidence record (STALE as of 2026-03-21 for current state) |
+| `docs/06_status/PROOF_BUNDLE_SCHEMA.md` | Proof bundle schema definition | Closeout reference |
 | `docs/06_status/PROOF_TEMPLATE.md` | Reusable T1 independent verification template | Closeout template |
 | `docs/06_status/ROLLBACK_TEMPLATE.md` | Reusable T1 rollback template | Rollback template |
-| `docs/06_status/status_source_of_truth.md` | **SUPERSEDED 2026-03-21** — historical record through Week 21 | Historical only |
-| `docs/06_status/current_phase.md` | **SUPERSEDED 2026-03-21** — historical record | Historical only |
-| `docs/06_status/next_build_order.md` | **SUPERSEDED 2026-03-21** — historical record | Historical only |
-| `docs/06_status/week_*` templates | Per-week proof/rollback/closeout templates (Weeks 7-16) | Historical only |
+| `docs/06_status/production_readiness_checklist.md` | Production readiness gate checklist | Active reference |
+
+> Note: All `week_*` proof/rollback/closeout templates (Weeks 7–16), completed UTV2-5x proof artifacts, and dated audit snapshots were deleted 2026-04-05. They served no future reference value.
+
+## Schema Debt Register (2026-04-05)
+
+Active schema debts to track alongside Linear issues:
+
+| Debt | Description | Risk | Linear |
+|------|-------------|------|--------|
+| Dual participant system | `participants`+`participant_memberships` (old) coexist with `leagues`+`teams`+`players`+`player_team_assignments` (new). `picks.participant_id` still FKs to old system. | High | T1 — needs PM approval |
+| `picks` missing FK columns | No `capper_id`, `sport_id`, `market_type_id`, or `player_id` FK columns on picks. Market is a free string. | Medium | UTV2-394 adjacent |
+| `sport_market_types` redundant | Superseded by `sport_market_type_availability`. Deprecate after consumer migration. | Low | T2 |
+| No `picks_current_state` view | Every consumer surface builds ad-hoc join across picks+promotion+settlement+reviews. | Medium | T2 |
+| `alert-agent` cross-app import | `apps/alert-agent` imports from `apps/api/src/` — violation of no-cross-app rule. | Medium | T2 |
 
 ## Conflict Rules
 
