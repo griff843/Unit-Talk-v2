@@ -231,10 +231,10 @@ Active schema debts to track alongside Linear issues:
 
 | Debt | Description | Risk | Linear |
 |------|-------------|------|--------|
-| Dual participant system | `participants`+`participant_memberships` (old) coexist with `leagues`+`teams`+`players`+`player_team_assignments` (new). `picks.participant_id` still FKs to old system. | High | T1 — needs PM approval |
-| `picks` missing FK columns | No `capper_id`, `sport_id`, `market_type_id`, or `player_id` FK columns on picks. Market is a free string. | Medium | UTV2-394 adjacent |
-| `sport_market_types` redundant | Superseded by `sport_market_type_availability`. Deprecate after consumer migration. | Low | T2 |
-| No `picks_current_state` view | Every consumer surface builds ad-hoc join across picks+promotion+settlement+reviews. | Medium | T2 |
+| Dual participant system | `participants`+`participant_memberships` (old) coexist with `leagues`+`teams`+`players`+`player_team_assignments` (new). `picks.participant_id` still FKs to old system. | High | UTV2-398 — T1, needs explicit PM approval |
+| `picks` missing FK columns | ~~No `capper_id`, `sport_id`, `market_type_id` FK columns on picks.~~ **RESOLVED** — PR #153 (UTV2-395) adds all three nullable FKs + `derivePickForeignKeyCandidates()`. `player_id` deferred to UTV2-398. | Low | UTV2-395 merged |
+| `sport_market_types` redundant | ~~Superseded by `sport_market_type_availability`. Deprecate after consumer migration.~~ **RESOLVED** — PR #155 (UTV2-397) drops table, migrates getCatalog() consumer. | Closed | UTV2-397 merged |
+| No `picks_current_state` view | ~~Every consumer surface builds ad-hoc join across picks+promotion+settlement+reviews.~~ **RESOLVED** — PR #154 (UTV2-396) creates view with LATERAL JOINs; pick-search updated. | Closed | UTV2-396 merged |
 | `alert-agent` cross-app import | `apps/alert-agent` imports from `apps/api/src/` — violation of no-cross-app rule. | Medium | T2 |
 
 ## Conflict Rules
