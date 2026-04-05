@@ -140,12 +140,40 @@ test('inferStatTypeFromMarketTypeId resolves MLB, NHL, and NFL labels', () => {
     'Singles',
   );
   assert.equal(
+    inferStatTypeFromMarketTypeId('player_batting_singles_ou'),
+    'Singles',
+  );
+  assert.equal(
     inferStatTypeFromMarketTypeId('player_doubles_ou'),
+    'Doubles',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_batting_doubles_ou'),
     'Doubles',
   );
   assert.equal(
     inferStatTypeFromMarketTypeId('player_triples_ou'),
     'Triples',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_batting_triples_ou'),
+    'Triples',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_batting_hrr_ou'),
+    'Hits + Runs + RBIs',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_pitching_earned_runs_ou'),
+    'Earned Runs',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_pitching_hits_allowed_ou'),
+    'Hits Allowed',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_pitching_outs_ou'),
+    'Pitcher Outs',
   );
   assert.equal(
     inferStatTypeFromMarketTypeId('player_shots_on_goal_ou'),
