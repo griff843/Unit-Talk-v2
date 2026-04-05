@@ -1,6 +1,8 @@
 import type { CatalogData } from './catalog';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
+const HIDDEN_SPORTSBOOK_IDS = new Set(['williamhill', 'sgo']);
+const DEFAULT_OPERATOR_SPORTSBOOK = { id: 'fanatics', name: 'Fanatics' } as const;
 
 export interface LeagueBrowseResult {
   id: string;
@@ -96,6 +98,7 @@ export interface SubmitPickResult {
 function normalizeCatalogData(data: unknown): CatalogData {
   const catalog = data && typeof data === 'object' ? (data as Record<string, unknown>) : {};
   const rawCappers = Array.isArray(catalog.cappers) ? catalog.cappers : [];
+  const rawSportsbooks = Array.isArray(catalog.sportsbooks) ? catalog.sportsbooks : [];
 
   const cappers = rawCappers.flatMap((entry) => {
       if (typeof entry === 'string') {
@@ -122,9 +125,36 @@ function normalizeCatalogData(data: unknown): CatalogData {
       }];
     });
 
+  const sportsbooks = rawSportsbooks.flatMap((entry) => {
+    if (!entry || typeof entry !== 'object') {
+      return [];
+    }
+
+    const sportsbook = entry as { id?: unknown; name?: unknown; displayName?: unknown };
+    const normalizedId = typeof sportsbook.id === 'string' ? sportsbook.id.trim().toLowerCase() : '';
+    const normalizedName =
+      typeof sportsbook.name === 'string'
+        ? sportsbook.name.trim()
+        : typeof sportsbook.displayName === 'string'
+          ? sportsbook.displayName.trim()
+          : '';
+
+    if (!normalizedId || !normalizedName || HIDDEN_SPORTSBOOK_IDS.has(normalizedId)) {
+      return [];
+    }
+
+    return [{ id: normalizedId, name: normalizedName }];
+  });
+
+  const dedupedSportsbooks = Array.from(
+    new Map(
+      [...sportsbooks, DEFAULT_OPERATOR_SPORTSBOOK].map((sportsbook) => [sportsbook.id, sportsbook]),
+    ).values(),
+  ).sort((left, right) => left.name.localeCompare(right.name));
+
   return {
     sports: Array.isArray(catalog.sports) ? catalog.sports : [],
-    sportsbooks: Array.isArray(catalog.sportsbooks) ? catalog.sportsbooks : [],
+    sportsbooks: dedupedSportsbooks,
     ticketTypes: Array.isArray(catalog.ticketTypes) ? catalog.ticketTypes : [],
     cappers,
   };
