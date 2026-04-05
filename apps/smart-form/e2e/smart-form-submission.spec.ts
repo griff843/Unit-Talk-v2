@@ -783,6 +783,99 @@ test('player-prop flow auto-binds team and matchup from player or team selection
 
 });
 
+test('player-prop fallback keeps the selected matchup compact when live offers are missing', async ({ page }) => {
+  const noPlayerPropEventBrowseResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: nbaLookupEventBrowseResponse.data.offers.filter((offer) => !offer.marketTypeId.startsWith('player.')),
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(noPlayerPropEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupBrowseSearchResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'player-tatum',
+            displayName: 'Jayson Tatum',
+            participantType: 'player',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/teams?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'team-celtics',
+            displayName: 'Celtics',
+            participantType: 'team',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByPlaceholder('Type a player name').fill('Jays');
+  await page.getByRole('button', { name: /Jayson Tatum/i }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Points', exact: true }).click();
+
+  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
+  await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
+  await expect(page.locator('input[name="team"]')).toHaveCount(1);
+  await expect(page.locator('input[name="playerName"]')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Over/i }).last()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Under/i }).last()).toBeVisible();
+  await expect(page.locator('input[name="line"]')).toBeVisible();
+});
+
 test('moneyline flow uses sportsbook-first filtering and matchup teams instead of free-text winner entry', async ({ page }) => {
   let submittedPayload: Record<string, unknown> | null = null;
 

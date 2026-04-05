@@ -2061,6 +2061,73 @@ export function BetForm() {
                   </div>
                 ) : null}
 
+                {selectedMarketType === 'player-prop' && filteredOffers.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Player Prop Offers
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Tap over or under to preload the prop
+                      </span>
+                    </div>
+                    <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+                      {filteredOffers.map((offer) => {
+                        const statLabel =
+                          inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName) ??
+                          watchedValues.statType ??
+                          'Prop';
+                        const lineLabel = offer.line != null ? String(offer.line) : 'Line pending';
+                        const participantLabel = offer.participantName ?? watchedValues.playerName ?? 'Player';
+                        return (
+                          <div
+                            key={[
+                              offer.sportsbookId ?? offer.providerKey,
+                              offer.marketTypeId ?? offer.providerMarketKey,
+                              offer.participantId ?? 'participant',
+                              offer.line ?? 'line',
+                            ].join(':')}
+                            className="rounded-xl border border-border bg-background px-4 py-4"
+                          >
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{participantLabel}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {statLabel}
+                                  {offer.sportsbookName ?? (selectedSportsbookValue ? ` · ${watchedValues.sportsbook}` : '')}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                                {lineLabel}
+                              </span>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Button
+                                type="button"
+                                variant={selectedOffer?.offer === offer && selectedOffer.side === 'over' ? 'default' : 'outline'}
+                                className="justify-between"
+                                onClick={() => applyLiveOfferSelection(offer, 'over')}
+                              >
+                                <span>Over</span>
+                                <span>{buildOddsLabel(offer.overOdds)}</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={selectedOffer?.offer === offer && selectedOffer.side === 'under' ? 'default' : 'outline'}
+                                className="justify-between"
+                                onClick={() => applyLiveOfferSelection(offer, 'under')}
+                              >
+                                <span>Under</span>
+                                <span>{buildOddsLabel(offer.underOdds)}</span>
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
                 {selectedMarketType ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
@@ -2095,7 +2162,7 @@ export function BetForm() {
                       <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
                         No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.
                       </div>
-                    ) : selectedMarketType === 'moneyline' || selectedMarketType === 'spread' || selectedMarketType === 'total' ? null : (
+                    ) : selectedMarketType === 'moneyline' || selectedMarketType === 'spread' || selectedMarketType === 'total' || selectedMarketType === 'player-prop' ? null : (
                       <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {filteredOffers.map((offer) => {
                           const offerAgeMinutes = getOfferAgeMinutes(offer.snapshotAt);
@@ -2161,6 +2228,96 @@ export function BetForm() {
     }
 
     if (selectedMarketType === 'player-prop') {
+      if (selectedMatchup) {
+        return (
+          <div className="space-y-4">
+            <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+              Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+            </div>
+            <div className="grid gap-3 md:grid-cols-2">
+              <div className="rounded-xl border border-border bg-background px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Player</p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {watchedValues.playerName || 'Choose player above'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {watchedValues.team || 'Team will lock from selection'}
+                </p>
+              </div>
+              <div className="rounded-xl border border-border bg-background px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stat Type</p>
+                <p className="mt-1 font-semibold text-foreground">
+                  {watchedValues.statType || 'Choose stat above'}
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Direction and line stay editable below if live odds are unavailable
+                </p>
+              </div>
+            </div>
+            <div className="space-y-3 rounded-xl border border-border bg-background px-4 py-4">
+              <div className="flex items-center justify-between gap-3">
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Ticket Details
+                </p>
+                <span className="text-xs text-muted-foreground">
+                  {selectedOffer ? 'Live offer preloaded' : 'Manual fallback'}
+                </span>
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <Button
+                  type="button"
+                  variant={watchedValues.direction === 'over' ? 'default' : 'outline'}
+                  className="justify-between"
+                  onClick={() => form.setValue('direction', 'over', {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })}
+                >
+                  <span>Over</span>
+                  <span>{selectedOffer?.side === 'over' ? buildOddsLabel(selectedOffer.offer.overOdds) : 'Select'}</span>
+                </Button>
+                <Button
+                  type="button"
+                  variant={watchedValues.direction === 'under' ? 'default' : 'outline'}
+                  className="justify-between"
+                  onClick={() => form.setValue('direction', 'under', {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: true,
+                  })}
+                >
+                  <span>Under</span>
+                  <span>{selectedOffer?.side === 'under' ? buildOddsLabel(selectedOffer.offer.underOdds) : 'Select'}</span>
+                </Button>
+              </div>
+              <div className="grid gap-3 md:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="line"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Line</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="e.g. 24.5"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
+          </div>
+        );
+      }
+
       return (
         <div className="space-y-4">
           <ParticipantAutocompleteField
