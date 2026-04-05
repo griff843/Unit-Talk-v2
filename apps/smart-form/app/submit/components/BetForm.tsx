@@ -64,6 +64,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const PARTICIPANT_QUERY_MIN = 2;
 const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
+const DEFAULT_OPERATOR_SPORTSBOOK_ID = 'fanatics';
 
 type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
@@ -84,8 +85,9 @@ interface ParticipantAutocompleteFieldProps {
   eventId?: string | null;
   sport: string;
   allowedParticipantIds?: ReadonlySet<string> | null;
-  onSuggestionSelected: (suggestion: ParticipantSuggestion) => void;
+  onSuggestionSelected: (suggestion: ParticipantSuggestion) => void | Promise<void>;
   onManualChange: () => void;
+  disabledOverride?: boolean;
 }
 
 function roleSortOrder(role: string) {
@@ -103,6 +105,15 @@ function formatMatchup(matchup: MatchupBrowseResult) {
 }
 
 function formatTimestampLabel(isoString: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
+    const [year, month, day] = isoString.split('-').map((value) => Number.parseInt(value, 10));
+    const dateOnly = new Date(year, (month ?? 1) - 1, day ?? 1);
+    return dateOnly.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
   const timestamp = new Date(isoString);
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
@@ -114,6 +125,15 @@ function formatTimestampLabel(isoString: string) {
 }
 
 function formatSearchTimestamp(isoString: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
+    const [year, month, day] = isoString.split('-').map((value) => Number.parseInt(value, 10));
+    const dateOnly = new Date(year, (month ?? 1) - 1, day ?? 1);
+    return dateOnly.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
   const timestamp = new Date(isoString);
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
@@ -172,6 +192,87 @@ function normalizeParticipantKey(value: string | null | undefined) {
   return value?.trim().toLocaleLowerCase() ?? null;
 }
 
+function teamMatchesMatchup(matchup: MatchupBrowseResult, teamId: string | null | undefined) {
+  if (!teamId) {
+    return false;
+  }
+
+  const normalizedTeamId = teamId.trim().toLocaleLowerCase();
+  return matchup.teams.some((team) => {
+    const canonicalTeamId = team.teamId?.trim().toLocaleLowerCase();
+    const participantTeamId = team.participantId.trim().toLocaleLowerCase();
+    return canonicalTeamId === normalizedTeamId || participantTeamId === normalizedTeamId;
+  });
+}
+
+function offerMatchesSelectedSportsbook(
+  offer: EventOfferBrowseResult,
+  sportsbookValue: string | null | undefined,
+) {
+  const normalizedSportsbook = sportsbookValue?.trim().toLocaleLowerCase() ?? '';
+  if (normalizedSportsbook.length === 0) {
+    return true;
+  }
+
+  return normalizedSportsbook === (offer.sportsbookId ?? '').trim().toLocaleLowerCase() ||
+    normalizedSportsbook === (offer.sportsbookName ?? '').trim().toLocaleLowerCase();
+}
+
+function buildOddsLabel(odds: number | null | undefined) {
+  if (odds == null) {
+    return 'Manual odds';
+  }
+
+  return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
+function buildSportsbookDisplayName(offer: EventOfferBrowseResult) {
+  return offer.sportsbookName?.trim() || offer.sportsbookId?.trim() || offer.providerKey;
+}
+
+function formatLineLabel(line: number | null | undefined) {
+  if (line == null) {
+    return null;
+  }
+
+  return line > 0 ? `+${line}` : `${line}`;
+}
+
+function parseOptionalNumber(value: string) {
+  if (value.trim() === '') {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function clampNumber(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function normalizeUnitsValue(value: string) {
+  const parsed = parseOptionalNumber(value);
+  if (parsed == null) {
+    return undefined;
+  }
+
+  return clampNumber(Math.round(parsed * 2) / 2, 0.5, 5);
+}
+
+function normalizeConvictionValue(value: string) {
+  const parsed = parseOptionalNumber(value);
+  if (parsed == null) {
+    return undefined;
+  }
+
+  return clampNumber(Math.round(parsed), 1, 10);
+}
+
+function matchupTeamKey(team: MatchupBrowseResult['teams'][number]) {
+  return team.teamId ?? team.participantId;
+}
+
 function ParticipantAutocompleteField({
   form,
   name,
@@ -183,6 +284,7 @@ function ParticipantAutocompleteField({
   allowedParticipantIds,
   onSuggestionSelected,
   onManualChange,
+  disabledOverride = false,
 }: ParticipantAutocompleteFieldProps) {
   const value = useWatch({ control: form.control, name }) ?? '';
   const [isFocused, setIsFocused] = useState(false);
@@ -268,12 +370,18 @@ function ParticipantAutocompleteField({
         <FormItem className="relative">
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input
-              {...field}
-              autoComplete="off"
-              disabled={!sport}
-              placeholder={sport ? placeholder : 'Select a sport first'}
-              value={field.value ?? ''}
+                        <Input
+                          {...field}
+                          autoComplete="off"
+                          disabled={!sport || disabledOverride}
+                          placeholder={
+                            !sport
+                              ? 'Select a sport first'
+                              : disabledOverride
+                                ? 'Choose team first'
+                                : placeholder
+                          }
+                          value={field.value ?? ''}
               onFocus={() => setIsFocused(true)}
               onBlur={() => {
                 window.setTimeout(() => setIsFocused(false), 120);
@@ -568,7 +676,7 @@ function SearchableSportsbookField({
             <Input
               autoComplete="off"
               placeholder={manualEntry ? 'Type sportsbook name' : 'Search sportsbook'}
-              value={manualEntry ? field.value ?? '' : query}
+              value={manualEntry ? field.value ?? '' : isFocused ? query : (selectedSportsbook?.name ?? query)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => {
                 window.setTimeout(() => {
@@ -672,7 +780,7 @@ export function BetForm() {
       playerName: '',
       statType: '',
       team: '',
-      sportsbook: '',
+      sportsbook: DEFAULT_OPERATOR_SPORTSBOOK_ID,
       capperConviction: undefined,
       units: 1.0,
       odds: undefined,
@@ -684,7 +792,15 @@ export function BetForm() {
   const watchedValues = form.watch();
   const selectedSport = watchedValues.sport;
   const selectedMarketType = watchedValues.marketType;
+  const selectedSportsbookValue = watchedValues.sportsbook?.trim().toLocaleLowerCase() ?? '';
   const emptyCatalog: CatalogData = { sports: [], sportsbooks: [], ticketTypes: [], cappers: [] };
+  const selectedCatalogSportsbook = useMemo(
+    () => catalog?.sportsbooks.find((sportsbook) => (
+      sportsbook.id === selectedSportsbookValue ||
+      sportsbook.name.toLocaleLowerCase() === selectedSportsbookValue
+    )) ?? null,
+    [catalog, selectedSportsbookValue],
+  );
   const selectedMatchup = useMemo(
     () => matchups.find((matchup) => matchup.eventId === selectedMatchupId) ?? null,
     [matchups, selectedMatchupId],
@@ -702,9 +818,10 @@ export function BetForm() {
     return new Set(
       eventBrowse.participants
         .filter((participant) => participant.participantType === 'player')
+        .filter((participant) => !selectedTeamId || participant.teamId === selectedTeamId)
         .map((participant) => participant.participantId),
     );
-  }, [eventBrowse]);
+  }, [eventBrowse, selectedTeamId]);
   const allowedTeamIds = useMemo(() => {
     if (!eventBrowse) {
       return null;
@@ -724,6 +841,10 @@ export function BetForm() {
       new Set(eventBrowse.offers.map((offer) => mapOfferToFormMarketType(offer))),
     );
   }, [eventBrowse]);
+  const visibleMarketFamilies = useMemo(
+    () => Array.from(new Set([...availableMarketTypes, ...availableOfferFamilies])),
+    [availableMarketTypes, availableOfferFamilies],
+  );
   const groupedPlayers = useMemo(() => {
     if (!eventBrowse) {
       return [] as Array<{
@@ -734,6 +855,7 @@ export function BetForm() {
 
     const playerParticipants = eventBrowse.participants
       .filter((participant) => participant.participantType === 'player')
+      .filter((participant) => !selectedTeamId || participant.teamId === selectedTeamId)
       .sort((left, right) => left.displayName.localeCompare(right.displayName));
     const groups = new Map<string, typeof playerParticipants>();
 
@@ -747,14 +869,21 @@ export function BetForm() {
     return Array.from(groups.entries())
       .map(([teamName, players]) => ({ teamName, players }))
       .sort((left, right) => left.teamName.localeCompare(right.teamName));
-  }, [eventBrowse]);
-  const filteredOffers = useMemo(() => {
+  }, [eventBrowse, selectedTeamId]);
+  const marketScopedOffers = useMemo(() => {
     if (!eventBrowse || !selectedMarketType) {
       return [] as EventOfferBrowseResult[];
     }
 
     return eventBrowse.offers.filter((offer) => {
       if (mapOfferToFormMarketType(offer) !== selectedMarketType) {
+        return false;
+      }
+      if (
+        selectedMarketType === 'player-prop' &&
+        watchedValues.statType &&
+        inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName) !== watchedValues.statType
+      ) {
         return false;
       }
       if (
@@ -766,12 +895,89 @@ export function BetForm() {
       }
       return true;
     });
-  }, [eventBrowse, selectedMarketType, selectedOfferParticipantId]);
+  }, [eventBrowse, selectedMarketType, selectedOfferParticipantId, watchedValues.statType]);
+  const filteredOffers = useMemo(() => {
+    if (!selectedCatalogSportsbook) {
+      return marketScopedOffers;
+    }
+
+    return marketScopedOffers.filter((offer) =>
+      offerMatchesSelectedSportsbook(offer, selectedSportsbookValue),
+    );
+  }, [marketScopedOffers, selectedCatalogSportsbook, selectedSportsbookValue]);
+  const alternateLiveSportsbooks = useMemo(() => {
+    if (marketScopedOffers.length === 0 || filteredOffers.length > 0) {
+      return [] as Array<{ id: string; name: string }>;
+    }
+
+    const seen = new Set<string>();
+    const suggestions: Array<{ id: string; name: string }> = [];
+    for (const offer of marketScopedOffers) {
+      const id = offer.sportsbookId?.trim().toLocaleLowerCase();
+      const name = buildSportsbookDisplayName(offer).trim();
+      if (!id || !name || id === selectedSportsbookValue || seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      suggestions.push({ id, name });
+    }
+    return suggestions.sort((left, right) => left.name.localeCompare(right.name));
+  }, [filteredOffers.length, marketScopedOffers, selectedCatalogSportsbook, selectedSportsbookValue]);
+  const selectedSportsbookMissingLiveCoverage =
+    Boolean(selectedMarketType) &&
+    marketScopedOffers.length > 0 &&
+    filteredOffers.length === 0;
+  const matchupTeams = useMemo(
+    () => [...(selectedMatchup?.teams ?? [])].sort(
+      (left, right) => roleSortOrder(left.role) - roleSortOrder(right.role),
+    ),
+    [selectedMatchup],
+  );
+  const moneylineOfferMap = useMemo(() => {
+    const offers = new Map<string, EventOfferBrowseResult>();
+    if (!eventBrowse || selectedMarketType !== 'moneyline') {
+      return offers;
+    }
+
+    for (const offer of filteredOffers) {
+      const eventParticipant = eventBrowse.participants.find((participant) => (
+        participant.participantType === 'team' &&
+        (
+          participant.participantId === offer.participantId ||
+          participant.canonicalId === offer.participantId ||
+          normalizeParticipantKey(participant.displayName) === normalizeParticipantKey(offer.participantName) ||
+          normalizeParticipantKey(participant.displayName) === normalizeParticipantKey(offer.providerParticipantId)
+        )
+      ));
+
+      const possibleKeys = [
+        offer.participantId,
+        eventParticipant?.participantId,
+        eventParticipant?.canonicalId,
+      ].filter((value): value is string => Boolean(value));
+
+      for (const key of possibleKeys) {
+        offers.set(key, offer);
+      }
+    }
+
+    return offers;
+  }, [eventBrowse, filteredOffers, selectedMarketType]);
+  const spreadOffers = useMemo(
+    () => selectedMarketType === 'spread'
+      ? filteredOffers.filter((offer) => offer.overOdds != null)
+      : [],
+    [filteredOffers, selectedMarketType],
+  );
+  const totalOffers = useMemo(
+    () => selectedMarketType === 'total' ? filteredOffers : [],
+    [filteredOffers, selectedMarketType],
+  );
   const availablePlayerPropStatTypes = useMemo(() => {
     if (selectedMarketType !== 'player-prop') {
       return [] as string[];
     }
-    if (!eventBrowse) {
+    if (!eventBrowse || availableStatTypes.length === 0) {
       return availableStatTypes;
     }
 
@@ -797,11 +1003,24 @@ export function BetForm() {
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse);
+  const hasInlineGuidedMarket =
+    browseMode === 'live-offer' &&
+    Boolean(selectedMatchup) &&
+    (
+      selectedMarketType === 'moneyline' ||
+      selectedMarketType === 'player-prop' ||
+      ((selectedMarketType === 'spread' || selectedMarketType === 'total') && filteredOffers.length > 0)
+    );
+  const hasSelectedBrowseMatchup = browseMode === 'live-offer' && Boolean(selectedMatchup);
   const shouldShowManualFallback =
     browseMode === 'manual' ||
     !selectedMatchup ||
     !eventBrowse ||
     filteredOffers.length === 0;
+  const shouldRenderPickDetailsSection =
+    browseMode === 'manual' ||
+    !selectedMatchup ||
+    (shouldShowManualFallback && !hasInlineGuidedMarket);
 
   useEffect(() => {
     getCatalog()
@@ -820,6 +1039,19 @@ export function BetForm() {
     if (fallbackCapper) {
       form.setValue('capper', fallbackCapper.id, { shouldValidate: true });
     }
+  }, [catalog, form]);
+
+  useEffect(() => {
+    if (!catalog || form.getValues('sportsbook')) {
+      return;
+    }
+
+    const defaultSportsbook = catalog.sportsbooks.find((sportsbook) => sportsbook.id === DEFAULT_OPERATOR_SPORTSBOOK_ID);
+    if (!defaultSportsbook) {
+      return;
+    }
+
+    form.setValue('sportsbook', defaultSportsbook.id, { shouldValidate: true });
   }, [catalog, form]);
 
   useEffect(() => {
@@ -843,7 +1075,7 @@ export function BetForm() {
     form.resetField('direction');
     form.resetField('line');
     form.resetField('odds');
-    form.setValue('sportsbook', '');
+    form.setValue('sportsbook', DEFAULT_OPERATOR_SPORTSBOOK_ID);
   }, [selectedSport, form]);
 
   useEffect(() => {
@@ -994,6 +1226,19 @@ export function BetForm() {
     }
   }, [availablePlayerPropStatTypes, form, selectedMarketType, watchedValues.statType]);
 
+  useEffect(() => {
+    if (
+      !selectedOffer ||
+      !selectedCatalogSportsbook ||
+      offerMatchesSelectedSportsbook(selectedOffer.offer, selectedSportsbookValue)
+    ) {
+      return;
+    }
+
+    setSelectedOffer(null);
+    form.resetField('odds');
+  }, [form, selectedCatalogSportsbook, selectedOffer, selectedSportsbookValue]);
+
   function upsertMatchup(matchup: MatchupBrowseResult) {
     setMatchups((current) => {
       const existing = current.find((row) => row.eventId === matchup.eventId);
@@ -1036,6 +1281,39 @@ export function BetForm() {
     form.resetField('line');
     form.resetField('odds');
     form.clearErrors('eventName');
+  }
+
+  function clearSelectedMatchup() {
+    setSelectedMatchupId(null);
+    setEventBrowse(null);
+    setEventBrowseError(null);
+    setSelectedOffer(null);
+    setSelectedOfferParticipantId(null);
+    setSelectedPlayerId(null);
+    setSelectedTeamId(null);
+    form.setValue('eventName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('playerName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('statType', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('team', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.resetField('direction');
+    form.resetField('line');
+    form.resetField('odds');
   }
 
   function applyBrowseSearchSelection(result: BrowseSearchResult) {
@@ -1093,6 +1371,101 @@ export function BetForm() {
       shouldTouch: true,
       shouldValidate: true,
     });
+  }
+
+  function findUniqueMatchupForTeam(teamId: string | null | undefined) {
+    if (!teamId) {
+      return null;
+    }
+
+    const matchingMatchups = matchups.filter((matchup) => teamMatchesMatchup(matchup, teamId));
+    return matchingMatchups.length === 1 ? matchingMatchups[0] ?? null : null;
+  }
+
+  async function resolveBrowseResultForSelection(
+    displayName: string,
+    resultType: BrowseSearchResult['resultType'],
+    participantId?: string | null,
+  ) {
+    if (!selectedSport || !watchedValues.gameDate) {
+      return null;
+    }
+
+    const results = await searchBrowse(selectedSport, watchedValues.gameDate, displayName);
+    const exactResults = results.filter((result) => {
+      if (result.resultType !== resultType) {
+        return false;
+      }
+
+      if (participantId && result.participantId === participantId) {
+        return true;
+      }
+
+      return normalizeParticipantKey(result.displayName) === normalizeParticipantKey(displayName);
+    });
+
+    if (exactResults.length === 1) {
+      return exactResults[0] ?? null;
+    }
+
+    const uniqueMatchupIds = Array.from(new Set(exactResults.map((result) => result.matchup.eventId)));
+    return uniqueMatchupIds.length === 1 ? (exactResults[0] ?? null) : null;
+  }
+
+  async function handlePlayerSuggestionSelection(suggestion: ParticipantSuggestion) {
+    setSelectedPlayerId(suggestion.participantId);
+    setSelectedOfferParticipantId(suggestion.participantId);
+
+    const browseResult = await resolveBrowseResultForSelection(
+      suggestion.displayName,
+      'player',
+      suggestion.participantId,
+    );
+
+    if (!browseResult) {
+      return;
+    }
+
+    applyMatchupSelection(browseResult.matchup);
+    setSelectedPlayerId(browseResult.participantId ?? suggestion.participantId);
+    setSelectedOfferParticipantId(browseResult.participantId ?? suggestion.participantId);
+    setSelectedTeamId(browseResult.teamId);
+    form.setValue('playerName', browseResult.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    if (browseResult.teamName) {
+      form.setValue('team', browseResult.teamName, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  }
+
+  async function handleTeamSuggestionSelection(suggestion: ParticipantSuggestion) {
+    setSelectedTeamId(suggestion.participantId);
+
+    const uniqueMatchupFromSlate = findUniqueMatchupForTeam(suggestion.participantId);
+    if (uniqueMatchupFromSlate) {
+      applyMatchupSelection(uniqueMatchupFromSlate);
+      setSelectedTeamId(suggestion.participantId);
+      return;
+    }
+
+    const browseResult = await resolveBrowseResultForSelection(
+      suggestion.displayName,
+      'team',
+      suggestion.participantId,
+    );
+
+    if (!browseResult) {
+      return;
+    }
+
+    applyMatchupSelection(browseResult.matchup);
+    setSelectedTeamId(browseResult.teamId ?? suggestion.participantId);
   }
 
   function applyLiveOfferSelection(offer: EventOfferBrowseResult, side: OfferSelectionSide) {
@@ -1197,6 +1570,60 @@ export function BetForm() {
     setSelectedTeamId(null);
   }
 
+  function applyMoneylineTeamSelection(team: MatchupBrowseResult['teams'][number]) {
+    form.setValue('team', team.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setSelectedTeamId(team.teamId ?? team.participantId);
+    form.clearErrors('team');
+
+    const matchingOffer = moneylineOfferMap.get(team.teamId ?? '') ??
+      moneylineOfferMap.get(team.participantId);
+
+    if (matchingOffer) {
+      applyLiveOfferSelection(matchingOffer, 'side');
+      return;
+    }
+
+    setSelectedOffer(null);
+    form.resetField('odds');
+  }
+
+  function applyPlayerPropTeamSelection(team: MatchupBrowseResult['teams'][number]) {
+    const teamKey = matchupTeamKey(team);
+    form.setValue('team', team.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setSelectedTeamId(teamKey);
+    form.clearErrors('team');
+
+    const currentPlayerKey = selectedPlayerId?.trim().toLocaleLowerCase() ?? null;
+    const selectedParticipant = eventBrowse?.participants.find((participant) => {
+      if (participant.participantType !== 'player') {
+        return false;
+      }
+      const participantKey = participant.participantId.trim().toLocaleLowerCase();
+      const canonicalKey = participant.canonicalId?.trim().toLocaleLowerCase() ?? null;
+      return participantKey === currentPlayerKey || canonicalKey === currentPlayerKey;
+    });
+
+    if (selectedParticipant && selectedParticipant.teamId === teamKey) {
+      return;
+    }
+
+    setSelectedPlayerId(null);
+    setSelectedOfferParticipantId(null);
+    form.setValue('playerName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  }
+
   async function onSubmit(values: BetFormValues) {
     if (!catalog) {
       return;
@@ -1270,7 +1697,7 @@ export function BetForm() {
               playerName: '',
               statType: '',
               team: '',
-              sportsbook: '',
+              sportsbook: DEFAULT_OPERATOR_SPORTSBOOK_ID,
               capperConviction: undefined,
               gameDate: TODAY,
               units: 1.0,
@@ -1380,7 +1807,7 @@ export function BetForm() {
               </div>
             ) : null}
             {browseSearchResults.length > 0 ? (
-              <div className="grid gap-2">
+              <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
                 {browseSearchResults.map((result) => {
                   const isSelected = result.matchup.eventId === selectedMatchupId;
 
@@ -1429,8 +1856,8 @@ export function BetForm() {
             No matchups scheduled for {watchedValues.gameDate}. You can switch to manual entry and still submit against canonical sport and book selections.
           </div>
         ) : null}
-        {liveEntryMode === 'browse' && matchups.length > 0 ? (
-          <div className="grid gap-2">
+        {liveEntryMode === 'browse' && matchups.length > 0 && !selectedMatchup ? (
+          <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
             {matchups.map((matchup) => {
               const isSelected = matchup.eventId === selectedMatchupId;
               return (
@@ -1449,7 +1876,7 @@ export function BetForm() {
                     <div>
                       <p className="font-medium text-foreground">{formatMatchup(matchup)}</p>
                       <p className="text-xs text-muted-foreground">
-                        {formatTimestampLabel(matchup.eventDate)} · {matchup.status}
+                        {formatTimestampLabel(matchup.startTime ?? matchup.eventDate)} · {matchup.status}
                       </p>
                     </div>
                     {matchup.leagueId ? (
@@ -1470,12 +1897,22 @@ export function BetForm() {
               <div>
                 <p className="text-sm font-semibold text-foreground">{selectedMatchup.eventName}</p>
                 <p className="text-xs text-muted-foreground">
-                  {formatTimestampLabel(selectedMatchup.eventDate)}
+                  {formatTimestampLabel(selectedMatchup.startTime ?? selectedMatchup.eventDate)}
                 </p>
               </div>
-              {isLoadingEventBrowse ? (
-                <span className="text-xs text-muted-foreground">Loading offers...</span>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {isLoadingEventBrowse ? (
+                  <span className="text-xs text-muted-foreground">Loading offers...</span>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearSelectedMatchup}
+                >
+                  Change game
+                </Button>
+              </div>
             </div>
 
             {eventBrowseError ? <p className="text-sm text-destructive">{eventBrowseError}</p> : null}
@@ -1487,7 +1924,7 @@ export function BetForm() {
                     Market Family
                   </p>
                   <MarketTypeGrid
-                    availableTypes={availableOfferFamilies}
+                    availableTypes={visibleMarketFamilies}
                     selected={selectedMarketType}
                     onSelect={(type) => form.setValue('marketType', type, {
                       shouldDirty: true,
@@ -1497,38 +1934,327 @@ export function BetForm() {
                   />
                 </div>
 
-                {selectedMarketType === 'player-prop' && groupedPlayers.length > 0 ? (
+                {selectedMarketType === 'player-prop' ? (
                   <div className="space-y-3">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium leading-none">Team</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {matchupTeams.map((team) => {
+                            const teamKey = matchupTeamKey(team);
+                            const isSelected = selectedTeamId === teamKey;
+                            return (
+                              <button
+                                key={team.participantId}
+                                type="button"
+                                onClick={() => applyPlayerPropTeamSelection(team)}
+                                className={cn(
+                                  'rounded-xl border px-4 py-3 text-left transition-colors',
+                                  isSelected
+                                    ? 'border-primary bg-primary/10'
+                                    : 'border-border bg-background hover:border-primary/50',
+                                )}
+                              >
+                                <p className="font-semibold text-foreground">{team.displayName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {isSelected ? 'Selected team' : 'Filter players to this team'}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                      <ParticipantAutocompleteField
+                        form={form}
+                        name="playerName"
+                        label="Player"
+                        placeholder="Type a player name"
+                        searchType="player"
+                        eventId={selectedMatchupId}
+                        sport={selectedSport}
+                        allowedParticipantIds={allowedPlayerIds}
+                        onSuggestionSelected={handlePlayerSuggestionSelection}
+                        onManualChange={() => setSelectedPlayerId(null)}
+                        disabledOverride={!selectedTeamId}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="statType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Stat Type</FormLabel>
+                            <Select
+                              disabled={availablePlayerPropStatTypes.length === 0}
+                              onValueChange={field.onChange}
+                              value={field.value ?? ''}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select stat" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {availablePlayerPropStatTypes.map((statType) => (
+                                  <SelectItem key={statType} value={statType}>
+                                    {statType}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Player
                     </p>
-                    <div className="space-y-3">
-                      {groupedPlayers.map((group) => (
-                        <div key={group.teamName} className="space-y-2">
-                          <p className="text-xs text-muted-foreground">{group.teamName}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {group.players.map((player) => (
-                              <Button
-                                key={player.participantId}
-                                type="button"
-                                variant={selectedOfferParticipantId === player.participantId ? 'default' : 'outline'}
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedOfferParticipantId(player.participantId);
-                                  setSelectedPlayerId(player.canonicalId ?? player.participantId);
-                                  form.setValue('playerName', player.displayName, {
-                                    shouldDirty: true,
-                                    shouldTouch: true,
-                                    shouldValidate: true,
-                                  });
-                                }}
-                              >
-                                {player.displayName}
-                              </Button>
-                            ))}
+                    {groupedPlayers.length > 0 ? (
+                      <div className="max-h-52 space-y-3 overflow-y-auto pr-1">
+                        {groupedPlayers.map((group) => (
+                          <div key={group.teamName} className="space-y-2">
+                            <p className="text-xs text-muted-foreground">{group.teamName}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {group.players.map((player) => (
+                                <Button
+                                  key={player.participantId}
+                                  type="button"
+                                  variant={selectedOfferParticipantId === player.participantId ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedOfferParticipantId(player.participantId);
+                                    setSelectedPlayerId(player.canonicalId ?? player.participantId);
+                                    form.setValue('playerName', player.displayName, {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                >
+                                  {player.displayName}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                        Live player listings are unavailable for this game right now. Search by team or player name to finish the prop ticket manually.
+                      </div>
+                    )}
+                  </div>
+                ) : null}
+
+                {selectedMarketType === 'moneyline' && matchupTeams.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Team to Win
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        {selectedSportsbookValue ? 'Odds filtered by sportsbook' : 'Select a sportsbook to lock odds'}
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {matchupTeams.map((team) => {
+                        const offer = moneylineOfferMap.get(team.teamId ?? '') ?? moneylineOfferMap.get(team.participantId);
+                        const isSelected = selectedTeamId === (team.teamId ?? team.participantId);
+                        return (
+                          <button
+                            key={team.participantId}
+                            type="button"
+                            onClick={() => applyMoneylineTeamSelection(team)}
+                            className={cn(
+                              'rounded-xl border px-4 py-4 text-left transition-colors',
+                              isSelected
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border bg-background hover:border-primary/50',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{team.displayName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {offer?.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Manual fallback')}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                                {buildOddsLabel(offer?.overOdds)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedMarketType === 'spread' && spreadOffers.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Spread
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Tap the side to preload line and odds
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {spreadOffers.map((offer) => {
+                        const teamKey = offer.participantId ?? offer.providerParticipantId ?? offer.participantName ?? offer.marketDisplayName;
+                        const isSelected =
+                          selectedOffer?.offer === offer ||
+                          normalizeParticipantKey(watchedValues.team) === normalizeParticipantKey(offer.participantName);
+                        return (
+                          <button
+                            key={`${teamKey}:${offer.line ?? 'line'}`}
+                            type="button"
+                            onClick={() => applyLiveOfferSelection(offer, 'side')}
+                            className={cn(
+                              'rounded-xl border px-4 py-4 text-left transition-colors',
+                              isSelected
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border bg-background hover:border-primary/50',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{offer.participantName ?? 'Team'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {offer.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Live offer')}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {formatLineLabel(offer.line) ?? 'Line pending'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{buildOddsLabel(offer.overOdds)}</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedMarketType === 'total' && totalOffers.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Total
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Tap over or under to preload the total
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {totalOffers.map((offer) => (
+                        <div
+                          key={`${offer.marketTypeId ?? offer.providerMarketKey}:${offer.line ?? 'line'}`}
+                          className="rounded-xl border border-border bg-background px-4 py-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-foreground">Game Total</p>
+                              <p className="text-xs text-muted-foreground">
+                                {offer.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Live offer')}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                              {offer.line != null ? String(offer.line) : 'Line pending'}
+                            </span>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Button
+                              type="button"
+                              variant={selectedOffer?.offer === offer && selectedOffer.side === 'over' ? 'default' : 'outline'}
+                              className="justify-between"
+                              onClick={() => applyLiveOfferSelection(offer, 'over')}
+                            >
+                              <span>Over</span>
+                              <span>{buildOddsLabel(offer.overOdds)}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={selectedOffer?.offer === offer && selectedOffer.side === 'under' ? 'default' : 'outline'}
+                              className="justify-between"
+                              onClick={() => applyLiveOfferSelection(offer, 'under')}
+                            >
+                              <span>Under</span>
+                              <span>{buildOddsLabel(offer.underOdds)}</span>
+                            </Button>
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedMarketType === 'player-prop' && filteredOffers.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Player Prop Offers
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Tap over or under to preload the prop
+                      </span>
+                    </div>
+                    <div className="max-h-[24rem] space-y-2 overflow-y-auto pr-1">
+                      {filteredOffers.map((offer) => {
+                        const statLabel =
+                          inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName) ??
+                          watchedValues.statType ??
+                          'Prop';
+                        const lineLabel = offer.line != null ? String(offer.line) : 'Line pending';
+                        const participantLabel = offer.participantName ?? watchedValues.playerName ?? 'Player';
+                        return (
+                          <div
+                            key={[
+                              offer.sportsbookId ?? offer.providerKey,
+                              offer.marketTypeId ?? offer.providerMarketKey,
+                              offer.participantId ?? 'participant',
+                              offer.line ?? 'line',
+                            ].join(':')}
+                            className="rounded-xl border border-border bg-background px-4 py-4"
+                          >
+                            <div className="mb-3 flex items-center justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{participantLabel}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {statLabel}
+                                  {offer.sportsbookName ?? (selectedSportsbookValue ? ` · ${watchedValues.sportsbook}` : '')}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                                {lineLabel}
+                              </span>
+                            </div>
+                            <div className="grid gap-2 sm:grid-cols-2">
+                              <Button
+                                type="button"
+                                variant={selectedOffer?.offer === offer && selectedOffer.side === 'over' ? 'default' : 'outline'}
+                                className="justify-between"
+                                onClick={() => applyLiveOfferSelection(offer, 'over')}
+                              >
+                                <span>Over</span>
+                                <span>{buildOddsLabel(offer.overOdds)}</span>
+                              </Button>
+                              <Button
+                                type="button"
+                                variant={selectedOffer?.offer === offer && selectedOffer.side === 'under' ? 'default' : 'outline'}
+                                className="justify-between"
+                                onClick={() => applyLiveOfferSelection(offer, 'under')}
+                              >
+                                <span>Under</span>
+                                <span>{buildOddsLabel(offer.underOdds)}</span>
+                              </Button>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1564,11 +2290,41 @@ export function BetForm() {
                     </div>
 
                     {filteredOffers.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
-                        No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.
+                      <div className="space-y-3 rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+                        <p>
+                          {selectedSportsbookMissingLiveCoverage
+                            ? `No live ${watchedValues.sportsbook} offers for this market right now.`
+                            : 'No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.'}
+                        </p>
+                        {selectedSportsbookMissingLiveCoverage && alternateLiveSportsbooks.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Live books available now
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {alternateLiveSportsbooks.map((sportsbook) => (
+                                <Button
+                                  key={sportsbook.id}
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    form.setValue('sportsbook', sportsbook.id, {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                >
+                                  {sportsbook.name}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
-                    ) : (
-                      <div className="space-y-3">
+                    ) : selectedMarketType === 'moneyline' || selectedMarketType === 'spread' || selectedMarketType === 'total' || selectedMarketType === 'player-prop' ? null : (
+                      <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {filteredOffers.map((offer) => {
                           const offerAgeMinutes = getOfferAgeMinutes(offer.snapshotAt);
                           const isMoneyline = mapOfferToFormMarketType(offer) === 'moneyline';
@@ -1613,6 +2369,87 @@ export function BetForm() {
                         })}
                       </div>
                     )}
+
+                    {selectedMarketType === 'player-prop' && filteredOffers.length === 0 ? (
+                      <div className="space-y-4 rounded-xl border border-border bg-background px-4 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Player Prop Ticket
+                          </p>
+                          <span className="text-xs text-muted-foreground">Manual fallback</span>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border border-border bg-background/70 px-4 py-4">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Player</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {watchedValues.playerName || 'Choose player above'}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {watchedValues.team || 'Team will lock from selection'}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-background/70 px-4 py-4">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stat Type</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {watchedValues.statType || 'Choose stat above'}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Matchup stays locked to the selected game
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Button
+                            type="button"
+                            variant={watchedValues.direction === 'over' ? 'default' : 'outline'}
+                            className="justify-between"
+                            onClick={() => form.setValue('direction', 'over', {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            })}
+                          >
+                            <span>Over</span>
+                            <span>Select</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={watchedValues.direction === 'under' ? 'default' : 'outline'}
+                            className="justify-between"
+                            onClick={() => form.setValue('direction', 'under', {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            })}
+                          >
+                            <span>Under</span>
+                            <span>Select</span>
+                          </Button>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <FormField
+                            control={form.control}
+                            name="line"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Line</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    step="0.5"
+                                    placeholder="e.g. 24.5"
+                                    {...field}
+                                    value={field.value ?? ''}
+                                    onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -1637,6 +2474,18 @@ export function BetForm() {
         <div className="space-y-4">
           <ParticipantAutocompleteField
             form={form}
+            name="team"
+            label="Team"
+            placeholder="Type a team name"
+            searchType="team"
+            eventId={selectedMatchupId}
+            sport={selectedSport}
+            allowedParticipantIds={allowedTeamIds}
+            onSuggestionSelected={handleTeamSuggestionSelection}
+            onManualChange={() => setSelectedTeamId(null)}
+          />
+          <ParticipantAutocompleteField
+            form={form}
             name="playerName"
             label="Player Name"
             placeholder="Type a player name"
@@ -1644,7 +2493,7 @@ export function BetForm() {
             eventId={selectedMatchupId}
             sport={selectedSport}
             allowedParticipantIds={allowedPlayerIds}
-            onSuggestionSelected={(suggestion) => setSelectedPlayerId(suggestion.participantId)}
+            onSuggestionSelected={handlePlayerSuggestionSelection}
             onManualChange={() => setSelectedPlayerId(null)}
           />
           <div className="grid grid-cols-2 gap-3">
@@ -1655,7 +2504,11 @@ export function BetForm() {
                 <FormItem>
                   <FormLabel>Matchup</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Knicks vs Heat" {...field} />
+                    <Input
+                      placeholder="e.g. Knicks vs Heat"
+                      readOnly={browseMode === 'live-offer' && Boolean(selectedMatchup)}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1740,31 +2593,72 @@ export function BetForm() {
     if (selectedMarketType === 'moneyline') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <ParticipantAutocompleteField
-            form={form}
-            name="team"
-            label="Team to Win"
-            placeholder="Type a team name"
-            searchType="team"
-            eventId={selectedMatchupId}
-            sport={selectedSport}
-            allowedParticipantIds={allowedTeamIds}
-            onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
-            onManualChange={() => setSelectedTeamId(null)}
-          />
+          {selectedMatchup ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {matchupTeams.map((team) => {
+                  const isSelected = selectedTeamId === (team.teamId ?? team.participantId);
+                  const offer = moneylineOfferMap.get(team.teamId ?? '') ?? moneylineOfferMap.get(team.participantId);
+                  return (
+                    <button
+                      key={team.participantId}
+                      type="button"
+                      onClick={() => applyMoneylineTeamSelection(team)}
+                      className={cn(
+                        'rounded-xl border px-4 py-4 text-left transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-primary/50',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-foreground">{team.displayName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {offer?.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Manual odds')}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                          {buildOddsLabel(offer?.overOdds)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <ParticipantAutocompleteField
+                form={form}
+                name="team"
+                label="Team to Win"
+                placeholder="Type a team name"
+                searchType="team"
+                eventId={selectedMatchupId}
+                sport={selectedSport}
+                allowedParticipantIds={allowedTeamIds}
+                onSuggestionSelected={handleTeamSuggestionSelection}
+                onManualChange={() => setSelectedTeamId(null)}
+              />
+            </>
+          )}
         </div>
       );
     }
@@ -1772,53 +2666,153 @@ export function BetForm() {
     if (selectedMarketType === 'spread') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <ParticipantAutocompleteField
-              form={form}
-              name="team"
-              label="Team"
-              placeholder="Type a team name"
-              searchType="team"
-              eventId={selectedMatchupId}
-              sport={selectedSport}
-              allowedParticipantIds={allowedTeamIds}
-              onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
-              onManualChange={() => setSelectedTeamId(null)}
-            />
-            <FormField
-              control={form.control}
-              name="line"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Spread</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      placeholder="e.g. -3.5"
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+          {selectedMatchup ? (
+            <>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                  Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {matchupTeams.map((team) => {
+                    const teamKey = team.teamId ?? team.participantId;
+                    const isSelected = selectedTeamId === teamKey;
+                    const selectedLineLabel =
+                      isSelected && typeof watchedValues.line === 'number'
+                        ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                        : null;
+                    return (
+                      <button
+                        key={team.participantId}
+                        type="button"
+                        onClick={() => {
+                          form.setValue('team', team.displayName, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                          setSelectedTeamId(teamKey);
+                        }}
+                        className={cn(
+                          'rounded-xl border px-4 py-4 text-left transition-colors',
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">{team.displayName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual spread entry'}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              isSelected
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {selectedLineLabel ?? 'Enter line'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedTeamId
+                        ? `${matchupTeams.find((team) => (team.teamId ?? team.participantId) === selectedTeamId)?.displayName ?? 'Selected team'} spread`
+                        : 'Spread ticket'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Pick a side above, then enter the spread line to finish the ticket.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <FormField
+                    control={form.control}
+                    name="line"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Spread</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="e.g. -3.5"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <ParticipantAutocompleteField
+                  form={form}
+                  name="team"
+                  label="Team"
+                  placeholder="Type a team name"
+                  searchType="team"
+                  eventId={selectedMatchupId}
+                  sport={selectedSport}
+                  allowedParticipantIds={allowedTeamIds}
+                  onSuggestionSelected={handleTeamSuggestionSelection}
+                  onManualChange={() => setSelectedTeamId(null)}
+                />
+                <FormField
+                  control={form.control}
+                  name="line"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Spread</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="e.g. -3.5"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -1826,62 +2820,162 @@ export function BetForm() {
     if (selectedMarketType === 'total') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name="direction"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Over / Under</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+          {selectedMatchup ? (
+            <>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                  Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(['over', 'under'] as const).map((direction) => {
+                    const isSelected = watchedValues.direction === direction;
+                    const selectedLineLabel =
+                      isSelected && typeof watchedValues.line === 'number'
+                        ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                        : null;
+                    return (
+                      <button
+                        key={direction}
+                        type="button"
+                        onClick={() => {
+                          form.setValue('direction', direction, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        className={cn(
+                          'rounded-xl border px-4 py-4 text-left transition-colors',
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">
+                              {direction === 'over' ? 'Over' : 'Under'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual total entry'}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              isSelected
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {selectedLineLabel ?? 'Enter total'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {watchedValues.direction
+                        ? `${watchedValues.direction === 'over' ? 'Over' : 'Under'} total`
+                        : 'Game total ticket'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Pick a side above, then enter the total line to finish the ticket.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <FormField
+                    control={form.control}
+                    name="line"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Total</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="e.g. 220.5"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Over or Under" />
-                      </SelectTrigger>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value="over">Over</SelectItem>
-                      <SelectItem value="under">Under</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="line"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Total</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      placeholder="e.g. 220.5"
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="direction"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Over / Under</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Over or Under" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="over">Over</SelectItem>
+                          <SelectItem value="under">Under</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="line"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="e.g. 220.5"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -1889,74 +2983,219 @@ export function BetForm() {
     if (selectedMarketType === 'team-total') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <ParticipantAutocompleteField
-              form={form}
-              name="team"
-              label="Team"
-              placeholder="Type a team name"
-              searchType="team"
-              eventId={selectedMatchupId}
-              sport={selectedSport}
-              allowedParticipantIds={allowedTeamIds}
-              onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
-              onManualChange={() => setSelectedTeamId(null)}
-            />
-            <FormField
-              control={form.control}
-              name="direction"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Over / Under</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Over or Under" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="over">Over</SelectItem>
-                      <SelectItem value="under">Under</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <FormField
-            control={form.control}
-            name="line"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Team Total</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    placeholder="e.g. 112.5"
-                    {...field}
-                    value={field.value ?? ''}
-                    onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+          {selectedMatchup ? (
+            <>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                  Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {matchupTeams.map((team) => {
+                    const teamKey = team.teamId ?? team.participantId;
+                    const isSelected = selectedTeamId === teamKey;
+                    return (
+                      <button
+                        key={team.participantId}
+                        type="button"
+                        onClick={() => {
+                          form.setValue('team', team.displayName, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                          setSelectedTeamId(teamKey);
+                        }}
+                        className={cn(
+                          'rounded-xl border px-4 py-4 text-left transition-colors',
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">{team.displayName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual team total entry'}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              isSelected
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {isSelected ? 'Selected' : 'Pick team'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(['over', 'under'] as const).map((direction) => {
+                  const isSelected = watchedValues.direction === direction;
+                  const selectedLineLabel =
+                    isSelected && typeof watchedValues.line === 'number'
+                      ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                      : null;
+                  return (
+                    <button
+                      key={direction}
+                      type="button"
+                      onClick={() => {
+                        form.setValue('direction', direction, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                      className={cn(
+                        'rounded-xl border px-4 py-4 text-left transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-primary/50',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {direction === 'over' ? 'Over' : 'Under'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual team total entry'}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                            isSelected
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-border text-muted-foreground',
+                          )}
+                        >
+                          {selectedLineLabel ?? 'Enter total'}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedTeamId
+                        ? `${matchupTeams.find((team) => (team.teamId ?? team.participantId) === selectedTeamId)?.displayName ?? 'Selected team'} total`
+                        : 'Team total ticket'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Choose the team and side above, then enter the team total line to finish the ticket.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <FormField
+                    control={form.control}
+                    name="line"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Team Total</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="e.g. 112.5"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <ParticipantAutocompleteField
+                  form={form}
+                  name="team"
+                  label="Team"
+                  placeholder="Type a team name"
+                  searchType="team"
+                  eventId={selectedMatchupId}
+                  sport={selectedSport}
+                  allowedParticipantIds={allowedTeamIds}
+                  onSuggestionSelected={handleTeamSuggestionSelection}
+                  onManualChange={() => setSelectedTeamId(null)}
+                />
+                <FormField
+                  control={form.control}
+                  name="direction"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Over / Under</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Over or Under" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="over">Over</SelectItem>
+                          <SelectItem value="under">Under</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="line"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Team Total</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="e.g. 112.5"
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
         </div>
       );
     }
@@ -2022,7 +3261,7 @@ export function BetForm() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <FormField
                     control={form.control}
                     name="sport"
@@ -2072,12 +3311,15 @@ export function BetForm() {
                       </FormItem>
                     )}
                   />
+
+                  <SearchableSportsbookField form={form} sportsbooks={catalog.sportsbooks} />
                 </div>
               </section>
 
               {renderLiveOfferSection()}
 
-              <section className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+              {shouldRenderPickDetailsSection ? (
+                <section className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-foreground">Pick Details</h2>
@@ -2091,20 +3333,22 @@ export function BetForm() {
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Market Family
-                  </p>
-                  <MarketTypeGrid
-                    availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
-                    selected={selectedMarketType}
-                    onSelect={(type) => form.setValue('marketType', type, {
-                      shouldDirty: true,
-                      shouldTouch: true,
-                      shouldValidate: true,
-                    })}
-                  />
-                </div>
+                {!hasSelectedBrowseMatchup ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Market Family
+                    </p>
+                    <MarketTypeGrid
+                      availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
+                      selected={selectedMarketType}
+                      onSelect={(type) => form.setValue('marketType', type, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      })}
+                    />
+                  </div>
+                ) : null}
 
                 {selectedMatchup && shouldShowManualFallback ? (
                   <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
@@ -2119,13 +3363,12 @@ export function BetForm() {
                 ) : null}
 
                 {renderBetDetailsSection()}
-              </section>
+                </section>
+              ) : null}
 
               <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-foreground">Book, Odds, and Submission</h2>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <SearchableSportsbookField form={form} sportsbooks={catalog.sportsbooks} />
-
                   <FormField
                     control={form.control}
                     name="odds"
@@ -2164,7 +3407,7 @@ export function BetForm() {
                             placeholder="1.0"
                             {...field}
                             value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            onChange={(event) => field.onChange(normalizeUnitsValue(event.target.value))}
                           />
                         </FormControl>
                         <FormMessage />
@@ -2187,7 +3430,7 @@ export function BetForm() {
                             placeholder="8"
                             {...field}
                             value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            onChange={(event) => field.onChange(normalizeConvictionValue(event.target.value))}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">

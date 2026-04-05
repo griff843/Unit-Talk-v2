@@ -37,7 +37,8 @@ export interface WorkerCycleSummary {
 export async function runWorkerCycles(
   options: WorkerRunnerOptions,
 ): Promise<WorkerCycleSummary[]> {
-  const maxCycles = options.maxCycles ?? 1;
+  // 0 means "run indefinitely" — the process relies on SIGINT/SIGTERM for clean shutdown
+  const maxCycles = options.maxCycles ?? 0;
   const pollIntervalMs = options.pollIntervalMs ?? 5000;
   const staleClaimMs = options.staleClaimMs ?? 300000;
   const sleep = options.sleep ?? defaultSleep;
@@ -53,7 +54,7 @@ export async function runWorkerCycles(
   // Pass workerHeartbeatIntervalMs=0 to disable. Default: 30000.
   const heartbeatIntervalMs = options.workerHeartbeatIntervalMs ?? 30000;
 
-  for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+  for (let cycle = 1; maxCycles === 0 || cycle <= maxCycles; cycle += 1) {
     let heartbeatRunId: string | undefined;
     if (heartbeatIntervalMs > 0) {
       try {

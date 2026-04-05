@@ -17,6 +17,34 @@ const catalogResponse = {
         statTypes: ['Passing Yards', 'Rushing Yards', 'Receiving Yards'],
         teams: [],
       },
+      {
+        id: 'MLB',
+        name: 'MLB',
+        marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+        statTypes: ['Hits', 'Total Bases', 'Pitching Strikeouts'],
+        teams: [],
+      },
+      {
+        id: 'NHL',
+        name: 'NHL',
+        marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+        statTypes: ['Shots on Goal', 'Points', 'Assists'],
+        teams: [],
+      },
+      {
+        id: 'NCAAB',
+        name: 'NCAAB',
+        marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+        statTypes: ['Points', 'Rebounds', 'Assists'],
+        teams: [],
+      },
+      {
+        id: 'NCAAF',
+        name: 'NCAAF',
+        marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+        statTypes: ['Passing Yards', 'Rushing Yards', 'Receiving Yards'],
+        teams: [],
+      },
     ],
     sportsbooks: [
       { id: 'fanatics', name: 'Fanatics' },
@@ -103,6 +131,293 @@ const eventBrowseResponse = {
         providerKey: 'sgo',
         providerMarketKey: 'nba-player-assists',
         providerParticipantId: 'provider-jamal',
+      },
+    ],
+  },
+};
+
+const nbaLookupMatchupsResponse = {
+  data: [
+    {
+      eventId: 'evt-celtics',
+      externalId: 'nba-evt-celtics',
+      eventName: 'Celtics vs Knicks',
+      eventDate: '2026-04-02',
+      status: 'scheduled',
+      sportId: 'NBA',
+      leagueId: 'nba',
+      teams: [
+        { participantId: 'team-celtics-participant', teamId: 'team-celtics', displayName: 'Celtics', role: 'home' },
+        { participantId: 'team-knicks-participant', teamId: 'team-knicks', displayName: 'Knicks', role: 'away' },
+      ],
+    },
+    {
+      eventId: 'evt-lakers',
+      externalId: 'nba-evt-lakers',
+      eventName: 'Lakers vs Bulls',
+      eventDate: '2026-04-02',
+      status: 'scheduled',
+      sportId: 'NBA',
+      leagueId: 'nba',
+      teams: [
+        { participantId: 'team-lakers-participant', teamId: 'team-lakers', displayName: 'Lakers', role: 'home' },
+        { participantId: 'team-bulls-participant', teamId: 'team-bulls', displayName: 'Bulls', role: 'away' },
+      ],
+    },
+  ],
+};
+
+const nbaLookupEventBrowseResponse = {
+  data: {
+    eventId: 'evt-celtics',
+    externalId: 'nba-evt-celtics',
+    eventName: 'Celtics vs Knicks',
+    eventDate: '2026-04-02',
+    status: 'scheduled',
+    sportId: 'NBA',
+    leagueId: 'nba',
+    participants: [
+      {
+        participantId: 'team-celtics-participant',
+        canonicalId: 'team-celtics',
+        participantType: 'team',
+        displayName: 'Celtics',
+        role: 'home',
+        teamId: 'team-celtics',
+        teamName: 'Celtics',
+      },
+      {
+        participantId: 'team-knicks-participant',
+        canonicalId: 'team-knicks',
+        participantType: 'team',
+        displayName: 'Knicks',
+        role: 'away',
+        teamId: 'team-knicks',
+        teamName: 'Knicks',
+      },
+      {
+        participantId: 'player-tatum',
+        canonicalId: 'player-tatum',
+        participantType: 'player',
+        displayName: 'Jayson Tatum',
+        role: 'home',
+        teamId: 'team-celtics',
+        teamName: 'Celtics',
+      },
+      {
+        participantId: 'player-brown',
+        canonicalId: 'player-brown',
+        participantType: 'player',
+        displayName: 'Jaylen Brown',
+        role: 'home',
+        teamId: 'team-celtics',
+        teamName: 'Celtics',
+      },
+      {
+        participantId: 'player-brunson',
+        canonicalId: 'player-brunson',
+        participantType: 'player',
+        displayName: 'Jalen Brunson',
+        role: 'away',
+        teamId: 'team-knicks',
+        teamName: 'Knicks',
+      },
+    ],
+    offers: [
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'moneyline',
+        marketDisplayName: 'Moneyline',
+        participantId: 'team-celtics-participant',
+        participantName: 'Celtics',
+        line: null,
+        overOdds: -135,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-moneyline-celtics',
+        providerParticipantId: 'team-celtics',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'moneyline',
+        marketDisplayName: 'Moneyline',
+        participantId: 'team-knicks-participant',
+        participantName: 'Knicks',
+        line: null,
+        overOdds: 115,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-moneyline-knicks',
+        providerParticipantId: 'team-knicks',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'game_spread',
+        marketDisplayName: 'Spread',
+        participantId: 'team-celtics-participant',
+        participantName: 'Celtics',
+        line: -4.5,
+        overOdds: -110,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-spread-celtics',
+        providerParticipantId: 'team-celtics',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'game_spread',
+        marketDisplayName: 'Spread',
+        participantId: 'team-knicks-participant',
+        participantName: 'Knicks',
+        line: 4.5,
+        overOdds: -110,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-spread-knicks',
+        providerParticipantId: 'team-knicks',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'game_total',
+        marketDisplayName: 'Total',
+        participantId: null,
+        participantName: null,
+        line: 227.5,
+        overOdds: -108,
+        underOdds: -112,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-total',
+        providerParticipantId: null,
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'player.points',
+        marketDisplayName: 'Player Points',
+        participantId: 'player-tatum',
+        participantName: 'Jayson Tatum',
+        line: 29.5,
+        overOdds: -110,
+        underOdds: -110,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-player-points',
+        providerParticipantId: 'provider-tatum',
+      },
+    ],
+  },
+};
+
+const nbaLookupBrowseSearchResponse = {
+  data: [
+    {
+      resultType: 'player',
+      participantId: 'player-tatum',
+      displayName: 'Jayson Tatum',
+      contextLabel: 'Celtics · Knicks @ Celtics · Apr 2',
+      teamId: 'team-celtics',
+      teamName: 'Celtics',
+      matchup: nbaLookupMatchupsResponse.data[0],
+    },
+    {
+      resultType: 'team',
+      participantId: 'team-celtics',
+      displayName: 'Celtics',
+      contextLabel: 'NBA · Apr 2',
+      teamId: 'team-celtics',
+      teamName: 'Celtics',
+      matchup: nbaLookupMatchupsResponse.data[0],
+    },
+  ],
+};
+
+const nhlLookupMatchupsResponse = {
+  data: [
+    {
+      eventId: 'evt-kraken',
+      externalId: 'nhl-evt-kraken',
+      eventName: 'Kraken vs Blackhawks',
+      eventDate: '2026-04-02',
+      status: 'scheduled',
+      sportId: 'NHL',
+      leagueId: 'nhl',
+      teams: [
+        { participantId: 'team-kraken-participant', teamId: 'team-kraken', displayName: 'Kraken', role: 'home' },
+        { participantId: 'team-blackhawks-participant', teamId: 'team-blackhawks', displayName: 'Blackhawks', role: 'away' },
+      ],
+    },
+  ],
+};
+
+const nhlLookupEventBrowseResponse = {
+  data: {
+    eventId: 'evt-kraken',
+    externalId: 'nhl-evt-kraken',
+    eventName: 'Kraken vs Blackhawks',
+    eventDate: '2026-04-02',
+    status: 'scheduled',
+    sportId: 'NHL',
+    leagueId: 'nhl',
+    participants: [
+      {
+        participantId: 'team-kraken-participant',
+        canonicalId: 'team-kraken',
+        participantType: 'team',
+        displayName: 'Kraken',
+        role: 'home',
+        teamId: 'team-kraken',
+        teamName: 'Kraken',
+      },
+      {
+        participantId: 'team-blackhawks-participant',
+        canonicalId: 'team-blackhawks',
+        participantType: 'team',
+        displayName: 'Blackhawks',
+        role: 'away',
+        teamId: 'team-blackhawks',
+        teamName: 'Blackhawks',
+      },
+    ],
+    offers: [
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'moneyline',
+        marketDisplayName: 'Moneyline',
+        participantId: 'team-kraken-participant',
+        participantName: 'Kraken',
+        line: null,
+        overOdds: -125,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nhl-moneyline-kraken',
+        providerParticipantId: 'team-kraken',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'moneyline',
+        marketDisplayName: 'Moneyline',
+        participantId: 'team-blackhawks-participant',
+        participantName: 'Blackhawks',
+        line: null,
+        overOdds: 105,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nhl-moneyline-blackhawks',
+        providerParticipantId: 'team-blackhawks',
       },
     ],
   },
@@ -300,7 +615,7 @@ test('manual fallback surfaces the current free-text matchup warning', async ({ 
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
 });
 
-test('selected matchup constrains participant choices and valid stat types', async ({ page }) => {
+test('selected matchup constrains player props to matchup teams and valid stat types', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', async (route) => {
     await route.fulfill({
       status: 200,
@@ -325,28 +640,23 @@ test('selected matchup constrains participant choices and valid stat types', asy
     });
   });
 
-  await page.route('**/api/operator/participants?**', async (route) => {
-    const requestUrl = new URL(route.request().url());
-    const participantType = requestUrl.searchParams.get('participantType');
-
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: participantType === 'player'
-          ? [
-              {
-                participantId: 'player-jamal',
-                displayName: 'Jamal Murray',
-                participantType: 'player',
-              },
-              {
-                participantId: 'player-lebron',
-                displayName: 'LeBron James',
-                participantType: 'player',
-              },
-            ]
-          : [],
+        data: [
+          {
+            participantId: 'player-jamal',
+            displayName: 'Jamal Murray',
+            participantType: 'player',
+          },
+          {
+            participantId: 'player-lebron',
+            displayName: 'LeBron James',
+            participantType: 'player',
+          },
+        ],
       }),
     });
   });
@@ -359,9 +669,10 @@ test('selected matchup constrains participant choices and valid stat types', asy
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: /Jazz @ Nuggets/i }).click();
   await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Nuggets/i }).click();
 
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
-  await expect(page.getByRole('option', { name: 'Assists' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Assists', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Points' })).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'Passing Yards' })).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -375,4 +686,651 @@ test('selected matchup constrains participant choices and valid stat types', asy
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
   await expect(page.getByRole('option', { name: 'Passing Yards' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Assists' })).toHaveCount(0);
+});
+
+test('player-prop flow binds matchup and narrows players once a matchup team is selected', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupBrowseSearchResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'player-tatum',
+            displayName: 'Jayson Tatum',
+            participantType: 'player',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/teams?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'team-celtics',
+            displayName: 'Celtics',
+            participantType: 'team',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await page.getByRole('button', { name: 'Browse slate' }).click();
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await expect(page.getByRole('button', { name: /ML\s*Moneyline/i }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /SPR\s*Spread/i }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /TOT\s*Total/i }).first()).toBeVisible();
+  await expect(page.getByRole('button', { name: /T-TOT\s*Team Total/i }).first()).toBeVisible();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Celtics/i }).click();
+
+  await page.getByPlaceholder('Type a player name').fill('Jays');
+  await page.getByRole('button', { name: /Jayson Tatum/i }).click();
+
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Celtics/i })).toHaveCount(1);
+  await expect(page.getByPlaceholder('Type a player name')).toHaveValue('Jayson Tatum');
+  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Celtics vs Knicks' })).toBeVisible();
+  await expect(page.getByText('Apr 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('combobox', { name: 'Stat Type' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jayson Tatum' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jaylen Brown' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jalen Brunson' })).toHaveCount(0);
+
+});
+
+test('player-prop fallback keeps the selected matchup compact when live offers are missing', async ({ page }) => {
+  const noPlayerPropEventBrowseResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: nbaLookupEventBrowseResponse.data.offers.filter((offer) => !offer.marketTypeId.startsWith('player.')),
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(noPlayerPropEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupBrowseSearchResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'player-tatum',
+            displayName: 'Jayson Tatum',
+            participantType: 'player',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/teams?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'team-celtics',
+            displayName: 'Celtics',
+            participantType: 'team',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Celtics/i }).click();
+  await page.getByPlaceholder('Type a player name').fill('Jays');
+  await page.getByRole('button', { name: /Jayson Tatum/i }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Points', exact: true }).click();
+
+  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await expect(page.getByText('Player Prop Ticket')).toBeVisible();
+  await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
+  await expect(page.locator('input[name="team"]')).toHaveCount(0);
+  await expect(page.locator('input[name="playerName"]')).toHaveCount(1);
+  await expect(page.getByRole('button', { name: /^Over/i }).last()).toBeVisible();
+  await expect(page.getByRole('button', { name: /^Under/i }).last()).toBeVisible();
+  await expect(page.locator('input[name="line"]')).toBeVisible();
+});
+
+test('units and conviction clamp to operator-safe bounds while typing', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.goto('/submit');
+
+  const unitsInput = page.locator('input[name="units"]');
+  const convictionInput = page.locator('input[name="capperConviction"]');
+
+  await unitsInput.fill('20');
+  await expect(unitsInput).toHaveValue('5');
+
+  await unitsInput.fill('0.1');
+  await expect(unitsInput).toHaveValue('0.5');
+
+  await convictionInput.fill('0');
+  await expect(convictionInput).toHaveValue('1');
+
+  await convictionInput.fill('14');
+  await expect(convictionInput).toHaveValue('10');
+});
+
+test('moneyline flow uses sportsbook-first filtering and matchup teams instead of free-text winner entry', async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | null = null;
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/submissions', async (route) => {
+    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          submissionId: 'sub_moneyline_123',
+          pickId: 'pick_moneyline_123',
+          lifecycleState: 'validated',
+        },
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Change game' })).toBeVisible();
+  await page.getByRole('button', { name: /ML\s*Moneyline/i }).first().click();
+
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Celtics Fanatics -135/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Knicks Fanatics \+115/i })).toBeVisible();
+  await expect(page.getByText('-135')).toBeVisible();
+  await expect(page.getByText('+115')).toBeVisible();
+  await expect(page.getByLabel('Team to Win')).toHaveCount(0);
+
+  await page.getByRole('button', { name: /Celtics Fanatics -135/i }).click();
+  await expect(page.locator('input[name="odds"]')).toHaveValue('-135');
+  await page.locator('input[name="capperConviction"]').fill('8');
+  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: 'Submit Pick' }).first().click();
+
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submittedPayload).not.toBeNull();
+  expect(submittedPayload?.market).toBe('moneyline');
+  expect(submittedPayload?.selection).toContain('Celtics');
+});
+
+test('spread flow collapses the slate and preloads side, line, and odds from live offers', async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | null = null;
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/submissions', async (route) => {
+    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          submissionId: 'sub_spread_123',
+          pickId: 'pick_spread_123',
+          lifecycleState: 'validated',
+        },
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+
+  await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
+  await page.getByRole('button', { name: /SPR\s*Spread/i }).first().click();
+
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Celtics.*-4.5.*-110/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Knicks.*\+4.5.*-110/i })).toBeVisible();
+
+  await page.getByRole('button', { name: /Celtics.*-4.5.*-110/i }).click();
+  await expect(page.locator('input[name="odds"]')).toHaveValue('-110');
+  await page.locator('input[name="capperConviction"]').fill('8');
+  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: 'Submit Pick' }).first().click();
+
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submittedPayload).not.toBeNull();
+  expect(submittedPayload?.market).toBe('game_spread');
+  expect(submittedPayload?.selection).toContain('Celtics -4.5');
+});
+
+test('spread fallback keeps the selected matchup compact when live offers are missing', async ({ page }) => {
+  const spreadlessEventBrowseResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: nbaLookupEventBrowseResponse.data.offers.filter((offer) => offer.marketTypeId !== 'game_spread'),
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(spreadlessEventBrowseResponse),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /Spread/i }).first().click();
+
+  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Celtics.*Enter line/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Knicks.*Enter line/i })).toBeVisible();
+  await expect(page.getByLabel('Matchup')).toHaveCount(0);
+  await expect(page.getByLabel('Team')).toHaveCount(0);
+});
+
+test('total fallback keeps the selected matchup compact when live offers are missing', async ({ page }) => {
+  const totallessEventBrowseResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: nbaLookupEventBrowseResponse.data.offers.filter((offer) => offer.marketTypeId !== 'game_total'),
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(totallessEventBrowseResponse),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /Total/i }).first().click();
+
+  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Over.*Enter total/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Under.*Enter total/i })).toBeVisible();
+  await expect(page.getByLabel('Matchup')).toHaveCount(0);
+  await expect(page.getByLabel('Over / Under')).toHaveCount(0);
+});
+
+test('team total fallback keeps the selected matchup compact when live offers are missing', async ({ page }) => {
+  const teamTotallessEventBrowseResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: nbaLookupEventBrowseResponse.data.offers.filter((offer) => offer.marketTypeId !== 'team_total'),
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(teamTotallessEventBrowseResponse),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /Team Total/i }).first().click();
+
+  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Celtics.*Pick team/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Knicks.*Pick team/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Over.*Enter total/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Under.*Enter total/i })).toBeVisible();
+  await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
+  await expect(page.locator('input[name="team"]')).toHaveCount(0);
+  await expect(page.getByText('Over or Under', { exact: true })).toHaveCount(0);
+});
+
+test('alternate live books surface when selected sportsbook has no coverage for a market', async ({ page }) => {
+  // Event browse returns player-prop offers only from DraftKings and BetMGM — no Fanatics props.
+  // The form should detect this mismatch and render "Live books available now" with the alternate books.
+  const noFanaticsPropsResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: [
+        {
+          sportsbookId: 'draftkings',
+          sportsbookName: 'DraftKings',
+          marketTypeId: 'player.points',
+          marketDisplayName: 'Player Points',
+          participantId: 'player-tatum',
+          participantName: 'Jayson Tatum',
+          line: 28.5,
+          overOdds: -115,
+          underOdds: -105,
+          snapshotAt: '2026-04-02T22:55:00.000Z',
+          providerKey: 'sgo',
+          providerMarketKey: 'nba-player-points-dk',
+          providerParticipantId: 'provider-tatum',
+        },
+        {
+          sportsbookId: 'betmgm',
+          sportsbookName: 'BetMGM',
+          marketTypeId: 'player.points',
+          marketDisplayName: 'Player Points',
+          participantId: 'player-tatum',
+          participantName: 'Jayson Tatum',
+          line: 28.5,
+          overOdds: -112,
+          underOdds: -108,
+          snapshotAt: '2026-04-02T22:55:00.000Z',
+          providerKey: 'sgo',
+          providerMarketKey: 'nba-player-points-mgm',
+          providerParticipantId: 'provider-tatum',
+        },
+      ],
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalogResponse) });
+  });
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(nbaLookupMatchupsResponse) });
+  });
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(noFanaticsPropsResponse) });
+  });
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(nbaLookupBrowseSearchResponse) });
+  });
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ participantId: 'player-tatum', displayName: 'Jayson Tatum', participantType: 'player' }] }) });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Celtics/i }).click();
+  await page.getByPlaceholder('Type a player name').fill('Jays');
+  await page.getByRole('button', { name: /Jayson Tatum/i }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Points', exact: true }).click();
+
+  // Fanatics has no coverage — "Live books available now" should surface the alternate books
+  await expect(page.getByText('Live books available now')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'DraftKings' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'BetMGM' })).toBeVisible();
+
+  // Clicking DraftKings should switch context and show live offers
+  await page.getByRole('button', { name: 'DraftKings' }).click();
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('DraftKings');
+  await expect(page.getByText('Live books available now')).toHaveCount(0);
+});
+
+test('nhl moneyline uses the same guided game-market flow as nba', async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | null = null;
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nhlLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-kraken/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nhlLookupEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/submissions', async (route) => {
+    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          submissionId: 'sub_nhl_ml_123',
+          pickId: 'pick_nhl_ml_123',
+          lifecycleState: 'validated',
+        },
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NHL' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await page.getByRole('button', { name: /Blackhawks @ Kraken/i }).click();
+  await page.getByRole('button', { name: /ML\\s*Moneyline|Moneyline/i }).first().click();
+
+  await expect(page.getByRole('button', { name: /Kraken/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Blackhawks/i })).toBeVisible();
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await page.getByRole('button', { name: /Kraken.*-125/i }).click();
+  await expect(page.locator('input[name="odds"]')).toHaveValue('-125');
+  await page.locator('input[name="capperConviction"]').fill('8');
+  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: 'Submit Pick' }).first().click();
+
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submittedPayload).not.toBeNull();
+  expect(submittedPayload?.market).toBe('moneyline');
+  expect(submittedPayload?.selection).toContain('Kraken');
 });
