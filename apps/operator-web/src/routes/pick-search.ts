@@ -8,8 +8,8 @@ import { writeJson } from '../http-utils.js';
  * Full-featured pick search with filters:
  *   q           - text search (pick ID prefix, market, selection)
  *   source      - exact match on picks.source
- *   capper      - ilike match on canonical submitter/capper identity
- *   sport       - substring match on canonical sport metadata
+ *   capper      - ilike match on canonical capper identity
+ *   sport       - substring match on canonical sport identity
  *   status      - lifecycle status (validated, queued, posted, settled, voided)
  *   approval    - approval_status (pending, approved, rejected)
  *   result      - settlement result (win, loss, push, void) - filters settled picks only
@@ -18,6 +18,9 @@ import { writeJson } from '../http-utils.js';
  *   sort        - newest (default), oldest, score
  *   limit       - max results (default 25, max 100)
  *   offset      - pagination offset (default 0)
+ *
+ * Uses picks_current_state view: settlement result and promotion state are available
+ * inline without a second query.
  */
 export async function handlePickSearchRequest(
   request: IncomingMessage,
@@ -50,7 +53,9 @@ export async function handlePickSearchRequest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = provider._supabaseClient as any;
 
-  let query = client.from('picks').select('*', { count: 'exact' });
+  // picks_current_state view provides settlement_result, promotion_status_current,
+  // sport_display_name, and capper_display_name inline — no secondary queries needed.
+  let query = client.from('picks_current_state').select('*', { count: 'exact' });
 
   if (q) {
     if (q.match(/^[0-9a-f-]{4,}$/i)) {
@@ -92,34 +97,15 @@ export async function handlePickSearchRequest(
   let picks = (data ?? []) as Array<Record<string, unknown>>;
   let total = count ?? 0;
 
-  const submissionIds = picks
-    .map((pick) => pick['submission_id'])
-    .filter((submissionId): submissionId is string => typeof submissionId === 'string' && submissionId.length > 0);
-
-  const submissionsById = new Map<string, Record<string, unknown>>();
-  if (submissionIds.length > 0) {
-    const { data: submissions } = await client
-      .from('submissions')
-      .select('*')
-      .in('id', submissionIds);
-
-    for (const row of (submissions ?? []) as Array<Record<string, unknown>>) {
-      const submissionId = row['id'];
-      if (typeof submissionId === 'string' && submissionId.length > 0) {
-        submissionsById.set(submissionId, row);
-      }
-    }
-  }
-
   picks = picks
     .map((pick) => {
-      const submissionId = typeof pick['submission_id'] === 'string' ? pick['submission_id'] : null;
-      const submission = submissionId ? submissionsById.get(submissionId) ?? null : null;
-
       return {
         ...pick,
-        submitter: readSubmittedBy(pick, submission),
-        sport: readMetadataString(pick, 'sport'),
+        submitter: readSubmittedBy(pick),
+        sport:
+          readStringField(pick, 'sport_id') ??
+          readStringField(pick, 'sport_display_name') ??
+          readMetadataString(pick, 'sport'),
       };
     })
     .filter((pick) => {
@@ -145,34 +131,10 @@ export async function handlePickSearchRequest(
   }
 
   if (result && picks.length > 0) {
-    const settledIds = picks.filter((pick) => pick['status'] === 'settled').map((pick) => pick['id'] as string);
-    if (settledIds.length > 0) {
-      const { data: settlements } = await client
-        .from('settlement_records')
-        .select('pick_id, result, corrects_id')
-        .in('pick_id', settledIds)
-        .order('created_at', { ascending: false });
-
-      const resultByPick = new Map<string, string>();
-      for (const settlement of (settlements ?? []) as Array<Record<string, unknown>>) {
-        const pickId = settlement['pick_id'] as string;
-        if (!resultByPick.has(pickId) && settlement['result']) {
-          resultByPick.set(pickId, settlement['result'] as string);
-        }
-      }
-
-      const matchingIds = new Set(
-        [...resultByPick.entries()]
-          .filter(([, settlementResult]) => settlementResult === result)
-          .map(([pickId]) => pickId),
-      );
-
-      picks = picks.filter((pick) => matchingIds.has(pick['id'] as string));
-      total = picks.length;
-    } else {
-      picks = [];
-      total = 0;
-    }
+    // settlement_result is available inline from picks_current_state view —
+    // no secondary settlement_records query needed.
+    picks = picks.filter((pick) => pick['settlement_result'] === result);
+    total = picks.length;
   }
 
   writeJson(response, 200, {
@@ -192,24 +154,18 @@ function readMetadataString(pick: Record<string, unknown>, key: string): string 
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
-function readSubmittedBy(
-  pick: Record<string, unknown>,
-  submission: Record<string, unknown> | null,
-): string | null {
-  const submissionPayload =
-    submission != null &&
-    typeof submission['payload'] === 'object' &&
-    submission['payload'] !== null &&
-    !Array.isArray(submission['payload'])
-      ? (submission['payload'] as Record<string, unknown>)
-      : null;
+function readStringField(pick: Record<string, unknown>, key: string): string | null {
+  const value = pick[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
 
+function readSubmittedBy(pick: Record<string, unknown>): string | null {
   const candidates = [
+    pick['capper_display_name'],
+    pick['capper_id'],
     pick['submitted_by'],
-    submission?.['submitted_by'],
     readMetadataString(pick, 'capper'),
     readMetadataString(pick, 'submittedBy'),
-    submissionPayload?.['submittedBy'],
   ];
 
   for (const candidate of candidates) {

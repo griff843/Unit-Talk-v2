@@ -4901,9 +4901,84 @@ function createAggregateProvider(tables: Record<string, Array<Record<string, unk
 function createMockSupabaseClient(tables: Record<string, Array<Record<string, unknown>>>) {
   return {
     from(table: string) {
-      return new MockSupabaseQuery(tables[table] ?? []);
+      const rows =
+        table === 'picks_current_state' && !tables[table]
+          ? buildPicksCurrentStateRows(tables)
+          : (tables[table] ?? []);
+      return new MockSupabaseQuery(rows);
     },
   };
+}
+
+function buildPicksCurrentStateRows(tables: Record<string, Array<Record<string, unknown>>>) {
+  const promotionByPick = new Map<string, Record<string, unknown>>();
+  for (const row of [...(tables['pick_promotion_history'] ?? [])].reverse()) {
+    const pickId = row['pick_id'];
+    if (typeof pickId === 'string' && !promotionByPick.has(pickId)) {
+      promotionByPick.set(pickId, row);
+    }
+  }
+
+  const settlementByPick = new Map<string, Record<string, unknown>>();
+  for (const row of [...(tables['settlement_records'] ?? [])].reverse()) {
+    const pickId = row['pick_id'];
+    if (typeof pickId === 'string' && !settlementByPick.has(pickId)) {
+      settlementByPick.set(pickId, row);
+    }
+  }
+
+  const reviewByPick = new Map<string, Record<string, unknown>>();
+  for (const row of [...(tables['pick_reviews'] ?? [])].reverse()) {
+    const pickId = row['pick_id'];
+    if (typeof pickId === 'string' && !reviewByPick.has(pickId)) {
+      reviewByPick.set(pickId, row);
+    }
+  }
+
+  return (tables['picks'] ?? []).map((pick) => {
+    const metadata =
+      typeof pick['metadata'] === 'object' &&
+      pick['metadata'] !== null &&
+      !Array.isArray(pick['metadata'])
+        ? (pick['metadata'] as Record<string, unknown>)
+        : {};
+    const pickId = typeof pick['id'] === 'string' ? pick['id'] : null;
+    const promotion = pickId ? promotionByPick.get(pickId) ?? null : null;
+    const settlement = pickId ? settlementByPick.get(pickId) ?? null : null;
+    const review = pickId ? reviewByPick.get(pickId) ?? null : null;
+
+    return {
+      ...pick,
+      capper_display_name:
+        typeof metadata['capper'] === 'string' ? metadata['capper'] : null,
+      sport_id: typeof metadata['sport'] === 'string' ? metadata['sport'] : null,
+      sport_display_name:
+        typeof metadata['sport'] === 'string' ? metadata['sport'] : null,
+      market_type_display_name: null,
+      promotion_status_current:
+        typeof promotion?.['status'] === 'string' ? promotion['status'] : null,
+      promotion_target_current:
+        typeof promotion?.['target'] === 'string' ? promotion['target'] : null,
+      promotion_score_current:
+        typeof promotion?.['score'] === 'number' ? promotion['score'] : null,
+      promotion_decided_at_current:
+        typeof promotion?.['decided_at'] === 'string' ? promotion['decided_at'] : null,
+      settlement_result:
+        typeof settlement?.['result'] === 'string' ? settlement['result'] : null,
+      settlement_status:
+        typeof settlement?.['status'] === 'string' ? settlement['status'] : null,
+      settlement_source:
+        typeof settlement?.['source'] === 'string' ? settlement['source'] : null,
+      settlement_recorded_at:
+        typeof settlement?.['created_at'] === 'string' ? settlement['created_at'] : null,
+      review_decision:
+        typeof review?.['decision'] === 'string' ? review['decision'] : null,
+      review_decided_by:
+        typeof review?.['decided_by'] === 'string' ? review['decided_by'] : null,
+      review_decided_at:
+        typeof review?.['decided_at'] === 'string' ? review['decided_at'] : null,
+    };
+  });
 }
 
 class MockSupabaseQuery {
