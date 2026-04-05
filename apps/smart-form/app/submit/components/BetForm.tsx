@@ -31,6 +31,7 @@ import {
   getStatTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  resolveCanonicalMarketTypeId,
   resolveSportsbookId,
 } from '@/lib/form-utils';
 import { betFormSchema, type BetFormValues, type MarketTypeId } from '@/lib/form-schema';
@@ -1641,6 +1642,21 @@ export function BetForm() {
       const resolvedSportsbookId = selectedOfferMatchesSubmittedBook
         ? (selectedOffer?.offer.sportsbookId ?? resolveSportsbookId(catalog, values.sportsbook))
         : resolveSportsbookId(catalog, values.sportsbook);
+
+      // Fail-closed: manual player-prop submissions must resolve to a canonical market ID.
+      // If statType is unrecognised, block submission rather than posting an ungradeable pick.
+      if (!selectedOffer && values.marketType === 'player-prop') {
+        const resolved = resolveCanonicalMarketTypeId(values.marketType, values.statType);
+        if (!resolved) {
+          toast({
+            title: 'Market resolution failed',
+            description: `Cannot resolve canonical market for "${values.statType ?? 'unknown stat'}". Pick cannot be submitted.`,
+            variant: 'destructive',
+          });
+          setIsSubmitting(false);
+          return;
+        }
+      }
 
       const payload = buildSubmissionPayload(values, {
         submissionMode: selectedOffer ? 'live-offer' : 'manual',

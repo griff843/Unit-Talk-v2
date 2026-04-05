@@ -6,6 +6,7 @@ import {
   calcPayout,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
+  resolveCanonicalMarketTypeId,
   resolveSportsbookId,
 } from '../lib/form-utils.ts';
 import type { BetFormValues } from '../lib/form-schema.ts';
@@ -224,11 +225,42 @@ test('buildSubmissionPayload keeps smart-form identity and conviction mapping', 
 
   assert.equal(payload.source, 'smart-form');
   assert.equal(payload.submittedBy, 'griff843');
-  assert.equal(payload.market, 'NBA - Player Prop');
+  // statType='Assists' → canonical market_type_id (not display-string fallback)
+  assert.equal(payload.market, 'player_assists_ou');
   assert.equal(payload.selection, 'Jamal Murray Assists O 7');
   assert.equal(payload.confidence, 0.8);
   assert.equal(payload.metadata?.capperConviction, 8);
+  assert.equal(payload.metadata?.marketResolution, 'canonical');
   assert.deepEqual(payload.metadata?.promotionScores, { trust: 80 });
+});
+
+test('resolveCanonicalMarketTypeId maps known stat labels to market type IDs', () => {
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Points'), 'player_points_ou');
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Assists'), 'player_assists_ou');
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Points + Rebounds + Assists'), 'player_pra_ou');
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Passing Yards'), 'player_passing_yards_ou');
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Hits + Runs + RBIs'), 'player_batting_hrr_ou');
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Shots on Goal'), 'player_shots_ou');
+});
+
+test('resolveCanonicalMarketTypeId returns null for unknown stat labels', () => {
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', 'Unknown Stat'), null);
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', undefined), null);
+  assert.equal(resolveCanonicalMarketTypeId('player-prop', ''), null);
+});
+
+test('resolveCanonicalMarketTypeId maps game-line market types', () => {
+  assert.equal(resolveCanonicalMarketTypeId('moneyline'), 'moneyline');
+  assert.equal(resolveCanonicalMarketTypeId('spread'), 'spread');
+  assert.equal(resolveCanonicalMarketTypeId('total'), 'game_total_ou');
+  assert.equal(resolveCanonicalMarketTypeId('team-total'), 'team_total_ou');
+});
+
+test('buildSubmissionPayload sets marketResolution=display-fallback for unknown stat', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ statType: 'Unknown Prop' }));
+  assert.equal(payload.metadata?.marketResolution, 'display-fallback');
+  // market falls back to display string when unresolved
+  assert.ok(payload.market.includes('NBA'));
 });
 
 test('buildSubmissionPayload records canonical browse metadata for live-offer selections', () => {
@@ -249,6 +281,7 @@ test('buildSubmissionPayload records canonical browse metadata for live-offer se
   });
 
   assert.equal(payload.market, 'player.points_assists');
+  assert.equal(payload.metadata?.marketResolution, 'canonical');
   assert.equal(payload.metadata?.submissionMode, 'live-offer');
   assert.equal(payload.metadata?.eventId, 'evt-1');
   assert.equal(payload.metadata?.leagueId, 'nba');

@@ -31,6 +31,7 @@ import {
   computeSubmissionDomainAnalysis,
   enrichMetadataWithDomainAnalysis,
 } from './domain-analysis-service.js';
+import { ApiError } from './errors.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
 
 export interface SubmissionProcessingResult {
@@ -82,6 +83,18 @@ export async function processSubmission(
     providerOffers: ProviderOfferRepository;
   },
 ): Promise<SubmissionProcessingResult> {
+  // Guardrail: reject display-string market values (e.g. "NBA - Player Prop") that cannot
+  // be graded. These indicate the client failed to resolve a canonical market_type_id.
+  // Pattern: contains " - " (sport prefix separator used as the display-string fallback).
+  if (payload.market && payload.market.includes(' - ')) {
+    throw new ApiError(
+      422,
+      'UNRESOLVABLE_MARKET',
+      `Market "${payload.market}" is a display-string fallback and cannot be graded. ` +
+      `Resolve to a canonical market_type_id (e.g. player_points_ou) before submitting.`,
+    );
+  }
+
   const normalizedMarketKey = normalizeMarketKey(payload.market);
 
   // Idempotency check: compute key from normalized payload and check for existing pick.

@@ -16,6 +16,90 @@ export interface SubmissionContext {
   selectedOffer?: Pick<EventOfferBrowseResult, 'providerKey' | 'providerMarketKey' | 'providerParticipantId' | 'snapshotAt'> | null;
 }
 
+/**
+ * Maps stat type display labels (as shown in the Smart Form) to canonical
+ * market_type_id values stored in picks.market and matched by the grading service.
+ *
+ * Keep in sync with market_types table. Add new entries here when new stat types
+ * are surfaced by the form.
+ */
+export const STAT_LABEL_TO_MARKET_TYPE_ID: Readonly<Record<string, string>> = {
+  // NBA
+  'Points': 'player_points_ou',
+  'Rebounds': 'player_rebounds_ou',
+  'Assists': 'player_assists_ou',
+  'Threes': 'player_3pm_ou',
+  'Three Pointers Made': 'player_3pm_ou',
+  'Steals': 'player_steals_ou',
+  'Blocks': 'player_blocks_ou',
+  'Turnovers': 'player_turnovers_ou',
+  'Points + Rebounds + Assists': 'player_pra_ou',
+  'Points + Rebounds': 'player_pts_rebs_ou',
+  'Points + Assists': 'player_pts_asts_ou',
+  'Rebounds + Assists': 'player_rebs_asts_ou',
+  // MLB batting
+  'Hits': 'player_batting_hits_ou',
+  'Home Runs': 'player_batting_home_runs_ou',
+  'RBI': 'player_batting_rbi_ou',
+  'Walks': 'player_batting_walks_ou',
+  'Total Bases': 'player_batting_total_bases_ou',
+  'Singles': 'player_batting_singles_ou',
+  'Doubles': 'player_batting_doubles_ou',
+  'Triples': 'player_batting_triples_ou',
+  'Hits + Runs + RBIs': 'player_batting_hrr_ou',
+  // MLB pitching
+  'Pitching Strikeouts': 'player_pitching_strikeouts_ou',
+  'Strikeouts': 'player_pitching_strikeouts_ou',
+  'Pitching Innings Pitched': 'player_pitching_innings_pitched_ou',
+  'Earned Runs': 'player_pitching_earned_runs_ou',
+  'Hits Allowed': 'player_pitching_hits_allowed_ou',
+  'Pitcher Outs': 'player_pitching_outs_ou',
+  // NHL
+  'Goals': 'player_goals_ou',
+  'Hockey Points': 'player_hockey_points_ou',
+  'Shots on Goal': 'player_shots_ou',
+  'Saves': 'player_saves_ou',
+  'Blocked Shots': 'player_blocked_shots_ou',
+  // NFL
+  'Passing Yards': 'player_passing_yards_ou',
+  'Passing Touchdowns': 'player_passing_tds_ou',
+  'Passing Attempts': 'player_passing_attempts_ou',
+  'Rushing Yards': 'player_rushing_yards_ou',
+  'Rushing Attempts': 'player_rushing_attempts_ou',
+  'Rush + Rec Yards': 'player_rush_rec_yards_ou',
+  'Receiving Yards': 'player_receiving_yards_ou',
+  'Receptions': 'player_receptions_ou',
+  'Interceptions': 'player_interceptions_ou',
+  'Touchdowns': 'player_touchdowns_ou',
+  'Tackles': 'player_tackles_ou',
+};
+
+/** Maps non-player-prop form market types to canonical market_type_ids. */
+const FORM_MARKET_TYPE_TO_CANONICAL_ID: Readonly<Record<string, string>> = {
+  moneyline: 'moneyline',
+  spread: 'spread',
+  total: 'game_total_ou',
+  'team-total': 'team_total_ou',
+};
+
+/**
+ * Resolve a canonical market_type_id from form values.
+ *
+ * For player props: looks up statType in STAT_LABEL_TO_MARKET_TYPE_ID.
+ * For game-line markets: returns a fixed canonical key.
+ * Returns null when the stat type is unrecognised — submission must be blocked.
+ */
+export function resolveCanonicalMarketTypeId(
+  marketType: string,
+  statType?: string | null,
+): string | null {
+  if (marketType === 'player-prop') {
+    if (!statType) return null;
+    return STAT_LABEL_TO_MARKET_TYPE_ID[statType] ?? null;
+  }
+  return FORM_MARKET_TYPE_TO_CANONICAL_ID[marketType] ?? null;
+}
+
 export function getMarketTypesForSport(
   catalog: CatalogData,
   sportId: string,
@@ -282,7 +366,16 @@ export function buildSubmissionPayload(
   context: SubmissionContext = {},
 ): SubmitPickPayload {
   const marketLabel = MARKET_TYPE_LABELS[values.marketType];
-  const market = context.canonicalMarketTypeId ?? `${values.sport} - ${marketLabel}`;
+  // Prefer browse-provided canonical ID, then resolve from form values, then fall back to
+  // display string. Display-string fallback is intentionally flagged in metadata so the API
+  // can reject it.
+  const resolvedMarket =
+    context.canonicalMarketTypeId ??
+    resolveCanonicalMarketTypeId(values.marketType, values.statType);
+  const market = resolvedMarket ?? `${values.sport} - ${marketLabel}`;
+  const marketResolution: 'canonical' | 'display-fallback' = resolvedMarket
+    ? 'canonical'
+    : 'display-fallback';
   const selection = buildSelectionString(values);
   const trustScore = values.capperConviction * 10;
 
@@ -327,6 +420,7 @@ export function buildSubmissionPayload(
           }
         : null,
       capperConviction: values.capperConviction,
+      marketResolution,
       promotionScores: {
         trust: trustScore,
       },

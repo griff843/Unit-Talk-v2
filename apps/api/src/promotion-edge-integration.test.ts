@@ -595,7 +595,7 @@ test('smart-form pick with low confidence is never blocked by confidence floor',
     {
       source: 'smart-form',
       submittedBy: 'griff843',
-      market: 'NBA - Player Prop',
+      market: 'player_points_ou',
       selection: 'Jalen Brunson Points O 28.5',
       odds: -110,
       confidence: 0.3, // below confidenceFloor of 0.6
@@ -692,7 +692,7 @@ test('non-smart-form pick with low confidence is correctly suppressed by confide
   const result = await processSubmission(
     {
       source: 'api',
-      market: 'NBA - Player Prop',
+      market: 'player_points_ou',
       selection: 'Player Points O 28.5',
       odds: -110,
       confidence: 0.3, // below confidenceFloor of 0.6
@@ -721,7 +721,7 @@ test('smart-form submission payload includes submittedBy from capper field', asy
     {
       source: 'smart-form',
       submittedBy: 'griff843',
-      market: 'NBA - Player Prop',
+      market: 'player_points_ou',
       selection: 'Player Points O 22.5',
       odds: -115,
       confidence: 0.8,

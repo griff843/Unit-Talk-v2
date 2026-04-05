@@ -528,7 +528,7 @@ test('processSubmission matches moneyline provider offers by canonical market ke
   const result = await processSubmission(
     {
       source: 'api',
-      market: 'NFL - Moneyline',
+      market: 'moneyline',
       selection: 'Bills',
       odds: -120,
       confidence: 0.62,
