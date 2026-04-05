@@ -1857,7 +1857,7 @@ export function BetForm() {
                   />
                 </div>
 
-                {selectedMarketType === 'player-prop' && groupedPlayers.length > 0 ? (
+                {selectedMarketType === 'player-prop' ? (
                   <div className="space-y-3">
                     <div className="grid gap-3 md:grid-cols-3">
                       <ParticipantAutocompleteField
@@ -1916,34 +1916,40 @@ export function BetForm() {
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Player
                     </p>
-                    <div className="max-h-52 space-y-3 overflow-y-auto pr-1">
-                      {groupedPlayers.map((group) => (
-                        <div key={group.teamName} className="space-y-2">
-                          <p className="text-xs text-muted-foreground">{group.teamName}</p>
-                          <div className="flex flex-wrap gap-2">
-                            {group.players.map((player) => (
-                              <Button
-                                key={player.participantId}
-                                type="button"
-                                variant={selectedOfferParticipantId === player.participantId ? 'default' : 'outline'}
-                                size="sm"
-                                onClick={() => {
-                                  setSelectedOfferParticipantId(player.participantId);
-                                  setSelectedPlayerId(player.canonicalId ?? player.participantId);
-                                  form.setValue('playerName', player.displayName, {
-                                    shouldDirty: true,
-                                    shouldTouch: true,
-                                    shouldValidate: true,
-                                  });
-                                }}
-                              >
-                                {player.displayName}
-                              </Button>
-                            ))}
+                    {groupedPlayers.length > 0 ? (
+                      <div className="max-h-52 space-y-3 overflow-y-auto pr-1">
+                        {groupedPlayers.map((group) => (
+                          <div key={group.teamName} className="space-y-2">
+                            <p className="text-xs text-muted-foreground">{group.teamName}</p>
+                            <div className="flex flex-wrap gap-2">
+                              {group.players.map((player) => (
+                                <Button
+                                  key={player.participantId}
+                                  type="button"
+                                  variant={selectedOfferParticipantId === player.participantId ? 'default' : 'outline'}
+                                  size="sm"
+                                  onClick={() => {
+                                    setSelectedOfferParticipantId(player.participantId);
+                                    setSelectedPlayerId(player.canonicalId ?? player.participantId);
+                                    form.setValue('playerName', player.displayName, {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                >
+                                  {player.displayName}
+                                </Button>
+                              ))}
+                            </div>
                           </div>
-                        </div>
-                      ))}
-                    </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                        Live player listings are unavailable for this game right now. Search by team or player name to finish the prop ticket manually.
+                      </div>
+                    )}
                   </div>
                 ) : null}
 
