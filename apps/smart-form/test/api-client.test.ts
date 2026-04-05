@@ -40,6 +40,26 @@ test('buildParticipantSearchUrl targets canonical team search endpoint without s
   );
 });
 
+test('buildParticipantSearchUrl keeps event-aware search on canonical endpoints', () => {
+  const playerUrl = buildParticipantSearchUrl('Shai', 'player', {
+    sport: 'NBA',
+    eventId: 'evt-thunder',
+  });
+  const teamUrl = buildParticipantSearchUrl('Thunder', 'team', {
+    sport: 'NBA',
+    eventId: 'evt-thunder',
+  });
+
+  assert.equal(
+    playerUrl,
+    'http://127.0.0.1:4000/api/reference-data/search/players?q=Shai&sport=NBA',
+  );
+  assert.equal(
+    teamUrl,
+    'http://127.0.0.1:4000/api/reference-data/search/teams?q=Thunder&sport=NBA',
+  );
+});
+
 test('normalizeParticipantSearchResults preserves participant ids, de-dupes, and sorts', () => {
   const results = normalizeParticipantSearchResults(
     {

@@ -4166,26 +4166,31 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     if (cappersRes.error) throw new Error(`Failed to load cappers: ${cappersRes.error.message}`);
     if (teamsRes.error) throw new Error(`Failed to load teams: ${teamsRes.error.message}`);
 
-    const sports = (sportsRes.data ?? []).map((sport) => ({
-      id: sport.id as string,
-      name: sport.display_name as string,
-      marketTypes: (marketTypesRes.data ?? [])
-        .filter((mt) => mt.sport_id === sport.id)
-        .map((mt) => mt.market_type as string) as ReferenceDataCatalog['sports'][number]['marketTypes'],
-      statTypes: Array.from(
-        new Set([
-          ...(statTypesRes.data ?? [])
-            .filter((st) => st.sport_id === sport.id)
-            .map((st) => st.name as string),
-          ...(comboStatTypesRes.data ?? [])
-            .filter((combo) => combo.sport_id === sport.id)
-            .map((combo) => combo.display_name as string),
-        ]),
-      ),
-      teams: (teamsRes.data ?? [])
-        .filter((t) => t.sport === sport.id)
-        .map((t) => t.display_name as string),
-    }));
+    const sports = (sportsRes.data ?? []).map((sport) => {
+      const fallbackSport = V1_REFERENCE_DATA.sports.find((entry) => entry.id === sport.id);
+
+      return {
+        id: sport.id as string,
+        name: sport.display_name as string,
+        marketTypes: (marketTypesRes.data ?? [])
+          .filter((mt) => mt.sport_id === sport.id)
+          .map((mt) => mt.market_type as string) as ReferenceDataCatalog['sports'][number]['marketTypes'],
+        statTypes: Array.from(
+          new Set([
+            ...(statTypesRes.data ?? [])
+              .filter((st) => st.sport_id === sport.id)
+              .map((st) => st.name as string),
+            ...(comboStatTypesRes.data ?? [])
+              .filter((combo) => combo.sport_id === sport.id)
+              .map((combo) => combo.display_name as string),
+            ...(fallbackSport?.statTypes ?? []),
+          ]),
+        ),
+        teams: (teamsRes.data ?? [])
+          .filter((t) => t.sport === sport.id)
+          .map((t) => t.display_name as string),
+      };
+    });
 
     const sportsbooks = (sportsbooksRes.data ?? []).map((sb) => ({
       id: sb.id as string,
@@ -4237,7 +4242,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   async listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
     const { data: events, error: eventsError } = await this.client
       .from('events')
-      .select('id,event_name,event_date,status,sport_id,external_id')
+      .select('id,event_name,event_date,status,sport_id,external_id,metadata')
       .eq('sport_id', sportId)
       .eq('event_date', date)
       .order('event_name');
@@ -4291,6 +4296,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         externalId: (event.external_id as string | null) ?? null,
         eventName: event.event_name as string,
         eventDate: event.event_date as string,
+        startTime: extractStartsAt(event.metadata),
         status: event.status as string,
         sportId: event.sport_id as string,
         leagueId,
@@ -4302,7 +4308,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   async getEventBrowse(eventId: string): Promise<EventBrowseResult | null> {
     const { data: event, error: eventError } = await this.client
       .from('events')
-      .select('id,event_name,event_date,status,sport_id,external_id')
+      .select('id,event_name,event_date,status,sport_id,external_id,metadata')
       .eq('id', eventId)
       .maybeSingle();
 
@@ -4382,6 +4388,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       externalId: (event.external_id as string | null) ?? null,
       eventName: event.event_name as string,
       eventDate: event.event_date as string,
+      startTime: extractStartsAt(event.metadata),
       status: event.status as string,
       sportId: event.sport_id as string,
       leagueId,
@@ -4739,7 +4746,20 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     const entityAliasRows = (entityAliases ?? []) as ProviderEntityAliasRow[];
 
     const bookAliasKeys = Array.from(
-      new Set(offers.map((row) => splitProviderBookKey(row.provider_key as string).bookKey)),
+      new Set(
+        offers
+          .map((row) => {
+            const explicitBookmakerKey = typeof row.bookmaker_key === 'string'
+              ? row.bookmaker_key
+              : null;
+            if (explicitBookmakerKey && explicitBookmakerKey.length > 0) {
+              return explicitBookmakerKey;
+            }
+
+            return splitProviderBookKey(row.provider_key as string).bookKey;
+          })
+          .filter((value): value is string => value.length > 0),
+      ),
     );
     const { data: bookAliases, error: bookAliasesError } = await this.fromUntyped('provider_book_aliases')
       .select('provider,provider_book_key,sportsbook_id')
@@ -4794,14 +4814,22 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     const grouped = new Map<string, EventOfferBrowseResult>();
     for (const offer of offers) {
       const providerKey = offer.provider_key as string;
-      const { provider, bookKey } = splitProviderBookKey(providerKey);
+      const { provider, bookKey: providerFallbackBookKey } = splitProviderBookKey(providerKey);
+      const explicitBookmakerKey = typeof offer.bookmaker_key === 'string'
+        ? offer.bookmaker_key
+        : null;
+      const resolvedBookKey = explicitBookmakerKey && explicitBookmakerKey.length > 0
+        ? explicitBookmakerKey
+        : providerFallbackBookKey;
       const providerMarketKey = offer.provider_market_key as string;
       const providerParticipantId = (offer.provider_participant_id as string | null) ?? null;
       const marketAlias = marketAliasMap.get(`${provider}:${providerMarketKey}`);
       const entityAlias = providerParticipantId
         ? entityAliasMap.get(`${provider}:${providerParticipantId}`)
         : null;
-      const sportsbookId = bookAliasMap.get(`${provider}:${bookKey}`) ?? null;
+      const sportsbookId =
+        bookAliasMap.get(`${provider}:${resolvedBookKey}`) ??
+        (resolvedBookKey && resolvedBookKey !== 'sgo' ? resolvedBookKey : null);
       const participantId =
         entityAlias?.player_id ??
         entityAlias?.team_id ??
@@ -4849,6 +4877,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return (left.line ?? 0) - (right.line ?? 0);
     });
   }
+}
+
+function extractStartsAt(metadata: unknown): string | null {
+  if (metadata && typeof metadata === 'object' && !Array.isArray(metadata)) {
+    const raw = (metadata as Record<string, unknown>)['starts_at'];
+    return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  }
+  return null;
 }
 
 function splitProviderBookKey(providerKey: string) {
