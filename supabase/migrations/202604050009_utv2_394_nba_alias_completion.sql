@@ -26,4 +26,4 @@ INSERT INTO public.provider_market_aliases (
   ('sgo', 'points+rebounds-all-game-ou',          'Points + Rebounds',             'player_pts_rebs_ou', 'NBA'),
   ('sgo', 'points+assists-all-game-ou',           'Points + Assists',              'player_pts_asts_ou', 'NBA'),
   ('sgo', 'rebounds+assists-all-game-ou',         'Rebounds + Assists',            'player_rebs_asts_ou', 'NBA')
-ON CONFLICT (provider, provider_market_key) DO NOTHING;
+ON CONFLICT (provider, provider_market_key, sport_id) DO NOTHING;

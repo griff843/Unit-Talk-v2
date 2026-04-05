@@ -108,4 +108,4 @@ INSERT INTO public.provider_market_aliases (
   ('sgo', 'pitching-earned-runs-all-game-ou',   'Earned Runs',         'player_pitching_earned_runs_ou',   'MLB'),
   ('sgo', 'pitching-hits-allowed-all-game-ou',  'Hits Allowed',        'player_pitching_hits_allowed_ou',  'MLB'),
   ('sgo', 'pitching-outs-all-game-ou',          'Pitcher Outs',        'player_pitching_outs_ou',          'MLB')
-ON CONFLICT (provider, provider_market_key) DO NOTHING;
+ON CONFLICT (provider, provider_market_key, sport_id) DO NOTHING;
