@@ -99,13 +99,18 @@ function readPollIntervalMs(environment: AppEnv) {
 }
 
 function readMaxCyclesPerRun(environment: AppEnv) {
-  const parsed = Number.parseInt(environment.UNIT_TALK_WORKER_MAX_CYCLES ?? '1', 10);
+  const raw = environment.UNIT_TALK_WORKER_MAX_CYCLES;
+  if (!raw) {
+    return 0; // 0 = run indefinitely
+  }
 
-  if (Number.isNaN(parsed) || parsed <= 0) {
+  const parsed = Number.parseInt(raw, 10);
+
+  if (Number.isNaN(parsed) || parsed < 0) {
     return 1;
   }
 
-  return parsed;
+  return parsed; // 0 = run indefinitely
 }
 
 function readStaleClaimMs(environment: AppEnv) {

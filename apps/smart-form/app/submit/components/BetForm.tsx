@@ -226,6 +226,10 @@ function buildOddsLabel(odds: number | null | undefined) {
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
+function buildSportsbookDisplayName(offer: EventOfferBrowseResult) {
+  return offer.sportsbookName?.trim() || offer.sportsbookId?.trim() || offer.providerKey;
+}
+
 function formatLineLabel(line: number | null | undefined) {
   if (line == null) {
     return null;
@@ -866,16 +870,13 @@ export function BetForm() {
       .map(([teamName, players]) => ({ teamName, players }))
       .sort((left, right) => left.teamName.localeCompare(right.teamName));
   }, [eventBrowse, selectedTeamId]);
-  const filteredOffers = useMemo(() => {
+  const marketScopedOffers = useMemo(() => {
     if (!eventBrowse || !selectedMarketType) {
       return [] as EventOfferBrowseResult[];
     }
 
     return eventBrowse.offers.filter((offer) => {
       if (mapOfferToFormMarketType(offer) !== selectedMarketType) {
-        return false;
-      }
-      if (selectedCatalogSportsbook && !offerMatchesSelectedSportsbook(offer, selectedSportsbookValue)) {
         return false;
       }
       if (
@@ -894,7 +895,38 @@ export function BetForm() {
       }
       return true;
     });
-  }, [eventBrowse, selectedCatalogSportsbook, selectedMarketType, selectedOfferParticipantId, selectedSportsbookValue, watchedValues.statType]);
+  }, [eventBrowse, selectedMarketType, selectedOfferParticipantId, watchedValues.statType]);
+  const filteredOffers = useMemo(() => {
+    if (!selectedCatalogSportsbook) {
+      return marketScopedOffers;
+    }
+
+    return marketScopedOffers.filter((offer) =>
+      offerMatchesSelectedSportsbook(offer, selectedSportsbookValue),
+    );
+  }, [marketScopedOffers, selectedCatalogSportsbook, selectedSportsbookValue]);
+  const alternateLiveSportsbooks = useMemo(() => {
+    if (marketScopedOffers.length === 0 || filteredOffers.length > 0) {
+      return [] as Array<{ id: string; name: string }>;
+    }
+
+    const seen = new Set<string>();
+    const suggestions: Array<{ id: string; name: string }> = [];
+    for (const offer of marketScopedOffers) {
+      const id = offer.sportsbookId?.trim().toLocaleLowerCase();
+      const name = buildSportsbookDisplayName(offer).trim();
+      if (!id || !name || id === selectedSportsbookValue || seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+      suggestions.push({ id, name });
+    }
+    return suggestions.sort((left, right) => left.name.localeCompare(right.name));
+  }, [filteredOffers.length, marketScopedOffers, selectedCatalogSportsbook, selectedSportsbookValue]);
+  const selectedSportsbookMissingLiveCoverage =
+    Boolean(selectedMarketType) &&
+    marketScopedOffers.length > 0 &&
+    filteredOffers.length === 0;
   const matchupTeams = useMemo(
     () => [...(selectedMatchup?.teams ?? [])].sort(
       (left, right) => roleSortOrder(left.role) - roleSortOrder(right.role),
@@ -945,7 +977,7 @@ export function BetForm() {
     if (selectedMarketType !== 'player-prop') {
       return [] as string[];
     }
-    if (!eventBrowse) {
+    if (!eventBrowse || availableStatTypes.length === 0) {
       return availableStatTypes;
     }
 
@@ -2258,8 +2290,38 @@ export function BetForm() {
                     </div>
 
                     {filteredOffers.length === 0 ? (
-                      <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
-                        No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.
+                      <div className="space-y-3 rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
+                        <p>
+                          {selectedSportsbookMissingLiveCoverage
+                            ? `No live ${watchedValues.sportsbook} offers for this market right now.`
+                            : 'No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.'}
+                        </p>
+                        {selectedSportsbookMissingLiveCoverage && alternateLiveSportsbooks.length > 0 ? (
+                          <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                              Live books available now
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              {alternateLiveSportsbooks.map((sportsbook) => (
+                                <Button
+                                  key={sportsbook.id}
+                                  type="button"
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    form.setValue('sportsbook', sportsbook.id, {
+                                      shouldDirty: true,
+                                      shouldTouch: true,
+                                      shouldValidate: true,
+                                    });
+                                  }}
+                                >
+                                  {sportsbook.name}
+                                </Button>
+                              ))}
+                            </div>
+                          </div>
+                        ) : null}
                       </div>
                     ) : selectedMarketType === 'moneyline' || selectedMarketType === 'spread' || selectedMarketType === 'total' || selectedMarketType === 'player-prop' ? null : (
                       <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">

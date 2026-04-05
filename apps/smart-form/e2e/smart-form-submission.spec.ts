@@ -672,7 +672,7 @@ test('selected matchup constrains player props to matchup teams and valid stat t
   await page.getByRole('button', { name: /Nuggets/i }).click();
 
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
-  await expect(page.getByRole('option', { name: 'Assists' })).toBeVisible();
+  await expect(page.getByRole('option', { name: 'Assists', exact: true })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Points' })).toHaveCount(0);
   await expect(page.getByRole('option', { name: 'Passing Yards' })).toHaveCount(0);
   await page.keyboard.press('Escape');
@@ -1188,6 +1188,86 @@ test('team total fallback keeps the selected matchup compact when live offers ar
   await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
   await expect(page.locator('input[name="team"]')).toHaveCount(0);
   await expect(page.getByText('Over or Under', { exact: true })).toHaveCount(0);
+});
+
+test('alternate live books surface when selected sportsbook has no coverage for a market', async ({ page }) => {
+  // Event browse returns player-prop offers only from DraftKings and BetMGM — no Fanatics props.
+  // The form should detect this mismatch and render "Live books available now" with the alternate books.
+  const noFanaticsPropsResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: [
+        {
+          sportsbookId: 'draftkings',
+          sportsbookName: 'DraftKings',
+          marketTypeId: 'player.points',
+          marketDisplayName: 'Player Points',
+          participantId: 'player-tatum',
+          participantName: 'Jayson Tatum',
+          line: 28.5,
+          overOdds: -115,
+          underOdds: -105,
+          snapshotAt: '2026-04-02T22:55:00.000Z',
+          providerKey: 'sgo',
+          providerMarketKey: 'nba-player-points-dk',
+          providerParticipantId: 'provider-tatum',
+        },
+        {
+          sportsbookId: 'betmgm',
+          sportsbookName: 'BetMGM',
+          marketTypeId: 'player.points',
+          marketDisplayName: 'Player Points',
+          participantId: 'player-tatum',
+          participantName: 'Jayson Tatum',
+          line: 28.5,
+          overOdds: -112,
+          underOdds: -108,
+          snapshotAt: '2026-04-02T22:55:00.000Z',
+          providerKey: 'sgo',
+          providerMarketKey: 'nba-player-points-mgm',
+          providerParticipantId: 'provider-tatum',
+        },
+      ],
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(catalogResponse) });
+  });
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(nbaLookupMatchupsResponse) });
+  });
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(noFanaticsPropsResponse) });
+  });
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(nbaLookupBrowseSearchResponse) });
+  });
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: [{ participantId: 'player-tatum', displayName: 'Jayson Tatum', participantType: 'player' }] }) });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Celtics/i }).click();
+  await page.getByPlaceholder('Type a player name').fill('Jays');
+  await page.getByRole('button', { name: /Jayson Tatum/i }).click();
+  await page.getByRole('combobox', { name: 'Stat Type' }).click();
+  await page.getByRole('option', { name: 'Points', exact: true }).click();
+
+  // Fanatics has no coverage — "Live books available now" should surface the alternate books
+  await expect(page.getByText('Live books available now')).toBeVisible();
+  await expect(page.getByRole('button', { name: 'DraftKings' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'BetMGM' })).toBeVisible();
+
+  // Clicking DraftKings should switch context and show live offers
+  await page.getByRole('button', { name: 'DraftKings' }).click();
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('DraftKings');
+  await expect(page.getByText('Live books available now')).toHaveCount(0);
 });
 
 test('nhl moneyline uses the same guided game-market flow as nba', async ({ page }) => {
