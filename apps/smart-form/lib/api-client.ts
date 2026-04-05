@@ -22,6 +22,7 @@ export interface MatchupBrowseResult {
   externalId: string | null;
   eventName: string;
   eventDate: string;
+  startTime?: string | null;
   status: string;
   sportId: string;
   leagueId: string | null;
@@ -69,6 +70,7 @@ export interface EventBrowseResult {
   externalId: string | null;
   eventName: string;
   eventDate: string;
+  startTime?: string | null;
   status: string;
   sportId: string;
   leagueId: string | null;
