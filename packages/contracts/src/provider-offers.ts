@@ -14,6 +14,8 @@ export interface NormalizedProviderOffer {
   isClosing: boolean;
   snapshotAt: string;
   idempotencyKey: string;
+  /** Per-bookmaker source (e.g. 'pinnacle', 'draftkings'). Null = top-level consensus odds. */
+  bookmakerKey: string | null;
 }
 
 // Marker interface for explicit insert intent on the persistence boundary.

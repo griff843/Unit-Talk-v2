@@ -150,6 +150,7 @@ async function seedClosingLine(
       isClosing: true,
       snapshotAt: input.snapshotAt ?? '2026-03-26T23:20:00.000Z',
       idempotencyKey: `closing-line:${input.providerEventId}:${input.marketKey}`,
+      bookmakerKey: null,
     },
   ]);
 }
@@ -875,4 +876,140 @@ test('runGradingPass writes grading.run row with failed count when errors occur'
     (runs[0]?.details as Record<string, unknown>)?.['failed'],
     1,
   );
+});
+// --- Game-line grading tests (UTV2-385) ---
+
+async function createPostedGameLinePickFixture(
+  overrides: {
+    market?: string;
+    selection?: string;
+    line?: number;
+    eventName?: string;
+  } = {},
+) {
+  const repositories = createInMemoryRepositoryBundle();
+  const eventName = overrides.eventName ?? 'LAL vs BOS';
+  const created = await processSubmission(
+    {
+      source: 'api',
+      market: overrides.market ?? 'game_total_ou',
+      selection: overrides.selection ?? 'Over 224.5',
+      line: overrides.line ?? 224.5,
+      odds: -110,
+      eventName,
+    },
+    repositories,
+  );
+
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+
+  // eventName is a top-level SubmissionPayload field, not stored in pick.metadata by default.
+  // Inject it so resolvePickEventByName can find the event.
+  mutatePick(repositories, created.pick.id, (existing) => ({
+    ...existing,
+    metadata: { ...(asRecord(existing.metadata) ?? {}), eventName },
+  }));
+
+  return { repositories, pickId: created.pick.id, eventName };
+}
+
+async function attachGameLineEventContext(
+  repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
+  eventName: string,
+  options: {
+    eventStatus?: 'scheduled' | 'in_progress' | 'completed' | 'postponed' | 'cancelled';
+    eventDate?: string;
+  } = {},
+) {
+  return repositories.events.upsertByExternalId({
+    externalId: `evt-game-line-${eventName}`,
+    sportId: 'NBA',
+    eventName,
+    eventDate: options.eventDate ?? '2026-04-04',
+    status: options.eventStatus ?? 'completed',
+    metadata: { starts_at: '2026-04-04T19:30:00.000Z' },
+  });
+}
+
+test('runGradingPass grades a game_total_ou pick as win when actual > line', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    selection: 'Over 224.5',
+    line: 224.5,
+  });
+
+  const event = await attachGameLineEventContext(repositories, eventName);
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 227,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.skipped, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('runGradingPass grades a game_total_ou under pick as win when actual < line', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    selection: 'Under 224.5',
+    line: 224.5,
+  });
+
+  const event = await attachGameLineEventContext(repositories, eventName);
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 210,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('runGradingPass skips game_total_ou pick when event is not completed', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture();
+
+  await attachGameLineEventContext(repositories, eventName, { eventStatus: 'in_progress' });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.equal(detail.reason, 'event_not_completed');
+});
+
+test('runGradingPass skips game_total_ou pick when no game result exists', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture();
+
+  await attachGameLineEventContext(repositories, eventName);
+  // no game_result seeded
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.equal(detail.reason, 'game_result_not_found');
 });

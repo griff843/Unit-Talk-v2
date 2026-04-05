@@ -203,6 +203,7 @@ test('InMemoryProviderOfferRepository.listByProvider can query a third odds-api 
     underOdds: offer.underOdds,
     isOpening: false,
     isClosing: false,
+    bookmakerKey: null,
   }));
 
   await repository.upsertBatch(upsertInputs);
@@ -1259,6 +1260,114 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
   assert.ok(summary.skippedResults > 0);
 });
 
+test('resolveAndInsertResults inserts game-line result with null participant_id', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const event = createResolvedEvent({
+    status: {
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+  });
+  await resolveSgoEntities([event], repositories);
+
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-entity-1',
+        status: {
+          started: true,
+          completed: true,
+          cancelled: false,
+          ended: true,
+          live: false,
+          delayed: false,
+          finalized: true,
+          oddsAvailable: false,
+        },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-all-game-ou-over',
+            baseMarketKey: 'points-all-game-ou',
+            providerParticipantId: null,
+            score: 227,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+  );
+
+  assert.equal(summary.insertedResults, 1);
+  assert.equal(summary.skippedResults, 0);
+
+  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  assert.equal(results.length, 1);
+  assert.equal(results[0]?.participant_id, null);
+  assert.equal(results[0]?.market_key, 'game_total_ou');
+  assert.equal(results[0]?.actual_value, 227);
+});
+
+test('resolveAndInsertResults deduplicates game-line results (idempotent for null participant)', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const event = createResolvedEvent({
+    status: {
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+  });
+  await resolveSgoEntities([event], repositories);
+
+  const gameTotalMarket = {
+    oddId: 'points-all-game-ou-over',
+    baseMarketKey: 'points-all-game-ou',
+    providerParticipantId: null as null,
+    score: 227,
+    scoringSupported: true,
+  };
+  const eventResult = {
+    providerEventId: 'evt-entity-1',
+    status: {
+      started: true,
+      completed: true,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    },
+    playerStats: [],
+    scoredMarkets: [gameTotalMarket],
+    resolvedEvent: null as null,
+  };
+
+  await resolveAndInsertResults([eventResult], repositories);
+  await resolveAndInsertResults([eventResult], repositories);
+
+  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  // Should still be exactly 1 row — deduplication by (event, null, market_key)
+  assert.equal(results.length, 1);
+});
+
 test('ingestLeague can skip results phase without breaking offer/entity ingest', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const summary = await ingestLeague('NBA', 'test-key', repositories, {
@@ -2004,4 +2113,85 @@ test('mapOddsApiOfferToProviderOfferInsert: null participantId uses empty string
 
   const resultFirst = mapOddsApiOfferToProviderOfferInsert(offer, new Set());
   assert.equal(resultFirst.isOpening, true);
+});
+
+test('normalizeSGOPairedProp passes bookmakerKey through to NormalizedProviderOffer', () => {
+  const base = {
+    providerEventId: 'evt-bk-1',
+    marketKey: 'points-player-42-game-ou',
+    providerParticipantId: 'player-42',
+    sportKey: 'NBA',
+    line: 27.5,
+    overOdds: -120,
+    underOdds: 100,
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+  };
+
+  const withKey = normalizeSGOPairedProp({ ...base, bookmakerKey: 'pinnacle' });
+  assert.ok(withKey);
+  assert.equal(withKey.bookmakerKey, 'pinnacle');
+  assert.ok(withKey.idempotencyKey.includes('pinnacle'), 'idempotencyKey should include bookmakerKey');
+
+  const noKey = normalizeSGOPairedProp({ ...base });
+  assert.ok(noKey);
+  assert.equal(noKey.bookmakerKey, null);
+  assert.ok(!noKey.idempotencyKey.includes('pinnacle'), 'consensus idempotencyKey should not include bookmakerKey');
+
+  // Consensus and Pinnacle rows must have different idempotency keys
+  assert.notEqual(withKey.idempotencyKey, noKey.idempotencyKey);
+});
+
+test('findClosingLine filters by bookmakerKey when specified', async () => {
+  const repository = new InMemoryProviderOfferRepository();
+
+  const base = {
+    providerEventId: 'evt-bk-clv',
+    providerMarketKey: 'points-all-game-ou',
+    providerParticipantId: 'player-42',
+    sportKey: 'NBA',
+    line: 27.5,
+    overOdds: -120,
+    underOdds: 100,
+    devigMode: 'PAIRED' as const,
+    isOpening: false,
+    isClosing: false,
+    snapshotAt: '2026-03-25T23:00:00.000Z',
+  };
+
+  await repository.upsertBatch([
+    { ...base, providerKey: 'sgo', idempotencyKey: 'bk-consensus', bookmakerKey: null },
+    { ...base, providerKey: 'sgo', idempotencyKey: 'bk-pinnacle', bookmakerKey: 'pinnacle', overOdds: -115, underOdds: 105 },
+  ]);
+
+  const before = '2026-03-26T00:00:00.000Z';
+
+  const pinnacle = await repository.findClosingLine({
+    providerEventId: base.providerEventId,
+    providerMarketKey: base.providerMarketKey,
+    providerParticipantId: base.providerParticipantId,
+    before,
+    bookmakerKey: 'pinnacle',
+  });
+  assert.ok(pinnacle);
+  assert.equal(pinnacle.over_odds, -115);
+  assert.equal(pinnacle.bookmaker_key, 'pinnacle');
+
+  const consensus = await repository.findClosingLine({
+    providerEventId: base.providerEventId,
+    providerMarketKey: base.providerMarketKey,
+    providerParticipantId: base.providerParticipantId,
+    before,
+  });
+  assert.ok(consensus);
+  assert.equal(consensus.over_odds, -120);
+  assert.equal(consensus.bookmaker_key, null);
+
+  const missing = await repository.findClosingLine({
+    providerEventId: base.providerEventId,
+    providerMarketKey: base.providerMarketKey,
+    providerParticipantId: base.providerParticipantId,
+    before,
+    bookmakerKey: 'draftkings',
+  });
+  assert.equal(missing, null);
 });

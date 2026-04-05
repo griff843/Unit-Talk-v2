@@ -9,6 +9,8 @@ export interface SGOPairedProp {
   overOdds: number | null;
   underOdds: number | null;
   snapshotAt: string;
+  /** Per-bookmaker source from byBookmaker (e.g. 'pinnacle'). Null = consensus SGO row. */
+  bookmakerKey?: string | null;
 }
 
 export function normalizeSGOPairedProp(
@@ -23,6 +25,7 @@ export function normalizeSGOPairedProp(
   const providerParticipantId =
     prop.providerParticipantId ?? inferParticipantId(prop.marketKey);
 
+  const bookmakerKey = prop.bookmakerKey ?? null;
   const normalized: NormalizedProviderOffer = {
     providerKey: 'sgo',
     providerEventId: prop.providerEventId,
@@ -39,6 +42,7 @@ export function normalizeSGOPairedProp(
     isOpening: false,
     isClosing: false,
     snapshotAt: prop.snapshotAt,
+    bookmakerKey,
     idempotencyKey: buildProviderOfferIdempotencyKey({
       providerKey: 'sgo',
       providerEventId: prop.providerEventId,
@@ -47,6 +51,7 @@ export function normalizeSGOPairedProp(
       line,
       isOpening: false,
       isClosing: false,
+      bookmakerKey,
     }),
   };
 
@@ -61,9 +66,10 @@ export function buildProviderOfferIdempotencyKey(input: {
   line: number | null;
   isOpening: boolean;
   isClosing: boolean;
+  bookmakerKey?: string | null;
 }) {
   const lineStr = input.line !== null ? input.line.toFixed(1) : 'null';
-  return [
+  const parts = [
     input.providerKey,
     input.providerEventId,
     input.providerMarketKey,
@@ -71,7 +77,11 @@ export function buildProviderOfferIdempotencyKey(input: {
     lineStr,
     String(input.isOpening),
     String(input.isClosing),
-  ].join(':');
+  ];
+  if (input.bookmakerKey) {
+    parts.push(input.bookmakerKey);
+  }
+  return parts.join(':');
 }
 
 function normalizeProviderMarketKey(marketKey: string) {

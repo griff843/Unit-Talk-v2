@@ -769,6 +769,7 @@ function makeOfferRecord(
         overrides.snapshotAt ?? '2026-03-28T10:00:00.000Z',
       ].join(':'),
     created_at: overrides.snapshotAt ?? '2026-03-28T10:00:00.000Z',
+    bookmaker_key: null,
   };
 }
 
@@ -812,5 +813,6 @@ function makeOfferInsert(
         String(overrides.line ?? 4.5),
         overrides.snapshotAt ?? '2026-03-28T10:00:00.000Z',
       ].join(':'),
+    bookmakerKey: null,
   };
 }

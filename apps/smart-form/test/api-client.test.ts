@@ -70,7 +70,13 @@ test('getCatalog returns catalog data on a successful response', async () => {
     new Response(
       JSON.stringify({
         data: {
-          sports: [{ id: 'NBA', name: 'NBA', marketTypes: ['player-prop'], statTypes: ['Points'], teams: [] }],
+          sports: [{
+            id: 'NBA',
+            name: 'NBA',
+            marketTypes: ['player-prop'],
+            statTypes: ['Points', 'Points + Rebounds + Assists'],
+            teams: [],
+          }],
           sportsbooks: [{ id: 'fanatics', name: 'Fanatics' }],
           ticketTypes: [],
           cappers: [{ id: 'griff843', displayName: 'griff843' }],
@@ -85,7 +91,36 @@ test('getCatalog returns catalog data on a successful response', async () => {
     assert.equal(catalog.sports[0]?.id, 'NBA');
     assert.equal(catalog.sportsbooks[0]?.name, 'Fanatics');
     assert.equal(catalog.cappers[0]?.id, 'griff843');
+    assert.ok(catalog.sports[0]?.statTypes.includes('Points + Rebounds + Assists'));
   });
+
+  restoreFetch();
+});
+
+test('getCatalog filters provider-only books and backfills Fanatics for operator entry', async () => {
+  const restoreFetch = installFetchMock(async () =>
+    new Response(
+      JSON.stringify({
+        data: {
+          sports: [],
+          sportsbooks: [
+            { id: 'draftkings', name: 'DraftKings' },
+            { id: 'williamhill', name: 'William Hill' },
+            { id: 'sgo', name: 'SGO' },
+          ],
+          ticketTypes: [],
+          cappers: [],
+        },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    ),
+  );
+
+  const catalog = await getCatalog();
+  assert.deepEqual(catalog.sportsbooks, [
+    { id: 'draftkings', name: 'DraftKings' },
+    { id: 'fanatics', name: 'Fanatics' },
+  ]);
 
   restoreFetch();
 });

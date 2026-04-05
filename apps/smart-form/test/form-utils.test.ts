@@ -104,6 +104,85 @@ test('inferStatTypeFromMarketTypeId resolves combo stat labels', () => {
     inferStatTypeFromMarketTypeId('player.pra'),
     'Points + Rebounds + Assists',
   );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_rebs_asts_ou'),
+    'Rebounds + Assists',
+  );
+});
+
+test('inferStatTypeFromMarketTypeId resolves MLB, NHL, and NFL labels', () => {
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_pitching_strikeouts_ou'),
+    'Pitching Strikeouts',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_pitching_innings_pitched_ou'),
+    'Pitching Innings Pitched',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_batting_total_bases_ou'),
+    'Total Bases',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_hits_runs_rbis_ou'),
+    'Hits + Runs + RBIs',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_earned_runs_ou'),
+    'Earned Runs',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_hits_allowed_ou'),
+    'Hits Allowed',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_singles_ou'),
+    'Singles',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_doubles_ou'),
+    'Doubles',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_triples_ou'),
+    'Triples',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_shots_on_goal_ou'),
+    'Shots on Goal',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_blocked_shots_ou'),
+    'Blocked Shots',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_receiving_yards_ou'),
+    'Receiving Yards',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_rushing_attempts_ou'),
+    'Rushing Attempts',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_rush_rec_yards_ou'),
+    'Rush + Rec Yards',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_passing_touchdowns_ou'),
+    'Passing Touchdowns',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_passing_attempts_ou'),
+    'Passing Attempts',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_touchdowns_ou'),
+    'Touchdowns',
+  );
+  assert.equal(
+    inferStatTypeFromMarketTypeId('player_tackles_ou'),
+    'Tackles',
+  );
 });
 
 test('resolveSportsbookId matches by canonical id and display name', () => {
@@ -154,6 +233,17 @@ test('buildSubmissionPayload records canonical browse metadata for live-offer se
     providerParticipantId: 'provider-player-1',
     snapshotAt: '2026-04-02T18:30:00.000Z',
   });
+});
+
+test('buildSubmissionPayload records sportsbook manual override metadata when book is typed', () => {
+  const payload = buildSubmissionPayload(buildBaseValues({ sportsbook: 'PrizePicks' }), {
+    manualOverrideFields: ['sportsbook'],
+  });
+
+  assert.equal(payload.metadata?.manualEntry, true);
+  assert.deepEqual(payload.metadata?.manualOverrideFields, ['sportsbook']);
+  assert.equal(payload.metadata?.sportsbook, 'PrizePicks');
+  assert.equal(payload.metadata?.sportsbookId, null);
 });
 
 // UTV2-255: conviction=8/9/4 trust mapping proof

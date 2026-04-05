@@ -490,6 +490,153 @@ function SearchableCapperField({
   );
 }
 
+function SearchableSportsbookField({
+  form,
+  sportsbooks,
+}: {
+  form: UseFormReturn<BetFormValues>;
+  sportsbooks: SportsbookDefinition[];
+}) {
+  const selectedSportsbookValue = useWatch({ control: form.control, name: 'sportsbook' }) ?? '';
+  const [query, setQuery] = useState('');
+  const [isFocused, setIsFocused] = useState(false);
+  const [manualEntry, setManualEntry] = useState(false);
+
+  const selectedSportsbook = useMemo(
+    () =>
+      sportsbooks.find(
+        (sportsbook) =>
+          sportsbook.id === selectedSportsbookValue ||
+          sportsbook.name.toLocaleLowerCase() === selectedSportsbookValue.toLocaleLowerCase(),
+      ) ?? null,
+    [sportsbooks, selectedSportsbookValue],
+  );
+  const filteredSportsbooks = useMemo(() => {
+    const normalizedQuery = query.trim().toLocaleLowerCase();
+    if (normalizedQuery.length === 0) {
+      return sportsbooks;
+    }
+
+    return sportsbooks.filter((sportsbook) => {
+      const displayName = sportsbook.name.toLocaleLowerCase();
+      const canonicalId = sportsbook.id.toLocaleLowerCase();
+      return displayName.includes(normalizedQuery) || canonicalId.includes(normalizedQuery);
+    });
+  }, [sportsbooks, query]);
+
+  useEffect(() => {
+    if (selectedSportsbookValue && !selectedSportsbook) {
+      setManualEntry(true);
+      return;
+    }
+
+    if (selectedSportsbook) {
+      setManualEntry(false);
+    }
+  }, [selectedSportsbook, selectedSportsbookValue]);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setQuery(selectedSportsbook?.name ?? (manualEntry ? selectedSportsbookValue : ''));
+    }
+  }, [isFocused, manualEntry, selectedSportsbook, selectedSportsbookValue]);
+
+  return (
+    <FormField
+      control={form.control}
+      name="sportsbook"
+      render={({ field }) => (
+        <FormItem className="relative">
+          <div className="flex items-center justify-between gap-3">
+            <FormLabel>Sportsbook</FormLabel>
+            <button
+              type="button"
+              className="text-[11px] font-semibold uppercase tracking-wider text-primary transition-colors hover:text-primary/80"
+              onClick={() => {
+                setManualEntry((current) => !current);
+                if (!manualEntry) {
+                  setQuery(field.value ?? '');
+                } else {
+                  setQuery(selectedSportsbook?.name ?? '');
+                }
+              }}
+            >
+              {manualEntry ? 'Use catalog list' : 'Book not listed? Type it'}
+            </button>
+          </div>
+          <FormControl>
+            <Input
+              autoComplete="off"
+              placeholder={manualEntry ? 'Type sportsbook name' : 'Search sportsbook'}
+              value={manualEntry ? field.value ?? '' : query}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => {
+                window.setTimeout(() => {
+                  setIsFocused(false);
+                  setQuery(selectedSportsbook?.name ?? (manualEntry ? field.value ?? '' : ''));
+                }, 120);
+              }}
+              onChange={(event) => {
+                const nextValue = event.target.value;
+                if (manualEntry) {
+                  field.onChange(nextValue);
+                  return;
+                }
+
+                setQuery(nextValue);
+                if (field.value) {
+                  form.setValue('sportsbook', '', {
+                    shouldDirty: true,
+                    shouldTouch: true,
+                    shouldValidate: false,
+                  });
+                }
+              }}
+            />
+          </FormControl>
+          {!manualEntry && isFocused ? (
+            <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-background shadow-lg">
+              {filteredSportsbooks.length > 0 ? (
+                <div className="py-1">
+                  {filteredSportsbooks.map((sportsbook) => (
+                    <button
+                      key={sportsbook.id}
+                      type="button"
+                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
+                      onMouseDown={(event) => {
+                        event.preventDefault();
+                        field.onChange(sportsbook.id);
+                        setQuery(sportsbook.name);
+                        setIsFocused(false);
+                        form.clearErrors('sportsbook');
+                      }}
+                    >
+                      <span>{sportsbook.name}</span>
+                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
+                        {sportsbook.id}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="px-3 py-2 text-sm text-muted-foreground">
+                  No matching books found. Use manual entry to type the book.
+                </div>
+              )}
+            </div>
+          ) : null}
+          <p className="text-xs text-muted-foreground">
+            {manualEntry
+              ? 'Manual sportsbook entry is allowed when the canonical list is missing a book. The typed value is preserved for operator review.'
+              : 'Search the canonical sportsbook list. Fanatics is included; provider-only books are hidden from operator entry.'}
+          </p>
+          <FormMessage />
+        </FormItem>
+      )}
+    />
+  );
+}
+
 export function BetForm() {
   const { toast } = useToast();
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
@@ -644,7 +791,10 @@ export function BetForm() {
       return availableStatTypes;
     }
 
-    return availableStatTypes.filter((statType) => inferredStatTypes.includes(statType));
+    return [
+      ...availableStatTypes.filter((statType) => inferredStatTypes.includes(statType)),
+      ...inferredStatTypes.filter((statType) => !availableStatTypes.includes(statType)),
+    ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse);
   const shouldShowManualFallback =
@@ -659,10 +809,16 @@ export function BetForm() {
       .catch((err: unknown) => setCatalogError(err instanceof Error ? err.message : 'Reference data unavailable'));
   }, []);
 
-  // Auto-select capper when catalog loads with exactly one option and no capper is set yet.
+  // Prefer Griff843 as the default capper for operator submissions; otherwise fall back to a single known capper.
   useEffect(() => {
-    if (catalog && catalog.cappers.length === 1 && !form.getValues('capper')) {
-      form.setValue('capper', catalog.cappers[0]!.id, { shouldValidate: true });
+    if (!catalog || form.getValues('capper')) {
+      return;
+    }
+
+    const preferredCapper = catalog.cappers.find((capper) => capper.id === 'griff843');
+    const fallbackCapper = preferredCapper ?? (catalog.cappers.length === 1 ? catalog.cappers[0] : null);
+    if (fallbackCapper) {
+      form.setValue('capper', fallbackCapper.id, { shouldValidate: true });
     }
   }, [catalog, form]);
 
@@ -1048,6 +1204,17 @@ export function BetForm() {
 
     setIsSubmitting(true);
     try {
+      const submittedSportsbook = values.sportsbook ?? '';
+      const normalizedSubmittedSportsbook = submittedSportsbook.trim().toLocaleLowerCase();
+      const selectedOfferMatchesSubmittedBook = selectedOffer
+        ? normalizedSubmittedSportsbook.length === 0 ||
+          normalizedSubmittedSportsbook === (selectedOffer.offer.sportsbookId ?? '').toLocaleLowerCase() ||
+          normalizedSubmittedSportsbook === (selectedOffer.offer.sportsbookName ?? '').toLocaleLowerCase()
+        : false;
+      const resolvedSportsbookId = selectedOfferMatchesSubmittedBook
+        ? (selectedOffer?.offer.sportsbookId ?? resolveSportsbookId(catalog, values.sportsbook))
+        : resolveSportsbookId(catalog, values.sportsbook);
+
       const payload = buildSubmissionPayload(values, {
         submissionMode: selectedOffer ? 'live-offer' : 'manual',
         eventId: selectedMatchup?.eventId ?? null,
@@ -1055,9 +1222,11 @@ export function BetForm() {
         teamId: selectedTeamId,
         playerId: selectedPlayerId,
         canonicalMarketTypeId: selectedOffer?.offer.marketTypeId ?? null,
-        sportsbookId:
-          selectedOffer?.offer.sportsbookId ??
-          resolveSportsbookId(catalog, values.sportsbook),
+        sportsbookId: resolvedSportsbookId,
+        manualOverrideFields:
+          values.sportsbook && !resolvedSportsbookId
+            ? ['sportsbook']
+            : [],
         selectedOffer: selectedOffer?.offer ?? null,
       });
       const result = await submitPick(payload);
@@ -1955,30 +2124,7 @@ export function BetForm() {
               <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-foreground">Book, Odds, and Submission</h2>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <FormField
-                    control={form.control}
-                    name="sportsbook"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Sportsbook</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                          <FormControl>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select sportsbook" />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            {catalog.sportsbooks.map((sportsbook: SportsbookDefinition) => (
-                              <SelectItem key={sportsbook.id} value={sportsbook.id}>
-                                {sportsbook.name}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
+                  <SearchableSportsbookField form={form} sportsbooks={catalog.sportsbooks} />
 
                   <FormField
                     control={form.control}

@@ -12,6 +12,7 @@ export interface SubmissionContext {
   playerId?: string | null;
   canonicalMarketTypeId?: string | null;
   sportsbookId?: string | null;
+  manualOverrideFields?: string[];
   selectedOffer?: Pick<EventOfferBrowseResult, 'providerKey' | 'providerMarketKey' | 'providerParticipantId' | 'snapshotAt'> | null;
 }
 
@@ -114,6 +115,7 @@ export function inferStatTypeFromMarketTypeId(
   if (
     marketKey.includes('points + rebounds') ||
     marketKey.includes('points_rebounds') ||
+    marketKey.includes('pts_rebs') ||
     marketKey.includes('pr-') ||
     marketKey.includes('pr-all-game-ou')
   ) {
@@ -122,10 +124,62 @@ export function inferStatTypeFromMarketTypeId(
   if (
     marketKey.includes('rebounds + assists') ||
     marketKey.includes('rebounds_assists') ||
+    marketKey.includes('rebs_asts') ||
     marketKey.includes('ra-') ||
     marketKey.includes('ra-all-game-ou')
   ) {
     return 'Rebounds + Assists';
+  }
+  if (marketKey.includes('innings') || marketKey.includes('innings_pitched')) {
+    return 'Pitching Innings Pitched';
+  }
+  if (marketKey.includes('strikeouts')) {
+    return marketKey.includes('pitch') ? 'Pitching Strikeouts' : 'Strikeouts';
+  }
+  if (marketKey.includes('earned runs') || marketKey.includes('earned_runs')) {
+    return 'Earned Runs';
+  }
+  if (marketKey.includes('hits + runs + rbis') || marketKey.includes('hits_runs_rbis') || marketKey.includes('hrr')) {
+    return 'Hits + Runs + RBIs';
+  }
+  if (marketKey.includes('hits allowed') || marketKey.includes('hits_allowed')) {
+    return 'Hits Allowed';
+  }
+  if (
+    marketKey.includes('singles') ||
+    marketKey.includes('batter_singles') ||
+    marketKey.includes('player_singles')
+  ) {
+    return 'Singles';
+  }
+  if (
+    marketKey.includes('doubles') ||
+    marketKey.includes('batter_doubles') ||
+    marketKey.includes('player_doubles')
+  ) {
+    return 'Doubles';
+  }
+  if (
+    marketKey.includes('triples') ||
+    marketKey.includes('batter_triples') ||
+    marketKey.includes('player_triples')
+  ) {
+    return 'Triples';
+  }
+  if (marketKey.includes('home runs') || marketKey.includes('home_runs')) {
+    return 'Home Runs';
+  }
+  if (marketKey.includes('total bases') || marketKey.includes('total_bases')) {
+    return 'Total Bases';
+  }
+  if (marketKey.includes('walks')) {
+    return 'Walks';
+  }
+  if (marketKey.includes('rbi')) {
+    return 'RBI';
+  }
+  if (marketKey.includes('hits')) {
+    return 'Hits';
   }
   if (marketKey.includes('points')) {
     return 'Points';
@@ -144,6 +198,62 @@ export function inferStatTypeFromMarketTypeId(
   }
   if (marketKey.includes('blocks')) {
     return 'Blocks';
+  }
+  if (marketKey.includes('turnovers')) {
+    return 'Turnovers';
+  }
+  if (
+    marketKey.includes('shots on goal') ||
+    marketKey.includes('shots_on_goal') ||
+    marketKey.includes('sog')
+  ) {
+    return 'Shots on Goal';
+  }
+  if (marketKey.includes('saves')) {
+    return 'Saves';
+  }
+  if (marketKey.includes('goals')) {
+    return 'Goals';
+  }
+  if (marketKey.includes('blocked shots') || marketKey.includes('blocked_shots')) {
+    return 'Blocked Shots';
+  }
+  if (marketKey.includes('passing yards') || marketKey.includes('passing_yards')) {
+    return 'Passing Yards';
+  }
+  if (marketKey.includes('passing touchdowns') || marketKey.includes('passing_touchdowns') || marketKey.includes('pass_tds')) {
+    return 'Passing Touchdowns';
+  }
+  if (marketKey.includes('passing attempts') || marketKey.includes('passing_attempts') || marketKey.includes('pass_attempts')) {
+    return 'Passing Attempts';
+  }
+  if (marketKey.includes('rushing yards') || marketKey.includes('rushing_yards')) {
+    return 'Rushing Yards';
+  }
+  if (marketKey.includes('rushing attempts') || marketKey.includes('rushing_attempts') || marketKey.includes('rush_attempts')) {
+    return 'Rushing Attempts';
+  }
+  if (
+    marketKey.includes('rush + rec') ||
+    marketKey.includes('rush_rec') ||
+    marketKey.includes('rushing + receiving')
+  ) {
+    return 'Rush + Rec Yards';
+  }
+  if (marketKey.includes('receiving yards') || marketKey.includes('receiving_yards')) {
+    return 'Receiving Yards';
+  }
+  if (marketKey.includes('receptions')) {
+    return 'Receptions';
+  }
+  if (marketKey.includes('interceptions')) {
+    return 'Interceptions';
+  }
+  if (marketKey.includes('touchdowns')) {
+    return 'Touchdowns';
+  }
+  if (marketKey.includes('tackles')) {
+    return 'Tackles';
   }
   return undefined;
 }
@@ -173,6 +283,7 @@ export function buildSubmissionPayload(
   const selection = buildSelectionString(values);
   const trustScore = values.capperConviction * 10;
 
+  const manualOverrideFields = context.manualOverrideFields ?? [];
   return {
     source: 'smart-form',
     submittedBy: values.capper,
@@ -202,6 +313,8 @@ export function buildSubmissionPayload(
       leagueId: context.leagueId ?? null,
       marketTypeId: context.canonicalMarketTypeId ?? null,
       submissionMode: context.submissionMode ?? 'manual',
+      manualEntry: manualOverrideFields.length > 0,
+      manualOverrideFields,
       selectedOffer: context.selectedOffer
         ? {
             providerKey: context.selectedOffer.providerKey,

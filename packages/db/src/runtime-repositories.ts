@@ -1170,7 +1170,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             offer.provider_event_id === criteria.providerEventId &&
             offer.provider_market_key === criteria.providerMarketKey &&
             offer.snapshot_at <= criteria.before &&
-            offer.provider_participant_id === providerParticipantId,
+            offer.provider_participant_id === providerParticipantId &&
+            (criteria.bookmakerKey === undefined ||
+              offer.bookmaker_key === criteria.bookmakerKey),
         )
         .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null
     );
@@ -1344,6 +1346,13 @@ export class InMemoryEventRepository implements EventRepository {
           row.event_date <= end,
       )
       .sort((left, right) => left.event_date.localeCompare(right.event_date));
+  }
+
+  async listByName(eventName: string): Promise<EventRow[]> {
+    const normalized = eventName.trim().toLowerCase();
+    return Array.from(this.events.values()).filter(
+      (row) => row.event_name.trim().toLowerCase() === normalized,
+    );
   }
 }
 
@@ -3700,6 +3709,14 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       query = query.eq('provider_participant_id', criteria.providerParticipantId);
     }
 
+    if (criteria.bookmakerKey !== undefined) {
+      if (criteria.bookmakerKey === null) {
+        query = query.is('bookmaker_key', null);
+      } else {
+        query = query.eq('bookmaker_key', criteria.bookmakerKey);
+      }
+    }
+
     const { data, error } = await query
       .order('snapshot_at', { ascending: false })
       .limit(1)
@@ -4047,6 +4064,19 @@ export class DatabaseEventRepository implements EventRepository {
 
     return data ?? [];
   }
+
+  async listByName(eventName: string): Promise<EventRow[]> {
+    const { data, error } = await this.client
+      .from('events')
+      .select('*')
+      .ilike('event_name', eventName.trim());
+
+    if (error) {
+      throw new Error(`Failed to list events by name: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
 }
 
 export class DatabaseEventParticipantRepository implements EventParticipantRepository {
@@ -4114,11 +4144,12 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
-    const [sportsRes, marketTypesRes, statTypesRes, sportsbooksRes, cappersRes, teamsRes] =
+    const [sportsRes, marketTypesRes, statTypesRes, comboStatTypesRes, sportsbooksRes, cappersRes, teamsRes] =
       await Promise.all([
         this.client.from('sports').select('*').eq('active', true).order('sort_order'),
         this.client.from('sport_market_types').select('*').order('sort_order'),
         this.client.from('stat_types').select('*').eq('active', true).order('sort_order'),
+        this.client.from('combo_stat_types').select('*').eq('active', true).order('sort_order'),
         this.client.from('sportsbooks').select('*').eq('active', true).order('sort_order'),
         this.client.from('cappers').select('*').eq('active', true),
         this.client
@@ -4130,6 +4161,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     if (sportsRes.error) throw new Error(`Failed to load sports: ${sportsRes.error.message}`);
     if (marketTypesRes.error) throw new Error(`Failed to load market types: ${marketTypesRes.error.message}`);
     if (statTypesRes.error) throw new Error(`Failed to load stat types: ${statTypesRes.error.message}`);
+    if (comboStatTypesRes.error) throw new Error(`Failed to load combo stat types: ${comboStatTypesRes.error.message}`);
     if (sportsbooksRes.error) throw new Error(`Failed to load sportsbooks: ${sportsbooksRes.error.message}`);
     if (cappersRes.error) throw new Error(`Failed to load cappers: ${cappersRes.error.message}`);
     if (teamsRes.error) throw new Error(`Failed to load teams: ${teamsRes.error.message}`);
@@ -4140,9 +4172,16 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       marketTypes: (marketTypesRes.data ?? [])
         .filter((mt) => mt.sport_id === sport.id)
         .map((mt) => mt.market_type as string) as ReferenceDataCatalog['sports'][number]['marketTypes'],
-      statTypes: (statTypesRes.data ?? [])
-        .filter((st) => st.sport_id === sport.id)
-        .map((st) => st.name as string),
+      statTypes: Array.from(
+        new Set([
+          ...(statTypesRes.data ?? [])
+            .filter((st) => st.sport_id === sport.id)
+            .map((st) => st.name as string),
+          ...(comboStatTypesRes.data ?? [])
+            .filter((combo) => combo.sport_id === sport.id)
+            .map((combo) => combo.display_name as string),
+        ]),
+      ),
       teams: (teamsRes.data ?? [])
         .filter((t) => t.sport === sport.id)
         .map((t) => t.display_name as string),
@@ -5654,6 +5693,7 @@ function mapProviderOfferInsertToRecord(
     snapshot_at: offer.snapshotAt,
     idempotency_key: offer.idempotencyKey,
     created_at: createdAt,
+    bookmaker_key: offer.bookmakerKey ?? null,
   };
 }
 
@@ -5672,6 +5712,7 @@ function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
     is_closing: offer.isClosing,
     snapshot_at: offer.snapshotAt,
     idempotency_key: offer.idempotencyKey,
+    bookmaker_key: offer.bookmakerKey ?? null,
   };
 }
 

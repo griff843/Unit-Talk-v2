@@ -59,8 +59,12 @@ export async function runGradingPass(
         continue;
       }
 
-      const resolvedParticipantId = await resolvePickParticipantId(pick, repositories);
-      if (!resolvedParticipantId) {
+      const gameLineMarket = isGameLineMarket(pick.market);
+      const resolvedParticipantId = gameLineMarket
+        ? null
+        : await resolvePickParticipantId(pick, repositories);
+
+      if (!gameLineMarket && !resolvedParticipantId) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
@@ -78,7 +82,10 @@ export async function runGradingPass(
         continue;
       }
 
-      const event = await resolvePickEvent(pick, resolvedParticipantId, repositories);
+      const event = gameLineMarket
+        ? await resolvePickEventByName(pick, repositories)
+        : await resolvePickEvent(pick, resolvedParticipantId as string, repositories);
+
       if (!event) {
         details.push({
           pickId: pick.id,
@@ -373,6 +380,35 @@ function readEventStartTime(event: EventRow) {
   return typeof startsAt === 'string' && startsAt.trim().length > 0
     ? startsAt
     : `${event.event_date}T23:59:59Z`;
+}
+
+/**
+ * Game-line market keys (participant_id = null in game_results).
+ * Score format for ML/spread is pending confirmation from SGO (see PROVIDER_KNOWLEDGE_BASE.md §4).
+ * For now only game totals (O/U) are supported for grading; ML/spread are stored but not graded.
+ */
+const GAME_LINE_MARKET_KEYS = new Set(['game_total_ou']);
+
+function isGameLineMarket(market: string): boolean {
+  return GAME_LINE_MARKET_KEYS.has(market);
+}
+
+async function resolvePickEventByName(
+  pick: PickRecord,
+  repositories: Pick<RepositoryBundle, 'events'>,
+): Promise<EventRow | null> {
+  const metadata = asRecord(pick.metadata);
+  const eventName = typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : '';
+  if (!eventName) {
+    return null;
+  }
+
+  const candidates = await repositories.events.listByName(eventName);
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  return chooseEventForPick(pick, candidates);
 }
 
 function inferSelectionSide(selection: string) {

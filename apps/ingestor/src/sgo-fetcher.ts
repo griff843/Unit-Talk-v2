@@ -127,7 +127,11 @@ interface FlatSGOOddsRow {
   line: number | string | null;
   odds: number | null;
   side: 'over' | 'under';
+  byBookmaker?: Record<string, unknown>;
 }
+
+/** Priority bookmakers to extract from byBookmaker (in preference order for CLV). */
+const PRIORITY_BOOKMAKERS = ['pinnacle', 'draftkings', 'fanduel', 'betmgm'] as const;
 
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
@@ -444,7 +448,11 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
   const rows: FlatSGOOddsRow[] = [];
   collectOddsRows(event.odds, providerEventId, sportKey, rows);
 
+  // Top-level paired props (consensus SGO odds)
   const grouped = new Map<string, SGOPairedProp>();
+  // Per-bookmaker: groupKey → bookId → { overOdds, underOdds }
+  const bookmakerGrouped = new Map<string, Map<string, { overOdds: number | null; underOdds: number | null }>>();
+
   for (const row of rows) {
     const baseMarketKey = stripSideSuffix(row.marketKey);
     const lineStr = formatLine(row.line);
@@ -468,9 +476,45 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
     }
 
     grouped.set(groupKey, existing);
+
+    // Extract per-bookmaker odds from byBookmaker
+    if (row.byBookmaker) {
+      const bookMap = bookmakerGrouped.get(groupKey) ?? new Map();
+      for (const bookId of PRIORITY_BOOKMAKERS) {
+        const bookData = row.byBookmaker[bookId];
+        if (!isRecord(bookData)) continue;
+        const bookOdds = firstNumber(bookData.odds as unknown);
+        if (bookOdds === null) continue;
+        const existing2 = bookMap.get(bookId) ?? { overOdds: null, underOdds: null };
+        if (row.side === 'over') {
+          existing2.overOdds = bookOdds;
+        } else {
+          existing2.underOdds = bookOdds;
+        }
+        bookMap.set(bookId, existing2);
+      }
+      bookmakerGrouped.set(groupKey, bookMap);
+    }
   }
 
-  return Array.from(grouped.values());
+  const result: SGOPairedProp[] = Array.from(grouped.values());
+
+  // Append bookmaker-specific props
+  for (const [groupKey, bookMap] of bookmakerGrouped) {
+    const baseProp = grouped.get(groupKey);
+    if (!baseProp) continue;
+    for (const [bookId, bookOdds] of bookMap) {
+      if (bookOdds.overOdds === null && bookOdds.underOdds === null) continue;
+      result.push({
+        ...baseProp,
+        overOdds: bookOdds.overOdds,
+        underOdds: bookOdds.underOdds,
+        bookmakerKey: bookId,
+      });
+    }
+  }
+
+  return result;
 }
 
 function collectOddsRows(
@@ -517,6 +561,7 @@ function collectOddsRows(
       line: firstNumber(node.bookOverUnder, node.fairOverUnder, node.line, node.points, node.total, node.handicap),
       odds: firstNumber(node.bookOdds, node.fairOdds, node.americanOdds, node.oddsAmerican, node.odds, node.price),
       side,
+      ...(isRecord(node.byBookmaker) ? { byBookmaker: node.byBookmaker as Record<string, unknown> } : {}),
     });
     return;
   }

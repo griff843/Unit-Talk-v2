@@ -20,6 +20,7 @@ test('ProviderOfferRepository.findClosingLine returns latest offer before cutoff
       isClosing: false,
       snapshotAt: '2026-03-26T20:00:00.000Z',
       idempotencyKey: 'offer-1',
+      bookmakerKey: null,
     },
     {
       providerKey: 'sgo',
@@ -35,6 +36,7 @@ test('ProviderOfferRepository.findClosingLine returns latest offer before cutoff
       isClosing: false,
       snapshotAt: '2026-03-26T21:00:00.000Z',
       idempotencyKey: 'offer-2',
+      bookmakerKey: null,
     },
     {
       providerKey: 'sgo',
@@ -50,6 +52,7 @@ test('ProviderOfferRepository.findClosingLine returns latest offer before cutoff
       isClosing: false,
       snapshotAt: '2026-03-26T22:30:00.000Z',
       idempotencyKey: 'offer-3',
+      bookmakerKey: null,
     },
   ]);
 
@@ -92,6 +95,7 @@ test('ProviderOfferRepository.findClosingLine handles participant-less markets',
       isClosing: false,
       snapshotAt: '2026-03-26T22:00:00.000Z',
       idempotencyKey: 'total-1',
+      bookmakerKey: null,
     },
   ]);
 
@@ -145,6 +149,7 @@ test('computeAndAttachCLV returns a positive CLV result when pick beats the clos
       isClosing: false,
       snapshotAt: '2026-03-26T23:20:00.000Z',
       idempotencyKey: 'clv-offer-1',
+      bookmakerKey: null,
     },
   ]);
 
@@ -226,6 +231,7 @@ test('computeAndAttachCLV falls back to event_date cutoff when starts_at is miss
       isClosing: false,
       snapshotAt: '2026-03-27T23:45:00.000Z',
       idempotencyKey: 'fallback-offer-1',
+      bookmakerKey: null,
     },
   ]);
 
@@ -305,6 +311,7 @@ test('computeAndAttachCLV logs market mismatches and returns null', async () => 
       isClosing: false,
       snapshotAt: '2026-03-28T22:50:00.000Z',
       idempotencyKey: 'mismatch-offer-1',
+      bookmakerKey: null,
     },
   ]);
 
@@ -389,6 +396,7 @@ test('computeAndAttachCLV resolves participant from metadata.player when partici
       isClosing: false,
       snapshotAt: '2026-03-29T23:00:00.000Z',
       idempotencyKey: 'meta-offer-1',
+      bookmakerKey: null,
     },
   ]);
 

@@ -491,6 +491,7 @@ export interface ClosingLineLookupCriteria {
   providerMarketKey: string;
   providerParticipantId?: string | null | undefined;
   before: string;
+  bookmakerKey?: string | null;
 }
 
 export interface ProviderOfferRepository {
@@ -557,6 +558,8 @@ export interface EventRepository {
   findById(eventId: string): Promise<EventRow | null>;
   findByExternalId(externalId: string): Promise<EventRow | null>;
   listUpcoming(sportId?: string, windowDays?: number): Promise<EventRow[]>;
+  /** Returns all events whose event_name matches the given name (case-insensitive). */
+  listByName(eventName: string): Promise<EventRow[]>;
 }
 
 export interface EventParticipantUpsertInput {
