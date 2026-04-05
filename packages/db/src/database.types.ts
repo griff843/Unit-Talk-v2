@@ -1138,12 +1138,14 @@ export type Database = {
       picks: {
         Row: {
           approval_status: string
+          capper_id: string | null
           confidence: number | null
           created_at: string
           id: string
           idempotency_key: string | null
           line: number | null
           market: string
+          market_type_id: string | null
           metadata: Json
           odds: number | null
           participant_id: string | null
@@ -1158,6 +1160,7 @@ export type Database = {
           selection: string
           settled_at: string | null
           source: string
+          sport_id: string | null
           stake_units: number | null
           status: string
           submission_id: string | null
@@ -1165,12 +1168,14 @@ export type Database = {
         }
         Insert: {
           approval_status?: string
+          capper_id?: string | null
           confidence?: number | null
           created_at?: string
           id?: string
           idempotency_key?: string | null
           line?: number | null
           market: string
+          market_type_id?: string | null
           metadata?: Json
           odds?: number | null
           participant_id?: string | null
@@ -1185,6 +1190,7 @@ export type Database = {
           selection: string
           settled_at?: string | null
           source: string
+          sport_id?: string | null
           stake_units?: number | null
           status?: string
           submission_id?: string | null
@@ -1192,12 +1198,14 @@ export type Database = {
         }
         Update: {
           approval_status?: string
+          capper_id?: string | null
           confidence?: number | null
           created_at?: string
           id?: string
           idempotency_key?: string | null
           line?: number | null
           market?: string
+          market_type_id?: string | null
           metadata?: Json
           odds?: number | null
           participant_id?: string | null
@@ -1212,6 +1220,7 @@ export type Database = {
           selection?: string
           settled_at?: string | null
           source?: string
+          sport_id?: string | null
           stake_units?: number | null
           status?: string
           submission_id?: string | null
@@ -1219,10 +1228,31 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "picks_capper_id_fkey"
+            columns: ["capper_id"]
+            isOneToOne: false
+            referencedRelation: "cappers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_market_type_id_fkey"
+            columns: ["market_type_id"]
+            isOneToOne: false
+            referencedRelation: "market_types"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "picks_participant_id_fkey"
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
             referencedColumns: ["id"]
           },
           {
