@@ -615,7 +615,7 @@ test('manual fallback surfaces the current free-text matchup warning', async ({ 
   await expect(page.getByRole('button', { name: 'Submit Pick' }).first()).toBeEnabled();
 });
 
-test('selected matchup constrains participant choices and valid stat types', async ({ page }) => {
+test('selected matchup constrains player props to matchup teams and valid stat types', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', async (route) => {
     await route.fulfill({
       status: 200,
@@ -669,6 +669,7 @@ test('selected matchup constrains participant choices and valid stat types', asy
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: /Jazz @ Nuggets/i }).click();
   await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Nuggets/i }).click();
 
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
   await expect(page.getByRole('option', { name: 'Assists' })).toBeVisible();
@@ -687,7 +688,7 @@ test('selected matchup constrains participant choices and valid stat types', asy
   await expect(page.getByRole('option', { name: 'Assists' })).toHaveCount(0);
 });
 
-test('player-prop flow auto-binds team and matchup from player or team selection', async ({ page }) => {
+test('player-prop flow binds matchup and narrows players once a matchup team is selected', async ({ page }) => {
   await page.route('**/api/reference-data/catalog', async (route) => {
     await route.fulfill({
       status: 200,
@@ -757,18 +758,21 @@ test('player-prop flow auto-binds team and matchup from player or team selection
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
   await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
+  await page.getByRole('button', { name: 'Browse slate' }).click();
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await expect(page.getByRole('button', { name: /ML\s*Moneyline/i }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /SPR\s*Spread/i }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /TOT\s*Total/i }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /T-TOT\s*Team Total/i }).first()).toBeVisible();
   await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Celtics/i }).click();
 
   await page.getByPlaceholder('Type a player name').fill('Jays');
   await page.getByRole('button', { name: /Jayson Tatum/i }).click();
 
   await expect(page.getByText('Pick Details')).toHaveCount(0);
-  await expect(page.getByLabel('Team')).toHaveValue('Celtics');
-  await expect(page.getByLabel('Player')).toHaveValue('Jayson Tatum');
+  await expect(page.getByRole('button', { name: /Celtics/i })).toHaveCount(1);
+  await expect(page.getByPlaceholder('Type a player name')).toHaveValue('Jayson Tatum');
   await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Celtics vs Knicks' })).toBeVisible();
   await expect(page.getByText('Apr 2', { exact: true })).toBeVisible();
   await expect(page.getByRole('combobox', { name: 'Stat Type' })).toBeVisible();
@@ -856,6 +860,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
   await page.getByLabel('Date').fill('2026-04-02');
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+  await page.getByRole('button', { name: /Celtics/i }).click();
   await page.getByPlaceholder('Type a player name').fill('Jays');
   await page.getByRole('button', { name: /Jayson Tatum/i }).click();
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
@@ -865,7 +870,7 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
   await expect(page.getByText('Pick Details')).toHaveCount(0);
   await expect(page.getByText('Player Prop Ticket')).toBeVisible();
   await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
-  await expect(page.locator('input[name="team"]')).toHaveCount(1);
+  await expect(page.locator('input[name="team"]')).toHaveCount(0);
   await expect(page.locator('input[name="playerName"]')).toHaveCount(1);
   await expect(page.getByRole('button', { name: /^Over/i }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Under/i }).last()).toBeVisible();

@@ -87,6 +87,7 @@ interface ParticipantAutocompleteFieldProps {
   allowedParticipantIds?: ReadonlySet<string> | null;
   onSuggestionSelected: (suggestion: ParticipantSuggestion) => void | Promise<void>;
   onManualChange: () => void;
+  disabledOverride?: boolean;
 }
 
 function roleSortOrder(role: string) {
@@ -264,6 +265,10 @@ function normalizeConvictionValue(value: string) {
   return clampNumber(Math.round(parsed), 1, 10);
 }
 
+function matchupTeamKey(team: MatchupBrowseResult['teams'][number]) {
+  return team.teamId ?? team.participantId;
+}
+
 function ParticipantAutocompleteField({
   form,
   name,
@@ -275,6 +280,7 @@ function ParticipantAutocompleteField({
   allowedParticipantIds,
   onSuggestionSelected,
   onManualChange,
+  disabledOverride = false,
 }: ParticipantAutocompleteFieldProps) {
   const value = useWatch({ control: form.control, name }) ?? '';
   const [isFocused, setIsFocused] = useState(false);
@@ -360,12 +366,18 @@ function ParticipantAutocompleteField({
         <FormItem className="relative">
           <FormLabel>{label}</FormLabel>
           <FormControl>
-            <Input
-              {...field}
-              autoComplete="off"
-              disabled={!sport}
-              placeholder={sport ? placeholder : 'Select a sport first'}
-              value={field.value ?? ''}
+                        <Input
+                          {...field}
+                          autoComplete="off"
+                          disabled={!sport || disabledOverride}
+                          placeholder={
+                            !sport
+                              ? 'Select a sport first'
+                              : disabledOverride
+                                ? 'Choose team first'
+                                : placeholder
+                          }
+                          value={field.value ?? ''}
               onFocus={() => setIsFocused(true)}
               onBlur={() => {
                 window.setTimeout(() => setIsFocused(false), 120);
@@ -1547,6 +1559,39 @@ export function BetForm() {
     form.resetField('odds');
   }
 
+  function applyPlayerPropTeamSelection(team: MatchupBrowseResult['teams'][number]) {
+    const teamKey = matchupTeamKey(team);
+    form.setValue('team', team.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setSelectedTeamId(teamKey);
+    form.clearErrors('team');
+
+    const currentPlayerKey = selectedPlayerId?.trim().toLocaleLowerCase() ?? null;
+    const selectedParticipant = eventBrowse?.participants.find((participant) => {
+      if (participant.participantType !== 'player') {
+        return false;
+      }
+      const participantKey = participant.participantId.trim().toLocaleLowerCase();
+      const canonicalKey = participant.canonicalId?.trim().toLocaleLowerCase() ?? null;
+      return participantKey === currentPlayerKey || canonicalKey === currentPlayerKey;
+    });
+
+    if (selectedParticipant && selectedParticipant.teamId === teamKey) {
+      return;
+    }
+
+    setSelectedPlayerId(null);
+    setSelectedOfferParticipantId(null);
+    form.setValue('playerName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+  }
+
   async function onSubmit(values: BetFormValues) {
     if (!catalog) {
       return;
@@ -1860,18 +1905,33 @@ export function BetForm() {
                 {selectedMarketType === 'player-prop' ? (
                   <div className="space-y-3">
                     <div className="grid gap-3 md:grid-cols-3">
-                      <ParticipantAutocompleteField
-                        form={form}
-                        name="team"
-                        label="Team"
-                        placeholder="Type a team name"
-                        searchType="team"
-                        eventId={selectedMatchupId}
-                        sport={selectedSport}
-                        allowedParticipantIds={allowedTeamIds}
-                        onSuggestionSelected={handleTeamSuggestionSelection}
-                        onManualChange={() => setSelectedTeamId(null)}
-                      />
+                      <div className="space-y-2">
+                        <p className="text-sm font-medium leading-none">Team</p>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          {matchupTeams.map((team) => {
+                            const teamKey = matchupTeamKey(team);
+                            const isSelected = selectedTeamId === teamKey;
+                            return (
+                              <button
+                                key={team.participantId}
+                                type="button"
+                                onClick={() => applyPlayerPropTeamSelection(team)}
+                                className={cn(
+                                  'rounded-xl border px-4 py-3 text-left transition-colors',
+                                  isSelected
+                                    ? 'border-primary bg-primary/10'
+                                    : 'border-border bg-background hover:border-primary/50',
+                                )}
+                              >
+                                <p className="font-semibold text-foreground">{team.displayName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {isSelected ? 'Selected team' : 'Filter players to this team'}
+                                </p>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
                       <ParticipantAutocompleteField
                         form={form}
                         name="playerName"
@@ -1883,6 +1943,7 @@ export function BetForm() {
                         allowedParticipantIds={allowedPlayerIds}
                         onSuggestionSelected={handlePlayerSuggestionSelection}
                         onManualChange={() => setSelectedPlayerId(null)}
+                        disabledOverride={!selectedTeamId}
                       />
                       <FormField
                         control={form.control}
