@@ -4136,6 +4136,33 @@ export class DatabaseEventParticipantRepository implements EventParticipantRepos
   }
 }
 
+// Derives the high-level market category strings used by Smart Form from canonical
+// market_type_id values in sport_market_type_availability. Preserves the display
+// order: player-prop → moneyline → spread → total → team-total.
+const MARKET_CATEGORY_PRIORITY: Record<string, number> = {
+  'player-prop': 1,
+  moneyline: 2,
+  spread: 3,
+  total: 4,
+  'team-total': 5,
+};
+
+function marketTypeIdToCategory(id: string): string | null {
+  if (id === 'moneyline') return 'moneyline';
+  if (id === 'spread') return 'spread';
+  if (id === 'game_total_ou') return 'total';
+  if (id === 'team_total_ou') return 'team-total';
+  if (id.startsWith('player_')) return 'player-prop';
+  return null;
+}
+
+function deriveCatalogMarketCategories(marketTypeIds: string[]): string[] {
+  const categories = Array.from(
+    new Set(marketTypeIds.map(marketTypeIdToCategory).filter((c): c is string => c !== null)),
+  );
+  return categories.sort((a, b) => (MARKET_CATEGORY_PRIORITY[a] ?? 99) - (MARKET_CATEGORY_PRIORITY[b] ?? 99));
+}
+
 export class DatabaseReferenceDataRepository implements ReferenceDataRepository {
   private readonly client: UnitTalkSupabaseClient;
 
@@ -4144,10 +4171,11 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
-    const [sportsRes, marketTypesRes, statTypesRes, comboStatTypesRes, sportsbooksRes, cappersRes, teamsRes] =
+    const [sportsRes, marketAvailRes, statTypesRes, comboStatTypesRes, sportsbooksRes, cappersRes, teamsRes] =
       await Promise.all([
         this.client.from('sports').select('*').eq('active', true).order('sort_order'),
-        this.client.from('sport_market_types').select('*').order('sort_order'),
+        // UTV2-397: sport_market_types deprecated — query sport_market_type_availability instead
+        this.client.from('sport_market_type_availability').select('sport_id,market_type_id,sort_order').eq('active', true).order('sort_order'),
         this.client.from('stat_types').select('*').eq('active', true).order('sort_order'),
         this.client.from('combo_stat_types').select('*').eq('active', true).order('sort_order'),
         this.client.from('sportsbooks').select('*').eq('active', true).order('sort_order'),
@@ -4159,7 +4187,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       ]);
 
     if (sportsRes.error) throw new Error(`Failed to load sports: ${sportsRes.error.message}`);
-    if (marketTypesRes.error) throw new Error(`Failed to load market types: ${marketTypesRes.error.message}`);
+    if (marketAvailRes.error) throw new Error(`Failed to load market type availability: ${marketAvailRes.error.message}`);
     if (statTypesRes.error) throw new Error(`Failed to load stat types: ${statTypesRes.error.message}`);
     if (comboStatTypesRes.error) throw new Error(`Failed to load combo stat types: ${comboStatTypesRes.error.message}`);
     if (sportsbooksRes.error) throw new Error(`Failed to load sportsbooks: ${sportsbooksRes.error.message}`);
@@ -4172,9 +4200,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return {
         id: sport.id as string,
         name: sport.display_name as string,
-        marketTypes: (marketTypesRes.data ?? [])
-          .filter((mt) => mt.sport_id === sport.id)
-          .map((mt) => mt.market_type as string) as ReferenceDataCatalog['sports'][number]['marketTypes'],
+        marketTypes: deriveCatalogMarketCategories(
+          (marketAvailRes.data ?? []).filter((row) => row.sport_id === sport.id).map((row) => row.market_type_id as string),
+        ) as ReferenceDataCatalog['sports'][number]['marketTypes'],
         statTypes: Array.from(
           new Set([
             ...(statTypesRes.data ?? [])
