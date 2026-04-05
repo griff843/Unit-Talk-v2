@@ -203,6 +203,27 @@ function teamMatchesMatchup(matchup: MatchupBrowseResult, teamId: string | null 
   });
 }
 
+function offerMatchesSelectedSportsbook(
+  offer: EventOfferBrowseResult,
+  sportsbookValue: string | null | undefined,
+) {
+  const normalizedSportsbook = sportsbookValue?.trim().toLocaleLowerCase() ?? '';
+  if (normalizedSportsbook.length === 0) {
+    return true;
+  }
+
+  return normalizedSportsbook === (offer.sportsbookId ?? '').trim().toLocaleLowerCase() ||
+    normalizedSportsbook === (offer.sportsbookName ?? '').trim().toLocaleLowerCase();
+}
+
+function buildOddsLabel(odds: number | null | undefined) {
+  if (odds == null) {
+    return 'Manual odds';
+  }
+
+  return odds > 0 ? `+${odds}` : `${odds}`;
+}
+
 function ParticipantAutocompleteField({
   form,
   name,
@@ -715,7 +736,15 @@ export function BetForm() {
   const watchedValues = form.watch();
   const selectedSport = watchedValues.sport;
   const selectedMarketType = watchedValues.marketType;
+  const selectedSportsbookValue = watchedValues.sportsbook?.trim().toLocaleLowerCase() ?? '';
   const emptyCatalog: CatalogData = { sports: [], sportsbooks: [], ticketTypes: [], cappers: [] };
+  const selectedCatalogSportsbook = useMemo(
+    () => catalog?.sportsbooks.find((sportsbook) => (
+      sportsbook.id === selectedSportsbookValue ||
+      sportsbook.name.toLocaleLowerCase() === selectedSportsbookValue
+    )) ?? null,
+    [catalog, selectedSportsbookValue],
+  );
   const selectedMatchup = useMemo(
     () => matchups.find((matchup) => matchup.eventId === selectedMatchupId) ?? null,
     [matchups, selectedMatchupId],
@@ -756,6 +785,10 @@ export function BetForm() {
       new Set(eventBrowse.offers.map((offer) => mapOfferToFormMarketType(offer))),
     );
   }, [eventBrowse]);
+  const visibleMarketFamilies = useMemo(
+    () => Array.from(new Set([...availableMarketTypes, ...availableOfferFamilies])),
+    [availableMarketTypes, availableOfferFamilies],
+  );
   const groupedPlayers = useMemo(() => {
     if (!eventBrowse) {
       return [] as Array<{
@@ -790,6 +823,16 @@ export function BetForm() {
       if (mapOfferToFormMarketType(offer) !== selectedMarketType) {
         return false;
       }
+      if (selectedCatalogSportsbook && !offerMatchesSelectedSportsbook(offer, selectedSportsbookValue)) {
+        return false;
+      }
+      if (
+        selectedMarketType === 'player-prop' &&
+        watchedValues.statType &&
+        inferStatTypeFromMarketTypeId(offer.marketTypeId, offer.marketDisplayName) !== watchedValues.statType
+      ) {
+        return false;
+      }
       if (
         selectedMarketType === 'player-prop' &&
         selectedOfferParticipantId &&
@@ -799,7 +842,43 @@ export function BetForm() {
       }
       return true;
     });
-  }, [eventBrowse, selectedMarketType, selectedOfferParticipantId]);
+  }, [eventBrowse, selectedCatalogSportsbook, selectedMarketType, selectedOfferParticipantId, selectedSportsbookValue, watchedValues.statType]);
+  const matchupTeams = useMemo(
+    () => [...(selectedMatchup?.teams ?? [])].sort(
+      (left, right) => roleSortOrder(left.role) - roleSortOrder(right.role),
+    ),
+    [selectedMatchup],
+  );
+  const moneylineOfferMap = useMemo(() => {
+    const offers = new Map<string, EventOfferBrowseResult>();
+    if (!eventBrowse || selectedMarketType !== 'moneyline') {
+      return offers;
+    }
+
+    for (const offer of filteredOffers) {
+      const eventParticipant = eventBrowse.participants.find((participant) => (
+        participant.participantType === 'team' &&
+        (
+          participant.participantId === offer.participantId ||
+          participant.canonicalId === offer.participantId ||
+          normalizeParticipantKey(participant.displayName) === normalizeParticipantKey(offer.participantName) ||
+          normalizeParticipantKey(participant.displayName) === normalizeParticipantKey(offer.providerParticipantId)
+        )
+      ));
+
+      const possibleKeys = [
+        offer.participantId,
+        eventParticipant?.participantId,
+        eventParticipant?.canonicalId,
+      ].filter((value): value is string => Boolean(value));
+
+      for (const key of possibleKeys) {
+        offers.set(key, offer);
+      }
+    }
+
+    return offers;
+  }, [eventBrowse, filteredOffers, selectedMarketType]);
   const availablePlayerPropStatTypes = useMemo(() => {
     if (selectedMarketType !== 'player-prop') {
       return [] as string[];
@@ -830,11 +909,19 @@ export function BetForm() {
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse);
+  const hasInlineMoneylineFallback =
+    browseMode === 'live-offer' &&
+    Boolean(selectedMatchup) &&
+    selectedMarketType === 'moneyline';
   const shouldShowManualFallback =
     browseMode === 'manual' ||
     !selectedMatchup ||
     !eventBrowse ||
     filteredOffers.length === 0;
+  const shouldRenderPickDetailsSection =
+    browseMode === 'manual' ||
+    !selectedMatchup ||
+    (shouldShowManualFallback && !hasInlineMoneylineFallback);
 
   useEffect(() => {
     getCatalog()
@@ -1027,6 +1114,19 @@ export function BetForm() {
     }
   }, [availablePlayerPropStatTypes, form, selectedMarketType, watchedValues.statType]);
 
+  useEffect(() => {
+    if (
+      !selectedOffer ||
+      !selectedCatalogSportsbook ||
+      offerMatchesSelectedSportsbook(selectedOffer.offer, selectedSportsbookValue)
+    ) {
+      return;
+    }
+
+    setSelectedOffer(null);
+    form.resetField('odds');
+  }, [form, selectedCatalogSportsbook, selectedOffer, selectedSportsbookValue]);
+
   function upsertMatchup(matchup: MatchupBrowseResult) {
     setMatchups((current) => {
       const existing = current.find((row) => row.eventId === matchup.eventId);
@@ -1185,6 +1285,11 @@ export function BetForm() {
     setSelectedPlayerId(browseResult.participantId ?? suggestion.participantId);
     setSelectedOfferParticipantId(browseResult.participantId ?? suggestion.participantId);
     setSelectedTeamId(browseResult.teamId);
+    form.setValue('playerName', browseResult.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
     if (browseResult.teamName) {
       form.setValue('team', browseResult.teamName, {
         shouldDirty: true,
@@ -1318,6 +1423,27 @@ export function BetForm() {
     });
     setSelectedPlayerId(null);
     setSelectedTeamId(null);
+  }
+
+  function applyMoneylineTeamSelection(team: MatchupBrowseResult['teams'][number]) {
+    form.setValue('team', team.displayName, {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: true,
+    });
+    setSelectedTeamId(team.teamId ?? team.participantId);
+    form.clearErrors('team');
+
+    const matchingOffer = moneylineOfferMap.get(team.teamId ?? '') ??
+      moneylineOfferMap.get(team.participantId);
+
+    if (matchingOffer) {
+      applyLiveOfferSelection(matchingOffer, 'side');
+      return;
+    }
+
+    setSelectedOffer(null);
+    form.resetField('odds');
   }
 
   async function onSubmit(values: BetFormValues) {
@@ -1610,7 +1736,7 @@ export function BetForm() {
                     Market Family
                   </p>
                   <MarketTypeGrid
-                    availableTypes={availableOfferFamilies}
+                    availableTypes={visibleMarketFamilies}
                     selected={selectedMarketType}
                     onSelect={(type) => form.setValue('marketType', type, {
                       shouldDirty: true,
@@ -1622,10 +1748,64 @@ export function BetForm() {
 
                 {selectedMarketType === 'player-prop' && groupedPlayers.length > 0 ? (
                   <div className="space-y-3">
+                    <div className="grid gap-3 md:grid-cols-3">
+                      <ParticipantAutocompleteField
+                        form={form}
+                        name="team"
+                        label="Team"
+                        placeholder="Type a team name"
+                        searchType="team"
+                        eventId={selectedMatchupId}
+                        sport={selectedSport}
+                        allowedParticipantIds={allowedTeamIds}
+                        onSuggestionSelected={handleTeamSuggestionSelection}
+                        onManualChange={() => setSelectedTeamId(null)}
+                      />
+                      <ParticipantAutocompleteField
+                        form={form}
+                        name="playerName"
+                        label="Player"
+                        placeholder="Type a player name"
+                        searchType="player"
+                        eventId={selectedMatchupId}
+                        sport={selectedSport}
+                        allowedParticipantIds={allowedPlayerIds}
+                        onSuggestionSelected={handlePlayerSuggestionSelection}
+                        onManualChange={() => setSelectedPlayerId(null)}
+                      />
+                      <FormField
+                        control={form.control}
+                        name="statType"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Stat Type</FormLabel>
+                            <Select
+                              disabled={availablePlayerPropStatTypes.length === 0}
+                              onValueChange={field.onChange}
+                              value={field.value ?? ''}
+                            >
+                              <FormControl>
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select stat" />
+                                </SelectTrigger>
+                              </FormControl>
+                              <SelectContent>
+                                {availablePlayerPropStatTypes.map((statType) => (
+                                  <SelectItem key={statType} value={statType}>
+                                    {statType}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                    </div>
                     <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                       Player
                     </p>
-                    <div className="space-y-3">
+                    <div className="max-h-52 space-y-3 overflow-y-auto pr-1">
                       {groupedPlayers.map((group) => (
                         <div key={group.teamName} className="space-y-2">
                           <p className="text-xs text-muted-foreground">{group.teamName}</p>
@@ -1652,6 +1832,50 @@ export function BetForm() {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedMarketType === 'moneyline' && matchupTeams.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Team to Win
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        {selectedSportsbookValue ? 'Odds filtered by sportsbook' : 'Select a sportsbook to lock odds'}
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {matchupTeams.map((team) => {
+                        const offer = moneylineOfferMap.get(team.teamId ?? '') ?? moneylineOfferMap.get(team.participantId);
+                        const isSelected = selectedTeamId === (team.teamId ?? team.participantId);
+                        return (
+                          <button
+                            key={team.participantId}
+                            type="button"
+                            onClick={() => applyMoneylineTeamSelection(team)}
+                            className={cn(
+                              'rounded-xl border px-4 py-4 text-left transition-colors',
+                              isSelected
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border bg-background hover:border-primary/50',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{team.displayName}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {offer?.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Manual fallback')}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                                {buildOddsLabel(offer?.overOdds)}
+                              </span>
+                            </div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 ) : null}
@@ -1690,8 +1914,8 @@ export function BetForm() {
                       <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
                         No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.
                       </div>
-                    ) : (
-                      <div className="space-y-3">
+                    ) : selectedMarketType === 'moneyline' ? null : (
+                      <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {filteredOffers.map((offer) => {
                           const offerAgeMinutes = getOfferAgeMinutes(offer.snapshotAt);
                           const isMoneyline = mapOfferToFormMarketType(offer) === 'moneyline';
@@ -1879,31 +2103,72 @@ export function BetForm() {
     if (selectedMarketType === 'moneyline') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <ParticipantAutocompleteField
-            form={form}
-            name="team"
-            label="Team to Win"
-            placeholder="Type a team name"
-            searchType="team"
-            eventId={selectedMatchupId}
-            sport={selectedSport}
-            allowedParticipantIds={allowedTeamIds}
-            onSuggestionSelected={handleTeamSuggestionSelection}
-            onManualChange={() => setSelectedTeamId(null)}
-          />
+          {selectedMatchup ? (
+            <div className="space-y-3">
+              <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+              </div>
+              <div className="grid gap-2 sm:grid-cols-2">
+                {matchupTeams.map((team) => {
+                  const isSelected = selectedTeamId === (team.teamId ?? team.participantId);
+                  const offer = moneylineOfferMap.get(team.teamId ?? '') ?? moneylineOfferMap.get(team.participantId);
+                  return (
+                    <button
+                      key={team.participantId}
+                      type="button"
+                      onClick={() => applyMoneylineTeamSelection(team)}
+                      className={cn(
+                        'rounded-xl border px-4 py-4 text-left transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-primary/50',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-foreground">{team.displayName}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {offer?.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Manual odds')}
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                          {buildOddsLabel(offer?.overOdds)}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <ParticipantAutocompleteField
+                form={form}
+                name="team"
+                label="Team to Win"
+                placeholder="Type a team name"
+                searchType="team"
+                eventId={selectedMatchupId}
+                sport={selectedSport}
+                allowedParticipantIds={allowedTeamIds}
+                onSuggestionSelected={handleTeamSuggestionSelection}
+                onManualChange={() => setSelectedTeamId(null)}
+              />
+            </>
+          )}
         </div>
       );
     }
@@ -2161,7 +2426,7 @@ export function BetForm() {
                   </div>
                 </div>
 
-                <div className="grid gap-4 md:grid-cols-2">
+                <div className="grid gap-4 md:grid-cols-3">
                   <FormField
                     control={form.control}
                     name="sport"
@@ -2211,12 +2476,15 @@ export function BetForm() {
                       </FormItem>
                     )}
                   />
+
+                  <SearchableSportsbookField form={form} sportsbooks={catalog.sportsbooks} />
                 </div>
               </section>
 
               {renderLiveOfferSection()}
 
-              <section className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+              {shouldRenderPickDetailsSection ? (
+                <section className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-foreground">Pick Details</h2>
@@ -2258,13 +2526,12 @@ export function BetForm() {
                 ) : null}
 
                 {renderBetDetailsSection()}
-              </section>
+                </section>
+              ) : null}
 
               <section className="space-y-4 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <h2 className="text-lg font-semibold text-foreground">Book, Odds, and Submission</h2>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <SearchableSportsbookField form={form} sportsbooks={catalog.sportsbooks} />
-
                   <FormField
                     control={form.control}
                     name="odds"
