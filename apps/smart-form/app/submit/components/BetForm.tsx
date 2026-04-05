@@ -2511,62 +2511,162 @@ export function BetForm() {
     if (selectedMarketType === 'total') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <FormField
-              control={form.control}
-              name="direction"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Over / Under</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
+          {selectedMatchup ? (
+            <>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                  Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {(['over', 'under'] as const).map((direction) => {
+                    const isSelected = watchedValues.direction === direction;
+                    const selectedLineLabel =
+                      isSelected && typeof watchedValues.line === 'number'
+                        ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                        : null;
+                    return (
+                      <button
+                        key={direction}
+                        type="button"
+                        onClick={() => {
+                          form.setValue('direction', direction, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                        }}
+                        className={cn(
+                          'rounded-xl border px-4 py-4 text-left transition-colors',
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">
+                              {direction === 'over' ? 'Over' : 'Under'}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual total entry'}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              isSelected
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {selectedLineLabel ?? 'Enter total'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {watchedValues.direction
+                        ? `${watchedValues.direction === 'over' ? 'Over' : 'Under'} total`
+                        : 'Game total ticket'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Pick a side above, then enter the total line to finish the ticket.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <FormField
+                    control={form.control}
+                    name="line"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Total</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="e.g. 220.5"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
                     <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Over or Under" />
-                      </SelectTrigger>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
                     </FormControl>
-                    <SelectContent>
-                      <SelectItem value="over">Over</SelectItem>
-                      <SelectItem value="under">Under</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="line"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Total</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      placeholder="e.g. 220.5"
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="direction"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Over / Under</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Over or Under" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="over">Over</SelectItem>
+                          <SelectItem value="under">Under</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="line"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Total</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="e.g. 220.5"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -2574,74 +2674,219 @@ export function BetForm() {
     if (selectedMarketType === 'team-total') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <ParticipantAutocompleteField
-              form={form}
-              name="team"
-              label="Team"
-              placeholder="Type a team name"
-              searchType="team"
-              eventId={selectedMatchupId}
-              sport={selectedSport}
-              allowedParticipantIds={allowedTeamIds}
-              onSuggestionSelected={handleTeamSuggestionSelection}
-              onManualChange={() => setSelectedTeamId(null)}
-            />
-            <FormField
-              control={form.control}
-              name="direction"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Over / Under</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value ?? ''}>
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Over or Under" />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="over">Over</SelectItem>
-                      <SelectItem value="under">Under</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
-          <FormField
-            control={form.control}
-            name="line"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Team Total</FormLabel>
-                <FormControl>
-                  <Input
-                    type="number"
-                    step="0.5"
-                    placeholder="e.g. 112.5"
-                    {...field}
-                    value={field.value ?? ''}
-                    onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+          {selectedMatchup ? (
+            <>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                  Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {matchupTeams.map((team) => {
+                    const teamKey = team.teamId ?? team.participantId;
+                    const isSelected = selectedTeamId === teamKey;
+                    return (
+                      <button
+                        key={team.participantId}
+                        type="button"
+                        onClick={() => {
+                          form.setValue('team', team.displayName, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                          setSelectedTeamId(teamKey);
+                        }}
+                        className={cn(
+                          'rounded-xl border px-4 py-4 text-left transition-colors',
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">{team.displayName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual team total entry'}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              isSelected
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {isSelected ? 'Selected' : 'Pick team'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {(['over', 'under'] as const).map((direction) => {
+                  const isSelected = watchedValues.direction === direction;
+                  const selectedLineLabel =
+                    isSelected && typeof watchedValues.line === 'number'
+                      ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                      : null;
+                  return (
+                    <button
+                      key={direction}
+                      type="button"
+                      onClick={() => {
+                        form.setValue('direction', direction, {
+                          shouldDirty: true,
+                          shouldTouch: true,
+                          shouldValidate: true,
+                        });
+                      }}
+                      className={cn(
+                        'rounded-xl border px-4 py-4 text-left transition-colors',
+                        isSelected
+                          ? 'border-primary bg-primary/10'
+                          : 'border-border bg-background hover:border-primary/50',
+                      )}
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold text-foreground">
+                            {direction === 'over' ? 'Over' : 'Under'}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual team total entry'}
+                          </p>
+                        </div>
+                        <span
+                          className={cn(
+                            'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                            isSelected
+                              ? 'border-primary/40 bg-primary/10 text-primary'
+                              : 'border-border text-muted-foreground',
+                          )}
+                        >
+                          {selectedLineLabel ?? 'Enter total'}
+                        </span>
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedTeamId
+                        ? `${matchupTeams.find((team) => (team.teamId ?? team.participantId) === selectedTeamId)?.displayName ?? 'Selected team'} total`
+                        : 'Team total ticket'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Choose the team and side above, then enter the team total line to finish the ticket.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <FormField
+                    control={form.control}
+                    name="line"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Team Total</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="e.g. 112.5"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
                   />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <ParticipantAutocompleteField
+                  form={form}
+                  name="team"
+                  label="Team"
+                  placeholder="Type a team name"
+                  searchType="team"
+                  eventId={selectedMatchupId}
+                  sport={selectedSport}
+                  allowedParticipantIds={allowedTeamIds}
+                  onSuggestionSelected={handleTeamSuggestionSelection}
+                  onManualChange={() => setSelectedTeamId(null)}
+                />
+                <FormField
+                  control={form.control}
+                  name="direction"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Over / Under</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value ?? ''}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Over or Under" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="over">Over</SelectItem>
+                          <SelectItem value="under">Under</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+              <FormField
+                control={form.control}
+                name="line"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Team Total</FormLabel>
+                    <FormControl>
+                      <Input
+                        type="number"
+                        step="0.5"
+                        placeholder="e.g. 112.5"
+                        {...field}
+                        value={field.value ?? ''}
+                        onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </>
+          )}
         </div>
       );
     }
