@@ -84,7 +84,7 @@ interface ParticipantAutocompleteFieldProps {
   eventId?: string | null;
   sport: string;
   allowedParticipantIds?: ReadonlySet<string> | null;
-  onSuggestionSelected: (suggestion: ParticipantSuggestion) => void;
+  onSuggestionSelected: (suggestion: ParticipantSuggestion) => void | Promise<void>;
   onManualChange: () => void;
 }
 
@@ -103,6 +103,15 @@ function formatMatchup(matchup: MatchupBrowseResult) {
 }
 
 function formatTimestampLabel(isoString: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
+    const [year, month, day] = isoString.split('-').map((value) => Number.parseInt(value, 10));
+    const dateOnly = new Date(year, (month ?? 1) - 1, day ?? 1);
+    return dateOnly.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
   const timestamp = new Date(isoString);
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
@@ -114,6 +123,15 @@ function formatTimestampLabel(isoString: string) {
 }
 
 function formatSearchTimestamp(isoString: string) {
+  if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
+    const [year, month, day] = isoString.split('-').map((value) => Number.parseInt(value, 10));
+    const dateOnly = new Date(year, (month ?? 1) - 1, day ?? 1);
+    return dateOnly.toLocaleDateString([], {
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+
   const timestamp = new Date(isoString);
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
@@ -170,6 +188,19 @@ function buildOfferStatus(eventBrowse: EventBrowseResult | null) {
 
 function normalizeParticipantKey(value: string | null | undefined) {
   return value?.trim().toLocaleLowerCase() ?? null;
+}
+
+function teamMatchesMatchup(matchup: MatchupBrowseResult, teamId: string | null | undefined) {
+  if (!teamId) {
+    return false;
+  }
+
+  const normalizedTeamId = teamId.trim().toLocaleLowerCase();
+  return matchup.teams.some((team) => {
+    const canonicalTeamId = team.teamId?.trim().toLocaleLowerCase();
+    const participantTeamId = team.participantId.trim().toLocaleLowerCase();
+    return canonicalTeamId === normalizedTeamId || participantTeamId === normalizedTeamId;
+  });
 }
 
 function ParticipantAutocompleteField({
@@ -702,9 +733,10 @@ export function BetForm() {
     return new Set(
       eventBrowse.participants
         .filter((participant) => participant.participantType === 'player')
+        .filter((participant) => !selectedTeamId || participant.teamId === selectedTeamId)
         .map((participant) => participant.participantId),
     );
-  }, [eventBrowse]);
+  }, [eventBrowse, selectedTeamId]);
   const allowedTeamIds = useMemo(() => {
     if (!eventBrowse) {
       return null;
@@ -734,6 +766,7 @@ export function BetForm() {
 
     const playerParticipants = eventBrowse.participants
       .filter((participant) => participant.participantType === 'player')
+      .filter((participant) => !selectedTeamId || participant.teamId === selectedTeamId)
       .sort((left, right) => left.displayName.localeCompare(right.displayName));
     const groups = new Map<string, typeof playerParticipants>();
 
@@ -747,7 +780,7 @@ export function BetForm() {
     return Array.from(groups.entries())
       .map(([teamName, players]) => ({ teamName, players }))
       .sort((left, right) => left.teamName.localeCompare(right.teamName));
-  }, [eventBrowse]);
+  }, [eventBrowse, selectedTeamId]);
   const filteredOffers = useMemo(() => {
     if (!eventBrowse || !selectedMarketType) {
       return [] as EventOfferBrowseResult[];
@@ -1095,6 +1128,96 @@ export function BetForm() {
     });
   }
 
+  function findUniqueMatchupForTeam(teamId: string | null | undefined) {
+    if (!teamId) {
+      return null;
+    }
+
+    const matchingMatchups = matchups.filter((matchup) => teamMatchesMatchup(matchup, teamId));
+    return matchingMatchups.length === 1 ? matchingMatchups[0] ?? null : null;
+  }
+
+  async function resolveBrowseResultForSelection(
+    displayName: string,
+    resultType: BrowseSearchResult['resultType'],
+    participantId?: string | null,
+  ) {
+    if (!selectedSport || !watchedValues.gameDate) {
+      return null;
+    }
+
+    const results = await searchBrowse(selectedSport, watchedValues.gameDate, displayName);
+    const exactResults = results.filter((result) => {
+      if (result.resultType !== resultType) {
+        return false;
+      }
+
+      if (participantId && result.participantId === participantId) {
+        return true;
+      }
+
+      return normalizeParticipantKey(result.displayName) === normalizeParticipantKey(displayName);
+    });
+
+    if (exactResults.length === 1) {
+      return exactResults[0] ?? null;
+    }
+
+    const uniqueMatchupIds = Array.from(new Set(exactResults.map((result) => result.matchup.eventId)));
+    return uniqueMatchupIds.length === 1 ? (exactResults[0] ?? null) : null;
+  }
+
+  async function handlePlayerSuggestionSelection(suggestion: ParticipantSuggestion) {
+    setSelectedPlayerId(suggestion.participantId);
+    setSelectedOfferParticipantId(suggestion.participantId);
+
+    const browseResult = await resolveBrowseResultForSelection(
+      suggestion.displayName,
+      'player',
+      suggestion.participantId,
+    );
+
+    if (!browseResult) {
+      return;
+    }
+
+    applyMatchupSelection(browseResult.matchup);
+    setSelectedPlayerId(browseResult.participantId ?? suggestion.participantId);
+    setSelectedOfferParticipantId(browseResult.participantId ?? suggestion.participantId);
+    setSelectedTeamId(browseResult.teamId);
+    if (browseResult.teamName) {
+      form.setValue('team', browseResult.teamName, {
+        shouldDirty: true,
+        shouldTouch: true,
+        shouldValidate: true,
+      });
+    }
+  }
+
+  async function handleTeamSuggestionSelection(suggestion: ParticipantSuggestion) {
+    setSelectedTeamId(suggestion.participantId);
+
+    const uniqueMatchupFromSlate = findUniqueMatchupForTeam(suggestion.participantId);
+    if (uniqueMatchupFromSlate) {
+      applyMatchupSelection(uniqueMatchupFromSlate);
+      setSelectedTeamId(suggestion.participantId);
+      return;
+    }
+
+    const browseResult = await resolveBrowseResultForSelection(
+      suggestion.displayName,
+      'team',
+      suggestion.participantId,
+    );
+
+    if (!browseResult) {
+      return;
+    }
+
+    applyMatchupSelection(browseResult.matchup);
+    setSelectedTeamId(browseResult.teamId ?? suggestion.participantId);
+  }
+
   function applyLiveOfferSelection(offer: EventOfferBrowseResult, side: OfferSelectionSide) {
     const derivedMarketType = mapOfferToFormMarketType(offer);
     const nextOdds = side === 'under' ? offer.underOdds : offer.overOdds;
@@ -1380,7 +1503,7 @@ export function BetForm() {
               </div>
             ) : null}
             {browseSearchResults.length > 0 ? (
-              <div className="grid gap-2">
+              <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
                 {browseSearchResults.map((result) => {
                   const isSelected = result.matchup.eventId === selectedMatchupId;
 
@@ -1430,7 +1553,7 @@ export function BetForm() {
           </div>
         ) : null}
         {liveEntryMode === 'browse' && matchups.length > 0 ? (
-          <div className="grid gap-2">
+          <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
             {matchups.map((matchup) => {
               const isSelected = matchup.eventId === selectedMatchupId;
               return (
@@ -1637,6 +1760,18 @@ export function BetForm() {
         <div className="space-y-4">
           <ParticipantAutocompleteField
             form={form}
+            name="team"
+            label="Team"
+            placeholder="Type a team name"
+            searchType="team"
+            eventId={selectedMatchupId}
+            sport={selectedSport}
+            allowedParticipantIds={allowedTeamIds}
+            onSuggestionSelected={handleTeamSuggestionSelection}
+            onManualChange={() => setSelectedTeamId(null)}
+          />
+          <ParticipantAutocompleteField
+            form={form}
             name="playerName"
             label="Player Name"
             placeholder="Type a player name"
@@ -1644,7 +1779,7 @@ export function BetForm() {
             eventId={selectedMatchupId}
             sport={selectedSport}
             allowedParticipantIds={allowedPlayerIds}
-            onSuggestionSelected={(suggestion) => setSelectedPlayerId(suggestion.participantId)}
+            onSuggestionSelected={handlePlayerSuggestionSelection}
             onManualChange={() => setSelectedPlayerId(null)}
           />
           <div className="grid grid-cols-2 gap-3">
@@ -1655,7 +1790,11 @@ export function BetForm() {
                 <FormItem>
                   <FormLabel>Matchup</FormLabel>
                   <FormControl>
-                    <Input placeholder="e.g. Knicks vs Heat" {...field} />
+                    <Input
+                      placeholder="e.g. Knicks vs Heat"
+                      readOnly={browseMode === 'live-offer' && Boolean(selectedMatchup)}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -1762,7 +1901,7 @@ export function BetForm() {
             eventId={selectedMatchupId}
             sport={selectedSport}
             allowedParticipantIds={allowedTeamIds}
-            onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
+            onSuggestionSelected={handleTeamSuggestionSelection}
             onManualChange={() => setSelectedTeamId(null)}
           />
         </div>
@@ -1795,7 +1934,7 @@ export function BetForm() {
               eventId={selectedMatchupId}
               sport={selectedSport}
               allowedParticipantIds={allowedTeamIds}
-              onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
+              onSuggestionSelected={handleTeamSuggestionSelection}
               onManualChange={() => setSelectedTeamId(null)}
             />
             <FormField
@@ -1912,7 +2051,7 @@ export function BetForm() {
               eventId={selectedMatchupId}
               sport={selectedSport}
               allowedParticipantIds={allowedTeamIds}
-              onSuggestionSelected={(suggestion) => setSelectedTeamId(suggestion.participantId)}
+              onSuggestionSelected={handleTeamSuggestionSelection}
               onManualChange={() => setSelectedTeamId(null)}
             />
             <FormField

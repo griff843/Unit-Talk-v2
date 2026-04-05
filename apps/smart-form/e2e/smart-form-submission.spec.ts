@@ -108,6 +108,136 @@ const eventBrowseResponse = {
   },
 };
 
+const nbaLookupMatchupsResponse = {
+  data: [
+    {
+      eventId: 'evt-celtics',
+      externalId: 'nba-evt-celtics',
+      eventName: 'Celtics vs Knicks',
+      eventDate: '2026-04-02',
+      status: 'scheduled',
+      sportId: 'NBA',
+      leagueId: 'nba',
+      teams: [
+        { participantId: 'team-celtics-participant', teamId: 'team-celtics', displayName: 'Celtics', role: 'home' },
+        { participantId: 'team-knicks-participant', teamId: 'team-knicks', displayName: 'Knicks', role: 'away' },
+      ],
+    },
+    {
+      eventId: 'evt-lakers',
+      externalId: 'nba-evt-lakers',
+      eventName: 'Lakers vs Bulls',
+      eventDate: '2026-04-02',
+      status: 'scheduled',
+      sportId: 'NBA',
+      leagueId: 'nba',
+      teams: [
+        { participantId: 'team-lakers-participant', teamId: 'team-lakers', displayName: 'Lakers', role: 'home' },
+        { participantId: 'team-bulls-participant', teamId: 'team-bulls', displayName: 'Bulls', role: 'away' },
+      ],
+    },
+  ],
+};
+
+const nbaLookupEventBrowseResponse = {
+  data: {
+    eventId: 'evt-celtics',
+    externalId: 'nba-evt-celtics',
+    eventName: 'Celtics vs Knicks',
+    eventDate: '2026-04-02',
+    status: 'scheduled',
+    sportId: 'NBA',
+    leagueId: 'nba',
+    participants: [
+      {
+        participantId: 'team-celtics-participant',
+        canonicalId: 'team-celtics',
+        participantType: 'team',
+        displayName: 'Celtics',
+        role: 'home',
+        teamId: 'team-celtics',
+        teamName: 'Celtics',
+      },
+      {
+        participantId: 'team-knicks-participant',
+        canonicalId: 'team-knicks',
+        participantType: 'team',
+        displayName: 'Knicks',
+        role: 'away',
+        teamId: 'team-knicks',
+        teamName: 'Knicks',
+      },
+      {
+        participantId: 'player-tatum',
+        canonicalId: 'player-tatum',
+        participantType: 'player',
+        displayName: 'Jayson Tatum',
+        role: 'home',
+        teamId: 'team-celtics',
+        teamName: 'Celtics',
+      },
+      {
+        participantId: 'player-brown',
+        canonicalId: 'player-brown',
+        participantType: 'player',
+        displayName: 'Jaylen Brown',
+        role: 'home',
+        teamId: 'team-celtics',
+        teamName: 'Celtics',
+      },
+      {
+        participantId: 'player-brunson',
+        canonicalId: 'player-brunson',
+        participantType: 'player',
+        displayName: 'Jalen Brunson',
+        role: 'away',
+        teamId: 'team-knicks',
+        teamName: 'Knicks',
+      },
+    ],
+    offers: [
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'player.points',
+        marketDisplayName: 'Player Points',
+        participantId: 'player-tatum',
+        participantName: 'Jayson Tatum',
+        line: 29.5,
+        overOdds: -110,
+        underOdds: -110,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-player-points',
+        providerParticipantId: 'provider-tatum',
+      },
+    ],
+  },
+};
+
+const nbaLookupBrowseSearchResponse = {
+  data: [
+    {
+      resultType: 'player',
+      participantId: 'player-tatum',
+      displayName: 'Jayson Tatum',
+      contextLabel: 'Celtics · Knicks @ Celtics · Apr 2',
+      teamId: 'team-celtics',
+      teamName: 'Celtics',
+      matchup: nbaLookupMatchupsResponse.data[0],
+    },
+    {
+      resultType: 'team',
+      participantId: 'team-celtics',
+      displayName: 'Celtics',
+      contextLabel: 'NBA · Apr 2',
+      teamId: 'team-celtics',
+      teamName: 'Celtics',
+      matchup: nbaLookupMatchupsResponse.data[0],
+    },
+  ],
+};
+
 const browseSearchResponse = {
   data: [
     {
@@ -375,4 +505,88 @@ test('selected matchup constrains participant choices and valid stat types', asy
   await page.getByRole('combobox', { name: 'Stat Type' }).click();
   await expect(page.getByRole('option', { name: 'Passing Yards' })).toBeVisible();
   await expect(page.getByRole('option', { name: 'Assists' })).toHaveCount(0);
+});
+
+test('player-prop flow auto-binds team and matchup from player or team selection', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupBrowseSearchResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'player-tatum',
+            displayName: 'Jayson Tatum',
+            participantType: 'player',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.route('**/api/reference-data/search/teams?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: [
+          {
+            participantId: 'team-celtics',
+            displayName: 'Celtics',
+            participantType: 'team',
+          },
+        ],
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /PROP Player Prop/i }).first().click();
+
+  await page.getByPlaceholder('Type a player name').fill('Jays');
+  await page.getByRole('button', { name: /Jayson Tatum/i }).click();
+
+  await expect(page.getByLabel('Matchup')).toHaveValue('Celtics vs Knicks');
+  await expect(page.getByLabel('Team')).toHaveValue('Celtics');
+  await expect(page.locator('p.text-sm.font-semibold.text-foreground', { hasText: 'Celtics vs Knicks' })).toBeVisible();
+  await expect(page.getByText('Apr 2', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jayson Tatum' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jaylen Brown' })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Jalen Brunson' })).toHaveCount(0);
+
 });
