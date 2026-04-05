@@ -224,6 +224,14 @@ function buildOddsLabel(odds: number | null | undefined) {
   return odds > 0 ? `+${odds}` : `${odds}`;
 }
 
+function formatLineLabel(line: number | null | undefined) {
+  if (line == null) {
+    return null;
+  }
+
+  return line > 0 ? `+${line}` : `${line}`;
+}
+
 function ParticipantAutocompleteField({
   form,
   name,
@@ -879,6 +887,16 @@ export function BetForm() {
 
     return offers;
   }, [eventBrowse, filteredOffers, selectedMarketType]);
+  const spreadOffers = useMemo(
+    () => selectedMarketType === 'spread'
+      ? filteredOffers.filter((offer) => offer.overOdds != null)
+      : [],
+    [filteredOffers, selectedMarketType],
+  );
+  const totalOffers = useMemo(
+    () => selectedMarketType === 'total' ? filteredOffers : [],
+    [filteredOffers, selectedMarketType],
+  );
   const availablePlayerPropStatTypes = useMemo(() => {
     if (selectedMarketType !== 'player-prop') {
       return [] as string[];
@@ -909,10 +927,13 @@ export function BetForm() {
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse);
-  const hasInlineMoneylineFallback =
+  const hasInlineGuidedMarket =
     browseMode === 'live-offer' &&
     Boolean(selectedMatchup) &&
-    selectedMarketType === 'moneyline';
+    (
+      selectedMarketType === 'moneyline' ||
+      ((selectedMarketType === 'spread' || selectedMarketType === 'total') && filteredOffers.length > 0)
+    );
   const shouldShowManualFallback =
     browseMode === 'manual' ||
     !selectedMatchup ||
@@ -921,7 +942,7 @@ export function BetForm() {
   const shouldRenderPickDetailsSection =
     browseMode === 'manual' ||
     !selectedMatchup ||
-    (shouldShowManualFallback && !hasInlineMoneylineFallback);
+    (shouldShowManualFallback && !hasInlineGuidedMarket);
 
   useEffect(() => {
     getCatalog()
@@ -1169,6 +1190,39 @@ export function BetForm() {
     form.resetField('line');
     form.resetField('odds');
     form.clearErrors('eventName');
+  }
+
+  function clearSelectedMatchup() {
+    setSelectedMatchupId(null);
+    setEventBrowse(null);
+    setEventBrowseError(null);
+    setSelectedOffer(null);
+    setSelectedOfferParticipantId(null);
+    setSelectedPlayerId(null);
+    setSelectedTeamId(null);
+    form.setValue('eventName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('playerName', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('statType', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.setValue('team', '', {
+      shouldDirty: true,
+      shouldTouch: true,
+      shouldValidate: false,
+    });
+    form.resetField('direction');
+    form.resetField('line');
+    form.resetField('odds');
   }
 
   function applyBrowseSearchSelection(result: BrowseSearchResult) {
@@ -1678,7 +1732,7 @@ export function BetForm() {
             No matchups scheduled for {watchedValues.gameDate}. You can switch to manual entry and still submit against canonical sport and book selections.
           </div>
         ) : null}
-        {liveEntryMode === 'browse' && matchups.length > 0 ? (
+        {liveEntryMode === 'browse' && matchups.length > 0 && !selectedMatchup ? (
           <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
             {matchups.map((matchup) => {
               const isSelected = matchup.eventId === selectedMatchupId;
@@ -1722,9 +1776,19 @@ export function BetForm() {
                   {formatTimestampLabel(selectedMatchup.eventDate)}
                 </p>
               </div>
-              {isLoadingEventBrowse ? (
-                <span className="text-xs text-muted-foreground">Loading offers...</span>
-              ) : null}
+              <div className="flex items-center gap-2">
+                {isLoadingEventBrowse ? (
+                  <span className="text-xs text-muted-foreground">Loading offers...</span>
+                ) : null}
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={clearSelectedMatchup}
+                >
+                  Change game
+                </Button>
+              </div>
             </div>
 
             {eventBrowseError ? <p className="text-sm text-destructive">{eventBrowseError}</p> : null}
@@ -1880,6 +1944,108 @@ export function BetForm() {
                   </div>
                 ) : null}
 
+                {selectedMarketType === 'spread' && spreadOffers.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Spread
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Tap the side to preload line and odds
+                      </span>
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {spreadOffers.map((offer) => {
+                        const teamKey = offer.participantId ?? offer.providerParticipantId ?? offer.participantName ?? offer.marketDisplayName;
+                        const isSelected =
+                          selectedOffer?.offer === offer ||
+                          normalizeParticipantKey(watchedValues.team) === normalizeParticipantKey(offer.participantName);
+                        return (
+                          <button
+                            key={`${teamKey}:${offer.line ?? 'line'}`}
+                            type="button"
+                            onClick={() => applyLiveOfferSelection(offer, 'side')}
+                            className={cn(
+                              'rounded-xl border px-4 py-4 text-left transition-colors',
+                              isSelected
+                                ? 'border-primary bg-primary/10'
+                                : 'border-border bg-background hover:border-primary/50',
+                            )}
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="font-semibold text-foreground">{offer.participantName ?? 'Team'}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  {offer.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Live offer')}
+                                </p>
+                              </div>
+                              <div className="text-right">
+                                <p className="text-sm font-semibold text-foreground">
+                                  {formatLineLabel(offer.line) ?? 'Line pending'}
+                                </p>
+                                <p className="text-xs text-muted-foreground">{buildOddsLabel(offer.overOdds)}</p>
+                              </div>
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ) : null}
+
+                {selectedMarketType === 'total' && totalOffers.length > 0 ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                        Total
+                      </p>
+                      <span className="text-xs text-muted-foreground">
+                        Tap over or under to preload the total
+                      </span>
+                    </div>
+                    <div className="space-y-2">
+                      {totalOffers.map((offer) => (
+                        <div
+                          key={`${offer.marketTypeId ?? offer.providerMarketKey}:${offer.line ?? 'line'}`}
+                          className="rounded-xl border border-border bg-background px-4 py-4"
+                        >
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-foreground">Game Total</p>
+                              <p className="text-xs text-muted-foreground">
+                                {offer.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Live offer')}
+                              </p>
+                            </div>
+                            <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-foreground">
+                              {offer.line != null ? String(offer.line) : 'Line pending'}
+                            </span>
+                          </div>
+                          <div className="grid gap-2 sm:grid-cols-2">
+                            <Button
+                              type="button"
+                              variant={selectedOffer?.offer === offer && selectedOffer.side === 'over' ? 'default' : 'outline'}
+                              className="justify-between"
+                              onClick={() => applyLiveOfferSelection(offer, 'over')}
+                            >
+                              <span>Over</span>
+                              <span>{buildOddsLabel(offer.overOdds)}</span>
+                            </Button>
+                            <Button
+                              type="button"
+                              variant={selectedOffer?.offer === offer && selectedOffer.side === 'under' ? 'default' : 'outline'}
+                              className="justify-between"
+                              onClick={() => applyLiveOfferSelection(offer, 'under')}
+                            >
+                              <span>Under</span>
+                              <span>{buildOddsLabel(offer.underOdds)}</span>
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+
                 {selectedMarketType ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
@@ -1914,7 +2080,7 @@ export function BetForm() {
                       <div className="rounded-lg border border-dashed border-border px-4 py-4 text-sm text-muted-foreground">
                         No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.
                       </div>
-                    ) : selectedMarketType === 'moneyline' ? null : (
+                    ) : selectedMarketType === 'moneyline' || selectedMarketType === 'spread' || selectedMarketType === 'total' ? null : (
                       <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {filteredOffers.map((offer) => {
                           const offerAgeMinutes = getOfferAgeMinutes(offer.snapshotAt);

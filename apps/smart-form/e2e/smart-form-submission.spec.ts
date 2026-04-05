@@ -229,6 +229,51 @@ const nbaLookupEventBrowseResponse = {
       {
         sportsbookId: 'fanatics',
         sportsbookName: 'Fanatics',
+        marketTypeId: 'game_spread',
+        marketDisplayName: 'Spread',
+        participantId: 'team-celtics-participant',
+        participantName: 'Celtics',
+        line: -4.5,
+        overOdds: -110,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-spread-celtics',
+        providerParticipantId: 'team-celtics',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'game_spread',
+        marketDisplayName: 'Spread',
+        participantId: 'team-knicks-participant',
+        participantName: 'Knicks',
+        line: 4.5,
+        overOdds: -110,
+        underOdds: null,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-spread-knicks',
+        providerParticipantId: 'team-knicks',
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
+        marketTypeId: 'game_total',
+        marketDisplayName: 'Total',
+        participantId: null,
+        participantName: null,
+        line: 227.5,
+        overOdds: -108,
+        underOdds: -112,
+        snapshotAt: '2026-04-02T22:55:00.000Z',
+        providerKey: 'sgo',
+        providerMarketKey: 'nba-total',
+        providerParticipantId: null,
+      },
+      {
+        sportsbookId: 'fanatics',
+        sportsbookName: 'Fanatics',
         marketTypeId: 'player.points',
         marketDisplayName: 'Player Points',
         participantId: 'player-tatum',
@@ -676,6 +721,8 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
   await page.getByPlaceholder('Search sportsbook').click();
   await page.getByRole('button', { name: /Fanatics/i }).click();
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Change game' })).toBeVisible();
   await page.getByRole('button', { name: /ML\s*Moneyline/i }).first().click();
 
   await expect(page.getByText('Pick Details')).toHaveCount(0);
@@ -695,4 +742,73 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
   expect(submittedPayload).not.toBeNull();
   expect(submittedPayload?.market).toBe('moneyline');
   expect(submittedPayload?.selection).toContain('Celtics');
+});
+
+test('spread flow collapses the slate and preloads side, line, and odds from live offers', async ({ page }) => {
+  let submittedPayload: Record<string, unknown> | null = null;
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupEventBrowseResponse),
+    });
+  });
+
+  await page.route('**/api/submissions', async (route) => {
+    submittedPayload = route.request().postDataJSON() as Record<string, unknown>;
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({
+        data: {
+          submissionId: 'sub_spread_123',
+          pickId: 'pick_spread_123',
+          lifecycleState: 'validated',
+        },
+      }),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByPlaceholder('Search sportsbook').click();
+  await page.getByRole('button', { name: /Fanatics/i }).click();
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+
+  await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
+  await page.getByRole('button', { name: /SPR\s*Spread/i }).first().click();
+
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Celtics.*-4.5.*-110/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Knicks.*\+4.5.*-110/i })).toBeVisible();
+
+  await page.getByRole('button', { name: /Celtics.*-4.5.*-110/i }).click();
+  await expect(page.locator('input[name="odds"]')).toHaveValue('-110');
+  await page.locator('input[name="capperConviction"]').fill('8');
+  await page.locator('input[name="units"]').fill('1');
+  await page.getByRole('button', { name: 'Submit Pick' }).first().click();
+
+  await expect(page.getByText('Pick Submitted')).toBeVisible();
+  expect(submittedPayload).not.toBeNull();
+  expect(submittedPayload?.market).toBe('game_spread');
+  expect(submittedPayload?.selection).toContain('Celtics -4.5');
 });
