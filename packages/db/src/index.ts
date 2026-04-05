@@ -20,7 +20,6 @@ export const canonicalTables = [
   'market_families',
   'market_types',
   'sport_market_type_availability',
-  'sport_market_types',
   'stat_types',
   'combo_stat_types',
   'combo_stat_type_components',
