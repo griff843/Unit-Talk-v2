@@ -14,6 +14,8 @@ const MARKET_ABBR: Record<MarketTypeId, string> = {
   total: 'TOT',
   'team-total': 'T-TOT',
 };
+
+const MLB_SPREAD_OVERRIDES = { abbr: 'RL', label: 'Run Line' };
 const EXTRA_CARD_ABBR: Record<'teaser', string> = {
   teaser: 'TEA',
 };
@@ -25,9 +27,11 @@ interface MarketTypeGridProps {
   availableTypes: MarketTypeId[];
   selected: MarketTypeId | undefined;
   onSelect: (type: MarketTypeId) => void;
+  sportId?: string;
 }
 
-export function MarketTypeGrid({ availableTypes, selected, onSelect }: MarketTypeGridProps) {
+export function MarketTypeGrid({ availableTypes, selected, onSelect, sportId }: MarketTypeGridProps) {
+  const isMLB = sportId === 'MLB';
   const [showAll, setShowAll] = useState(false);
   if (availableTypes.length === 0) {
     return (
@@ -45,8 +49,8 @@ export function MarketTypeGrid({ availableTypes, selected, onSelect }: MarketTyp
         {cards.map((type) => {
           const isPlaceholder = type === 'teaser';
           const isSelected = !isPlaceholder && selected === type;
-          const abbr = isPlaceholder ? EXTRA_CARD_ABBR[type] : MARKET_ABBR[type];
-          const label = isPlaceholder ? EXTRA_CARD_LABELS[type] : MARKET_TYPE_LABELS[type];
+          const abbr = isPlaceholder ? EXTRA_CARD_ABBR[type] : (isMLB && type === 'spread' ? MLB_SPREAD_OVERRIDES.abbr : MARKET_ABBR[type]);
+          const label = isPlaceholder ? EXTRA_CARD_LABELS[type] : (isMLB && type === 'spread' ? MLB_SPREAD_OVERRIDES.label : MARKET_TYPE_LABELS[type]);
 
           if (isPlaceholder) {
             return (

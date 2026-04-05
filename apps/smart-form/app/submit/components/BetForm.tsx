@@ -1926,6 +1926,7 @@ export function BetForm() {
                   <MarketTypeGrid
                     availableTypes={visibleMarketFamilies}
                     selected={selectedMarketType}
+                    sportId={selectedSport ?? undefined}
                     onSelect={(type) => form.setValue('marketType', type, {
                       shouldDirty: true,
                       shouldTouch: true,
@@ -3341,6 +3342,7 @@ export function BetForm() {
                     <MarketTypeGrid
                       availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
                       selected={selectedMarketType}
+                      sportId={selectedSport ?? undefined}
                       onSelect={(type) => form.setValue('marketType', type, {
                         shouldDirty: true,
                         shouldTouch: true,

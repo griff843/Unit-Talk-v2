@@ -130,6 +130,9 @@ export function inferStatTypeFromMarketTypeId(
   ) {
     return 'Rebounds + Assists';
   }
+  if (marketKey.includes('pitcher_outs') || marketKey.includes('pitching_outs') || marketKey.includes('pitching-outs')) {
+    return 'Pitcher Outs';
+  }
   if (marketKey.includes('innings') || marketKey.includes('innings_pitched')) {
     return 'Pitching Innings Pitched';
   }
