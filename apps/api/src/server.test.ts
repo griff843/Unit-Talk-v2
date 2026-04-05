@@ -523,13 +523,17 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
       assert.equal(body.ok, true);
       assert.ok(body.data);
       assert.equal(body.data.sports.length, 9);
-      assert.equal(body.data.sportsbooks.length, 11);
+      assert.equal(body.data.sportsbooks.length, 10);
+      assert.ok(body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'fanatics'));
+      assert.ok(!body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'williamhill'));
+      assert.ok(!body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'sgo'));
       assert.ok(body.data.cappers.some((capper) => capper.id === 'griff843'));
 
     const nba = body.data.sports.find((s) => s.id === 'NBA');
     assert.ok(nba);
     assert.ok(nba.marketTypes.includes('player-prop'));
     assert.ok(nba.statTypes.includes('Points'));
+    assert.ok(nba.statTypes.includes('Points + Rebounds + Assists'));
     assert.equal(nba.teams.length, 30);
   } finally {
     server.close();
