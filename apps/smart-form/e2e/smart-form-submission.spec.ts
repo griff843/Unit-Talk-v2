@@ -640,28 +640,23 @@ test('selected matchup constrains participant choices and valid stat types', asy
     });
   });
 
-  await page.route('**/api/operator/participants?**', async (route) => {
-    const requestUrl = new URL(route.request().url());
-    const participantType = requestUrl.searchParams.get('participantType');
-
+  await page.route('**/api/reference-data/search/players?**', async (route) => {
     await route.fulfill({
       status: 200,
       contentType: 'application/json',
       body: JSON.stringify({
-        data: participantType === 'player'
-          ? [
-              {
-                participantId: 'player-jamal',
-                displayName: 'Jamal Murray',
-                participantType: 'player',
-              },
-              {
-                participantId: 'player-lebron',
-                displayName: 'LeBron James',
-                participantType: 'player',
-              },
-            ]
-          : [],
+        data: [
+          {
+            participantId: 'player-jamal',
+            displayName: 'Jamal Murray',
+            participantType: 'player',
+          },
+          {
+            participantId: 'player-lebron',
+            displayName: 'LeBron James',
+            participantType: 'player',
+          },
+        ],
       }),
     });
   });

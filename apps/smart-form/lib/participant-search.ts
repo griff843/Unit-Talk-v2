@@ -1,6 +1,6 @@
 /**
  * Pure helper utilities for participant autocomplete.
- * No UI dependencies — safe to import in tests and server contexts.
+ * No UI dependencies - safe to import in tests and server contexts.
  */
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
@@ -27,39 +27,18 @@ export function buildParticipantSearchUrl(
   participantType: ParticipantSearchType,
   sportOrOptions?: string | OperatorParticipantSearchOptions,
 ): string {
-  if (typeof sportOrOptions === 'string' || sportOrOptions === undefined) {
-    const params = new URLSearchParams({
-      q: query.trim(),
-      sport: sportOrOptions?.trim() ?? '',
-    });
-    if (params.get('sport') === '') {
-      params.delete('sport');
+  const params = new URLSearchParams({ q: query.trim() });
+
+  if (typeof sportOrOptions === 'string') {
+    if (sportOrOptions.trim()) {
+      params.set('sport', sportOrOptions.trim());
     }
-
-    const endpoint = participantType === 'player' ? 'players' : 'teams';
-    return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
+  } else if (sportOrOptions?.sport?.trim()) {
+    params.set('sport', sportOrOptions.sport.trim());
   }
 
-  // If no eventId, fall back to the canonical participants search which queries
-  // our participants table directly — no event context needed.
-  if (!sportOrOptions.eventId?.trim()) {
-    const params = new URLSearchParams({ q: query.trim() });
-    if (sportOrOptions.sport?.trim()) params.set('sport', sportOrOptions.sport.trim());
-    const endpoint = participantType === 'player' ? 'players' : 'teams';
-    return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
-  }
-
-  const params = new URLSearchParams({
-    participantType,
-    query: query.trim(),
-    sport: sportOrOptions.sport?.trim() ?? '',
-    eventId: sportOrOptions.eventId.trim(),
-  });
-  if (params.get('sport') === '') {
-    params.delete('sport');
-  }
-
-  return `${API_BASE_URL}/api/operator/participants?${params.toString()}`;
+  const endpoint = participantType === 'player' ? 'players' : 'teams';
+  return `${API_BASE_URL}/api/reference-data/search/${endpoint}?${params.toString()}`;
 }
 
 export function normalizeParticipantSearchResults(
