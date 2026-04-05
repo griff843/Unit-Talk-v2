@@ -64,6 +64,7 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const PARTICIPANT_QUERY_MIN = 2;
 const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
+const DEFAULT_OPERATOR_SPORTSBOOK_ID = 'fanatics';
 
 type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
@@ -628,7 +629,7 @@ function SearchableSportsbookField({
             <Input
               autoComplete="off"
               placeholder={manualEntry ? 'Type sportsbook name' : 'Search sportsbook'}
-              value={manualEntry ? field.value ?? '' : query}
+              value={manualEntry ? field.value ?? '' : isFocused ? query : (selectedSportsbook?.name ?? query)}
               onFocus={() => setIsFocused(true)}
               onBlur={() => {
                 window.setTimeout(() => {
@@ -732,7 +733,7 @@ export function BetForm() {
       playerName: '',
       statType: '',
       team: '',
-      sportsbook: '',
+      sportsbook: DEFAULT_OPERATOR_SPORTSBOOK_ID,
       capperConviction: undefined,
       units: 1.0,
       odds: undefined,
@@ -934,6 +935,7 @@ export function BetForm() {
       selectedMarketType === 'moneyline' ||
       ((selectedMarketType === 'spread' || selectedMarketType === 'total') && filteredOffers.length > 0)
     );
+  const hasSelectedBrowseMatchup = browseMode === 'live-offer' && Boolean(selectedMatchup);
   const shouldShowManualFallback =
     browseMode === 'manual' ||
     !selectedMatchup ||
@@ -964,6 +966,19 @@ export function BetForm() {
   }, [catalog, form]);
 
   useEffect(() => {
+    if (!catalog || form.getValues('sportsbook')) {
+      return;
+    }
+
+    const defaultSportsbook = catalog.sportsbooks.find((sportsbook) => sportsbook.id === DEFAULT_OPERATOR_SPORTSBOOK_ID);
+    if (!defaultSportsbook) {
+      return;
+    }
+
+    form.setValue('sportsbook', defaultSportsbook.id, { shouldValidate: true });
+  }, [catalog, form]);
+
+  useEffect(() => {
     setSelectedMatchupId(null);
     setEventBrowse(null);
     setEventBrowseError(null);
@@ -984,7 +999,7 @@ export function BetForm() {
     form.resetField('direction');
     form.resetField('line');
     form.resetField('odds');
-    form.setValue('sportsbook', '');
+    form.setValue('sportsbook', DEFAULT_OPERATOR_SPORTSBOOK_ID);
   }, [selectedSport, form]);
 
   useEffect(() => {
@@ -1573,7 +1588,7 @@ export function BetForm() {
               playerName: '',
               statType: '',
               team: '',
-              sportsbook: '',
+              sportsbook: DEFAULT_OPERATOR_SPORTSBOOK_ID,
               capperConviction: undefined,
               gameDate: TODAY,
               units: 1.0,
@@ -2342,53 +2357,153 @@ export function BetForm() {
     if (selectedMarketType === 'spread') {
       return (
         <div className="space-y-4">
-          <FormField
-            control={form.control}
-            name="eventName"
-            render={({ field }) => (
-              <FormItem>
-                <FormLabel>Matchup</FormLabel>
-                <FormControl>
-                  <Input placeholder="e.g. Lakers vs Warriors" {...field} />
-                </FormControl>
-                <FormMessage />
-              </FormItem>
-            )}
-          />
-          <div className="grid grid-cols-2 gap-3">
-            <ParticipantAutocompleteField
-              form={form}
-              name="team"
-              label="Team"
-              placeholder="Type a team name"
-              searchType="team"
-              eventId={selectedMatchupId}
-              sport={selectedSport}
-              allowedParticipantIds={allowedTeamIds}
-              onSuggestionSelected={handleTeamSuggestionSelection}
-              onManualChange={() => setSelectedTeamId(null)}
-            />
-            <FormField
-              control={form.control}
-              name="line"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Spread</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      step="0.5"
-                      placeholder="e.g. -3.5"
-                      {...field}
-                      value={field.value ?? ''}
-                      onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-          </div>
+          {selectedMatchup ? (
+            <>
+              <div className="space-y-3">
+                <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                  Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
+                </div>
+                <div className="grid gap-2 sm:grid-cols-2">
+                  {matchupTeams.map((team) => {
+                    const teamKey = team.teamId ?? team.participantId;
+                    const isSelected = selectedTeamId === teamKey;
+                    const selectedLineLabel =
+                      isSelected && typeof watchedValues.line === 'number'
+                        ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                        : null;
+                    return (
+                      <button
+                        key={team.participantId}
+                        type="button"
+                        onClick={() => {
+                          form.setValue('team', team.displayName, {
+                            shouldDirty: true,
+                            shouldTouch: true,
+                            shouldValidate: true,
+                          });
+                          setSelectedTeamId(teamKey);
+                        }}
+                        className={cn(
+                          'rounded-xl border px-4 py-4 text-left transition-colors',
+                          isSelected
+                            ? 'border-primary bg-primary/10'
+                            : 'border-border bg-background hover:border-primary/50',
+                        )}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold text-foreground">{team.displayName}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual spread entry'}
+                            </p>
+                          </div>
+                          <span
+                            className={cn(
+                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                              isSelected
+                                ? 'border-primary/40 bg-primary/10 text-primary'
+                                : 'border-border text-muted-foreground',
+                            )}
+                          >
+                            {selectedLineLabel ?? 'Enter line'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+              <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-semibold text-foreground">
+                      {selectedTeamId
+                        ? `${matchupTeams.find((team) => (team.teamId ?? team.participantId) === selectedTeamId)?.displayName ?? 'Selected team'} spread`
+                        : 'Spread ticket'}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Pick a side above, then enter the spread line to finish the ticket.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
+                    {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual'}
+                  </span>
+                </div>
+                <div className="mt-4">
+                  <FormField
+                    control={form.control}
+                    name="line"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Spread</FormLabel>
+                        <FormControl>
+                          <Input
+                            type="number"
+                            step="0.5"
+                            placeholder="e.g. -3.5"
+                            {...field}
+                            value={field.value ?? ''}
+                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+              </div>
+            </>
+          ) : (
+            <>
+              <FormField
+                control={form.control}
+                name="eventName"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Matchup</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Lakers vs Warriors" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              <div className="grid grid-cols-2 gap-3">
+                <ParticipantAutocompleteField
+                  form={form}
+                  name="team"
+                  label="Team"
+                  placeholder="Type a team name"
+                  searchType="team"
+                  eventId={selectedMatchupId}
+                  sport={selectedSport}
+                  allowedParticipantIds={allowedTeamIds}
+                  onSuggestionSelected={handleTeamSuggestionSelection}
+                  onManualChange={() => setSelectedTeamId(null)}
+                />
+                <FormField
+                  control={form.control}
+                  name="line"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Spread</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          step="0.5"
+                          placeholder="e.g. -3.5"
+                          {...field}
+                          value={field.value ?? ''}
+                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </>
+          )}
         </div>
       );
     }
@@ -2664,20 +2779,22 @@ export function BetForm() {
                   </p>
                 </div>
 
-                <div className="space-y-3">
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    Market Family
-                  </p>
-                  <MarketTypeGrid
-                    availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
-                    selected={selectedMarketType}
-                    onSelect={(type) => form.setValue('marketType', type, {
-                      shouldDirty: true,
-                      shouldTouch: true,
-                      shouldValidate: true,
-                    })}
-                  />
-                </div>
+                {!hasSelectedBrowseMatchup ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                      Market Family
+                    </p>
+                    <MarketTypeGrid
+                      availableTypes={selectedMatchup && availableOfferFamilies.length > 0 ? availableOfferFamilies : availableMarketTypes}
+                      selected={selectedMarketType}
+                      onSelect={(type) => form.setValue('marketType', type, {
+                        shouldDirty: true,
+                        shouldTouch: true,
+                        shouldValidate: true,
+                      })}
+                    />
+                  </div>
+                ) : null}
 
                 {selectedMatchup && shouldShowManualFallback ? (
                   <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">

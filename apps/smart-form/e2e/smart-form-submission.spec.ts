@@ -651,6 +651,7 @@ test('player-prop flow auto-binds team and matchup from player or team selection
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
   await expect(page.getByRole('button', { name: /ML\s*Moneyline/i }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /SPR\s*Spread/i }).first()).toBeVisible();
   await expect(page.getByRole('button', { name: /TOT\s*Total/i }).first()).toBeVisible();
@@ -718,8 +719,7 @@ test('moneyline flow uses sportsbook-first filtering and matchup teams instead o
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await page.getByPlaceholder('Search sportsbook').click();
-  await page.getByRole('button', { name: /Fanatics/i }).click();
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
   await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Change game' })).toBeVisible();
@@ -790,8 +790,7 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
 
   await page.getByRole('button', { name: 'NBA' }).click();
   await page.getByLabel('Date').fill('2026-04-02');
-  await page.getByPlaceholder('Search sportsbook').click();
-  await page.getByRole('button', { name: /Fanatics/i }).click();
+  await expect(page.locator('input[placeholder="Search sportsbook"]')).toHaveValue('Fanatics');
   await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
 
   await expect(page.getByRole('button', { name: /Bulls @ Lakers/i })).toHaveCount(0);
@@ -811,4 +810,52 @@ test('spread flow collapses the slate and preloads side, line, and odds from liv
   expect(submittedPayload).not.toBeNull();
   expect(submittedPayload?.market).toBe('game_spread');
   expect(submittedPayload?.selection).toContain('Celtics -4.5');
+});
+
+test('spread fallback keeps the selected matchup compact when live offers are missing', async ({ page }) => {
+  const spreadlessEventBrowseResponse = {
+    data: {
+      ...nbaLookupEventBrowseResponse.data,
+      offers: nbaLookupEventBrowseResponse.data.offers.filter((offer) => offer.marketTypeId !== 'game_spread'),
+    },
+  };
+
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/matchups?**', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(nbaLookupMatchupsResponse),
+    });
+  });
+
+  await page.route('**/api/reference-data/events/evt-celtics/browse', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(spreadlessEventBrowseResponse),
+    });
+  });
+
+  await page.goto('/submit');
+
+  await page.getByRole('button', { name: 'NBA' }).click();
+  await page.getByLabel('Date').fill('2026-04-02');
+  await page.getByRole('button', { name: /Knicks @ Celtics/i }).click();
+  await page.getByRole('button', { name: /Spread/i }).first().click();
+
+  await expect(page.getByText('No live offers for this market.')).toBeVisible();
+  await expect(page.getByText('Market Family')).toHaveCount(1);
+  await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
+  await expect(page.getByRole('button', { name: /Celtics.*Enter line/i })).toBeVisible();
+  await expect(page.getByRole('button', { name: /Knicks.*Enter line/i })).toBeVisible();
+  await expect(page.getByLabel('Matchup')).toHaveCount(0);
+  await expect(page.getByLabel('Team')).toHaveCount(0);
 });
