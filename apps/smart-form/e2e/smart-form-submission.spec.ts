@@ -867,13 +867,41 @@ test('player-prop fallback keeps the selected matchup compact when live offers a
   await page.getByRole('option', { name: 'Points', exact: true }).click();
 
   await expect(page.getByText('No live offers for this market.')).toBeVisible();
-  await expect(page.getByText('Matchup locked from Browse Setup: Knicks @ Celtics')).toBeVisible();
+  await expect(page.getByText('Pick Details')).toHaveCount(0);
+  await expect(page.getByText('Player Prop Ticket')).toBeVisible();
   await expect(page.locator('input[name="eventName"]')).toHaveCount(0);
   await expect(page.locator('input[name="team"]')).toHaveCount(1);
   await expect(page.locator('input[name="playerName"]')).toHaveCount(1);
   await expect(page.getByRole('button', { name: /^Over/i }).last()).toBeVisible();
   await expect(page.getByRole('button', { name: /^Under/i }).last()).toBeVisible();
   await expect(page.locator('input[name="line"]')).toBeVisible();
+});
+
+test('units and conviction clamp to operator-safe bounds while typing', async ({ page }) => {
+  await page.route('**/api/reference-data/catalog', async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify(catalogResponse),
+    });
+  });
+
+  await page.goto('/submit');
+
+  const unitsInput = page.locator('input[name="units"]');
+  const convictionInput = page.locator('input[name="capperConviction"]');
+
+  await unitsInput.fill('20');
+  await expect(unitsInput).toHaveValue('5');
+
+  await unitsInput.fill('0.1');
+  await expect(unitsInput).toHaveValue('0.5');
+
+  await convictionInput.fill('0');
+  await expect(convictionInput).toHaveValue('1');
+
+  await convictionInput.fill('14');
+  await expect(convictionInput).toHaveValue('10');
 });
 
 test('moneyline flow uses sportsbook-first filtering and matchup teams instead of free-text winner entry', async ({ page }) => {

@@ -233,6 +233,37 @@ function formatLineLabel(line: number | null | undefined) {
   return line > 0 ? `+${line}` : `${line}`;
 }
 
+function parseOptionalNumber(value: string) {
+  if (value.trim() === '') {
+    return undefined;
+  }
+
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function clampNumber(value: number, minimum: number, maximum: number) {
+  return Math.min(maximum, Math.max(minimum, value));
+}
+
+function normalizeUnitsValue(value: string) {
+  const parsed = parseOptionalNumber(value);
+  if (parsed == null) {
+    return undefined;
+  }
+
+  return clampNumber(Math.round(parsed * 2) / 2, 0.5, 5);
+}
+
+function normalizeConvictionValue(value: string) {
+  const parsed = parseOptionalNumber(value);
+  if (parsed == null) {
+    return undefined;
+  }
+
+  return clampNumber(Math.round(parsed), 1, 10);
+}
+
 function ParticipantAutocompleteField({
   form,
   name,
@@ -933,6 +964,7 @@ export function BetForm() {
     Boolean(selectedMatchup) &&
     (
       selectedMarketType === 'moneyline' ||
+      selectedMarketType === 'player-prop' ||
       ((selectedMarketType === 'spread' || selectedMarketType === 'total') && filteredOffers.length > 0)
     );
   const hasSelectedBrowseMatchup = browseMode === 'live-offer' && Boolean(selectedMatchup);
@@ -2208,6 +2240,87 @@ export function BetForm() {
                         })}
                       </div>
                     )}
+
+                    {selectedMarketType === 'player-prop' && filteredOffers.length === 0 ? (
+                      <div className="space-y-4 rounded-xl border border-border bg-background px-4 py-4">
+                        <div className="flex items-center justify-between gap-3">
+                          <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                            Player Prop Ticket
+                          </p>
+                          <span className="text-xs text-muted-foreground">Manual fallback</span>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <div className="rounded-xl border border-border bg-background/70 px-4 py-4">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Player</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {watchedValues.playerName || 'Choose player above'}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              {watchedValues.team || 'Team will lock from selection'}
+                            </p>
+                          </div>
+                          <div className="rounded-xl border border-border bg-background/70 px-4 py-4">
+                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stat Type</p>
+                            <p className="mt-1 font-semibold text-foreground">
+                              {watchedValues.statType || 'Choose stat above'}
+                            </p>
+                            <p className="mt-1 text-xs text-muted-foreground">
+                              Matchup stays locked to the selected game
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <Button
+                            type="button"
+                            variant={watchedValues.direction === 'over' ? 'default' : 'outline'}
+                            className="justify-between"
+                            onClick={() => form.setValue('direction', 'over', {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            })}
+                          >
+                            <span>Over</span>
+                            <span>Select</span>
+                          </Button>
+                          <Button
+                            type="button"
+                            variant={watchedValues.direction === 'under' ? 'default' : 'outline'}
+                            className="justify-between"
+                            onClick={() => form.setValue('direction', 'under', {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            })}
+                          >
+                            <span>Under</span>
+                            <span>Select</span>
+                          </Button>
+                        </div>
+                        <div className="grid gap-3 md:grid-cols-2">
+                          <FormField
+                            control={form.control}
+                            name="line"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Line</FormLabel>
+                                <FormControl>
+                                  <Input
+                                    type="number"
+                                    step="0.5"
+                                    placeholder="e.g. 24.5"
+                                    {...field}
+                                    value={field.value ?? ''}
+                                    onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                                  />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : (
                   <p className="text-sm text-muted-foreground">
@@ -2228,96 +2341,6 @@ export function BetForm() {
     }
 
     if (selectedMarketType === 'player-prop') {
-      if (selectedMatchup) {
-        return (
-          <div className="space-y-4">
-            <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
-              Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
-            </div>
-            <div className="grid gap-3 md:grid-cols-2">
-              <div className="rounded-xl border border-border bg-background px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Player</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {watchedValues.playerName || 'Choose player above'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {watchedValues.team || 'Team will lock from selection'}
-                </p>
-              </div>
-              <div className="rounded-xl border border-border bg-background px-4 py-4">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Stat Type</p>
-                <p className="mt-1 font-semibold text-foreground">
-                  {watchedValues.statType || 'Choose stat above'}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Direction and line stay editable below if live odds are unavailable
-                </p>
-              </div>
-            </div>
-            <div className="space-y-3 rounded-xl border border-border bg-background px-4 py-4">
-              <div className="flex items-center justify-between gap-3">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                  Ticket Details
-                </p>
-                <span className="text-xs text-muted-foreground">
-                  {selectedOffer ? 'Live offer preloaded' : 'Manual fallback'}
-                </span>
-              </div>
-              <div className="grid gap-2 sm:grid-cols-2">
-                <Button
-                  type="button"
-                  variant={watchedValues.direction === 'over' ? 'default' : 'outline'}
-                  className="justify-between"
-                  onClick={() => form.setValue('direction', 'over', {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })}
-                >
-                  <span>Over</span>
-                  <span>{selectedOffer?.side === 'over' ? buildOddsLabel(selectedOffer.offer.overOdds) : 'Select'}</span>
-                </Button>
-                <Button
-                  type="button"
-                  variant={watchedValues.direction === 'under' ? 'default' : 'outline'}
-                  className="justify-between"
-                  onClick={() => form.setValue('direction', 'under', {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: true,
-                  })}
-                >
-                  <span>Under</span>
-                  <span>{selectedOffer?.side === 'under' ? buildOddsLabel(selectedOffer.offer.underOdds) : 'Select'}</span>
-                </Button>
-              </div>
-              <div className="grid gap-3 md:grid-cols-2">
-                <FormField
-                  control={form.control}
-                  name="line"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Line</FormLabel>
-                      <FormControl>
-                        <Input
-                          type="number"
-                          step="0.5"
-                          placeholder="e.g. 24.5"
-                          {...field}
-                          value={field.value ?? ''}
-                          onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            </div>
-          </div>
-        );
-      }
-
       return (
         <div className="space-y-4">
           <ParticipantAutocompleteField
@@ -3255,7 +3278,7 @@ export function BetForm() {
                             placeholder="1.0"
                             {...field}
                             value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            onChange={(event) => field.onChange(normalizeUnitsValue(event.target.value))}
                           />
                         </FormControl>
                         <FormMessage />
@@ -3278,7 +3301,7 @@ export function BetForm() {
                             placeholder="8"
                             {...field}
                             value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            onChange={(event) => field.onChange(normalizeConvictionValue(event.target.value))}
                           />
                         </FormControl>
                         <p className="text-xs text-muted-foreground">
