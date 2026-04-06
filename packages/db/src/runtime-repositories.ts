@@ -3677,7 +3677,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     const { error } = await this.client
       .from('provider_offers')
-      .upsert(rows, { onConflict: 'idempotency_key' });
+      .upsert(rows, { onConflict: 'idempotency_key', ignoreDuplicates: true });
 
     if (error) {
       throw new Error(`Failed to upsert provider offers: ${error.message}`);
