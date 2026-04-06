@@ -49,8 +49,7 @@ export function normalizeSGOPairedProp(
       providerMarketKey,
       providerParticipantId,
       line,
-      isOpening: false,
-      isClosing: false,
+      snapshotAt: prop.snapshotAt,
       bookmakerKey,
     }),
   };
@@ -64,8 +63,7 @@ export function buildProviderOfferIdempotencyKey(input: {
   providerMarketKey: string;
   providerParticipantId: string | null;
   line: number | null;
-  isOpening: boolean;
-  isClosing: boolean;
+  snapshotAt: string;
   bookmakerKey?: string | null;
 }) {
   const lineStr = input.line !== null ? input.line.toFixed(1) : 'null';
@@ -75,8 +73,7 @@ export function buildProviderOfferIdempotencyKey(input: {
     input.providerMarketKey,
     input.providerParticipantId ?? 'all',
     lineStr,
-    String(input.isOpening),
-    String(input.isClosing),
+    input.snapshotAt,
   ];
   if (input.bookmakerKey) {
     parts.push(input.bookmakerKey);
