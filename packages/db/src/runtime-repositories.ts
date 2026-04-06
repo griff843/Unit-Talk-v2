@@ -1218,14 +1218,23 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     );
   }
 
-  async findExistingCombinations(providerEventIds: string[]): Promise<Set<string>> {
+  async findExistingCombinations(
+    providerEventIds: string[],
+    options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
+  ): Promise<Set<string>> {
     const eventIdSet = new Set(providerEventIds);
     const result = new Set<string>();
     for (const offer of this.offers.values()) {
-      if (eventIdSet.has(offer.provider_event_id)) {
+      if (
+        eventIdSet.has(offer.provider_event_id) &&
+        (options?.beforeSnapshotAt === undefined || offer.snapshot_at < options.beforeSnapshotAt)
+      ) {
         const participantKey = offer.provider_participant_id ?? '';
+        const bookmakerKey = options?.includeBookmakerKey ? (offer.bookmaker_key ?? '') : null;
         result.add(
-          `${offer.provider_key}:${offer.provider_event_id}:${offer.provider_market_key}:${participantKey}`,
+          options?.includeBookmakerKey
+            ? `${offer.provider_key}:${offer.provider_event_id}:${offer.provider_market_key}:${participantKey}:${bookmakerKey}`
+            : `${offer.provider_key}:${offer.provider_event_id}:${offer.provider_market_key}:${participantKey}`,
         );
       }
     }
@@ -1235,6 +1244,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   async markClosingLines(
     events: Array<{ providerEventId: string; commenceTime: string }>,
     snapshotAt: string,
+    options?: { includeBookmakerKey?: boolean },
   ): Promise<number> {
     let updated = 0;
     for (const { providerEventId, commenceTime } of events) {
@@ -1249,7 +1259,10 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       const latestByKey = new Map<string, ProviderOfferRecord>();
       for (const offer of candidates) {
         const participantKey = offer.provider_participant_id ?? '';
-        const key = `${offer.provider_key}:${offer.provider_market_key}:${participantKey}`;
+        const bookmakerKey = options?.includeBookmakerKey ? (offer.bookmaker_key ?? '') : null;
+        const key = options?.includeBookmakerKey
+          ? `${offer.provider_key}:${offer.provider_market_key}:${participantKey}:${bookmakerKey}`
+          : `${offer.provider_key}:${offer.provider_market_key}:${participantKey}`;
         const existing = latestByKey.get(key);
         if (!existing || offer.snapshot_at > existing.snapshot_at) {
           latestByKey.set(key, offer);
@@ -3784,17 +3797,24 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return data;
   }
 
-  async findExistingCombinations(providerEventIds: string[]): Promise<Set<string>> {
+  async findExistingCombinations(
+    providerEventIds: string[],
+    options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
+  ): Promise<Set<string>> {
     const result = new Set<string>();
     if (providerEventIds.length === 0) return result;
 
     // Chunk to avoid URL length limits
     for (let i = 0; i < providerEventIds.length; i += 100) {
       const chunk = providerEventIds.slice(i, i + 100);
-      const { data, error } = await this.client
+      let query = this.client
         .from('provider_offers')
-        .select('provider_key, provider_event_id, provider_market_key, provider_participant_id')
+        .select('provider_key, provider_event_id, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at')
         .in('provider_event_id', chunk);
+      if (options?.beforeSnapshotAt !== undefined) {
+        query = query.lt('snapshot_at', options.beforeSnapshotAt);
+      }
+      const { data, error } = await query;
 
       if (error) {
         throw new Error(`Failed to find existing combinations: ${error.message}`);
@@ -3802,8 +3822,11 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
       for (const row of data ?? []) {
         const participantKey = row.provider_participant_id ?? '';
+        const bookmakerKey = options?.includeBookmakerKey ? (row.bookmaker_key ?? '') : null;
         result.add(
-          `${row.provider_key}:${row.provider_event_id}:${row.provider_market_key}:${participantKey}`,
+          options?.includeBookmakerKey
+            ? `${row.provider_key}:${row.provider_event_id}:${row.provider_market_key}:${participantKey}:${bookmakerKey}`
+            : `${row.provider_key}:${row.provider_event_id}:${row.provider_market_key}:${participantKey}`,
         );
       }
     }
@@ -3814,6 +3837,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   async markClosingLines(
     events: Array<{ providerEventId: string; commenceTime: string }>,
     snapshotAt: string,
+    options?: { includeBookmakerKey?: boolean },
   ): Promise<number> {
     const startedEvents = events.filter((e) => snapshotAt >= e.commenceTime);
     if (startedEvents.length === 0) return 0;
@@ -3824,7 +3848,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // Fetch all pre-commence offers for this event
       const { data, error } = await this.client
         .from('provider_offers')
-        .select('id, provider_key, provider_market_key, provider_participant_id, snapshot_at, is_closing')
+        .select('id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing')
         .eq('provider_event_id', providerEventId)
         .lt('snapshot_at', commenceTime)
         .eq('is_closing', false)
@@ -3841,7 +3865,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const latestIdByKey = new Map<string, string>();
       for (const row of rows) {
         const participantKey = row.provider_participant_id ?? '';
-        const key = `${row.provider_key}:${row.provider_market_key}:${participantKey}`;
+        const bookmakerKey = options?.includeBookmakerKey ? (row.bookmaker_key ?? '') : null;
+        const key = options?.includeBookmakerKey
+          ? `${row.provider_key}:${row.provider_market_key}:${participantKey}:${bookmakerKey}`
+          : `${row.provider_key}:${row.provider_market_key}:${participantKey}`;
         if (!latestIdByKey.has(key)) {
           // rows are ordered descending — first seen is latest
           latestIdByKey.set(key, row.id);

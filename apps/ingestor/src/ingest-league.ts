@@ -4,7 +4,10 @@ import { resolveSgoEntities } from './entity-resolver.js';
 import { fetchSGOResultsWithTelemetry, type SGORequestTelemetry } from './sgo-fetcher.js';
 import { resolveAndInsertResults } from './results-resolver.js';
 import { fetchAndPairSGOProps, type SGOFetchOptions, type SGOFetchResult } from './sgo-fetcher.js';
-import { normalizeSGOPairedProp } from './sgo-normalizer.js';
+import {
+  buildProviderOfferIdempotencyKey,
+  normalizeSGOPairedProp,
+} from './sgo-normalizer.js';
 
 export interface IngestLeagueOptions {
   fetchImpl?: SGOFetchOptions['fetchImpl'];
@@ -125,11 +128,57 @@ export async function ingestLeague(
       ...(options.logger ? { logger: options.logger } : {}),
     });
 
+    const providerEventIds = fetched.events
+      .map((event) => event.providerEventId)
+      .filter((providerEventId) => providerEventId.length > 0);
+    const existingCombinations = await repositories.providerOffers.findExistingCombinations(
+      providerEventIds,
+      {
+        includeBookmakerKey: true,
+        beforeSnapshotAt: snapshotAt,
+      },
+    );
+    const seenCombinations = new Set(existingCombinations);
+
     const normalized = fetched.pairedProps
       .map((prop) => normalizeSGOPairedProp(prop))
-      .filter((offer) => offer !== null);
+      .filter((offer) => offer !== null)
+      .map((offer) => {
+        const combinationKey = buildSgoCombinationKey({
+          providerKey: offer.providerKey,
+          providerEventId: offer.providerEventId,
+          providerMarketKey: offer.providerMarketKey,
+          providerParticipantId: offer.providerParticipantId,
+          bookmakerKey: offer.bookmakerKey,
+        });
+        const isOpening = !seenCombinations.has(combinationKey);
+        seenCombinations.add(combinationKey);
+        return {
+          ...offer,
+          isOpening,
+          idempotencyKey: buildProviderOfferIdempotencyKey({
+            providerKey: offer.providerKey,
+            providerEventId: offer.providerEventId,
+            providerMarketKey: offer.providerMarketKey,
+            providerParticipantId: offer.providerParticipantId,
+            line: offer.line,
+            snapshotAt: offer.snapshotAt,
+            bookmakerKey: offer.bookmakerKey,
+          }),
+        };
+      });
 
     const upsert = await repositories.providerOffers.upsertBatch(normalized);
+    await repositories.providerOffers.markClosingLines(
+      fetched.events
+        .filter((event) => typeof event.startsAt === 'string' && event.startsAt.length > 0)
+        .map((event) => ({
+          providerEventId: event.providerEventId,
+          commenceTime: event.startsAt as string,
+        })),
+      snapshotAt,
+      { includeBookmakerKey: true },
+    );
     const skippedCount = fetched.pairedProps.length - normalized.length;
     const emptyResults = { results: [], requestTelemetry: createEmptyRequestTelemetry('results') };
     let fetchedResults: Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>;
@@ -296,4 +345,20 @@ function createEmptyFetchResult(_snapshotAt: string): SGOFetchResult {
     pairedProps: [],
     requestTelemetry: createEmptyRequestTelemetry('odds'),
   };
+}
+
+function buildSgoCombinationKey(input: {
+  providerKey: string;
+  providerEventId: string;
+  providerMarketKey: string;
+  providerParticipantId: string | null;
+  bookmakerKey: string | null;
+}) {
+  return [
+    input.providerKey,
+    input.providerEventId,
+    input.providerMarketKey,
+    input.providerParticipantId ?? '',
+    input.bookmakerKey ?? '',
+  ].join(':');
 }

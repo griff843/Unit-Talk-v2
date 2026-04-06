@@ -43,7 +43,7 @@ test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped mar
   assert.equal(normalized.devigMode, 'PAIRED');
   assert.equal(
     normalized.idempotencyKey,
-    'sgo:evt-1:points-all-game-ou:player-123:22.5:false:false',
+    'sgo:evt-1:points-all-game-ou:player-123:22.5:2026-03-25T12:00:00.000Z',
   );
 });
 
@@ -981,6 +981,124 @@ test('ingestLeague includes resolved entity counts in cycle summary', async () =
   assert.equal(summary.resolvedParticipantsCount, 4);
   assert.equal(summary.insertedCount, 1);
   assert.equal(summary.quota.provider, 'sgo');
+});
+
+test('ingestLeague marks first-seen SGO combinations as opening and later snapshots as non-opening', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    skipResults: true,
+    fetchImpl,
+  });
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:05:00.000Z',
+    skipResults: true,
+    fetchImpl,
+  });
+
+  const rows = await repositories.providerOffers.listByProvider('sgo');
+  const targetRows = rows.filter(
+    (row) =>
+      row.provider_event_id === 'evt-entity-1' &&
+      row.provider_market_key === 'points-all-game-ou' &&
+      row.provider_participant_id === 'JALEN_BRUNSON_1_NBA' &&
+      row.bookmaker_key === null,
+  );
+
+  assert.equal(targetRows.length, 2);
+  assert.equal(targetRows.filter((row) => row.is_opening).length, 1);
+  assert.equal(targetRows.filter((row) => !row.is_opening).length, 1);
+});
+
+test('ingestLeague tracks consensus and bookmaker SGO rows independently for opening tags', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const eventWithBookmakerOdds = {
+    ...createSgoApiEvent(),
+    odds: {
+      market: {
+        'points-player-JALEN_BRUNSON_1_NBA-game-ou-over': {
+          playerID: 'JALEN_BRUNSON_1_NBA',
+          line: 27.5,
+          odds: -115,
+          byBookmaker: {
+            pinnacle: { odds: -118 },
+          },
+        },
+        'points-player-JALEN_BRUNSON_1_NBA-game-ou-under': {
+          playerID: 'JALEN_BRUNSON_1_NBA',
+          line: 27.5,
+          odds: -105,
+          byBookmaker: {
+            pinnacle: { odds: -102 },
+          },
+        },
+      },
+    },
+  };
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    skipResults: true,
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ data: [eventWithBookmakerOdds] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  const rows = await repositories.providerOffers.listByProvider('sgo');
+  const consensusRow = rows.find((row) => row.bookmaker_key === null);
+  const pinnacleRow = rows.find((row) => row.bookmaker_key === 'pinnacle');
+
+  assert.ok(consensusRow);
+  assert.ok(pinnacleRow);
+  assert.equal(consensusRow?.is_opening, true);
+  assert.equal(pinnacleRow?.is_opening, true);
+});
+
+test('ingestLeague marks latest pre-commence SGO snapshot as closing', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const fetchImpl = async () =>
+    new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    skipResults: true,
+    fetchImpl,
+  });
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-26T23:40:00.000Z',
+    skipResults: true,
+    fetchImpl,
+  });
+
+  const rows = await repositories.providerOffers.listByProvider('sgo');
+  const targetRows = rows
+    .filter(
+      (row) =>
+        row.provider_event_id === 'evt-entity-1' &&
+        row.provider_market_key === 'points-all-game-ou' &&
+        row.provider_participant_id === 'JALEN_BRUNSON_1_NBA' &&
+        row.bookmaker_key === null,
+    )
+    .sort((left, right) => left.snapshot_at.localeCompare(right.snapshot_at));
+
+  assert.equal(targetRows.length, 2);
+  assert.equal(targetRows[0]?.snapshot_at, '2026-03-25T12:00:00.000Z');
+  assert.equal(targetRows[0]?.is_closing, true);
+  assert.equal(targetRows[1]?.snapshot_at, '2026-03-26T23:40:00.000Z');
+  assert.equal(targetRows[1]?.is_closing, false);
 });
 
 test('fetchSGOResults returns player stat rows for completed events only', async () => {

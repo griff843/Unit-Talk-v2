@@ -515,7 +515,10 @@ export interface ProviderOfferRepository {
    * one row already exists in provider_offers for the given event IDs.
    * Used before a batch insert to determine which offers are opening lines.
    */
-  findExistingCombinations(providerEventIds: string[]): Promise<Set<string>>;
+  findExistingCombinations(
+    providerEventIds: string[],
+    options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
+  ): Promise<Set<string>>;
   /**
    * For each event in the list where commenceTime <= snapshotAt (game has started),
    * marks the latest pre-commence snapshot per (providerKey, marketKey, participantId)
@@ -524,6 +527,7 @@ export interface ProviderOfferRepository {
   markClosingLines(
     events: Array<{ providerEventId: string; commenceTime: string }>,
     snapshotAt: string,
+    options?: { includeBookmakerKey?: boolean },
   ): Promise<number>;
 }
 
