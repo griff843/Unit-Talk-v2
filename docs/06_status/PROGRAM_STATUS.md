@@ -7,6 +7,12 @@
 
 ## Last Updated
 
+2026-04-07 — **PI-M5 platform readiness closure (UTV2-356). PR #162 merged (ops hardening). Main CI green (run 24062213123).**
+Migration 011 (`picks.player_id` FK) applied. `pnpm supabase:types` clean: 2367 lines. 43/43 migrations applied, head `202604070011`. All PI-M5 acceptance criteria met: CI green, types clean, migration audit clean, deployment runbook updated with migration rollback procedure, alert surface artifacts present (pipeline-health, worker-alert-check, INGESTOR_RUNTIME_SUPERVISION), lint/type-check/test/outbox all pass. `pnpm pi-m5:verify` exits 0. PI-M5 (UTV2-356) → Done.
+
+2026-04-05 — **Migration batch 007–010 applied to live Supabase. Types regenerated. Linear board normalized.**
+Migrations applied: `picks_current_state` view (007), `sport_market_types` drop (008), NBA alias completion (009, UTV2-394 Done), MLB taxonomy completion (010, UTV2-391 Done — stat_types, market_types, combo_stat_types, provider_market_aliases for 1B/2B/3B/HRR/ER/HA/PO). PRs #153–#157 merged (picks FK columns live: `capper_id`, `market_type_id`, `sport_id`). `pnpm supabase:types` regenerated — 2357 lines, picks_current_state view now typed, sport_market_types removed. Tests: 188/188 pass. Type-check: clean. M5 Linear board: UTV2-364/343/369 closed; UTV2-353 deferred to Backlog; UTV2-356/360/335 have AC added (remain Ready, awaiting runtime preconditions). UTV2-320 (NBA baseline) still blocked — awaiting settled pick data per UTV2-335 precondition.
+
 2026-04-04 — **Full state reconciliation.** Linear queue, repo, and docs aligned as of `bdc237f`. UTV2-386 shipped (per-bookmaker odds capture — `bookmaker_key` column live in Supabase, SGO byBookmaker extraction active, CLV now prefers Pinnacle closing line). UTV2-387 (Smart Form autocomplete) marked Done — fix was in commit `239781c`. All M5 production-readiness closure issues (UTV2-335, 343, 353, 356, 360, 364, 369) moved to Ready for PM assessment. NBA/NFL/NHL baseline models (UTV2-320, 322, 323) moved to Ready alongside active UTV2-321 (MLB, In Progress). Test baseline: `pnpm test` 188 pass, smart-form 87 pass, ingestor 51 pass. All gates green.
 
 2026-04-04 — **UTV2-385 shipped (game-line results).** Migration `202604040003` adds partial unique index for null-participant game_results. `results-resolver.ts` no longer skips game-line markets — ML/spread/totals now write to DB with null participant_id. `EventRepository.listByName()` added. Grading service handles `game_total_ou` picks end-to-end via event-name resolution. ML/spread grading deferred pending SGO score format confirmation. **T1: migration `202604040003` needs Supabase apply before full grading proof.** UTV2-384 marked Done.
@@ -28,12 +34,12 @@
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **All pass** — 0 failures. `pnpm test` 188 pass (main `bdc237f`). Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
+| Tests | **All pass** — 0 failures. `pnpm test` 188 pass (main `51e295a`). Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **SGO Pro trial (6-day window, 2026-04-04).** UTV2-384/385/386 Done. UTV2-321 (MLB baseline) In Progress. All M5 production-readiness closure issues now Ready for assessment. Phase 7 awaiting PM approval. |
+| Milestone | **SGO Pro trial (6-day window, 2026-04-04).** Migrations 007–010 live. Picks FK columns (`capper_id`, `market_type_id`, `sport_id`) live in Supabase. UTV2-391/394 Done. M5 closure: 364/343/369 Done, 353 Backlog, 356/360/335 Ready (AC added, blocked on runtime preconditions). Phase 7 awaiting PM approval. |
 | Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill complete: 329k provider_offers rows (2026-01-05 → 2026-04-04). Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) now captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. |
-| Roadmap | Active: UTV2-321 (MLB baseline, lane:codex). Ready: UTV2-320/322/323 (NBA/NFL/NHL baselines), UTV2-388 (Smart Form catalog expansion), M5 production-readiness closure batch. Phase 7 (Syndicate Lane) awaiting PM approval. |
+| Roadmap | Active: none (UTV2-321 MLB baseline stalled pending backfill data). Ready: UTV2-320 (NBA baseline, blocked on settled picks), UTV2-322/323 (NFL/NHL baselines), UTV2-398 (picks_current_state type). Phase 7 (Syndicate Lane) awaiting PM approval. |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
@@ -88,7 +94,7 @@ Root `test` script: 6 named groups, each ≤10 files, chained `&&` (fail-closed)
 | `discord:best-bets` | **LIVE** | Real channel `1288613037539852329`. |
 | `discord:trader-insights` | **LIVE** | Real channel `1356613995175481405`. |
 | `discord:recaps` | **LIVE** | Real channel `1300411261854547968`. Daily/weekly recap posts. |
-| `discord:exclusive-insights` | **LIVE** | Real channel `1288613114815840466`. Promotion evaluation, distribution service, and target map all wired (UTV2-87 DONE). |
+| `discord:exclusive-insights` | Code merged — activation deferred | Real channel `1288613114815840466`. Promotion evaluation, distribution service wired (UTV2-87 DONE). Not in `UNIT_TALK_DISTRIBUTION_TARGETS` — live activation requires explicit PM approval. |
 | `discord:game-threads` | Blocked | Thread routing not implemented. |
 | `discord:strategy-room` | Blocked | DM routing not implemented. |
 
@@ -321,6 +327,23 @@ M12 closed 2026-03-28 at 691/691 tests. Proof: `out/sprints/M12/2026-03-28/m12_c
 - Notification layer: `runAlertNotificationPass()` — DB-backed cooldown, tier-based Discord routing: `notable`→canary (30min), `alert-worthy`→canary+trader-insights (15min), `ALERT_DRY_RUN` kill switch (UTV2-114 PR #55)
 - Both passes run in `alert-agent.ts` scheduler tick; fail independently
 - Hedge detection contract ratified (UTV2-69 READY); exclusive-insights activation contract ratified (UTV2-87 READY)
+
+### UltraPlan Phase 0+1 Hardening (2026-04-06/07)
+
+**Phase 0A — Truth Restoration**
+- Linear CLI fixed: `team(key:)` → `team(id:)` with UUID. `LINEAR_TEAM_ID` wired. Commit `3437be2`.
+- `.gitignore` cleaned: smart-form test-results + `.code-workspace` excluded.
+
+**Phase 0B — Worker Supervisor (T1-lite)**
+- `scripts/worker-supervisor.ts` — detached supervisor spawns child worker, exponential backoff (5s–30s), writes state to `out/worker-runtime/state.json`, health check via `system_runs.worker.heartbeat` + pending outbox count. Commit `e81702b`.
+- `pnpm worker:start|stop|restart|status` scripts wired.
+
+**Phase 1 — Runtime Hardening**
+- Worker fail-closed atomic delivery: `persistenceMode` dispatch — `database` mode calls `claimNextAtomic`/`confirmDeliveryAtomic`, no silent fallback. `in_memory` path explicit for tests. Commit `670da32`.
+- `GET /api/health/config` — feature availability signals: closingLines, clv, sharpConsensus, edge; derived from live DB. scoringProfile, persistenceMode, runtimeMode, boardCaps. Commit `670da32`.
+- Worker heartbeat alert check: `scripts/worker-alert-check.ts` — `pnpm worker:alert-check` queries `system_runs.worker.heartbeat`, emits CRITICAL + Discord canary alert if stale beyond threshold. Commit `670da32`.
+- 188/188 tests pass, type-check clean.
+- `discord:exclusive-insights` status corrected in this file: activation deferred, not LIVE. Commit `0b4ad2e`.
 
 ### Worker runtime
 - Worker process activated: `UNIT_TALK_WORKER_AUTORUN=true`, healthy = outbox draining, receipts written, no dead-letter (UTV2-107 PR #44)
