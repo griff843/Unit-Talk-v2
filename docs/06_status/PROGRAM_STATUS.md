@@ -38,7 +38,7 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
 | Milestone | **SGO Pro trial (6-day window, 2026-04-04).** Migrations 007–010 live. Picks FK columns (`capper_id`, `market_type_id`, `sport_id`) live in Supabase. UTV2-391/394 Done. M5 closure: 364/343/369 Done, 353 Backlog, 356/360/335 Ready (AC added, blocked on runtime preconditions). Phase 7 awaiting PM approval. |
-| Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill complete: 329k provider_offers rows (2026-01-05 → 2026-04-04). Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) now captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. |
+| Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill complete: 329k provider_offers rows (2026-01-05 → 2026-04-04). Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) now captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
 | Roadmap | Active: none (UTV2-321 MLB baseline stalled pending backfill data). Ready: UTV2-320 (NBA baseline, blocked on settled picks), UTV2-322/323 (NFL/NHL baselines), UTV2-398 (picks_current_state type). Phase 7 (Syndicate Lane) awaiting PM approval. |
 
 ## Honest Assessment (forensic audit 2026-03-31)
