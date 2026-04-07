@@ -158,24 +158,42 @@ export async function ingestLeague(
           isOpening,
           idempotencyKey: buildProviderOfferIdempotencyKey({
             providerKey: offer.providerKey,
-            providerEventId: offer.providerEventId,
-            providerMarketKey: offer.providerMarketKey,
-            providerParticipantId: offer.providerParticipantId,
-            line: offer.line,
-            snapshotAt: offer.snapshotAt,
-            bookmakerKey: offer.bookmakerKey,
-          }),
-        };
+          providerEventId: offer.providerEventId,
+          providerMarketKey: offer.providerMarketKey,
+          providerParticipantId: offer.providerParticipantId,
+          line: offer.line,
+          snapshotAt: offer.snapshotAt,
+          bookmakerKey: offer.bookmakerKey,
+        }),
+      };
       });
 
     const upsert = await repositories.providerOffers.upsertBatch(normalized);
-    await repositories.providerOffers.markClosingLines(
-      fetched.events
-        .filter((event) => typeof event.startsAt === 'string' && event.startsAt.length > 0)
-        .map((event) => ({
+    const startedEvents = await repositories.events.listStartedBySnapshot(snapshotAt);
+    const closingCandidates = new Map<string, { providerEventId: string; commenceTime: string }>();
+    for (const event of fetched.events) {
+      if (typeof event.startsAt === 'string' && event.startsAt.length > 0) {
+        closingCandidates.set(event.providerEventId, {
           providerEventId: event.providerEventId,
-          commenceTime: event.startsAt as string,
-        })),
+          commenceTime: event.startsAt,
+        });
+      }
+    }
+    for (const event of startedEvents) {
+      if (!event.external_id) {
+        continue;
+      }
+      const commenceTime = event.metadata?.starts_at;
+      if (typeof commenceTime !== 'string' || commenceTime.length === 0) {
+        continue;
+      }
+      closingCandidates.set(event.external_id, {
+        providerEventId: event.external_id,
+        commenceTime,
+      });
+    }
+    await repositories.providerOffers.markClosingLines(
+      [...closingCandidates.values()],
       snapshotAt,
       { includeBookmakerKey: true },
     );

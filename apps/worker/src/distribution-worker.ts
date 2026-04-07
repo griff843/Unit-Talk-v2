@@ -119,15 +119,25 @@ export async function processNextDistributionWork(
     heartbeatMs?: number;
     watchdogMs?: number;
     targetRegistry?: TargetRegistryEntry[];
+    /**
+     * Persistence mode controls atomic vs sequential claim/confirm paths.
+     * - 'database': uses claimNextAtomic / confirmDeliveryAtomic (SELECT FOR UPDATE SKIP LOCKED).
+     *   Throws on RPC failure — no silent fallback in production.
+     * - 'in_memory': uses sequential claimNext / markSent (safe for tests, not for concurrent workers).
+     * Default: 'database' (fail-closed).
+     */
+    persistenceMode?: 'database' | 'in_memory';
   } = {},
 ): Promise<WorkerProcessResult> {
-  // Try atomic claim (SELECT FOR UPDATE SKIP LOCKED) first,
-  // fall back to sequential claim for InMemory mode.
+  const persistenceMode = options.persistenceMode ?? 'database';
+
+  // Mode-aware claim: atomic in database mode (no silent fallback), sequential in in-memory mode.
   let claimed: OutboxRecord | null;
-  try {
-    claimed = await repositories.outbox.claimNextAtomic(target, workerId);
-  } catch {
+  if (persistenceMode === 'in_memory') {
     claimed = await repositories.outbox.claimNext(target, workerId);
+  } else {
+    // Hard failure in database mode — missing or broken RPC is not silently tolerated.
+    claimed = await repositories.outbox.claimNextAtomic(target, workerId);
   }
 
   if (!claimed) {
@@ -342,14 +352,41 @@ export async function processNextDistributionWork(
       });
     }
 
-    // Try atomic confirm (markSent + lifecycle + receipt + audit in one tx),
-    // fall back to sequential for InMemory mode.
+    // Mode-aware confirm: atomic in database mode (no silent fallback), sequential in in-memory mode.
     let sent: OutboxRecord;
     let receipt: ReceiptRecord;
     let postedLifecycleEventId: string | null = null;
 
-    try {
-      const confirmResult = await repositories.outbox.confirmDeliveryAtomic({
+    if (persistenceMode === 'in_memory') {
+      // Sequential path for test/in-memory mode.
+      sent = await repositories.outbox.markSent(claimed.id);
+      const postedTransition = await transitionPickLifecycle(
+        repositories.picks,
+        claimed.pick_id,
+        'posted',
+        'downstream delivery confirmed',
+        'poster',
+      );
+      receipt = await repositories.receipts.record({
+        outboxId: claimed.id,
+        receiptType: delivery.receiptType,
+        status: delivery.status as 'sent' | 'failed',
+        channel: delivery.channel ?? '',
+        externalId: delivery.externalId ?? undefined,
+        idempotencyKey: delivery.idempotencyKey ?? `${claimed.id}:receipt`,
+        payload: delivery.payload ?? {},
+      });
+      await repositories.audit.record({
+        entityType: 'distribution_outbox',
+        entityId: claimed.id,
+        action: 'distribution.sent',
+        actor: workerId,
+        payload: { outboxId: claimed.id, target, pickId: claimed.pick_id },
+      });
+      postedLifecycleEventId = postedTransition?.lifecycleEvent.id ?? null;
+    } else {
+    // Atomic confirm — throws on RPC failure, no silent fallback in production.
+    const confirmResult = await repositories.outbox.confirmDeliveryAtomic({
         outboxId: claimed.id,
         pickId: claimed.pick_id,
         workerId,
@@ -374,39 +411,6 @@ export async function processNextDistributionWork(
       sent = confirmResult.outbox;
       receipt = confirmResult.receipt ?? ({} as ReceiptRecord);
       postedLifecycleEventId = confirmResult.lifecycleEvent?.id ?? null;
-    } catch {
-      // Sequential fallback (InMemory mode)
-      sent = await repositories.outbox.markSent(claimed.id);
-      const postedTransition = await transitionPickLifecycle(
-        repositories.picks,
-        claimed.pick_id,
-        'posted',
-        'downstream delivery confirmed',
-        'poster',
-      );
-      receipt = await repositories.receipts.record({
-        outboxId: claimed.id,
-        receiptType: delivery.receiptType,
-        status: delivery.status,
-        channel: delivery.channel,
-        externalId: delivery.externalId,
-        idempotencyKey: delivery.idempotencyKey,
-        payload: delivery.payload,
-      });
-      postedLifecycleEventId = postedTransition.lifecycleEvent.id;
-      await recordWorkerAudit(repositories.audit, {
-        entityType: 'distribution_outbox',
-        entityId: claimed.id,
-        action: 'distribution.sent',
-        actor: workerId,
-        payload: {
-          outboxId: claimed.id,
-          receiptId: receipt.id,
-          target,
-          pickId: claimed.pick_id,
-          postedLifecycleEventId,
-        },
-      });
     }
 
     const completedRun = await repositories.runs.completeRun({

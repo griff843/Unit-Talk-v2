@@ -36,3 +36,9 @@ supabase/.branches/
 # Lane manager — local operator state, never committed
 .claude/lanes.json
 .claude/snapshots/
+
+# IDE workspace files
+*.code-workspace
+
+# Smart Form Playwright results
+apps/smart-form/test-results/

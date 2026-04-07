@@ -1407,6 +1407,15 @@ export class InMemoryEventRepository implements EventRepository {
       (row) => row.event_name.trim().toLowerCase() === normalized,
     );
   }
+
+  async listStartedBySnapshot(snapshotAt: string, lookbackDays = 1): Promise<EventRow[]> {
+    const snapshotMs = new Date(snapshotAt).getTime();
+    const cutoffMs = snapshotMs - lookbackDays * 24 * 60 * 60 * 1000;
+    return Array.from(this.events.values()).filter((row) => {
+      const startMs = new Date(row.event_date).getTime();
+      return startMs >= cutoffMs && startMs <= snapshotMs;
+    });
+  }
 }
 
 export class InMemoryEventParticipantRepository implements EventParticipantRepository {
@@ -3677,7 +3686,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     const { error } = await this.client
       .from('provider_offers')
-      .upsert(rows, { onConflict: 'idempotency_key' });
+      .upsert(rows, { onConflict: 'idempotency_key', ignoreDuplicates: true });
 
     if (error) {
       throw new Error(`Failed to upsert provider offers: ${error.message}`);
@@ -4155,6 +4164,24 @@ export class DatabaseEventRepository implements EventRepository {
 
     if (error) {
       throw new Error(`Failed to list events by name: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
+  async listStartedBySnapshot(snapshotAt: string, lookbackDays = 1): Promise<EventRow[]> {
+    const cutoff = new Date(
+      new Date(snapshotAt).getTime() - lookbackDays * 24 * 60 * 60 * 1000,
+    ).toISOString();
+
+    const { data, error } = await this.client
+      .from('events')
+      .select('*')
+      .gte('event_date', cutoff)
+      .lte('event_date', snapshotAt);
+
+    if (error) {
+      throw new Error(`Failed to list events by snapshot: ${error.message}`);
     }
 
     return data ?? [];

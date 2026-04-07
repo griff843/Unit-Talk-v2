@@ -562,6 +562,7 @@ export interface EventRepository {
   findById(eventId: string): Promise<EventRow | null>;
   findByExternalId(externalId: string): Promise<EventRow | null>;
   listUpcoming(sportId?: string, windowDays?: number): Promise<EventRow[]>;
+  listStartedBySnapshot(snapshotAt: string, lookbackDays?: number): Promise<EventRow[]>;
   /** Returns all events whose event_name matches the given name (case-insensitive). */
   listByName(eventName: string): Promise<EventRow[]>;
 }

@@ -11,6 +11,7 @@ import {
   createLokiLogWriter,
 } from '@unit-talk/observability';
 import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js';
+import { parseSchedulerConfig, type SchedulerEnv } from './scheduler.js';
 
 const lokiUrl = process.env.LOKI_URL?.trim();
 const ingestorWriter = lokiUrl
@@ -27,6 +28,7 @@ function createIngestorRuntimeDependencies() {
   const autorun = env.UNIT_TALK_INGESTOR_AUTORUN === 'true';
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
   const apiUrl = env.UNIT_TALK_API_URL;
+  const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
 
   const runtimeMode = readIngestorRuntimeMode(env);
 
@@ -41,6 +43,7 @@ function createIngestorRuntimeDependencies() {
       maxCycles,
       autorun,
       skipResults,
+      schedulerConfig,
       apiKey: env.SGO_API_KEY,
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
@@ -68,6 +71,7 @@ function createIngestorRuntimeDependencies() {
       maxCycles,
       autorun,
       skipResults,
+      schedulerConfig,
       apiKey: env.SGO_API_KEY,
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
@@ -91,6 +95,12 @@ export function createIngestorRuntimeSummary() {
     maxCyclesPerRun: runtime.maxCycles ?? 0,
     autorun: runtime.autorun,
     skipResults: runtime.skipResults,
+    scheduler: {
+      enabled: runtime.schedulerConfig.enabled,
+      peakPollMs: runtime.schedulerConfig.peakPollMs,
+      offPeakPollMs: runtime.schedulerConfig.offPeakPollMs,
+      peakWindowEt: `${runtime.schedulerConfig.peakStartHourEt}:00–${runtime.schedulerConfig.peakEndHourEt}:00`,
+    },
     apiKeyConfigured: Boolean(runtime.apiKey),
     apiUrlConfigured: Boolean(runtime.apiUrl),
     nextStep: runtime.autorun
@@ -108,9 +118,10 @@ if (runtime.autorun) {
     ...(runtime.apiKey ? { apiKey: runtime.apiKey } : {}),
     ...(runtime.oddsApiKey ? { oddsApiKey: runtime.oddsApiKey } : {}),
     ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
-    ...(runtime.maxCycles !== undefined ? { maxCycles: runtime.maxCycles } : {}),
+    maxCycles: runtime.maxCycles ?? Number.POSITIVE_INFINITY,
     skipResults: runtime.skipResults,
     pollIntervalMs: runtime.pollIntervalMs,
+    schedulerConfig: runtime.schedulerConfig,
     logger: console,
   })
     .then((cycles) => {

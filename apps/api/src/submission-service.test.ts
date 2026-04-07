@@ -400,6 +400,26 @@ test('processSubmission materializes canonical records and submission event', as
   assert.equal(result.lifecycleEventRecord.to_state, 'validated');
 });
 
+test('processSubmission rejects display-string fallback markets with UNRESOLVABLE_MARKET', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  await assert.rejects(
+    () =>
+      processSubmission(
+        {
+          source: 'smart-form',
+          market: 'NBA - Player Prop',
+          selection: 'Jamal Murray Assists O 7',
+        },
+        repositories,
+      ),
+    (error: unknown) =>
+      error instanceof Error &&
+      'code' in error &&
+      error.code === 'UNRESOLVABLE_MARKET',
+  );
+});
+
 test('processSubmission normalizes known market keys before persisting the pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(

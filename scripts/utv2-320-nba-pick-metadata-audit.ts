@@ -53,7 +53,8 @@ async function main() {
   const { data: pickRows, error } = await db
     .from('picks')
     .select('id,market,metadata')
-    .filter('metadata->>sport', 'eq', 'NBA');
+    .filter('metadata->>sport', 'eq', 'NBA')
+    .not('market', 'like', '% - %');
 
   if (error) {
     throw new Error(`picks query failed: ${error.message}`);

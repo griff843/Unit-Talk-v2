@@ -63,7 +63,7 @@ async function main(): Promise<void> {
 }
 
 async function listIssues(): Promise<void> {
-  const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
+  const teamId = readOption('team') ?? env.LINEAR_TEAM_ID;
   const stateNames = parseCsv(readOption('states') ?? 'Ready,In Progress,In Review');
   const limit = Number.parseInt(readOption('limit') ?? '50', 10);
   const json = hasFlag('json');
@@ -76,8 +76,8 @@ async function listIssues(): Promise<void> {
     } | null;
   }>(
     `
-      query ListIssues($teamKey: String!, $stateNames: [String!], $first: Int!) {
-        team(key: $teamKey) {
+      query ListIssues($teamId: String!, $stateNames: [String!], $first: Int!) {
+        team(id: $teamId) {
           issues(
             first: $first
             filter: { state: { name: { in: $stateNames } } }
@@ -98,7 +98,7 @@ async function listIssues(): Promise<void> {
       }
     `,
     {
-      teamKey,
+      teamId,
       stateNames,
       first: limit,
     },
@@ -136,7 +136,7 @@ async function listIssues(): Promise<void> {
 }
 
 async function listExecutableWork(): Promise<void> {
-  const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
+  const teamId = readOption('team') ?? env.LINEAR_TEAM_ID;
   const stateNames = parseCsv(readOption('states') ?? 'Ready,In Progress,In Review');
   const limit = Number.parseInt(readOption('limit') ?? '25', 10);
 
@@ -154,8 +154,8 @@ async function listExecutableWork(): Promise<void> {
     } | null;
   }>(
     `
-      query WorkIssues($teamKey: String!, $stateNames: [String!], $first: Int!) {
-        team(key: $teamKey) {
+      query WorkIssues($teamId: String!, $stateNames: [String!], $first: Int!) {
+        team(id: $teamId) {
           issues(
             first: $first
             filter: { state: { name: { in: $stateNames } } }
@@ -179,7 +179,7 @@ async function listExecutableWork(): Promise<void> {
       }
     `,
     {
-      teamKey,
+      teamId,
       stateNames,
       first: limit,
     },
@@ -392,7 +392,7 @@ async function resolveIssue(issueRef: string): Promise<LinearIssueNode> {
 }
 
 async function resolveStateId(stateName: string): Promise<string> {
-  const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
+  const teamId = readOption('team') ?? env.LINEAR_TEAM_ID;
   const data = await gql<{
     team: {
       states: {
@@ -401,8 +401,8 @@ async function resolveStateId(stateName: string): Promise<string> {
     } | null;
   }>(
     `
-      query ResolveState($teamKey: String!) {
-        team(key: $teamKey) {
+      query ResolveState($teamId: String!) {
+        team(id: $teamId) {
           states {
             nodes {
               id
@@ -413,7 +413,7 @@ async function resolveStateId(stateName: string): Promise<string> {
         }
       }
     `,
-    { teamKey },
+    { teamId },
   );
 
   const state = data.team?.states.nodes.find(
@@ -421,7 +421,7 @@ async function resolveStateId(stateName: string): Promise<string> {
   );
 
   if (!state) {
-    throw new Error(`Linear state not found on team ${teamKey}: ${stateName}`);
+    throw new Error(`Linear state not found on team ${teamId}: ${stateName}`);
   }
 
   return state.id;
@@ -438,7 +438,8 @@ async function gql<T>(query: string, variables: JsonObject = {}): Promise<T> {
   });
 
   if (!response.ok) {
-    throw new Error(`Linear API request failed: ${response.status} ${response.statusText}`);
+    const body = await response.text().catch(() => '');
+    throw new Error(`Linear API request failed: ${response.status} ${response.statusText}${body ? ` — ${body.slice(0, 300)}` : ''}`);
   }
 
   const payload = (await response.json()) as LinearGraphQlResponse<T>;

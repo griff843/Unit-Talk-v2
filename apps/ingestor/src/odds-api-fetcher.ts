@@ -272,6 +272,7 @@ export function normalizeOddsApiToOffers(
       const providerKey = `odds-api:${bookmaker.key}`;
 
       for (const market of bookmaker.markets) {
+        const marketSnapshotAt = market.last_update || bookmaker.last_update || snapshotAt;
         // Group outcomes by point/line for over/under pairing
         const outcomesByPoint = new Map<string, OddsApiOutcome[]>();
         for (const outcome of market.outcomes) {
@@ -293,7 +294,7 @@ export function normalizeOddsApiToOffers(
                 selectionTeam: event.home_team,
                 selectionOdds: homeOutcome?.price ?? null,
                 opposingOdds: awayOutcome?.price ?? null,
-                snapshotAt: bookmaker.last_update || snapshotAt,
+                snapshotAt: marketSnapshotAt,
                 eventName,
                 sport,
               }),
@@ -303,7 +304,7 @@ export function normalizeOddsApiToOffers(
                 selectionTeam: event.away_team,
                 selectionOdds: awayOutcome?.price ?? null,
                 opposingOdds: homeOutcome?.price ?? null,
-                snapshotAt: bookmaker.last_update || snapshotAt,
+                snapshotAt: marketSnapshotAt,
                 eventName,
                 sport,
               }),
@@ -324,7 +325,7 @@ export function normalizeOddsApiToOffers(
                 ? `${market.key}:${participant}`
                 : market.key,
               providerParticipantId: participant,
-              snapshotAt: bookmaker.last_update || snapshotAt,
+              snapshotAt: marketSnapshotAt,
               line,
               overOdds: over?.price ?? null,
               underOdds: under?.price ?? null,
@@ -347,7 +348,7 @@ export function normalizeOddsApiToOffers(
                 ? `${market.key}:${participant}`
                 : market.key,
               providerParticipantId: participant,
-              snapshotAt: bookmaker.last_update || snapshotAt,
+              snapshotAt: marketSnapshotAt,
               line,
               overOdds: over?.price ?? null,
               underOdds: under?.price ?? null,

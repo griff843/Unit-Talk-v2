@@ -684,6 +684,7 @@ test('processNextDistributionWork returns idle when no work is available', async
     async () => {
       throw new Error('should not be called');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'idle');
@@ -707,6 +708,7 @@ test('processNextDistributionWork marks work sent, records receipt, and posts th
         delivered: true,
       },
     }),
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'sent');
@@ -741,6 +743,7 @@ test('processNextDistributionWork marks work failed and records audit', async ()
     async () => {
       throw new Error('discord down');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'failed');
@@ -777,6 +780,7 @@ test('processNextDistributionWork immediately dead-letters terminal delivery fai
         adapter: 'discord',
       },
     }),
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'failed');
@@ -812,6 +816,7 @@ test('processNextDistributionWork retries normally on retryable delivery failure
         adapter: 'discord',
       },
     }),
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'failed');
@@ -841,6 +846,7 @@ test('processNextDistributionWork promotes the outbox row to dead_letter after t
     async () => {
       throw new Error('delivery exploded');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'failed');
@@ -868,6 +874,7 @@ test('processNextDistributionWork resets row to pending with backoff before the 
     async () => {
       throw new Error('retryable failure');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'failed');
@@ -896,6 +903,7 @@ test('processNextDistributionWork marks dead_letter rows without delivering agai
       deliverCalls += 1;
       throw new Error('delivery exploded again');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(deliverCalls, 1);
@@ -917,6 +925,7 @@ test('runWorkerCycles processes configured targets across cycles', async () => {
     targets: ['discord:cycle-a', 'discord:cycle-b'],
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
+    persistenceMode: 'in_memory',
   });
 
   assert.equal(cycles.length, 1);
@@ -1140,6 +1149,7 @@ test('processNextDistributionWork does not advance pick lifecycle on delivery fa
     async () => {
       throw new Error('delivery error');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   const pick = await picks.findPickById(outboxRecord.pick_id);
@@ -1163,6 +1173,7 @@ test('processNextDistributionWork receipt is linked to outbox and carries idempo
       idempotencyKey: `${outbox.id}:discord:test-channel:receipt`,
       payload: {},
     }),
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'sent');
@@ -1196,6 +1207,7 @@ test('processNextDistributionWork skips terminal picks and completes outbox with
       deliverCalled = true;
       throw new Error('deliver must not run for settled picks');
     },
+    { persistenceMode: 'in_memory' },
   );
 
   assert.equal(result.status, 'skipped');
@@ -1217,6 +1229,7 @@ test('runWorkerCycles returns idle results when targets have no pending work', a
     targets: ['discord:no-work'],
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
+    persistenceMode: 'in_memory',
   });
 
   assert.equal(cycles.length, 1);
@@ -1239,6 +1252,7 @@ test('runWorkerCycles reaps stale processing claims before claiming fresh work',
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
     staleClaimMs: 60_000,
+    persistenceMode: 'in_memory',
   });
 
   assert.equal(cycles[0]?.reapedOutboxIds.includes(stale.id), true);
@@ -1275,6 +1289,7 @@ test('processNextDistributionWork heartbeats active claims during long delivery'
     {
       heartbeatMs: 5,
       watchdogMs: 100,
+      persistenceMode: 'in_memory',
     },
   );
 
@@ -1294,6 +1309,7 @@ test('processNextDistributionWork fails hung deliveries when watchdog expires', 
     {
       heartbeatMs: 5,
       watchdogMs: 20,
+      persistenceMode: 'in_memory',
     },
   );
 
@@ -1523,6 +1539,7 @@ test('runWorkerCycles skips target with open circuit and returns circuit-open re
     maxCycles: 3,
     sleep: async () => {},
     circuitBreaker: cb,
+    persistenceMode: 'in_memory',
   });
 
   // Cycle 3 should have circuit-open because circuit opens at threshold=2
@@ -1551,6 +1568,7 @@ test('runWorkerCycles writes system_runs row when circuit opens', async () => {
     deliver: alwaysFail,
     maxCycles: 1,
     circuitBreaker: cb,
+    persistenceMode: 'in_memory',
   });
 
   const circuitRun = runs.records.find((r) => r.run_type === 'worker.circuit-open');
@@ -1574,6 +1592,7 @@ test('runWorkerCycles skips disabled target — outbox row stays pending', async
     targets: ['discord:exclusive-insights'],
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
+    persistenceMode: 'in_memory',
     targetRegistry: [
       { target: 'best-bets', enabled: true, rolloutPct: 100 },
       { target: 'trader-insights', enabled: true, rolloutPct: 100 },
@@ -1608,6 +1627,7 @@ test('runWorkerCycles writes a worker.heartbeat system_run per cycle', async () 
     targets: ['discord:hb-target'],
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
+    persistenceMode: 'in_memory',
     workerHeartbeatIntervalMs: 30000,
   });
 
@@ -1627,6 +1647,7 @@ test('runWorkerCycles writes one heartbeat per cycle for multiple cycles', async
     deliver: createStubDeliveryAdapter(),
     maxCycles: 3,
     sleep: async () => {},
+    persistenceMode: 'in_memory',
     workerHeartbeatIntervalMs: 30000,
   });
 
@@ -1646,6 +1667,7 @@ test('runWorkerCycles skips heartbeat write when workerHeartbeatIntervalMs is 0'
     targets: ['discord:hb-skip'],
     deliver: createStubDeliveryAdapter(),
     maxCycles: 1,
+    persistenceMode: 'in_memory',
     workerHeartbeatIntervalMs: 0,
   });
 
