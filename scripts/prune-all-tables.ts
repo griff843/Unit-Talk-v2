@@ -15,7 +15,7 @@
  * Run: npx tsx scripts/prune-all-tables.ts
  */
 
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient } from '@supabase/supabase-js';
 import { loadEnvironment } from '@unit-talk/config';
 
 loadEnvironment();
@@ -38,7 +38,6 @@ interface PruneTarget {
   table: string;
   dateColumn: string;
   retentionDays: number;
-  extraFilter?: (query: ReturnType<SupabaseClient['from']>) => ReturnType<SupabaseClient['from']>;
 }
 
 const PRUNE_TARGETS: PruneTarget[] = [
@@ -61,17 +60,11 @@ async function pruneBatch(target: PruneTarget): Promise<number> {
     batch++;
     process.stdout.write(`  Batch ${batch}... `);
 
-    let selectQuery = db
+    const { data, error } = await db
       .from(target.table)
       .select('id')
       .lt(target.dateColumn, cutoff)
       .limit(BATCH_SIZE);
-
-    if (target.extraFilter) {
-      selectQuery = target.extraFilter(selectQuery as any) as any;
-    }
-
-    const { data, error } = await selectQuery;
 
     if (error) throw new Error(`Select failed on ${target.table}: ${error.message}`);
     if (!data || data.length === 0) {
