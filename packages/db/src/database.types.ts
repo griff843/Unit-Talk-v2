@@ -310,6 +310,13 @@ export type Database = {
             referencedRelation: "picks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "distribution_outbox_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks_current_state"
+            referencedColumns: ["id"]
+          },
         ]
       }
       distribution_receipts: {
@@ -1042,6 +1049,13 @@ export type Database = {
             referencedRelation: "picks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pick_lifecycle_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks_current_state"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pick_promotion_history: {
@@ -1095,6 +1109,13 @@ export type Database = {
             referencedRelation: "picks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pick_promotion_history_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks_current_state"
+            referencedColumns: ["id"]
+          },
         ]
       }
       pick_reviews: {
@@ -1133,6 +1154,13 @@ export type Database = {
             referencedRelation: "picks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pick_reviews_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks_current_state"
+            referencedColumns: ["id"]
+          },
         ]
       }
       picks: {
@@ -1149,6 +1177,7 @@ export type Database = {
           metadata: Json
           odds: number | null
           participant_id: string | null
+          player_id: string | null
           posted_at: string | null
           promotion_decided_at: string | null
           promotion_decided_by: string | null
@@ -1179,6 +1208,7 @@ export type Database = {
           metadata?: Json
           odds?: number | null
           participant_id?: string | null
+          player_id?: string | null
           posted_at?: string | null
           promotion_decided_at?: string | null
           promotion_decided_by?: string | null
@@ -1209,6 +1239,7 @@ export type Database = {
           metadata?: Json
           odds?: number | null
           participant_id?: string | null
+          player_id?: string | null
           posted_at?: string | null
           promotion_decided_at?: string | null
           promotion_decided_by?: string | null
@@ -1246,6 +1277,13 @@ export type Database = {
             columns: ["participant_id"]
             isOneToOne: false
             referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_player_id_fkey"
+            columns: ["player_id"]
+            isOneToOne: false
+            referencedRelation: "players"
             referencedColumns: ["id"]
           },
           {
@@ -1706,6 +1744,13 @@ export type Database = {
             referencedRelation: "picks"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "settlement_records_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "picks_current_state"
+            referencedColumns: ["id"]
+          },
         ]
       }
       sport_market_type_availability: {
@@ -1746,38 +1791,6 @@ export type Database = {
           },
           {
             foreignKeyName: "sport_market_type_availability_sport_id_fkey"
-            columns: ["sport_id"]
-            isOneToOne: false
-            referencedRelation: "sports"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      sport_market_types: {
-        Row: {
-          created_at: string
-          id: string
-          market_type: string
-          sort_order: number
-          sport_id: string
-        }
-        Insert: {
-          created_at?: string
-          id?: string
-          market_type: string
-          sort_order?: number
-          sport_id: string
-        }
-        Update: {
-          created_at?: string
-          id?: string
-          market_type?: string
-          sort_order?: number
-          sport_id?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "sport_market_types_sport_id_fkey"
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
@@ -2067,6 +2080,89 @@ export type Database = {
             columns: ["sport_id"]
             isOneToOne: false
             referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      picks_current_state: {
+        Row: {
+          approval_status: string | null
+          capper_display_name: string | null
+          capper_id: string | null
+          confidence: number | null
+          created_at: string | null
+          id: string | null
+          idempotency_key: string | null
+          line: number | null
+          market: string | null
+          market_type_display_name: string | null
+          market_type_id: string | null
+          metadata: Json | null
+          odds: number | null
+          participant_id: string | null
+          posted_at: string | null
+          promotion_decided_at: string | null
+          promotion_decided_at_current: string | null
+          promotion_decided_by: string | null
+          promotion_reason: string | null
+          promotion_score: number | null
+          promotion_score_current: number | null
+          promotion_status: string | null
+          promotion_status_current: string | null
+          promotion_target: string | null
+          promotion_target_current: string | null
+          promotion_version: string | null
+          review_decided_at: string | null
+          review_decided_by: string | null
+          review_decision: string | null
+          selection: string | null
+          settled_at: string | null
+          settlement_recorded_at: string | null
+          settlement_result: string | null
+          settlement_source: string | null
+          settlement_status: string | null
+          source: string | null
+          sport_display_name: string | null
+          sport_id: string | null
+          stake_units: number | null
+          status: string | null
+          submission_id: string | null
+          updated_at: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "picks_capper_id_fkey"
+            columns: ["capper_id"]
+            isOneToOne: false
+            referencedRelation: "cappers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_market_type_id_fkey"
+            columns: ["market_type_id"]
+            isOneToOne: false
+            referencedRelation: "market_types"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_sport_id_fkey"
+            columns: ["sport_id"]
+            isOneToOne: false
+            referencedRelation: "sports"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "picks_submission_id_fkey"
+            columns: ["submission_id"]
+            isOneToOne: false
+            referencedRelation: "submissions"
             referencedColumns: ["id"]
           },
         ]
