@@ -33,6 +33,7 @@
     "linear:work": "tsx scripts/linear-workflow.ts work",
     "linear:update": "tsx scripts/linear-workflow.ts update",
     "lint": "eslint .",
+    "db:prune": "tsx scripts/prune-all-tables.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
     "ops:health": "tsx scripts/ops-health.ts",
     "pi-m5:verify": "tsx scripts/pi-m5-verify.ts",
