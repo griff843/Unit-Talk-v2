@@ -43,12 +43,6 @@ function makeRuntime(
 ): ApiRuntimeDependencies {
   const repositories = createInMemoryRepositoryBundle();
 
-  // Seed provider offers
-  for (const offer of offers) {
-    (repositories.providerOffers as { offers?: Map<string, ProviderOfferRecord> } & typeof repositories.providerOffers);
-    // Use listRecentOffers override via monkey-patching for test isolation
-  }
-
   // Override listRecentOffers to return seeded data
   const originalRepo = repositories.providerOffers;
   repositories.providerOffers = {
