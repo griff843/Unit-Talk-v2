@@ -77,7 +77,7 @@ The hardest intellectual work. Already done in V2 — more rigorous than legacy.
 |---|------|--------|------|-------|
 | 2.1 | Devigging / probability calibration | ✅ | — | `packages/domain` — tested |
 | 2.2 | Kelly fraction sizing | ✅ | — | Tested |
-| 2.3 | CLV computation logic | ✅ | — | Tested + fed live data + operator surface live — pick 5a36ffbf: clvRaw=0.039736, beatsClosingLine=true; clvSummary + pipeline CLV columns in operator dashboard |
+| 2.3 | CLV computation logic | ✅ | — | Tested + fed live data + operator surface live — pick 5a36ffbf: clvRaw=0.039736, beatsClosingLine=true; clvSummary + pipeline CLV columns in Command Center |
 | 2.4 | Edge validation | ✅ | — | Tested |
 | 2.5 | Market signals / book dispersion | ✅ | — | Tested |
 | 2.6 | Scoring (MLB/NBA/NFL/NHL) | ✅ | — | Tested |

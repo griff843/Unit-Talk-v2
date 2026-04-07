@@ -83,7 +83,7 @@
 | Route | Path | What It Returns | Consumed By CC Page | Classification | Notes |
 |---|---|---|---|---|---|
 | `GET /health` | `handleHealthRequest` | Service health, persistence mode, health signals | No direct CC page (used in dashboard via `/api/operator/dashboard`) | `keep` | Correct. Internal health check. |
-| `GET /` | `handleDashboardRequest` | HTML server-side rendered operator dashboard (light theme) | Not consumed by Command Center | `rename` | This route renders a standalone HTML dashboard at the operator-web root. It uses "Unit Talk V2 Operator" branding, not "Command Center". Conflicts with CC branding. |
+| `GET /` | `handleDashboardRequest` | HTML server-side rendered status page (light theme) | Not consumed by Command Center | `rename` | This route renders a standalone HTML page at the operator-web root. It uses "Unit Talk V2 Operator" branding, not "Command Center". Conflicts with CC branding. |
 | `GET /api/operator/snapshot` | `handleSnapshotRequest` | Full operator snapshot: counts, health, picks pipeline, aging, recap, board exposure, canary/best-bets/trader-insights channel health, recent outbox/receipts/settlements/runs/audit | `/` (Dashboard), `/burn-in`, `/interventions` | `keep` | Comprehensive. Correct. |
 | `GET /api/operator/picks-pipeline` | `handlePicksPipelineRequest` | Picks pipeline counts + recent picks | No direct CC consumer (CC uses snapshot instead) | `remove` | Redundant: `snapshot` already includes picks pipeline data. No CC page calls this directly. Dead endpoint. |
 | `GET /api/operator/recap` | `handleRecapRequest` | Settlement recap from snapshot | No direct CC consumer | `remove` | Redundant: recap data is available via `/snapshot`. No CC page calls this endpoint. Dead endpoint. |

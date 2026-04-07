@@ -141,7 +141,7 @@ V2 has no mechanism to enforce channel access beyond:
 
 ### 1.7 Operator / Admin Surface (operator-web, read-only)
 
-`apps/operator-web` has no member tier exposure. It does not query `member_tiers` (the table does not exist). There is no tier count, no member roster, no role audit surface in the operator dashboard.
+`apps/operator-web` has no member tier exposure. It does not query `member_tiers` (the table does not exist). There is no tier count, no member roster, no role audit surface in Command Center.
 
 The `OperatorSnapshot` type does not include a `memberTiers` field. The spec for this field exists only in `MEMBER_TIER_MODEL_CONTRACT.md` — it is design intent, not runtime truth.
 

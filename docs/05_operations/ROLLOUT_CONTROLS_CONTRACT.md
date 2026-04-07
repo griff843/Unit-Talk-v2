@@ -22,7 +22,7 @@ The target registry is binary: enabled or disabled. There is no way to:
 - Route 10% of qualifying picks to a new target before going to 100%
 - Restrict a target to a specific sport (e.g., "only NBA picks to trader-insights for now")
 - Adjust rollout percentage without a code deploy or process restart
-- See rollout config state in the operator dashboard
+- See rollout config state in Command Center
 
 ## 3. Design
 

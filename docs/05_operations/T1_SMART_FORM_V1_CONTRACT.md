@@ -326,5 +326,5 @@ WRONG (UTV2-45 original Augment submission):
 | Conviction history tracking per capper | Future — requires capper performance DB |
 | Conviction calibration (conviction vs actual win rate) | Syndicate-gate work |
 | Conviction displayed in Discord embed | Future embed contract |
-| Conviction visible in operator dashboard | Future operator contract |
+| Conviction visible in Command Center | Future operator contract |
 | "I know something the market doesn't" signal | Future — qualitative signal layer |

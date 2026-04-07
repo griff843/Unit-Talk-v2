@@ -23,7 +23,7 @@ The domain math layer has `computeCLVForecastV2()` (tested, 4 tests) and `classi
 3. No code writes CLV into `settlement_records.payload`
 4. The settlement service reads CLV from `pick.metadata.lossAttribution` but that field is never populated
 
-After this lane: when a pick is settled, the system looks up the closest provider offer before the event started, computes CLV by comparing the pick's odds to the closing line, and persists the result to `settlement_records.payload.clv`. The operator dashboard displays CLV in the pick detail view.
+After this lane: when a pick is settled, the system looks up the closest provider offer before the event started, computes CLV by comparing the pick's odds to the closing line, and persists the result to `settlement_records.payload.clv`. Command Center displays CLV in the pick detail view.
 
 ---
 

@@ -52,16 +52,16 @@ The Worker does not write picks or settlement data. It is a delivery executor on
 
 ---
 
-### Operator Web — Read-Only Monitoring
+### Command Center — Operator Intelligence Dashboard (Data Backend)
 
 | Field | Value |
 |-------|-------|
 | App | `apps/operator-web` |
 | State | **LIVE** |
-| Role | Internal read-only operational visibility surface |
+| Role | Internal read-only data backend for Command Center |
 | Access | Operator / Admin only |
 
-Read-only. No write surfaces. Provides real-time operational health, outbox state, pick pipeline status, and settlement summary.
+Read-only. No write surfaces. Provides real-time operational health, outbox state, pick pipeline status, and settlement summary. All endpoints are consumed by the Command Center UI (`apps/command-center`).
 
 Key endpoints:
 - `GET /` — operator HTML dashboard

@@ -294,7 +294,7 @@ breaking phases 1 and 2.
 - **No `stat-resolver.ts` changes** — that domain layer uses the legacy underscore format. The ingestor uses a separate SGO-format mapping. Do not merge or modify the domain layer.
 - **No settlement writes** — this lane only writes `game_results`. Grading service writes settlements.
 - **No new Discord output** — no bot notifications from results ingest.
-- **No operator web changes** — the operator dashboard shows grading results via existing settlement surfaces. No new HTML sections required.
+- **No Command Center changes** — Command Center shows grading results via existing settlement surfaces. No new UI sections required.
 - **No historical backfill** — only events from the current and recent ingest window are processed. Historical backfill is a separate maintenance script.
 - **No multi-provider consensus** — SGO only. Second provider results is a separate T2 lane.
 - **No game totals / team results in V1** — player props only. Team/game-level results (spread, moneyline, game total) require a separate stat field mapping and are explicitly deferred.
