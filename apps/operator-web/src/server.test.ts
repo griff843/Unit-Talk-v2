@@ -345,6 +345,7 @@ test('createSnapshotFromRows uses effective corrected settlement result in picks
         idempotency_key: null,
         metadata: {},
         created_at: '2026-03-21T11:45:00.000Z',
+        player_id: null,
         updated_at: '2026-03-21T12:05:00.000Z',
       },
     ],
@@ -2523,6 +2524,7 @@ function createStaticProvider(): OperatorSnapshotProvider {
             idempotency_key: null,
             metadata: {},
             created_at: '2026-03-20T11:59:00.000Z',
+            player_id: null,
             updated_at: '2026-03-20T12:01:00.000Z',
           },
           {
@@ -2553,6 +2555,7 @@ function createStaticProvider(): OperatorSnapshotProvider {
             idempotency_key: null,
             metadata: {},
             created_at: '2026-03-21T12:59:00.000Z',
+            player_id: null,
             updated_at: '2026-03-21T13:01:00.000Z',
           },
           {
@@ -2583,6 +2586,7 @@ function createStaticProvider(): OperatorSnapshotProvider {
             idempotency_key: null,
             metadata: {},
             created_at: '2026-03-20T12:09:00.000Z',
+            player_id: null,
             updated_at: '2026-03-20T12:20:00.000Z',
           },
         ],
@@ -2847,6 +2851,7 @@ function makeStatsPick(id: string, submissionId: string, sport: string) {
     idempotency_key: null,
     metadata: { sport },
     created_at: '2026-03-20T11:00:00.000Z',
+    player_id: null,
     updated_at: '2026-03-20T12:00:00.000Z',
   };
 }
@@ -4311,6 +4316,7 @@ test('createSnapshotFromRows aging counts zero when no stale picks or outbox row
         idempotency_key: null,
         metadata: {},
         created_at: '2026-03-25T11:00:00.000Z', // 1h old, under 24h threshold
+        player_id: null,
         updated_at: '2026-03-25T11:00:00.000Z',
       },
     ],
@@ -4361,6 +4367,7 @@ test('createSnapshotFromRows aging detects stale validated picks older than 24h'
         idempotency_key: null,
         metadata: {},
         created_at: '2026-03-23T10:00:00.000Z', // ~50h old
+        player_id: null,
         updated_at: '2026-03-23T10:00:00.000Z',
       },
     ],
@@ -4414,6 +4421,7 @@ test('createSnapshotFromRows aging detects stale posted picks older than 7d', ()
         idempotency_key: null,
         metadata: {},
         created_at: '2026-03-10T12:00:00.000Z', // 15d old
+        player_id: null,
         updated_at: '2026-03-10T12:00:00.000Z',
       },
     ],
