@@ -53,9 +53,17 @@ export async function computeAndAttachCLV(
     return null;
   }
 
+  // Translate canonical pick.market (e.g. 'player_turnovers_ou') to the SGO
+  // provider market key (e.g. 'turnovers-all-game-ou') via the alias table.
+  // Falls back to pick.market as-is when no alias exists (handles picks already
+  // submitted with provider-native market keys).
+  const resolvedMarketKey =
+    (await repositories.providerOffers.resolveProviderMarketKey(pick.market, 'sgo')) ??
+    pick.market;
+
   const baseLineCriteria = {
     providerEventId: eventContext.providerEventId,
-    providerMarketKey: pick.market,
+    providerMarketKey: resolvedMarketKey,
     providerParticipantId: eventContext.participantExternalId,
     before: eventContext.eventStartTime,
   };

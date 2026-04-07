@@ -1284,6 +1284,11 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     }
     return updated;
   }
+
+  async resolveProviderMarketKey(_canonicalKey: string, _provider: string): Promise<string | null> {
+    // InMemory implementation has no alias table — alias resolution not supported in tests.
+    return null;
+  }
 }
 
 export class InMemoryParticipantRepository implements ParticipantRepository {
@@ -3903,6 +3908,21 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     }
 
     return totalUpdated;
+  }
+
+  async resolveProviderMarketKey(canonicalKey: string, provider: string): Promise<string | null> {
+    const { data, error } = await fromUntyped(this.client, 'provider_market_aliases')
+      .select('provider_market_key')
+      .eq('market_type_id', canonicalKey)
+      .eq('provider', provider)
+      .limit(1);
+
+    if (error) {
+      throw new Error(`Failed to resolve provider market key: ${error.message}`);
+    }
+
+    const rows = (data ?? []) as Array<{ provider_market_key: string }>;
+    return rows[0]?.provider_market_key ?? null;
   }
 }
 

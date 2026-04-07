@@ -529,6 +529,12 @@ export interface ProviderOfferRepository {
     snapshotAt: string,
     options?: { includeBookmakerKey?: boolean },
   ): Promise<number>;
+  /**
+   * Translates a canonical market key (e.g. pick.market = 'player_turnovers_ou') to
+   * the provider-native market key used in provider_offers (e.g. 'turnovers-all-game-ou').
+   * Returns null when no alias mapping exists for the given provider.
+   */
+  resolveProviderMarketKey(canonicalKey: string, provider: string): Promise<string | null>;
 }
 
 export interface ParticipantUpsertInput {

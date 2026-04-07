@@ -495,3 +495,98 @@ test('computeAndAttachCLV returns null when metadata.player has no matching part
 
   assert.equal(result, null, 'CLV should be null when no participant matches');
 });
+
+test('computeAndAttachCLV resolves canonical pick.market to provider market key via alias', async () => {
+  // Simulates the production case where pick.market = 'player_turnovers_ou' (canonical)
+  // but provider_offers stores 'turnovers-all-game-ou' (SGO format).
+  // resolveProviderMarketKey is stubbed to return the SGO key.
+  const repositories = createInMemoryRepositoryBundle();
+
+  // Stub alias resolution on the InMemory repo (which returns null by default)
+  const originalResolve = repositories.providerOffers.resolveProviderMarketKey.bind(repositories.providerOffers);
+  repositories.providerOffers.resolveProviderMarketKey = async (canonicalKey: string, provider: string) => {
+    if (canonicalKey === 'player_turnovers_ou' && provider === 'sgo') {
+      return 'turnovers-all-game-ou';
+    }
+    return originalResolve(canonicalKey, provider);
+  };
+
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'GARLAND_1_NBA',
+    displayName: 'Darius Garland',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-alias-1',
+    sportId: 'NBA',
+    eventName: 'Cavaliers vs. Raptors',
+    eventDate: '2026-01-10',
+    status: 'completed',
+    metadata: { starts_at: '2026-01-10T23:30:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-alias-1',
+      providerMarketKey: 'turnovers-all-game-ou', // SGO format
+      providerParticipantId: 'GARLAND_1_NBA',
+      sportKey: 'NBA',
+      line: 2.5,
+      overOdds: -120,
+      underOdds: 100,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-01-10T23:00:00.000Z',
+      idempotencyKey: 'turnovers-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-alias-1',
+      submission_id: 'sub-alias-1',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'player_turnovers_ou', // canonical format — must be resolved via alias
+      selection: 'Darius Garland Under',
+      line: 2.5,
+      odds: -112,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 80,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-01-10T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-01-10T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Cavaliers vs. Raptors' },
+      created_at: '2026-01-10T20:00:00.000Z',
+      updated_at: '2026-01-10T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'CLV result should be non-null when alias resolves the market key');
+  assert.equal(result.providerKey, 'sgo');
+  assert.equal(result.closingOdds, 100); // under side (pick is Under)
+});
