@@ -2,7 +2,7 @@
 title: Runtime Restart and Deploy Discipline
 status: active
 owner: operations
-last_updated: 2026-03-22
+last_updated: 2026-04-07
 ---
 
 # Runtime Restart and Deploy Discipline
@@ -103,6 +103,68 @@ For proof-quality runs, capture:
 - health/readiness confirmation
 - endpoint or UI response showing current runtime state
 - note of any restart or stale-process remediation performed
+
+## Migration Rollback Procedure
+
+Use this procedure when a migration must be reverted from the live Supabase project.
+
+**When to trigger:**
+- A migration applied to live introduces a regression discovered in the same session
+- PM or operator explicitly authorizes rollback
+- Never self-authorize — confirm with PM before executing
+
+**Step 1 — Identify the head migration**
+
+```bash
+SUPABASE_ACCESS_TOKEN=<token> npx supabase migration list --linked
+# or: pnpm migration:audit
+```
+
+Confirm which migration is being rolled back. Never roll back more than one migration without PM approval per migration.
+
+**Step 2 — Back up the current schema state**
+
+```bash
+# Dump current schema only (no data) for reference
+SUPABASE_ACCESS_TOKEN=<token> npx supabase db dump --schema-only -f schema-backup-$(date +%Y%m%d%H%M).sql
+```
+
+**Step 3 — Apply the reverse migration manually via Supabase SQL editor**
+
+There is no `supabase migration down` command in the hosted project. Roll back by:
+
+1. Opening the Supabase dashboard → SQL editor
+2. Manually running the inverse of the migration's DDL (e.g., `ALTER TABLE ... DROP COLUMN IF EXISTS` for an `ADD COLUMN` migration)
+3. Documenting the exact SQL executed and the timestamp
+
+**Step 4 — Mark the migration as unapplied in the tracking table**
+
+```sql
+-- Run in SQL editor after the reverse DDL is applied
+DELETE FROM supabase_migrations.schema_migrations WHERE name = '<migration_timestamp>';
+```
+
+**Step 5 — Regenerate types and verify**
+
+```bash
+pnpm supabase:types
+pnpm type-check
+pnpm test
+```
+
+Confirm the type file line count and test suite are clean after the rollback.
+
+**Step 6 — Record the incident**
+
+Add a note to `docs/05_operations/migration_ledger.md` documenting:
+- which migration was rolled back
+- why
+- what inverse SQL was applied
+- who authorized
+
+Do not delete the migration file from `supabase/migrations/`. Rename it with a `.rolled-back` suffix and add a comment at the top.
+
+---
 
 ## Future Hardening Recommendations
 
