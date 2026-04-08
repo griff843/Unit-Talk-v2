@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-08 — **CC-M5 batch closed (UTV2-445/446/447). Decision stub shells normalized, Intelligence nav unified, Intelligence shared patterns enforced.**
+UTV2-446 (Decision stub shells + error boundary, PR #196, commit `4eefd89`) Done. UTV2-447 (Intelligence workspace tab navigation unification, PR #195, commit `838b271`) Done. UTV2-445 (Intelligence shared UI patterns, PR #197, commit `e377ceb`) Done. All T3 bounded UI work. CI green on all 3. Browser/runtime verified. Linear board: no Ready issues remaining. UTV2-431/433/435 blocked (live data gates). Phase 7 deferred (PM approval required).
+
 2026-04-08 — **Green-state recovery sprint. Worker crash loop fixed (UTV2-441). Repo hygiene recovered (UTV2-442). Docs truth-synced (UTV2-443).**
 Worker was crashing on transient Supabase network errors (159 restarts since 2026-04-07). Fix deployed (PR #188): transient fetch/5xx errors no longer crash the process. Worker restarted clean (Restarts: 0, Verdict: UP). Repo working tree clean: 4 governed scripts committed, 10 scratch scripts deleted, .gitignore updated. Migration history drift repaired (012–015 applied via Dashboard, not recorded in schema_migrations — repaired via `supabase migration repair`). pg_cron nightly retention scheduled (UTV2-439, migration 016 live). 48/48 migrations local = remote, head `202604080016`. 188/188 tests pass. CC Unification Phase 2 complete (PRs #183–#186: nav shell, module UI, analytics sequence, LLM governance). Linear board: UTV2-415/419 promoted to Ready (spec-only, not blocked). UTV2-441/442/443/439/428/427/426/425 Done.
 
@@ -43,7 +46,7 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Milestone | **Green-state recovery sprint (2026-04-08).** Worker crash loop fixed. Repo hygiene clean. Docs truth-synced. Migrations 012–016 live (head `202604080016`). pg_cron retention scheduled. CC Unification Phase 2 complete. UTV2-415/419 Ready (spec). Phase 7 awaiting PM approval. |
 | Provider | **SGO Pro active (permanent, upgraded 2026-04-07).** Odds API suspended. Historical backfill complete: 329k provider_offers rows. Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
 | Worker | **UP** — transient network error fix deployed (PR #188, UTV2-441). Restarts: 0 (fresh after restart 2026-04-08). Supervisor active since restart. |
-| Roadmap | CC Unification Phase 2 Done (PRs #183–#186). Active: UTV2-415/419 (spec, Ready). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (Syndicate Lane, PM approval required). |
+| Roadmap | CC Unification Phase 2 Done (PRs #183–#186). UTV2-415/419 Done. UTV2-444 Done (PR #194). CC-M5 batch Done: UTV2-446 (PR #196), UTV2-447 (PR #195), UTV2-445 (PR #197). No Ready issues. Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (Syndicate Lane, PM approval required). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
