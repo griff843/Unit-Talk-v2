@@ -4,10 +4,39 @@ import {
   processNextDistributionWork,
   type DeliveryResult,
   type WorkerProcessResult,
+  type WorkerProcessIdleResult,
   type WorkerProcessTargetDisabledResult,
 } from './distribution-worker.js';
 import { DeliveryCircuitBreaker } from './circuit-breaker.js';
 import { readCircuitBreakerThreshold, readCircuitBreakerCooldownMs } from './runtime.js';
+
+// ---------------------------------------------------------------------------
+// Transient network error detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true for network-level errors that are safe to retry without
+ * side effects: fetch failures, Supabase/Cloudflare 5xx, rate limits.
+ * These should never crash the worker process — the supervisor restart
+ * loop adds no value and the stale claim reaper handles any orphaned rows.
+ */
+function isTransientNetworkError(error: unknown): boolean {
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes('fetch failed') ||
+    msg.includes('TypeError: fetch') ||
+    msg.includes('ECONNRESET') ||
+    msg.includes('ECONNREFUSED') ||
+    msg.includes('ETIMEDOUT') ||
+    msg.includes('ENOTFOUND') ||
+    msg.includes('502') ||
+    msg.includes('503') ||
+    msg.includes('504') ||
+    msg.includes('429') ||
+    msg.includes('Bad gateway') ||
+    msg.includes('Service Unavailable')
+  );
+}
 
 export type DeliveryAdapter = (outbox: OutboxRecord) => Promise<DeliveryResult>;
 
@@ -69,7 +98,23 @@ export async function runWorkerCycles(
       }
     }
 
-    const reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
+    // Transient network errors during stale reaping are non-fatal — log and continue
+    // with an empty reap list. The stale claim reaper will retry next cycle.
+    let reaped: OutboxRecord[] = [];
+    try {
+      reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
+    } catch (reapError: unknown) {
+      if (isTransientNetworkError(reapError)) {
+        console.log(JSON.stringify({
+          event: 'worker.stale-reap-skipped',
+          workerId: options.workerId,
+          cycle,
+          reason: reapError instanceof Error ? reapError.message : String(reapError),
+        }));
+      } else {
+        throw reapError;
+      }
+    }
     const results: WorkerProcessResult[] = [];
 
     for (const target of options.targets) {
@@ -90,17 +135,36 @@ export async function runWorkerCycles(
         continue;
       }
 
-      const result = await processNextDistributionWork(
-        options.repositories,
-        target,
-        options.workerId,
-        options.deliver,
-        {
-          ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
-          ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
-          targetRegistry: registry,
-        },
-      );
+      // Transient network errors during claim/delivery are non-fatal — log and treat
+      // as idle. If a claim was partially made, the stale claim reaper will release it.
+      let result: WorkerProcessResult;
+      try {
+        result = await processNextDistributionWork(
+          options.repositories,
+          target,
+          options.workerId,
+          options.deliver,
+          {
+            ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
+            ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
+            targetRegistry: registry,
+          },
+        );
+      } catch (deliveryError: unknown) {
+        if (isTransientNetworkError(deliveryError)) {
+          console.log(JSON.stringify({
+            event: 'worker.delivery-skipped-transient',
+            workerId: options.workerId,
+            target,
+            cycle,
+            reason: deliveryError instanceof Error ? deliveryError.message : String(deliveryError),
+          }));
+          const idleResult: WorkerProcessIdleResult = { status: 'idle', target, workerId: options.workerId };
+          results.push(idleResult);
+          continue;
+        }
+        throw deliveryError;
+      }
 
       if (result.status === 'failed') {
         const wasOpen = cb.openTargets().includes(target);
