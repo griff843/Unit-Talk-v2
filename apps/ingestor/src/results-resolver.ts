@@ -1,27 +1,10 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import type { SGOEventResult } from './results-fetcher.js';
 
-// @deprecated — stat-field accumulation approach replaced by odds.<oddId>.score grading.
-// This map will be removed once the score-based approach is proven stable.
-export const SGO_MARKET_KEY_TO_STAT_FIELDS: Record<string, string[]> = {
-  'points-all-game-ou': ['points'],
-  'assists-all-game-ou': ['assists'],
-  'rebounds-all-game-ou': ['rebounds'],
-  'steals-all-game-ou': ['steals'],
-  'blocks-all-game-ou': ['blocks'],
-  'turnovers-all-game-ou': ['turnovers'],
-  'pra-all-game-ou': ['points', 'rebounds', 'assists'],
-  'pts-rebs-all-game-ou': ['points', 'rebounds'],
-  'pts-asts-all-game-ou': ['points', 'assists'],
-  'rebs-asts-all-game-ou': ['rebounds', 'assists'],
-  'batting-hits-all-game-ou': ['batting_hits'],
-  'batting-home-runs-all-game-ou': ['batting_homeRuns'],
-  'batting-rbi-all-game-ou': ['batting_RBI'],
-  'batting-strikeouts-all-game-ou': ['batting_strikeouts'],
-  'batting-total-bases-all-game-ou': ['batting_totalBases'],
-  'pitching-strikeouts-all-game-ou': ['pitching_strikeouts'],
-  'pitching-innings-pitched-all-game-ou': ['pitching_inningsPitched'],
-};
+// SGO_MARKET_KEY_TO_STAT_FIELDS removed (UTV2-448).
+// The stat-field accumulation approach was deprecated — SGO support confirmed
+// that odds.<oddID>.score is the correct field for grading all market types.
+// Grading uses scoredMarket.score directly in resolveAndInsertResults below.
 
 /**
  * Maps SGO provider market keys to canonical market_type_ids for game-line markets
