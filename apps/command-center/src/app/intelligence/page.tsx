@@ -1,4 +1,4 @@
-import { Card } from '@/components/ui/Card';
+import { Card, EmptyState, MetricsCard } from '@/components/ui';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
 
@@ -167,7 +167,10 @@ export default async function IntelligencePage() {
     return (
       <div className="flex flex-col gap-6">
         <h1 className="text-lg font-bold text-gray-100">Intelligence</h1>
-        <p className="text-sm text-gray-500">Unable to load intelligence data.</p>
+        <EmptyState
+          message="Unable to load intelligence data."
+          detail="Check that operator-web is reachable and the /api/operator/intelligence endpoint is responding."
+        />
       </div>
     );
   }
@@ -292,32 +295,27 @@ export default async function IntelligencePage() {
       {/* Decision Quality */}
       <Card title="Decision Quality">
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-          <div className="rounded border border-gray-800 bg-gray-900/50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Approved Win Rate</p>
-            <p className={`mt-2 text-xl font-bold ${(data.decisionQuality.approvedWinRate ?? 0) >= 50 ? 'text-emerald-400' : 'text-red-400'}`}>
-              {data.decisionQuality.approvedWinRate != null ? `${data.decisionQuality.approvedWinRate.toFixed(1)}%` : '—'}
-            </p>
-          </div>
-          <div className="rounded border border-gray-800 bg-gray-900/50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Denied Would-Have-Won</p>
-            <p className={`mt-2 text-xl font-bold ${(data.decisionQuality.deniedWouldHaveWonRate ?? 0) < 50 ? 'text-emerald-400' : 'text-yellow-400'}`}>
-              {data.decisionQuality.deniedWouldHaveWonRate != null ? `${data.decisionQuality.deniedWouldHaveWonRate.toFixed(1)}%` : '—'}
-            </p>
-            <p className="mt-1 text-xs text-gray-500">Lower is better</p>
-          </div>
-          <div className="rounded border border-gray-800 bg-gray-900/50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Approved vs Denied ROI Delta</p>
-            <p className={`mt-2 text-xl font-bold ${data.decisionQuality.approvedVsDeniedRoiDelta > 0 ? 'text-emerald-400' : data.decisionQuality.approvedVsDeniedRoiDelta < 0 ? 'text-red-400' : 'text-gray-300'}`}>
-              {data.decisionQuality.approvedVsDeniedRoiDelta >= 0 ? '+' : ''}{data.decisionQuality.approvedVsDeniedRoiDelta.toFixed(1)}%
-            </p>
-            <p className="mt-1 text-xs text-gray-500">Positive = decisions adding value</p>
-          </div>
-          <div className="rounded border border-gray-800 bg-gray-900/50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wide text-gray-500">Holds Resolved</p>
-            <p className="mt-2 text-xl font-bold text-gray-200">
-              {data.decisionQuality.holdsResolvedCount} / {data.decisionQuality.holdsTotal}
-            </p>
-          </div>
+          <MetricsCard
+            label="Approved Win Rate"
+            value={data.decisionQuality.approvedWinRate != null ? `${data.decisionQuality.approvedWinRate.toFixed(1)}%` : '—'}
+            trend={data.decisionQuality.approvedWinRate != null ? ((data.decisionQuality.approvedWinRate >= 50) ? 'up' : 'down') : undefined}
+          />
+          <MetricsCard
+            label="Denied Would-Have-Won"
+            value={data.decisionQuality.deniedWouldHaveWonRate != null ? `${data.decisionQuality.deniedWouldHaveWonRate.toFixed(1)}%` : '—'}
+            trend={data.decisionQuality.deniedWouldHaveWonRate != null ? ((data.decisionQuality.deniedWouldHaveWonRate < 50) ? 'up' : 'down') : undefined}
+            trendLabel="Lower is better"
+          />
+          <MetricsCard
+            label="Approved vs Denied ROI Delta"
+            value={`${data.decisionQuality.approvedVsDeniedRoiDelta >= 0 ? '+' : ''}${data.decisionQuality.approvedVsDeniedRoiDelta.toFixed(1)}%`}
+            trend={data.decisionQuality.approvedVsDeniedRoiDelta > 0 ? 'up' : data.decisionQuality.approvedVsDeniedRoiDelta < 0 ? 'down' : 'flat'}
+            trendLabel="Positive = decisions adding value"
+          />
+          <MetricsCard
+            label="Holds Resolved"
+            value={`${data.decisionQuality.holdsResolvedCount} / ${data.decisionQuality.holdsTotal}`}
+          />
         </div>
       </Card>
 
