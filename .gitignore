@@ -23,6 +23,12 @@ scripts/BOT_MANAGEMENT.md
 .claude/settings.local.json
 .claude/worktrees/
 skills-lock.json
+# Test output and session artifacts (never commit)
+apps/smart-form/test-results/
+artifacts/
+# Session-specific diagnostic scripts (scratch, not governed)
+scripts/debug-*.ts
+scripts/live-data-lab-*.ts
 # MCP server config (contains API keys)
 .mcp.json
 # Supabase local branch tracking
