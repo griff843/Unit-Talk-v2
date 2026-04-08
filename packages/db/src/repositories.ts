@@ -497,6 +497,12 @@ export interface ClosingLineLookupCriteria {
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
   findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
+  /**
+   * Returns the earliest is_opening=true snapshot for the given market criteria.
+   * Used as a CLV fallback when no closing line exists (e.g. Odds API was down).
+   * Opening-line CLV is directionally valid but less precise than closing-line CLV.
+   */
+  findOpeningLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
   findLatestByMarketKey(
     marketKey: string,
     providerKey?: string,

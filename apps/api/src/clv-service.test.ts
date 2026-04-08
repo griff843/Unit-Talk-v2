@@ -590,3 +590,174 @@ test('computeAndAttachCLV resolves canonical pick.market to provider market key 
   assert.equal(result.providerKey, 'sgo');
   assert.equal(result.closingOdds, 100); // under side (pick is Under)
 });
+
+test('computeAndAttachCLV falls back to opening line when no closing line exists', async () => {
+  // Validates UTV2-449: opening line is used as CLV proxy when Odds API is unavailable
+  const repositories = createInMemoryRepositoryBundle();
+
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_OL_1',
+    displayName: 'Opening Line Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-opening-1',
+    sportId: 'NBA',
+    eventName: 'Bulls vs. Knicks',
+    eventDate: '2026-02-01',
+    status: 'completed',
+    metadata: { starts_at: '2026-02-01T23:00:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+
+  // Opening line ingested after game start — findClosingLine won't find it (after cutoff),
+  // but findOpeningLine will (no before filter on opening line lookup).
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-opening-1',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_OL_1',
+      sportKey: 'NBA',
+      line: 25.5,
+      overOdds: -115,
+      underOdds: -105,
+      devigMode: 'PAIRED',
+      isOpening: true,
+      isClosing: false,
+      snapshotAt: '2026-02-01T23:30:00.000Z', // after game start at 23:00 — findClosingLine misses it
+      idempotencyKey: 'opening-line-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-opening-1',
+      submission_id: 'sub-opening-1',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'points-all-game-ou',
+      selection: 'Opening Line Player Over 25.5',
+      line: 25.5,
+      odds: -110,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 75,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-02-01T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-02-01T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Bulls vs. Knicks' },
+      created_at: '2026-02-01T20:00:00.000Z',
+      updated_at: '2026-02-01T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result !== null, 'CLV should not be null when opening line is available as fallback');
+  assert.equal(result.isOpeningLineFallback, true, 'isOpeningLineFallback should be true');
+  assert.equal(result.providerKey, 'sgo');
+  assert.equal(result.closingOdds, -115); // over side
+});
+
+test('computeAndAttachCLV does not set isOpeningLineFallback when closing line is found', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_CL_1',
+    displayName: 'Closing Line Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-closing-1',
+    sportId: 'NBA',
+    eventName: 'Heat vs. Celtics',
+    eventDate: '2026-02-02',
+    status: 'completed',
+    metadata: { starts_at: '2026-02-02T23:00:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-closing-1',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_CL_1',
+      sportKey: 'NBA',
+      line: 22.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-02-02T22:30:00.000Z',
+      idempotencyKey: 'closing-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-closing-1',
+      submission_id: 'sub-closing-1',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'points-all-game-ou',
+      selection: 'Closing Line Player Over 22.5',
+      line: 22.5,
+      odds: -108,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 78,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-02-02T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-02-02T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Heat vs. Celtics' },
+      created_at: '2026-02-02T20:00:00.000Z',
+      updated_at: '2026-02-02T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result !== null, 'CLV should not be null when a snapshot is available');
+  assert.equal(result.isOpeningLineFallback, undefined, 'isOpeningLineFallback should not be set when closing line found');
+});

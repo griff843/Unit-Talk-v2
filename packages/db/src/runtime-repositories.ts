@@ -1224,6 +1224,27 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     );
   }
 
+  async findOpeningLine(
+    criteria: ClosingLineLookupCriteria,
+  ): Promise<ProviderOfferRecord | null> {
+    const providerParticipantId =
+      criteria.providerParticipantId === undefined ? null : criteria.providerParticipantId;
+
+    return (
+      Array.from(this.offers.values())
+        .filter(
+          (offer) =>
+            offer.provider_event_id === criteria.providerEventId &&
+            offer.provider_market_key === criteria.providerMarketKey &&
+            offer.is_opening === true &&
+            offer.provider_participant_id === providerParticipantId &&
+            (criteria.bookmakerKey === undefined ||
+              offer.bookmaker_key === criteria.bookmakerKey),
+        )
+        .sort((left, right) => left.snapshot_at.localeCompare(right.snapshot_at))[0] ?? null
+    );
+  }
+
   async findExistingCombinations(
     providerEventIds: string[],
     options?: { includeBookmakerKey?: boolean; beforeSnapshotAt?: string },
@@ -3805,6 +3826,42 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     if (error) {
       throw new Error(`Failed to find closing line: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async findOpeningLine(
+    criteria: ClosingLineLookupCriteria,
+  ): Promise<ProviderOfferRecord | null> {
+    let query = this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('provider_event_id', criteria.providerEventId)
+      .eq('provider_market_key', criteria.providerMarketKey)
+      .eq('is_opening', true);
+
+    if (criteria.providerParticipantId === undefined || criteria.providerParticipantId === null) {
+      query = query.is('provider_participant_id', null);
+    } else {
+      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+    }
+
+    if (criteria.bookmakerKey !== undefined) {
+      if (criteria.bookmakerKey === null) {
+        query = query.is('bookmaker_key', null);
+      } else {
+        query = query.eq('bookmaker_key', criteria.bookmakerKey);
+      }
+    }
+
+    const { data, error } = await query
+      .order('snapshot_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(`Failed to find opening line: ${error.message}`);
     }
 
     return data;

@@ -17,6 +17,8 @@ export interface CLVResult {
   clvPercent: number;
   beatsClosingLine: boolean;
   providerKey: string;
+  /** True when opening line was used as CLV proxy (no closing line available). */
+  isOpeningLineFallback?: boolean;
 }
 
 export interface ComputeAndAttachClvOptions {
@@ -77,6 +79,17 @@ export async function computeAndAttachCLV(
     closingLine = await repositories.providerOffers.findClosingLine(baseLineCriteria);
   }
 
+  // Fallback: use SGO opening line as CLV proxy when no closing line is available.
+  // This removes the hard dependency on Odds API Pinnacle data — picks still get a
+  // directionally-valid CLV even when the Odds API is down or hasn't ingested yet.
+  let isOpeningFallback = false;
+  if (!closingLine) {
+    closingLine = await repositories.providerOffers.findOpeningLine(baseLineCriteria);
+    if (closingLine) {
+      isOpeningFallback = true;
+    }
+  }
+
   if (!closingLine) {
     await logMarketMismatchIfNeeded(pick, eventContext, repositories.providerOffers, options.logger);
     return null;
@@ -108,6 +121,7 @@ export async function computeAndAttachCLV(
     clvPercent: roundTo(clvRaw * 100, 4),
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
+    ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
   };
 }
 
