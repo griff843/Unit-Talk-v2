@@ -21,7 +21,11 @@ import {
 } from './odds-api-fetcher.js';
 import { fetchSGOResults, type SGOEventResult, type SGOMarketScore, type SGOResolvedEvent } from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
-import { resolveAndInsertResults } from './results-resolver.js';
+import {
+  resolveAndInsertResults,
+  SGO_GAME_LINE_CANONICAL_ID,
+  SGO_MARKET_KEY_TO_CANONICAL_ID,
+} from './results-resolver.js';
 
 test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped market key and idempotency key', () => {
   const normalized = normalizeSGOPairedProp({
@@ -1731,6 +1735,48 @@ test('ingestLeague extracts scored markets from finalized event odds', async () 
   const pointsRow = results.find((r) => r.market_key === 'player_points_ou');
   assert.ok(pointsRow, 'grade result for player_points_ou should exist (canonical ID, not SGO key)');
   assert.equal(pointsRow.actual_value, 28);
+});
+
+test('results-resolver canonical alias maps include expanded player props and game lines', () => {
+  const expectedPlayerAliases = {
+    'batting-runs-all-game-ou': 'player_batting_runs_ou',
+    'goals-all-game-ou': 'player_goals_ou',
+    'assists-all-game-ou': 'player_assists_ou',
+    'shots-on-goal-all-game-ou': 'player_shots_on_goal_ou',
+    'points-all-game-ou': 'player_points_ou',
+    'passing-yards-all-game-ou': 'player_passing_yards_ou',
+    'passing-tds-all-game-ou': 'player_passing_tds_ou',
+    'rushing-yards-all-game-ou': 'player_rushing_yards_ou',
+    'receiving-yards-all-game-ou': 'player_receiving_yards_ou',
+    'receiving-targets-all-game-ou': 'player_receiving_targets_ou',
+    'receptions-all-game-ou': 'player_receptions_ou',
+  };
+
+  for (const [marketKey, canonicalId] of Object.entries(expectedPlayerAliases)) {
+    assert.equal(SGO_MARKET_KEY_TO_CANONICAL_ID[marketKey], canonicalId);
+  }
+
+  const expectedGameLineAliases = {
+    'nba-spread-all-game': 'game_spread_nba',
+    'nfl-spread-all-game': 'game_spread_nfl',
+    'mlb-spread-all-game': 'game_spread_mlb',
+    'nhl-spread-all-game': 'game_spread_nhl',
+    'ncaab-spread-all-game': 'game_spread_ncaab',
+    'ncaaf-spread-all-game': 'game_spread_ncaaf',
+    'nba-ml-all-game': 'game_ml_nba',
+    'nfl-ml-all-game': 'game_ml_nfl',
+    'mlb-ml-all-game': 'game_ml_mlb',
+    'nhl-ml-all-game': 'game_ml_nhl',
+    'ncaab-ml-all-game': 'game_ml_ncaab',
+    'ncaaf-ml-all-game': 'game_ml_ncaaf',
+    'nfl-total-all-game': 'game_total_nfl',
+    'mlb-total-all-game': 'game_total_mlb',
+    'nhl-total-all-game': 'game_total_nhl',
+  };
+
+  for (const [marketKey, canonicalId] of Object.entries(expectedGameLineAliases)) {
+    assert.equal(SGO_GAME_LINE_CANONICAL_ID[marketKey], canonicalId);
+  }
 });
 
 function createResolvedEvent(
