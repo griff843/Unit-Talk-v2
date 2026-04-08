@@ -1013,3 +1013,56 @@ test('runGradingPass skips game_total_ou pick when no game result exists', async
   assert.equal(detail.outcome, 'skipped');
   assert.equal(detail.reason, 'game_result_not_found');
 });
+
+// UTV2-448: score-based grading correctness — push and loss cases
+test('runGradingPass grades a game_total_ou over pick as push when actual equals line', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    selection: 'Over 224.5',
+    line: 224.5,
+  });
+
+  const event = await attachGameLineEventContext(repositories, eventName);
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 224.5,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'push');
+});
+
+test('runGradingPass grades a game_total_ou over pick as loss when actual < line', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    selection: 'Over 224.5',
+    line: 224.5,
+  });
+
+  const event = await attachGameLineEventContext(repositories, eventName);
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 198,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'loss');
+});

@@ -348,7 +348,7 @@ Canonical keys must never change once assigned. If a team rebrands (e.g., Washin
 | Players | SGO entity resolver | Odds API descriptions | Operator for corrections |
 | Sportsbooks | Static + Odds API bookmaker list | — | Operator for new books |
 | Market types | Static seed + provider alias mapping | — | — |
-| Stat types | Static seed from current `MARKET_KEY_MAP` + SGO `SGO_MARKET_KEY_TO_STAT_FIELDS` | — | — |
+| Stat types | Static seed from current `MARKET_KEY_MAP` + SGO `SGO_MARKET_KEY_TO_CANONICAL_ID` | — | — |
 
 ### Mapping rules
 
@@ -470,7 +470,7 @@ Not all markets are created equal. Some have full intelligence backing; others s
 - Market families (6) + market types (all from current `MARKET_KEY_MAP` + moneyline/spread/total)
 - Stat types (all from current reference data, across all sports)
 - Combo stats (PRA, P+A, P+R, R+A for NBA; total bases for MLB)
-- Provider market aliases (SGO keys from `SGO_MARKET_KEY_TO_STAT_FIELDS`; Odds API keys)
+- Provider market aliases (SGO keys from `SGO_MARKET_KEY_TO_CANONICAL_ID`; Odds API keys)
 
 **Risk:** Low — additive only, no existing tables modified.
 
