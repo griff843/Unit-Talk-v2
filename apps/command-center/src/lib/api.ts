@@ -1,4 +1,5 @@
 import type {
+  BoardStateData,
   DashboardData,
   DashboardRuntimeData,
   DeliveryStatus,
@@ -75,6 +76,19 @@ export async function fetchProviderHealth(): Promise<ProviderHealth> {
   const json = (await res.json()) as { ok: boolean; data: ProviderHealth };
   if (!json.ok) {
     throw new Error('Provider health fetch failed');
+  }
+  return json.data;
+}
+
+export async function fetchBoardState(target = 'best-bets'): Promise<BoardStateData> {
+  const res = await fetch(
+    `${OPERATOR_WEB_BASE}/api/operator/board-state?target=${encodeURIComponent(target)}`,
+    { cache: 'no-store' },
+  );
+  if (!res.ok) throw new Error(`Board state fetch failed: ${res.status}`);
+  const json = (await res.json()) as { ok: boolean; data: BoardStateData };
+  if (!json.ok) {
+    throw new Error('Board state fetch failed');
   }
   return json.data;
 }

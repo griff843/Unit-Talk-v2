@@ -48,6 +48,7 @@ import { handleIntelligenceRequest } from './routes/intelligence.js';
 import { handleIntelligenceCoverageRequest } from './routes/intelligence-coverage.js';
 import { handleProviderHealthRequest } from './routes/provider-health.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
+import { handleBoardStateRequest } from './routes/board-state.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
@@ -492,6 +493,10 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/held-queue') {
     return handleHeldQueueRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/board-state') {
+    return handleBoardStateRequest(request, response, deps);
   }
 
   const pickDetailMatch = /^\/api\/operator\/picks\/([^/]+)$/.exec(url.pathname);

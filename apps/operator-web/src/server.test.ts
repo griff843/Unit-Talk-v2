@@ -5130,6 +5130,40 @@ class MockSupabaseQuery {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Board-state overlay tests (UTV2-444)
+// ---------------------------------------------------------------------------
+
+test('GET /api/operator/board-state returns empty board state when no DB client', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/board-state');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      slate: { current: number };
+      scoreBreakdowns: unknown[];
+      conflictCards: unknown[];
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.slate.current, 0);
+  assert.deepEqual(body.data.scoreBreakdowns, []);
+  assert.deepEqual(body.data.conflictCards, []);
+});
+
 function compareSortable(left: unknown, right: unknown) {
   if (typeof left === 'number' && typeof right === 'number') {
     return left - right;
