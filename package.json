@@ -4,6 +4,10 @@
   "private": true,
   "packageManager": "pnpm@10.29.3",
   "description": "Unit Talk 2.0 greenfield monorepo",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=10.0.0"
+  },
   "scripts": {
     "backfill:sgo-history": "tsx scripts/backfill-sgo-history.ts",
     "build": "pnpm exec tsc -b tsconfig.json",

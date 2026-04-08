@@ -241,6 +241,8 @@ When executing parallel Codex-lane issues:
 
 ## Architecture
 
+> Full technical reference (confirmed against source files): `docs/CODEBASE_GUIDE.md`
+
 ### Package dependency graph
 
 ```
