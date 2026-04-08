@@ -25,7 +25,7 @@
 - Worker owns asynchronous execution and lifecycle processing.
 - Smart Form owns intake UX and passes into a backend-owned submission path.
 - Discord Bot owns distribution surface interaction and receipt ingestion.
-- Operator Web is read-first until a future write contract is ratified.
+- Command Center (`apps/operator-web` backend) is read-first until a future write contract is ratified.
 
 ## Truth Handling
 

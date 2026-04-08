@@ -29,7 +29,7 @@ Before this milestone, the system could complete submission, posting, and settle
 - Wired `computeSettlementSummary()` from `@unit-talk/domain` into snapshot generation
 - Added `recap: SettlementSummary` to `OperatorSnapshot`
 - Added `GET /api/operator/recap` for live settlement summary JSON
-- Added a `Settlement Recap` section to the operator dashboard showing:
+- Added a `Settlement Recap` section to Command Center showing:
   - hit rate %
   - flat-bet ROI %
   - result distribution
@@ -50,7 +50,7 @@ This milestone resolves the recap-stage blocker the correct way:
 
 - a live settlement summary is computed from runtime settlement data
 - the summary is exposed through an operator API surface
-- the operator dashboard renders the recap output
+- Command Center renders the recap output
 - tests cover domain, transport, and render layers
 - repository verification passes cleanly
 
