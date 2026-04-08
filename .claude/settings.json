@@ -9,6 +9,15 @@
             "command": "bash .claude/hooks/artifact-drift-check.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/linear-sync-reminder.sh"
+          }
+        ]
       }
     ]
   }
