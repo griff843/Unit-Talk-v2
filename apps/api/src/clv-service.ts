@@ -21,8 +21,22 @@ export interface CLVResult {
   isOpeningLineFallback?: boolean;
 }
 
+/**
+ * Pre-resolved event context for use in the graded-settlement path.
+ * Passing this bypasses the internal event resolution in computeAndAttachCLV,
+ * ensuring CLV uses the same event that grading resolved rather than re-resolving
+ * by proximity (which can select a different, wrong event).
+ */
+export interface CLVPreResolvedContext {
+  providerEventId: string;
+  eventStartTime: string;
+  participantExternalId: string | null;
+}
+
 export interface ComputeAndAttachClvOptions {
   logger?: Pick<Console, 'warn'>;
+  /** Skip internal event/participant resolution — use this context directly. */
+  preResolvedContext?: CLVPreResolvedContext;
 }
 
 interface PickEventContext {
@@ -50,7 +64,8 @@ export async function computeAndAttachCLV(
     return null;
   }
 
-  const eventContext = await resolvePickEventContext(pick, repositories);
+  const eventContext: PickEventContext | null = options.preResolvedContext
+    ?? await resolvePickEventContext(pick, repositories);
   if (!eventContext) {
     return null;
   }
