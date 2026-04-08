@@ -29,7 +29,7 @@ import path from 'node:path';
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 type LaneStatus = 'active' | 'review' | 'merged' | 'abandoned';
-type LaneOwner = 'claude' | 'codex' | 'manual';
+type LaneOwner = 'claude' | 'codex' | 'codex-cli' | 'manual';
 
 interface LaneEntry {
   id: string;
@@ -41,6 +41,7 @@ interface LaneEntry {
   createdAt: string;
   snapshotAt: string | null;
   pr: number | null;
+  allowedFiles?: string[];
 }
 
 interface LaneRegistry {
@@ -257,16 +258,48 @@ function cmdSpawn(flags: Record<string, string>, bools: Set<string>): void {
   const base = flags.base ?? 'main';
   const useWorktree = bools.has('worktree');
 
-  // Enforce Codex capacity
+  // Enforce Codex cloud capacity (max 2)
   if (owner === 'codex') {
     const activeCodex = registry.lanes.filter(
       (l) => l.owner === 'codex' && l.status === 'active',
     ).length;
     if (activeCodex >= 2) {
-      console.error(`Error: Codex lane capacity reached (${activeCodex}/2 active).`);
+      console.error(`Error: Codex cloud lane capacity reached (${activeCodex}/2 active).`);
       console.error('  Run pnpm lane:list to review.');
       console.error('  Run pnpm lane:cleanup to close finished lanes first.');
       process.exit(1);
+    }
+  }
+
+  // Enforce Codex CLI capacity (max 3)
+  if (owner === 'codex-cli') {
+    const activeCodexCli = registry.lanes.filter(
+      (l) => l.owner === 'codex-cli' && l.status === 'active',
+    ).length;
+    if (activeCodexCli >= 3) {
+      console.error(`Error: Codex CLI lane capacity reached (${activeCodexCli}/3 active).`);
+      console.error('  Run pnpm codex:status to review active Codex CLI lanes.');
+      console.error('  Wait for a lane to return before dispatching another.');
+      process.exit(1);
+    }
+  }
+
+  // File-overlap guard: reject if any active lane owns overlapping files
+  const candidateFiles: string[] = flags.allowed
+    ? flags.allowed.split(',').map((f) => f.trim()).filter(Boolean)
+    : [];
+  if (candidateFiles.length > 0) {
+    for (const activeLane of registry.lanes.filter((l) => l.status === 'active' && l.id !== issueId)) {
+      if (!activeLane.allowedFiles || activeLane.allowedFiles.length === 0) continue;
+      const overlap = candidateFiles.filter((f) =>
+        activeLane.allowedFiles!.some((lf) => f === lf || f.startsWith(lf) || lf.startsWith(f)),
+      );
+      if (overlap.length > 0) {
+        console.error(`Error: File overlap conflict with active lane ${activeLane.id}.`);
+        console.error(`  Overlapping files: ${overlap.join(', ')}`);
+        console.error('  Resolve the active lane before spawning this one.');
+        process.exit(1);
+      }
     }
   }
 
@@ -325,6 +358,7 @@ function cmdSpawn(flags: Record<string, string>, bools: Set<string>): void {
     createdAt: now,
     snapshotAt: null,
     pr: null,
+    allowedFiles: candidateFiles.length > 0 ? candidateFiles : undefined,
   };
 
   // Upsert (replace if a non-active entry existed for this ID)
@@ -361,12 +395,25 @@ function cmdSpawn(flags: Record<string, string>, bools: Set<string>): void {
     const activeCodex =
       registry.lanes.filter((l) => l.owner === 'codex' && l.status === 'active').length;
     console.log('');
-    console.log(`Codex dispatch info:`);
-    console.log(`  Codex lanes: ${activeCodex}/2`);
+    console.log(`Codex cloud dispatch info:`);
+    console.log(`  Codex cloud lanes: ${activeCodex}/2`);
     if (worktreePath) {
       console.log(`  Worktree:    ${worktreePath}`);
     }
     console.log(`  Branch:      ${branch}`);
+  }
+
+  if (owner === 'codex-cli') {
+    const activeCodexCli =
+      registry.lanes.filter((l) => l.owner === 'codex-cli' && l.status === 'active').length;
+    console.log('');
+    console.log(`Codex CLI dispatch info:`);
+    console.log(`  Codex CLI lanes: ${activeCodexCli}/3`);
+    if (worktreePath) {
+      console.log(`  Worktree:    ${worktreePath}`);
+    }
+    console.log(`  Branch:      ${branch}`);
+    console.log(`  Generate packet: pnpm codex:dispatch -- --issue ${issueId}`);
   }
 }
 
@@ -446,7 +493,9 @@ function cmdList(bools: Set<string>): void {
   console.log(line);
 
   const codexCount = active.filter((l) => l.owner === 'codex').length;
-  console.log(`Codex capacity: ${codexCount}/2`);
+  const codexCliCount = active.filter((l) => l.owner === 'codex-cli').length;
+  console.log(`Codex cloud capacity:  ${codexCount}/2`);
+  console.log(`Codex CLI capacity:    ${codexCliCount}/3`);
 
   // Stale snapshot warnings
   const stale = active.filter((l) => {
@@ -895,7 +944,7 @@ try {
       );
       console.error('');
       console.error('Usage:');
-      console.error('  pnpm lane:spawn    -- --issue UTV2-XXX [--title "text"] [--owner claude|codex] [--worktree] [--base main]');
+      console.error('  pnpm lane:spawn    -- --issue UTV2-XXX [--title "text"] [--owner claude|codex|codex-cli] [--worktree] [--base main] [--allowed "file1,file2"]');
       console.error('  pnpm lane:list');
       console.error('  pnpm lane:snapshot -- --issue UTV2-XXX [--next "action"] [--obj "objective"]');
       console.error('  pnpm lane:resume   -- --issue UTV2-XXX');

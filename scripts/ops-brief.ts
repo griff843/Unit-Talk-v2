@@ -1,5 +1,19 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
+
+// ─── Repo Root ────────────────────────────────────────────────────────────────
+
+function findRepoRoot(): string {
+  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
+  return result.status === 0 ? result.stdout.trim() : process.cwd();
+}
+
+const ROOT = findRepoRoot();
 
 type SectionResult = {
   name: string;
@@ -38,6 +52,7 @@ async function main(): Promise<void> {
 
   const sections: SectionResult[] = [
     buildOverviewSection(repo, issueId, pickIds),
+    buildCodexLanesSection(),
     buildLinearSection(issueId),
     buildGitHubSection(),
     buildPipelineSection(),
@@ -84,6 +99,72 @@ function buildOverviewSection(
   return {
     name: 'Overview',
     ok: true,
+    lines,
+  };
+}
+
+function buildCodexLanesSection(): SectionResult {
+  const lanesFile = path.join(ROOT, '.claude', 'lanes.json');
+  if (!fs.existsSync(lanesFile)) {
+    return {
+      name: 'Codex Lanes',
+      ok: true,
+      lines: ['no lane registry found (.claude/lanes.json missing)'],
+    };
+  }
+
+  let registry: { version: number; lanes: Array<{
+    id: string; title: string; branch: string; status: string;
+    owner: string; createdAt: string; pr: number | null;
+  }> };
+
+  try {
+    registry = JSON.parse(fs.readFileSync(lanesFile, 'utf8'));
+  } catch {
+    return { name: 'Codex Lanes', ok: false, lines: ['lanes.json is malformed'] };
+  }
+
+  const codexLanes = registry.lanes.filter(
+    (l) => l.owner === 'codex-cli' && l.status !== 'merged' && l.status !== 'abandoned',
+  );
+  const allActive = registry.lanes.filter((l) => l.status === 'active');
+  const claudeActive = allActive.filter((l) => l.owner === 'claude' || l.owner === 'manual');
+  const codexCliActive = allActive.filter((l) => l.owner === 'codex-cli');
+
+  const lines: string[] = [
+    `claude_lanes=${claudeActive.length}/3  codex_cli_lanes=${codexCliActive.length}/3`,
+  ];
+
+  const FOUR_HOURS = 4 * 60 * 60 * 1000;
+  const stale = codexCliActive.filter(
+    (l) => Date.now() - new Date(l.createdAt).getTime() > FOUR_HOURS,
+  );
+
+  if (codexLanes.length === 0) {
+    lines.push('no active Codex CLI lanes');
+  } else {
+    for (const lane of codexLanes) {
+      const ageMs = Date.now() - new Date(lane.createdAt).getTime();
+      const ageMin = Math.floor(ageMs / 60_000);
+      const age = ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`;
+      const pr = lane.pr ? ` pr=#${lane.pr}` : '';
+      const staleFlag = ageMs > FOUR_HOURS ? ' STALE' : '';
+      lines.push(`${lane.id} | ${lane.status}${staleFlag} | age=${age}${pr}`);
+    }
+  }
+
+  if (stale.length > 0) {
+    lines.push(`stale_lanes=${stale.map((l) => l.id).join(',')}`);
+  }
+
+  const inReview = registry.lanes.filter((l) => l.owner === 'codex-cli' && l.status === 'review');
+  if (inReview.length > 0) {
+    lines.push(`pending_review=${inReview.map((l) => l.id).join(',')}`);
+  }
+
+  return {
+    name: 'Codex Lanes',
+    ok: stale.length === 0,
     lines,
   };
 }

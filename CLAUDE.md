@@ -38,13 +38,17 @@ Claude Code is the execution orchestrator for Unit Talk V2. The job is to work t
 
 0. Run `pnpm ops:brief`
 0a. Run `pnpm worker:status` — confirm worker is UP before proceeding
+0b. Run `pnpm codex:status` — see what Codex CLI lanes are active or returned (receive any returned work first)
 1. Read Linear issues in Ready, In Progress, and In Review states
 2. Reconcile Linear state against repo truth on main (mark already-merged issues Done, detect stale states)
-3. Read `docs/06_status/PROGRAM_STATUS.md` for current milestone context
-4. Read `docs/05_operations/docs_authority_map.md` for authority tiers
+3. Run `pnpm codex:classify` — auto-classify Ready issues into codex-safe vs claude-only
+4. Read `docs/06_status/PROGRAM_STATUS.md` for current milestone context
+5. Read `docs/05_operations/docs_authority_map.md` for authority tiers
 
 CLI-first helpers for these checks:
-- `pnpm ops:brief` ← default one-command snapshot
+- `pnpm ops:brief` ← default one-command snapshot (includes Codex Lanes section)
+- `pnpm codex:status` ← Codex CLI lane health
+- `pnpm codex:classify` ← auto-classify Ready issues into dispatch queue
 - `pnpm linear:work`
 - `pnpm queue:status`
 - `pnpm github:current`
@@ -111,9 +115,26 @@ CLI-first preference:
 
 ### Concurrency
 
-- Claude may execute one complex lane directly
-- Codex may run at most 2 parallel lanes at a time
-- Do not exceed 2 Codex lanes unless all active tasks are fully isolated by app and file scope
+**Claude Code (in this terminal):**
+- Max 3 parallel Claude agent lanes (worktree isolated)
+- Claude Code is the only merge authority — it reviews and merges all PRs
+
+**Codex CLI (separate terminal):**
+- Max 3 parallel Codex CLI lanes when file scope is fully isolated
+- Codex CLI creates PRs — it never merges directly
+- All Codex returns must pass `pnpm codex:receive` gate before merge
+
+**Total max simultaneous lanes: 6 (3 Claude + 3 Codex CLI)**
+
+**Dispatch flow:**
+1. `pnpm codex:classify` — auto-classify Ready issues
+2. `pnpm codex:dispatch -- --issue UTV2-XXX` — generate packet + register lane
+3. Paste packet into Codex CLI terminal
+4. When Codex returns: `pnpm codex:receive -- --issue UTV2-XXX --branch <b> --pr <url>`
+5. Review diff, then merge via Claude Code only
+
+**Do not exceed 3 Codex CLI lanes unless all active tasks are fully isolated by app and file scope.**
+**Codex cloud (legacy): max 2 parallel lanes.**
 
 ### Merge Policy
 
@@ -213,11 +234,14 @@ This repo uses explicit lane separation.
 - Linear / Notion sync
 - orchestration of Codex lanes
 
-**Codex lane** — default owner for:
+**Codex CLI lane** (`owner: 'codex-cli'`) — default owner for:
 - isolated runtime implementation
 - isolated tests
 - isolated endpoint implementation
 - refactors with explicit file scope
+- T3 bounded UI/docs work
+
+**Codex cloud lane** (`owner: 'codex'`) — legacy, max 2 parallel
 
 **Never do without explicit approval:**
 - redefine architecture boundaries
@@ -231,13 +255,20 @@ If asked to verify, do not change runtime code.
 
 ## Batch Execution Pattern
 
-When executing parallel Codex-lane issues:
-
-- Launch agents with `isolation: worktree` — each agent gets a clean isolated copy
+### Claude agents (in Claude Code)
+- Launch with `isolation: worktree` — each agent gets a clean isolated copy
 - One agent per issue, one branch per issue, one PR per issue — no stacking
-- Max 2 parallel Codex lanes (increase only when file scope is fully isolated)
-- **Merge on green without ceremony delay.** Do not hold PRs waiting for a full batch
-- Serial chains (issues with dependencies): launch the next agent on merge notification, not in advance
+- Max 3 parallel Claude lanes
+- **Merge on green without ceremony delay**
+- Serial chains: launch the next agent on merge notification, not in advance
+
+### Codex CLI lanes (separate terminal)
+- Use `pnpm codex:dispatch -- --issue UTV2-XXX` to generate the task packet
+- One Codex CLI session per issue — paste the packet, let it run
+- Max 3 parallel Codex CLI lanes (only when file scope is 100% isolated)
+- When Codex returns: `pnpm codex:receive -- --issue UTV2-XXX --branch <b> --pr <url>`
+- `codex:receive` runs `pnpm type-check && pnpm test` — PASS required before merge
+- **Claude Code is the ONLY merge authority — Codex CLI never merges directly**
 
 ## Architecture
 

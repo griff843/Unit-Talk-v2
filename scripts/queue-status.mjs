@@ -4,7 +4,7 @@ const queuePath = process.argv[2] ? process.argv[2] : defaultQueuePath;
 const markdown = readText(queuePath);
 const issues = parseQueue(markdown);
 const statuses = ['READY', 'IN_PROGRESS', 'IN_REVIEW', 'BLOCKED'];
-const laneOrder = ['lane:codex', 'lane:claude', 'lane:augment'];
+const laneOrder = ['lane:codex', 'lane:claude', 'lane:codex-cli'];
 
 for (const status of statuses) {
   console.log(status);
