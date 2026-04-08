@@ -28,7 +28,7 @@ import type {
 } from '@unit-talk/db';
 import { ensurePickLifecycleState, transitionPickLifecycle } from './lifecycle-service.js';
 import { ApiError } from './errors.js';
-import { computeAndAttachCLV } from './clv-service.js';
+import { computeAndAttachCLV, type CLVPreResolvedContext } from './clv-service.js';
 
 export interface RecordSettlementResult {
   pickRecord: PickRecord;
@@ -129,7 +129,17 @@ export async function recordGradedSettlement(
     );
   }
 
-  const clv = await computeAndAttachCLV(pick, repositories);
+  // Resolve CLV context from the grading event directly so CLV uses the same event
+  // that grading resolved — not a re-resolved event that could pick a different game
+  // due to proximity-only matching (the root cause of null CLV on auto-graded picks).
+  const clvContext = await buildCLVContextFromGradingEvent(
+    gradingContext.eventId,
+    pick,
+    repositories,
+  );
+  const clv = await computeAndAttachCLV(pick, repositories, {
+    ...(clvContext ? { preResolvedContext: clvContext } : {}),
+  });
   const payload: Record<string, unknown> = {
     gradingContext,
     correction: false,
@@ -617,5 +627,65 @@ function isDuplicateSettlementError(err: unknown): boolean {
   const record = err as Record<string, unknown>;
   // Supabase/pg errors surface the code as `.code`
   return record['code'] === '23505';
+}
+
+/**
+ * Builds a CLVPreResolvedContext from the event grading already identified.
+ * This ensures CLV uses the same event as grading rather than re-resolving by
+ * proximity — which can select a different, unrelated future event.
+ *
+ * Returns null if the event or participant cannot be resolved (CLV will return null).
+ */
+async function buildCLVContextFromGradingEvent(
+  eventId: string,
+  pick: PickRecord,
+  repositories: {
+    events: EventRepository;
+    participants: ParticipantRepository;
+  },
+): Promise<CLVPreResolvedContext | null> {
+  const event = await repositories.events.findById(eventId);
+  if (!event?.external_id) {
+    return null;
+  }
+
+  const eventMeta = asRecord(event.metadata);
+  const startsAt = eventMeta?.['starts_at'];
+  const eventStartTime =
+    typeof startsAt === 'string' && startsAt.trim().length > 0
+      ? startsAt
+      : `${event.event_date}T23:59:59Z`;
+
+  // For game-line markets there is no participant — CLV lookup uses null participant.
+  if (!pick.participant_id && !asRecord(pick.metadata)?.['player']) {
+    return {
+      providerEventId: event.external_id,
+      eventStartTime,
+      participantExternalId: null,
+    };
+  }
+
+  // For player-prop markets, resolve the participant's external_id for provider_offers lookup.
+  let participantExternalId: string | null = null;
+  if (pick.participant_id) {
+    const participant = await repositories.participants.findById(pick.participant_id);
+    participantExternalId = participant?.external_id ?? null;
+  } else {
+    const metadata = asRecord(pick.metadata);
+    const playerName = typeof metadata?.['player'] === 'string' ? metadata['player'].trim() : '';
+    if (playerName) {
+      const sport = typeof metadata?.['sport'] === 'string' ? metadata['sport'].trim() : undefined;
+      const candidates = await repositories.participants.listByType('player', sport);
+      const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const matches = candidates.filter(c => norm(c.display_name) === norm(playerName));
+      participantExternalId = matches.length === 1 ? (matches[0]?.external_id ?? null) : null;
+    }
+  }
+
+  return {
+    providerEventId: event.external_id,
+    eventStartTime,
+    participantExternalId,
+  };
 }
 

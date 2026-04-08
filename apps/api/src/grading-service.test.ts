@@ -766,6 +766,72 @@ test('recordGradedSettlement omits top-level CLV keys when no closing line exist
   assert.equal('beatsClosingLine' in payload, false);
 });
 
+test('recordGradedSettlement produces non-null CLV when a future sibling event is closer by date (UTV2-453 regression)', async () => {
+  // Reproduces the production bug: pick created 2026-04-04, graded against the April 3 event
+  // (completed), but CLV was returning null because the April 6 event (scheduled, closer by 30h)
+  // was selected by proximity. The fix: CLV now uses gradingContext.eventId directly.
+  const { repositories, pickId } = await createPostedPickFixture({ odds: -112 });
+
+  // The event that grading resolved to (completed April 3 game)
+  const { participant, event: gradedEvent } = await attachPlayerEventContext(repositories, pickId, {
+    participantExternalId: 'PLAYER_453_A',
+    participantName: 'Fixture Player 453',
+    eventExternalId: 'evt-453-apr3',
+    eventName: 'Team A vs Team B — Apr 3',
+    eventDate: '2026-04-03',
+    eventStatus: 'completed',
+    startsAt: '2026-04-03T02:30:00.000Z',
+  });
+
+  // A FUTURE sibling event that is closer in calendar time to the pick creation date.
+  // Without the fix, CLV would pick this event and find no offers → return null.
+  const futureEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-453-apr6',
+    sportId: 'NBA',
+    eventName: 'Team A vs Team C — Apr 6',
+    eventDate: '2026-04-06',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-06T01:00:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: futureEvent.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+
+  const gameResult = await seedGameResult(repositories, {
+    eventId: gradedEvent.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  // Closing line exists only for the April 3 event — not the April 6 event.
+  await seedClosingLine(repositories, {
+    providerEventId: 'evt-453-apr3',
+    providerParticipantId: 'PLAYER_453_A',
+    marketKey: 'points-all-game-ou',
+    snapshotAt: '2026-04-03T02:20:00.000Z',
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gradedEvent.id,     // grading resolved this — CLV must use the same
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  const clv = payload.clv as Record<string, unknown> | null;
+  assert.ok(clv !== null, 'CLV must not be null when a closing line exists for the graded event');
+  assert.equal(clv?.providerKey, 'sgo');
+});
+
 test('runGradingPass writes settlement.graded audit rows with gradingContext payload', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
   const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
