@@ -2,7 +2,7 @@ import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import type { SGOEventResult } from './results-fetcher.js';
 
 // SGO_MARKET_KEY_TO_STAT_FIELDS removed (UTV2-448).
-// The stat-field accumulation approach was deprecated — SGO support confirmed
+// The stat-field accumulation approach was deprecated - SGO support confirmed
 // that odds.<oddID>.score is the correct field for grading all market types.
 // Grading uses scoredMarket.score directly in resolveAndInsertResults below.
 
@@ -12,17 +12,28 @@ import type { SGOEventResult } from './results-fetcher.js';
  *
  * These must be distinct from player-prop canonical IDs even when the baseMarketKey
  * is the same (e.g. both a player points O/U and a game total normalize to
- * 'points-all-game-ou' — the game-line version maps to 'game_total_ou').
+ * 'points-all-game-ou' - the game-line version maps to 'game_total_ou').
  *
  * Related issue: UTV2-385 (game-line grading schema)
  */
 export const SGO_GAME_LINE_CANONICAL_ID: Record<string, string> = {
-  // Game totals — score = total combined points; grade with O/U logic
   'points-all-game-ou': 'game_total_ou',
-  // Moneyline and spread — score format TBD (see PROVIDER_KNOWLEDGE_BASE.md §4)
-  // Stored with raw SGO key until score format is confirmed for grading
-  // 'points-all-game-ml': 'game_ml',
-  // 'points-all-game-sp': 'game_spread',
+  // TODO(UTV2-450): verify exact SGO key format for game-line aliases against live payloads.
+  'nba-spread-all-game': 'game_spread_nba',
+  'nfl-spread-all-game': 'game_spread_nfl',
+  'mlb-spread-all-game': 'game_spread_mlb',
+  'nhl-spread-all-game': 'game_spread_nhl',
+  'ncaab-spread-all-game': 'game_spread_ncaab',
+  'ncaaf-spread-all-game': 'game_spread_ncaaf',
+  'nba-ml-all-game': 'game_ml_nba',
+  'nfl-ml-all-game': 'game_ml_nfl',
+  'mlb-ml-all-game': 'game_ml_mlb',
+  'nhl-ml-all-game': 'game_ml_nhl',
+  'ncaab-ml-all-game': 'game_ml_ncaab',
+  'ncaaf-ml-all-game': 'game_ml_ncaaf',
+  'nfl-total-all-game': 'game_total_nfl',
+  'mlb-total-all-game': 'game_total_mlb',
+  'nhl-total-all-game': 'game_total_nhl',
 };
 
 /**
@@ -55,9 +66,20 @@ export const SGO_MARKET_KEY_TO_CANONICAL_ID: Record<string, string> = {
   'batting-walks-all-game-ou': 'player_batting_walks_ou',
   'batting-total-bases-all-game-ou': 'player_batting_total_bases_ou',
   'batting-strikeouts-all-game-ou': 'player_batting_strikeouts_ou',
+  'batting-runs-all-game-ou': 'player_batting_runs_ou',
   // MLB pitching
   'pitching-strikeouts-all-game-ou': 'player_pitching_strikeouts_ou',
   'pitching-innings-pitched-all-game-ou': 'player_pitching_innings_pitched_ou',
+  // NHL
+  'goals-all-game-ou': 'player_goals_ou',
+  'shots-on-goal-all-game-ou': 'player_shots_on_goal_ou',
+  // NFL / NCAAF
+  'passing-yards-all-game-ou': 'player_passing_yards_ou',
+  'passing-tds-all-game-ou': 'player_passing_tds_ou',
+  'rushing-yards-all-game-ou': 'player_rushing_yards_ou',
+  'receiving-yards-all-game-ou': 'player_receiving_yards_ou',
+  'receiving-targets-all-game-ou': 'player_receiving_targets_ou',
+  'receptions-all-game-ou': 'player_receptions_ou',
 };
 
 export interface ResultsResolutionSummary {
@@ -94,7 +116,6 @@ export async function resolveAndInsertResults(
 
       for (const scoredMarket of eventResult.scoredMarkets) {
         if (scoredMarket.providerParticipantId === null) {
-          // Game-level market (ML, spread, game total) — no participant FK
           const canonicalMarketKey =
             SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ?? scoredMarket.baseMarketKey;
 
@@ -118,8 +139,6 @@ export async function resolveAndInsertResults(
           continue;
         }
 
-        // Resolve to canonical market_type_id so pick.market matches game_results.market_key.
-        // Falls back to the SGO key if no alias is registered (new markets won't block grading data).
         const canonicalMarketKey =
           SGO_MARKET_KEY_TO_CANONICAL_ID[scoredMarket.baseMarketKey] ?? scoredMarket.baseMarketKey;
 
