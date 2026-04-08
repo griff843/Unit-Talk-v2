@@ -25,7 +25,16 @@ export interface GradingPassResult {
 
 export interface RunGradingPassOptions {
   logger?: Pick<Console, 'error' | 'warn'>;
+  retryState?: GradingRetryState;
 }
+
+export type GradingRetryState = Map<
+  string,
+  {
+    attempts: number;
+    retryAfter: number;
+  }
+>;
 
 export async function runGradingPass(
   repositories: Pick<
@@ -46,6 +55,7 @@ export async function runGradingPass(
 ): Promise<GradingPassResult> {
   const picks = await repositories.picks.listByLifecycleState('posted');
   const details: GradingPickResult[] = [];
+  const retryState = options.retryState;
 
   for (const pick of picks) {
     try {
@@ -111,13 +121,46 @@ export async function runGradingPass(
       });
 
       if (!gameResult) {
+        const now = Date.now();
+        const retryEntry = retryState?.get(pick.id);
+        if (retryEntry && now < retryEntry.retryAfter) {
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: 'game_result_retry_pending',
+          });
+          continue;
+        }
+
+        const nextAttempts = (retryEntry?.attempts ?? 0) + 1;
+        if (retryState && nextAttempts >= 3) {
+          retryState.set(pick.id, {
+            attempts: nextAttempts,
+            retryAfter: now,
+          });
+          details.push({
+            pickId: pick.id,
+            outcome: 'skipped',
+            reason: 'grade_skipped_final',
+          });
+          continue;
+        }
+
+        if (retryState) {
+          retryState.set(pick.id, {
+            attempts: nextAttempts,
+            retryAfter: now + 15 * 60 * 1000,
+          });
+        }
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
-          reason: 'game_result_not_found',
+          reason: retryEntry ? 'game_result_retry_scheduled' : 'game_result_not_found',
         });
         continue;
       }
+
+      retryState?.delete(pick.id);
 
       const selectionSide = inferSelectionSide(pick.selection);
       if (!selectionSide) {

@@ -1,7 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import type { RepositoryBundle } from '@unit-talk/db';
 import { createApiRuntimeDependencies } from './server.js';
-import { runGradingPass, type GradingPassResult } from './grading-service.js';
+import {
+  runGradingPass,
+  type GradingPassResult,
+  type GradingRetryState,
+} from './grading-service.js';
 
 export interface GradingCronCycleSummary {
   cycle: number;
@@ -47,6 +51,7 @@ export async function runGradingCronCycles(
   const sleep = options.sleep ?? defaultSleep;
   const runPass = options.runGradingPass ?? runGradingPass;
   const summaries: GradingCronCycleSummary[] = [];
+  const retryState: GradingRetryState = new Map();
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     summaries.push(
@@ -54,6 +59,7 @@ export async function runGradingCronCycles(
         cycle,
         repositories: options.repositories,
         runPass,
+        retryState,
         ...(options.logger ? { logger: options.logger } : {}),
       }),
     );
@@ -72,6 +78,7 @@ export async function startGradingCronLoop(
   const pollIntervalMs = options.pollIntervalMs ?? 300_000;
   const sleep = options.sleep ?? defaultSleep;
   const runPass = options.runGradingPass ?? runGradingPass;
+  const retryState: GradingRetryState = new Map();
   let cycle = 0;
 
   while (true) {
@@ -80,6 +87,7 @@ export async function startGradingCronLoop(
       cycle,
       repositories: options.repositories,
       runPass,
+      retryState,
       ...(options.logger ? { logger: options.logger } : {}),
     });
 
@@ -133,13 +141,17 @@ async function runGradingCronCycle(options: {
   cycle: number;
   repositories: GradingCronRunnerOptions['repositories'];
   runPass: typeof runGradingPass;
+  retryState: GradingRetryState;
   logger?: Pick<Console, 'error' | 'info' | 'warn'>;
 }): Promise<GradingCronCycleSummary> {
   try {
-    const runPassOptions = options.logger ? { logger: options.logger } : undefined;
+    const runPassOptions = {
+      retryState: options.retryState,
+      ...(options.logger ? { logger: options.logger } : {}),
+    };
     const result = await options.runPass(
       options.repositories,
-      runPassOptions ?? undefined,
+      runPassOptions,
     );
 
     return {
