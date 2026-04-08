@@ -541,6 +541,18 @@ export interface ProviderOfferRepository {
    * Returns null when no alias mapping exists for the given provider.
    */
   resolveProviderMarketKey(canonicalKey: string, provider: string): Promise<string | null>;
+  /**
+   * Reverse alias lookup: translates a provider-native market key (e.g. 'points-all-game-ou')
+   * to the canonical market_type_id (e.g. 'player_points_ou').
+   * Used by the system pick scanner to build gradeable picks from raw provider offers.
+   */
+  resolveCanonicalMarketKey(providerMarketKey: string, provider: string): Promise<string | null>;
+  /**
+   * Returns recent is_opening=true rows for a given provider, within the lookback window,
+   * that have both over_odds and under_odds and a non-null line and participant.
+   * Used by the system pick scanner to auto-generate picks from opening lines.
+   */
+  listOpeningOffers(since: string, provider: string, limit?: number): Promise<ProviderOfferRecord[]>;
 }
 
 export interface ParticipantUpsertInput {

@@ -1310,6 +1310,26 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     // InMemory implementation has no alias table — alias resolution not supported in tests.
     return null;
   }
+
+  async resolveCanonicalMarketKey(_providerMarketKey: string, _provider: string): Promise<string | null> {
+    // InMemory implementation has no alias table — reverse alias resolution not supported in tests.
+    return null;
+  }
+
+  async listOpeningOffers(since: string, _provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
+    const sinceMs = new Date(since).getTime();
+    return Array.from(this.offers.values())
+      .filter(
+        (o) =>
+          o.is_opening === true &&
+          new Date(o.snapshot_at).getTime() >= sinceMs &&
+          o.over_odds != null &&
+          o.under_odds != null &&
+          o.line != null &&
+          o.provider_participant_id != null,
+      )
+      .slice(0, limit);
+  }
 }
 
 export class InMemoryParticipantRepository implements ParticipantRepository {
@@ -3980,6 +4000,42 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     const rows = (data ?? []) as Array<{ provider_market_key: string }>;
     return rows[0]?.provider_market_key ?? null;
+  }
+
+  async resolveCanonicalMarketKey(providerMarketKey: string, provider: string): Promise<string | null> {
+    const { data, error } = await fromUntyped(this.client, 'provider_market_aliases')
+      .select('market_type_id')
+      .eq('provider_market_key', providerMarketKey)
+      .eq('provider', provider)
+      .limit(1);
+
+    if (error) {
+      throw new Error(`Failed to resolve canonical market key: ${error.message}`);
+    }
+
+    const rows = (data ?? []) as Array<{ market_type_id: string }>;
+    return rows[0]?.market_type_id ?? null;
+  }
+
+  async listOpeningOffers(since: string, provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
+    const { data, error } = await this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('provider_key', provider)
+      .eq('is_opening', true)
+      .gte('snapshot_at', since)
+      .not('over_odds', 'is', null)
+      .not('under_odds', 'is', null)
+      .not('line', 'is', null)
+      .not('provider_participant_id', 'is', null)
+      .order('snapshot_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`Failed to list opening offers: ${error.message}`);
+    }
+
+    return (data ?? []) as ProviderOfferRecord[];
   }
 }
 

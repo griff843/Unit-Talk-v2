@@ -2,6 +2,9 @@ import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { startRecapScheduler } from './recap-scheduler.js';
 import { startTrialExpiryScheduler } from './trial-expiry-service.js';
 import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
+import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-scanner.js';
+
+const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -10,6 +13,7 @@ const server = createApiServer({ runtime });
 let stopRecapScheduler: (() => void) | null = null;
 let stopTrialExpiryScheduler: (() => void) | null = null;
 let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
+let systemPickScannerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -28,6 +32,20 @@ server.listen(port, () => {
   enrichmentTimer = setInterval(() => {
     runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
   }, 6 * 60 * 60 * 1000);
+
+  // System pick scanner: auto-generate player prop picks from opening lines
+  const scannerConfig = loadSystemPickScannerConfig();
+  if (scannerConfig.enabled) {
+    const scannerDeps = {
+      providerOffers: runtime.repositories.providerOffers,
+      participants: runtime.repositories.participants,
+      events: runtime.repositories.events,
+    };
+    runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
+    systemPickScannerTimer = setInterval(() => {
+      runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
+    }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
+  }
 
   console.log(
     JSON.stringify(
@@ -86,6 +104,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   stopTrialExpiryScheduler?.();
   stopTrialExpiryScheduler = null;
   if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
+  if (systemPickScannerTimer) { clearInterval(systemPickScannerTimer); systemPickScannerTimer = null; }
 
   server.close(() => {
     process.exit(0);
