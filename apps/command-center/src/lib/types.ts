@@ -127,6 +127,74 @@ export interface ProviderHealth {
   distinctEventsLast24h: number;
 }
 
+// ---------------------------------------------------------------------------
+// Board-state overlay types (UTV2-444)
+// ---------------------------------------------------------------------------
+
+export type CapStatus = 'open' | 'near-cap' | 'at-cap';
+export type ConflictReason = 'slate-cap' | 'sport-cap' | 'game-cap' | 'duplicate' | 'other';
+
+export interface BoardCapDimension {
+  current: number;
+  cap: number;
+  utilization: number;   // 0–1
+  status: CapStatus;
+}
+
+export interface BoardSportDimension extends BoardCapDimension {
+  sportKey: string;
+}
+
+export interface BoardGameDimension extends BoardCapDimension {
+  gameId: string;
+}
+
+export interface ScoreComponents {
+  edge: number;
+  trust: number;
+  readiness: number;
+  uniqueness: number;
+  boardFit: number;
+}
+
+export interface ScoreBreakdownRow {
+  pickId: string;
+  target: string;
+  status: string;
+  totalScore: number;
+  threshold: number;
+  qualifiedOnScore: boolean;
+  components: ScoreComponents;
+  weights: ScoreComponents;
+  componentsWeighted: ScoreComponents;
+  thresholdDelta: number;
+  decidedAt: string;
+}
+
+export interface ConflictCard {
+  pickId: string;
+  status: string;
+  totalScore: number;
+  threshold: number;
+  thresholdDelta: number;
+  conflictReason: ConflictReason;
+  rawReason: string;
+  sport: string;
+  decidedAt: string;
+}
+
+export interface BoardStateData {
+  window: string;
+  computedAt: string;
+  target: string;
+  caps: { perSlate: number; perSport: number; perGame: number };
+  slate: BoardCapDimension;
+  bySport: BoardSportDimension[];
+  byGame: BoardGameDimension[];
+  scoreBreakdowns: ScoreBreakdownRow[];
+  conflictCards: ConflictCard[];
+}
+
 export interface DashboardRuntimeData {
   outbox: {
     pending: number;
