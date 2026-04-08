@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
-import { runGradingPass } from './grading-service.js';
+import { runGradingPass, type GradingRetryState } from './grading-service.js';
 import { recordGradedSettlement } from './settlement-service.js';
 
 async function createPostedPickFixture(
@@ -381,6 +381,74 @@ test('runGradingPass skips picks when no matching game result exists', async () 
   assert.equal(result.skipped, 1);
   assert.equal(result.details[0]?.reason, 'game_result_not_found');
   assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
+});
+
+test('runGradingPass skips retry-pending pick without incrementing attempts', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  await attachPlayerEventContext(repositories, pickId, { eventName });
+  const retryState: GradingRetryState = new Map([
+    [
+      pickId,
+      {
+        attempts: 1,
+        retryAfter: Date.now() + 60_000,
+      },
+    ],
+  ]);
+
+  const result = await runGradingPass(repositories, { retryState });
+
+  assert.equal(result.skipped, 1);
+  assert.equal(result.details[0]?.reason, 'game_result_retry_pending');
+  assert.equal(retryState.get(pickId)?.attempts, 1);
+});
+
+test('runGradingPass re-attempts and grades pick when retryAfter has elapsed', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+  });
+  const retryState: GradingRetryState = new Map([
+    [
+      pickId,
+      {
+        attempts: 1,
+        retryAfter: Date.now() - 1,
+      },
+    ],
+  ]);
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  const result = await runGradingPass(repositories, { retryState });
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal(retryState.has(pickId), false);
+});
+
+test('runGradingPass marks pick as grade_skipped_final after 3 failed attempts', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  await attachPlayerEventContext(repositories, pickId, { eventName });
+  const retryState: GradingRetryState = new Map([
+    [
+      pickId,
+      {
+        attempts: 2,
+        retryAfter: Date.now() - 1,
+      },
+    ],
+  ]);
+
+  const result = await runGradingPass(repositories, { retryState });
+
+  assert.equal(result.skipped, 1);
+  assert.equal(result.details[0]?.reason, 'grade_skipped_final');
+  assert.equal(retryState.get(pickId)?.attempts, 3);
 });
 
 test('runGradingPass is idempotent across repeated executions', async () => {

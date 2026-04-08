@@ -64,3 +64,28 @@ test('runGradingCronCycles records failures and continues to the next cycle', as
   assert.equal(summaries[1]?.cycle, 2);
   assert.equal(summaries[1]?.result?.graded, 0);
 });
+
+test('runGradingCronCycles shares a single retry state across cycles', async () => {
+  const retryStates: unknown[] = [];
+
+  await runGradingCronCycles({
+    repositories: {} as Parameters<typeof runGradingCronCycles>[0]['repositories'],
+    maxCycles: 2,
+    pollIntervalMs: 100,
+    runGradingPass: async (_repositories, options) => {
+      retryStates.push(options?.retryState);
+      return {
+        attempted: 0,
+        graded: 0,
+        skipped: 0,
+        errors: 0,
+        details: [],
+      };
+    },
+    sleep: async () => {},
+  });
+
+  assert.equal(retryStates.length, 2);
+  assert.ok(retryStates[0] instanceof Map);
+  assert.equal(retryStates[0], retryStates[1]);
+});
