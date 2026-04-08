@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-08 — **Green-state recovery sprint. Worker crash loop fixed (UTV2-441). Repo hygiene recovered (UTV2-442). Docs truth-synced (UTV2-443).**
+Worker was crashing on transient Supabase network errors (159 restarts since 2026-04-07). Fix deployed (PR #188): transient fetch/5xx errors no longer crash the process. Worker restarted clean (Restarts: 0, Verdict: UP). Repo working tree clean: 4 governed scripts committed, 10 scratch scripts deleted, .gitignore updated. Migration history drift repaired (012–015 applied via Dashboard, not recorded in schema_migrations — repaired via `supabase migration repair`). pg_cron nightly retention scheduled (UTV2-439, migration 016 live). 48/48 migrations local = remote, head `202604080016`. 188/188 tests pass. CC Unification Phase 2 complete (PRs #183–#186: nav shell, module UI, analytics sequence, LLM governance). Linear board: UTV2-415/419 promoted to Ready (spec-only, not blocked). UTV2-441/442/443/439/428/427/426/425 Done.
+
 2026-04-07 — **PI-M5 platform readiness closure (UTV2-356). PR #162 merged (ops hardening). Main CI green (run 24062213123).**
 Migration 011 (`picks.player_id` FK) applied. `pnpm supabase:types` clean: 2367 lines. 43/43 migrations applied, head `202604070011`. All PI-M5 acceptance criteria met: CI green, types clean, migration audit clean, deployment runbook updated with migration rollback procedure, alert surface artifacts present (pipeline-health, worker-alert-check, INGESTOR_RUNTIME_SUPERVISION), lint/type-check/test/outbox all pass. `pnpm pi-m5:verify` exits 0. PI-M5 (UTV2-356) → Done.
 
@@ -34,12 +37,13 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **All pass** — 0 failures. `pnpm test` 188 pass (main `51e295a`). Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
+| Tests | **All pass** — 0 failures. `pnpm test` 188 pass. Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **SGO Pro trial (6-day window, 2026-04-04).** Migrations 007–010 live. Picks FK columns (`capper_id`, `market_type_id`, `sport_id`) live in Supabase. UTV2-391/394 Done. M5 closure: 364/343/369 Done, 353 Backlog, 356/360/335 Ready (AC added, blocked on runtime preconditions). Phase 7 awaiting PM approval. |
-| Provider | **SGO Pro active.** Odds API suspended for trial period. Historical backfill complete: 329k provider_offers rows (2026-01-05 → 2026-04-04). Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) now captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
-| Roadmap | Active: none (UTV2-321 MLB baseline stalled pending backfill data). Ready: UTV2-320 (NBA baseline, blocked on settled picks), UTV2-322/323 (NFL/NHL baselines), UTV2-398 (picks_current_state type). Phase 7 (Syndicate Lane) awaiting PM approval. |
+| Milestone | **Green-state recovery sprint (2026-04-08).** Worker crash loop fixed. Repo hygiene clean. Docs truth-synced. Migrations 012–016 live (head `202604080016`). pg_cron retention scheduled. CC Unification Phase 2 complete. UTV2-415/419 Ready (spec). Phase 7 awaiting PM approval. |
+| Provider | **SGO Pro active (permanent, upgraded 2026-04-07).** Odds API suspended. Historical backfill complete: 329k provider_offers rows. Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
+| Worker | **UP** — transient network error fix deployed (PR #188, UTV2-441). Restarts: 0 (fresh after restart 2026-04-08). Supervisor active since restart. |
+| Roadmap | CC Unification Phase 2 Done (PRs #183–#186). Active: UTV2-415/419 (spec, Ready). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (Syndicate Lane, PM approval required). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
@@ -53,11 +57,7 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 
 **Sprint A resolved:** Lint fixed (G1 unblocked). Submission dedup (UNIQUE index). Settlement dedup (atomic claim + UNIQUE constraint). Atomic promotion (compensating rollback). Retry model (pending + backoff). Post-send reconciliation. CLV capper identity hotfix. Exposure gate lifecycle fix.
 
-**Pending migrations (must apply to Supabase before production):**
-- `202603310001_submission_idempotency.sql` — adds `idempotency_key` column + UNIQUE index to `picks`
-- `202603310002_settlement_idempotency.sql` — adds UNIQUE partial index on `settlement_records(pick_id, source)`
-
-## Gate Notes (verified 2026-04-01 — Sprint D complete)
+## Gate Notes (verified 2026-04-08 — green-state recovery)
 
 | Gate | Status | Notes |
 |------|--------|-------|

@@ -25,7 +25,7 @@ Environment is loaded from `local.env` (gitignored, has real credentials) > `.en
 
 ## Execution Model
 
-Claude Code is the execution orchestrator for Unit Talk V2. The job is to work the Linear backlog continuously until there are no executable issues left.
+Claude Code is the execution orchestrator for Unit Talk V2. The job is to work the Linear backlog continuously until there are no executable issues left. When a green-state recovery sprint is active, recovery work (worker stability, repo hygiene, docs truth-sync) takes precedence over all feature work.
 
 ### Authority
 
@@ -37,6 +37,7 @@ Claude Code is the execution orchestrator for Unit Talk V2. The job is to work t
 ### Start-of-Session Checklist
 
 0. Run `pnpm ops:brief`
+0a. Run `pnpm worker:status` — confirm worker is UP before proceeding
 1. Read Linear issues in Ready, In Progress, and In Review states
 2. Reconcile Linear state against repo truth on main (mark already-merged issues Done, detect stale states)
 3. Read `docs/06_status/PROGRAM_STATUS.md` for current milestone context
@@ -281,7 +282,7 @@ Read-only operator dashboard. No write surfaces. Provides JSON API endpoints con
 
 ### apps/command-center
 
-Next.js 14 operator intelligence dashboard. Reads from operator-web, writes through API. No direct DB access.
+Next.js 14 operator intelligence dashboard. Reads from operator-web, writes through API. No direct DB access. 4-workspace model (Research / Decision / Operations / Intelligence) — `WorkspaceSidebar` component ships in `src/components/WorkspaceSidebar.tsx` (CC Unification Phase 2, UTV2-427).
 
 ### apps/smart-form
 
