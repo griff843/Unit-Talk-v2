@@ -51,6 +51,7 @@ import type {
   ExperimentLedgerRecord,
   ExperimentRunType,
   ExecutionQualityReport,
+  ProviderEntityAliasRow,
 } from './types.js';
 
 export interface SubmissionCreateInput {
@@ -558,6 +559,12 @@ export interface ProviderOfferRepository {
    * N+1 query patterns.
    */
   listAliasLookup(provider: string): Promise<ProviderMarketAliasRow[]>;
+  /**
+   * Bulk-loads all provider_entity_alias rows for a given provider where entity_kind = 'player'.
+   * Returns rows including provider_entity_id and participant_id for FK resolution.
+   * Used by the market universe materializer for O(1) participant FK lookups.
+   */
+  listParticipantAliasLookup(provider: string): Promise<ProviderEntityAliasRow[]>;
   /**
    * Returns recent is_opening=true rows for a given provider, within the lookback window,
    * that have both over_odds and under_odds and a non-null line and participant.

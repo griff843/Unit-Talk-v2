@@ -102,6 +102,23 @@ export class MarketUniverseMaterializer {
       // Alias load failure is non-fatal — materializer continues without resolution
     }
 
+    // Load participant alias lookup once per run for O(1) per-row participant FK resolution
+    // Key: provider_entity_id (matches provider_offers.provider_participant_id)
+    // Value: participant_id (UUID FK into participants table)
+    const participantMap = new Map<string, string>();
+    try {
+      const participantAliasRows = await this.repos.providerOffers.listParticipantAliasLookup(
+        offers[0]?.provider_key ?? 'sgo',
+      );
+      for (const row of participantAliasRows) {
+        if (row.provider_entity_id && row.participant_id) {
+          participantMap.set(row.provider_entity_id, row.participant_id);
+        }
+      }
+    } catch {
+      // Participant alias load failure is non-fatal — materializer continues without resolution
+    }
+
     // Group offers by natural key to find opening, closing, and current (latest) per group
     type NaturalKey = string;
     interface GroupedOffers {
@@ -203,7 +220,7 @@ export class MarketUniverseMaterializer {
           sport_key: latest.sport_key ?? 'unknown',
           league_key: latest.sport_key ?? 'unknown',
           event_id: null,       // event FK resolution: Phase 3+ (requires event lookup service)
-          participant_id: null, // participant FK resolution: Phase 3+ (requires participant lookup)
+          participant_id: participantMap.get(latest.provider_participant_id ?? '') ?? null,
           market_type_id: alias?.market_type_id ?? null,
           canonical_market_key: alias?.market_type_id ?? latest.provider_market_key,
 
