@@ -7,6 +7,12 @@
 
 ## Last Updated
 
+2026-04-09 — **Phase 2 (Syndicate Machine Foundation) staged in Linear. UTV2-458 contract complete.**
+Phase 1 (scanner stabilization, CFix-1/2/3) closed at commit `66c9cc1`. CFix-1: `system-pick-scanner` added to `pickSources` contract; board-cap filter corrected in InMemory + Database repos (UTV2-455 comment + UTV2-456/457 closed). CFix-2: `SGO_MARKET_KEY_TO_CANONICAL_ID` rewritten with live-feed key formats; 13 MLB player prop aliases inserted into `provider_market_aliases` (UTV2-456 Done). CFix-3: settlements repo wired into all three `evaluateAllPoliciesEagerAndPersist` callers so CLV trust adjustment runs on every promotion evaluation (UTV2-457 Done). 188/188 tests pass. Type-check clean. Scanner confirmed live (submitting picks post-restart). Phase 2 issue set staged in Linear (UTV2-458 through UTV2-464, all Backlog). Schema contract written: `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md` (UTV2-458, this entry). UTV2-459 and UTV2-460 remain blocked until UTV2-458 is formally closed.
+
+**Phase 2 dependency chain (locked):**
+UTV2-458 (contract) → [UTV2-459 market_universe migration ‖ UTV2-460 pick_candidates migration] → UTV2-461 (materializer) → [UTV2-462 line movement ‖ UTV2-463 board scan] → UTV2-464 (proof/gate). UTV2-459 and UTV2-460 may be authored in parallel but must merge serially (migration numbering). UTV2-464 is the hard gate to Phase 3. No runtime Phase 2 implementation has started.
+
 2026-04-08 — **CC-M5 batch closed (UTV2-445/446/447). Decision stub shells normalized, Intelligence nav unified, Intelligence shared patterns enforced.**
 UTV2-446 (Decision stub shells + error boundary, PR #196, commit `4eefd89`) Done. UTV2-447 (Intelligence workspace tab navigation unification, PR #195, commit `838b271`) Done. UTV2-445 (Intelligence shared UI patterns, PR #197, commit `e377ceb`) Done. All T3 bounded UI work. CI green on all 3. Browser/runtime verified. Linear board: no Ready issues remaining. UTV2-431/433/435 blocked (live data gates). Phase 7 deferred (PM approval required).
 
@@ -43,10 +49,10 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Tests | **All pass** — 0 failures. `pnpm test` 188 pass. Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **Green-state recovery sprint (2026-04-08).** Worker crash loop fixed. Repo hygiene clean. Docs truth-synced. Migrations 012–016 live (head `202604080016`). pg_cron retention scheduled. CC Unification Phase 2 complete. UTV2-415/419 Ready (spec). Phase 7 awaiting PM approval. |
+| Milestone | **Phase 2 — Syndicate Machine Foundation (active, 2026-04-09).** Phase 1 closed (commit `66c9cc1`). Phase 2 staged: UTV2-458 through UTV2-464 in Linear. UTV2-458 (schema contract) complete. UTV2-459/460 blocked on contract merge. No runtime Phase 2 implementation started. Phase 3 blocked until UTV2-464 evidence bundle accepted. Migrations 012–016 live (head `202604080016`). Phase 7 deferred (PM approval required). |
 | Provider | **SGO Pro active (permanent, upgraded 2026-04-07).** Odds API suspended. Historical backfill complete: 329k provider_offers rows. Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
 | Worker | **UP** — transient network error fix deployed (PR #188, UTV2-441). Restarts: 0 (fresh after restart 2026-04-08). Supervisor active since restart. |
-| Roadmap | CC Unification Phase 2 Done (PRs #183–#186). UTV2-415/419 Done. UTV2-444 Done (PR #194). CC-M5 batch Done: UTV2-446 (PR #196), UTV2-447 (PR #195), UTV2-445 (PR #197). No Ready issues. Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (Syndicate Lane, PM approval required). |
+| Roadmap | Phase 1 closed: UTV2-455/456/457 Done (commit `66c9cc1`). Phase 2 staged: UTV2-458 (contract, active) → UTV2-459/460 (T1 migrations, blocked on 458) → UTV2-461 (materializer) → UTV2-462/463 (line movement + board scan) → UTV2-464 (proof gate). CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (Syndicate Lane, PM approval required). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
