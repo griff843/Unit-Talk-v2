@@ -37,6 +37,8 @@ import type {
   HedgeOpportunityCooldownQuery,
   HedgeOpportunityNotificationUpdateInput,
   HedgeOpportunityRepository,
+  IMarketUniverseRepository,
+  MarketUniverseUpsertInput,
   MemberTierActivateInput,
   MemberTierDeactivateInput,
   MemberTierRepository,
@@ -5706,6 +5708,202 @@ export function createModelOpsRepositories(
   };
 }
 
+// ---------------------------------------------------------------------------
+// market_universe repository implementations (Phase 2 UTV2-461)
+// ---------------------------------------------------------------------------
+
+/**
+ * InMemoryMarketUniverseRepository — in-process store for unit tests.
+ *
+ * Keyed by the natural key string:
+ *   "providerKey:providerEventId:COALESCE(participantId,''):marketKey"
+ *
+ * Opening/closing immutability: once set (non-null) on an existing row,
+ * those fields are never overwritten.
+ */
+export class InMemoryMarketUniverseRepository implements IMarketUniverseRepository {
+  private readonly rows = new Map<string, MarketUniverseUpsertInput>();
+
+  private naturalKey(row: MarketUniverseUpsertInput): string {
+    return [
+      row.provider_key,
+      row.provider_event_id,
+      row.provider_participant_id ?? '',
+      row.provider_market_key,
+    ].join(':');
+  }
+
+  async upsertMarketUniverse(rows: MarketUniverseUpsertInput[]): Promise<void> {
+    for (const row of rows) {
+      const key = this.naturalKey(row);
+      const existing = this.rows.get(key);
+      if (existing) {
+        // Opening immutability: do not overwrite once set
+        const opening_line = existing.opening_line !== null ? existing.opening_line : row.opening_line;
+        const opening_over_odds = existing.opening_over_odds !== null ? existing.opening_over_odds : row.opening_over_odds;
+        const opening_under_odds = existing.opening_under_odds !== null ? existing.opening_under_odds : row.opening_under_odds;
+        // Closing immutability: do not overwrite once set
+        const closing_line = existing.closing_line !== null ? existing.closing_line : row.closing_line;
+        const closing_over_odds = existing.closing_over_odds !== null ? existing.closing_over_odds : row.closing_over_odds;
+        const closing_under_odds = existing.closing_under_odds !== null ? existing.closing_under_odds : row.closing_under_odds;
+
+        this.rows.set(key, {
+          ...row,
+          opening_line,
+          opening_over_odds,
+          opening_under_odds,
+          closing_line,
+          closing_over_odds,
+          closing_under_odds,
+        });
+      } else {
+        this.rows.set(key, row);
+      }
+    }
+  }
+
+  /** Test helper: return all rows. */
+  listAll(): MarketUniverseUpsertInput[] {
+    return Array.from(this.rows.values());
+  }
+
+  /** Test helper: look up by natural key. */
+  findByNaturalKey(
+    providerKey: string,
+    providerEventId: string,
+    providerParticipantId: string | null,
+    providerMarketKey: string,
+  ): MarketUniverseUpsertInput | undefined {
+    return this.rows.get(
+      [providerKey, providerEventId, providerParticipantId ?? '', providerMarketKey].join(':'),
+    );
+  }
+}
+
+/**
+ * DatabaseMarketUniverseRepository — Supabase implementation.
+ *
+ * Uses .upsert() with onConflict targeting the natural key columns.
+ * ignoreDuplicates: false ensures UPDATE is applied on conflict.
+ *
+ * Opening/closing immutability is enforced via a Supabase RPC or manual
+ * fetch-then-merge strategy: we fetch existing rows for the batch first,
+ * then apply the immutability rule before calling upsert.
+ */
+export class DatabaseMarketUniverseRepository implements IMarketUniverseRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async upsertMarketUniverse(rows: MarketUniverseUpsertInput[]): Promise<void> {
+    if (rows.length === 0) return;
+
+    // Fetch existing rows for the batch to enforce opening/closing immutability.
+    // We match on (provider_key, provider_event_id, provider_market_key) and then
+    // do provider_participant_id matching in JS (COALESCE semantics).
+    const providerEventIds = [...new Set(rows.map((r) => r.provider_event_id))];
+    const { data: existingRows, error: fetchError } = await this.client
+      .from('market_universe')
+      .select('provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds')
+      .in('provider_event_id', providerEventIds);
+
+    if (fetchError) {
+      throw new Error(`market_universe fetch for immutability check failed: ${fetchError.message}`);
+    }
+
+    // Build a lookup keyed by natural key string
+    const existingMap = new Map<string, {
+      opening_line: number | null;
+      opening_over_odds: number | null;
+      opening_under_odds: number | null;
+      closing_line: number | null;
+      closing_over_odds: number | null;
+      closing_under_odds: number | null;
+    }>();
+
+    for (const existing of (existingRows ?? [])) {
+      const k = [
+        existing.provider_key,
+        existing.provider_event_id,
+        existing.provider_participant_id ?? '',
+        existing.provider_market_key,
+      ].join(':');
+      existingMap.set(k, {
+        opening_line: existing.opening_line as number | null,
+        opening_over_odds: existing.opening_over_odds as number | null,
+        opening_under_odds: existing.opening_under_odds as number | null,
+        closing_line: existing.closing_line as number | null,
+        closing_over_odds: existing.closing_over_odds as number | null,
+        closing_under_odds: existing.closing_under_odds as number | null,
+      });
+    }
+
+    const now = new Date().toISOString();
+    const upsertRows = rows.map((row) => {
+      const k = [
+        row.provider_key,
+        row.provider_event_id,
+        row.provider_participant_id ?? '',
+        row.provider_market_key,
+      ].join(':');
+      const ex = existingMap.get(k);
+
+      // Apply opening immutability: keep existing non-null values
+      const opening_line = (ex && ex.opening_line !== null) ? ex.opening_line : row.opening_line;
+      const opening_over_odds = (ex && ex.opening_over_odds !== null) ? ex.opening_over_odds : row.opening_over_odds;
+      const opening_under_odds = (ex && ex.opening_under_odds !== null) ? ex.opening_under_odds : row.opening_under_odds;
+      // Apply closing immutability: keep existing non-null values
+      const closing_line = (ex && ex.closing_line !== null) ? ex.closing_line : row.closing_line;
+      const closing_over_odds = (ex && ex.closing_over_odds !== null) ? ex.closing_over_odds : row.closing_over_odds;
+      const closing_under_odds = (ex && ex.closing_under_odds !== null) ? ex.closing_under_odds : row.closing_under_odds;
+
+      return {
+        sport_key: row.sport_key,
+        league_key: row.league_key,
+        event_id: row.event_id,
+        participant_id: row.participant_id,
+        market_type_id: row.market_type_id,
+        canonical_market_key: row.canonical_market_key,
+        provider_key: row.provider_key,
+        provider_event_id: row.provider_event_id,
+        provider_participant_id: row.provider_participant_id,
+        provider_market_key: row.provider_market_key,
+        current_line: row.current_line,
+        current_over_odds: row.current_over_odds,
+        current_under_odds: row.current_under_odds,
+        opening_line,
+        opening_over_odds,
+        opening_under_odds,
+        closing_line,
+        closing_over_odds,
+        closing_under_odds,
+        fair_over_prob: row.fair_over_prob,
+        fair_under_prob: row.fair_under_prob,
+        is_stale: row.is_stale,
+        last_offer_snapshot_at: row.last_offer_snapshot_at,
+        refreshed_at: now,
+        updated_at: now,
+      };
+    });
+
+    // ON CONFLICT matches the market_universe_natural_key UNIQUE NULLS NOT DISTINCT constraint
+    // (provider_key, provider_event_id, provider_participant_id, provider_market_key)
+    // NULLS NOT DISTINCT treats NULL=NULL, semantically equivalent to COALESCE(provider_participant_id,'')
+    const { error } = await this.client
+      .from('market_universe')
+      .upsert(upsertRows, {
+        onConflict: 'provider_key,provider_event_id,provider_participant_id,provider_market_key',
+        ignoreDuplicates: false,
+      });
+
+    if (error) {
+      throw new Error(`market_universe upsert failed: ${error.message}`);
+    }
+  }
+}
+
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
   const providerOffers = new InMemoryProviderOfferRepository();
@@ -5730,6 +5928,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     referenceData: new InMemoryReferenceDataRepository(V1_REFERENCE_DATA),
     tiers: new InMemoryMemberTierRepository(),
     reviews: new InMemoryPickReviewRepository(),
+    marketUniverse: new InMemoryMarketUniverseRepository(),
   };
 }
 
@@ -5754,6 +5953,7 @@ export function createDatabaseRepositoryBundle(
     referenceData: new DatabaseReferenceDataRepository(connection),
     tiers: new DatabaseMemberTierRepository(connection),
     reviews: new DatabasePickReviewRepository(connection),
+    marketUniverse: new DatabaseMarketUniverseRepository(connection),
   };
 }
 
