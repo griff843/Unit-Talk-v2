@@ -8,12 +8,14 @@ import { runMarketUniverseMaterializer } from './market-universe-materializer.js
 import { runLineMovementDetection, DatabaseLineMovementRepository } from './line-movement-detector.js';
 import { runBoardScan } from './board-scan-service.js';
 import { runCandidateScoring } from './candidate-scoring-service.js';
+import { runRankedSelection } from './ranked-selection-service.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const CANDIDATE_SCORING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const RANKED_SELECTION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -28,6 +30,7 @@ let marketUniverseMaterializerTimer: ReturnType<typeof setInterval> | null = nul
 let lineMovementDetectorTimer: ReturnType<typeof setInterval> | null = null;
 let boardScanTimer: ReturnType<typeof setInterval> | null = null;
 let candidateScoringTimer: ReturnType<typeof setInterval> | null = null;
+let rankedSelectionTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -106,6 +109,18 @@ server.listen(port, () => {
     runCandidateScoring(scoringDeps, { logger: console }).catch(() => {});
   }, CANDIDATE_SCORING_INTERVAL_MS);
 
+  // Ranked selection: deterministically ranks qualified+scored candidates by model_score + tier
+  // Phase 4 UTV2-473 — runs after candidate scoring to rank the scored pool
+  // Hard invariants: never sets pick_id, never sets shadow_mode=false, no scarcity logic
+  const rankingDeps = {
+    pickCandidates: runtime.repositories.pickCandidates,
+    marketUniverse: runtime.repositories.marketUniverse,
+  };
+  runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
+  rankedSelectionTimer = setInterval(() => {
+    runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
+  }, RANKED_SELECTION_INTERVAL_MS);
+
   console.log(
     JSON.stringify(
       {
@@ -168,6 +183,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (lineMovementDetectorTimer) { clearInterval(lineMovementDetectorTimer); lineMovementDetectorTimer = null; }
   if (boardScanTimer) { clearInterval(boardScanTimer); boardScanTimer = null; }
   if (candidateScoringTimer) { clearInterval(candidateScoringTimer); candidateScoringTimer = null; }
+  if (rankedSelectionTimer) { clearInterval(rankedSelectionTimer); rankedSelectionTimer = null; }
 
   server.close(() => {
     process.exit(0);
