@@ -76,16 +76,21 @@ const dbPassword = getEnv('SUPABASE_DB_PASSWORD');
 let args;
 let mode;
 
-if (accessToken) {
+if (dbUrl) {
+  // Option B1: explicit full DB URL — checked first so it takes priority over access token.
+  // Use this for direct DB connections (schema introspection) when Management API is slow.
+  // URL-encode the password segment to handle special chars (@, [], <>, etc).
+  const encodedDbUrl = dbUrl.replace(/^(postgresql?:\/\/[^:]+):(.+)@(.+)$/, (_, prefix, pass, suffix) => {
+    return `${prefix}:${encodeURIComponent(pass)}@${suffix}`;
+  });
+  args = ['supabase', 'gen', 'types', 'typescript', '--db-url', encodedDbUrl, '--schema', 'public'];
+  mode = '--db-url (explicit SUPABASE_DB_URL)';
+} else if (accessToken) {
   // Option A: use --project-id with access token injected into subprocess env.
   // This is equivalent to --linked but works even when the token is only in local.env.
   supabaseEnv['SUPABASE_ACCESS_TOKEN'] = accessToken;
   args = ['supabase', 'gen', 'types', 'typescript', '--project-id', projectRef, '--schema', 'public'];
   mode = '--project-id (access token injected from local.env)';
-} else if (dbUrl) {
-  // Option B1: explicit full DB URL provided.
-  args = ['supabase', 'gen', 'types', 'typescript', '--db-url', dbUrl, '--schema', 'public'];
-  mode = '--db-url (explicit SUPABASE_DB_URL)';
 } else if (dbPassword) {
   // Option B2: construct pooler URL from project ref + password.
   // Uses Supavisor session pooler (port 5432) which supports DDL introspection.
