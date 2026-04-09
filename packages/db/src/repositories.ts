@@ -6,6 +6,7 @@ import type {
   SubmissionPayload,
   ValidatedSubmission,
 } from '@unit-talk/contracts';
+import type { IMarketUniverseRepository, MarketUniverseUpsertInput } from './market-universe-repository.js';
 import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
   AlertDetectionMarketType,
@@ -831,11 +832,14 @@ export interface RepositoryBundle {
   referenceData: ReferenceDataRepository;
   tiers: MemberTierRepository;
   reviews: PickReviewRepository;
+  marketUniverse: IMarketUniverseRepository;
   modelRegistry?: ModelRegistryRepository;
   experimentLedger?: ExperimentLedgerRepository;
   modelHealthSnapshots?: ModelHealthSnapshotRepository;
   executionQuality?: ExecutionQualityRepository;
 }
+
+export type { IMarketUniverseRepository, MarketUniverseUpsertInput };
 
 export interface IngestorRepositoryBundle {
   providerOffers: ProviderOfferRepository;

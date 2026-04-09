@@ -40,6 +40,7 @@ import {
 } from './schema.js';
 
 import type { Tables } from './database.types.js';
+import type { MarketUniverseRow as MarketUniverseRowStub } from './market-universe-repository.js';
 
 // ---------------------------------------------------------------------------
 // Enum / status union types
@@ -171,6 +172,17 @@ export type ExperimentLedgerRecord = ExperimentLedgerRow;
 
 /** @see {@link ModelHealthSnapshotRow} */
 export type ModelHealthSnapshotRecord = ModelHealthSnapshotRow;
+
+// ---------------------------------------------------------------------------
+// market_universe types (stubbed — database.types.ts not yet regenerated)
+// TODO: regenerate via pnpm supabase:types once Supabase connectivity restores
+// ---------------------------------------------------------------------------
+
+/** Row shape for market_universe table (Phase 2 UTV2-459 migration). */
+export type MarketUniverseRow = MarketUniverseRowStub;
+
+/** Backward-compatible record alias. */
+export type MarketUniverseRecord = MarketUniverseRow;
 
 export type ExecutionQualityReport = {
   providerKey: string;

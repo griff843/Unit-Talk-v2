@@ -4,8 +4,10 @@ import { startRecapScheduler } from './recap-scheduler.js';
 import { startTrialExpiryScheduler } from './trial-expiry-service.js';
 import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
 import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-scanner.js';
+import { runMarketUniverseMaterializer } from './market-universe-materializer.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -16,6 +18,7 @@ let stopRecapScheduler: (() => void) | null = null;
 let stopTrialExpiryScheduler: (() => void) | null = null;
 let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
 let systemPickScannerTimer: ReturnType<typeof setInterval> | null = null;
+let marketUniverseMaterializerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -48,6 +51,17 @@ server.listen(port, () => {
       runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
     }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
   }
+
+  // Market universe materializer: keep market_universe current from provider_offers
+  // Phase 2 UTV2-461 — always runs (no feature flag; shadow_mode is enforced at candidate layer)
+  const materializerDeps = {
+    providerOffers: runtime.repositories.providerOffers,
+    marketUniverse: runtime.repositories.marketUniverse,
+  };
+  runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
+  marketUniverseMaterializerTimer = setInterval(() => {
+    runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
+  }, MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS);
 
   console.log(
     JSON.stringify(
@@ -107,6 +121,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   stopTrialExpiryScheduler = null;
   if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
   if (systemPickScannerTimer) { clearInterval(systemPickScannerTimer); systemPickScannerTimer = null; }
+  if (marketUniverseMaterializerTimer) { clearInterval(marketUniverseMaterializerTimer); marketUniverseMaterializerTimer = null; }
 
   server.close(() => {
     process.exit(0);
