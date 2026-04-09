@@ -23,6 +23,32 @@ Tests use `node:test` + `tsx --test`. No Jest, no Vitest. Assertions use `node:a
 
 Environment is loaded from `local.env` (gitignored, has real credentials) > `.env` (gitignored) > `.env.example` (template). No dotenv package — `@unit-talk/config` parses env files directly. The Supabase project ref is `feownrheeefbcsehtsiw`.
 
+## Active Build — Phase 2: Syndicate Machine Foundation
+
+**Phase 1 is complete** (commit `66c9cc1`). **Phase 2 is the active build.**
+
+Phase 2 issue set (all Backlog, dependency-ordered):
+- UTV2-458 — Contract spec (`docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md`) ✅ Done
+- UTV2-459 — `market_universe` migration (T1, blocked until 458 merged — now unblocked)
+- UTV2-460 — `pick_candidates` migration (T1, same gate; may author in parallel with 459, merge serial)
+- UTV2-461 — Market universe materializer (T1, depends on 459)
+- UTV2-462 — Line movement tracking (T1/T2, depends on 459 + 461)
+- UTV2-463 — Board scan → candidates (T2, Codex-safe after 460 + 461 merge)
+- UTV2-464 — Phase 2 proof/evidence bundle — **hard gate to Phase 3**
+
+**Phase 2 hard boundaries (never violate):**
+- Candidate layer does not write to `picks` — `pick_candidates.pick_id` remains NULL in all Phase 2 code
+- `model_score / model_tier / model_confidence` remain NULL — Phase 3 wires the model runner
+- `shadow_mode` defaults `true` — must not be set `false` in Phase 2
+- Materializer outputs `market_universe` rows only
+- Board scan outputs `pick_candidates` rows only
+- `system-pick-scanner` is a parallel path and is NOT routed through the candidate layer
+- Phase 3 does not start until UTV2-464 evidence bundle is accepted by PM
+
+**Schema contract authority:** `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md`
+
+---
+
 ## Execution Model
 
 Claude Code is the execution orchestrator for Unit Talk V2. The job is to work the Linear backlog continuously until there are no executable issues left. When a green-state recovery sprint is active, recovery work (worker stability, repo hygiene, docs truth-sync) takes precedence over all feature work.
@@ -333,6 +359,16 @@ Standalone process for line movement detection and notification routing.
 
 SGO feed ingest — populates `provider_offers` and `game_results`.
 
+**SGO key format (live feed):** keys use underscore_camelCase for MLB/NHL/NFL (`batting_homeRuns-all-game-ou`, `shots_onGoal-all-game-ou`, `passing_yards-all-game-ou`), `+` separator for combo stats (`points+rebounds+assists-all-game-ou`), camelCase for NBA specials (`threePointersMade-all-game-ou`). The `SGO_MARKET_KEY_TO_CANONICAL_ID` map in `results-resolver.ts` uses these exact formats — do not use old hyphen-only formats.
+
+**Provider state:** SGO Pro is permanent (upgraded 2026-04-07). Odds API is suspended. All CLV and grading uses SGO data. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`.
+
+### apps/api — system-pick-scanner
+
+`system-pick-scanner` is wired into `apps/api/src/index.ts` and runs as a scheduled scan on startup. It reads `provider_offers` for `is_opening=true` rows, resolves canonical market key via `provider_market_aliases` reverse lookup, deviggs fair probability, selects the higher-probability side, and POSTs to `/api/submissions` with `source: 'system-pick-scanner'`.
+
+This is a **parallel path** to the Phase 2 candidate layer — it does not use `market_universe` or `pick_candidates`. Do not route it through the candidate layer.
+
 ### @unit-talk/db
 
 - `database.types.ts` — generated, never hand-edited
@@ -361,6 +397,14 @@ Approval and promotion are separate. Never collapse them conceptually in docs or
 - `audit_log.entity_ref` = pick id as text
 - `submission_events.event_name` (not `event_type`)
 - `settlement_records.corrects_id` = self-referencing FK for corrections; original row is never mutated
+- `picks.source` = typed union from `pickSources` in `packages/contracts/src/submission.ts`; valid values include `'system-pick-scanner'` (added Phase 1, commit `66c9cc1`)
+- `provider_offers.is_opening` / `is_opening` = line tags set by ingestor; required for CLV and scanner operation; fixed UTV2-400
+- Migration head: `202604080016` (pg_cron retention cron, 48 migrations applied)
+
+**Phase 2 tables (pending migrations UTV2-459 / UTV2-460):**
+- `market_universe` — canonical board-opportunity layer; upsert key `(provider_key, provider_event_id, COALESCE(provider_participant_id,''), provider_market_key)`
+- `pick_candidates` — evaluation layer; upsert key `(universe_id)`; `pick_id` must remain NULL in Phase 2
+- Full spec: `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md`
 
 ## Live Discord Targets
 
@@ -446,6 +490,15 @@ If legacy parity knowledge is needed, convert it into a bounded v2 reference art
 - do not create new packages unless clearly justified
 - do not leave duplicate templates active
 - do not use docs to claim runtime truth that is not yet enforced
+
+**Phase 2 specific — never do:**
+- do not write to `picks` from the candidate or board-scan layer
+- do not populate `pick_candidates.model_score / model_tier / model_confidence` in Phase 2
+- do not set `pick_candidates.pick_id` in Phase 2
+- do not set `pick_candidates.shadow_mode = false` in Phase 2
+- do not route `system-pick-scanner` through `market_universe` or `pick_candidates`
+- do not start Phase 3 model wiring before UTV2-464 closes
+- do not merge UTV2-459 and UTV2-460 in the same deploy (migration numbering — serial merge required)
 
 ## Preferred Verification Commands
 
