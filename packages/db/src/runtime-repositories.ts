@@ -112,6 +112,7 @@ import type {
   PickLifecycleRecord,
   HedgeOpportunityRecord,
   ProviderMarketAliasRow,
+  ProviderEntityAliasRow,
   ProviderOfferRecord,
   PromotionHistoryRecord,
   ReceiptRecord,
@@ -1324,6 +1325,11 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listAliasLookup(_provider: string): Promise<ProviderMarketAliasRow[]> {
+    // InMemory implementation has no alias table — returns empty array in test mode.
+    return [];
+  }
+
+  async listParticipantAliasLookup(_provider: string): Promise<ProviderEntityAliasRow[]> {
     // InMemory implementation has no alias table — returns empty array in test mode.
     return [];
   }
@@ -4039,6 +4045,19 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     }
 
     return (data ?? []) as ProviderMarketAliasRow[];
+  }
+
+  async listParticipantAliasLookup(provider: string): Promise<ProviderEntityAliasRow[]> {
+    const { data, error } = await fromUntyped(this.client, 'provider_entity_aliases')
+      .select('*')
+      .eq('provider', provider)
+      .eq('entity_kind', 'player');
+
+    if (error) {
+      throw new Error(`Failed to load participant alias lookup: ${error.message}`);
+    }
+
+    return (data ?? []) as unknown as ProviderEntityAliasRow[];
   }
 
   async listOpeningOffers(since: string, provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
