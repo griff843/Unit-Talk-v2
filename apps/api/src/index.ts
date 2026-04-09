@@ -9,6 +9,7 @@ import { runLineMovementDetection, DatabaseLineMovementRepository } from './line
 import { runBoardScan } from './board-scan-service.js';
 import { runCandidateScoring } from './candidate-scoring-service.js';
 import { runRankedSelection } from './ranked-selection-service.js';
+import { runBoardConstruction } from './board-construction-service.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -16,6 +17,7 @@ const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const CANDIDATE_SCORING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const RANKED_SELECTION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const BOARD_CONSTRUCTION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -31,6 +33,7 @@ let lineMovementDetectorTimer: ReturnType<typeof setInterval> | null = null;
 let boardScanTimer: ReturnType<typeof setInterval> | null = null;
 let candidateScoringTimer: ReturnType<typeof setInterval> | null = null;
 let rankedSelectionTimer: ReturnType<typeof setInterval> | null = null;
+let boardConstructionTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -121,6 +124,18 @@ server.listen(port, () => {
     runRankedSelection(rankingDeps, { logger: console }).catch(() => {});
   }, RANKED_SELECTION_INTERVAL_MS);
 
+  // Board construction: applies scarcity rules to ranked pool, writes to syndicate_board
+  // Phase 4 UTV2-474 — runs after ranked selection on 5-min cadence
+  const boardConstructionDeps = {
+    pickCandidates: runtime.repositories.pickCandidates,
+    marketUniverse: runtime.repositories.marketUniverse,
+    syndicateBoard: runtime.repositories.syndicateBoard,
+  };
+  runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
+  boardConstructionTimer = setInterval(() => {
+    runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
+  }, BOARD_CONSTRUCTION_INTERVAL_MS);
+
   console.log(
     JSON.stringify(
       {
@@ -184,6 +199,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (boardScanTimer) { clearInterval(boardScanTimer); boardScanTimer = null; }
   if (candidateScoringTimer) { clearInterval(candidateScoringTimer); candidateScoringTimer = null; }
   if (rankedSelectionTimer) { clearInterval(rankedSelectionTimer); rankedSelectionTimer = null; }
+  if (boardConstructionTimer) { clearInterval(boardConstructionTimer); boardConstructionTimer = null; }
 
   server.close(() => {
     process.exit(0);

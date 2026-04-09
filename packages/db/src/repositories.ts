@@ -7,6 +7,7 @@ import type {
   ValidatedSubmission,
 } from '@unit-talk/contracts';
 import type { IMarketUniverseRepository, MarketUniverseUpsertInput } from './market-universe-repository.js';
+import type { ISyndicateBoardRepository, SyndicateBoardInsertInput, SyndicateBoardRow } from './syndicate-board-repository.js';
 import type { ReferenceDataCatalog } from '@unit-talk/contracts';
 import type {
   AlertDetectionMarketType,
@@ -851,6 +852,7 @@ export interface RepositoryBundle {
   reviews: PickReviewRepository;
   marketUniverse: IMarketUniverseRepository;
   pickCandidates: IPickCandidateRepository;
+  syndicateBoard: ISyndicateBoardRepository;
   modelRegistry?: ModelRegistryRepository;
   experimentLedger?: ExperimentLedgerRepository;
   modelHealthSnapshots?: ModelHealthSnapshotRepository;
@@ -858,6 +860,7 @@ export interface RepositoryBundle {
 }
 
 export type { IMarketUniverseRepository, MarketUniverseUpsertInput };
+export type { ISyndicateBoardRepository, SyndicateBoardInsertInput, SyndicateBoardRow };
 
 // ---------------------------------------------------------------------------
 // IPickCandidateRepository — Phase 2 UTV2-463
