@@ -111,6 +111,7 @@ import type {
   PickRecord,
   PickLifecycleRecord,
   HedgeOpportunityRecord,
+  ProviderMarketAliasRow,
   ProviderOfferRecord,
   PromotionHistoryRecord,
   ReceiptRecord,
@@ -1320,6 +1321,11 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   async resolveCanonicalMarketKey(_providerMarketKey: string, _provider: string): Promise<string | null> {
     // InMemory implementation has no alias table — reverse alias resolution not supported in tests.
     return null;
+  }
+
+  async listAliasLookup(_provider: string): Promise<ProviderMarketAliasRow[]> {
+    // InMemory implementation has no alias table — returns empty array in test mode.
+    return [];
   }
 
   async listOpeningOffers(since: string, _provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
@@ -4021,6 +4027,18 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     const rows = (data ?? []) as Array<{ market_type_id: string }>;
     return rows[0]?.market_type_id ?? null;
+  }
+
+  async listAliasLookup(provider: string): Promise<ProviderMarketAliasRow[]> {
+    const { data, error } = await fromUntyped(this.client, 'provider_market_aliases')
+      .select('*')
+      .eq('provider', provider);
+
+    if (error) {
+      throw new Error(`Failed to load alias lookup: ${error.message}`);
+    }
+
+    return (data ?? []) as ProviderMarketAliasRow[];
   }
 
   async listOpeningOffers(since: string, provider: string, limit = 500): Promise<ProviderOfferRecord[]> {

@@ -39,6 +39,7 @@ import type {
   PromotionStatus,
   PromotionTarget,
   OutboxRecord,
+  ProviderMarketAliasRow,
   ProviderOfferRecord,
   ReceiptRecord,
   SettlementConfidence,
@@ -550,6 +551,13 @@ export interface ProviderOfferRepository {
    * Used by the system pick scanner to build gradeable picks from raw provider offers.
    */
   resolveCanonicalMarketKey(providerMarketKey: string, provider: string): Promise<string | null>;
+  /**
+   * Bulk-loads all provider_market_alias rows for a given provider.
+   * Returns the full alias row set, including sport_id for sport-aware disambiguation.
+   * Used by the market universe materializer for O(1) per-row alias lookups without
+   * N+1 query patterns.
+   */
+  listAliasLookup(provider: string): Promise<ProviderMarketAliasRow[]>;
   /**
    * Returns recent is_opening=true rows for a given provider, within the lookback window,
    * that have both over_odds and under_odds and a non-null line and participant.
