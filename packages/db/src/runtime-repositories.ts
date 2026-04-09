@@ -5771,7 +5771,7 @@ export function createModelOpsRepositories(
  * those fields are never overwritten.
  */
 export class InMemoryMarketUniverseRepository implements IMarketUniverseRepository {
-  private readonly rows = new Map<string, MarketUniverseUpsertInput>();
+  private readonly rows = new Map<string, MarketUniverseRow>();
 
   private naturalKey(row: MarketUniverseUpsertInput): string {
     return [
@@ -5783,6 +5783,7 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
   }
 
   async upsertMarketUniverse(rows: MarketUniverseUpsertInput[]): Promise<void> {
+    const now = new Date().toISOString();
     for (const row of rows) {
       const key = this.naturalKey(row);
       const existing = this.rows.get(key);
@@ -5797,7 +5798,11 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
         const closing_under_odds = existing.closing_under_odds !== null ? existing.closing_under_odds : row.closing_under_odds;
 
         this.rows.set(key, {
+          ...existing,
           ...row,
+          id: existing.id,         // preserve generated id
+          created_at: existing.created_at,  // preserve created_at
+          updated_at: now,
           opening_line,
           opening_over_odds,
           opening_under_odds,
@@ -5806,26 +5811,29 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
           closing_under_odds,
         });
       } else {
-        this.rows.set(key, row);
+        // INSERT: generate id and timestamps; all other fields come from input
+        this.rows.set(key, {
+          ...row,
+          id: crypto.randomUUID(),
+          refreshed_at: now,
+          created_at: now,
+          updated_at: now,
+        });
       }
     }
   }
 
   async listForScan(limit: number): Promise<MarketUniverseRow[]> {
-    // InMemory stores MarketUniverseUpsertInput shapes (no id/timestamps) unless seeded
-    // as full MarketUniverseRow by test helpers. Cast and slice.
-    const all = Array.from(this.rows.values()) as unknown as MarketUniverseRow[];
-    return all.slice(0, limit);
+    return Array.from(this.rows.values()).slice(0, limit);
   }
 
   async findByIds(ids: string[]): Promise<MarketUniverseRow[]> {
     const idSet = new Set(ids);
-    const all = Array.from(this.rows.values()) as unknown as MarketUniverseRow[];
-    return all.filter(r => idSet.has(r.id));
+    return Array.from(this.rows.values()).filter(r => idSet.has(r.id));
   }
 
   /** Test helper: return all rows. */
-  listAll(): MarketUniverseUpsertInput[] {
+  listAll(): MarketUniverseRow[] {
     return Array.from(this.rows.values());
   }
 
@@ -5835,7 +5843,7 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
     providerEventId: string,
     providerParticipantId: string | null,
     providerMarketKey: string,
-  ): MarketUniverseUpsertInput | undefined {
+  ): MarketUniverseRow | undefined {
     return this.rows.get(
       [providerKey, providerEventId, providerParticipantId ?? '', providerMarketKey].join(':'),
     );
