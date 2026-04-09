@@ -1,3 +1,4 @@
+import { loadEnvironment } from '@unit-talk/config';
 import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { startRecapScheduler } from './recap-scheduler.js';
 import { startTrialExpiryScheduler } from './trial-expiry-service.js';
@@ -8,7 +9,8 @@ const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
-const runtime = createApiRuntimeDependencies();
+const environment = loadEnvironment();
+const runtime = createApiRuntimeDependencies({ environment });
 const server = createApiServer({ runtime });
 let stopRecapScheduler: (() => void) | null = null;
 let stopTrialExpiryScheduler: (() => void) | null = null;
@@ -34,7 +36,7 @@ server.listen(port, () => {
   }, 6 * 60 * 60 * 1000);
 
   // System pick scanner: auto-generate player prop picks from opening lines
-  const scannerConfig = loadSystemPickScannerConfig();
+  const scannerConfig = loadSystemPickScannerConfig(environment);
   if (scannerConfig.enabled) {
     const scannerDeps = {
       providerOffers: runtime.repositories.providerOffers,

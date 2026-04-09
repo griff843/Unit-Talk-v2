@@ -6,7 +6,7 @@ This file is read by Codex before every task. Follow every rule here exactly.
 
 ## Workspace
 
-- Active repo: `C:\dev\unit-talk-v2` (this repo)
+- Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
 - Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
 
 ---

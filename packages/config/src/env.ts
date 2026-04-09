@@ -58,10 +58,14 @@ export interface AppEnv {
   DISCORD_CAPPER_CHANNEL_ID?: string | undefined;
   DISCORD_ANNOUNCEMENT_CHANNEL_ID?: string | undefined;
   UNIT_TALK_API_URL?: string | undefined;
+  UNIT_TALK_API_KEY_SUBMITTER?: string | undefined;
   OPENAI_API_KEY?: string | undefined;
   NOTION_TOKEN?: string | undefined;
   SLACK_BOT_TOKEN?: string | undefined;
   SLACK_SIGNING_SECRET?: string | undefined;
+  SYSTEM_PICK_SCANNER_ENABLED?: string | undefined;
+  SYSTEM_PICK_SCANNER_LOOKBACK_HOURS?: string | undefined;
+  SYSTEM_PICK_SCANNER_MAX_PICKS?: string | undefined;
 }
 
 function parseEnvFile(filePath: string) {
@@ -181,10 +185,14 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     DISCORD_CAPPER_CHANNEL_ID: optionalEnv('DISCORD_CAPPER_CHANNEL_ID', merged),
     DISCORD_ANNOUNCEMENT_CHANNEL_ID: optionalEnv('DISCORD_ANNOUNCEMENT_CHANNEL_ID', merged),
     UNIT_TALK_API_URL: optionalEnv('UNIT_TALK_API_URL', merged),
+    UNIT_TALK_API_KEY_SUBMITTER: optionalEnv('UNIT_TALK_API_KEY_SUBMITTER', merged),
     OPENAI_API_KEY: optionalEnv('OPENAI_API_KEY', merged),
     NOTION_TOKEN: optionalEnv('NOTION_TOKEN', merged),
     SLACK_BOT_TOKEN: optionalEnv('SLACK_BOT_TOKEN', merged),
     SLACK_SIGNING_SECRET: optionalEnv('SLACK_SIGNING_SECRET', merged),
+    SYSTEM_PICK_SCANNER_ENABLED: optionalEnv('SYSTEM_PICK_SCANNER_ENABLED', merged),
+    SYSTEM_PICK_SCANNER_LOOKBACK_HOURS: optionalEnv('SYSTEM_PICK_SCANNER_LOOKBACK_HOURS', merged),
+    SYSTEM_PICK_SCANNER_MAX_PICKS: optionalEnv('SYSTEM_PICK_SCANNER_MAX_PICKS', merged),
   };
 
   return env;

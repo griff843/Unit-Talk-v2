@@ -63,7 +63,7 @@ async function main(): Promise<void> {
 }
 
 async function listIssues(): Promise<void> {
-  const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
+  const teamId = await resolveTeamId();
   const stateNames = parseCsv(readOption('states') ?? 'Ready,In Progress,In Review');
   const limit = Number.parseInt(readOption('limit') ?? '50', 10);
   const json = hasFlag('json');
@@ -77,7 +77,7 @@ async function listIssues(): Promise<void> {
   }>(
     `
       query ListIssues($teamKey: String!, $stateNames: [String!], $first: Int!) {
-        team(key: $teamKey) {
+        team(id: $teamKey) {
           issues(
             first: $first
             filter: { state: { name: { in: $stateNames } } }
@@ -98,7 +98,7 @@ async function listIssues(): Promise<void> {
       }
     `,
     {
-      teamKey,
+      teamKey: teamId,
       stateNames,
       first: limit,
     },
@@ -136,7 +136,7 @@ async function listIssues(): Promise<void> {
 }
 
 async function listExecutableWork(): Promise<void> {
-  const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
+  const teamId = await resolveTeamId();
   const stateNames = parseCsv(readOption('states') ?? 'Ready,In Progress,In Review');
   const limit = Number.parseInt(readOption('limit') ?? '25', 10);
 
@@ -155,7 +155,7 @@ async function listExecutableWork(): Promise<void> {
   }>(
     `
       query WorkIssues($teamKey: String!, $stateNames: [String!], $first: Int!) {
-        team(key: $teamKey) {
+        team(id: $teamKey) {
           issues(
             first: $first
             filter: { state: { name: { in: $stateNames } } }
@@ -179,7 +179,7 @@ async function listExecutableWork(): Promise<void> {
       }
     `,
     {
-      teamKey,
+      teamKey: teamId,
       stateNames,
       first: limit,
     },
@@ -392,7 +392,7 @@ async function resolveIssue(issueRef: string): Promise<LinearIssueNode> {
 }
 
 async function resolveStateId(stateName: string): Promise<string> {
-  const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
+  const teamId = await resolveTeamId();
   const data = await gql<{
     team: {
       states: {
@@ -402,7 +402,7 @@ async function resolveStateId(stateName: string): Promise<string> {
   }>(
     `
       query ResolveState($teamKey: String!) {
-        team(key: $teamKey) {
+        team(id: $teamKey) {
           states {
             nodes {
               id
@@ -413,7 +413,7 @@ async function resolveStateId(stateName: string): Promise<string> {
         }
       }
     `,
-    { teamKey },
+    { teamKey: teamId },
   );
 
   const state = data.team?.states.nodes.find(
@@ -421,10 +421,50 @@ async function resolveStateId(stateName: string): Promise<string> {
   );
 
   if (!state) {
-    throw new Error(`Linear state not found on team ${teamKey}: ${stateName}`);
+    throw new Error(`Linear state not found on the configured team: ${stateName}`);
   }
 
   return state.id;
+}
+
+async function resolveTeamId(): Promise<string> {
+  const explicitTeamId = readOption('team-id') ?? env.LINEAR_TEAM_ID?.trim();
+  if (explicitTeamId) {
+    return explicitTeamId;
+  }
+
+  const teamKey = readOption('team-key') ?? readOption('team') ?? env.LINEAR_TEAM_KEY?.trim();
+  if (!teamKey) {
+    throw new Error('Provide LINEAR_TEAM_ID or LINEAR_TEAM_KEY to query the Linear team');
+  }
+
+  const data = await gql<{
+    teams: {
+      nodes: Array<{ id: string; key: string; name: string }>;
+    };
+  }>(
+    `
+      query ResolveTeamId {
+        teams(first: 250) {
+          nodes {
+            id
+            key
+            name
+          }
+        }
+      }
+    `,
+  );
+
+  const team = data.teams.nodes.find(
+    (candidate) => candidate.key.toLowerCase() === teamKey.toLowerCase(),
+  );
+
+  if (!team) {
+    throw new Error(`Linear team not found for key: ${teamKey}`);
+  }
+
+  return team.id;
 }
 
 async function gql<T>(query: string, variables: JsonObject = {}): Promise<T> {
@@ -508,8 +548,8 @@ function requirePositionalArg(index: number, label: string): string {
 
 function printUsage(): void {
   console.log(`Usage:
-  tsx scripts/linear-workflow.ts issues [--states "Ready,In Progress,In Review"] [--limit 50] [--json]
-  tsx scripts/linear-workflow.ts work [--states "Ready,In Progress,In Review"] [--limit 25]
+  tsx scripts/linear-workflow.ts issues [--team-id <id> | --team-key <key>] [--states "Ready,In Progress,In Review"] [--limit 50] [--json]
+  tsx scripts/linear-workflow.ts work [--team-id <id> | --team-key <key>] [--states "Ready,In Progress,In Review"] [--limit 25]
   tsx scripts/linear-workflow.ts update UTV2-123 [--state Done] [--branch branch-name]
   tsx scripts/linear-workflow.ts comment UTV2-123 --body "message"
   tsx scripts/linear-workflow.ts close UTV2-123 [--comment "closeout note"] [--state Done]`);

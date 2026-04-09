@@ -11,6 +11,7 @@
  */
 
 import { americanToImplied, applyDevig } from '@unit-talk/domain';
+import type { AppEnv } from '@unit-talk/config';
 import type {
   EventRepository,
   ParticipantRepository,
@@ -37,16 +38,20 @@ export interface SystemPickScanResult {
   errors: number;
 }
 
-export function loadSystemPickScannerConfig(): Pick<
-  SystemPickScanOptions,
-  'enabled' | 'apiUrl' | 'apiKey' | 'lookbackHours' | 'maxPicksPerRun'
-> {
+export function loadSystemPickScannerConfig(env: Pick<
+  AppEnv,
+  | 'SYSTEM_PICK_SCANNER_ENABLED'
+  | 'SYSTEM_PICK_SCANNER_LOOKBACK_HOURS'
+  | 'SYSTEM_PICK_SCANNER_MAX_PICKS'
+  | 'UNIT_TALK_API_URL'
+  | 'UNIT_TALK_API_KEY_SUBMITTER'
+>): Pick<SystemPickScanOptions, 'enabled' | 'apiUrl' | 'apiKey' | 'lookbackHours' | 'maxPicksPerRun'> {
   return {
-    enabled: process.env.SYSTEM_PICK_SCANNER_ENABLED === 'true',
-    apiUrl: (process.env.UNIT_TALK_API_URL ?? '').replace(/\/+$/, ''),
-    apiKey: process.env.UNIT_TALK_API_KEY_SUBMITTER?.trim() || undefined,
-    lookbackHours: parsePositiveInt(process.env.SYSTEM_PICK_SCANNER_LOOKBACK_HOURS, 24),
-    maxPicksPerRun: parsePositiveInt(process.env.SYSTEM_PICK_SCANNER_MAX_PICKS, 100),
+    enabled: env.SYSTEM_PICK_SCANNER_ENABLED === 'true',
+    apiUrl: (env.UNIT_TALK_API_URL ?? '').replace(/\/+$/, ''),
+    apiKey: env.UNIT_TALK_API_KEY_SUBMITTER?.trim() || undefined,
+    lookbackHours: parsePositiveInt(env.SYSTEM_PICK_SCANNER_LOOKBACK_HOURS, 24),
+    maxPicksPerRun: parsePositiveInt(env.SYSTEM_PICK_SCANNER_MAX_PICKS, 100),
   };
 }
 

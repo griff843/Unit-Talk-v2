@@ -4,7 +4,7 @@ Unit Talk V2 is a greenfield rebuild of the Unit Talk platform in a clean monore
 
 ## Workspace Split
 
-- Active build workspace: `C:\dev\unit-talk-v2`
+- Active build workspace: `C:\Dev\Unit-Talk-v2-main`
 - Legacy reference workspace: `C:\dev\unit-talk-production`
 
 The legacy repository is available for audit, extraction, and migration mapping only. New implementation belongs here.
