@@ -20,8 +20,7 @@
  */
 
 import { americanToImplied, applyDevig } from '@unit-talk/domain';
-import type { IMarketUniverseRepository, MarketUniverseUpsertInput } from '@unit-talk/db';
-import type { ProviderOfferRepository } from '@unit-talk/db';
+import type { IMarketUniverseRepository, MarketUniverseUpsertInput, ProviderOfferRepository } from '@unit-talk/db';
 
 // Phase 2: staleness threshold is hardcoded at 2 hours (see contract §4)
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
@@ -86,6 +85,21 @@ export class MarketUniverseMaterializer {
         }),
       );
       return { upserted: 0, errors: 0, durationMs: Date.now() - startMs };
+    }
+
+    // Load alias lookup once per run for O(1) per-market resolution
+    // Key structure: `${provider_market_key}:${sport_id ?? ''}` (sport-aware)
+    // Fallback key: `${provider_market_key}:` (sport-agnostic)
+    type AliasEntry = { market_type_id: string };
+    const aliasMap = new Map<string, AliasEntry>();
+    try {
+      const aliasRows = await this.repos.providerOffers.listAliasLookup(offers[0]?.provider_key ?? 'sgo');
+      for (const row of aliasRows) {
+        // Sport-specific key takes precedence; sport-agnostic key is the fallback
+        aliasMap.set(`${row.provider_market_key}:${row.sport_id ?? ''}`, { market_type_id: row.market_type_id });
+      }
+    } catch {
+      // Alias load failure is non-fatal — materializer continues without resolution
     }
 
     // Group offers by natural key to find opening, closing, and current (latest) per group
@@ -170,6 +184,12 @@ export class MarketUniverseMaterializer {
         const lastSnapshotMs = new Date(latest.snapshot_at).getTime();
         const is_stale = lastSnapshotMs < now - STALE_THRESHOLD_MS;
 
+        // Alias resolution: try sport-specific key first, then sport-agnostic fallback
+        const sportKey = latest.sport_key ?? '';
+        const alias =
+          aliasMap.get(`${latest.provider_market_key}:${sportKey}`) ??
+          aliasMap.get(`${latest.provider_market_key}:`);
+
         const row: MarketUniverseUpsertInput = {
           // Natural key
           provider_key: latest.provider_key,
@@ -182,10 +202,10 @@ export class MarketUniverseMaterializer {
           // when not separately stored on provider_offers (it isn't in Phase 2)
           sport_key: latest.sport_key ?? 'unknown',
           league_key: latest.sport_key ?? 'unknown',
-          event_id: null,       // Phase 2: event FK resolution deferred (no event lookup in materializer)
-          participant_id: null, // Phase 2: participant FK resolution deferred
-          market_type_id: null, // Phase 2: market type resolution deferred
-          canonical_market_key: latest.provider_market_key, // Phase 2: use provider key as-is
+          event_id: null,       // event FK resolution: Phase 3+ (requires event lookup service)
+          participant_id: null, // participant FK resolution: Phase 3+ (requires participant lookup)
+          market_type_id: alias?.market_type_id ?? null,
+          canonical_market_key: alias?.market_type_id ?? latest.provider_market_key,
 
           // Current line (from the most recent snapshot)
           current_line: latest.line ?? null,
