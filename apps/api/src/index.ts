@@ -5,9 +5,11 @@ import { startTrialExpiryScheduler } from './trial-expiry-service.js';
 import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
 import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-scanner.js';
 import { runMarketUniverseMaterializer } from './market-universe-materializer.js';
+import { runLineMovementDetection, DatabaseLineMovementRepository } from './line-movement-detector.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -19,6 +21,7 @@ let stopTrialExpiryScheduler: (() => void) | null = null;
 let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
 let systemPickScannerTimer: ReturnType<typeof setInterval> | null = null;
 let marketUniverseMaterializerTimer: ReturnType<typeof setInterval> | null = null;
+let lineMovementDetectorTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -62,6 +65,14 @@ server.listen(port, () => {
   marketUniverseMaterializerTimer = setInterval(() => {
     runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
   }, MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS);
+
+  // Line movement detector: runs after materializer on same 5-minute schedule
+  // Phase 2 UTV2-462 — in-memory only, no DB writes
+  const lineMovementRepo = new DatabaseLineMovementRepository(runtime.repositories.marketUniverse);
+  runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
+  lineMovementDetectorTimer = setInterval(() => {
+    runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
+  }, LINE_MOVEMENT_DETECTOR_INTERVAL_MS);
 
   console.log(
     JSON.stringify(
@@ -122,6 +133,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
   if (systemPickScannerTimer) { clearInterval(systemPickScannerTimer); systemPickScannerTimer = null; }
   if (marketUniverseMaterializerTimer) { clearInterval(marketUniverseMaterializerTimer); marketUniverseMaterializerTimer = null; }
+  if (lineMovementDetectorTimer) { clearInterval(lineMovementDetectorTimer); lineMovementDetectorTimer = null; }
 
   server.close(() => {
     process.exit(0);
