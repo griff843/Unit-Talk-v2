@@ -43,43 +43,56 @@ export const SGO_GAME_LINE_CANONICAL_ID: Record<string, string> = {
  * game_results rows are stored with the same key that `pick.market` uses,
  * enabling the grading-service to match them without a provider-specific join.
  *
+ * Key format: exact SGO baseMarketKey values as returned in the results feed
+ * (verified against live provider_offers.provider_market_key).
+ *
  * Keep in sync with: provider_market_aliases WHERE provider='sgo'
  * Related issue: UTV2-384 (auto-settle E2E proof), UTV2-385 (game-line grading schema)
  */
 export const SGO_MARKET_KEY_TO_CANONICAL_ID: Record<string, string> = {
-  // NBA / NCAAB
+  // NBA / NCAAB — simple stats
   'points-all-game-ou': 'player_points_ou',
   'rebounds-all-game-ou': 'player_rebounds_ou',
   'assists-all-game-ou': 'player_assists_ou',
   'steals-all-game-ou': 'player_steals_ou',
   'blocks-all-game-ou': 'player_blocks_ou',
   'turnovers-all-game-ou': 'player_turnovers_ou',
-  'threes-all-game-ou': 'player_3pm_ou',
-  'pra-all-game-ou': 'player_pra_ou',
-  'pts-rebs-all-game-ou': 'player_pts_rebs_ou',
-  'pts-asts-all-game-ou': 'player_pts_asts_ou',
-  'rebs-asts-all-game-ou': 'player_rebs_asts_ou',
-  // MLB batting
-  'batting-hits-all-game-ou': 'player_batting_hits_ou',
-  'batting-home-runs-all-game-ou': 'player_batting_home_runs_ou',
-  'batting-rbi-all-game-ou': 'player_batting_rbi_ou',
-  'batting-walks-all-game-ou': 'player_batting_walks_ou',
-  'batting-total-bases-all-game-ou': 'player_batting_total_bases_ou',
-  'batting-strikeouts-all-game-ou': 'player_batting_strikeouts_ou',
-  'batting-runs-all-game-ou': 'player_batting_runs_ou',
+  // NBA / NCAAB — combo and special (+ format, camelCase as in live feed)
+  'threePointersMade-all-game-ou': 'player_3pm_ou',
+  'threePointersMade-all-1h-ou': 'player_3pm_ou',
+  'threePointersMade-all-1q-ou': 'player_3pm_ou',
+  'points+rebounds+assists-all-game-ou': 'player_pra_ou',
+  'points+rebounds+assists-all-1h-ou': 'player_pra_ou',
+  'points+rebounds+assists-all-1q-ou': 'player_pra_ou',
+  'points+rebounds-all-game-ou': 'player_pts_rebs_ou',
+  'points+assists-all-game-ou': 'player_pts_asts_ou',
+  'rebounds+assists-all-game-ou': 'player_rebs_asts_ou',
+  'fantasyScore-all-game-ou': 'player_fantasy_score_ou',
+  // MLB batting (camelCase/underscore as in live feed)
+  'batting_hits-all-game-ou': 'player_batting_hits_ou',
+  'batting_homeRuns-all-game-ou': 'player_batting_home_runs_ou',
+  'batting_RBI-all-game-ou': 'player_batting_rbi_ou',
+  'batting_totalBases-all-game-ou': 'player_batting_total_bases_ou',
+  'batting_singles-all-game-ou': 'player_batting_singles_ou',
+  'batting_doubles-all-game-ou': 'player_batting_doubles_ou',
+  'batting_triples-all-game-ou': 'player_batting_triples_ou',
+  'batting_basesOnBalls-all-game-ou': 'player_batting_walks_ou',
+  'batting_hits+runs+rbi-all-game-ou': 'player_batting_hrr_ou',
   // MLB pitching
-  'pitching-strikeouts-all-game-ou': 'player_pitching_strikeouts_ou',
-  'pitching-innings-pitched-all-game-ou': 'player_pitching_innings_pitched_ou',
+  'pitching_strikeouts-all-game-ou': 'player_pitching_strikeouts_ou',
+  'pitching_outs-all-game-ou': 'player_pitching_outs_ou',
+  'pitching_hits-all-game-ou': 'player_pitching_hits_allowed_ou',
+  'pitching_earnedRuns-all-game-ou': 'player_pitching_earned_runs_ou',
   // NHL
-  'goals-all-game-ou': 'player_goals_ou',
-  'shots-on-goal-all-game-ou': 'player_shots_on_goal_ou',
-  // NFL / NCAAF
-  'passing-yards-all-game-ou': 'player_passing_yards_ou',
-  'passing-tds-all-game-ou': 'player_passing_tds_ou',
-  'rushing-yards-all-game-ou': 'player_rushing_yards_ou',
-  'receiving-yards-all-game-ou': 'player_receiving_yards_ou',
-  'receiving-targets-all-game-ou': 'player_receiving_targets_ou',
-  'receptions-all-game-ou': 'player_receptions_ou',
+  'goals+assists-all-game-ou': 'player_hockey_points_ou',
+  'shots_onGoal-all-game-ou': 'player_shots_ou',
+  'goalie_saves-all-game-ou': 'player_saves_ou',
+  // NFL / NCAAF (underscore format as in live feed)
+  'passing_yards-all-game-ou': 'player_passing_yards_ou',
+  'passing_touchdowns-all-game-ou': 'player_passing_tds_ou',
+  'rushing_yards-all-game-ou': 'player_rushing_yards_ou',
+  'receiving_yards-all-game-ou': 'player_receiving_yards_ou',
+  'receiving_receptions-all-game-ou': 'player_receptions_ou',
 };
 
 export interface ResultsResolutionSummary {

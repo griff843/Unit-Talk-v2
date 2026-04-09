@@ -6,6 +6,7 @@ export const pickSources = [
   'model-driven',
   'api',
   'discord-bot',
+  'system-pick-scanner',
 ] as const;
 
 export type PickSource = (typeof pickSources)[number];

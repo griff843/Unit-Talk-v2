@@ -53,11 +53,13 @@ export async function rerunPromotionController(
   const previousScore = pick.promotion_score;
 
   // Rerun promotion — this writes new pick_promotion_history rows
+  // settlements passed to enable CLV-based trust adjustment.
   const result = await evaluateAllPoliciesEagerAndPersist(
     pickId,
     `rerun.${payload.actor.trim()}`,
     repositories.picks,
     repositories.audit,
+    repositories.settlements,
   );
 
   // Read updated pick state from the result

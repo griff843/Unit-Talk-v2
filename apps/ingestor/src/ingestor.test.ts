@@ -1739,17 +1739,39 @@ test('ingestLeague extracts scored markets from finalized event odds', async () 
 
 test('results-resolver canonical alias maps include expanded player props and game lines', () => {
   const expectedPlayerAliases = {
-    'batting-runs-all-game-ou': 'player_batting_runs_ou',
-    'goals-all-game-ou': 'player_goals_ou',
-    'assists-all-game-ou': 'player_assists_ou',
-    'shots-on-goal-all-game-ou': 'player_shots_on_goal_ou',
+    // NBA / NCAAB — simple stats (verified against live SGO feed)
     'points-all-game-ou': 'player_points_ou',
-    'passing-yards-all-game-ou': 'player_passing_yards_ou',
-    'passing-tds-all-game-ou': 'player_passing_tds_ou',
-    'rushing-yards-all-game-ou': 'player_rushing_yards_ou',
-    'receiving-yards-all-game-ou': 'player_receiving_yards_ou',
-    'receiving-targets-all-game-ou': 'player_receiving_targets_ou',
-    'receptions-all-game-ou': 'player_receptions_ou',
+    'rebounds-all-game-ou': 'player_rebounds_ou',
+    'assists-all-game-ou': 'player_assists_ou',
+    'steals-all-game-ou': 'player_steals_ou',
+    'blocks-all-game-ou': 'player_blocks_ou',
+    'turnovers-all-game-ou': 'player_turnovers_ou',
+    // NBA — camelCase as in live SGO feed
+    'threePointersMade-all-game-ou': 'player_3pm_ou',
+    // NBA combo stats (+ format as in live SGO feed)
+    'points+rebounds+assists-all-game-ou': 'player_pra_ou',
+    'points+rebounds-all-game-ou': 'player_pts_rebs_ou',
+    'points+assists-all-game-ou': 'player_pts_asts_ou',
+    'rebounds+assists-all-game-ou': 'player_rebs_asts_ou',
+    // MLB batting (underscore_camelCase as in live SGO feed)
+    'batting_hits-all-game-ou': 'player_batting_hits_ou',
+    'batting_homeRuns-all-game-ou': 'player_batting_home_runs_ou',
+    'batting_RBI-all-game-ou': 'player_batting_rbi_ou',
+    'batting_totalBases-all-game-ou': 'player_batting_total_bases_ou',
+    'batting_hits+runs+rbi-all-game-ou': 'player_batting_hrr_ou',
+    // MLB pitching
+    'pitching_strikeouts-all-game-ou': 'player_pitching_strikeouts_ou',
+    'pitching_earnedRuns-all-game-ou': 'player_pitching_earned_runs_ou',
+    // NHL (underscore_camelCase as in live SGO feed)
+    'goals+assists-all-game-ou': 'player_hockey_points_ou',
+    'shots_onGoal-all-game-ou': 'player_shots_ou',
+    'goalie_saves-all-game-ou': 'player_saves_ou',
+    // NFL (underscore format as in live SGO feed)
+    'passing_yards-all-game-ou': 'player_passing_yards_ou',
+    'passing_touchdowns-all-game-ou': 'player_passing_tds_ou',
+    'rushing_yards-all-game-ou': 'player_rushing_yards_ou',
+    'receiving_yards-all-game-ou': 'player_receiving_yards_ou',
+    'receiving_receptions-all-game-ou': 'player_receptions_ou',
   };
 
   for (const [marketKey, canonicalId] of Object.entries(expectedPlayerAliases)) {

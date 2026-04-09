@@ -13,6 +13,7 @@ import {
   type PickRepository,
   type ProviderOfferRecord,
   type ProviderOfferRepository,
+  type SettlementRepository,
   type SubmissionEventRecord,
   type SubmissionRecord,
   type SubmissionRepository,
@@ -80,6 +81,7 @@ export async function processSubmission(
     picks: PickRepository;
     audit: AuditLogRepository;
     providerOffers: ProviderOfferRepository;
+    settlements?: SettlementRepository;
   },
 ): Promise<SubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -256,11 +258,13 @@ export async function processSubmission(
 
   // Eager promotion evaluation — all policies evaluated in priority order.
   // picks.promotion_target is set to the highest-priority qualified target (or null).
+  // settlements passed to enable CLV-based trust adjustment.
   const eagerResult = await evaluateAllPoliciesEagerAndPersist(
     pickRecord.id,
     'system',
     repositories.picks,
     repositories.audit,
+    repositories.settlements,
   );
 
   return {

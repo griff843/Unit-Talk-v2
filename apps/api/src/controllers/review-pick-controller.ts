@@ -101,11 +101,13 @@ export async function reviewPickController(
   if (decision === 'approve') {
     try {
       const { evaluateAllPoliciesEagerAndPersist } = await import('../promotion-service.js');
+      // settlements passed to enable CLV-based trust adjustment.
       await evaluateAllPoliciesEagerAndPersist(
         pickId,
         `review.${payload.decidedBy.trim()}`,
         repositories.picks,
         repositories.audit,
+        repositories.settlements,
       );
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);

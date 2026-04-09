@@ -438,7 +438,7 @@ export class InMemoryPickRepository implements PickRepository {
         pick.status !== 'settled' &&
         pick.status !== 'voided' &&
         pick.created_at >= boardWindowStart &&
-        (pick.source === 'smart-form' || pick.source === 'discord' || pick.source === 'api'),
+        pick.source != null,
     );
 
     return {
@@ -2492,7 +2492,7 @@ export class DatabasePickRepository implements PickRepository {
       .select('market,selection,metadata,promotion_target,promotion_status,source')
       .eq('promotion_target', input.target)
       .in('promotion_status', ['qualified', 'promoted'])
-      .in('source', ['smart-form', 'discord', 'api'])
+      .not('source', 'is', null)
       .neq('status', 'settled')
       .neq('status', 'voided')
       .gte('created_at', boardWindowStart);
