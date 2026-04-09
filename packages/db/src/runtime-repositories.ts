@@ -93,6 +93,7 @@ import type {
   TeamSearchResult,
   PickReviewCreateInput,
   PickReviewRepository,
+  ISyndicateBoardRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -130,6 +131,10 @@ import {
   type UnitTalkSupabaseClient,
 } from './client.js';
 import { derivePickForeignKeyCandidates } from './pick-foreign-keys.js';
+import {
+  InMemorySyndicateBoardRepository,
+  DatabaseSyndicateBoardRepository,
+} from './syndicate-board-repository.js';
 
 function extractPlayerId(pick: CanonicalPick): string | null {
   const raw = pick.metadata?.['playerId'];
@@ -6222,6 +6227,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     reviews: new InMemoryPickReviewRepository(),
     marketUniverse: new InMemoryMarketUniverseRepository(),
     pickCandidates: new InMemoryPickCandidateRepository(),
+    syndicateBoard: new InMemorySyndicateBoardRepository(),
   };
 }
 
@@ -6248,6 +6254,7 @@ export function createDatabaseRepositoryBundle(
     reviews: new DatabasePickReviewRepository(connection),
     marketUniverse: new DatabaseMarketUniverseRepository(connection),
     pickCandidates: new DatabasePickCandidateRepository(connection),
+    syndicateBoard: new DatabaseSyndicateBoardRepository(connection),
   };
 }
 
