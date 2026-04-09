@@ -880,6 +880,13 @@ export interface PickCandidateUpsertInput {
   // NOTE: pick_id, model_score, model_tier, model_confidence, shadow_mode must NEVER be set in Phase 2
 }
 
+export interface ModelScoreUpdate {
+  id: string;
+  model_score: number;
+  model_tier: string;
+  model_confidence: number;
+}
+
 export interface IPickCandidateRepository {
   /**
    * Upsert pick_candidates rows using the conflict target: universe_id (unique index).
@@ -897,6 +904,13 @@ export interface IPickCandidateRepository {
    * Find candidates by status. Used by tests and Phase 3 model runner.
    */
   findByStatus(status: string): Promise<PickCandidateRow[]>;
+
+  /**
+   * Batch-updates model scoring fields on pick_candidates rows.
+   * Only sets model_score, model_tier, model_confidence — never touches pick_id or shadow_mode.
+   * Used by the Phase 3 candidate scoring service.
+   */
+  updateModelScoreBatch(updates: ModelScoreUpdate[]): Promise<void>;
 }
 
 export type { PickCandidateRow, PickCandidateFilterDetails };

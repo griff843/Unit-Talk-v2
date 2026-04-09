@@ -7,11 +7,13 @@ import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-sc
 import { runMarketUniverseMaterializer } from './market-universe-materializer.js';
 import { runLineMovementDetection, DatabaseLineMovementRepository } from './line-movement-detector.js';
 import { runBoardScan } from './board-scan-service.js';
+import { runCandidateScoring } from './candidate-scoring-service.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const CANDIDATE_SCORING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -25,6 +27,7 @@ let systemPickScannerTimer: ReturnType<typeof setInterval> | null = null;
 let marketUniverseMaterializerTimer: ReturnType<typeof setInterval> | null = null;
 let lineMovementDetectorTimer: ReturnType<typeof setInterval> | null = null;
 let boardScanTimer: ReturnType<typeof setInterval> | null = null;
+let candidateScoringTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -91,6 +94,18 @@ server.listen(port, () => {
     runBoardScan(boardScanDeps, { logger: console }).catch(() => {});
   }, BOARD_SCAN_INTERVAL_MS);
 
+  // Candidate scoring: reads pick_candidates with model_score=NULL, computes and writes scores
+  // Phase 3 UTV2-470 — always runs on 5-min cadence after board scan populates candidates
+  // Hard invariants: never sets pick_id, never sets shadow_mode=false, never writes to picks
+  const scoringDeps = {
+    pickCandidates: runtime.repositories.pickCandidates,
+    marketUniverse: runtime.repositories.marketUniverse,
+  };
+  runCandidateScoring(scoringDeps, { logger: console }).catch(() => {});
+  candidateScoringTimer = setInterval(() => {
+    runCandidateScoring(scoringDeps, { logger: console }).catch(() => {});
+  }, CANDIDATE_SCORING_INTERVAL_MS);
+
   console.log(
     JSON.stringify(
       {
@@ -152,6 +167,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (marketUniverseMaterializerTimer) { clearInterval(marketUniverseMaterializerTimer); marketUniverseMaterializerTimer = null; }
   if (lineMovementDetectorTimer) { clearInterval(lineMovementDetectorTimer); lineMovementDetectorTimer = null; }
   if (boardScanTimer) { clearInterval(boardScanTimer); boardScanTimer = null; }
+  if (candidateScoringTimer) { clearInterval(candidateScoringTimer); candidateScoringTimer = null; }
 
   server.close(() => {
     process.exit(0);
