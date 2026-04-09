@@ -6,10 +6,12 @@ import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
 import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-scanner.js';
 import { runMarketUniverseMaterializer } from './market-universe-materializer.js';
 import { runLineMovementDetection, DatabaseLineMovementRepository } from './line-movement-detector.js';
+import { runBoardScan } from './board-scan-service.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -22,6 +24,7 @@ let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
 let systemPickScannerTimer: ReturnType<typeof setInterval> | null = null;
 let marketUniverseMaterializerTimer: ReturnType<typeof setInterval> | null = null;
 let lineMovementDetectorTimer: ReturnType<typeof setInterval> | null = null;
+let boardScanTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -73,6 +76,20 @@ server.listen(port, () => {
   lineMovementDetectorTimer = setInterval(() => {
     runLineMovementDetection(lineMovementRepo, { logger: console }).catch(() => {});
   }, LINE_MOVEMENT_DETECTOR_INTERVAL_MS);
+
+  // Board scan: reads market_universe, writes pick_candidates
+  // Phase 2 UTV2-463 — gated by SYNDICATE_MACHINE_ENABLED=true (default: false)
+  // Runs after materializer on the same 5-min cadence.
+  // Hard boundaries: writes ONLY to pick_candidates; pick_id stays NULL;
+  // shadow_mode stays true; model fields stay NULL; does NOT create picks.
+  const boardScanDeps = {
+    marketUniverse: runtime.repositories.marketUniverse,
+    pickCandidates: runtime.repositories.pickCandidates,
+  };
+  runBoardScan(boardScanDeps, { logger: console }).catch(() => {});
+  boardScanTimer = setInterval(() => {
+    runBoardScan(boardScanDeps, { logger: console }).catch(() => {});
+  }, BOARD_SCAN_INTERVAL_MS);
 
   console.log(
     JSON.stringify(
@@ -134,6 +151,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (systemPickScannerTimer) { clearInterval(systemPickScannerTimer); systemPickScannerTimer = null; }
   if (marketUniverseMaterializerTimer) { clearInterval(marketUniverseMaterializerTimer); marketUniverseMaterializerTimer = null; }
   if (lineMovementDetectorTimer) { clearInterval(lineMovementDetectorTimer); lineMovementDetectorTimer = null; }
+  if (boardScanTimer) { clearInterval(boardScanTimer); boardScanTimer = null; }
 
   server.close(() => {
     process.exit(0);

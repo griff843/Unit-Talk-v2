@@ -184,6 +184,44 @@ export type MarketUniverseRow = MarketUniverseRowStub;
 /** Backward-compatible record alias. */
 export type MarketUniverseRecord = MarketUniverseRow;
 
+// ---------------------------------------------------------------------------
+// pick_candidates types (stubbed — Phase 2 UTV2-460 migration)
+// TODO: regenerate via pnpm supabase:types once Supabase connectivity restores
+// ---------------------------------------------------------------------------
+
+/** Filter details jsonb structure — canonical shape from contract §5.5 */
+export interface PickCandidateFilterDetails {
+  missing_canonical_identity: boolean;
+  stale_price_data: boolean;
+  unsupported_market_family: boolean;
+  missing_participant_linkage: boolean;
+  invalid_odds_structure: boolean;
+  duplicate_suppressed: boolean;
+  freshness_window_failed: boolean;
+}
+
+/** Row shape for pick_candidates table (Phase 2 UTV2-460 migration). */
+export interface PickCandidateRow {
+  id: string;                          // uuid NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY
+  universe_id: string;                 // uuid NOT NULL FK → market_universe
+  status: string;                      // text NOT NULL DEFAULT 'pending'
+  rejection_reason: string | null;     // text NULL — first failing filter key
+  filter_details: PickCandidateFilterDetails | null; // jsonb NULL — §5.5 canonical shape
+  model_score: number | null;          // numeric NULL — Phase 3 placeholder, must remain NULL in Phase 2
+  model_tier: string | null;           // text NULL — Phase 3 placeholder, must remain NULL in Phase 2
+  model_confidence: number | null;     // numeric NULL — Phase 3 placeholder, must remain NULL in Phase 2
+  shadow_mode: boolean;                // boolean NOT NULL DEFAULT true — must remain true in Phase 2
+  pick_id: string | null;              // uuid NULL FK → picks — must remain NULL in Phase 2
+  scan_run_id: string | null;          // text NULL — provenance: ID of scan cycle that last wrote this row
+  provenance: Record<string, unknown> | null; // jsonb NULL — scan version, filter set version, timestamp
+  expires_at: string | null;           // timestamptz NULL — set from event starts_at if known
+  created_at: string;                  // timestamptz NOT NULL DEFAULT now()
+  updated_at: string;                  // timestamptz NOT NULL DEFAULT now()
+}
+
+/** Backward-compatible record alias. */
+export type PickCandidateRecord = PickCandidateRow;
+
 export type ExecutionQualityReport = {
   providerKey: string;
   sportKey: string | null;
