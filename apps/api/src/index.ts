@@ -5,7 +5,6 @@ import { startTrialExpiryScheduler } from './trial-expiry-service.js';
 import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
 import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-scanner.js';
 import { runMarketUniverseMaterializer } from './market-universe-materializer.js';
-<<<<<<< HEAD
 import { runLineMovementDetection, DatabaseLineMovementRepository } from './line-movement-detector.js';
 import { runBoardScan } from './board-scan-service.js';
 

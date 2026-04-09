@@ -633,6 +633,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       tiers: {} as RepositoryBundle['tiers'],
       reviews: {} as RepositoryBundle['reviews'],
       marketUniverse: {} as RepositoryBundle['marketUniverse'],
+      pickCandidates: {} as RepositoryBundle['pickCandidates'],
     },
     picks,
     receipts,

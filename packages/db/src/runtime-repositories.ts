@@ -100,6 +100,7 @@ import type {
   ExecutionQualityReport,
   EventRow,
   GradeResultRecord,
+  MarketUniverseRow,
   PickCandidateRow,
   ModelHealthSnapshotRecord,
   MemberTierRecord,
