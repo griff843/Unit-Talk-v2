@@ -789,6 +789,111 @@ export type Database = {
           },
         ]
       }
+      market_universe: {
+        Row: {
+          canonical_market_key: string
+          closing_line: number | null
+          closing_over_odds: number | null
+          closing_under_odds: number | null
+          created_at: string
+          current_line: number | null
+          current_over_odds: number | null
+          current_under_odds: number | null
+          event_id: string | null
+          fair_over_prob: number | null
+          fair_under_prob: number | null
+          id: string
+          is_stale: boolean
+          last_offer_snapshot_at: string
+          league_key: string
+          market_type_id: string | null
+          opening_line: number | null
+          opening_over_odds: number | null
+          opening_under_odds: number | null
+          participant_id: string | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          refreshed_at: string
+          sport_key: string
+          updated_at: string
+        }
+        Insert: {
+          canonical_market_key: string
+          closing_line?: number | null
+          closing_over_odds?: number | null
+          closing_under_odds?: number | null
+          created_at?: string
+          current_line?: number | null
+          current_over_odds?: number | null
+          current_under_odds?: number | null
+          event_id?: string | null
+          fair_over_prob?: number | null
+          fair_under_prob?: number | null
+          id?: string
+          is_stale?: boolean
+          last_offer_snapshot_at: string
+          league_key: string
+          market_type_id?: string | null
+          opening_line?: number | null
+          opening_over_odds?: number | null
+          opening_under_odds?: number | null
+          participant_id?: string | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          refreshed_at?: string
+          sport_key: string
+          updated_at?: string
+        }
+        Update: {
+          canonical_market_key?: string
+          closing_line?: number | null
+          closing_over_odds?: number | null
+          closing_under_odds?: number | null
+          created_at?: string
+          current_line?: number | null
+          current_over_odds?: number | null
+          current_under_odds?: number | null
+          event_id?: string | null
+          fair_over_prob?: number | null
+          fair_under_prob?: number | null
+          id?: string
+          is_stale?: boolean
+          last_offer_snapshot_at?: string
+          league_key?: string
+          market_type_id?: string | null
+          opening_line?: number | null
+          opening_over_odds?: number | null
+          opening_under_odds?: number | null
+          participant_id?: string | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          refreshed_at?: string
+          sport_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "market_universe_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "market_universe_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "participants"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       member_tiers: {
         Row: {
           changed_by: string | null
@@ -1009,6 +1114,68 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      pick_candidates: {
+        Row: {
+          created_at: string
+          expires_at: string | null
+          filter_details: Json | null
+          id: string
+          model_confidence: number | null
+          model_score: number | null
+          model_tier: string | null
+          pick_id: string | null
+          provenance: Json | null
+          rejection_reason: string | null
+          scan_run_id: string | null
+          shadow_mode: boolean
+          status: string
+          universe_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string | null
+          filter_details?: Json | null
+          id?: string
+          model_confidence?: number | null
+          model_score?: number | null
+          model_tier?: string | null
+          pick_id?: string | null
+          provenance?: Json | null
+          rejection_reason?: string | null
+          scan_run_id?: string | null
+          shadow_mode?: boolean
+          status?: string
+          universe_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string | null
+          filter_details?: Json | null
+          id?: string
+          model_confidence?: number | null
+          model_score?: number | null
+          model_tier?: string | null
+          pick_id?: string | null
+          provenance?: Json | null
+          rejection_reason?: string | null
+          scan_run_id?: string | null
+          shadow_mode?: boolean
+          status?: string
+          universe_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pick_candidates_universe_id_fkey"
+            columns: ["universe_id"]
+            isOneToOne: false
+            referencedRelation: "market_universe"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pick_lifecycle: {
         Row: {
