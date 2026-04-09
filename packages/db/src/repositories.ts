@@ -896,6 +896,12 @@ export interface SelectionRankUpdate {
   is_board_candidate: boolean;
 }
 
+/** Phase 5 — link a created pick back to its originating candidate. */
+export interface PickIdUpdate {
+  id: string;       // pick_candidates.id
+  pick_id: string;  // picks.id — the governed system pick that was created
+}
+
 export interface IPickCandidateRepository {
   /**
    * Upsert pick_candidates rows using the conflict target: universe_id (unique index).
@@ -931,9 +937,22 @@ export interface IPickCandidateRepository {
    * Called at the start of each ranking run to eliminate stale rank state.
    */
   resetSelectionRanks(): Promise<void>;
+
+  /**
+   * Find candidates by their primary IDs.
+   * Used by board-pick-writer to load board candidates for pick creation.
+   */
+  findByIds(ids: string[]): Promise<PickCandidateRow[]>;
+
+  /**
+   * Phase 5 — link a created pick back to its originating candidate.
+   * Sets pick_id and clears shadow_mode (false) on each candidate row.
+   * Called once per board write run, after all picks are successfully created.
+   */
+  updatePickIdBatch(updates: PickIdUpdate[]): Promise<void>;
 }
 
-export type { PickCandidateRow, PickCandidateFilterDetails };
+export type { PickCandidateRow, PickCandidateFilterDetails, PickIdUpdate };
 
 export interface IngestorRepositoryBundle {
   providerOffers: ProviderOfferRepository;

@@ -42,6 +42,7 @@ import type {
   MarketUniverseUpsertInput,
   ModelScoreUpdate,
   SelectionRankUpdate,
+  PickIdUpdate,
   PickCandidateUpsertInput,
   MemberTierActivateInput,
   MemberTierDeactivateInput,
@@ -6091,6 +6092,23 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
     }
   }
 
+  async findByIds(ids: string[]): Promise<PickCandidateRow[]> {
+    const idSet = new Set(ids);
+    return Array.from(this.rows.values()).filter((r) => idSet.has(r.id));
+  }
+
+  async updatePickIdBatch(updates: PickIdUpdate[]): Promise<void> {
+    const now = new Date().toISOString();
+    for (const u of updates) {
+      for (const [key, row] of this.rows.entries()) {
+        if (row.id === u.id) {
+          this.rows.set(key, { ...row, pick_id: u.pick_id, shadow_mode: false, updated_at: now });
+          break;
+        }
+      }
+    }
+  }
+
   /** Test helper: return all rows. */
   listAll(): PickCandidateRow[] {
     return Array.from(this.rows.values());
@@ -6198,6 +6216,27 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       })
       .not('id', 'is', null); // matches all rows
     if (error) throw new Error(`Failed to reset selection ranks: ${error.message}`);
+  }
+
+  async findByIds(ids: string[]): Promise<PickCandidateRow[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await this.client
+      .from('pick_candidates')
+      .select('*')
+      .in('id', ids);
+    if (error) throw new Error(`pick_candidates findByIds failed: ${error.message}`);
+    return (data ?? []) as unknown as PickCandidateRow[];
+  }
+
+  async updatePickIdBatch(updates: PickIdUpdate[]): Promise<void> {
+    if (updates.length === 0) return;
+    const now = new Date().toISOString();
+    for (const u of updates) {
+      const { error } = await fromUntyped(this.client, 'pick_candidates')
+        .update({ pick_id: u.pick_id, shadow_mode: false, updated_at: now })
+        .eq('id', u.id);
+      if (error) throw new Error(`Failed to link pick_id for candidate ${u.id}: ${error.message}`);
+    }
   }
 }
 
