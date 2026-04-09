@@ -117,4 +117,10 @@ export interface IMarketUniverseRepository {
    * with id/timestamps by the test helper; the Database implementation queries the DB.
    */
   listForScan(limit: number): Promise<MarketUniverseRow[]>;
+
+  /**
+   * Returns market_universe rows for the given IDs.
+   * Used by the candidate scoring service to load market data for batch scoring.
+   */
+  findByIds(ids: string[]): Promise<MarketUniverseRow[]>;
 }

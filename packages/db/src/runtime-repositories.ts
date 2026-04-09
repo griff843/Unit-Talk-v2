@@ -40,6 +40,7 @@ import type {
   IMarketUniverseRepository,
   IPickCandidateRepository,
   MarketUniverseUpsertInput,
+  ModelScoreUpdate,
   PickCandidateUpsertInput,
   MemberTierActivateInput,
   MemberTierDeactivateInput,
@@ -5810,6 +5811,12 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
     return all.slice(0, limit);
   }
 
+  async findByIds(ids: string[]): Promise<MarketUniverseRow[]> {
+    const idSet = new Set(ids);
+    const all = Array.from(this.rows.values()) as unknown as MarketUniverseRow[];
+    return all.filter(r => idSet.has(r.id));
+  }
+
   /** Test helper: return all rows. */
   listAll(): MarketUniverseUpsertInput[] {
     return Array.from(this.rows.values());
@@ -5964,6 +5971,15 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
 
     return (data ?? []) as unknown as MarketUniverseRow[];
   }
+
+  async findByIds(ids: string[]): Promise<MarketUniverseRow[]> {
+    if (ids.length === 0) return [];
+    const { data, error } = await fromUntyped(this.client, 'market_universe')
+      .select('*')
+      .in('id', ids);
+    if (error) throw new Error(`Failed to find market universe by ids: ${error.message}`);
+    return (data ?? []) as MarketUniverseRow[];
+  }
 }
 
 // =============================================================================
@@ -6030,6 +6046,23 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
 
   async findByStatus(status: string): Promise<PickCandidateRow[]> {
     return Array.from(this.rows.values()).filter((r) => r.status === status);
+  }
+
+  async updateModelScoreBatch(updates: ModelScoreUpdate[]): Promise<void> {
+    // InMemory rows are keyed by universe_id, so find by scanning values for matching id
+    for (const u of updates) {
+      for (const [key, existing] of this.rows.entries()) {
+        if (existing.id === u.id) {
+          this.rows.set(key, {
+            ...existing,
+            model_score: u.model_score,
+            model_tier: u.model_tier,
+            model_confidence: u.model_confidence,
+          });
+          break;
+        }
+      }
+    }
   }
 
   /** Test helper: return all rows. */
@@ -6099,6 +6132,21 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
     }
 
     return (data ?? []) as unknown as PickCandidateRow[];
+  }
+
+  async updateModelScoreBatch(updates: ModelScoreUpdate[]): Promise<void> {
+    if (updates.length === 0) return;
+    for (const u of updates) {
+      const { error } = await fromUntyped(this.client, 'pick_candidates')
+        .update({
+          model_score: u.model_score,
+          model_tier: u.model_tier,
+          model_confidence: u.model_confidence,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', u.id);
+      if (error) throw new Error(`Failed to update model score for ${u.id}: ${error.message}`);
+    }
   }
 }
 
