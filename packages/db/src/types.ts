@@ -210,6 +210,8 @@ export interface PickCandidateRow {
   model_score: number | null;          // numeric NULL — Phase 3 placeholder, must remain NULL in Phase 2
   model_tier: string | null;           // text NULL — Phase 3 placeholder, must remain NULL in Phase 2
   model_confidence: number | null;     // numeric NULL — Phase 3 placeholder, must remain NULL in Phase 2
+  selection_rank: number | null;       // integer NULL — Phase 4: rank within the qualified pool (1 = highest). NULL = not yet ranked.
+  is_board_candidate: boolean;         // boolean NOT NULL DEFAULT false — Phase 4: true if in the pre-scarcity board pool for current cycle.
   shadow_mode: boolean;                // boolean NOT NULL DEFAULT true — must remain true in Phase 2
   pick_id: string | null;              // uuid NULL FK → picks — must remain NULL in Phase 2
   scan_run_id: string | null;          // text NULL — provenance: ID of scan cycle that last wrote this row

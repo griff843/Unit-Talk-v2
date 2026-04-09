@@ -41,6 +41,7 @@ import type {
   IPickCandidateRepository,
   MarketUniverseUpsertInput,
   ModelScoreUpdate,
+  SelectionRankUpdate,
   PickCandidateUpsertInput,
   MemberTierActivateInput,
   MemberTierDeactivateInput,
@@ -6032,6 +6033,8 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
           model_score: null,           // Phase 3 placeholder — never set in Phase 2
           model_tier: null,            // Phase 3 placeholder — never set in Phase 2
           model_confidence: null,      // Phase 3 placeholder — never set in Phase 2
+          selection_rank: null,        // Phase 4 placeholder — set by ranked selection service
+          is_board_candidate: false,   // Phase 4 placeholder — set by ranked selection service
           shadow_mode: true,           // must remain true in Phase 2
           pick_id: null,               // must remain null in Phase 2
           scan_run_id: input.scan_run_id,
@@ -6062,6 +6065,24 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
           break;
         }
       }
+    }
+  }
+
+  async updateSelectionRankBatch(updates: SelectionRankUpdate[]): Promise<void> {
+    for (const u of updates) {
+      // InMemory stores candidates keyed by universe_id — find by id field
+      for (const [key, row] of this.rows.entries()) {
+        if (row.id === u.id) {
+          this.rows.set(key, { ...row, selection_rank: u.selection_rank, is_board_candidate: u.is_board_candidate });
+          break;
+        }
+      }
+    }
+  }
+
+  async resetSelectionRanks(): Promise<void> {
+    for (const [key, row] of this.rows.entries()) {
+      this.rows.set(key, { ...row, selection_rank: null, is_board_candidate: false });
     }
   }
 
@@ -6147,6 +6168,31 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
         .eq('id', u.id);
       if (error) throw new Error(`Failed to update model score for ${u.id}: ${error.message}`);
     }
+  }
+
+  async updateSelectionRankBatch(updates: SelectionRankUpdate[]): Promise<void> {
+    if (updates.length === 0) return;
+    for (const u of updates) {
+      const { error } = await fromUntyped(this.client, 'pick_candidates')
+        .update({
+          selection_rank: u.selection_rank,
+          is_board_candidate: u.is_board_candidate,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', u.id);
+      if (error) throw new Error(`Failed to update selection rank for ${u.id}: ${error.message}`);
+    }
+  }
+
+  async resetSelectionRanks(): Promise<void> {
+    const { error } = await fromUntyped(this.client, 'pick_candidates')
+      .update({
+        selection_rank: null,
+        is_board_candidate: false,
+        updated_at: new Date().toISOString(),
+      })
+      .not('id', 'is', null); // matches all rows
+    if (error) throw new Error(`Failed to reset selection ranks: ${error.message}`);
   }
 }
 

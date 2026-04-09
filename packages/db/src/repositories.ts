@@ -887,6 +887,12 @@ export interface ModelScoreUpdate {
   model_confidence: number;
 }
 
+export interface SelectionRankUpdate {
+  id: string;
+  selection_rank: number;
+  is_board_candidate: boolean;
+}
+
 export interface IPickCandidateRepository {
   /**
    * Upsert pick_candidates rows using the conflict target: universe_id (unique index).
@@ -911,6 +917,17 @@ export interface IPickCandidateRepository {
    * Used by the Phase 3 candidate scoring service.
    */
   updateModelScoreBatch(updates: ModelScoreUpdate[]): Promise<void>;
+  /**
+   * Batch-updates selection_rank and is_board_candidate on pick_candidates rows.
+   * Called by the ranked selection service after each full ranking cycle.
+   * Never touches pick_id, shadow_mode, model_score, or status.
+   */
+  updateSelectionRankBatch(updates: SelectionRankUpdate[]): Promise<void>;
+  /**
+   * Resets selection_rank to NULL and is_board_candidate to false on ALL rows.
+   * Called at the start of each ranking run to eliminate stale rank state.
+   */
+  resetSelectionRanks(): Promise<void>;
 }
 
 export type { PickCandidateRow, PickCandidateFilterDetails };
