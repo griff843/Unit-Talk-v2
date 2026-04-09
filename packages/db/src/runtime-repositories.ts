@@ -38,7 +38,9 @@ import type {
   HedgeOpportunityNotificationUpdateInput,
   HedgeOpportunityRepository,
   IMarketUniverseRepository,
+  IPickCandidateRepository,
   MarketUniverseUpsertInput,
+  PickCandidateUpsertInput,
   MemberTierActivateInput,
   MemberTierDeactivateInput,
   MemberTierRepository,
@@ -98,6 +100,7 @@ import type {
   ExecutionQualityReport,
   EventRow,
   GradeResultRecord,
+  PickCandidateRow,
   ModelHealthSnapshotRecord,
   MemberTierRecord,
   ModelRegistryRecord,
@@ -5762,6 +5765,13 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
     }
   }
 
+  async listForScan(limit: number): Promise<MarketUniverseRow[]> {
+    // InMemory stores MarketUniverseUpsertInput shapes (no id/timestamps) unless seeded
+    // as full MarketUniverseRow by test helpers. Cast and slice.
+    const all = Array.from(this.rows.values()) as unknown as MarketUniverseRow[];
+    return all.slice(0, limit);
+  }
+
   /** Test helper: return all rows. */
   listAll(): MarketUniverseUpsertInput[] {
     return Array.from(this.rows.values());
@@ -5902,6 +5912,156 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
       throw new Error(`market_universe upsert failed: ${error.message}`);
     }
   }
+
+  async listForScan(limit: number): Promise<MarketUniverseRow[]> {
+    const { data, error } = await this.client
+      .from('market_universe')
+      .select('*')
+      .order('refreshed_at', { ascending: false })
+      .limit(limit);
+
+    if (error) {
+      throw new Error(`market_universe listForScan failed: ${error.message}`);
+    }
+
+    return (data ?? []) as unknown as MarketUniverseRow[];
+  }
+}
+
+// =============================================================================
+// PickCandidateRepository — Phase 2 UTV2-463
+// Contract authority: docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md §5
+//
+// Hard Phase 2 invariants enforced here:
+//   - pick_id is NEVER set — it stays NULL
+//   - shadow_mode is NEVER set to false — it stays DB DEFAULT true
+//   - model_score / model_tier / model_confidence are NEVER set
+// =============================================================================
+
+/**
+ * InMemoryPickCandidateRepository — in-process store for unit tests.
+ *
+ * Keyed by universe_id (unique index — one active candidate per market row).
+ * Upsert: INSERT or UPDATE on conflict with universe_id.
+ */
+export class InMemoryPickCandidateRepository implements IPickCandidateRepository {
+  private readonly rows = new Map<string, PickCandidateRow>();
+
+  async upsertCandidates(inputs: PickCandidateUpsertInput[]): Promise<void> {
+    const now = new Date().toISOString();
+    for (const input of inputs) {
+      const existing = this.rows.get(input.universe_id);
+      if (existing) {
+        // UPDATE on conflict — preserve created_at, update the rest
+        this.rows.set(input.universe_id, {
+          ...existing,
+          status: input.status,
+          rejection_reason: input.rejection_reason,
+          filter_details: input.filter_details,
+          scan_run_id: input.scan_run_id,
+          provenance: input.provenance,
+          expires_at: input.expires_at,
+          updated_at: now,
+          // Phase 2 invariants: never set these
+          // pick_id: remains null
+          // shadow_mode: remains true (DB default)
+          // model_score / model_tier / model_confidence: remain null
+        });
+      } else {
+        // INSERT
+        this.rows.set(input.universe_id, {
+          id: crypto.randomUUID(),
+          universe_id: input.universe_id,
+          status: input.status,
+          rejection_reason: input.rejection_reason,
+          filter_details: input.filter_details,
+          model_score: null,           // Phase 3 placeholder — never set in Phase 2
+          model_tier: null,            // Phase 3 placeholder — never set in Phase 2
+          model_confidence: null,      // Phase 3 placeholder — never set in Phase 2
+          shadow_mode: true,           // must remain true in Phase 2
+          pick_id: null,               // must remain null in Phase 2
+          scan_run_id: input.scan_run_id,
+          provenance: input.provenance,
+          expires_at: input.expires_at,
+          created_at: now,
+          updated_at: now,
+        });
+      }
+    }
+  }
+
+  async findByStatus(status: string): Promise<PickCandidateRow[]> {
+    return Array.from(this.rows.values()).filter((r) => r.status === status);
+  }
+
+  /** Test helper: return all rows. */
+  listAll(): PickCandidateRow[] {
+    return Array.from(this.rows.values());
+  }
+}
+
+/**
+ * DatabasePickCandidateRepository — Supabase implementation.
+ *
+ * Uses .upsert() with onConflict: 'universe_id' (unique index on pick_candidates).
+ * ignoreDuplicates: false ensures UPDATE is applied on conflict.
+ *
+ * Phase 2 invariants: pick_id, model_score, model_tier, model_confidence are
+ * NEVER passed in the upsert payload. shadow_mode is NEVER set to false.
+ * These fields default to their DB values (NULL / true) and must not be mutated.
+ */
+export class DatabasePickCandidateRepository implements IPickCandidateRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async upsertCandidates(inputs: PickCandidateUpsertInput[]): Promise<void> {
+    if (inputs.length === 0) return;
+
+    const now = new Date().toISOString();
+    const rows = inputs.map((input) => ({
+      universe_id: input.universe_id,
+      status: input.status,
+      rejection_reason: input.rejection_reason,
+      filter_details: input.filter_details as unknown as Record<string, unknown>,
+      scan_run_id: input.scan_run_id,
+      provenance: input.provenance,
+      expires_at: input.expires_at,
+      updated_at: now,
+      // Phase 2 invariants — these are deliberately omitted from the upsert payload:
+      // pick_id          → remains NULL (DB default; Phase 4+ only)
+      // shadow_mode      → remains true  (DB default; must not be set false in Phase 2)
+      // model_score      → remains NULL  (Phase 3 placeholder)
+      // model_tier       → remains NULL  (Phase 3 placeholder)
+      // model_confidence → remains NULL  (Phase 3 placeholder)
+    }));
+
+    const { error } = await this.client
+      .from('pick_candidates')
+      .upsert(rows, {
+        onConflict: 'universe_id',
+        ignoreDuplicates: false,
+      });
+
+    if (error) {
+      throw new Error(`pick_candidates upsert failed: ${error.message}`);
+    }
+  }
+
+  async findByStatus(status: string): Promise<PickCandidateRow[]> {
+    const { data, error } = await this.client
+      .from('pick_candidates')
+      .select('*')
+      .eq('status', status);
+
+    if (error) {
+      throw new Error(`pick_candidates findByStatus failed: ${error.message}`);
+    }
+
+    return (data ?? []) as unknown as PickCandidateRow[];
+  }
 }
 
 export function createInMemoryRepositoryBundle(): RepositoryBundle {
@@ -5929,6 +6089,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     tiers: new InMemoryMemberTierRepository(),
     reviews: new InMemoryPickReviewRepository(),
     marketUniverse: new InMemoryMarketUniverseRepository(),
+    pickCandidates: new InMemoryPickCandidateRepository(),
   };
 }
 
@@ -5954,6 +6115,7 @@ export function createDatabaseRepositoryBundle(
     tiers: new DatabaseMemberTierRepository(connection),
     reviews: new DatabasePickReviewRepository(connection),
     marketUniverse: new DatabaseMarketUniverseRepository(connection),
+    pickCandidates: new DatabasePickCandidateRepository(connection),
   };
 }
 

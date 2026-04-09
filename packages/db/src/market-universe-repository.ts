@@ -107,4 +107,14 @@ export interface IMarketUniverseRepository {
    * values set, the implementation MUST NOT overwrite them.
    */
   upsertMarketUniverse(rows: MarketUniverseUpsertInput[]): Promise<void>;
+
+  /**
+   * Returns up to `limit` market_universe rows ordered by refreshed_at descending.
+   * Used by the board scan (UTV2-463) to fetch rows to evaluate.
+   *
+   * Returns a full MarketUniverseRow shape. The InMemory implementation stores
+   * MarketUniverseUpsertInput rows seeded via upsertMarketUniverse and supplemented
+   * with id/timestamps by the test helper; the Database implementation queries the DB.
+   */
+  listForScan(limit: number): Promise<MarketUniverseRow[]>;
 }

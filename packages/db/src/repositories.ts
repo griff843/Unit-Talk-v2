@@ -28,6 +28,8 @@ import type {
   ModelHealthSnapshotRecord,
   ModelStatus,
   ParticipantRow,
+  PickCandidateRow,
+  PickCandidateFilterDetails,
   PickReviewRecord,
   ParticipantType,
   PickRecord,
@@ -833,6 +835,7 @@ export interface RepositoryBundle {
   tiers: MemberTierRepository;
   reviews: PickReviewRepository;
   marketUniverse: IMarketUniverseRepository;
+  pickCandidates: IPickCandidateRepository;
   modelRegistry?: ModelRegistryRepository;
   experimentLedger?: ExperimentLedgerRepository;
   modelHealthSnapshots?: ModelHealthSnapshotRepository;
@@ -840,6 +843,48 @@ export interface RepositoryBundle {
 }
 
 export type { IMarketUniverseRepository, MarketUniverseUpsertInput };
+
+// ---------------------------------------------------------------------------
+// IPickCandidateRepository — Phase 2 UTV2-463
+// Contract authority: docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md §5
+//
+// Hard Phase 2 invariants (never violate):
+//   - pick_id must remain NULL on every row written in Phase 2
+//   - shadow_mode must remain DEFAULT true in Phase 2
+//   - model_score / model_tier / model_confidence must remain NULL in Phase 2
+// ---------------------------------------------------------------------------
+
+export interface PickCandidateUpsertInput {
+  universe_id: string;
+  status: string;                                          // 'qualified' | 'rejected' | 'pending'
+  rejection_reason: string | null;                         // first failing filter key; null if qualified
+  filter_details: PickCandidateFilterDetails;              // canonical §5.5 shape — all 7 booleans required
+  scan_run_id: string | null;                              // UUID of the scan run that produced this row
+  provenance: Record<string, unknown> | null;              // { scanVersion, filterVersion, runAt }
+  expires_at: string | null;                               // ISO timestamptz from event.starts_at or null
+  // NOTE: pick_id, model_score, model_tier, model_confidence, shadow_mode must NEVER be set in Phase 2
+}
+
+export interface IPickCandidateRepository {
+  /**
+   * Upsert pick_candidates rows using the conflict target: universe_id (unique index).
+   * One active candidate per market opportunity. Idempotent across repeated scan runs.
+   *
+   * ON CONFLICT (universe_id): UPDATE status, filter_details, scan_run_id, provenance,
+   * expires_at, updated_at. Do NOT insert a new row.
+   *
+   * Phase 2 invariant: pick_id MUST remain NULL. shadow_mode MUST remain DEFAULT true.
+   * model_score / model_tier / model_confidence MUST remain NULL.
+   */
+  upsertCandidates(rows: PickCandidateUpsertInput[]): Promise<void>;
+
+  /**
+   * Find candidates by status. Used by tests and Phase 3 model runner.
+   */
+  findByStatus(status: string): Promise<PickCandidateRow[]>;
+}
+
+export type { PickCandidateRow, PickCandidateFilterDetails };
 
 export interface IngestorRepositoryBundle {
   providerOffers: ProviderOfferRepository;
