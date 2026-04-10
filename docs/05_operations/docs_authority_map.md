@@ -13,7 +13,7 @@ When documents conflict:
 | Owner | Program Owner |
 | Status | Ratified |
 | Ratified | 2026-03-20 |
-| Last Updated | 2026-04-05 (full architecture audit — added missing post-2026-03-29 entries, marked deprecated docs, noted schema debt) |
+| Last Updated | 2026-04-09 (Phase 5 sync — Phases 2–4 closed, Phase 5 P5-01/P5-02 merged, evidence bundles added to Tier 5) |
 
 ## Tier 1 - Principles
 
@@ -222,6 +222,10 @@ When documents conflict:
 | `docs/06_status/PROOF_TEMPLATE.md` | Reusable T1 independent verification template | Closeout template |
 | `docs/06_status/ROLLBACK_TEMPLATE.md` | Reusable T1 rollback template | Rollback template |
 | `docs/06_status/production_readiness_checklist.md` | Production readiness gate checklist | Active reference |
+| `docs/06_status/UTV2-464-PHASE2-EVIDENCE-BUNDLE.md` | Phase 2 (Syndicate Machine Foundation) evidence — closed | Historical |
+| `docs/06_status/UTV2-471-PHASE3-EVIDENCE-BUNDLE.md` | Phase 3 (Model Scoring) evidence — closed | Historical |
+| `docs/06_status/UTV2-473-PHASE4-P401-EVIDENCE.md` | Phase 4 P4-01 (ranked selection) intermediate proof | Historical |
+| `docs/06_status/UTV2-475-PHASE4-EVIDENCE-BUNDLE.md` | Phase 4 (Board Construction) evidence — closed | Historical |
 
 > Note: All `week_*` proof/rollback/closeout templates (Weeks 7–16), completed UTV2-5x proof artifacts, and dated audit snapshots were deleted 2026-04-05. They served no future reference value.
 

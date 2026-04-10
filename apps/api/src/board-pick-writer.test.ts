@@ -450,3 +450,38 @@ test('actor defaults to system:board-construction when not provided', async () =
     'default actor must be system:board-construction',
   );
 });
+
+// ---------------------------------------------------------------------------
+// Boundary test — non-finite odds
+// ---------------------------------------------------------------------------
+
+test('candidate with non-finite odds is counted in skipped, not errors or written', async () => {
+  // Exercises the Number.isFinite() guard explicitly with Infinity and NaN odds.
+  // These are valid JS numbers but are not finite — the writer must treat them as
+  // invalid and count the row in skipped (not errors, not written).
+  const repos = createInMemoryRepositoryBundle();
+  const boardRunId = crypto.randomUUID();
+
+  // Row 1: Infinity odds
+  await seedBoardCandidate(repos, boardRunId, 1, {
+    provider_event_id: 'evt_nonfinite_inf',
+    current_over_odds: Infinity,
+    current_under_odds: -105,
+  });
+
+  // Row 2: NaN odds
+  await seedBoardCandidate(repos, boardRunId, 2, {
+    provider_event_id: 'evt_nonfinite_nan',
+    canonical_market_key: 'batting_hits',
+    provider_market_key: 'batting_hits-all-game-ou',
+    current_over_odds: NaN,
+    current_under_odds: NaN,
+  });
+
+  const result = await runBoardPickWriter(repos);
+
+  assert.equal(result.written, 0, 'no picks written for non-finite odds');
+  assert.equal(result.skipped, 2, 'both rows counted in skipped');
+  assert.equal(result.errors, 0, 'non-finite odds must not increment errors');
+  assert.deepEqual(result.pickIds, [], 'no pick ids returned');
+});

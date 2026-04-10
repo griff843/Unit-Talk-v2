@@ -7,11 +7,28 @@
 
 ## Last Updated
 
-2026-04-09 — **Phase 2 (Syndicate Machine Foundation) staged in Linear. UTV2-458 contract complete.**
-Phase 1 (scanner stabilization, CFix-1/2/3) closed at commit `66c9cc1`. CFix-1: `system-pick-scanner` added to `pickSources` contract; board-cap filter corrected in InMemory + Database repos (UTV2-455 comment + UTV2-456/457 closed). CFix-2: `SGO_MARKET_KEY_TO_CANONICAL_ID` rewritten with live-feed key formats; 13 MLB player prop aliases inserted into `provider_market_aliases` (UTV2-456 Done). CFix-3: settlements repo wired into all three `evaluateAllPoliciesEagerAndPersist` callers so CLV trust adjustment runs on every promotion evaluation (UTV2-457 Done). 188/188 tests pass. Type-check clean. Scanner confirmed live (submitting picks post-restart). Phase 2 issue set staged in Linear (UTV2-458 through UTV2-464, all Backlog). Schema contract written: `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md` (UTV2-458, this entry). UTV2-459 and UTV2-460 remain blocked until UTV2-458 is formally closed.
+2026-04-09 — **Phase 5 — Governed Write Path + CC Surface (P5-01/P5-02 merged, P5-03 proof in progress).**
+UTV2-476 (P5-01: governed candidate-to-pick write path, PR #214, commit `9766ef9`) Done. Introduces `board-pick-writer.ts`: reads latest `syndicate_board` run, calls `processSubmission()` per row with `source='board-construction'`, immediately links `pick_candidates.pick_id` per-row (not deferred), sets `shadow_mode=false` on each successful link. Idempotent: already-linked candidates skipped. Auth-gated `POST /api/board/write-picks` (operator role only — `auth.ts` route registry). Audit record written per run (`board.pick_write.completed`, entity_type `syndicate_board`).
+UTV2-477 (P5-02: CC board queue review surface, PR #215, commit `919599a`) Done. Adds `GET /api/operator/board-queue` (operator-web, latest run only — no historical mixing), `BoardQueueRow`/`BoardQueueData` types, `BoardQueueTable` component with Pending/Written badges and `Write N Pending Picks` button, `writeSystemPicks()` Next.js server action (delegates to API, bearer-auth'd, idempotent, revalidates path), Board Queue nav under Decision workspace in `WorkspaceSidebar`. No suppress/reroute implemented — governed write is the only available action (scope discipline enforced).
+UTV2-478 (P5-03: DB truth + lifecycle + audit proof) In Progress — proof script agent (Lane A) and unit test hardening agent (Lane B) running in parallel worktrees.
 
-**Phase 2 dependency chain (locked):**
-UTV2-458 (contract) → [UTV2-459 market_universe migration ‖ UTV2-460 pick_candidates migration] → UTV2-461 (materializer) → [UTV2-462 line movement ‖ UTV2-463 board scan] → UTV2-464 (proof/gate). UTV2-459 and UTV2-460 may be authored in parallel but must merge serially (migration numbering). UTV2-464 is the hard gate to Phase 3. No runtime Phase 2 implementation has started.
+**Phase 5 hard boundaries (active):**
+- `board-pick-writer.ts` is the only authorized bridge from `syndicate_board` to `picks`
+- `source='board-construction'` on every pick created by this path
+- `pick_candidates.pick_id` linked immediately per-row (never batch-deferred)
+- `shadow_mode=false` only on successfully linked candidates
+- `POST /api/board/write-picks` requires operator role — no unauthenticated path
+- Command Center writes nothing to DB directly — all mutations via API
+- Phase 6 (feedback loop) does not start until UTV2-478 evidence bundle accepted
+
+2026-04-09 — **Phase 4 (Board Construction) closed. Evidence bundle: UTV2-475.**
+Phase 4 gate open. UTV2-473 (ranked candidate selection, PR #212, commit `4189f9d`) Done. UTV2-474 (board construction service, PR #213, commit `f1c3acc`) Done. UTV2-475 (Phase 4 evidence bundle, commit `5daaf0b`) Done — 301 board candidates, board size 12, sport cap enforced, pick_id/shadow_mode boundaries verified. Phase 5 gate opened.
+
+2026-04-09 — **Phase 3 (Model Scoring) closed. Evidence bundle: UTV2-471.**
+UTV2-470 (model runner wired into live candidate scoring, PR #211, commit `d82c554`) Done. UTV2-472 (participant FK resolution + 196-player alias backfill, PR #210, commit `6f6a2e0`) Done. UTV2-471 evidence bundle (`4b5e4a9`): 301 scored candidates, Phase 4 gate opened.
+
+2026-04-09 — **Phase 2 (Syndicate Machine Foundation) closed. Evidence bundle: UTV2-464.**
+Phase 2 closed at `c077ab1`. All migrations live. `market_universe` and `pick_candidates` tables active. Materializer, line movement, board scan complete. UTV2-464 evidence PASS. Phase 3 gate opened. Phase 1 closed earlier at `66c9cc1`.
 
 2026-04-08 — **CC-M5 batch closed (UTV2-445/446/447). Decision stub shells normalized, Intelligence nav unified, Intelligence shared patterns enforced.**
 UTV2-446 (Decision stub shells + error boundary, PR #196, commit `4eefd89`) Done. UTV2-447 (Intelligence workspace tab navigation unification, PR #195, commit `838b271`) Done. UTV2-445 (Intelligence shared UI patterns, PR #197, commit `e377ceb`) Done. All T3 bounded UI work. CI green on all 3. Browser/runtime verified. Linear board: no Ready issues remaining. UTV2-431/433/435 blocked (live data gates). Phase 7 deferred (PM approval required).
@@ -46,13 +63,13 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Tests | **All pass** — 0 failures. `pnpm test` 188 pass. Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
+| Tests | **All pass** — 0 failures. `pnpm test` 188+ pass (Phase 5 board-pick-writer tests added via UTV2-476/478). Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **Phase 2 — Syndicate Machine Foundation (active, 2026-04-09).** Phase 1 closed (commit `66c9cc1`). Phase 2 staged: UTV2-458 through UTV2-464 in Linear. UTV2-458 (schema contract) complete. UTV2-459/460 blocked on contract merge. No runtime Phase 2 implementation started. Phase 3 blocked until UTV2-464 evidence bundle accepted. Migrations 012–016 live (head `202604080016`). Phase 7 deferred (PM approval required). |
+| Milestone | **Phase 5 — Governed Write Path (active, 2026-04-09).** Phases 1–4 closed. P5-01 (UTV2-476, PR #214) merged. P5-02 (UTV2-477, PR #215) merged. P5-03 (UTV2-478 proof) in progress. Phase 6 (feedback loop / model iteration) blocked until UTV2-478 evidence accepted. Migrations 012–016 live (head `202604080016`). Phase 7 deferred (PM approval required). |
 | Provider | **SGO Pro active (permanent, upgraded 2026-04-07).** Odds API suspended. Historical backfill complete: 329k provider_offers rows. Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
 | Worker | **UP** — transient network error fix deployed (PR #188, UTV2-441). Restarts: 0 (fresh after restart 2026-04-08). Supervisor active since restart. |
-| Roadmap | Phase 1 closed: UTV2-455/456/457 Done (commit `66c9cc1`). Phase 2 staged: UTV2-458 (contract, active) → UTV2-459/460 (T1 migrations, blocked on 458) → UTV2-461 (materializer) → UTV2-462/463 (line movement + board scan) → UTV2-464 (proof gate). CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (Syndicate Lane, PM approval required). |
+| Roadmap | Phase 1 closed (`66c9cc1`). Phase 2 closed (`c077ab1`, UTV2-464). Phase 3 closed (`4b5e4a9`, UTV2-471). Phase 4 closed (`5daaf0b`, UTV2-475). Phase 5 active: P5-01 (`9766ef9`, PR #214) + P5-02 (`919599a`, PR #215) merged → P5-03 UTV2-478 proof in progress. Phase 6 blocked on UTV2-478. CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (PM approval required). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
@@ -66,7 +83,7 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 
 **Sprint A resolved:** Lint fixed (G1 unblocked). Submission dedup (UNIQUE index). Settlement dedup (atomic claim + UNIQUE constraint). Atomic promotion (compensating rollback). Retry model (pending + backoff). Post-send reconciliation. CLV capper identity hotfix. Exposure gate lifecycle fix.
 
-## Gate Notes (verified 2026-04-08 — green-state recovery)
+## Gate Notes (last full run 2026-04-08 — green-state recovery; Phase 5 adds board-pick-writer tests)
 
 | Gate | Status | Notes |
 |------|--------|-------|
