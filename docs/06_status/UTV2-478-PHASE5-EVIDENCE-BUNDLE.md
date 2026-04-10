@@ -1,7 +1,7 @@
 # UTV2-478 — Phase 5 Evidence Bundle
 
-**Status:** PARTIAL — code proof COMPLETE, boundary checks PASS (live DB), write-trigger proof PENDING
-**Date:** 2026-04-09
+**Status:** COMPLETE — 7/7 assertions PASS (live DB, 2026-04-10)
+**Date:** 2026-04-10
 **Verified by:** Claude Code orchestrator + Supabase DB (feownrheeefbcsehtsiw)
 **Proof script:** `apps/api/src/scripts/utv2-478-board-pick-proof.ts`
 
@@ -121,37 +121,29 @@ To complete the proof, the operator must:
 
 ---
 
-## Live DB State — Boundary Checks (2026-04-09, Micro compute restored)
+## Live DB State — Full Proof (2026-04-10)
 
-DB was unresponsive due to NANO compute resource exhaustion. Upgraded to Micro (1 GB RAM, 2-core ARM CPU).
-Index applied: `CREATE INDEX IF NOT EXISTS idx_picks_source ON picks (source);`
+**Trigger:** `POST /api/board/write-picks` via Phase 5 API (main, commit `a32f168`)
+**boardRunId:** `682c84c6-fa37-4613-962c-bd49363c837e`
+**Compute:** Micro (1 GB RAM, 2-core ARM CPU) — upgraded from NANO to resolve resource exhaustion
+**Index:** `CREATE INDEX IF NOT EXISTS idx_picks_source ON picks (source);` applied before run
 
 ```
--- A2/A4: linked candidates with shadow_mode=true (violations)
-SELECT COUNT(*) FROM pick_candidates WHERE pick_id IS NOT NULL AND shadow_mode = true;
-→ 0  ← PASS
+=== UTV2-478: Board-Pick Write Path Proof (Phase 5) ===
 
--- A3: unlinked candidates with shadow_mode=false (violations)
-SELECT COUNT(*) FROM pick_candidates WHERE pick_id IS NULL AND shadow_mode = false;
-→ 0  ← PASS
+{"assertion":"A1: picks(source=board-construction) exists","result":"PASS","evidence":{"rowCount":12}}
+{"assertion":"A2: linked candidates have shadow_mode=false (0 violations)","result":"PASS","evidence":{"violations":0}}
+{"assertion":"A3: unlinked candidates have shadow_mode=true (0 violations)","result":"PASS","evidence":{"violations":0}}
+{"assertion":"A4: Phase 5 boundary — no linked candidate with shadow_mode=true","result":"PASS","evidence":{"violations":0}}
+{"assertion":"A5: audit_log has board.pick_write.completed for entity_type=syndicate_board","result":"PASS","evidence":{"rowCount":2}}
+{"assertion":"A6: board-construction picks each have pick_lifecycle row","result":"PASS","evidence":{"totalBoardPicks":12,"withLifecycleRow":12,"missingLifecycleCount":0,"sampleMissing":[]}}
+{"assertion":"A7: idempotency — no duplicate (market, selection, odds) per boardRunId","result":"PASS","evidence":{"boardRunCount":1,"totalBoardPicks":12,"duplicateViolations":0,"sampleViolations":[]}}
 
--- A1: board-construction picks (requires live trigger)
-SELECT COUNT(*) FROM picks WHERE source = 'board-construction';
-→ 0  ← PENDING
-
--- A5: audit entries (requires live trigger)
-SELECT COUNT(*) FROM audit_log WHERE action = 'board.pick_write.completed' AND entity_type = 'syndicate_board';
-→ 0  ← PENDING
-
--- syndicate_board ready for trigger
-SELECT board_run_id, created_at, COUNT(*) AS candidate_count FROM syndicate_board
-GROUP BY board_run_id, created_at ORDER BY created_at DESC LIMIT 1;
-→ board_run_id=9e494126-7c45-4522-ae6a-35b2cf1dd3ad, 12 candidates, 2026-04-09 19:59:33 UTC
+RESULT: 7/7 PASS
 ```
 
-A6 and A7 are also PENDING (depend on A1).
-
-**Live trigger protocol:** merge branch → restart API with Phase 5 code → `POST /api/board/write-picks` → run proof script → update this section.
+**API run log:** `written: 10, skipped: 0, errors: 2` on first pass; idempotency check correctly skipped 8 on second concurrent pass; total 12 board-construction picks in DB.
+**Duplicate key errors** on 2 candidates (ranks 9 and 10) were caused by concurrent curl invocations during the wait — the writer's idempotency check recovered and linked the correct existing pick. No data integrity violation.
 
 ---
 
@@ -161,7 +153,6 @@ A6 and A7 are also PENDING (depend on A1).
 |-------|--------|
 | Code review | **PASS** — all invariants verified in source |
 | Unit tests | **PASS** — 12/12, all 5 Phase 5 invariants covered |
-| Live DB proof | **PENDING** — requires live write trigger |
+| Live DB proof | **PASS** — 7/7 assertions, 2026-04-10 |
 
-**Phase 5 gate:** OPEN for merge. Live DB proof must be completed before Phase 6 starts.
-The proof script is committed and ready to run. Merge → restart API → trigger write → run script → update this doc.
+**Phase 5 gate: CLOSED — all proof layers complete. Phase 6 may begin.**
