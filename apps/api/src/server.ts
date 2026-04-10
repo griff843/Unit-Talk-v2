@@ -47,6 +47,7 @@ import {
   handleShadowModelSummaries,
   handleHealthConfig,
   handleBoardWritePicks,
+  handleBoardRunTuning,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 
@@ -439,6 +440,10 @@ export async function routeRequest(
 
   if (method === 'POST' && url.pathname === '/api/board/write-picks') {
     return handleBoardWritePicks(request, response, runtime);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/board/run-tuning') {
+    return handleBoardRunTuning(request, response, runtime);
   }
 
   return writeJson(response, 404, {

@@ -26,4 +26,4 @@ export { handlePicksQuery } from './picks-query.js';
 export { handleSettlementsRecent } from './settlements-query.js';
 export { handleShadowModelSummaries } from './shadow-models.js';
 export { handleHealthConfig } from './config.js';
-export { handleBoardWritePicks } from './board.js';
+export { handleBoardWritePicks, handleBoardRunTuning } from './board.js';
