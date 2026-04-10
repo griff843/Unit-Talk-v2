@@ -7,19 +7,16 @@
 
 ## Last Updated
 
+2026-04-10 — **Phase 6 started — P6-01 attribution wiring merged (UTV2-479). P6-02 trust tuning in progress (UTV2-480).**
+UTV2-479 (P6-01: model performance and outcome attribution wiring, commit `2a18f29`) Done. Creates `v_governed_pick_performance` view (migration `202604100001`) joining `picks → pick_candidates → syndicate_board → market_universe → settlement_records`. Adds `GET /api/board/performance` (operator-web), `GovernedPickPerformanceRow` type, `fetchBoardPerformance()` CC helper. 48 rows in live view (12 governed picks × 4 board runs). Full attribution chain queryable. UTV2-482 (PM-T1 docs sync) closed — PROGRAM_STATUS now reflects Phase 6 reality.
+UTV2-480 (P6-02: market-family trust and threshold tuning) In Progress — implementation lane active.
+
+2026-04-10 — **Phase 5 COMPLETE — 7/7 proof assertions PASS (live DB). Gate closed.**
+UTV2-476 (P5-01: governed candidate-to-pick write path, PR #214, commit `9766ef9`) Done. UTV2-477 (P5-02: CC board queue review surface, PR #215, commit `919599a`) Done. UTV2-478 (P5-03: DB truth + lifecycle + audit proof, commit `aeb978e`) Done — RESULT: 7/7 PASS. 12 board-construction picks written (boardRunId `682c84c6`), 12 with lifecycle rows, 0 shadow_mode violations, 0 duplicate tuples, 2 audit entries. Micro compute upgrade (NANO→Micro) applied to resolve resource exhaustion during proof run. Phase 5 gate CLOSED. Phase 6 opened.
+
 2026-04-09 — **Phase 5 — Governed Write Path + CC Surface (P5-01/P5-02 merged, P5-03 proof in progress).**
 UTV2-476 (P5-01: governed candidate-to-pick write path, PR #214, commit `9766ef9`) Done. Introduces `board-pick-writer.ts`: reads latest `syndicate_board` run, calls `processSubmission()` per row with `source='board-construction'`, immediately links `pick_candidates.pick_id` per-row (not deferred), sets `shadow_mode=false` on each successful link. Idempotent: already-linked candidates skipped. Auth-gated `POST /api/board/write-picks` (operator role only — `auth.ts` route registry). Audit record written per run (`board.pick_write.completed`, entity_type `syndicate_board`).
 UTV2-477 (P5-02: CC board queue review surface, PR #215, commit `919599a`) Done. Adds `GET /api/operator/board-queue` (operator-web, latest run only — no historical mixing), `BoardQueueRow`/`BoardQueueData` types, `BoardQueueTable` component with Pending/Written badges and `Write N Pending Picks` button, `writeSystemPicks()` Next.js server action (delegates to API, bearer-auth'd, idempotent, revalidates path), Board Queue nav under Decision workspace in `WorkspaceSidebar`. No suppress/reroute implemented — governed write is the only available action (scope discipline enforced).
-UTV2-478 (P5-03: DB truth + lifecycle + audit proof) In Progress — proof script agent (Lane A) and unit test hardening agent (Lane B) running in parallel worktrees.
-
-**Phase 5 hard boundaries (active):**
-- `board-pick-writer.ts` is the only authorized bridge from `syndicate_board` to `picks`
-- `source='board-construction'` on every pick created by this path
-- `pick_candidates.pick_id` linked immediately per-row (never batch-deferred)
-- `shadow_mode=false` only on successfully linked candidates
-- `POST /api/board/write-picks` requires operator role — no unauthenticated path
-- Command Center writes nothing to DB directly — all mutations via API
-- Phase 6 (feedback loop) does not start until UTV2-478 evidence bundle accepted
 
 2026-04-09 — **Phase 4 (Board Construction) closed. Evidence bundle: UTV2-475.**
 Phase 4 gate open. UTV2-473 (ranked candidate selection, PR #212, commit `4189f9d`) Done. UTV2-474 (board construction service, PR #213, commit `f1c3acc`) Done. UTV2-475 (Phase 4 evidence bundle, commit `5daaf0b`) Done — 301 board candidates, board size 12, sport cap enforced, pick_id/shadow_mode boundaries verified. Phase 5 gate opened.
@@ -66,10 +63,10 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Tests | **All pass** — 0 failures. `pnpm test` 188+ pass (Phase 5 board-pick-writer tests added via UTV2-476/478). Smart-form: 87 pass. Ingestor: 51 pass. All gates green. |
 | Gates | `pnpm lint` PASS. `pnpm type-check` PASS. `pnpm test` PASS. `pnpm build` PASS. All green. |
 | Operating Model | Risk-tiered sprints (T1/T2/T3) per `SPRINT_MODEL_v2.md` |
-| Milestone | **Phase 5 — Governed Write Path (active, 2026-04-09).** Phases 1–4 closed. P5-01 (UTV2-476, PR #214) merged. P5-02 (UTV2-477, PR #215) merged. P5-03 (UTV2-478 proof) in progress. Phase 6 (feedback loop / model iteration) blocked until UTV2-478 evidence accepted. Migrations 012–016 live (head `202604080016`). Phase 7 deferred (PM approval required). |
+| Milestone | **Phase 6 — Feedback Loop / Model Iteration (active, 2026-04-10).** Phases 1–5 closed. P6-01 (UTV2-479, attribution wiring, commit `2a18f29`) Done. P6-02 (UTV2-480, trust tuning) In Progress. P6-03 (UTV2-481, proof bundle) blocked on UTV2-480. Migrations 012–016 live (head `202604080016`); Phase 6 adds `202604100001` (attribution view) + `202604100002` (market_family_trust table, pending). Phase 7 deferred (PM approval required). |
 | Provider | **SGO Pro active (permanent, upgraded 2026-04-07).** Odds API suspended. Historical backfill complete: 329k provider_offers rows. Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
 | Worker | **UP** — transient network error fix deployed (PR #188, UTV2-441). Restarts: 0 (fresh after restart 2026-04-08). Supervisor active since restart. |
-| Roadmap | Phase 1 closed (`66c9cc1`). Phase 2 closed (`c077ab1`, UTV2-464). Phase 3 closed (`4b5e4a9`, UTV2-471). Phase 4 closed (`5daaf0b`, UTV2-475). Phase 5 active: P5-01 (`9766ef9`, PR #214) + P5-02 (`919599a`, PR #215) merged → P5-03 UTV2-478 proof in progress. Phase 6 blocked on UTV2-478. CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (PM approval required). |
+| Roadmap | Phase 1 closed (`66c9cc1`). Phase 2 closed (`c077ab1`, UTV2-464). Phase 3 closed (`4b5e4a9`, UTV2-471). Phase 4 closed (`5daaf0b`, UTV2-475). Phase 5 closed (`aeb978e`, UTV2-478 — 7/7 PASS). Phase 6 active: P6-01 Done (`2a18f29`, UTV2-479) → P6-02 In Progress (UTV2-480) → P6-03 proof (UTV2-481, blocked). CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (PM approval required). |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
