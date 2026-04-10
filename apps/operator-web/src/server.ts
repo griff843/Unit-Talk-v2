@@ -50,6 +50,7 @@ import { handleProviderHealthRequest } from './routes/provider-health.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
 import { handleBoardStateRequest } from './routes/board-state.js';
 import { handleBoardQueueRequest } from './routes/board-queue.js';
+import { handleBoardPerformanceRequest } from './routes/board-performance.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
@@ -502,6 +503,10 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/board-queue') {
     return handleBoardQueueRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/board/performance') {
+    return handleBoardPerformanceRequest(request, response, deps);
   }
 
   const pickDetailMatch = /^\/api\/operator\/picks\/([^/]+)$/.exec(url.pathname);

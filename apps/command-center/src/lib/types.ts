@@ -237,6 +237,47 @@ export interface WriteBoardPicksResult {
   error?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Governed Pick Performance (UTV2-479)
+// ---------------------------------------------------------------------------
+
+export interface GovernedPickPerformanceRow {
+  pick_id: string;
+  market: string | null;
+  selection: string | null;
+  odds: number | null;
+  pick_status: string | null;
+  settled_at: string | null;
+  pick_created_at: string | null;
+  metadata: Record<string, unknown> | null;
+  board_run_id: string | null;
+  board_rank: number | null;
+  board_tier: string | null;
+  sport_key: string | null;
+  market_type_id: string | null;
+  board_model_score: number | null;
+  candidate_id: string | null;
+  universe_id: string | null;
+  candidate_model_score: number | null;
+  model_confidence: number | null;
+  model_tier: string | null;
+  selection_rank: number | null;
+  provider_key: string | null;
+  provider_market_key: string | null;
+  /** null for unsettled picks */
+  settlement_id: string | null;
+  /** null for unsettled picks */
+  settlement_result: string | null;
+  /** null for unsettled picks */
+  settlement_status: string | null;
+  /** null for unsettled picks */
+  settlement_settled_at: string | null;
+  /** null for unsettled picks */
+  settled_by: string | null;
+  /** null for unsettled picks */
+  settlement_confidence: number | null;
+}
+
 export interface DashboardRuntimeData {
   outbox: {
     pending: number;
