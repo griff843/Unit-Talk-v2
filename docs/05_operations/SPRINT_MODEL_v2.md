@@ -64,6 +64,48 @@ Sprint ceremony scales with risk. High-risk changes get full governance. Low-ris
 
 **Structural refactor rule:** Pure structural refactors (no behavior change, no schema change, no routing change) qualify for T3 ceremony regardless of how the issue is tier-labeled in the queue. If an issue is labeled T2 but meets the T3 criteria above, T3 ceremony is correct. Reclassify at implementation time and note in the commit.
 
+---
+## Transitional Exception Policy
+
+When `main` carries pre-existing failures that predate the active issue branch,
+the standard "pnpm verify must pass" rule is modified as follows:
+
+**General rule (T2/T3 work):**
+- No new failures may be introduced by the PR (hard block -- no exceptions)
+- Pre-existing failures must be documented in the PR description with provenance
+  (which issue they originate from, which check fails, when they first appeared)
+- The exception window must be open -- declared by PM, not assumed
+
+**T1 work (migrations, schema changes, lifecycle routing, shared contracts):**
+T1 work is permitted during an active exception window but requires all of the
+following in addition to the general rule:
+
+1. Explicit PM sign-off on this specific T1 issue -- general exception coverage
+   does not extend to T1 automatically
+2. Full catalogue of pre-existing failures in the PR description, with exact
+   provenance -- "pre-existing" is not sufficient; the originating issue or commit
+   must be named
+3. The issue's own scope-specific tests must pass (cannot hide behind pre-existing
+   test failures to avoid running the new tests)
+4. If the PR includes a migration: the migration must be reviewed as idempotent
+   and additive before live apply, regardless of exception window status
+
+**Absolute blocks for T1 -- no exception applies:**
+- A PR that introduces new failures compared to `main` at branch point. Zero
+  tolerance. The exception only covers pre-existing failures, never new ones.
+- A non-additive schema change without explicit PM approval and an independent
+  rollback path documented
+- A migration applied live before it is confirmed idempotent
+- T1 work where the PM sign-off requirement is unmet
+
+**Exception window status:** CLOSED 2026-04-10 CI-run-24255360536 commit-0c95b1ec
+
+**What closes the exception window:**
+PM observes a full `pnpm verify` clean run on `main`, records the CI run ID and
+commit SHA, and updates the exception window status line above.
+
+---
+
 ## What Remains Unchanged
 
 These are non-negotiable regardless of tier:
