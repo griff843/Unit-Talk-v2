@@ -61,14 +61,16 @@ test('enqueueDistributionWork: first enqueue succeeds', async () => {
 // Phase 7A governance brake — UTV2-492
 // ---------------------------------------------------------------------------
 
-test('isGovernanceBrakeSource: brakes non-human sources', () => {
+test('isGovernanceBrakeSource: brakes autonomous non-human sources', () => {
   assert.equal(isGovernanceBrakeSource('system-pick-scanner'), true);
   assert.equal(isGovernanceBrakeSource('alert-agent'), true);
   assert.equal(isGovernanceBrakeSource('model-driven'), true);
-  assert.equal(isGovernanceBrakeSource('board-construction'), true);
 });
 
-test('isGovernanceBrakeSource: does NOT brake human-relayed sources', () => {
+test('isGovernanceBrakeSource: does NOT brake operator-triggered or human-relayed sources', () => {
+  // board-construction is operator-triggered (governed board path) — NOT
+  // an autonomous producer. Must retain existing queueing behavior.
+  assert.equal(isGovernanceBrakeSource('board-construction'), false);
   assert.equal(isGovernanceBrakeSource('smart-form'), false);
   assert.equal(isGovernanceBrakeSource('api'), false);
   assert.equal(isGovernanceBrakeSource('discord-bot'), false);

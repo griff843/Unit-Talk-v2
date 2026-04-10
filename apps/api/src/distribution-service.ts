@@ -18,18 +18,24 @@ export interface DistributionSkippedResult {
 
 /**
  * Phase 7A governance brake: pick sources that must NOT auto-enqueue for
- * distribution on submission. These are non-human producers whose picks must
- * land in `awaiting_approval` and wait for operator review before any queueing.
+ * distribution on submission. These are autonomous non-human producers whose
+ * picks must land in `awaiting_approval` and wait for operator review before
+ * any queueing.
  *
  * This set is the single source of truth for the brake — consulted by
  * `submit-pick-controller` (primary enforcement) and used to reason about
  * defense-in-depth guards in `run-audit-service` and `enqueueDistributionWork`.
+ *
+ * NOTE: `board-construction` is intentionally NOT in this set. The governed
+ * board path is already operator-triggered — it is not an autonomous producer
+ * and must retain its existing queueing behavior. Phase 7A repo-truth
+ * correction (PM, 2026-04-10) explicitly excludes board-construction from
+ * the non-human brake bucket.
  */
 export const GOVERNANCE_BRAKE_SOURCES: ReadonlySet<PickSource> = new Set<PickSource>([
   'system-pick-scanner',
   'alert-agent',
   'model-driven',
-  'board-construction',
 ]);
 
 export function isGovernanceBrakeSource(source: PickSource): boolean {

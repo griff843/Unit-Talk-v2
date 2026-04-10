@@ -84,7 +84,10 @@ test('submit-pick-controller: alert-agent lands in awaiting_approval (governance
   assert.equal(result.body.data.outboxEnqueued, false);
 });
 
-test('submit-pick-controller: board-construction lands in awaiting_approval (governance brake)', async () => {
+test('submit-pick-controller: board-construction is NOT braked (operator-triggered governed path)', async () => {
+  // Phase 7A repo-truth correction (PM, 2026-04-10): board-construction is
+  // operator-triggered, not autonomous. It must retain existing queueing
+  // behavior and NOT be lumped into the non-human brake bucket.
   const repositories = createInMemoryRepositoryBundle();
 
   const result = await submitPickController(
@@ -95,8 +98,8 @@ test('submit-pick-controller: board-construction lands in awaiting_approval (gov
   assert.ok(result.body.ok);
   if (!result.body.ok) return;
 
-  assert.equal(result.body.data.lifecycleState, 'awaiting_approval');
-  assert.equal(result.body.data.governanceBrake, true);
+  assert.notEqual(result.body.data.lifecycleState, 'awaiting_approval');
+  assert.equal(result.body.data.governanceBrake, undefined);
 });
 
 test('submit-pick-controller: smart-form path is NOT braked (regression guard)', async () => {
