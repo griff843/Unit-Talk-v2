@@ -195,6 +195,48 @@ export interface BoardStateData {
   conflictCards: ConflictCard[];
 }
 
+// ---------------------------------------------------------------------------
+// Board Queue (UTV2-477)
+// ---------------------------------------------------------------------------
+
+export interface BoardQueueRow {
+  boardRank: number;
+  boardTier: string;
+  candidateId: string;
+  boardRunId: string;
+  sportKey: string;
+  modelScore: number;
+  /** null = pending write; non-null = already written */
+  pickId: string | null;
+  shadowMode: boolean;
+  canonicalMarketKey: string;
+  currentLine: number | null;
+  currentOverOdds: number | null;
+  currentUnderOdds: number | null;
+  universeId: string;
+}
+
+export interface BoardQueueData {
+  boardRunId: string;
+  observedAt: string;
+  totalRows: number;
+  pendingCount: number;
+  writtenCount: number;
+  rows: BoardQueueRow[];
+}
+
+export interface WriteBoardPicksResult {
+  ok: boolean;
+  boardRunId: string;
+  boardSize: number;
+  written: number;
+  skipped: number;
+  errors: number;
+  durationMs: number;
+  pickIds: string[];
+  error?: string;
+}
+
 export interface DashboardRuntimeData {
   outbox: {
     pending: number;

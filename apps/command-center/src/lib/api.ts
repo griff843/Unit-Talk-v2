@@ -1,4 +1,5 @@
 import type {
+  BoardQueueData,
   BoardStateData,
   DashboardData,
   DashboardRuntimeData,
@@ -89,6 +90,18 @@ export async function fetchBoardState(target = 'best-bets'): Promise<BoardStateD
   const json = (await res.json()) as { ok: boolean; data: BoardStateData };
   if (!json.ok) {
     throw new Error('Board state fetch failed');
+  }
+  return json.data;
+}
+
+export async function fetchBoardQueue(): Promise<BoardQueueData> {
+  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/board-queue`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Board queue fetch failed: ${res.status}`);
+  const json = (await res.json()) as { ok: boolean; data: BoardQueueData };
+  if (!json.ok) {
+    throw new Error('Board queue fetch failed');
   }
   return json.data;
 }

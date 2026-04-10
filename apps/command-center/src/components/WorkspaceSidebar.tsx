@@ -113,6 +113,7 @@ const WORKSPACES: Workspace[] = [
     icon: <IconDecision />,
     routes: ['/decision', '/decisions'],
     secondaryNav: [
+      { href: '/decision/board-queue', label: 'Board Queue' },
       { href: '/decision/scores', label: 'Score Breakdown' },
       { href: '/decision/preview', label: 'Promotion Preview' },
       { href: '/decision/routing', label: 'Routing Preview' },
