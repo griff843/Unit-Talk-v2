@@ -4475,11 +4475,13 @@ test('createSnapshotFromRows aging detects stuck processing outbox rows older th
 });
 
 test('GET /api/operator/intelligence-coverage returns burn-in enrichment aggregates', async () => {
+  // Use relative dates so picks stay within the 7d window regardless of when this runs
+  const d = (offsetHours: number) => new Date(Date.now() - offsetHours * 60 * 60 * 1000).toISOString();
   const provider = createAggregateProvider({
     picks: [
       {
         id: 'pick-1',
-        created_at: '2026-04-02T02:00:00.000Z',
+        created_at: d(50),
         odds: -110,
         metadata: {
           domainAnalysis: {
@@ -4492,7 +4494,7 @@ test('GET /api/operator/intelligence-coverage returns burn-in enrichment aggrega
       },
       {
         id: 'pick-2',
-        created_at: '2026-04-02T03:00:00.000Z',
+        created_at: d(49),
         odds: -120,
         metadata: {
           domainAnalysis: {
@@ -4503,7 +4505,7 @@ test('GET /api/operator/intelligence-coverage returns burn-in enrichment aggrega
       },
       {
         id: 'pick-3',
-        created_at: '2026-04-02T04:00:00.000Z',
+        created_at: d(48),
         odds: null,
         metadata: {},
       },
@@ -4511,13 +4513,13 @@ test('GET /api/operator/intelligence-coverage returns burn-in enrichment aggrega
     settlement_records: [
       {
         id: 'settlement-1',
-        created_at: '2026-04-02T05:00:00.000Z',
+        created_at: d(47),
         status: 'settled',
         payload: { clvRaw: 0.12 },
       },
       {
         id: 'settlement-2',
-        created_at: '2026-04-02T06:00:00.000Z',
+        created_at: d(46),
         status: 'settled',
         payload: {},
       },

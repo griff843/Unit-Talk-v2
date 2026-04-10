@@ -53,10 +53,15 @@ export type { WriterRole };
 
 /**
  * V2 allowed transitions — from packages/db/src/lifecycle.ts
+ *
+ * Phase 7A (UTV2-491): `awaiting_approval` added. Must stay in sync with the
+ * canonical FSM in packages/db/src/lifecycle.ts. If this mirror drifts, the
+ * TypeScript compiler will flag it as a missing key in Record<PickLifecycleState, ...>.
  */
 const allowedTransitions: Record<PickLifecycleState, PickLifecycleState[]> = {
   draft: ['validated', 'voided'],
-  validated: ['queued', 'voided'],
+  validated: ['queued', 'awaiting_approval', 'voided'],
+  awaiting_approval: ['queued', 'voided'],
   queued: ['posted', 'voided'],
   posted: ['settled', 'voided'],
   settled: [],

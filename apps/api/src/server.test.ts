@@ -318,11 +318,12 @@ test('GET /api/alerts/signal-quality returns insufficient-data empty state when 
 
 test('GET /api/alerts/signal-quality returns aggregated alert-agent CLV and bySport metrics', async () => {
   const repositories = createInMemoryRepositoryBundle();
+  const now = Date.now();
   for (let index = 0; index < 10; index += 1) {
     await createSettledAlertAgentPick(repositories, {
       selection: `NBA signal ${index}`,
       sport: 'NBA',
-      settledAt: `2026-03-${String(index + 10).padStart(2, '0')}T12:00:00.000Z`,
+      settledAt: new Date(now - (index + 2) * 24 * 60 * 60 * 1000).toISOString(),
       result: index < 7 ? 'win' : 'loss',
       clvPercent: 2,
     });
@@ -330,7 +331,7 @@ test('GET /api/alerts/signal-quality returns aggregated alert-agent CLV and bySp
   await createSettledAlertAgentPick(repositories, {
     selection: 'MLB signal',
     sport: 'MLB',
-    settledAt: '2026-03-15T12:00:00.000Z',
+    settledAt: new Date(now - 5 * 24 * 60 * 60 * 1000).toISOString(),
     result: 'push',
     clvPercent: 1,
   });

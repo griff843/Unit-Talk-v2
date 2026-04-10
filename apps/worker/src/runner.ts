@@ -55,6 +55,13 @@ export interface WorkerRunnerOptions {
   targetRegistry?: TargetRegistryEntry[] | undefined;
   /** Interval at which the runner writes a worker.heartbeat system_run per cycle. Pass 0 to disable. Default: 30000. */
   workerHeartbeatIntervalMs?: number | undefined;
+  /**
+   * Persistence mode controls atomic vs sequential claim/confirm paths.
+   * - 'database': uses claimNextAtomic / confirmDeliveryAtomic (SELECT FOR UPDATE SKIP LOCKED).
+   * - 'in_memory': uses sequential claimNext / markSent (safe for tests, not for concurrent workers).
+   * Default: 'database' (fail-closed).
+   */
+  persistenceMode?: 'database' | 'in_memory' | undefined;
 }
 
 export interface WorkerCycleSummary {
@@ -147,6 +154,7 @@ export async function runWorkerCycles(
           {
             ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
             ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
+            ...(options.persistenceMode === undefined ? {} : { persistenceMode: options.persistenceMode }),
             targetRegistry: registry,
           },
         );

@@ -15,21 +15,36 @@ Never assume state from memory. Always verify from live sources.
 
 ---
 
-## Step 1 — Run the ops brief
+## Step 1 — Run health check and ops brief
 
 ```bash
-pnpm ops:brief
+pnpm ops:health   # fast drift check: lanes, worktrees, branches, status docs
+pnpm ops:brief    # point-in-time snapshot: Linear queue, GitHub, pipeline
 ```
 
-This is the single-command snapshot. Read the output in full before doing anything else.
+Run `ops:health` first. If it reports BLOCKED, resolve before proceeding.
+Run `ops:brief` for the full queue and runtime snapshot.
 
-It surfaces:
+If any active lanes exist from a previous session, check them before starting new work:
+
+```bash
+pnpm lane:list                          # see what's active
+pnpm lane:resume -- --issue UTV2-XXX   # restore context for an in-progress lane
+```
+
+`ops:health` surfaces:
+- Active lane health (snapshot freshness, merged-but-still-active, capacity)
+- Orphaned worktrees not in the lane registry
+- Unregistered feat/* branches older than 3 days
+- PROGRAM_STATUS.md staleness vs last commit
+
+`ops:brief` surfaces:
 - Current branch and last commit
 - Linear queue state (Ready / In Progress / In Review)
 - Runtime health indicators
 - Any pending proof inputs
 
-If `ops:brief` fails or errors, diagnose before proceeding. Do not work blind.
+If either command fails or errors, diagnose before proceeding. Do not work blind.
 
 ---
 

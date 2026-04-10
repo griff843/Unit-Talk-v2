@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { randomUUID } from 'node:crypto';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import type {
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
@@ -634,6 +637,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       reviews: {} as RepositoryBundle['reviews'],
       marketUniverse: {} as RepositoryBundle['marketUniverse'],
       pickCandidates: {} as RepositoryBundle['pickCandidates'],
+      syndicateBoard: {} as RepositoryBundle['syndicateBoard'],
     },
     picks,
     receipts,
@@ -1639,6 +1643,81 @@ test('runWorkerCycles writes a worker.heartbeat system_run per cycle', async () 
   assert.equal(heartbeatRuns.length, 1, 'exactly one worker.heartbeat run must be written per cycle');
   assert.equal(heartbeatRuns[0]?.status, 'succeeded', 'heartbeat run must be completed as succeeded');
   assert.ok(heartbeatRuns[0]?.finished_at != null, 'heartbeat run must have a finished_at timestamp');
+});
+
+test('createWorkerRuntimeDependencies reads worker settings from local.env', () => {
+  const originalCwd = process.cwd();
+  const originalEnv = {
+    UNIT_TALK_WORKER_ID: process.env.UNIT_TALK_WORKER_ID,
+    UNIT_TALK_DISTRIBUTION_TARGETS: process.env.UNIT_TALK_DISTRIBUTION_TARGETS,
+    UNIT_TALK_WORKER_ADAPTER: process.env.UNIT_TALK_WORKER_ADAPTER,
+    UNIT_TALK_WORKER_POLL_MS: process.env.UNIT_TALK_WORKER_POLL_MS,
+    UNIT_TALK_WORKER_MAX_CYCLES: process.env.UNIT_TALK_WORKER_MAX_CYCLES,
+    UNIT_TALK_WORKER_DRY_RUN: process.env.UNIT_TALK_WORKER_DRY_RUN,
+    UNIT_TALK_WORKER_AUTORUN: process.env.UNIT_TALK_WORKER_AUTORUN,
+  };
+  const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-worker-runtime-'));
+
+  fs.writeFileSync(
+    path.join(tempDir, '.env.example'),
+    [
+      'NODE_ENV=development',
+      'UNIT_TALK_APP_ENV=local',
+      'UNIT_TALK_ACTIVE_WORKSPACE=C:\\\\dev\\\\unit-talk-v2',
+      'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
+      'LINEAR_TEAM_KEY=UT',
+      'LINEAR_TEAM_NAME=Unit Talk',
+      'NOTION_WORKSPACE_NAME=Unit Talk',
+      'SLACK_WORKSPACE_NAME=Unit Talk',
+    ].join('\n'),
+    'utf8',
+  );
+
+  fs.writeFileSync(
+    path.join(tempDir, 'local.env'),
+    [
+      'UNIT_TALK_WORKER_ID=worker-from-local-env',
+      'UNIT_TALK_DISTRIBUTION_TARGETS=discord:best-bets,discord:canary',
+      'UNIT_TALK_WORKER_ADAPTER=discord',
+      'UNIT_TALK_WORKER_POLL_MS=9000',
+      'UNIT_TALK_WORKER_MAX_CYCLES=7',
+      'UNIT_TALK_WORKER_DRY_RUN=false',
+      'UNIT_TALK_WORKER_AUTORUN=true',
+    ].join('\n'),
+    'utf8',
+  );
+
+  try {
+    process.chdir(tempDir);
+    delete process.env.UNIT_TALK_WORKER_ID;
+    delete process.env.UNIT_TALK_DISTRIBUTION_TARGETS;
+    delete process.env.UNIT_TALK_WORKER_ADAPTER;
+    delete process.env.UNIT_TALK_WORKER_POLL_MS;
+    delete process.env.UNIT_TALK_WORKER_MAX_CYCLES;
+    delete process.env.UNIT_TALK_WORKER_DRY_RUN;
+    delete process.env.UNIT_TALK_WORKER_AUTORUN;
+
+    const runtime = createWorkerRuntimeDependencies();
+
+    assert.equal(runtime.persistenceMode, 'in_memory');
+    assert.equal(runtime.workerId, 'worker-from-local-env');
+    assert.deepEqual(runtime.distributionTargets, ['discord:best-bets', 'discord:canary']);
+    assert.equal(runtime.adapterKind, 'discord');
+    assert.equal(runtime.pollIntervalMs, 9000);
+    assert.equal(runtime.maxCyclesPerRun, 7);
+    assert.equal(runtime.dryRun, false);
+    assert.equal(runtime.autorun, true);
+  } finally {
+    process.env.UNIT_TALK_WORKER_ID = originalEnv.UNIT_TALK_WORKER_ID;
+    process.env.UNIT_TALK_DISTRIBUTION_TARGETS = originalEnv.UNIT_TALK_DISTRIBUTION_TARGETS;
+    process.env.UNIT_TALK_WORKER_ADAPTER = originalEnv.UNIT_TALK_WORKER_ADAPTER;
+    process.env.UNIT_TALK_WORKER_POLL_MS = originalEnv.UNIT_TALK_WORKER_POLL_MS;
+    process.env.UNIT_TALK_WORKER_MAX_CYCLES = originalEnv.UNIT_TALK_WORKER_MAX_CYCLES;
+    process.env.UNIT_TALK_WORKER_DRY_RUN = originalEnv.UNIT_TALK_WORKER_DRY_RUN;
+    process.env.UNIT_TALK_WORKER_AUTORUN = originalEnv.UNIT_TALK_WORKER_AUTORUN;
+    process.chdir(originalCwd);
+    fs.rmSync(tempDir, { recursive: true, force: true });
+  }
 });
 
 test('runWorkerCycles writes one heartbeat per cycle for multiple cycles', async () => {

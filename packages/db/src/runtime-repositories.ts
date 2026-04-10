@@ -94,7 +94,6 @@ import type {
   TeamSearchResult,
   PickReviewCreateInput,
   PickReviewRepository,
-  ISyndicateBoardRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -1338,12 +1337,12 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
   async listAliasLookup(_provider: string): Promise<ProviderMarketAliasRow[]> {
     // InMemory implementation has no alias table — returns empty array in test mode.
-    return [];
+    return [] as unknown as ProviderMarketAliasRow[];
   }
 
   async listParticipantAliasLookup(_provider: string): Promise<ProviderEntityAliasRow[]> {
     // InMemory implementation has no alias table — returns empty array in test mode.
-    return [];
+    return [] as unknown as ProviderEntityAliasRow[];
   }
 
   async listOpeningOffers(since: string, _provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
@@ -1487,6 +1486,13 @@ export class InMemoryEventRepository implements EventRepository {
     const normalized = eventName.trim().toLowerCase();
     return Array.from(this.events.values()).filter(
       (row) => row.event_name.trim().toLowerCase() === normalized,
+    );
+  }
+
+  async listStartedBySnapshot(snapshotAt: string): Promise<EventRow[]> {
+    const snapshotDate = snapshotAt.slice(0, 10); // YYYY-MM-DD
+    return Array.from(this.events.values()).filter(
+      (row) => row.event_date <= snapshotDate,
     );
   }
 }
@@ -4355,6 +4361,20 @@ export class DatabaseEventRepository implements EventRepository {
 
     return data ?? [];
   }
+
+  async listStartedBySnapshot(snapshotAt: string): Promise<EventRow[]> {
+    const snapshotDate = snapshotAt.slice(0, 10); // YYYY-MM-DD
+    const { data, error } = await this.client
+      .from('events')
+      .select('*')
+      .lte('event_date', snapshotDate);
+
+    if (error) {
+      throw new Error(`Failed to list started events: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
 }
 
 export class DatabaseEventParticipantRepository implements EventParticipantRepository {
@@ -6436,23 +6456,6 @@ type PlayerTeamAssignmentRow = {
   effective_until: string | null;
 };
 
-type ProviderEntityAliasRow = {
-  provider: string;
-  entity_kind: string;
-  provider_entity_key: string;
-  participant_id?: string | null;
-  team_id: string | null;
-  player_id: string | null;
-};
-
-type ProviderMarketAliasRow = {
-  provider: string;
-  provider_market_key: string;
-  provider_display_name: string | null;
-  market_type_id: string | null;
-  sport_id: string | null;
-};
-
 type ProviderBookAliasRow = {
   provider: string;
   provider_book_key: string;
@@ -6474,8 +6477,10 @@ type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
   insert(values: Record<string, unknown> | readonly Record<string, unknown>[]): UntypedQueryBuilder;
   update(values: Record<string, unknown>): UntypedQueryBuilder;
   eq(column: string, value: unknown): UntypedQueryBuilder;
+  neq(column: string, value: unknown): UntypedQueryBuilder;
   in(column: string, values: readonly unknown[]): UntypedQueryBuilder;
   is(column: string, value: unknown): UntypedQueryBuilder;
+  not(column: string, operator: string, value: unknown): UntypedQueryBuilder;
   order(column: string, options?: { ascending?: boolean }): UntypedQueryBuilder;
   ilike(column: string, pattern: string): UntypedQueryBuilder;
   limit(count: number): UntypedQueryBuilder;

@@ -10,6 +10,7 @@ import type { PickSource, SubmissionPayload, ValidatedSubmission } from './submi
 export type PickLifecycleState =
   | 'draft'
   | 'validated'
+  | 'awaiting_approval'
   | 'queued'
   | 'posted'
   | 'settled'
@@ -49,8 +50,28 @@ export interface LifecycleEvent {
   createdAt: string;
 }
 
+/**
+ * Options for controlling the initial lifecycle/approval state at materialization.
+ *
+ * Phase 7A (UTV2-491): added to allow non-human producers to land picks in
+ * `awaiting_approval` at the same atomic step as materialization, instead of
+ * performing a separate post-create transition (which would leave a race
+ * window where the brake could miss a just-created `validated` pick).
+ *
+ * Backward-compatible: omitting `initial` preserves pre-Phase-7A defaults
+ * (`lifecycleState: 'validated'`, `approvalStatus: 'approved'`).
+ *
+ * Producer routing policy (which source uses which initial state) is NOT
+ * decided in UTV2-491. See UTV2-492 and later.
+ */
+export interface MaterializeCanonicalPickInitial {
+  lifecycleState?: PickLifecycleState;
+  approvalStatus?: ApprovalStatus;
+}
+
 export function materializeCanonicalPick(
   submission: ValidatedSubmission,
+  initial?: MaterializeCanonicalPickInitial,
   now = new Date().toISOString(),
 ): CanonicalPick {
   const payload: SubmissionPayload = submission.payload;
@@ -66,9 +87,9 @@ export function materializeCanonicalPick(
     confidence: payload.confidence,
     source: payload.source,
     submittedBy: payload.submittedBy,
-    approvalStatus: 'approved',
+    approvalStatus: initial?.approvalStatus ?? 'approved',
     promotionStatus: 'not_eligible',
-    lifecycleState: 'validated',
+    lifecycleState: initial?.lifecycleState ?? 'validated',
     eventStartTime:
       typeof payload.metadata?.['eventStartTime'] === 'string'
         ? payload.metadata['eventStartTime']

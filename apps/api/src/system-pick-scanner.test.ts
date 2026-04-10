@@ -28,7 +28,7 @@ function makeOffer(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function makeParticipant(overrides: Record<string, unknown> = {}) {
+function _makeParticipant(overrides: Record<string, unknown> = {}) {
   return {
     id: crypto.randomUUID(),
     external_id: 'player-ext-1',

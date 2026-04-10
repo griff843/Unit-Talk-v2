@@ -16,7 +16,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { BoardScanService, runBoardScan } from './board-scan-service.js';
+import { runBoardScan } from './board-scan-service.js';
 import { InMemoryMarketUniverseRepository, InMemoryPickCandidateRepository } from '@unit-talk/db';
 import type { MarketUniverseRow } from '@unit-talk/db';
 

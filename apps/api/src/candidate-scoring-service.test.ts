@@ -104,6 +104,8 @@ function makeCandidate(overrides: Partial<PickCandidateRow> = {}): PickCandidate
     model_score: null,
     model_tier: null,
     model_confidence: null,
+    selection_rank: null,
+    is_board_candidate: false,
     shadow_mode: true,
     pick_id: null,
     scan_run_id: 'run-1',

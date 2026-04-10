@@ -230,7 +230,7 @@ export class BoardPickWriter {
           picks: this.repos.picks,
           audit: this.repos.audit,
           providerOffers: this.repos.providerOffers,
-          settlements: this.repos.settlements,
+          ...(this.repos.settlements != null ? { settlements: this.repos.settlements } : {}),
         });
         pickId = result.pickRecord.id;
       } catch (err) {
