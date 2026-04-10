@@ -61,6 +61,8 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 
 ## Current State
 
+> **Repo-green status: see the Repo-Green Truth section below. Current state claims in this table are UNVERIFIED pending PM verification.**
+
 | Field | Value |
 |-------|-------|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
@@ -71,6 +73,22 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 | Provider | **SGO Pro active (permanent, upgraded 2026-04-07).** Odds API suspended. Historical backfill complete: 329k provider_offers rows. Per-bookmaker rows (Pinnacle/DK/FD/BetMGM) captured via byBookmaker. Results pipeline uses `odds.<oddID>.score`. Knowledge base: `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md`. Authority: `docs/05_operations/PROVIDER_AUTHORITY_LOCK.md`. |
 | Worker | **UP** — transient network error fix deployed (PR #188, UTV2-441). Restarts: 0 (fresh after restart 2026-04-08). Supervisor active since restart. |
 | Roadmap | Phase 1 closed (`66c9cc1`). Phase 2 closed (`c077ab1`, UTV2-464). Phase 3 closed (`4b5e4a9`, UTV2-471). Phase 4 closed (`5daaf0b`, UTV2-475). Phase 5 closed (`aeb978e`, UTV2-478 — 7/7 PASS). Phase 6 closed (`b74c384`, UTV2-481 — 7/7 PASS). CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (PM approval required). |
+
+The authoritative split for current milestone closure vs current repo-green status is defined in the two sections below. Historical summary rows above are preserved as-is.
+
+## Milestone Closure Truth
+
+| Field | Value |
+|-------|-------|
+| Milestone | **Phase 6 COMPLETE (2026-04-10). Locked roadmap (Phases 1-6) closed.** Phase 6 gate: 7/7 PASS (`b74c384`, UTV2-481). Migrations live: `202604100001` (attribution view) + `202604100002` (market_family_trust). Phase 7 deferred (PM approval required). |
+| Roadmap | Phase 1 closed (`66c9cc1`). Phase 2 closed (`c077ab1`, UTV2-464). Phase 3 closed (`4b5e4a9`, UTV2-471). Phase 4 closed (`5daaf0b`, UTV2-475). Phase 5 closed (`aeb978e`, UTV2-478 - 7/7 PASS). Phase 6 closed (`b74c384`, UTV2-481 - 7/7 PASS). CC-M5 batch Done (PRs #196/195/197). Blocked: UTV2-431/433/435 (live data gates). Deferred: Phase 7 (PM approval required). |
+
+## Repo-Green Truth
+
+| Field | Value |
+|-------|-------|
+| Tests | **UNVERIFIED - pending PM decision.** Prior repo-green claims are preserved below as historical record, but this section does not re-assert a current all-green state without a ratified verification reference. |
+| Gates | **UNVERIFIED - pending PM decision.** Prior statements such as `pnpm lint` PASS / `pnpm type-check` PASS / `pnpm test` PASS / `pnpm build` PASS / "All green" remain in the historical sections below and are not promoted here as current truth. |
 
 ## Honest Assessment (forensic audit 2026-03-31)
 
@@ -85,6 +103,8 @@ Migrations applied: `picks_current_state` view (007), `sport_market_types` drop 
 **Sprint A resolved:** Lint fixed (G1 unblocked). Submission dedup (UNIQUE index). Settlement dedup (atomic claim + UNIQUE constraint). Atomic promotion (compensating rollback). Retry model (pending + backoff). Post-send reconciliation. CLV capper identity hotfix. Exposure gate lifecycle fix.
 
 ## Gate Notes (last full run 2026-04-08 — green-state recovery; Phase 5 adds board-pick-writer tests)
+
+> Historical record only. Current repo-green status is **UNVERIFIED** - see the Repo-Green Truth section above.
 
 | Gate | Status | Notes |
 |------|--------|-------|

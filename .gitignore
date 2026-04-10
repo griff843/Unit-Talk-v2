@@ -49,3 +49,6 @@ supabase/.branches/
 
 # Smart Form Playwright results
 apps/smart-form/test-results/
+
+# Governance CLI — local issue state (never committed)
+.ut-state/

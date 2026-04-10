@@ -1,0 +1,61 @@
+id: UTV2-491
+title: "P7A-01 - add awaiting_approval lifecycle state"
+tier: T1
+phase: "7a"
+
+upstream_dependencies:
+  - UTV2-485
+
+allowed_files:
+  - "packages/contracts/src/picks.ts"
+  - "packages/db/src/lifecycle.ts"
+  - "packages/db/src/lifecycle.test.ts"
+  - "packages/domain/src/picks.ts"
+  - "packages/verification/src/engine/v2-type-bridge.ts"
+  - "supabase/migrations/*_utv2_491_*.sql"
+
+forbidden_files:
+  - "apps/api/src/controllers/submit-pick-controller.ts"
+  - "apps/api/src/run-audit-service.ts"
+  - "apps/api/src/distribution-service.ts"
+  - "apps/api/src/controllers/review-pick-controller.ts"
+  - "apps/command-center/**"
+  - "apps/operator-web/**"
+
+expected_collateral:
+  - "packages/db/src/database.types.ts"
+
+requires_migration: true
+requires_sql_review: true
+requires_status_sync: true
+pm_review_required: true
+
+rollback_plan: |
+  Commit-level: revert the PR. Purely additive - no existing path altered.
+  Schema-level: rollback SQL in migration header comment block. Precondition:
+  SELECT count(*) FROM public.picks WHERE status='awaiting_approval' must be 0
+  before running rollback.
+
+verification_commands:
+  - name: "contracts-test"
+    cmd: "pnpm --filter @unit-talk/contracts test"
+  - name: "db-test"
+    cmd: "pnpm --filter @unit-talk/db test"
+  - name: "domain-test"
+    cmd: "pnpm --filter @unit-talk/domain test"
+  - name: "verification-test"
+    cmd: "pnpm --filter @unit-talk/verification test"
+
+sql_review_criteria: null
+
+downstream_unlocks:
+  - UTV2-492
+
+pre_existing_failures: null
+
+notes: |
+  T1 lifecycle-spine work. Brake placement stays in UTV2-492.
+  Do NOT modify process_submission_atomic RPC here.
+  COMPLETED: merged 2026-04-10, commit 0c95b1ec. This file serves as the
+  first fixture for the Governance CLI V1 build - used to exercise phase:start
+  rerun-safety, scope checks, and closed-issue idempotency.
