@@ -28,6 +28,7 @@ import type {
   ModelScoreUpdate,
   SelectionRankUpdate,
   PickCandidateUpsertInput,
+  PickIdUpdate,
 } from '@unit-talk/db';
 
 import {
@@ -65,6 +66,14 @@ class StubPickCandidateRepository implements IPickCandidateRepository {
   }
 
   async resetSelectionRanks(): Promise<void> {
+    // no-op
+  }
+
+  async findByIds(ids: string[]): Promise<PickCandidateRow[]> {
+    return this.rows.filter((r) => ids.includes(r.id));
+  }
+
+  async updatePickIdBatch(_updates: PickIdUpdate[]): Promise<void> {
     // no-op
   }
 }

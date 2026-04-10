@@ -156,8 +156,8 @@ test('TC2: single qualified+scored non-stale candidate gets selection_rank=1 and
 
   const rows = pickCandidates.listAll();
   assert.equal(rows.length, 1);
-  assert.equal(rows[0].selection_rank, 1);
-  assert.equal(rows[0].is_board_candidate, true);
+  assert.equal(rows[0]!.selection_rank, 1);
+  assert.equal(rows[0]!.is_board_candidate, true);
 });
 
 test('TC3: multiple candidates ordered correctly — higher score gets rank 1', async () => {

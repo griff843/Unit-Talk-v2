@@ -40,7 +40,6 @@ import {
 import { processNextDistributionWork } from './distribution-worker.js';
 import { runWorkerCycles } from './runner.js';
 import { DeliveryCircuitBreaker } from './circuit-breaker.js';
-import { createWorkerRuntimeDependencies } from './runtime.js';
 
 interface CapturedRequest {
   url: string;
@@ -638,6 +637,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       reviews: {} as RepositoryBundle['reviews'],
       marketUniverse: {} as RepositoryBundle['marketUniverse'],
       pickCandidates: {} as RepositoryBundle['pickCandidates'],
+      syndicateBoard: {} as RepositoryBundle['syndicateBoard'],
     },
     picks,
     receipts,

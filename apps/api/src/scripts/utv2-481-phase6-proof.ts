@@ -181,7 +181,7 @@ async function assertB4(): Promise<AssertionResult> {
   const lines = content.split('\n');
   const lineMatch = lines.findIndex((l) => l.includes('run-tuning'));
   const lineNumber = lineMatch >= 0 ? lineMatch + 1 : -1;
-  const matchedLine = lineMatch >= 0 ? lines[lineMatch].trim() : '';
+  const matchedLine = lineMatch >= 0 ? lines[lineMatch]!.trim() : '';
   const hasOperatorRole = matchedLine.includes("'operator'") || matchedLine.includes('"operator"');
 
   if (!hasPattern) return fail(label, { error: 'run-tuning pattern not found in auth.ts' });

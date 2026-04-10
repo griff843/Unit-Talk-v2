@@ -56,6 +56,8 @@ function makeProviderOffersRepo(offers: ProviderOfferRecord[]) {
     markClosingLines: async () => 0,
     resolveProviderMarketKey: async () => null,
     resolveCanonicalMarketKey: async () => null,
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
     listOpeningOffers: async () => [],
   };
 }

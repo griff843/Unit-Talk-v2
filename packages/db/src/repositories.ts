@@ -607,6 +607,11 @@ export interface EventRepository {
   listUpcoming(sportId?: string, windowDays?: number): Promise<EventRow[]>;
   /** Returns all events whose event_name matches the given name (case-insensitive). */
   listByName(eventName: string): Promise<EventRow[]>;
+  /**
+   * Returns all events whose event_date is on or before the given snapshotAt timestamp.
+   * Used by the ingestor to identify started events for closing line detection.
+   */
+  listStartedBySnapshot(snapshotAt: string): Promise<EventRow[]>;
 }
 
 export interface EventParticipantUpsertInput {
@@ -953,7 +958,7 @@ export interface IPickCandidateRepository {
   updatePickIdBatch(updates: PickIdUpdate[]): Promise<void>;
 }
 
-export type { PickCandidateRow, PickCandidateFilterDetails, PickIdUpdate };
+export type { PickCandidateRow, PickCandidateFilterDetails };
 
 export interface IngestorRepositoryBundle {
   providerOffers: ProviderOfferRepository;
