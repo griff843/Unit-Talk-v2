@@ -1,0 +1,70 @@
+id: UTV2-492
+title: "P7A-02 - Gate the real queueing path for awaiting_approval picks"
+tier: T1
+phase: "7a"
+
+upstream_dependencies:
+  - UTV2-491
+
+allowed_files:
+  - "apps/api/src/controllers/submit-pick-controller.ts"
+  - "apps/api/src/run-audit-service.ts"
+  - "apps/api/src/distribution-service.ts"
+  - "apps/api/src/submission-service.ts"
+  - "apps/api/src/distribution-service.test.ts"
+  - "apps/api/src/submission-service.test.ts"
+  - "apps/api/src/run-audit-service.test.ts"
+  - "apps/api/src/controllers/submit-pick-controller.test.ts"
+
+forbidden_files:
+  - "apps/api/src/controllers/review-pick-controller.ts"
+  - "apps/command-center/**"
+  - "apps/operator-web/**"
+  - "packages/domain/**"
+  - "packages/db/src/lifecycle.ts"
+
+expected_collateral: []
+
+requires_migration: false
+requires_sql_review: false
+requires_status_sync: true
+pm_review_required: true
+
+rollback_plan: |
+  Commit-level: revert the PR. The brake is purely additive — it only intercepts
+  non-human sources before they reach the existing queueing path. Reverting
+  restores the pre-brake behavior (non-human picks auto-enqueue if qualified).
+  No schema change; no rollback SQL required.
+
+verification_commands:
+  - name: "api-test"
+    cmd: "pnpm --filter @unit-talk/api test"
+  - name: "type-check"
+    cmd: "pnpm type-check"
+
+sql_review_criteria: null
+
+downstream_unlocks:
+  - UTV2-493
+  - UTV2-494
+
+pre_existing_failures: null
+
+notes: |
+  T1 governance brake. Intercept non-human pick sources
+  (system-pick-scanner, alert-agent, model-driven, board-construction) at the
+  submit-pick-controller before enqueueDistributionWithRunTracking is called,
+  and transition validated -> awaiting_approval instead of allowing the
+  auto-enqueue path.
+
+  Defense-in-depth: enqueueDistributionWithRunTracking and enqueueDistributionWork
+  must also refuse to operate on picks already in awaiting_approval. This closes
+  the helper-path loophole noted in the Linear description.
+
+  The atomic enqueue RPC (202604010002) has no FSM guard — it transitions
+  whatever fromState the caller passes. RPC change is intentionally NOT included
+  in this PR; app-layer defense is sufficient for the Phase 7A brake.
+  RPC strengthening can follow as a separate hardening ticket.
+
+  Must NOT touch review-pick-controller.ts (UTV2-493 owns the approval-path
+  enqueue bridge). Must NOT touch lifecycle.ts (FSM is frozen from UTV2-491).
