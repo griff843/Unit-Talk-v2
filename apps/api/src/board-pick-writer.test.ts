@@ -14,10 +14,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
-import type { IPickCandidateRepository, PickIdUpdate, PickCandidateRow } from '@unit-talk/db';
+import type { IPickCandidateRepository, PickIdUpdate } from '@unit-talk/db';
 import { runBoardPickWriter } from './board-pick-writer.js';
 import type {
-  SyndicateBoardInsertInput,
   PickCandidateUpsertInput,
   MarketUniverseUpsertInput,
   RepositoryBundle,
