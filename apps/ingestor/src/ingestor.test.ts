@@ -418,6 +418,9 @@ test('ingestOddsApiLeague hydrates team events for browse when canonical teams e
   const seededTeams = await repositories.participants.listByType('team', 'NBA');
   const home = seededTeams.find((row) => row.display_name === 'Celtics');
   const away = seededTeams.find((row) => row.display_name === 'Bulls');
+  // Use a relative date so this test stays within the listUpcoming ±7-day window
+  const recentEventTime = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
+  const recentUpdateTime = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000).toISOString();
 
   const summary = await ingestOddsApiLeague({
     apiKey: 'test-key',
@@ -432,18 +435,18 @@ test('ingestOddsApiLeague hydrates team events for browse when canonical teams e
             id: 'odds-event-browse-1',
             sport_key: 'basketball_nba',
             sport_title: 'NBA',
-            commence_time: '2026-04-02T23:30:00.000Z',
+            commence_time: recentEventTime,
             home_team: 'Celtics',
             away_team: 'Bulls',
             bookmakers: [
               {
                 key: 'pinnacle',
                 title: 'Pinnacle',
-                last_update: '2026-04-02T20:00:00.000Z',
+                last_update: recentUpdateTime,
                 markets: [
                   {
                     key: 'h2h',
-                    last_update: '2026-04-02T20:00:00.000Z',
+                    last_update: recentUpdateTime,
                     outcomes: [
                       { name: 'Celtics', price: -145 },
                       { name: 'Bulls', price: 125 },
@@ -493,6 +496,8 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
   const warnings: string[] = [];
   let capturedUrl = '';
 
+  const recentEventTime2 = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
+  const recentUpdateTime2 = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000).toISOString();
   const summary = await ingestOddsApiLeague({
     apiKey: 'test-key',
     league: 'NBA',
@@ -510,18 +515,18 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
             id: 'odds-event-browse-player-1',
             sport_key: 'basketball_nba',
             sport_title: 'NBA',
-            commence_time: '2026-04-02T23:30:00.000Z',
+            commence_time: recentEventTime2,
             home_team: 'Boston Celtics',
             away_team: 'New York Knicks',
             bookmakers: [
               {
                 key: 'pinnacle',
                 title: 'Pinnacle',
-                last_update: '2026-04-02T20:00:00.000Z',
+                last_update: recentUpdateTime2,
                 markets: [
                   {
                     key: 'h2h',
-                    last_update: '2026-04-02T20:00:00.000Z',
+                    last_update: recentUpdateTime2,
                     outcomes: [
                       { name: 'Boston Celtics', price: -145 },
                       { name: 'New York Knicks', price: 125 },
@@ -529,7 +534,7 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
                   },
                   {
                     key: 'player_points',
-                    last_update: '2026-04-02T20:00:00.000Z',
+                    last_update: recentUpdateTime2,
                     outcomes: [
                       { name: 'Over', description: 'Jalen Brunson', price: -120, point: 27.5 },
                       { name: 'Under', description: 'Jalen Brunson', price: 100, point: 27.5 },
@@ -537,7 +542,7 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
                   },
                   {
                     key: 'player_assists',
-                    last_update: '2026-04-02T20:00:00.000Z',
+                    last_update: recentUpdateTime2,
                     outcomes: [
                       { name: 'Over', description: 'Mystery Player', price: -110, point: 6.5 },
                       { name: 'Under', description: 'Mystery Player', price: -110, point: 6.5 },
