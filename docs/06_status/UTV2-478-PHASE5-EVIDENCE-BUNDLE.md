@@ -1,6 +1,6 @@
 # UTV2-478 — Phase 5 Evidence Bundle
 
-**Status:** PARTIAL — code proof COMPLETE, live-trigger proof PENDING
+**Status:** PARTIAL — code proof COMPLETE, boundary checks PASS (live DB), write-trigger proof PENDING
 **Date:** 2026-04-09
 **Verified by:** Claude Code orchestrator + Supabase DB (feownrheeefbcsehtsiw)
 **Proof script:** `apps/api/src/scripts/utv2-478-board-pick-proof.ts`
@@ -121,11 +121,37 @@ To complete the proof, the operator must:
 
 ---
 
-## Live DB State
+## Live DB State — Boundary Checks (2026-04-09, Micro compute restored)
+
+DB was unresponsive due to NANO compute resource exhaustion. Upgraded to Micro (1 GB RAM, 2-core ARM CPU).
+Index applied: `CREATE INDEX IF NOT EXISTS idx_picks_source ON picks (source);`
 
 ```
-PENDING — update after live trigger + proof script run
+-- A2/A4: linked candidates with shadow_mode=true (violations)
+SELECT COUNT(*) FROM pick_candidates WHERE pick_id IS NOT NULL AND shadow_mode = true;
+→ 0  ← PASS
+
+-- A3: unlinked candidates with shadow_mode=false (violations)
+SELECT COUNT(*) FROM pick_candidates WHERE pick_id IS NULL AND shadow_mode = false;
+→ 0  ← PASS
+
+-- A1: board-construction picks (requires live trigger)
+SELECT COUNT(*) FROM picks WHERE source = 'board-construction';
+→ 0  ← PENDING
+
+-- A5: audit entries (requires live trigger)
+SELECT COUNT(*) FROM audit_log WHERE action = 'board.pick_write.completed' AND entity_type = 'syndicate_board';
+→ 0  ← PENDING
+
+-- syndicate_board ready for trigger
+SELECT board_run_id, created_at, COUNT(*) AS candidate_count FROM syndicate_board
+GROUP BY board_run_id, created_at ORDER BY created_at DESC LIMIT 1;
+→ board_run_id=9e494126-7c45-4522-ae6a-35b2cf1dd3ad, 12 candidates, 2026-04-09 19:59:33 UTC
 ```
+
+A6 and A7 are also PENDING (depend on A1).
+
+**Live trigger protocol:** merge branch → restart API with Phase 5 code → `POST /api/board/write-picks` → run proof script → update this section.
 
 ---
 
