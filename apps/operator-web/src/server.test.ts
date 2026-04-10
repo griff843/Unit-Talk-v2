@@ -4925,6 +4925,133 @@ test('GET /api/operator/pick-search surfaces submitter separately from intake so
   assert.equal(body.data.picks[0]?.sport, 'NBA');
 });
 
+test('GET /api/operator/review-queue includes awaiting_approval picks and excludes held rows', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-awaiting-review',
+        status: 'awaiting_approval',
+        approval_status: 'pending',
+        source: 'system-pick-scanner',
+        market: 'NBA Spread',
+        selection: 'Knicks -4.5',
+        promotion_score: 81.2,
+        created_at: '2026-04-10T18:00:00.000Z',
+      },
+      {
+        id: 'pick-held-awaiting',
+        status: 'awaiting_approval',
+        approval_status: 'pending',
+        source: 'alert-agent',
+        market: 'NBA Total',
+        selection: 'Over 228.5',
+        promotion_score: 74.1,
+        created_at: '2026-04-10T17:00:00.000Z',
+      },
+      {
+        id: 'pick-legacy-pending',
+        status: 'validated',
+        approval_status: 'pending',
+        source: 'smart-form',
+        market: 'NBA Moneyline',
+        selection: 'Knicks ML',
+        promotion_score: 69.5,
+        created_at: '2026-04-10T16:00:00.000Z',
+      },
+    ],
+    pick_reviews: [
+      {
+        id: 'review-held',
+        pick_id: 'pick-held-awaiting',
+        decision: 'hold',
+        reason: 'Need confirmation',
+        decided_by: 'operator',
+        decided_at: '2026-04-10T18:15:00.000Z',
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/review-queue');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      total: number;
+      picks: Array<{ id: string; governanceQueueState: string }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.total, 2);
+  assert.deepEqual(
+    body.data.picks.map((pick) => pick.id),
+    ['pick-awaiting-review', 'pick-legacy-pending'],
+  );
+  assert.equal(body.data.picks[0]?.governanceQueueState, 'awaiting_approval');
+  assert.equal(body.data.picks[1]?.governanceQueueState, 'pending_review');
+});
+
+test('GET /api/operator/held-queue includes held awaiting_approval picks', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-held-awaiting',
+        status: 'awaiting_approval',
+        approval_status: 'pending',
+        source: 'system-pick-scanner',
+        market: 'NBA Total',
+        selection: 'Over 228.5',
+        promotion_score: 74.1,
+        created_at: '2026-04-10T17:00:00.000Z',
+      },
+    ],
+    pick_reviews: [
+      {
+        id: 'review-held',
+        pick_id: 'pick-held-awaiting',
+        decision: 'hold',
+        reason: 'Need confirmation',
+        decided_by: 'operator',
+        decided_at: '2026-04-10T18:15:00.000Z',
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/held-queue');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      total: number;
+      picks: Array<{ id: string; governanceQueueState: string; holdReason: string }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.total, 1);
+  assert.equal(body.data.picks[0]?.id, 'pick-held-awaiting');
+  assert.equal(body.data.picks[0]?.governanceQueueState, 'awaiting_approval');
+  assert.equal(body.data.picks[0]?.holdReason, 'Need confirmation');
+});
+
 function createAggregateProvider(tables: Record<string, Array<Record<string, unknown>>>): OperatorSnapshotProvider {
   return {
     ...createStaticProvider(),
@@ -5074,12 +5201,22 @@ class MockSupabaseQuery {
       .map((clause) => {
         const parts = clause.split('.');
         const field = parts[0] ?? '';
-        const needle = parts.slice(2).join('.').replaceAll('%', '').toLowerCase();
-        return { field, needle };
+        const operator = parts[1] ?? '';
+        const value = parts.slice(2).join('.');
+        return { field, operator, value };
       });
 
     this.filters.push((row) =>
-      clauses.some(({ field, needle }) => String(row[field] ?? '').toLowerCase().includes(needle)),
+      clauses.some(({ field, operator, value }) => {
+        if (operator === 'eq') {
+          return String(row[field] ?? '') === value;
+        }
+        if (operator === 'ilike') {
+          const needle = value.replaceAll('%', '').toLowerCase();
+          return String(row[field] ?? '').toLowerCase().includes(needle);
+        }
+        return false;
+      }),
     );
     return this;
   }
