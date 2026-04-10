@@ -861,6 +861,7 @@ export interface RepositoryBundle {
 
 export type { IMarketUniverseRepository, MarketUniverseUpsertInput };
 export type { ISyndicateBoardRepository, SyndicateBoardInsertInput, SyndicateBoardRow };
+export type { IMarketFamilyTrustRepository, MarketFamilyTrustInsert, MarketFamilyTrustRow } from './market-family-trust-repository.js';
 
 // ---------------------------------------------------------------------------
 // IPickCandidateRepository — Phase 2 UTV2-463

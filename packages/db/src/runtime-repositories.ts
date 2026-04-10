@@ -136,6 +136,10 @@ import {
   InMemorySyndicateBoardRepository,
   DatabaseSyndicateBoardRepository,
 } from './syndicate-board-repository.js';
+export {
+  InMemoryMarketFamilyTrustRepository,
+  DatabaseMarketFamilyTrustRepository,
+} from './market-family-trust-repository.js';
 
 function extractPlayerId(pick: CanonicalPick): string | null {
   const raw = pick.metadata?.['playerId'];

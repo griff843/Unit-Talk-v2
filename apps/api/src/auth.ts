@@ -44,6 +44,7 @@ const ROUTE_ROLES: ReadonlyArray<{ pattern: RegExp; roles: readonly AuthRole[] }
   { pattern: /^\/api\/recap\/post$/, roles: ['poster', 'operator'] },
   { pattern: /^\/api\/member-tiers$/, roles: ['operator'] },
   { pattern: /^\/api\/board\/write-picks$/, roles: ['operator'] },
+  { pattern: /^\/api\/board\/run-tuning$/, roles: ['operator'] },
 ];
 
 /** The context returned when auth is disabled (fail_open + no keys). */
