@@ -1,10 +1,12 @@
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import { isShadowEnabled, parseShadowModeEnv } from '@unit-talk/domain';
+import { transitionPickLifecycle } from '@unit-talk/db';
 import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { ApiError } from '../errors.js';
 import { processShadowSubmission, processSubmission } from '../submission-service.js';
 import { enqueueDistributionWithRunTracking } from '../run-audit-service.js';
+import { isGovernanceBrakeSource } from '../distribution-service.js';
 
 export interface SubmitPickControllerResult {
   submissionId: string;
@@ -14,6 +16,7 @@ export interface SubmitPickControllerResult {
   promotionTarget: string | null;
   outboxEnqueued: boolean;
   shadowMode?: boolean;
+  governanceBrake?: boolean;
 }
 
 export async function submitPickController(
@@ -27,6 +30,54 @@ export async function submitPickController(
 
   if (!result.pick.id) {
     throw new ApiError(500, 'PICK_CREATION_FAILED', 'Canonical pick was not created');
+  }
+
+  // Phase 7A governance brake: non-human pick sources must NOT auto-enqueue.
+  // They land in `awaiting_approval` and wait for operator review. The brake
+  // is applied BEFORE enqueueDistributionWithRunTracking is considered — no
+  // atomic transition, no outbox row, no run. Approval path (review controller)
+  // is the only way out of awaiting_approval.
+  const governanceBrakeApplied =
+    !routingShadowEnabled && isGovernanceBrakeSource(result.pick.source);
+
+  if (governanceBrakeApplied) {
+    const brakeTransition = await transitionPickLifecycle(
+      repositories.picks,
+      result.pick.id,
+      'awaiting_approval',
+      `governance brake: non-human source ${result.pick.source}`,
+      'promoter',
+    );
+    await repositories.audit.record({
+      entityType: 'picks',
+      entityId: brakeTransition.lifecycleEvent.id,
+      action: 'pick.governance_brake.applied',
+      actor: 'submission',
+      payload: {
+        pickId: result.pick.id,
+        source: result.pick.source,
+        promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+        promotionTarget: result.pick.promotionTarget ?? null,
+        fromState: 'validated',
+        toState: 'awaiting_approval',
+      },
+    });
+
+    return {
+      status: 201,
+      body: {
+        ok: true,
+        data: {
+          submissionId: result.submission.id,
+          pickId: result.pick.id,
+          lifecycleState: 'awaiting_approval',
+          promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+          promotionTarget: result.pick.promotionTarget ?? null,
+          outboxEnqueued: false,
+          governanceBrake: true,
+        },
+      },
+    };
   }
 
   // Auto-enqueue qualified picks for distribution.

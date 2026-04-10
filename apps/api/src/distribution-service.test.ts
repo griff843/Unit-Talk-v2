@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import type { CanonicalPick } from '@unit-talk/contracts';
 import { InMemoryOutboxRepository } from '@unit-talk/db';
 import {
+  AwaitingApprovalBrakeError,
   enqueueDistributionWork,
+  isGovernanceBrakeSource,
   resolveDeliveryTarget,
   type DistributionSkippedResult,
 } from './distribution-service.js';
@@ -53,6 +55,41 @@ test('enqueueDistributionWork: first enqueue succeeds', async () => {
   assert.ok('outboxRecord' in result, 'expected enqueue result');
   assert.equal(result.pickId, pick.id);
   assert.equal(result.target, TARGET_CANARY);
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7A governance brake — UTV2-492
+// ---------------------------------------------------------------------------
+
+test('isGovernanceBrakeSource: brakes autonomous non-human sources', () => {
+  assert.equal(isGovernanceBrakeSource('system-pick-scanner'), true);
+  assert.equal(isGovernanceBrakeSource('alert-agent'), true);
+  assert.equal(isGovernanceBrakeSource('model-driven'), true);
+});
+
+test('isGovernanceBrakeSource: does NOT brake operator-triggered or human-relayed sources', () => {
+  // board-construction is operator-triggered (governed board path) — NOT
+  // an autonomous producer. Must retain existing queueing behavior.
+  assert.equal(isGovernanceBrakeSource('board-construction'), false);
+  assert.equal(isGovernanceBrakeSource('smart-form'), false);
+  assert.equal(isGovernanceBrakeSource('api'), false);
+  assert.equal(isGovernanceBrakeSource('discord-bot'), false);
+  assert.equal(isGovernanceBrakeSource('feed'), false);
+  assert.equal(isGovernanceBrakeSource('system'), false);
+});
+
+test('enqueueDistributionWork: refuses picks in awaiting_approval (defense-in-depth)', async () => {
+  const outbox = new InMemoryOutboxRepository();
+  const pick = makePick({ lifecycleState: 'awaiting_approval' });
+
+  await assert.rejects(
+    () => enqueueDistributionWork(pick, outbox, TARGET_CANARY),
+    AwaitingApprovalBrakeError,
+  );
+
+  // Outbox must remain empty — no enqueue should have been attempted
+  const outboxRows = await outbox.listByPickId(pick.id);
+  assert.equal(outboxRows.length, 0);
 });
 
 test('resolveDeliveryTarget rewrites governed discord targets to canary in local env', () => {
