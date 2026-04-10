@@ -4,7 +4,7 @@ import { writeJson, readOptionalInteger } from '../http-utils.js';
 import type { CanonicalPick } from '@unit-talk/contracts';
 
 const VALID_STATUSES: Set<CanonicalPick['lifecycleState']> = new Set([
-  'draft', 'validated', 'queued', 'posted', 'settled', 'voided',
+  'draft', 'validated', 'awaiting_approval', 'queued', 'posted', 'settled', 'voided',
 ]);
 
 const DEFAULT_LIMIT = 50;

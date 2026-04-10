@@ -1,5 +1,6 @@
 import type { RepositoryBundle, ApprovalStatus } from '@unit-talk/db';
 import type { PickReviewDecision } from '@unit-talk/db';
+import { transitionPickLifecycle, InvalidTransitionError } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { successResponse, errorResponse } from '../http.js';
 
@@ -81,6 +82,44 @@ export async function reviewPickController(
     await repositories.picks.updateApprovalStatus(pickId, newApprovalStatus);
   }
 
+  // For picks in awaiting_approval state, the approve/deny decision also drives
+  // a lifecycle transition: approved → queued, denied → voided.
+  // This is the governance brake release path (Phase 7A, UTV2-491/UTV2-509).
+  const pickLifecycleState = pick.status as string;
+  if (pickLifecycleState === 'awaiting_approval') {
+    if (decision === 'approve') {
+      try {
+        await transitionPickLifecycle(
+          repositories.picks,
+          pickId,
+          'queued',
+          `operator approved: ${payload.reason.trim()}`,
+          'operator_override',
+        );
+      } catch (err: unknown) {
+        if (err instanceof InvalidTransitionError) {
+          return errorResponse(409, 'INVALID_LIFECYCLE_TRANSITION', err.message);
+        }
+        throw err;
+      }
+    } else if (decision === 'deny') {
+      try {
+        await transitionPickLifecycle(
+          repositories.picks,
+          pickId,
+          'voided',
+          `operator denied: ${payload.reason.trim()}`,
+          'operator_override',
+        );
+      } catch (err: unknown) {
+        if (err instanceof InvalidTransitionError) {
+          return errorResponse(409, 'INVALID_LIFECYCLE_TRANSITION', err.message);
+        }
+        throw err;
+      }
+    }
+  }
+
   // Write audit log
   const audit = await repositories.audit.record({
     entityType: 'pick_review',
@@ -93,6 +132,7 @@ export async function reviewPickController(
       reason: payload.reason.trim(),
       previousApprovalStatus: pick.approval_status,
       newApprovalStatus: newApprovalStatus ?? pick.approval_status,
+      previousLifecycleState: pickLifecycleState,
     },
   });
 
