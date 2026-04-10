@@ -47,6 +47,7 @@ if (runtime.autorun) {
     heartbeatMs: runtime.heartbeatMs,
     watchdogMs: runtime.watchdogMs,
     workerHeartbeatIntervalMs: runtime.workerHeartbeatIntervalMs,
+    persistenceMode: runtime.persistenceMode,
   })
     .then((cycles) => {
       console.log(
