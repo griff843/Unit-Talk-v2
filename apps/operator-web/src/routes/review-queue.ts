@@ -6,7 +6,8 @@ import { writeJson } from '../http-utils.js';
  * GET /api/operator/review-queue
  *
  * Returns picks awaiting operator review:
- *   approval_status = 'pending' AND NOT held (latest review decision != 'hold')
+ *   (status = 'awaiting_approval' OR approval_status = 'pending')
+ *   AND NOT held (latest review decision != 'hold')
  *
  * Query params:
  *   search  — pick ID prefix or market/selection text
@@ -34,7 +35,10 @@ export async function handleReviewQueueRequest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = provider._supabaseClient as any;
 
-  let query = client.from('picks').select('*').eq('approval_status', 'pending');
+  let query = client
+    .from('picks')
+    .select('*')
+    .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
   if (source) query = query.eq('source', source);
   if (search) {
@@ -84,7 +88,13 @@ export async function handleReviewQueueRequest(
     );
   }
 
-  const reviewQueuePicks = picks.filter((p) => !heldPickIds.has(p['id'] as string));
+  const reviewQueuePicks = picks
+    .filter((p) => !heldPickIds.has(p['id'] as string))
+    .map((pick) => ({
+      ...pick,
+      governanceQueueState:
+        pick['status'] === 'awaiting_approval' ? 'awaiting_approval' : 'pending_review',
+    }));
 
   writeJson(response, 200, {
     ok: true,
