@@ -94,7 +94,6 @@ import type {
   TeamSearchResult,
   PickReviewCreateInput,
   PickReviewRepository,
-  ISyndicateBoardRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,

@@ -60,7 +60,7 @@ async function main() {
   const maxPerSport = Math.max(0, ...sportCounts.values());
   const suppressOnBoard = latestBoard.filter(r => r.board_tier === 'SUPPRESS').length;
   const boardRanks = latestBoard.map(r => r.board_rank).sort((a, b) => a - b);
-  const boardIsContiguous =
+  const _boardIsContiguous =
     latestBoard.length > 0 &&
     boardRanks[0] === 1 &&
     boardRanks[boardRanks.length - 1] === latestBoard.length;
