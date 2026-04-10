@@ -47,6 +47,7 @@ export async function reviewPick(
   revalidatePath('/');
   revalidatePath('/review');
   revalidatePath('/held');
+  revalidatePath('/decisions');
 
   return {
     ok: true,
@@ -90,6 +91,7 @@ export async function bulkReviewPicks(
   revalidatePath('/');
   revalidatePath('/review');
   revalidatePath('/held');
+  revalidatePath('/decisions');
 
   return { succeeded, failed };
 }

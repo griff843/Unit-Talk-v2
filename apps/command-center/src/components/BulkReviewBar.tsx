@@ -9,7 +9,11 @@ interface BulkReviewBarProps {
   onClearSelection: () => void;
 }
 
-const BULK_DECISIONS: { decision: ReviewDecision; label: string; variant: 'success' | 'danger' | 'warning' }[] = [
+const BULK_DECISIONS: {
+  decision: ReviewDecision;
+  label: string;
+  variant: 'success' | 'danger' | 'warning';
+}[] = [
   { decision: 'approve', label: 'Bulk Approve', variant: 'success' },
   { decision: 'deny', label: 'Bulk Deny', variant: 'danger' },
   { decision: 'hold', label: 'Bulk Hold', variant: 'warning' },
@@ -54,17 +58,18 @@ export function BulkReviewBar({ selectedIds, onClearSelection }: BulkReviewBarPr
           {selectedIds.length} pick{selectedIds.length !== 1 ? 's' : ''} selected
         </span>
         <div className="flex items-center gap-2">
-          {!activeDecision && BULK_DECISIONS.map((bd) => (
-            <Button
-              key={bd.decision}
-              variant={bd.variant}
-              size="sm"
-              disabled={isPending}
-              onClick={() => handleExecute(bd.decision)}
-            >
-              {bd.label}
-            </Button>
-          ))}
+          {!activeDecision &&
+            BULK_DECISIONS.map((bd) => (
+              <Button
+                key={bd.decision}
+                variant={bd.variant}
+                size="sm"
+                disabled={isPending}
+                onClick={() => handleExecute(bd.decision)}
+              >
+                {bd.label}
+              </Button>
+            ))}
           <Button variant="ghost" size="sm" onClick={onClearSelection} disabled={isPending}>
             Clear
           </Button>
@@ -74,12 +79,12 @@ export function BulkReviewBar({ selectedIds, onClearSelection }: BulkReviewBarPr
       {activeDecision && (
         <div className="mt-3 flex flex-col gap-2">
           <label className="text-xs text-gray-400">
-            Reason for bulk {activeDecision} <span className="text-red-400">*</span>
+            Reason for bulk governance decision: {activeDecision} <span className="text-red-400">*</span>
           </label>
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder={`Required -- reason for bulk ${activeDecision}`}
+            placeholder={`Required - reason for bulk ${activeDecision}`}
             rows={2}
             className="rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
@@ -109,7 +114,8 @@ export function BulkReviewBar({ selectedIds, onClearSelection }: BulkReviewBarPr
           )}
           {result.failed.length > 0 && (
             <p className="text-red-400">
-              {result.failed.length} pick{result.failed.length !== 1 ? 's' : ''} failed: {result.failed.map((id) => id.slice(0, 8)).join(', ')}
+              {result.failed.length} pick{result.failed.length !== 1 ? 's' : ''} failed:{' '}
+              {result.failed.map((id) => id.slice(0, 8)).join(', ')}
             </p>
           )}
         </div>

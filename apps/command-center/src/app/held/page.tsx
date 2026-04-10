@@ -22,6 +22,9 @@ interface HeldPick {
   heldAt: string;
   holdReason: string;
   ageHours: number;
+  status: string;
+  approval_status: string;
+  governanceQueueState?: string;
 }
 
 async function fetchHeldQueue(params: Record<string, string>): Promise<{ picks: HeldPick[]; total: number }> {
@@ -58,6 +61,10 @@ export default async function HeldQueuePage({
   const { picks, total } = await fetchHeldQueue(params);
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();
+  const lifecycleAwaitingApproval = picks.filter(
+    (pick) => pick.governanceQueueState === 'awaiting_approval' || pick.status === 'awaiting_approval',
+  ).length;
+  const legacyPending = Math.max(total - lifecycleAwaitingApproval, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -65,6 +72,10 @@ export default async function HeldQueuePage({
         <div className="space-y-1">
           <h1 className="text-lg font-bold text-gray-100">Held Picks</h1>
           <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} on hold</span>
+          <p className="text-xs text-gray-500">
+            Holds now span both lifecycle-gated awaiting_approval picks and legacy pending-review picks.
+            Current mix: {lifecycleAwaitingApproval} awaiting_approval, {legacyPending} legacy pending.
+          </p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
@@ -110,6 +121,12 @@ export default async function HeldQueuePage({
                   <span className="text-yellow-500">{new Date(pick.heldAt).toLocaleString()}</span>
                 </div>
                 <p className="mt-1 text-xs text-yellow-400">Reason: {pick.holdReason}</p>
+                <p className="mt-1 text-[11px] text-yellow-500">
+                  Governance state:{' '}
+                  {pick.governanceQueueState === 'awaiting_approval' || pick.status === 'awaiting_approval'
+                    ? 'awaiting_approval'
+                    : 'pending review'}
+                </p>
               </div>
 
               <ReviewActions pickId={pick.id} decisions={['return', 'approve', 'deny']} />
