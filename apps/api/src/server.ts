@@ -46,6 +46,7 @@ import {
   handleSettlementsRecent,
   handleShadowModelSummaries,
   handleHealthConfig,
+  handleBoardWritePicks,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 
@@ -434,6 +435,10 @@ export async function routeRequest(
 
   if (method === 'POST' && url.pathname === '/api/member-tiers') {
     return handleMemberTiers(request, response, runtime);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/board/write-picks') {
+    return handleBoardWritePicks(request, response, runtime);
   }
 
   return writeJson(response, 404, {
