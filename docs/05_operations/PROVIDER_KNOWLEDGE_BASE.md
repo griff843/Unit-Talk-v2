@@ -449,6 +449,60 @@ const result = score > pick.line ? 'win' : score < pick.line ? 'loss' : 'push';
 
 No separate historical endpoint on SGO — just date-range filtering on `/v2/events`.
 
+### 3.7 SGO Consensus Data Policy — Approved and Prohibited Uses
+
+**Status:** Locked policy (2026-04-06). PM-owned. Do not relax without explicit approval.
+
+#### What SGO provides
+
+SGO exposes three distinct categories of odds data. Each has a defined role. They are not interchangeable.
+
+| Category | SGO fields | What it represents |
+|---|---|---|
+| Current consensus | `fairOdds`, `bookOdds` | Live vig-free / with-vig aggregate across all available books at snapshot time |
+| Opening consensus | `openFairOdds`, `openBookOdds` | Consensus at time market first opened — always available, no extra params required |
+| Per-bookmaker open/close | `byBookmaker.pinnacle.openOdds`, `.closeOdds` | Pinnacle-specific opening and closing line — requires `includeOpenCloseOdds=true` |
+
+Consensus fields (`fairOdds`, `bookOdds`, `openFairOdds`, `openBookOdds`) are aggregated across books. They are not Pinnacle-specific.
+
+#### Approved uses for consensus / fair-line data
+
+- **Operator reference** — displaying current market price, fair price, and opening price in operator dashboard, pick detail, and recap displays
+- **Intelligence overlays** — line movement detection (`openFairOdds` vs. current `fairOdds`), sharp-vs-square divergence indicators, and alert-agent calibration
+- **Current market benchmark** — `bookOdds` stored in `provider_offers` as a secondary reference data point at pick submission time
+- **Edge calculation fallback** — `fairOdds` may be used in the `sgo-edge` tier (tier 3 in `real-edge-service` priority chain) when Pinnacle-specific data is unavailable
+- **Opening line display** — `openFairOdds` as a labeled "consensus opening" data point for analytics overlays, explicitly not presented as Pinnacle opening
+
+#### Prohibited uses — consensus data must NOT be used for
+
+1. **CLV closing-line proof.** `fairOdds`, `bookOdds`, `openFairOdds`, and `openBookOdds` are not Pinnacle prices and are not closing-line proof. They must not be stored or displayed as CLV proof for settled picks.
+
+2. **Replacing the `provider_offers` time-proximity lookup.** The canonical CLV lookup in `clv-service.ts` is `findClosingLine()` — a DB query against stored `provider_offers` rows using `snapshot_at <= starts_at`. Substituting a live `fairOdds` fetch at settlement time is not equivalent: the market may have moved post-game-start and the value is not reproducible.
+
+3. **Populating `settlement_records.payload.clv`.** The `CLVResult` object in settlement payload must derive from `findClosingLine()` against stored rows, not from a runtime SGO consensus field.
+
+4. **Claiming Pinnacle-specific closing line.** `openFairOdds` is not Pinnacle. `fairOdds` is not Pinnacle. Only `byBookmaker.pinnacle.closeOdds` (fetched with `includeOpenCloseOdds=true`) or a stored `sgo:pinnacle`-keyed `provider_offers` row constitutes a Pinnacle closing line.
+
+5. **Bypassing the `provider_offers` storage layer.** No runtime service may fetch SGO consensus directly at settlement time as a shortcut. All CLV data must transit through the DB layer so it is auditable and reproducible.
+
+#### Current CLV implementation status
+
+The CLV wiring (`clv-service.ts`, `findClosingLine()`, `settlement_records.payload.clv`) is complete and uses time-proximity against stored `provider_offers` rows (see T1 CLV contract, closed 2026-03-26). The `providerKey` for these rows is `sgo` (consensus), not `sgo:pinnacle` (per-bookmaker).
+
+True Pinnacle-specific CLV requires:
+1. `includeOpenCloseOdds=true` on SGO fetches
+2. `byBookmaker` capture stored as separate `provider_offers` rows with `providerKey: 'sgo:pinnacle'`
+3. `findClosingLine()` scoped to `sgo:pinnacle` rows
+
+This path is **not yet built** (deferred per CLV contract §10). Until it is, CLV values in `settlement_records` derive from SGO consensus time-proximity and must be labeled accordingly in any operator display or public-facing output.
+
+#### Key invariants (must never be violated)
+
+- Consensus ≠ proof
+- `openFairOdds` ≠ Pinnacle opening line
+- `fairOdds` at settlement time ≠ closing line
+- CLV proof requires a stored row with a verifiable `snapshot_at` timestamp
+
 ---
 
 ## 4. Discovered Unlocks Log

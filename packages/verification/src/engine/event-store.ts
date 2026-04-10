@@ -175,6 +175,23 @@ export class JournalEventStore {
     return new JournalEventStore(filePath);
   }
 
+  /**
+   * Create a pure in-memory store pre-loaded with an existing event array.
+   * Used by the live-data lab runner to load exported pick events without
+   * disk-linking the store (no new events are written to the source file).
+   * Sequence numbers and producedAt are preserved as-is from the input.
+   */
+  static fromEvents(events: ReadonlyArray<ReplayEvent>): JournalEventStore {
+    const store = new JournalEventStore(null);
+    for (const event of events) {
+      store.events.push({ ...event });
+      if (event.sequenceNumber >= store.nextSeq) {
+        store.nextSeq = event.sequenceNumber + 1;
+      }
+    }
+    return store;
+  }
+
   // ─────────────────────────────────────────────────────────────
   // PRIVATE
   // ─────────────────────────────────────────────────────────────

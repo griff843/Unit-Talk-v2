@@ -288,6 +288,9 @@ export class ReplayLifecycleRunner {
           posted_to_discord: true,
           promotion_posted_at: resolveNow(context.clock).toISOString(),
           promotion_status: 'promoted',
+          // Advance lifecycle stage so settle() can transition posted → settled.
+          // claimForPosting is the canonical "pick is now live" marker.
+          status: 'posted' as const,
         },
         [{ field: 'posted_to_discord', value: false, op: 'eq' }]
       );
