@@ -14,6 +14,7 @@ import {
   traderInsightsPromotionPolicy,
 } from '@unit-talk/domain';
 import {
+  AwaitingApprovalBrakeError,
   enqueueDistributionWork,
   resolveDeliveryTarget,
   type DistributionEnqueueResult,
@@ -38,6 +39,50 @@ export async function enqueueDistributionWithRunTracking(
   auditLogRepository: AuditLogRepository,
 ): Promise<DistributionRunResult> {
   const resolvedTarget = resolveDeliveryTarget(target);
+
+  // Phase 7A governance brake: re-fetch the pick to get the authoritative
+  // lifecycle state from the DB, then refuse to run the enqueue pipeline if
+  // the pick is parked in `awaiting_approval`. This is defense-in-depth — the
+  // caller (submit-pick-controller) already gates based on source, but any
+  // other helper path that reaches this function must also be safe.
+  const currentPick = await pickRepository.findPickById(pick.id);
+  const currentLifecycleState =
+    currentPick?.status ?? pick.lifecycleState;
+  if (currentLifecycleState === 'awaiting_approval') {
+    const brakeRun = await systemRunRepository.startRun({
+      runType: 'distribution.enqueue',
+      actor,
+      details: {
+        pickId: pick.id,
+        target: resolvedTarget,
+        skipped: true,
+        reason: 'governance-brake-awaiting-approval',
+      },
+      idempotencyKey: `${pick.id}:${resolvedTarget}:awaiting-approval-brake`,
+    });
+    const completedBrakeRun = await systemRunRepository.completeRun({
+      runId: brakeRun.id,
+      status: 'failed',
+      details: {
+        target: resolvedTarget,
+        reason: 'governance-brake-awaiting-approval',
+      },
+    });
+    await auditLogRepository.record({
+      entityType: 'distribution_outbox',
+      entityId: completedBrakeRun.id,
+      action: 'distribution.enqueue.blocked',
+      actor,
+      payload: {
+        pickId: pick.id,
+        target: resolvedTarget,
+        reason: 'governance-brake-awaiting-approval',
+        lifecycleState: 'awaiting_approval',
+      },
+    });
+    throw new AwaitingApprovalBrakeError(pick.id, resolvedTarget);
+  }
+
   const run = await systemRunRepository.startRun({
     runType: 'distribution.enqueue',
     actor,
