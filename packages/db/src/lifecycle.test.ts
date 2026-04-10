@@ -98,6 +98,28 @@ test('posted -> voided succeeds', async () => {
 });
 
 // ---------------------------------------------------------------------------
+// Phase 7A (UTV2-491) — awaiting_approval valid transitions
+// ---------------------------------------------------------------------------
+
+test('validated -> awaiting_approval succeeds', async () => {
+  const repo = await repoWithPick('p1', 'validated');
+  const result = await transitionPickLifecycle(repo, 'p1', 'awaiting_approval', 'test');
+  assert.equal(result.lifecycleState, 'awaiting_approval');
+});
+
+test('awaiting_approval -> queued succeeds (approval)', async () => {
+  const repo = await repoWithPick('p1', 'awaiting_approval');
+  const result = await transitionPickLifecycle(repo, 'p1', 'queued', 'test');
+  assert.equal(result.lifecycleState, 'queued');
+});
+
+test('awaiting_approval -> voided succeeds (rejection)', async () => {
+  const repo = await repoWithPick('p1', 'awaiting_approval');
+  const result = await transitionPickLifecycle(repo, 'p1', 'voided', 'test');
+  assert.equal(result.lifecycleState, 'voided');
+});
+
+// ---------------------------------------------------------------------------
 // transitionPickLifecycle — invalid transitions throw InvalidTransitionError
 // ---------------------------------------------------------------------------
 
@@ -144,6 +166,69 @@ test('posted -> queued throws InvalidTransitionError (no regression)', async () 
     () => transitionPickLifecycle(repo, 'p1', 'queued', 'test'),
     (err: unknown) => {
       assert.ok(err instanceof InvalidTransitionError);
+      return true;
+    },
+  );
+});
+
+// ---------------------------------------------------------------------------
+// Phase 7A (UTV2-491) — awaiting_approval forbidden transitions
+// ---------------------------------------------------------------------------
+
+test('awaiting_approval -> posted throws InvalidTransitionError (must go through queued)', async () => {
+  const repo = await repoWithPick('p1', 'awaiting_approval');
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'p1', 'posted', 'test'),
+    (err: unknown) => {
+      assert.ok(err instanceof InvalidTransitionError);
+      assert.equal(err.fromState, 'awaiting_approval');
+      assert.equal(err.toState, 'posted');
+      return true;
+    },
+  );
+});
+
+test('awaiting_approval -> settled throws InvalidTransitionError', async () => {
+  const repo = await repoWithPick('p1', 'awaiting_approval');
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'p1', 'settled', 'test'),
+    (err: unknown) => {
+      assert.ok(err instanceof InvalidTransitionError);
+      return true;
+    },
+  );
+});
+
+test('awaiting_approval -> validated throws InvalidTransitionError (no regression)', async () => {
+  const repo = await repoWithPick('p1', 'awaiting_approval');
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'p1', 'validated', 'test'),
+    (err: unknown) => {
+      assert.ok(err instanceof InvalidTransitionError);
+      return true;
+    },
+  );
+});
+
+test('awaiting_approval -> draft throws InvalidTransitionError (no regression)', async () => {
+  const repo = await repoWithPick('p1', 'awaiting_approval');
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'p1', 'draft', 'test'),
+    (err: unknown) => {
+      assert.ok(err instanceof InvalidTransitionError);
+      return true;
+    },
+  );
+});
+
+test('draft -> awaiting_approval throws InvalidTransitionError (must validate first)', async () => {
+  const repo = await repoWithPick('p1', 'draft');
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'p1', 'awaiting_approval', 'test'),
+    (err: unknown) => {
+      assert.ok(err instanceof InvalidTransitionError);
+      assert.equal(err.fromState, 'draft');
+      assert.equal(err.toState, 'awaiting_approval');
       return true;
     },
   );
@@ -202,8 +287,12 @@ test('getAllowedTransitions for draft returns [validated, voided]', () => {
   assert.deepEqual(result, ['validated', 'voided']);
 });
 
-test('getAllowedTransitions for validated returns [queued, voided]', () => {
-  assert.deepEqual(getAllowedTransitions('validated'), ['queued', 'voided']);
+test('getAllowedTransitions for validated returns [queued, awaiting_approval, voided]', () => {
+  assert.deepEqual(getAllowedTransitions('validated'), ['queued', 'awaiting_approval', 'voided']);
+});
+
+test('getAllowedTransitions for awaiting_approval returns [queued, voided]', () => {
+  assert.deepEqual(getAllowedTransitions('awaiting_approval'), ['queued', 'voided']);
 });
 
 test('getAllowedTransitions for queued returns [posted, voided]', () => {
@@ -240,6 +329,10 @@ test('isTerminalState returns false for draft', () => {
 
 test('isTerminalState returns false for validated', () => {
   assert.equal(isTerminalState('validated'), false);
+});
+
+test('isTerminalState returns false for awaiting_approval', () => {
+  assert.equal(isTerminalState('awaiting_approval'), false);
 });
 
 test('isTerminalState returns false for queued', () => {

@@ -18,6 +18,11 @@ import type { PickLifecycleRecord } from './types.js';
  *  - voided  -> * — void is final
  *  - posted  -> validated — no regression
  *  - posted  -> queued    — no regression
+ *  - awaiting_approval -> posted — must go through queued first
+ *  - awaiting_approval -> settled — must go through queued and posted first
+ *  - awaiting_approval -> validated — no regression back to pre-approval state
+ *  - awaiting_approval -> draft — no regression
+ *  - draft -> awaiting_approval — must validate first
  */
 export class InvalidTransitionError extends Error {
   public readonly fromState: PickLifecycleState;
@@ -55,10 +60,16 @@ export class InvalidPickStateError extends Error {
  *
  * Terminal states (`settled`, `voided`) have no outgoing transitions.
  * Regression transitions (e.g. posted -> validated) are forbidden by omission.
+ *
+ * Phase 7A (UTV2-491): `awaiting_approval` is a governance brake state for
+ * non-human producers. Valid forward paths: `queued` (approved) or `voided`
+ * (rejected). Not a terminal state, but has no backward transitions and
+ * cannot skip directly to `posted` or `settled`.
  */
 const allowedTransitions: Record<PickLifecycleState, PickLifecycleState[]> = {
   draft: ['validated', 'voided'],
-  validated: ['queued', 'voided'],
+  validated: ['queued', 'awaiting_approval', 'voided'],
+  awaiting_approval: ['queued', 'voided'],
   queued: ['posted', 'voided'],
   posted: ['settled', 'voided'],
   settled: [],
