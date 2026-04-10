@@ -4,6 +4,7 @@ import type {
   DashboardData,
   DashboardRuntimeData,
   DeliveryStatus,
+  GovernedPickPerformanceRow,
   IntelligenceCoverage,
   LifecycleSignal,
   LifecycleStatus,
@@ -102,6 +103,23 @@ export async function fetchBoardQueue(): Promise<BoardQueueData> {
   const json = (await res.json()) as { ok: boolean; data: BoardQueueData };
   if (!json.ok) {
     throw new Error('Board queue fetch failed');
+  }
+  return json.data;
+}
+
+export async function fetchBoardPerformance(boardRunId?: string): Promise<GovernedPickPerformanceRow[]> {
+  const params = new URLSearchParams();
+  if (boardRunId) {
+    params.set('boardRunId', boardRunId);
+  }
+  const suffix = params.toString() ? `?${params.toString()}` : '';
+  const res = await fetch(`${OPERATOR_WEB_BASE}/api/board/performance${suffix}`, {
+    cache: 'no-store',
+  });
+  if (!res.ok) throw new Error(`Board performance fetch failed: ${res.status}`);
+  const json = (await res.json()) as { ok: boolean; data: GovernedPickPerformanceRow[] };
+  if (!json.ok) {
+    throw new Error('Board performance fetch failed');
   }
   return json.data;
 }
