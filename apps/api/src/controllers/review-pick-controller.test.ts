@@ -213,3 +213,91 @@ test('reviewPickController: hold decision does not trigger promotion and has no 
   if (!result.body.ok) return;
   assert.equal(result.body.data.promotionError, undefined);
 });
+
+// ─── awaiting_approval governance brake paths (Phase 7A / UTV2-509) ──────────
+
+test('reviewPickController: approve from awaiting_approval transitions lifecycle to queued', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({ id: 'pick-await-approve-1', lifecycleState: 'awaiting_approval' });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'approve', reason: 'Looks good', decidedBy: 'operator-1' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.decision, 'approve');
+  assert.equal(result.body.data.approvalStatus, 'approved');
+
+  // Verify lifecycle was advanced to queued
+  const updated = await repos.picks.findPickById(pick.id);
+  assert.ok(updated, 'pick should exist');
+  assert.equal(updated!.status, 'queued', 'lifecycle state should be queued after approval');
+});
+
+test('reviewPickController: deny from awaiting_approval transitions lifecycle to voided', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({ id: 'pick-await-deny-1', lifecycleState: 'awaiting_approval' });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'deny', reason: 'Not confident', decidedBy: 'operator-1' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.decision, 'deny');
+  assert.equal(result.body.data.approvalStatus, 'rejected');
+
+  // Verify lifecycle was advanced to voided
+  const updated = await repos.picks.findPickById(pick.id);
+  assert.ok(updated, 'pick should exist');
+  assert.equal(updated!.status, 'voided', 'lifecycle state should be voided after denial');
+});
+
+test('reviewPickController: awaiting_approval pick writes audit row with previousLifecycleState', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({ id: 'pick-await-audit-1', lifecycleState: 'awaiting_approval' });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'approve', reason: 'All good', decidedBy: 'operator-2' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+
+  // Audit row should have been written (auditId present)
+  assert.ok(result.body.data.auditId, 'auditId should be present');
+});
+
+test('reviewPickController: hold on awaiting_approval does NOT change lifecycle state', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({ id: 'pick-await-hold-1', lifecycleState: 'awaiting_approval' });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'hold', reason: 'Need more info', decidedBy: 'operator-1' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+
+  // Lifecycle state should remain awaiting_approval (hold does not trigger a transition)
+  const updated = await repos.picks.findPickById(pick.id);
+  assert.ok(updated, 'pick should exist');
+  assert.equal(updated!.status, 'awaiting_approval', 'hold should not change lifecycle state');
+});

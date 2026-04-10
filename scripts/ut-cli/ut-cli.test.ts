@@ -163,7 +163,13 @@ test('phase:verify passes with scoped diff and migration', async () => {
     stdout: 'codex@example.com\n',
     stderr: '',
   });
+  // Register both Windows and Linux shell variants for cross-platform CI
   shell.register('cmd.exe', ['/d', '/s', '/c', 'pnpm --filter @unit-talk/contracts test'], {
+    status: 0,
+    stdout: '',
+    stderr: '',
+  });
+  shell.register('sh', ['-c', 'pnpm --filter @unit-talk/contracts test'], {
     status: 0,
     stdout: '',
     stderr: '',
