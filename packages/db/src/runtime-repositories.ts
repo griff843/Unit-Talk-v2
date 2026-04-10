@@ -1,5 +1,6 @@
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
+import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
 import {
   V1_REFERENCE_DATA,
   type ProviderOfferInsert,
@@ -10,6 +11,7 @@ import {
 import type {
   CanonicalPick,
   LifecycleEvent,
+  PickLifecycleState,
 } from '@unit-talk/contracts';
 import type {
   AlertCooldownQuery,
@@ -85,6 +87,8 @@ import type {
   SettlePickAtomicResult,
   SubmissionAtomicInput,
   SubmissionAtomicResult,
+  TransitionPickLifecycleAtomicInput,
+  TransitionPickLifecycleAtomicResult,
   SubmissionEventCreateInput,
   SubmissionCreateInput,
   SubmissionRepository,
@@ -486,6 +490,14 @@ export class InMemoryPickRepository implements PickRepository {
     };
     this.picks.set(pickId, updated);
     return { claimed: true };
+  }
+
+  async transitionPickLifecycleAtomic(
+    _input: TransitionPickLifecycleAtomicInput,
+  ): Promise<TransitionPickLifecycleAtomicResult> {
+    throw new Error(
+      'transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.',
+    );
   }
 
   async findPickByIdempotencyKey(key: string): Promise<PickRecord | null> {
@@ -2576,6 +2588,54 @@ export class DatabasePickRepository implements PickRepository {
     }
 
     return { claimed: (data?.length ?? 0) > 0 };
+  }
+
+  async transitionPickLifecycleAtomic(
+    input: TransitionPickLifecycleAtomicInput,
+  ): Promise<TransitionPickLifecycleAtomicResult> {
+    const { data, error } = await this.client.rpc('transition_pick_lifecycle', {
+      p_pick_id: input.pickId,
+      p_from_state: input.fromState,
+      p_to_state: input.toState,
+      p_writer_role: input.writerRole,
+      p_reason: input.reason,
+      p_payload: toJsonObject(input.payload ?? {}),
+    });
+
+    if (error) {
+      const message = error.message ?? '';
+      if (message.includes('PICK_NOT_FOUND')) {
+        throw new InvalidPickStateError(input.pickId);
+      }
+      if (message.includes('INVALID_LIFECYCLE_TRANSITION')) {
+        // The RPC raises with the actual current status. The caller already
+        // knows the intended fromState, but we prefer the observed mismatch
+        // value (parsed from the error message) when constructing the typed
+        // FSM error so the thrown error reflects live DB truth.
+        const observedMatch = message.match(/got ([a-z_]+)/);
+        const observed = (observedMatch?.[1] ?? input.fromState) as PickLifecycleState;
+        throw new InvalidTransitionError(observed, input.toState as PickLifecycleState);
+      }
+      throw new Error(`transition_pick_lifecycle failed: ${error.message}`);
+    }
+
+    const result = data as {
+      pickId: string;
+      fromState: string;
+      toState: string;
+      eventId: string;
+    } | null;
+
+    if (!result) {
+      throw new Error('transition_pick_lifecycle returned null');
+    }
+
+    return {
+      pickId: result.pickId,
+      fromState: result.fromState,
+      toState: result.toState,
+      eventId: result.eventId,
+    };
   }
 
   async findPickByIdempotencyKey(key: string): Promise<PickRecord | null> {

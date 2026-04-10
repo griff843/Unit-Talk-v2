@@ -406,3 +406,142 @@ test('atomicClaimForTransition returns false for invalid transition', async () =
   const result = await atomicClaimForTransition(repo, 'claim-4', 'settled', 'posted');
   assert.equal(result.claimed, false);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-519 — transitionPickLifecycleAtomic path
+//
+// The lifecycle caller tries the atomic RPC first and only falls back to the
+// sequential writes when the repo throws the exact InMemory sentinel. Any
+// other atomic-path error (real DB failure, typed FSM error) must propagate
+// without falling back — otherwise Postgres rollback semantics would be
+// masked by the in-memory non-enforcing writes.
+// ---------------------------------------------------------------------------
+
+interface MockCall {
+  name: string;
+  args: unknown[];
+}
+
+function makeMockRepo(opts: {
+  currentState?: CanonicalPick['lifecycleState'];
+  atomic: () => Promise<{ pickId: string; fromState: string; toState: string; eventId: string }>;
+}) {
+  const calls: MockCall[] = [];
+  const repo = {
+    async findPickById(pickId: string) {
+      calls.push({ name: 'findPickById', args: [pickId] });
+      return {
+        id: pickId,
+        status: opts.currentState ?? 'validated',
+        created_at: new Date().toISOString(),
+      } as unknown as import('./types.js').PickRecord;
+    },
+    async updatePickLifecycleState(pickId: string, state: CanonicalPick['lifecycleState']) {
+      calls.push({ name: 'updatePickLifecycleState', args: [pickId, state] });
+      return { id: pickId, status: state } as unknown as import('./types.js').PickRecord;
+    },
+    async saveLifecycleEvent(event: unknown) {
+      calls.push({ name: 'saveLifecycleEvent', args: [event] });
+      return { id: 'seq-event-id' } as unknown as import('./types.js').PickLifecycleRecord;
+    },
+    async transitionPickLifecycleAtomic(input: unknown) {
+      calls.push({ name: 'transitionPickLifecycleAtomic', args: [input] });
+      return opts.atomic();
+    },
+  } as unknown as import('./repositories.js').PickRepository;
+  return { repo, calls };
+}
+
+test('UTV2-519: atomic path is called when repo supports it and sequential path is skipped', async () => {
+  const { repo, calls } = makeMockRepo({
+    currentState: 'validated',
+    atomic: async () => ({
+      pickId: 'mock-1',
+      fromState: 'validated',
+      toState: 'awaiting_approval',
+      eventId: 'evt-1',
+    }),
+  });
+
+  const result = await transitionPickLifecycle(
+    repo,
+    'mock-1',
+    'awaiting_approval',
+    'brake',
+    'promoter',
+  );
+
+  assert.equal(result.lifecycleState, 'awaiting_approval');
+  assert.equal(result.lifecycleEvent.id, 'evt-1');
+  const atomicCalls = calls.filter((c) => c.name === 'transitionPickLifecycleAtomic');
+  const seqUpdateCalls = calls.filter((c) => c.name === 'updatePickLifecycleState');
+  const seqInsertCalls = calls.filter((c) => c.name === 'saveLifecycleEvent');
+  assert.equal(atomicCalls.length, 1, 'atomic should be called exactly once');
+  assert.equal(seqUpdateCalls.length, 0, 'sequential update must NOT run when atomic succeeds');
+  assert.equal(seqInsertCalls.length, 0, 'sequential insert must NOT run when atomic succeeds');
+});
+
+test('UTV2-519: real DB error from atomic path is re-raised (no fallback)', async () => {
+  const { repo, calls } = makeMockRepo({
+    currentState: 'validated',
+    atomic: async () => {
+      throw new Error('transition_pick_lifecycle failed: connection reset by peer');
+    },
+  });
+
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'mock-2', 'awaiting_approval', 'brake', 'promoter'),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(
+        (err as Error).message.includes('connection reset'),
+        'original error should propagate',
+      );
+      return true;
+    },
+  );
+
+  const seqUpdateCalls = calls.filter((c) => c.name === 'updatePickLifecycleState');
+  const seqInsertCalls = calls.filter((c) => c.name === 'saveLifecycleEvent');
+  assert.equal(seqUpdateCalls.length, 0, 'sequential update must NOT run after atomic DB error');
+  assert.equal(seqInsertCalls.length, 0, 'sequential insert must NOT run after atomic DB error');
+});
+
+test('UTV2-519: InvalidTransitionError from atomic path propagates unchanged', async () => {
+  const { repo } = makeMockRepo({
+    // The caller-side FSM check happens first using findPickById — we must
+    // keep the mocked current state matching the intended fromState so we
+    // reach the atomic call, then have the atomic call throw the typed FSM
+    // error (simulating a race where the DB changed under us).
+    currentState: 'validated',
+    atomic: async () => {
+      throw new InvalidTransitionError('queued', 'awaiting_approval');
+    },
+  });
+
+  await assert.rejects(
+    () => transitionPickLifecycle(repo, 'mock-3', 'awaiting_approval', 'brake', 'promoter'),
+    (err: unknown) => {
+      assert.ok(err instanceof InvalidTransitionError);
+      assert.equal((err as InvalidTransitionError).fromState, 'queued');
+      return true;
+    },
+  );
+});
+
+test('UTV2-519: InMemory sentinel triggers sequential fallback (both writes occur)', async () => {
+  // InMemoryPickRepository already throws the sentinel; the existing caller
+  // passing it through must fall back to the sequential path. Assert both
+  // writes happen and the transition succeeds.
+  const repo = await repoWithPick('p-fallback', 'validated');
+  const result = await transitionPickLifecycle(
+    repo,
+    'p-fallback',
+    'awaiting_approval',
+    'brake',
+    'promoter',
+  );
+  assert.equal(result.lifecycleState, 'awaiting_approval');
+  const updated = await repo.findPickById('p-fallback');
+  assert.equal(updated?.status, 'awaiting_approval');
+});

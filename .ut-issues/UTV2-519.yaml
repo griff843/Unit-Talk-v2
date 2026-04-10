@@ -1,0 +1,136 @@
+id: UTV2-519
+title: "P7A-04 - Corrective: awaiting_approval lifecycle event constraint + atomic transition"
+tier: T1
+phase: "7a"
+
+upstream_dependencies:
+  - UTV2-491
+  - UTV2-492
+
+allowed_files:
+  - "supabase/migrations/202604100004_utv2_519_pick_lifecycle_awaiting_approval_constraint.sql"
+  - "supabase/migrations/202604100005_utv2_519_transition_pick_lifecycle_rpc.sql"
+  - "packages/db/src/repositories.ts"
+  - "packages/db/src/runtime-repositories.ts"
+  - "packages/db/src/lifecycle.ts"
+  - "packages/db/src/lifecycle.test.ts"
+  - "packages/db/src/database.types.ts"
+  - "apps/api/src/t1-proof-awaiting-approval.test.ts"
+  - ".ut-issues/UTV2-519.yaml"
+
+forbidden_files:
+  - "apps/api/src/controllers/**"
+  - "apps/api/src/controllers/review-pick-controller.ts"
+  - "apps/api/src/distribution-service.ts"
+  - "apps/api/src/run-audit-service.ts"
+  - "apps/api/src/submission-service.ts"
+  - "apps/api/src/scripts/utv2-494-*"
+  - "supabase/migrations/202604100003_utv2_491_picks_awaiting_approval_state.sql"
+  - "apps/operator-web/**"
+  - "apps/command-center/**"
+  - "apps/smart-form/**"
+  - "apps/discord-bot/**"
+  - "apps/worker/**"
+  - "apps/ingestor/**"
+  - "apps/alert-agent/**"
+
+expected_collateral:
+  - "packages/db/src/database.types.ts"
+
+requires_migration: true
+requires_sql_review: true
+requires_status_sync: true
+pm_review_required: true
+
+rollback_plan: |
+  Commit-level: revert the PR. Schema rollback order (run manually in the
+  indicated sequence):
+    1. DROP FUNCTION public.transition_pick_lifecycle(uuid, text, text, text, text, jsonb);
+    2. ALTER TABLE public.pick_lifecycle DROP CONSTRAINT IF EXISTS pick_lifecycle_to_state_check;
+       ALTER TABLE public.pick_lifecycle ADD CONSTRAINT pick_lifecycle_to_state_check CHECK (
+         to_state in ('draft','validated','queued','posted','settled','voided')
+       );
+    3. Revert packages/db/src/lifecycle.ts to the prior sequential
+       (updatePickLifecycleState + saveLifecycleEvent) implementation.
+  Stranded awaiting_approval rows currently in live DB (24 as of 2026-04-10)
+  are intentionally NOT touched by this migration pair and remain untouched
+  on rollback. Cleanup is a separate hybrid-policy follow-up.
+
+verification_commands:
+  - name: "type-check"
+    cmd: "pnpm type-check"
+  - name: "db-test"
+    cmd: "pnpm --filter @unit-talk/db test"
+  - name: "api-test"
+    cmd: "pnpm --filter @unit-talk/api test"
+  - name: "test-db"
+    cmd: "pnpm test:db"
+  - name: "supabase-types"
+    cmd: "pnpm supabase:types"
+
+sql_review_criteria: |
+  1. pick_lifecycle_to_state_check swap (202604100004): drop + re-add. The new
+     allow-list must include 'awaiting_approval' alongside the existing six
+     states. Idempotent via DROP IF EXISTS + ADD. No data is mutated; no
+     trigger is created; no index is changed. The from_state column on
+     pick_lifecycle remains unconstrained (by design — see 202603200002).
+
+  2. transition_pick_lifecycle RPC (202604100005): PL/pgSQL, implicit
+     transaction. Behavior:
+       - SELECT status FROM picks WHERE id = p_pick_id FOR UPDATE (row lock)
+       - RAISE EXCEPTION PICK_NOT_FOUND (SQLSTATE P0001) if not found
+       - RAISE EXCEPTION INVALID_LIFECYCLE_TRANSITION (P0001) if current
+         status does not equal p_from_state
+       - UPDATE picks SET status = p_to_state, updated_at = now()
+       - INSERT INTO pick_lifecycle (...) RETURNING id
+       - Return jsonb with { pickId, fromState, toState, eventId }
+     Any RAISE rolls back both writes via PL/pgSQL exception semantics, so the
+     UTV2-491 vs UTV2-519 constraint gap can no longer strand picks.status.
+     Grant pattern matches 202604010005_submission_atomicity_rpc.sql:
+     GRANT EXECUTE ... TO service_role. The TypeScript FSM in
+     packages/db/src/lifecycle.ts remains the canonical FSM and is evaluated
+     before the RPC is invoked — the RPC only guards the from_state race.
+
+downstream_unlocks:
+  - UTV2-494
+
+pre_existing_failures: null
+
+notes: |
+  UTV2-491 (202604100003) added 'awaiting_approval' to picks_status_check but
+  did NOT add it to the sibling pick_lifecycle_to_state_check constraint
+  (originally declared in 202603200002 v2_schema_hardening). As a result the
+  Phase 7A governance brake could successfully UPDATE picks.status to
+  'awaiting_approval' (first write) but the subsequent INSERT into
+  pick_lifecycle was rejected by Postgres with a CHECK violation. Because the
+  two writes were not wrapped in a transaction in lifecycle.ts (lines 141-144),
+  the status update committed and the DB was left structurally inconsistent:
+  picks.status = 'awaiting_approval' with no matching lifecycle event, no
+  'pick.governance_brake.applied' audit row, and HTTP 400 returned to callers.
+  24 stranded rows currently exist in live DB as of 2026-04-10.
+
+  Unit tests passed only because the InMemory repositories do not enforce
+  Postgres CHECK constraints (InMemory drift). UTV2-494 Lane A and Lane C
+  reproduced the failure against live Postgres on 2026-04-10.
+
+  This PR takes three corrective steps:
+    1. Migration 202604100004 extends pick_lifecycle_to_state_check to
+       include 'awaiting_approval' (closes the UTV2-491 gap).
+    2. Migration 202604100005 adds transition_pick_lifecycle RPC so the two
+       lifecycle writes are wrapped in a single Postgres transaction.
+    3. lifecycle.ts calls the atomic RPC first, then falls back to the
+       pre-existing sequential path only when the repository throws the
+       InMemory sentinel. Real DB errors from the atomic path are re-raised
+       — no silent fallback that would mask Postgres rollback semantics.
+
+  Scanner quiescence (SYSTEM_PICK_SCANNER_ENABLED=false in local.env since
+  2026-04-10 21:15 UTC) is unchanged by this PR.
+
+  The 24 stranded awaiting_approval rows are intentionally NOT mutated by
+  this PR. Hybrid cleanup policy is deferred to a separate follow-up ticket.
+
+  The new t1-proof-awaiting-approval.test.ts is not wired into the default
+  pnpm test:db script (which currently targets only database-smoke.test.ts);
+  it is invoked directly via:
+    UNIT_TALK_APP_ENV=local npx tsx --test apps/api/src/t1-proof-awaiting-approval.test.ts
+  This matches the invocation style of the existing t1-proof-atomicity.test.ts.

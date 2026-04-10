@@ -317,6 +317,13 @@ export type Database = {
             referencedRelation: "picks_current_state"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "distribution_outbox_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["pick_id"]
+          },
         ]
       }
       distribution_receipts: {
@@ -729,6 +736,57 @@ export type Database = {
         }
         Relationships: []
       }
+      market_family_trust: {
+        Row: {
+          avg_model_score: number | null
+          computed_at: string
+          confidence_band: string | null
+          id: string
+          loss_count: number
+          market_type_id: string
+          metadata: Json
+          push_count: number
+          roi: number | null
+          sample_size: number
+          sport_key: string | null
+          tuning_run_id: string
+          win_count: number
+          win_rate: number | null
+        }
+        Insert: {
+          avg_model_score?: number | null
+          computed_at?: string
+          confidence_band?: string | null
+          id?: string
+          loss_count: number
+          market_type_id: string
+          metadata?: Json
+          push_count: number
+          roi?: number | null
+          sample_size: number
+          sport_key?: string | null
+          tuning_run_id: string
+          win_count: number
+          win_rate?: number | null
+        }
+        Update: {
+          avg_model_score?: number | null
+          computed_at?: string
+          confidence_band?: string | null
+          id?: string
+          loss_count?: number
+          market_type_id?: string
+          metadata?: Json
+          push_count?: number
+          roi?: number | null
+          sample_size?: number
+          sport_key?: string | null
+          tuning_run_id?: string
+          win_count?: number
+          win_rate?: number | null
+        }
+        Relationships: []
+      }
       market_types: {
         Row: {
           active: boolean
@@ -1121,6 +1179,7 @@ export type Database = {
           expires_at: string | null
           filter_details: Json | null
           id: string
+          is_board_candidate: boolean
           model_confidence: number | null
           model_score: number | null
           model_tier: string | null
@@ -1128,6 +1187,7 @@ export type Database = {
           provenance: Json | null
           rejection_reason: string | null
           scan_run_id: string | null
+          selection_rank: number | null
           shadow_mode: boolean
           status: string
           universe_id: string
@@ -1138,6 +1198,7 @@ export type Database = {
           expires_at?: string | null
           filter_details?: Json | null
           id?: string
+          is_board_candidate?: boolean
           model_confidence?: number | null
           model_score?: number | null
           model_tier?: string | null
@@ -1145,6 +1206,7 @@ export type Database = {
           provenance?: Json | null
           rejection_reason?: string | null
           scan_run_id?: string | null
+          selection_rank?: number | null
           shadow_mode?: boolean
           status?: string
           universe_id: string
@@ -1155,6 +1217,7 @@ export type Database = {
           expires_at?: string | null
           filter_details?: Json | null
           id?: string
+          is_board_candidate?: boolean
           model_confidence?: number | null
           model_score?: number | null
           model_tier?: string | null
@@ -1162,6 +1225,7 @@ export type Database = {
           provenance?: Json | null
           rejection_reason?: string | null
           scan_run_id?: string | null
+          selection_rank?: number | null
           shadow_mode?: boolean
           status?: string
           universe_id?: string
@@ -1223,6 +1287,13 @@ export type Database = {
             referencedRelation: "picks_current_state"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pick_lifecycle_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["pick_id"]
+          },
         ]
       }
       pick_promotion_history: {
@@ -1283,6 +1354,13 @@ export type Database = {
             referencedRelation: "picks_current_state"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "pick_promotion_history_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["pick_id"]
+          },
         ]
       }
       pick_reviews: {
@@ -1327,6 +1405,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "picks_current_state"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pick_reviews_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["pick_id"]
           },
         ]
       }
@@ -1905,6 +1990,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "settlement_records_corrects_id_fkey"
+            columns: ["corrects_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["settlement_id"]
+          },
+          {
             foreignKeyName: "settlement_records_pick_id_fkey"
             columns: ["pick_id"]
             isOneToOne: false
@@ -1917,6 +2009,13 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "picks_current_state"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "settlement_records_pick_id_fkey"
+            columns: ["pick_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["pick_id"]
           },
         ]
       }
@@ -2137,6 +2236,60 @@ export type Database = {
         }
         Relationships: []
       }
+      syndicate_board: {
+        Row: {
+          board_rank: number
+          board_run_id: string
+          board_tier: string
+          candidate_id: string
+          created_at: string
+          id: string
+          market_type_id: string | null
+          model_score: number
+          sport_key: string
+          updated_at: string
+        }
+        Insert: {
+          board_rank: number
+          board_run_id: string
+          board_tier: string
+          candidate_id: string
+          created_at?: string
+          id?: string
+          market_type_id?: string | null
+          model_score: number
+          sport_key: string
+          updated_at?: string
+        }
+        Update: {
+          board_rank?: number
+          board_run_id?: string
+          board_tier?: string
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          market_type_id?: string | null
+          model_score?: number
+          sport_key?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "syndicate_board_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "pick_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "syndicate_board_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "v_governed_pick_performance"
+            referencedColumns: ["candidate_id"]
+          },
+        ]
+      }
       system_runs: {
         Row: {
           actor: string | null
@@ -2334,6 +2487,47 @@ export type Database = {
           },
         ]
       }
+      v_governed_pick_performance: {
+        Row: {
+          board_model_score: number | null
+          board_rank: number | null
+          board_run_id: string | null
+          board_tier: string | null
+          candidate_id: string | null
+          candidate_model_score: number | null
+          market: string | null
+          market_type_id: string | null
+          metadata: Json | null
+          model_confidence: number | null
+          model_tier: string | null
+          odds: number | null
+          pick_created_at: string | null
+          pick_id: string | null
+          pick_status: string | null
+          provider_key: string | null
+          provider_market_key: string | null
+          selection: string | null
+          selection_rank: number | null
+          settled_at: string | null
+          settled_by: string | null
+          settlement_confidence: string | null
+          settlement_id: string | null
+          settlement_result: string | null
+          settlement_settled_at: string | null
+          settlement_status: string | null
+          sport_key: string | null
+          universe_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pick_candidates_universe_id_fkey"
+            columns: ["universe_id"]
+            isOneToOne: false
+            referencedRelation: "market_universe"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Functions: {
       bootstrap_canonical_reference_data: { Args: never; Returns: undefined }
@@ -2396,6 +2590,17 @@ export type Database = {
           p_lifecycle_writer_role: string
           p_pick_id: string
           p_settlement: Json
+        }
+        Returns: Json
+      }
+      transition_pick_lifecycle: {
+        Args: {
+          p_from_state: string
+          p_payload?: Json
+          p_pick_id: string
+          p_reason: string
+          p_to_state: string
+          p_writer_role: string
         }
         Returns: Json
       }
