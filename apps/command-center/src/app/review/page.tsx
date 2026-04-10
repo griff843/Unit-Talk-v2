@@ -17,6 +17,9 @@ interface ReviewPick {
   stake_units: number | null;
   promotion_score: number | null;
   created_at: string;
+  status: string;
+  approval_status: string;
+  governanceQueueState?: string;
   metadata: Record<string, unknown>;
 }
 
@@ -54,6 +57,10 @@ export default async function ReviewQueuePage({
   const { picks, total } = await fetchReviewQueue(params);
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();
+  const lifecycleAwaitingApproval = picks.filter(
+    (pick) => pick.governanceQueueState === 'awaiting_approval' || pick.status === 'awaiting_approval',
+  ).length;
+  const legacyPending = Math.max(total - lifecycleAwaitingApproval, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -61,6 +68,11 @@ export default async function ReviewQueuePage({
         <div className="space-y-1">
           <h1 className="text-lg font-bold text-gray-100">Review Queue</h1>
           <span className="text-sm text-gray-400">{total} pick{total !== 1 ? 's' : ''} awaiting review</span>
+          <p className="text-xs text-gray-500">
+            Governance queue truth: {lifecycleAwaitingApproval} lifecycle-gated awaiting_approval
+            {', '}
+            {legacyPending} legacy pending-review pick{legacyPending !== 1 ? 's' : ''}.
+          </p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>

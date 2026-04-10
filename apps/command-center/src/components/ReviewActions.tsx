@@ -9,7 +9,10 @@ interface ReviewActionsProps {
   decisions?: ReviewDecision[];
 }
 
-const DECISION_CONFIG: Record<ReviewDecision, { label: string; variant: 'success' | 'danger' | 'warning' | 'primary' }> = {
+const DECISION_CONFIG: Record<
+  ReviewDecision,
+  { label: string; variant: 'success' | 'danger' | 'warning' | 'primary' }
+> = {
   approve: { label: 'Approve', variant: 'success' },
   deny: { label: 'Deny', variant: 'danger' },
   hold: { label: 'Hold', variant: 'warning' },
@@ -43,7 +46,10 @@ export function ReviewActions({ pickId, decisions = ['approve', 'deny', 'hold'] 
     startTransition(async () => {
       const res = await reviewPick(pickId, selected, reason.trim());
       if (res.ok) {
-        setOutcome({ ok: true, message: `Decision recorded: ${selected}. Review ID: ${res.reviewId}` });
+        setOutcome({
+          ok: true,
+          message: `Decision recorded: ${selected}. Review ID: ${res.reviewId}. Approval status: ${res.approvalStatus || 'pending'}`,
+        });
       } else {
         setOutcome({ ok: false, message: res.error });
       }
@@ -87,12 +93,12 @@ export function ReviewActions({ pickId, decisions = ['approve', 'deny', 'hold'] 
           <textarea
             value={reason}
             onChange={(e) => setReason(e.target.value)}
-            placeholder="Required — explain your decision"
+            placeholder="Required - explain your governance decision"
             rows={2}
             className="rounded border border-gray-700 bg-gray-800 px-3 py-2 text-sm text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
           />
           {reason.trim().length === 0 && (
-            <p className="text-xs text-gray-500">A reason is required for every review decision.</p>
+            <p className="text-xs text-gray-500">A reason is required for every governance review decision.</p>
           )}
           <Button
             variant="primary"
@@ -108,7 +114,7 @@ export function ReviewActions({ pickId, decisions = ['approve', 'deny', 'hold'] 
       {confirming && selected && (
         <div className="flex flex-col gap-3 rounded-md border border-gray-700 bg-gray-900 p-4">
           <p className="text-sm text-gray-200">
-            Confirm: <span className="font-semibold uppercase text-white">{selected}</span> this pick?
+            Confirm governance decision: <span className="font-semibold uppercase text-white">{selected}</span> this pick?
           </p>
           <p className="text-xs text-gray-400">Reason: {reason}</p>
           <div className="flex gap-2">
