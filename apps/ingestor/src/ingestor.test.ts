@@ -1105,6 +1105,43 @@ test('ingestLeague marks latest pre-commence SGO snapshot as closing', async () 
   assert.equal(targetRows[1]?.is_closing, false);
 });
 
+test('ingestLeague marks closing for started SGO events even when the current fetch returns no events', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    skipResults: true,
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-26T23:40:00.000Z',
+    skipResults: true,
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+  });
+
+  const rows = await repositories.providerOffers.listByProvider('sgo');
+  const targetRow = rows.find(
+    (row) =>
+      row.provider_event_id === 'evt-entity-1' &&
+      row.provider_market_key === 'points-all-game-ou' &&
+      row.provider_participant_id === 'JALEN_BRUNSON_1_NBA' &&
+      row.bookmaker_key === null &&
+      row.snapshot_at === '2026-03-25T12:00:00.000Z',
+  );
+
+  assert.ok(targetRow);
+  assert.equal(targetRow?.is_closing, true);
+});
+
 test('fetchSGOResults returns player stat rows for completed events only', async () => {
   const results = await fetchSGOResults({
     apiKey: 'test-key',
@@ -2212,7 +2249,6 @@ test('ingestOddsApiLeague: started event marks latest pre-commence snapshot as i
   const repositories = createInMemoryIngestorRepositoryBundle();
 
   // Simulate a pre-game snapshot
-  const _preGameSnapshot = '2026-04-04T17:00:00.000Z';
   const startedEvent = {
     ...ODDS_API_MLB_EVENT,
     commence_time: '2020-01-01T16:00:00.000Z', // clearly in the past — game already started
@@ -2237,6 +2273,46 @@ test('ingestOddsApiLeague: started event marks latest pre-commence snapshot as i
   // There are none yet, so closing count = 0. This verifies the guard works.
   const closingRows = preGameOffers.filter((r) => r.is_closing);
   assert.equal(closingRows.length, 0, 'no pre-game rows exist yet, so no closing marks expected');
+});
+
+test('ingestOddsApiLeague: market last_update is used for closing tags when bookmaker update is later', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const startedEvent = {
+    ...ODDS_API_MLB_EVENT,
+    commence_time: '2026-04-04T12:30:00.000Z',
+    bookmakers: [
+      {
+        ...ODDS_API_MLB_EVENT.bookmakers[0]!,
+        last_update: '2026-04-04T12:45:00.000Z',
+        markets: [
+          {
+            key: 'h2h',
+            last_update: '2026-04-04T12:20:00.000Z',
+            outcomes: [
+              { name: 'Yankees', price: -135 },
+              { name: 'Red Sox', price: 115 },
+            ],
+          },
+        ],
+      },
+    ],
+  };
+
+  await ingestOddsApiLeague({
+    apiKey: 'test-key',
+    league: 'MLB',
+    repositories,
+    markets: ['h2h'],
+    bookmakers: ['pinnacle'],
+    fetchImpl: makeMlbFetchResponse(startedEvent),
+  });
+
+  const rows = await repositories.providerOffers.listAll();
+  assert.ok(rows.length > 0, 'expected started-event offers to be inserted');
+  for (const row of rows) {
+    assert.equal(row.snapshot_at, '2026-04-04T12:20:00.000Z');
+    assert.equal(row.is_closing, true, `expected closing row for ${row.idempotency_key}`);
+  }
 });
 
 test('mapOddsApiOfferToProviderOfferInsert: is_opening=true when combination not in existing set', () => {

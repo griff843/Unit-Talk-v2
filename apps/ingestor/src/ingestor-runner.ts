@@ -2,6 +2,11 @@ import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
 import { fetchSGOAccountUsage, type SGOAccountUsage } from './sgo-fetcher.js';
+import {
+  formatSchedulerLog,
+  resolveCurrentPollIntervalMs,
+  type SchedulerConfig,
+} from './scheduler.js';
 
 export const SUPPORTED_SGO_LEAGUES = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
 
@@ -11,9 +16,13 @@ export interface IngestorRunnerOptions {
   apiKey?: string;
   oddsApiKey?: string;
   apiUrl?: string;
+  /** undefined = run indefinitely */
   maxCycles?: number;
   sleep?: (ms: number) => Promise<void>;
+  /** Fixed poll interval (ms). Ignored when schedulerConfig.enabled=true. */
   pollIntervalMs?: number;
+  /** Adaptive on-peak/off-peak scheduling. Takes precedence over pollIntervalMs when enabled. */
+  schedulerConfig?: SchedulerConfig;
   fetchImpl?: typeof fetch;
   skipResults?: boolean;
   logger?: Pick<Console, 'warn' | 'info'>;
@@ -40,7 +49,7 @@ export async function runIngestorCycles(
   validateLeagues(options.leagues);
 
   const maxCycles = options.maxCycles ?? 1;
-  const pollIntervalMs = options.pollIntervalMs ?? 300_000;
+  const fixedPollIntervalMs = options.pollIntervalMs ?? 300_000;
   const sleep = options.sleep ?? defaultSleep;
   const summaries: IngestorCycleSummary[] = [];
 
@@ -77,11 +86,15 @@ export async function runIngestorCycles(
     const gradingTrigger = await triggerGradingForCycle(results, options);
 
     let sgoUsage: SGOAccountUsage | null = null;
-    if (options.apiKey) {
+    if (options.apiKey && !options.fetchImpl) {
       try {
-        sgoUsage = await fetchSGOAccountUsage(
-          options.apiKey,
-          options.fetchImpl ?? fetch,
+        sgoUsage = await fetchWithTimeout(
+          fetchSGOAccountUsage(
+            options.apiKey,
+            options.fetchImpl ?? fetch,
+          ),
+          5_000,
+          'SGO account usage fetch timed out',
         );
       } catch (error) {
         options.logger?.warn?.(
@@ -92,8 +105,14 @@ export async function runIngestorCycles(
 
     summaries.push({ cycle, results, oddsApiResults, gradingTrigger, sgoUsage });
 
-    if (cycle < maxCycles) {
-      await sleep(pollIntervalMs);
+    const isLastCycle = cycle >= maxCycles;
+    if (!isLastCycle) {
+      const resolution = resolveCurrentPollIntervalMs(
+        options.schedulerConfig ?? { enabled: false, peakPollMs: 0, offPeakPollMs: 0, peakStartHourEt: 0, peakEndHourEt: 0 },
+        fixedPollIntervalMs,
+      );
+      options.logger?.info?.(`[ingestor] cycle=${cycle} next-sleep ${formatSchedulerLog(resolution)}`);
+      await sleep(resolution.intervalMs);
     }
   }
 
@@ -193,5 +212,28 @@ function validateLeagues(leagues: string[]) {
 function defaultSleep(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
+  });
+}
+
+function fetchWithTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  timeoutMessage: string,
+): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
+    );
   });
 }
