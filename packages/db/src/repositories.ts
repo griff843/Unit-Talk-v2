@@ -83,6 +83,31 @@ export interface SubmissionAtomicResult {
   lifecycleEvent: PickLifecycleRecord | null;
 }
 
+/**
+ * UTV2-519 P7A-04 Corrective: atomic pick lifecycle transition.
+ *
+ * Inputs for the `transition_pick_lifecycle` RPC that wraps
+ * `UPDATE picks.status` + `INSERT pick_lifecycle` in a single Postgres
+ * transaction. Replaces the prior two-write pattern in
+ * `packages/db/src/lifecycle.ts` which could strand picks.status when the
+ * lifecycle event insert failed a CHECK constraint.
+ */
+export interface TransitionPickLifecycleAtomicInput {
+  pickId: string;
+  fromState: string;
+  toState: string;
+  writerRole: string;
+  reason: string;
+  payload?: Record<string, unknown> | null | undefined;
+}
+
+export interface TransitionPickLifecycleAtomicResult {
+  pickId: string;
+  fromState: string;
+  toState: string;
+  eventId: string;
+}
+
 export interface SubmissionRepository {
   saveSubmission(input: SubmissionCreateInput): Promise<SubmissionRecord>;
   saveSubmissionEvent(input: SubmissionEventCreateInput): Promise<SubmissionEventRecord>;
@@ -126,6 +151,24 @@ export interface PickRepository {
     fromState: string,
     toState: string,
   ): Promise<{ claimed: boolean }>;
+  /**
+   * UTV2-519: atomic lifecycle transition. Updates picks.status and inserts a
+   * pick_lifecycle event in a single Postgres transaction. Throws
+   * `InvalidTransitionError` (from lifecycle.ts) when the from-state does not
+   * match, `InvalidPickStateError` when the pick is not found, and the
+   * InMemory sentinel `'transitionPickLifecycleAtomic is not supported in
+   * InMemory mode. Use the sequential path.'` when running against the
+   * InMemory repository.
+   *
+   * Optional on the interface so pre-existing test fakes and other
+   * implementers in the repo do not need to be touched as part of UTV2-519.
+   * The canonical InMemoryPickRepository and DatabasePickRepository BOTH
+   * implement it; `transitionPickLifecycle` in lifecycle.ts detects absence
+   * and falls back to the sequential write path in that case.
+   */
+  transitionPickLifecycleAtomic?(
+    input: TransitionPickLifecycleAtomicInput,
+  ): Promise<TransitionPickLifecycleAtomicResult>;
 }
 
 export interface PromotionDecisionPersistenceInput {

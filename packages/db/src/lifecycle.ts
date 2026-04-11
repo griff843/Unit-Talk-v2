@@ -138,6 +138,59 @@ export async function transitionPickLifecycle(
     }
   }
 
+  // UTV2-519 P7A-04 Corrective: try the atomic RPC path first. Postgres wraps
+  // the UPDATE picks.status + INSERT pick_lifecycle in a single transaction,
+  // closing the race window where a lifecycle event insert could fail a CHECK
+  // (e.g. the UTV2-491 awaiting_approval gap) after picks.status was already
+  // committed. When the repository is InMemory the call throws the sentinel
+  // message below and we fall back to the pre-existing sequential path.
+  // The interface method is optional — older test fakes may not implement
+  // it, in which case we also take the sequential fallback.
+  try {
+    if (typeof pickRepository.transitionPickLifecycleAtomic !== 'function') {
+      throw new Error(
+        'transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.',
+      );
+    }
+    const atomicResult = await pickRepository.transitionPickLifecycleAtomic({
+      pickId,
+      fromState,
+      toState,
+      writerRole,
+      reason,
+    });
+
+    const lifecycleEvent: PickLifecycleRecord = {
+      id: atomicResult.eventId,
+      pick_id: pickId,
+      from_state: fromState,
+      to_state: toState,
+      writer_role: writerRole,
+      reason,
+      payload: {},
+      created_at: new Date().toISOString(),
+    };
+
+    return {
+      pickId,
+      lifecycleState: toState,
+      lifecycleEvent,
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const isInMemorySentinel = message.includes(
+      'transitionPickLifecycleAtomic is not supported in InMemory mode',
+    );
+    if (!isInMemorySentinel) {
+      // Real DB error, typed FSM error, or not-found — do NOT fall back to
+      // sequential writes, which would mask the live rollback semantics we
+      // just added in UTV2-519.
+      throw err;
+    }
+  }
+
+  // Sequential fallback — only reached under InMemory mode where Postgres
+  // constraint enforcement does not apply.
   await pickRepository.updatePickLifecycleState(pickId, toState);
   const lifecycleEvent = await pickRepository.saveLifecycleEvent(
     createLifecycleEvent(pickId, toState, writerRole, reason, fromState),
