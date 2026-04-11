@@ -64,8 +64,21 @@ export async function reviewPickController(
     }
   }
 
-  if (pick.approval_status !== 'pending' && (decision === 'approve' || decision === 'deny' || decision === 'hold')) {
-    return errorResponse(400, 'NOT_PENDING', `Pick approval status is '${pick.approval_status}', not 'pending'. Cannot review.`);
+  // Two distinct review lanes protected by this guard:
+  //   1. Promotion-approval lane (legacy): approval_status must be 'pending'
+  //   2. Governance-review lane (Phase 7A, UTV2-491/UTV2-509/UTV2-521): lifecycle
+  //      status must be 'awaiting_approval', regardless of approval_status. Brake
+  //      picks enter this lane with approval_status='approved' as a post-promotion
+  //      default — approval_status and lifecycle status are orthogonal dimensions
+  //      here. Collapsing them would break the separation of approval from promotion.
+  const isGovernanceReview = pick.status === 'awaiting_approval';
+  const isPromotionReview = pick.approval_status === 'pending';
+  if (!isGovernanceReview && !isPromotionReview && (decision === 'approve' || decision === 'deny' || decision === 'hold')) {
+    return errorResponse(
+      400,
+      'NOT_PENDING',
+      `Pick not in a reviewable state (status='${pick.status}', approval_status='${pick.approval_status}'). Cannot review.`,
+    );
   }
 
   // Record the review decision
@@ -76,7 +89,15 @@ export async function reviewPickController(
     decidedBy: payload.decidedBy.trim(),
   });
 
-  // Update approval_status if decision changes it
+  // Update approval_status if decision changes it.
+  //
+  // Option A writeback semantics (UTV2-521): brake picks enter the governance-review
+  // lane with approval_status='approved' as a post-promotion default, so:
+  //   - approve → 'approved' (no-op for brake picks; was already 'approved')
+  //   - deny → 'rejected'
+  //   - hold → null (no change)
+  //   - return → null (no change)
+  // decisionToApprovalStatus is not modified; the writeback path is unchanged.
   const newApprovalStatus = decisionToApprovalStatus(decision);
   if (newApprovalStatus) {
     await repositories.picks.updateApprovalStatus(pickId, newApprovalStatus);
