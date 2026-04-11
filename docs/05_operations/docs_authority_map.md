@@ -103,6 +103,7 @@ When documents conflict:
 | File | Purpose | Owner |
 |---|---|---|
 | `docs/05_operations/AGENT_OPERATING_MODEL.md` | **Active** agent operating model — Linear-first, role boundaries, reporting rules | Program Owner |
+| `docs/05_operations/DELEGATION_POLICY.md` | **Active** canonical delegation policy — Tier A/B/C authorization, sensitive-path matrix, isolation definition, issue-reshaping rules, stop conditions (UTV2-524) | Program Owner |
 | `docs/05_operations/codex_wave_execution_playbook.md` | Default Codex wave execution model — issue triage, lane ownership, stacked PR discipline, Linear update rules | Program Owner |
 | `docs/05_operations/delivery_operating_model.md` | Cross-tool sync rules and lane ownership | Program Owner |
 | `docs/05_operations/discord_routing.md` | Canonical Discord target taxonomy and routing rules | Platform |
