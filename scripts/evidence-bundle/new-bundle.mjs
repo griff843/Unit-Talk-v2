@@ -14,7 +14,7 @@
  * ESM pure-stdlib — no external deps.
  */
 
-import { readFile, writeFile, mkdir, access } from 'node:fs/promises';
+import { writeFile, mkdir, access } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
