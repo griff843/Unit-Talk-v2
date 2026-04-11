@@ -114,6 +114,7 @@ When documents conflict:
 | `docs/05_operations/risk_register.md` | Open risks and mitigation state | Program Owner |
 | `docs/05_operations/runtime_restart_and_deploy_sop.md` | Deploy and restart SOP | Platform |
 | `docs/05_operations/docs_authority_map.md` | This file — updated 2026-04-05 (full architecture audit) | Program Owner |
+| `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md` | **Active** — canonical evidence-bundle shape + mechanical validator rules (UTV2-532) | Program Owner |
 | `docs/05_operations/UTV2-106_WORKER_RUNTIME_CONTRACT.md` | Worker runtime ownership and operator proof expectations | Architecture |
 | `docs/05_operations/SPRINT_MODEL_v2.md` | Risk-tiered sprint model (T1/T2/T3) | Program Owner |
 | `docs/05_operations/QUEUE_ORCHESTRATION_DESIGN.md` | Queue/orchestration system design — ratified 2026-03-26 | Claude |
