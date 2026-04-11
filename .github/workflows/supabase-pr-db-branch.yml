@@ -152,7 +152,15 @@ jobs:
           exit 1
 
       - name: Apply pending migrations to isolated branch
-        run: supabase db push --db-url "$POSTGRES_URL_NON_POOLING"
+        # Use the pooled connection URL (port 6543, Supavisor) instead of the
+        # direct Postgres endpoint (port 5432). GitHub-hosted Actions runners
+        # are IPv4-only for outbound traffic, and the Supabase direct
+        # endpoint resolves to an IPv6 address in our region — the runner
+        # cannot route to it and fails with
+        #   dial tcp [2600:1f18:...]:5432: connect: network is unreachable.
+        # The pooled URL is IPv4-reachable from GitHub runners and supports
+        # the DDL needed by `supabase db push`.
+        run: supabase db push --db-url "$POSTGRES_URL"
 
       - name: Run test:db against isolated branch
         run: pnpm test:db
@@ -166,7 +174,7 @@ jobs:
             echo ""
             echo "- Preview branch: \`$SUPABASE_BRANCH_NAME\`"
             echo "- Project ref: \`$SUPABASE_PROJECT_REF\`"
-            echo "- Migrations applied with \`supabase db push --db-url \$POSTGRES_URL_NON_POOLING\`"
+            echo "- Migrations applied with \`supabase db push --db-url \$POSTGRES_URL\` (pooled, IPv4-reachable)"
             echo "- \`pnpm test:db\`: PASS"
           } >> "$GITHUB_STEP_SUMMARY"
 
