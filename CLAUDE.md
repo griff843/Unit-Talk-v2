@@ -456,6 +456,8 @@ If verifying, do not "fix while checking." Report truth first.
 
 ## Anti-Drift Rules
 
+Known debt (unfixed conditions with ticket linkage) lives in `docs/06_status/KNOWN_DEBT.md`, not here. This section lists *discipline rules*; the dashboard lists *outstanding conditions*. Code TODO markers must follow the `TODO(UTV2-NNN): ...` convention defined there.
+
 Watch for:
 - duplicate templates
 - stale week contracts
