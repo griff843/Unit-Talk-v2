@@ -168,6 +168,8 @@ CLI-first preference:
 - **T2 isolated logic/refactor:** review diff, verify green, then merge
 - **T1/migrations/runtime routing/shared contracts:** do not merge without explicit PM approval
 
+Canonical delegation policy (authorization tiers, sensitive-path matrix, issue reshaping rules, self-amendment): `docs/05_operations/DELEGATION_POLICY.md`. When this section and the canonical policy disagree, the canonical policy wins.
+
 ### Required Checks Before Merge
 
 At minimum run:
