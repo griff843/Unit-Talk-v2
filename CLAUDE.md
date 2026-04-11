@@ -62,9 +62,17 @@ Claude Code is the execution orchestrator for Unit Talk V2. The job is to work t
 
 ### Start-of-Session Checklist
 
-0. Run `pnpm ops:brief`
-0a. Run `pnpm worker:status` — confirm worker is UP before proceeding
-0b. Run `pnpm codex:status` — see what Codex CLI lanes are active or returned (receive any returned work first)
+0. **Confirm local base is current with `origin/main` before anything else.**
+   Run `git fetch origin && git status -sb` and check that local `main` is not
+   behind `origin/main`. If it is, `git pull --ff-only origin main` before
+   continuing. Stale local state produces false premises — prior sessions have
+   hit this exact trap (UTV2-540 stopped on a "refactor not shipped" finding
+   and UTV2-539 flagged files as "missing from tree" because local main was 6
+   commits behind origin). Never reconcile Linear state or make truth claims
+   against a base you have not just fetched.
+0a. Run `pnpm ops:brief`
+0b. Run `pnpm worker:status` — confirm worker is UP before proceeding
+0c. Run `pnpm codex:status` — see what Codex CLI lanes are active or returned (receive any returned work first)
 1. Read Linear issues in Ready, In Progress, and In Review states
 2. Reconcile Linear state against repo truth on main (mark already-merged issues Done, detect stale states)
 3. Run `pnpm codex:classify` — auto-classify Ready issues into codex-safe vs claude-only
