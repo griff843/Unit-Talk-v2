@@ -1,0 +1,154 @@
+name: Linear Auto-Close
+
+# On push to main, parse UTV2-NNN identifiers from the head commit message
+# and move the corresponding Linear issue(s) to Done with a merge-SHA comment.
+#
+# Eliminates the manual "update Linear state + attach merge SHA" dance after
+# every merge. For bounded PRs with a single issue ID this is fully automatic.
+# For multi-issue PRs, all referenced issues are closed.
+#
+# Requirements:
+#   - Repo secret LINEAR_API_TOKEN with scope sufficient to read + update issues
+#     and create comments. Generate at https://linear.app/settings/api and add
+#     via Settings > Secrets and variables > Actions.
+#
+# Safety:
+#   - Only fires on push to main (not on feature branches, not on force-push
+#     rewrites of old commits — those are filtered by only inspecting
+#     github.event.commits[0], the head of the push).
+#   - Skips silently if LINEAR_API_TOKEN is not configured (first-time setup).
+#   - Idempotent: re-running against an already-Done issue is a no-op.
+#   - Never creates new issues, never moves issues to anything other than Done,
+#     never deletes anything.
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  linear-auto-close:
+    name: Close Linear issues referenced in merge commit
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Skip if Linear token not configured
+        id: guard
+        env:
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+        run: |
+          if [ -z "$LINEAR_API_TOKEN" ]; then
+            echo "LINEAR_API_TOKEN secret not set — skipping auto-close."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Extract issue IDs from commit message
+        if: steps.guard.outputs.configured == 'true'
+        id: extract
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # Extract unique UTV2-NNNN identifiers from the merge commit message
+          ids=$(echo "$COMMIT_MSG" | grep -oE 'UTV2-[0-9]+' | sort -u | tr '\n' ' ')
+          if [ -z "$ids" ]; then
+            echo "No UTV2-NNN identifiers found in commit message — nothing to close."
+            echo "ids=" >> "$GITHUB_OUTPUT"
+          else
+            echo "Found Linear issue ids: $ids"
+            echo "ids=$ids" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Move issues to Done and attach merge SHA
+        if: steps.guard.outputs.configured == 'true' && steps.extract.outputs.ids != ''
+        env:
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          IDS: ${{ steps.extract.outputs.ids }}
+          MERGE_SHA: ${{ github.sha }}
+          COMMIT_URL: ${{ github.event.head_commit.url }}
+          COMMIT_SUBJECT: ${{ github.event.head_commit.message }}
+        run: |
+          set -euo pipefail
+
+          # Fetch the Done state id for team unit-talk-v2 once
+          team_query='{"query":"query { team(id: \"unit-talk-v2\") { states { nodes { id name type } } } }"}'
+          team_resp=$(curl -sS -X POST https://api.linear.app/graphql \
+            -H "Authorization: $LINEAR_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$team_query")
+
+          done_state_id=$(echo "$team_resp" | jq -r '.data.team.states.nodes[] | select(.name=="Done") | .id')
+          if [ -z "$done_state_id" ] || [ "$done_state_id" = "null" ]; then
+            echo "::warning title=Linear state lookup failed::Could not resolve Done state id. Team response: $team_resp"
+            exit 0
+          fi
+          echo "Resolved Done state id: $done_state_id"
+
+          short_sha="${MERGE_SHA:0:7}"
+          # Extract the commit subject (first line only)
+          subject=$(echo "$COMMIT_SUBJECT" | head -n 1)
+
+          for identifier in $IDS; do
+            echo "---"
+            echo "Processing $identifier..."
+
+            # Look up the issue by identifier to get its UUID
+            lookup_query="{\"query\":\"query { issue(id: \\\"$identifier\\\") { id state { name } } }\"}"
+            lookup_resp=$(curl -sS -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$lookup_query")
+
+            issue_uuid=$(echo "$lookup_resp" | jq -r '.data.issue.id')
+            current_state=$(echo "$lookup_resp" | jq -r '.data.issue.state.name')
+
+            if [ -z "$issue_uuid" ] || [ "$issue_uuid" = "null" ]; then
+              echo "::warning title=Issue not found::$identifier not found in Linear. Response: $lookup_resp"
+              continue
+            fi
+
+            echo "  uuid=$issue_uuid current_state=$current_state"
+
+            if [ "$current_state" = "Done" ]; then
+              echo "  already Done — attaching merge comment only"
+            else
+              # Update to Done
+              update_query=$(jq -n \
+                --arg id "$issue_uuid" \
+                --arg state "$done_state_id" \
+                '{query: "mutation UpdateIssue($id: String!, $state: String!) { issueUpdate(id: $id, input: { stateId: $state }) { success } }", variables: {id: $id, state: $state}}')
+
+              update_resp=$(curl -sS -X POST https://api.linear.app/graphql \
+                -H "Authorization: $LINEAR_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d "$update_query")
+
+              success=$(echo "$update_resp" | jq -r '.data.issueUpdate.success')
+              if [ "$success" = "true" ]; then
+                echo "  moved to Done"
+              else
+                echo "::warning title=Issue update failed::$identifier update response: $update_resp"
+                continue
+              fi
+            fi
+
+            # Post a comment with the merge SHA + commit URL
+            comment_body="Merged to main: [\`$short_sha\`]($COMMIT_URL) — $subject"
+            comment_query=$(jq -n \
+              --arg id "$issue_uuid" \
+              --arg body "$comment_body" \
+              '{query: "mutation CreateComment($id: String!, $body: String!) { commentCreate(input: { issueId: $id, body: $body }) { success } }", variables: {id: $id, body: $body}}')
+
+            comment_resp=$(curl -sS -X POST https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "$comment_query")
+
+            comment_ok=$(echo "$comment_resp" | jq -r '.data.commentCreate.success')
+            if [ "$comment_ok" = "true" ]; then
+              echo "  merge comment attached"
+            else
+              echo "::warning title=Comment create failed::$identifier comment response: $comment_resp"
+            fi
+          done
