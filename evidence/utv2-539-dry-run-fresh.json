@@ -1,0 +1,246 @@
+{
+  "issue": "UTV2-539",
+  "debt": "DEBT-002",
+  "supabase_project_ref": "feownrheeefbcsehtsiw",
+  "generated_at": "2026-04-11T16:41:34.918Z",
+  "mode": "dry-run",
+  "execute_requested": false,
+  "execute_blocked_reason": null,
+  "plan_target_total": 24,
+  "plan_target_by_source": {
+    "system-pick-scanner": 20,
+    "alert-agent": 2,
+    "model-driven": 2
+  },
+  "actual_stranded_total": 24,
+  "actual_stranded_by_source": {
+    "system-pick-scanner": 20,
+    "alert-agent": 2,
+    "model-driven": 2
+  },
+  "drift_detected": false,
+  "drift_notes": [],
+  "counts": {
+    "fixture": 7,
+    "productionBackfill": 17,
+    "unclassified": 0
+  },
+  "rows": [
+    {
+      "pick_id": "0f7aa2e3-c965-43aa-89f7-6f435f6d313a",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:52:33.754+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BROOKS_LEE_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BROOKS_LEE_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "918c9e99-cd4f-40b2-9f39-ce4f8870fcd1",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:52:51.302+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BYRON_BUXTON_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BYRON_BUXTON_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "1e3ae402-37bf-49d1-9287-d4b49ac242e6",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:54:22.85+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:RYAN_JEFFERS_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:RYAN_JEFFERS_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "9c1f021e-071d-4af6-b1f3-07112b8038ad",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:53:07.852+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:JOSHUA_BELL_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:JOSHUA_BELL_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "10dea854-5442-4047-8101-1d885e1977d6",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:53:30.076+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:LUKE_KEASCHALL_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:LUKE_KEASCHALL_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "7eb84cb4-8f8a-4ea5-87d1-367799ccf167",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:53:47.687+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:MATT_WALLNER_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:MATT_WALLNER_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "61acebaf-914e-4d32-a58f-59243e53aa2a",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:55:20.244+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BROOKS_LEE_1_MLB:batting_hits+runs+rbi-all-game-ou:under",
+      "selection_preview": "Under 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BROOKS_LEE_1_MLB:batting_hits+runs+rbi-all-game-ou:under"
+    },
+    {
+      "pick_id": "a40437d1-83f9-4dd2-8d8a-903b69cc751e",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:54:05.323+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:ROYCE_LEWIS_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:ROYCE_LEWIS_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "a36c3936-dc8e-4aa0-8880-b5f28a44f3c8",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:54:40.32+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:VICTOR_CARATINI_1_MLB:batting_basesOnBalls-all-game-ou:under",
+      "selection_preview": "Under 0.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:VICTOR_CARATINI_1_MLB:batting_basesOnBalls-all-game-ou:under"
+    },
+    {
+      "pick_id": "ee74a2c7-f6b8-479b-9981-65aa25f8014d",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:54:59.121+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:AUSTIN_MARTIN_1_MLB:batting_hits+runs+rbi-all-game-ou:under",
+      "selection_preview": "Under 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:AUSTIN_MARTIN_1_MLB:batting_hits+runs+rbi-all-game-ou:under"
+    },
+    {
+      "pick_id": "272e05da-34b6-4d7a-86b6-e63de04f2b85",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:55:53.012+00:00",
+      "classification": "fixture",
+      "reason": "metadata.proof_fixture_id=utv2-494-lane-a-system-pick-scanner-1775854552811",
+      "selection_preview": "Player Over 18.5",
+      "idempotency_key_preview": null
+    },
+    {
+      "pick_id": "6e479bd8-8440-4518-aab2-eec79e2547ed",
+      "source": "alert-agent",
+      "created_at": "2026-04-10T20:55:54.621+00:00",
+      "classification": "fixture",
+      "reason": "metadata.proof_fixture_id=utv2-494-lane-a-alert-agent-1775854554562",
+      "selection_preview": "Player Over 18.5",
+      "idempotency_key_preview": null
+    },
+    {
+      "pick_id": "ed0fed89-95ab-47b7-b3fc-119535915666",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:56:24.877+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:LUKE_KEASCHALL_1_MLB:batting_hits+runs+rbi-all-game-ou:over",
+      "selection_preview": "Over 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:LUKE_KEASCHALL_1_MLB:batting_hits+runs+rbi-all-game-ou:over"
+    },
+    {
+      "pick_id": "82d6ae62-4420-4f74-824c-06e51bde724e",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:56:07.423+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:JOSHUA_BELL_1_MLB:batting_hits+runs+rbi-all-game-ou:under",
+      "selection_preview": "Under 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:JOSHUA_BELL_1_MLB:batting_hits+runs+rbi-all-game-ou:under"
+    },
+    {
+      "pick_id": "41d8298f-6e2d-4a0d-9562-3ec6c2f426d3",
+      "source": "model-driven",
+      "created_at": "2026-04-10T20:55:56.006+00:00",
+      "classification": "fixture",
+      "reason": "metadata.proof_fixture_id=utv2-494-lane-a-model-driven-1775854555962",
+      "selection_preview": "Player Over 18.5",
+      "idempotency_key_preview": null
+    },
+    {
+      "pick_id": "8bc07735-9f26-4099-bdf7-730721e10abd",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:55:42.085+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BYRON_BUXTON_1_MLB:batting_hits+runs+rbi-all-game-ou:under",
+      "selection_preview": "Under 2.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:BYRON_BUXTON_1_MLB:batting_hits+runs+rbi-all-game-ou:under"
+    },
+    {
+      "pick_id": "fba43b6a-7470-4228-9921-7abbd0024b8c",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:56:42.398+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:MATT_WALLNER_1_MLB:batting_hits+runs+rbi-all-game-ou:under",
+      "selection_preview": "Under 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:MATT_WALLNER_1_MLB:batting_hits+runs+rbi-all-game-ou:under"
+    },
+    {
+      "pick_id": "07f74718-f5ef-4343-8431-58111ca91398",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:57:35.092+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:VICTOR_CARATINI_1_MLB:batting_hits+runs+rbi-all-game-ou:over",
+      "selection_preview": "Over 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:VICTOR_CARATINI_1_MLB:batting_hits+runs+rbi-all-game-ou:over"
+    },
+    {
+      "pick_id": "6c9cceab-b632-4ca1-8c1d-6b6ce99c5dd9",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:56:59.928+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:ROYCE_LEWIS_1_MLB:batting_hits+runs+rbi-all-game-ou:under",
+      "selection_preview": "Under 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:ROYCE_LEWIS_1_MLB:batting_hits+runs+rbi-all-game-ou:under"
+    },
+    {
+      "pick_id": "5f73230c-ad10-42ef-993f-3d78ba282754",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:57:30.834+00:00",
+      "classification": "fixture",
+      "reason": "metadata.proof_script=utv2-494-lane-c",
+      "selection_preview": "Player Over 18.5 (utv2-494-lane-c-approve-1775854650722)",
+      "idempotency_key_preview": null
+    },
+    {
+      "pick_id": "826343db-5dbb-4b66-8b28-2d0641f7a41f",
+      "source": "alert-agent",
+      "created_at": "2026-04-10T20:57:32.163+00:00",
+      "classification": "fixture",
+      "reason": "metadata.proof_script=utv2-494-lane-c",
+      "selection_preview": "Player Over 18.5 (utv2-494-lane-c-deny-1775854650722)",
+      "idempotency_key_preview": null
+    },
+    {
+      "pick_id": "7cabee61-2937-4e42-9cc7-d3589a13c695",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:57:17.59+00:00",
+      "classification": "production-backfill",
+      "reason": "scanner systemGenerated=true idempotencyKey=system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:RYAN_JEFFERS_1_MLB:batting_hits+runs+rbi-all-game-ou:over",
+      "selection_preview": "Over 1.5",
+      "idempotency_key_preview": "system-pick:sgo:mJ9BWt7kOxDoNNvLDvQg:RYAN_JEFFERS_1_MLB:batting_hits+runs+rbi-all-game-ou:over"
+    },
+    {
+      "pick_id": "0466af23-077a-463e-a71b-d5ef96aec337",
+      "source": "model-driven",
+      "created_at": "2026-04-10T20:57:33.463+00:00",
+      "classification": "fixture",
+      "reason": "metadata.proof_script=utv2-494-lane-c",
+      "selection_preview": "Player Over 18.5 (utv2-494-lane-c-hold-1775854650722)",
+      "idempotency_key_preview": null
+    },
+    {
+      "pick_id": "a046dad7-671f-47b4-b6d5-b6cf2fdcd41b",
+      "source": "system-pick-scanner",
+      "created_at": "2026-04-10T20:59:21.293+00:00",
+      "classification": "fixture",
+      "reason": "metadata.test_key=abc-1775854761",
+      "selection_preview": "Fresh Proof UTV2-494 Test",
+      "idempotency_key_preview": null
+    }
+  ]
+}
