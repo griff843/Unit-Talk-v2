@@ -1,0 +1,106 @@
+id: UTV2-521
+title: "P7A-06 - Corrective: review controller must accept decisions on awaiting_approval picks independent of approval_status"
+tier: T1
+phase: "7a"
+
+upstream_dependencies:
+  - UTV2-509
+  - UTV2-519
+
+allowed_files:
+  - "apps/api/src/controllers/review-pick-controller.ts"
+  - "apps/api/src/controllers/review-pick-controller.test.ts"
+  - "apps/api/src/t1-proof-awaiting-approval-review.test.ts"
+  - ".ut-issues/UTV2-521.yaml"
+
+forbidden_files:
+  - "apps/api/src/controllers/submit-pick-controller.ts"
+  - "apps/api/src/promotion-service.ts"
+  - "apps/api/src/distribution-service.ts"
+  - "apps/api/src/run-audit-service.ts"
+  - "apps/api/src/submission-service.ts"
+  - "packages/db/**"
+  - "supabase/migrations/**"
+  - "apps/api/src/scripts/utv2-494-*"
+  - "apps/operator-web/**"
+  - "apps/command-center/**"
+  - "apps/worker/**"
+  - "apps/ingestor/**"
+  - "apps/alert-agent/**"
+  - "apps/smart-form/**"
+  - "apps/discord-bot/**"
+  - "docs/**"
+  - "local.env"
+
+expected_collateral: []
+
+requires_migration: false
+requires_sql_review: false
+requires_status_sync: true
+pm_review_required: true
+
+rollback_plan: |
+  Pure application-code revert — no migration, no schema change, no stranded
+  rows to reconcile. Reverting the PR restores the prior NOT_PENDING guard,
+  which will once again reject governance-review decisions on brake picks.
+  No rollback SQL required. Any pick_lifecycle / audit_log / pick_reviews rows
+  written between merge and revert remain valid historical data and are not
+  mutated by the revert.
+
+verification_commands:
+  - name: "type-check"
+    cmd: "pnpm type-check"
+  - name: "api-test"
+    cmd: "pnpm --filter @unit-talk/api test"
+  - name: "root-test"
+    cmd: "pnpm test"
+  - name: "db-test"
+    cmd: "pnpm test:db"
+
+sql_review_criteria: null
+
+downstream_unlocks:
+  - UTV2-494
+  - UTV2-509
+
+pre_existing_failures: null
+
+notes: |
+  Corrective for UTV2-509. UTV2-509 added awaiting_approval branches to the
+  review controller (approve→queued, deny→voided, hold→no-op) but the
+  extension is unreachable at runtime for Phase 7A brake picks: every brake
+  source submission produces approval_status='approved' as a post-promotion
+  default, so the existing NOT_PENDING guard fires first at HTTP 400. Live
+  reproduction on 2026-04-11 (UTV2-494 Lane C) confirmed this failure mode
+  against pickId 590f5d79-d614-44f1-9de7-15be4d9ef74e and three stranded
+  brake fixtures (20ad490e, a2b29768, 1ec7fee5).
+
+  PM direction (explicit):
+  - Preserve separation between lifecycle state and approval/promotion state.
+    Do NOT collapse approval_status into status.
+  - Do NOT pursue Option C (modify submit-pick-controller or promotion-service
+    to hold approval_status='pending' for brake picks). The upstream default
+    stays as-is.
+  - Make the review controller accept review decisions for picks whose
+    status='awaiting_approval' regardless of approval_status, because that
+    lifecycle state IS the governance-review lane.
+
+  Implementation: NOT_PENDING guard now checks two orthogonal review lanes:
+  1. Promotion-approval lane (legacy): approval_status='pending'
+  2. Governance-review lane (Phase 7A): status='awaiting_approval'
+  If a pick belongs to neither lane, the guard still returns 400 NOT_PENDING.
+
+  Option A approval_status writeback semantics retained:
+  - approve → 'approved' (no-op on brake picks that are already approved)
+  - deny → 'rejected'
+  - hold → null (no change)
+  decisionToApprovalStatus is not modified.
+
+  UTV2-519 merge-deploy policy alignment: this PR is purely additive at the
+  application layer and requires no migration, so it merges as a standalone
+  T1 application deploy. No RPC change, no schema change.
+
+  UTV2-509 and UTV2-494 are listed as downstream_unlocks because once this
+  lands the UTV2-509 branches are reachable end-to-end and the UTV2-494
+  Lane C stranded-fixture remediation can proceed (operator can now review
+  the brake picks via the API path).

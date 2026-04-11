@@ -301,3 +301,151 @@ test('reviewPickController: hold on awaiting_approval does NOT change lifecycle 
   assert.ok(updated, 'pick should exist');
   assert.equal(updated!.status, 'awaiting_approval', 'hold should not change lifecycle state');
 });
+
+// ─── UTV2-521: governance-review lane independent of approval_status ─────────
+//
+// Phase 7A brake picks are created with approval_status='approved' as a
+// post-promotion default. The review controller's NOT_PENDING guard used to
+// reject these picks at HTTP 400. UTV2-521 relaxes the guard for picks whose
+// lifecycle status is 'awaiting_approval', because that lifecycle state IS the
+// governance-review lane. The promotion-approval lane (approval_status='pending',
+// non-awaiting_approval status) continues to be protected.
+
+test('UTV2-521 reviewPickController: approve on awaiting_approval+approved succeeds and advances lifecycle to queued', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({
+    id: 'utv2-521-approve-brake',
+    lifecycleState: 'awaiting_approval',
+    approvalStatus: 'approved',
+  });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'approve', reason: 'UTV2-521 governance approve', decidedBy: 'operator-521' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.decision, 'approve');
+  assert.equal(result.body.data.approvalStatus, 'approved');
+  assert.ok(result.body.data.auditId);
+  assert.ok(result.body.data.reviewId);
+
+  const updated = await repos.picks.findPickById(pick.id);
+  assert.ok(updated);
+  assert.equal(updated!.status, 'queued', 'lifecycle should advance awaiting_approval→queued');
+  assert.equal(updated!.approval_status, 'approved');
+
+  // Verify a pick_reviews row was created
+  const reviews = await repos.reviews.listByPick(pick.id);
+  assert.equal(reviews.length, 1);
+  assert.equal(reviews[0]!.decision, 'approve');
+});
+
+test('UTV2-521 reviewPickController: deny on awaiting_approval+approved succeeds and advances lifecycle to voided', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({
+    id: 'utv2-521-deny-brake',
+    lifecycleState: 'awaiting_approval',
+    approvalStatus: 'approved',
+  });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'deny', reason: 'UTV2-521 governance deny', decidedBy: 'operator-521' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.decision, 'deny');
+  assert.equal(result.body.data.approvalStatus, 'rejected');
+
+  const updated = await repos.picks.findPickById(pick.id);
+  assert.ok(updated);
+  assert.equal(updated!.status, 'voided', 'lifecycle should advance awaiting_approval→voided');
+  assert.equal(updated!.approval_status, 'rejected');
+
+  const reviews = await repos.reviews.listByPick(pick.id);
+  assert.equal(reviews.length, 1);
+  assert.equal(reviews[0]!.decision, 'deny');
+});
+
+test('UTV2-521 reviewPickController: hold on awaiting_approval+approved succeeds and leaves lifecycle untouched', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({
+    id: 'utv2-521-hold-brake',
+    lifecycleState: 'awaiting_approval',
+    approvalStatus: 'approved',
+  });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'hold', reason: 'UTV2-521 governance hold', decidedBy: 'operator-521' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.decision, 'hold');
+  // hold does not change approval_status; we expect the previous value surfaced
+  assert.equal(result.body.data.approvalStatus, 'approved');
+
+  const updated = await repos.picks.findPickById(pick.id);
+  assert.ok(updated);
+  assert.equal(updated!.status, 'awaiting_approval', 'hold must not change lifecycle state');
+  assert.equal(updated!.approval_status, 'approved');
+
+  const reviews = await repos.reviews.listByPick(pick.id);
+  assert.equal(reviews.length, 1);
+  assert.equal(reviews[0]!.decision, 'hold');
+});
+
+test('UTV2-521 reviewPickController: regression — approve on validated+approved (non-governance) still hits NOT_PENDING', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({
+    id: 'utv2-521-regress-not-pending',
+    lifecycleState: 'validated',
+    approvalStatus: 'approved',
+  });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'approve', reason: 'should be blocked', decidedBy: 'operator-521' },
+    repos,
+  );
+
+  assert.equal(result.status, 400);
+  assert.ok(!result.body.ok);
+  if (result.body.ok) return;
+  assert.equal(result.body.error.code, 'NOT_PENDING');
+});
+
+test('UTV2-521 reviewPickController: regression — approve on validated+pending (promotion-approval lane) still succeeds', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const pick = makePendingPick({
+    id: 'utv2-521-regress-pending-ok',
+    lifecycleState: 'validated',
+    approvalStatus: 'pending',
+  });
+  await repos.picks.savePick(pick);
+
+  const result = await reviewPickController(
+    pick.id,
+    { decision: 'approve', reason: 'ordinary promotion approve', decidedBy: 'operator-521' },
+    repos,
+  );
+
+  assert.equal(result.status, 200);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+  assert.equal(result.body.data.approvalStatus, 'approved');
+});
