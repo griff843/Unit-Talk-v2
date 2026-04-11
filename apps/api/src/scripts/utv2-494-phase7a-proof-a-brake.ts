@@ -107,10 +107,15 @@ interface SubmissionResult {
 
 async function submitPick(source: BrakeSource): Promise<SubmissionResult> {
   const fixtureId = `utv2-494-lane-a-${source}-${Date.now()}`;
+  // UTV2-522: inject the per-fixture marker into `selection` so the
+  // idempotency key (computeSubmissionIdempotencyKey in submission-service.ts
+  // hashes source|market|selection|line|odds|eventName) differs on every run
+  // and the script can re-run against live DB without colliding with prior
+  // stranded fixtures. Assertion semantics unchanged.
   const payload = {
     source,
     market: 'NBA points',
-    selection: 'Player Over 18.5',
+    selection: `Player Over 18.5 [${fixtureId}]`,
     line: 18.5,
     odds: -110,
     stakeUnits: 1,
