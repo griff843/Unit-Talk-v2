@@ -228,6 +228,7 @@ When documents conflict:
 | `docs/06_status/UTV2-473-PHASE4-P401-EVIDENCE.md` | Phase 4 P4-01 (ranked selection) intermediate proof | Historical |
 | `docs/06_status/UTV2-475-PHASE4-EVIDENCE-BUNDLE.md` | Phase 4 (Board Construction) evidence — closed | Historical |
 | `docs/06_status/INCIDENTS/README.md` | Incident log index — append-only record of live-system, live-DB, schema-drift, and governance-control incidents; authority placement in Tier 5 as operational history | Operational history |
+| `docs/06_status/KNOWN_DEBT.md` | Canonical known-debt dashboard — ticket-linked index of open/partial/closed debt, TODO marker convention, add/remove rules | Pointer index |
 
 > Note: All `week_*` proof/rollback/closeout templates (Weeks 7–16), completed UTV2-5x proof artifacts, and dated audit snapshots were deleted 2026-04-05. They served no future reference value.
 
