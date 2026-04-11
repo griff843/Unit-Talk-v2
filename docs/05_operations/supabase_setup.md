@@ -194,6 +194,39 @@ pnpm supabase:types
 
 The repository ships a pull-request-only workflow at [supabase-pr-db-branch.yml](/C:/Dev/Unit-Talk-v2-main/.github/workflows/supabase-pr-db-branch.yml) for migration-safe `pnpm test:db` validation on an isolated non-production Supabase branch.
 
+### Usage policy
+
+Supabase preview-branch validation is not the default path for every migration PR. It is a cost-incurring, high-signal control and must be used only when needed.
+
+Default rule:
+- Do not rely on preview-branch validation for routine or low-risk migration work by default.
+
+Use preview-branch validation only when one or more of the following is true:
+- the PR is Tier C / T1
+- the PR changes destructive or stateful schema behavior
+- the PR introduces or modifies RPCs, constraints, triggers, or lifecycle-critical DB logic
+- the PR includes backfill, cleanup, or corrective data-state logic
+- the PR affects a path where InMemory vs Postgres divergence is a known risk
+- PM explicitly requires isolated Supabase validation for this PR
+
+Do not require preview-branch validation when:
+- the change is docs-only
+- the change is app/runtime-only with no migration
+- the migration is low-risk and already covered by local verification plus manual review
+- the expected safety benefit does not justify the preview-branch cost
+
+Cost-control rules:
+- Keep migration PRs small and tightly scoped
+- Avoid repeated speculative pushes to migration PR branches
+- Close or merge migration PRs promptly so preview branches are torn down quickly
+- Prefer local verification first; escalate to preview-branch validation only for higher-risk cases
+
+PM authority:
+- PM may require preview-branch validation for any migration PR, but the default posture is selective use, not automatic use on every change
+
+Current note:
+- Until the preview-branch workflow is fully reliable, treat it as a selective safety gate, not a universal merge prerequisite
+
 ### Lifecycle
 
 1. A PR targeting `main` opens, reopens, synchronizes, or becomes ready for review.
