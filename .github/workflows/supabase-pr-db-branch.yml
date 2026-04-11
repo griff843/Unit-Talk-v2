@@ -128,8 +128,18 @@ jobs:
           for attempt in $(seq 1 20); do
             if supabase --experimental branches get "$SUPABASE_BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" -o env > supabase-branch.env 2>/dev/null; then
               if grep -q '^SUPABASE_URL=' supabase-branch.env && grep -q '^SUPABASE_SERVICE_ROLE_KEY=' supabase-branch.env && grep -q '^POSTGRES_URL_NON_POOLING=' supabase-branch.env; then
-                cat supabase-branch.env >> "$GITHUB_ENV"
-                echo "Preview branch credentials loaded."
+                # Supabase CLI `-o env` emits values wrapped in double quotes,
+                # e.g. POSTGRES_URL_NON_POOLING="postgresql://...". GitHub
+                # Actions $GITHUB_ENV preserves those quotes literally, so
+                # downstream shell expansions include the `"` characters and
+                # any CLI that parses the URL (e.g. `supabase db push
+                # --db-url`) fails to recognize the scheme and falls back to
+                # a libpq Unix-socket lookup at /var/run/postgresql — the
+                # exact PR #240 failure mode. Strip surrounding double quotes
+                # from each KEY="value" line before appending to $GITHUB_ENV
+                # so every subsequent step receives clean, parseable values.
+                sed -E 's/^([A-Z][A-Z0-9_]*)="(.*)"$/\1=\2/' supabase-branch.env >> "$GITHUB_ENV"
+                echo "Preview branch credentials loaded (surrounding quotes stripped for \$GITHUB_ENV)."
                 exit 0
               fi
             fi
