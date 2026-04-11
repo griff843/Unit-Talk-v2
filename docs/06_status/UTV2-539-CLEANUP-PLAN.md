@@ -6,11 +6,12 @@
 | Debt register entry | DEBT-002 (`docs/06_status/KNOWN_DEBT.md`) |
 | Parent incident | `docs/06_status/INCIDENTS/INC-2026-04-10-utv2-519-awaiting-approval-constraint-gap.md` |
 | Delegation tier | Tier C / T1 sensitive-path — production row mutation |
-| This document | PLAN + DRY-RUN ONLY. No production mutation performed. |
-| Status | Awaiting PM ratification |
+| This document | PLAN + EXECUTE wiring. Live mutation is gated and PM-witnessed. |
+| Status | Plan accepted; execute-path PR pending PM merge |
 | Supabase project ref | `feownrheeefbcsehtsiw` |
 | Dry-run evidence | `evidence/utv2-539-dry-run-fresh.json` |
-| Dry-run script | `apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts` |
+| Cleanup script | `apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts` |
+| Backfill RPC migration | `supabase/migrations/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql` |
 
 ---
 
@@ -202,28 +203,42 @@ resolved.
 
 ---
 
-## §4 Dry-run script command reference
+## §4 Cleanup script command reference
+
+The cleanup script is `apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts`.
+The matching backfill RPC migration is
+`supabase/migrations/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql`.
 
 ```bash
 # Human-readable dry-run (default, read-only)
 UNIT_TALK_APP_ENV=local \
   npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts
 
-# Machine-readable JSON dry-run (read-only)
+# Machine-readable JSON dry-run (read-only).
+# Captured as evidence/utv2-539-dry-run-fresh.json by the plan-pass run;
+# do not overwrite that artifact — write a new path for re-runs.
 UNIT_TALK_APP_ENV=local \
   npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --json \
-  > evidence/utv2-539-dry-run-fresh.json
+  > evidence/utv2-539-dry-run-pre-exec.json
 
-# "Execute" path — currently a hard stub, exits 2.
-# Even with gates, this path does not mutate production in this pass.
+# Execute path — performs production mutation. Requires BOTH env gates to
+# be set AND --execute on the CLI AND UTV2_539_DRY_RUN_ONLY must NOT be set.
+# Output is captured to evidence/utv2-539-execute-run.log for the PM
+# witness record.
+UNIT_TALK_APP_ENV=local \
 UTV2_539_PM_APPROVED=1 UTV2_539_EXECUTE_CONFIRMED=yes \
-  npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --execute
-# -> prints: "execute path not wired — see follow-up PR UTV2-539-exec"
-# -> exits 2
+  npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --execute \
+  2>&1 | tee evidence/utv2-539-execute-run.log
 
-# Downgrade guard: forces --execute back to dry-run
+# Refusal: --execute without env gates exits 2 with a "REFUSING to execute"
+# message and never touches the live DB.
+npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --execute
+# -> exit 2
+
+# Downgrade guard: forces --execute back to dry-run regardless of env gates.
 UTV2_539_DRY_RUN_ONLY=1 UTV2_539_PM_APPROVED=1 UTV2_539_EXECUTE_CONFIRMED=yes \
   npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --execute
+# -> dry-run, exit 0
 ```
 
 Required env gates for `--execute` (all three must be set, AND
@@ -235,9 +250,22 @@ Required env gates for `--execute` (all three must be set, AND
 
 Drift guard: `actualStrandedTotal` is compared against `PLAN_TARGET_TOTAL`
 (24) and every row is compared against `PLAN_TARGET_BY_SOURCE`. Any drift
-is surfaced in `report.drift_notes`. Once the exec wiring lands, any
-non-empty `drift_notes` will cause the exec path to exit 1 before any
-mutation is attempted.
+surfaces in `report.drift_notes` and the execute path refuses to mutate
+when `drift_detected === true`, exiting with `process.exitCode = 1` and
+`failedAt = 'inventory_drift: ...'` in the summary JSON.
+
+Per-row drift is also enforced inside the execute path:
+
+- The fixture-DELETE loop filters every `picks` DELETE on
+  `status='awaiting_approval'`. A zero-row match aborts the loop with
+  `failedAt='fixture_drift: ...'` before any further writes happen.
+- An intermediate checkpoint between the fixture and backfill phases
+  re-queries the stranded set and verifies every backfill target is still
+  stranded as `production-backfill`. Any drift aborts before any RPC call.
+- The backfill RPC itself (`backfill_pick_awaiting_approval`) raises
+  `INVALID_BACKFILL_STATE` (SQLSTATE P0001) if the row is no longer
+  `awaiting_approval` and `ALREADY_BACKFILLED` if a prior
+  `to_state='awaiting_approval'` lifecycle row already exists.
 
 ---
 
@@ -276,24 +304,80 @@ WHERE id IN (<7 fixture ids>);
 
 ### Data-level rollback
 
-- **Fixture DELETEs** are destructive — the `debt002_fixture_backup`
-  snapshot (produced by the exec PR) is the only recovery path. The
-  fixture rows have no downstream dependencies (no distribution_outbox,
-  no settlement_records, no promotion history), so rehydrating from the
-  snapshot is a simple INSERT-from-JSON if ever needed.
+- **Production backfill (RPC) writes** are fully reversible. The RPC
+  `public.backfill_pick_awaiting_approval` writes exactly two rows per
+  invocation: one `pick_lifecycle` row tagged
+  `reason='backfill_utv2_519_remediation'` and one `audit_log` row tagged
+  `action='pick.governance_brake.backfilled'` with
+  `payload->>'linear_issue' = 'UTV2-539'`. Both can be removed exactly:
 
-- **Production backfill INSERTs** are easy to undo: a single
-  `DELETE FROM pick_lifecycle WHERE reason LIKE 'UTV2-539 DEBT-002 backfill%'`
-  and the sibling `DELETE FROM audit_log WHERE action = 'lifecycle.backfill.awaiting_approval'`
-  restores the pre-exec state exactly. The `picks` rows are never touched
-  by the backfill, so there is nothing to roll back on that table.
+  ```sql
+  -- Run the audit_log delete FIRST so we don't leave audit rows whose
+  -- entity_id points at a pick_lifecycle row that no longer exists.
+  DELETE FROM public.audit_log
+   WHERE action = 'pick.governance_brake.backfilled'
+     AND payload->>'linear_issue' = 'UTV2-539';
+
+  DELETE FROM public.pick_lifecycle
+   WHERE reason = 'backfill_utv2_519_remediation';
+  ```
+
+  The `picks` rows are never touched by the backfill (the row was already
+  in `awaiting_approval`), so there is nothing to roll back on that table.
+
+- **Fixture DELETEs are NOT rollback-able.** The 7 fixture rows have no
+  pre-snapshot in this PR. They are proof-script artifacts authored by
+  UTV2-494 Phase 7A Lane A / Lane C / fresh-proof runs and have no
+  legitimate downstream value. The intentional design is that the fixture
+  delete is a clean structural removal: there is no scenario in which the
+  proof-script artifacts need to be re-hydrated. If a future regression
+  requires equivalent fixtures, re-run the proof scripts (which will
+  generate fresh ones with new ids).
+
+- **Fixture deletes ordering is intentional.** The execute path deletes
+  `audit_log` (`promotion.suppressed` rows tied to the pick) → then
+  `pick_lifecycle` (the prior `validated` row) → then `picks`. The picks
+  delete carries `status='eq.awaiting_approval'` as a drift guard.
+
+### RPC-level rollback
+
+```sql
+DROP FUNCTION IF EXISTS public.backfill_pick_awaiting_approval(uuid, text);
+```
+
+This is safe to run AFTER the data-level rollback above. Running the
+function drop without first removing the audit_log + pick_lifecycle rows
+would leave audit rows whose `payload->>'linear_issue'` references a
+function that no longer exists — that's not a constraint violation but
+it confuses post-mortem queries.
+
+### Migration-level rollback
+
+The migration file is
+`supabase/migrations/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql`.
+To revert:
+
+1. Run the data-level rollback SQL above (audit_log first, then
+   pick_lifecycle).
+2. Run the RPC-level rollback above (`DROP FUNCTION`).
+3. `git revert` the commit that added the migration file. This removes
+   the file from `supabase/migrations/` so future
+   `pnpm supabase:types` and CI lint passes do not see a deleted RPC.
+
+The ordering matters: revert the data first (so no orphan audit rows
+reference a missing function), drop the function second, then revert the
+migration file at the repo level.
 
 ### File-level rollback (this PR)
 
-- This PR adds one script (`apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts`),
-  one doc (`docs/06_status/UTV2-539-CLEANUP-PLAN.md`), and one dry-run
-  artifact (`evidence/utv2-539-dry-run-fresh.json`). Reverting the PR
-  removes all three. Nothing in the live DB is affected by such a revert.
+- This PR adds one migration
+  (`supabase/migrations/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql`),
+  modifies one script
+  (`apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts`), and
+  modifies this plan doc. Reverting the PR removes the migration and
+  reverts the script + doc to the plan-pass state. Nothing in the live
+  DB is affected by such a revert until the migration is applied AND the
+  cleanup script is run with `--execute` and both env gates set.
 
 ---
 
@@ -337,7 +421,75 @@ WHERE id IN (<7 fixture ids>);
 
 ---
 
-## §8 Ready-for-review sign-off
+## §8 Dual-step operational sequence
+
+The cleanup ships in two distinct, separately-witnessed steps. They MAY
+be combined inside a single PM session (window permitting), but they
+MUST NOT be combined inside a single PR. Migration apply and live data
+mutation are separate operational acts.
+
+### Step 1 — execute-path PR (this PR)
+
+- Adds the backfill RPC migration
+  (`supabase/migrations/202604110001_utv2_539_backfill_pick_awaiting_approval_rpc.sql`)
+- Wires the execute path into the cleanup script
+  (`apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts`)
+- Updates this plan doc (§4 / §6 / §9)
+- Tier C / T1 sensitive-path merge touchpoint — PM approval required to
+  merge per the canonical delegation policy
+  (`docs/05_operations/DELEGATION_POLICY.md`)
+- **Does NOT apply the migration to live DB**
+- **Does NOT run `--execute` against live DB**
+- The PR is mergeable as soon as PM has reviewed the diff and approved
+  the migration text + execute-path implementation. Live mutation is a
+  separate witnessed action (Step 2).
+
+### Step 2 — PM-witnessed live mutation pass
+
+After this PR merges, in a single PM-witnessed session:
+
+1. Apply the migration to the live DB (`feownrheeefbcsehtsiw`) using the
+   project's standard migration apply path. The migration is purely
+   additive (creates one PL/pgSQL function + one grant) and does not
+   touch any existing row.
+2. Capture a fresh dry-run snapshot for the pre-mutation record:
+   ```bash
+   UNIT_TALK_APP_ENV=local \
+     npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --json \
+     > evidence/utv2-539-dry-run-pre-exec.json
+   ```
+   This MUST report `actual_stranded_total = 24`, `counts.fixture = 7`,
+   `counts.productionBackfill = 17`, `counts.unclassified = 0`,
+   `drift_detected = false`. If any of these is false, STOP.
+3. Run the cleanup script ONCE with both env gates set, capturing the
+   full output to `evidence/utv2-539-execute-run.log`:
+   ```bash
+   UNIT_TALK_APP_ENV=local \
+   UTV2_539_PM_APPROVED=1 UTV2_539_EXECUTE_CONFIRMED=yes \
+     npx tsx apps/api/src/scripts/utv2-539-awaiting-approval-cleanup.ts --execute \
+     2>&1 | tee evidence/utv2-539-execute-run.log
+   ```
+4. Run the four §5 verification queries against the live DB. The first
+   must return 0 (no stranded picks remain), queries 2 and 3 must return
+   17 (one backfill row + one audit row per production-backfill pick),
+   query 4 must return 0 (no surviving fixture rows).
+5. Attach `evidence/utv2-539-execute-run.log` and the four query results
+   to the Linear issue (UTV2-539). Move the issue to Done. Update
+   `docs/06_status/KNOWN_DEBT.md` DEBT-002 to closed.
+
+If any step fails, STOP. The script exits 1 on partial failure and emits
+a `failedAt` field in the JSON summary identifying the exact phase. The
+fixture-DELETE phase has no rollback (see §6); the production-backfill
+phase is fully reversible via the §6 data-level rollback SQL.
+
+**Combining steps in a single session is explicitly allowed but not
+required.** PM decides based on window availability. Dispatching
+migration apply and live data mutation inside the same PR is explicitly
+forbidden — they must be separately witnessed actions.
+
+---
+
+## §9 Ready-for-review sign-off
 
 > **PM sign-off required here.** Leave this block blank. Filled after
 > plan review.
