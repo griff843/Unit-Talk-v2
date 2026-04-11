@@ -1,0 +1,212 @@
+name: Supabase PR DB Branch
+
+on:
+  pull_request:
+    types:
+      - opened
+      - reopened
+      - synchronize
+      - ready_for_review
+      - closed
+    branches:
+      - main
+
+concurrency:
+  group: supabase-pr-db-branch-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  plan:
+    name: Detect migration PR scope
+    runs-on: ubuntu-latest
+    outputs:
+      migration_changed: ${{ steps.detect.outputs.migration_changed }}
+      migration_files: ${{ steps.detect.outputs.migration_files }}
+      branch_name: ${{ steps.naming.outputs.branch_name }}
+    steps:
+      - name: Compute branch name
+        id: naming
+        run: echo "branch_name=pr-${{ github.event.pull_request.number }}-migration-check" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Detect changed migration files
+        id: detect
+        shell: bash
+        run: |
+          files="$(git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" -- 'supabase/migrations/*.sql')"
+
+          if [[ -z "$files" ]]; then
+            echo "migration_changed=false" >> "$GITHUB_OUTPUT"
+            echo "migration_files=" >> "$GITHUB_OUTPUT"
+            echo "No migration files changed in this PR." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+
+          echo "migration_changed=true" >> "$GITHUB_OUTPUT"
+          {
+            echo 'migration_files<<FILES_EOF'
+            printf '%s\n' "$files"
+            echo 'FILES_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+          echo "Migration files changed:" >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$files" >> "$GITHUB_STEP_SUMMARY"
+
+  validate:
+    name: Validate migrations on isolated Supabase branch
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.event.action != 'closed' && needs.plan.outputs.migration_changed == 'true'
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_BRANCH_NAME: ${{ needs.plan.outputs.branch_name }}
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate required Supabase configuration
+        shell: bash
+        run: |
+          if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
+            echo "::error title=Missing secret::SUPABASE_ACCESS_TOKEN is required for preview branch management."
+            exit 1
+          fi
+          if [[ -z "$SUPABASE_PROJECT_REF" ]]; then
+            echo "::error title=Missing variable::SUPABASE_PROJECT_REF must be set as a repository variable."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Create or attach Supabase preview branch
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if supabase --experimental branches get "$SUPABASE_BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" >/dev/null 2>&1; then
+            echo "Attached to existing preview branch: $SUPABASE_BRANCH_NAME"
+          else
+            echo "Creating preview branch: $SUPABASE_BRANCH_NAME"
+            supabase --experimental branches create "$SUPABASE_BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF"
+          fi
+
+      - name: Wait for branch credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f supabase-branch.env
+
+          for attempt in $(seq 1 20); do
+            if supabase --experimental branches get "$SUPABASE_BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" -o env > supabase-branch.env 2>/dev/null; then
+              if grep -q '^SUPABASE_URL=' supabase-branch.env && grep -q '^SUPABASE_SERVICE_ROLE_KEY=' supabase-branch.env && grep -q '^POSTGRES_URL_NON_POOLING=' supabase-branch.env; then
+                cat supabase-branch.env >> "$GITHUB_ENV"
+                echo "Preview branch credentials loaded."
+                exit 0
+              fi
+            fi
+
+            echo "Preview branch not ready yet (attempt $attempt/20). Waiting 15s..."
+            sleep 15
+          done
+
+          echo "::error title=Preview branch not ready::Timed out waiting for Supabase preview branch credentials."
+          exit 1
+
+      - name: Apply pending migrations to isolated branch
+        run: supabase db push --db-url "$POSTGRES_URL_NON_POOLING"
+
+      - name: Run test:db against isolated branch
+        run: pnpm test:db
+
+      - name: Write success summary
+        if: success()
+        shell: bash
+        run: |
+          {
+            echo "## Supabase PR branch validation"
+            echo ""
+            echo "- Preview branch: \`$SUPABASE_BRANCH_NAME\`"
+            echo "- Project ref: \`$SUPABASE_PROJECT_REF\`"
+            echo "- Migrations applied with \`supabase db push --db-url \$POSTGRES_URL_NON_POOLING\`"
+            echo "- \`pnpm test:db\`: PASS"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Write failure summary
+        if: failure()
+        shell: bash
+        run: |
+          {
+            echo "## Supabase PR branch validation"
+            echo ""
+            echo "- Preview branch: \`$SUPABASE_BRANCH_NAME\`"
+            echo "- Validation failed while applying migrations and/or running \`pnpm test:db\`."
+            echo "- Check the failing step above for the exact migration or smoke-test error."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  teardown:
+    name: Tear down Supabase preview branch
+    runs-on: ubuntu-latest
+    needs: plan
+    if: github.event.action == 'closed' && needs.plan.outputs.migration_changed == 'true'
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_PROJECT_REF: ${{ vars.SUPABASE_PROJECT_REF }}
+      SUPABASE_BRANCH_NAME: ${{ needs.plan.outputs.branch_name }}
+    steps:
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Validate required Supabase configuration
+        shell: bash
+        run: |
+          if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
+            echo "::error title=Missing secret::SUPABASE_ACCESS_TOKEN is required for preview branch management."
+            exit 1
+          fi
+          if [[ -z "$SUPABASE_PROJECT_REF" ]]; then
+            echo "::error title=Missing variable::SUPABASE_PROJECT_REF must be set as a repository variable."
+            exit 1
+          fi
+
+      - name: Delete preview branch if it exists
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if supabase --experimental branches get "$SUPABASE_BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF" >/dev/null 2>&1; then
+            supabase --experimental branches delete "$SUPABASE_BRANCH_NAME" --project-ref "$SUPABASE_PROJECT_REF"
+            echo "Deleted preview branch $SUPABASE_BRANCH_NAME" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Preview branch $SUPABASE_BRANCH_NAME was already absent." >> "$GITHUB_STEP_SUMMARY"
+          fi
