@@ -189,3 +189,54 @@ npx supabase db push
 ```bash
 pnpm supabase:types
 ```
+
+## PR Preview Branch Validation
+
+The repository ships a pull-request-only workflow at [supabase-pr-db-branch.yml](/C:/Dev/Unit-Talk-v2-main/.github/workflows/supabase-pr-db-branch.yml) for migration-safe `pnpm test:db` validation on an isolated non-production Supabase branch.
+
+### Lifecycle
+
+1. A PR targeting `main` opens, reopens, synchronizes, or becomes ready for review.
+2. The workflow diffs the PR and exits early if no files under `supabase/migrations/` changed.
+3. If migrations changed, the workflow creates or re-attaches a preview branch named `pr-<PR_NUMBER>-migration-check`.
+4. The workflow waits for branch-specific credentials via `supabase --experimental branches get <name> -o env`.
+5. The workflow applies local pending migrations to that isolated branch with:
+
+   ```bash
+   supabase db push --db-url "$POSTGRES_URL_NON_POOLING"
+   ```
+
+6. The workflow runs:
+
+   ```bash
+   pnpm test:db
+   ```
+
+7. On PR close or merge, the same workflow deletes the preview branch.
+
+### Assumptions
+
+- This path is **non-production only**. It must never be pointed at the live production database.
+- Supabase preview branching is enabled for the target project.
+- Branch credentials exported by `supabase branches get -o env` include:
+  - `SUPABASE_URL`
+  - `SUPABASE_ANON_KEY`
+  - `SUPABASE_SERVICE_ROLE_KEY`
+  - `POSTGRES_URL_NON_POOLING`
+- `pnpm test:db` remains the canonical smoke check; the workflow does not introduce a second DB validation contract.
+- This workflow complements, but does not replace, the merge-to-deploy discipline. Production migration apply remains a separate governed step after merge.
+
+### Required GitHub configuration
+
+- Repository secret: `SUPABASE_ACCESS_TOKEN`
+  - personal or service access token with permission to manage Supabase preview branches
+- Repository variable: `SUPABASE_PROJECT_REF`
+  - project ref for the non-production Supabase project that hosts preview branches
+
+### Manual setup still required outside the repo
+
+- Enable Supabase preview branching for the chosen non-production project
+- Add the GitHub secret `SUPABASE_ACCESS_TOKEN`
+- Add the GitHub variable `SUPABASE_PROJECT_REF`
+- Confirm the project plan/quota supports per-PR preview branches
+- Confirm org policy allows GitHub Actions to create and delete preview branches through the Supabase CLI

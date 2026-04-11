@@ -93,6 +93,18 @@ These are separate systems with separate purposes.
 
 **Rule:** `PROGRAM_STATUS.md` reflects only proven, merged capabilities. It is not a planning document.
 
+## Branch Protection Baseline
+
+The intended `main` branch baseline is:
+
+- no direct pushes to `main`
+- no force pushes to `main`
+- human review required before merge
+- current status checks required before merge, and those checks must represent repo truth rather than stale or advisory signals
+- CODEOWNERS review required for owned paths where applicable
+
+This document describes the intended baseline only. GitHub branch protection settings still need to be configured manually in the repository admin UI.
+
 ---
 
 ## Minimal Operator Workflow

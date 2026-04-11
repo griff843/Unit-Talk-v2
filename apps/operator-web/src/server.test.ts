@@ -4712,6 +4712,106 @@ test('GET /api/operator/exception-queues surfaces missing canonical market and b
   });
 });
 
+test('GET /api/operator/exception-queues surfaces awaiting_approval lifecycle drift and stale rows', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-awaiting-missing-lifecycle',
+        status: 'awaiting_approval',
+        source: 'system-pick-scanner',
+        market: 'NBA Spread',
+        selection: 'Knicks -4.5',
+        created_at: '2026-04-10T10:00:00.000Z',
+      },
+      {
+        id: 'pick-awaiting-mismatched-lifecycle',
+        status: 'awaiting_approval',
+        source: 'alert-agent',
+        market: 'NBA Total',
+        selection: 'Over 228.5',
+        created_at: '2026-04-10T17:00:00.000Z',
+      },
+      {
+        id: 'pick-awaiting-healthy',
+        status: 'awaiting_approval',
+        source: 'system-pick-scanner',
+        market: 'NBA Moneyline',
+        selection: 'Knicks ML',
+        created_at: '2026-04-10T19:30:00.000Z',
+      },
+    ],
+    pick_lifecycle: [
+      {
+        id: 'lifecycle-1',
+        pick_id: 'pick-awaiting-mismatched-lifecycle',
+        from_state: 'validated',
+        to_state: 'awaiting_approval',
+        created_at: '2026-04-10T17:00:00.000Z',
+      },
+      {
+        id: 'lifecycle-2',
+        pick_id: 'pick-awaiting-mismatched-lifecycle',
+        from_state: 'awaiting_approval',
+        to_state: 'queued',
+        created_at: '2026-04-10T17:30:00.000Z',
+      },
+      {
+        id: 'lifecycle-3',
+        pick_id: 'pick-awaiting-healthy',
+        from_state: 'validated',
+        to_state: 'awaiting_approval',
+        created_at: '2026-04-10T19:30:00.000Z',
+      },
+    ],
+  });
+  const realNow = Date.now;
+  Date.now = () => new Date('2026-04-10T20:00:00.000Z').getTime();
+  const server = createOperatorServer({ provider });
+
+  try {
+    await new Promise<void>((resolve) => server.listen(0, resolve));
+    const address = server.address();
+    if (!address || typeof address === 'string') {
+      throw new Error('Expected server address');
+    }
+
+    const response = await makeRequest(address.port, '/api/operator/exception-queues');
+
+    assert.equal(response.statusCode, 200);
+    const body = JSON.parse(response.body) as {
+      ok: boolean;
+      data: {
+        counts: {
+          awaitingApprovalDrift: number;
+          awaitingApprovalStale: number;
+        };
+        awaitingApprovalDrift: Array<{
+          id: string;
+          stale: boolean;
+          missingLifecycleEvidence: boolean;
+          lifecycleMismatch: boolean;
+          latestLifecycleToState: string | null;
+        }>;
+      };
+    };
+
+    assert.equal(body.ok, true);
+    assert.equal(body.data.counts.awaitingApprovalDrift, 2);
+    assert.equal(body.data.counts.awaitingApprovalStale, 1);
+    assert.deepEqual(
+      body.data.awaitingApprovalDrift.map((row) => row.id),
+      ['pick-awaiting-missing-lifecycle', 'pick-awaiting-mismatched-lifecycle'],
+    );
+    assert.equal(body.data.awaitingApprovalDrift[0]?.missingLifecycleEvidence, true);
+    assert.equal(body.data.awaitingApprovalDrift[0]?.stale, true);
+    assert.equal(body.data.awaitingApprovalDrift[1]?.lifecycleMismatch, true);
+    assert.equal(body.data.awaitingApprovalDrift[1]?.latestLifecycleToState, 'queued');
+  } finally {
+    Date.now = realNow;
+    await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  }
+});
+
 test('GET /api/operator/picks/:id returns canonical submittedBy from submission identity', async () => {
   const provider = createAggregateProvider({
     picks: [

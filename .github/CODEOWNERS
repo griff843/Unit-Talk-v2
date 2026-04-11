@@ -1,0 +1,10 @@
+# Repo protection baseline ownership
+* @griff843
+
+# Core runtime and governance surfaces
+/packages/db/** @griff843
+/apps/api/src/controllers/** @griff843
+/supabase/migrations/** @griff843
+/docs/06_status/** @griff843
+/.github/workflows/** @griff843
+/.claude/** @griff843
