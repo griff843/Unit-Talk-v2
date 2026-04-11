@@ -17,6 +17,8 @@
     "clean": "pnpm -r --if-present run clean",
     "dev": "pnpm --filter @unit-talk/api dev",
     "env:check": "node scripts/validate-env.mjs",
+    "evidence:new": "node scripts/evidence-bundle/new-bundle.mjs",
+    "evidence:validate": "node scripts/evidence-bundle/validate-bundle.mjs",
     "format:check": "prettier --check .",
     "format:write": "prettier --write .",
     "github:checks": "tsx scripts/github-workflow.ts checks",

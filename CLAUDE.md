@@ -454,6 +454,8 @@ Independent verification should prefer live DB truth over runtime self-report.
 
 If verifying, do not "fix while checking." Report truth first.
 
+**Evidence bundles.** Phase / gate evidence bundles must follow the canonical shape in `docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md`. Generate a new bundle with `pnpm evidence:new UTV2-XXX` and validate it with `pnpm evidence:validate <path>` (or `pnpm evidence:validate --all`). The validator is a mechanical shape checker — it enforces required sections, assertion-to-evidence ties, named waivers, and a qualified verifier identity. Free-text "I checked this" is not evidence.
+
 ## Anti-Drift Rules
 
 Known debt (unfixed conditions with ticket linkage) lives in `docs/06_status/KNOWN_DEBT.md`, not here. This section lists *discipline rules*; the dashboard lists *outstanding conditions*. Code TODO markers must follow the `TODO(UTV2-NNN): ...` convention defined there.
