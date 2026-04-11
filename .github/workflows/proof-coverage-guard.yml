@@ -1,0 +1,146 @@
+name: Proof Coverage Guard
+
+# Any PR that touches sensitive runtime paths (lifecycle, promotion, audit,
+# distribution, review controller, migrations) must also include a
+# corresponding change in a live-DB proof file (apps/api/src/t1-proof-*.test.ts
+# or similar). Catches the InMemory-vs-Database drift class at CI time,
+# before merge, instead of in a downstream proof bundle.
+#
+# Context: UTV2-519 and UTV2-521 both shipped broken against live Postgres
+# because unit tests pass under InMemory but the real pipeline diverged.
+# This guard ensures runtime changes come with live-DB evidence.
+#
+# Escape hatch: add the label 'skip-proof-coverage' to the PR to bypass.
+# Use only for pure infrastructure PRs that do not touch runtime semantics.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, labeled, unlabeled]
+
+jobs:
+  proof-coverage:
+    name: Require live-DB proof for runtime changes
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+
+    steps:
+      - name: Check for skip label
+        id: skip
+        run: |
+          labels='${{ toJSON(github.event.pull_request.labels.*.name) }}'
+          if echo "$labels" | grep -q 'skip-proof-coverage'; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "skip-proof-coverage label present — guard will report pass."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout PR
+        if: steps.skip.outputs.skip != 'true'
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Compute diff vs base
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+          echo "Comparing $base_sha...$head_sha"
+          git diff --name-only "$base_sha" "$head_sha" > /tmp/changed.txt
+          echo "Changed files:"
+          cat /tmp/changed.txt
+
+      - name: Check for sensitive runtime changes
+        id: sensitive
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          # Sensitive runtime paths — any diff here requires live-DB proof
+          sensitive_patterns=(
+            '^packages/db/src/lifecycle\.ts$'
+            '^packages/db/src/repositories\.ts$'
+            '^packages/db/src/runtime-repositories\.ts$'
+            '^apps/api/src/controllers/submit-pick-controller\.ts$'
+            '^apps/api/src/controllers/review-pick-controller\.ts$'
+            '^apps/api/src/controllers/settle-pick-controller\.ts$'
+            '^apps/api/src/promotion-service\.ts$'
+            '^apps/api/src/submission-service\.ts$'
+            '^apps/api/src/distribution-service\.ts$'
+            '^apps/api/src/run-audit-service\.ts$'
+            '^apps/api/src/settlement-service\.ts$'
+            '^supabase/migrations/.*\.sql$'
+          )
+
+          sensitive_changed=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            for pattern in "${sensitive_patterns[@]}"; do
+              if echo "$file" | grep -qE "$pattern"; then
+                sensitive_changed+="$file"$'\n'
+                break
+              fi
+            done
+          done < /tmp/changed.txt
+
+          if [ -z "$sensitive_changed" ]; then
+            echo "No sensitive runtime changes detected. Guard passes trivially."
+            echo "required=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Sensitive runtime changes detected:"
+          printf '%s' "$sensitive_changed"
+          echo "required=true" >> "$GITHUB_OUTPUT"
+          {
+            echo 'sensitive<<SENSITIVE_EOF'
+            printf '%s' "$sensitive_changed"
+            echo 'SENSITIVE_EOF'
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Check for corresponding live-DB proof changes
+        if: steps.skip.outputs.skip != 'true' && steps.sensitive.outputs.required == 'true'
+        run: |
+          # Accept any change to a file whose path matches a live-DB proof pattern
+          proof_patterns=(
+            'apps/api/src/t1-proof-.*\.test\.ts$'
+            'apps/api/src/.*test-db.*\.ts$'
+            'apps/api/src/scripts/utv2-.*-proof.*\.ts$'
+          )
+
+          proof_changed=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            for pattern in "${proof_patterns[@]}"; do
+              if echo "$file" | grep -qE "$pattern"; then
+                proof_changed+="$file"$'\n'
+                break
+              fi
+            done
+          done < /tmp/changed.txt
+
+          if [ -n "$proof_changed" ]; then
+            echo "✓ Live-DB proof coverage present:"
+            printf '%s' "$proof_changed"
+            exit 0
+          fi
+
+          echo "::error title=Proof coverage missing::This PR touches sensitive runtime paths but does not include a corresponding live-DB proof change."
+          echo ""
+          echo "Sensitive files touched:"
+          printf '%s' "${{ steps.sensitive.outputs.sensitive }}"
+          echo ""
+          echo "This class of change has shipped broken twice (UTV2-519, UTV2-521)"
+          echo "because unit tests pass under InMemory while production diverges."
+          echo ""
+          echo "Required: add or update a live-DB proof case under one of:"
+          echo "  - apps/api/src/t1-proof-*.test.ts (gated on SUPABASE_SERVICE_ROLE_KEY)"
+          echo "  - apps/api/src/scripts/utv2-*-proof*.ts (proof script)"
+          echo ""
+          echo "The proof must exercise your change against the real submission or"
+          echo "review pipeline via in-process controller calls with live repos."
+          echo "See apps/api/src/t1-proof-awaiting-approval.test.ts for the pattern."
+          echo ""
+          echo "If this PR is genuinely infrastructure-only and does not need a"
+          echo "runtime proof, add the label 'skip-proof-coverage' to the PR."
+          exit 1
