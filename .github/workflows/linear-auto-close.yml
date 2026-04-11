@@ -1,24 +1,48 @@
 name: Linear Auto-Close
 
-# On push to main, parse UTV2-NNN identifiers from the head commit message
-# and move the corresponding Linear issue(s) to Done with a merge-SHA comment.
+# On push to main, parse explicit close-intent markers from the head commit
+# message and move the referenced Linear issue(s) to Done with a merge-SHA
+# comment.
 #
-# Eliminates the manual "update Linear state + attach merge SHA" dance after
-# every merge. For bounded PRs with a single issue ID this is fully automatic.
-# For multi-issue PRs, all referenced issues are closed.
+# This workflow closes Linear issues ONLY when the commit message contains an
+# explicit close-intent marker, following the same conventions as GitHub's
+# own issue auto-closing syntax:
+#
+#   - Closes UTV2-NNN     (inline verb, case-insensitive on the verb)
+#   - Fixes UTV2-NNN      (inline verb, case-insensitive on the verb)
+#   - Resolves UTV2-NNN   (inline verb, case-insensitive on the verb)
+#   - Linear-Close: UTV2-NNN   (commit trailer, anchored to line start)
+#
+# Free-form mentions like "UTV2-NNN dispatch packet", "follow-up to UTV2-NNN",
+# file path literals, code examples, or "supersedes UTV2-NNN" wording are
+# IGNORED. This prevents the false-positive class that caused an earlier
+# packet-describing PR to incorrectly close the target issue.
+#
+# Identifier prefix is case-sensitive — `UTV2-NNN` matches, `utv2-NNN` does
+# not. This ensures conventional-commit scope prefixes like `feat(utv2-519):`
+# cannot trigger a close on their own. Use the explicit close-intent verb in
+# a separate position to close.
+#
+# Extraction logic lives in `.github/workflows/linear-auto-close.test.sh`,
+# which also contains a standalone test harness. Run the harness manually:
+#
+#   bash .github/workflows/linear-auto-close.test.sh
+#
+# Any change to the extraction regex MUST be accompanied by a test update in
+# the same PR. The harness runs 22 positive and negative cases covering the
+# full intended behavior, including the original false-positive incident.
 #
 # Requirements:
-#   - Repo secret LINEAR_API_TOKEN with scope sufficient to read + update issues
-#     and create comments. Generate at https://linear.app/settings/api and add
-#     via Settings > Secrets and variables > Actions.
+#   - Repo secret LINEAR_API_TOKEN with scope sufficient to read + update
+#     issues and create comments. Generate at https://linear.app/settings/api
+#     and add via Settings > Secrets and variables > Actions.
 #
 # Safety:
-#   - Only fires on push to main (not on feature branches, not on force-push
-#     rewrites of old commits — those are filtered by only inspecting
-#     github.event.commits[0], the head of the push).
+#   - Only fires on push to main.
 #   - Skips silently if LINEAR_API_TOKEN is not configured (first-time setup).
-#   - Idempotent: re-running against an already-Done issue is a no-op.
-#   - Never creates new issues, never moves issues to anything other than Done,
+#   - Idempotent: re-running against an already-Done issue only attaches the
+#     merge-SHA comment; it does not error.
+#   - Never creates new issues, never moves issues to states other than Done,
 #     never deletes anything.
 
 on:
@@ -44,19 +68,33 @@ jobs:
             echo "configured=true" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Extract issue IDs from commit message
+      - name: Checkout repo (for extraction function)
+        if: steps.guard.outputs.configured == 'true'
+        uses: actions/checkout@v4
+        with:
+          # Minimal checkout — only the workflow files are needed for the
+          # extraction function. No history, no LFS, no submodules.
+          fetch-depth: 1
+
+      - name: Extract close-intent issue IDs from commit message
         if: steps.guard.outputs.configured == 'true'
         id: extract
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          # Extract unique UTV2-NNNN identifiers from the merge commit message
-          ids=$(echo "$COMMIT_MSG" | grep -oE 'UTV2-[0-9]+' | sort -u | tr '\n' ' ')
+          # Source the shared extraction function from the test file.
+          # The function parses the commit message and emits only identifiers
+          # referenced with an explicit close-intent marker. Sourcing the test
+          # file ensures the workflow and the test harness cannot drift apart.
+          # shellcheck disable=SC1091
+          source .github/workflows/linear-auto-close.test.sh
+
+          ids=$(extract_linear_close_ids "$COMMIT_MSG")
           if [ -z "$ids" ]; then
-            echo "No UTV2-NNN identifiers found in commit message — nothing to close."
+            echo "No explicit close-intent markers found in commit message — nothing to close."
             echo "ids=" >> "$GITHUB_OUTPUT"
           else
-            echo "Found Linear issue ids: $ids"
+            echo "Found close-intent ids: $ids"
             echo "ids=$ids" >> "$GITHUB_OUTPUT"
           fi
 
