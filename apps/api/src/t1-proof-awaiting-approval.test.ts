@@ -245,9 +245,16 @@ test('UTV2-519 atomic rollback: mismatched fromState leaves picks.status and pic
   // Better: call the repository's transitionPickLifecycleAtomic directly
   // with a fabricated fromState mismatch. This bypasses the FSM pre-check
   // and lets us observe the Postgres-level exception rollback.
+  // The method is optional on the interface (see UTV2-520 for tightening).
+  // DatabasePickRepository implements it; assert it exists before invoking.
+  const atomicTransition = repositories.picks.transitionPickLifecycleAtomic;
+  assert.ok(
+    typeof atomicTransition === 'function',
+    'DatabasePickRepository.transitionPickLifecycleAtomic must be implemented for this proof',
+  );
   await assert.rejects(
     () =>
-      repositories.picks.transitionPickLifecycleAtomic({
+      atomicTransition.call(repositories.picks, {
         pickId,
         fromState: 'queued', // wrong — real state is awaiting_approval
         toState: 'posted',
