@@ -1,359 +1,458 @@
-/**
- * scripts/codex-receive.ts
- * Accept returned work from Codex CLI and gate it before merge.
- *
- * - Validates the returned branch exists
- * - Runs pnpm type-check + pnpm test on the return branch
- * - Updates lane registry status → 'review'
- * - Posts a Linear comment with PR link + verdict
- * - Outputs PASS/FAIL verdict with diff summary
- *
- * Usage:
- *   pnpm codex:receive -- --issue UTV2-XXX --branch <branch> --pr <url> [--skip-tests]
- */
-
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
+import {
+  ROOT,
+  emitJson,
+  getFlag,
+  parseArgs,
+  readManifest,
+  relativeToRoot,
+  requireIssueId,
+  validateBranchName,
+} from './ops/shared.js';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface LaneEntry {
-  id: string;
-  title: string;
-  branch: string;
-  worktree: string | null;
-  status: 'active' | 'review' | 'merged' | 'abandoned';
-  owner: 'claude' | 'codex' | 'codex-cli' | 'manual';
-  createdAt: string;
-  snapshotAt: string | null;
-  pr: number | null;
-  allowedFiles?: string[];
-}
-
-interface LaneRegistry {
-  version: number;
-  lanes: LaneEntry[];
-}
-
-// ─── Repo Context ─────────────────────────────────────────────────────────────
-
-function repoRoot(): string {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-    stdio: 'pipe',
-  });
-  if (result.status !== 0) throw new Error('Not in a git repository');
-  return result.stdout.trim();
-}
-
-const ROOT = repoRoot();
-const CLAUDE_DIR = path.join(ROOT, '.claude');
-const LANES_FILE = path.join(CLAUDE_DIR, 'lanes.json');
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function readRegistry(): LaneRegistry {
-  if (!fs.existsSync(LANES_FILE)) return { version: 1, lanes: [] };
-  try {
-    return JSON.parse(fs.readFileSync(LANES_FILE, 'utf8')) as LaneRegistry;
-  } catch {
-    return { version: 1, lanes: [] };
-  }
-}
-
-function writeRegistry(reg: LaneRegistry): void {
-  fs.mkdirSync(CLAUDE_DIR, { recursive: true });
-  fs.writeFileSync(LANES_FILE, JSON.stringify(reg, null, 2) + '\n', 'utf8');
-}
-
-function git(...args: string[]): { ok: boolean; stdout: string; stderr: string } {
-  const result = spawnSync('git', args, { encoding: 'utf8', stdio: 'pipe', cwd: ROOT });
-  return {
-    ok: result.status === 0,
-    stdout: (result.stdout ?? '').trim(),
-    stderr: (result.stderr ?? '').trim(),
-  };
-}
-
-function runPnpm(args: string[]): { ok: boolean; stdout: string; stderr: string } {
-  const result = spawnSync('pnpm', args, {
-    encoding: 'utf8',
-    stdio: 'pipe',
-    cwd: ROOT,
-    shell: process.platform === 'win32',
-  });
-  return {
-    ok: result.status === 0,
-    stdout: (result.stdout ?? '').trim(),
-    stderr: (result.stderr ?? '').trim(),
-  };
-}
-
-function readArg(cliArgs: string[], name: string): string | undefined {
-  const idx = cliArgs.indexOf(`--${name}`);
-  if (idx >= 0 && cliArgs[idx + 1] && !cliArgs[idx + 1].startsWith('--')) {
-    return cliArgs[idx + 1];
-  }
-  return undefined;
-}
-
-// ANSI colors
-const isTTY = process.stdout.isTTY;
-const c = {
-  green: (s: string) => (isTTY ? `\x1b[32m${s}\x1b[0m` : s),
-  yellow: (s: string) => (isTTY ? `\x1b[33m${s}\x1b[0m` : s),
-  red: (s: string) => (isTTY ? `\x1b[31m${s}\x1b[0m` : s),
-  bold: (s: string) => (isTTY ? `\x1b[1m${s}\x1b[0m` : s),
-  dim: (s: string) => (isTTY ? `\x1b[2m${s}\x1b[0m` : s),
+type ReceiveResult = {
+  ok: boolean;
+  code: string;
+  message: string;
+  issue_id?: string;
+  branch?: string;
+  pr_url?: string;
+  manifest_path?: string;
+  worktree_path?: string;
+  status?: string;
+  heartbeat_at?: string;
+  linear_comment?: 'posted' | 'skipped' | 'failed';
+  warning?: string;
 };
 
-// ─── Linear Comment ───────────────────────────────────────────────────────────
+type LinearIssueResolution = {
+  issueInternalId: string;
+};
 
-async function postLinearComment(
-  issueId: string,
-  body: string,
-  apiKey: string,
-): Promise<void> {
-  // Resolve issue internal ID first
-  const resolveResp = await fetch('https://api.linear.app/graphql', {
-    method: 'POST',
-    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      query: `query { issue(id: "${issueId}") { id } }`,
-    }),
+const PR_URL_PATTERN = /^https:\/\/github\.com\/[^/]+\/[^/]+\/pull\/\d+$/;
+
+function git(args: string[]): { ok: boolean; stdout: string; stderr: string } {
+  const result = spawnSync('git', args, {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: 'pipe',
   });
-
-  if (!resolveResp.ok) return; // non-fatal
-
-  const resolveData = (await resolveResp.json()) as {
-    data?: { issue?: { id: string } | null };
+  return {
+    ok: result.status === 0,
+    stdout: (result.stdout ?? '').trim(),
+    stderr: (result.stderr ?? '').trim(),
   };
+}
 
-  const internalId = resolveData.data?.issue?.id;
-  if (!internalId) return;
+function runPnpm(args: string[]): { status: number; stdout: string; stderr: string } {
+  const child = process.platform === 'win32'
+    ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm', ...args], {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      })
+    : spawnSync('pnpm', args, {
+        cwd: ROOT,
+        encoding: 'utf8',
+        stdio: 'pipe',
+      });
+  return {
+    status: child.status ?? 1,
+    stdout: (child.stdout ?? '').trim(),
+    stderr: (child.stderr ?? '').trim(),
+  };
+}
 
-  await fetch('https://api.linear.app/graphql', {
+function manifestPathForIssue(issueId: string): string {
+  return `docs/06_status/lanes/${issueId}.json`;
+}
+
+function parseWriterPayload(stdout: string): Record<string, unknown> {
+  return JSON.parse(stdout) as Record<string, unknown>;
+}
+
+function branchExistsAnywhere(branch: string): { ok: boolean; warning?: string } {
+  const local = git(['show-ref', '--verify', '--quiet', `refs/heads/${branch}`]);
+  if (local.ok) {
+    return { ok: true };
+  }
+
+  const remote = git(['ls-remote', '--exit-code', '--heads', 'origin', branch]);
+  if (remote.ok) {
+    return { ok: true };
+  }
+
+  const fetch = git(['fetch', 'origin', branch]);
+  if (fetch.ok) {
+    const fetched = git(['show-ref', '--verify', '--quiet', `refs/remotes/origin/${branch}`]);
+    if (fetched.ok) {
+      return { ok: true, warning: 'branch resolved only after fetch origin <branch>' };
+    }
+  }
+
+  return { ok: false };
+}
+
+function buildLinearComment(input: {
+  issueId: string;
+  manifestPath: string;
+  branch: string;
+  prUrl: string;
+  tier: string;
+  worktreePath: string;
+  fileScopeLock: string[];
+  expectedProofPaths: string[];
+}): string {
+  return [
+    `**Codex returned work — ${input.issueId}**`,
+    '',
+    `PR:       ${input.prUrl}`,
+    `Branch:   \`${input.branch}\``,
+    `Tier:     ${input.tier}`,
+    `Worktree: ${input.worktreePath}`,
+    '',
+    `Lane manifest: ${input.manifestPath}`,
+    '',
+    'Status: in_review (transitioned by ops:lane-link-pr)',
+    '',
+    '### Locked file scope',
+    ...input.fileScopeLock.map((entry) => `- \`${entry}\``),
+    '',
+    '### Expected proof paths for close',
+    ...(input.expectedProofPaths.length > 0
+      ? input.expectedProofPaths.map((entry) => `- \`${entry}\``)
+      : ['- *(none declared for this tier)*']),
+    '',
+    '---',
+    '',
+    `Next step: this lane closes via \`ops:lane-close ${input.issueId}\`, which runs \`ops:truth-check\``,
+    'against the merge SHA and the proof paths above. Verification is CI + truth-check;',
+    'codex-receive does not gate merge.',
+  ].join('\n');
+}
+
+async function resolveLinearIssue(issueId: string, token: string): Promise<LinearIssueResolution> {
+  const response = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
-    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({
-      query: `mutation { commentCreate(input: { issueId: "${internalId}", body: ${JSON.stringify(body)} }) { success } }`,
+      query: `
+        query ResolveIssue($id: String!) {
+          issue(id: $id) {
+            id
+          }
+        }
+      `,
+      variables: { id: issueId },
     }),
   });
+  if (!response.ok) {
+    throw new Error(`Linear API error: ${response.status} ${response.statusText}`);
+  }
+  const payload = (await response.json()) as {
+    data?: { issue: { id: string } | null };
+    errors?: Array<{ message?: string }>;
+  };
+  if (payload.errors?.length) {
+    throw new Error(payload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
+  }
+  if (!payload.data?.issue?.id) {
+    throw new Error(`Linear issue not found: ${issueId}`);
+  }
+  return {
+    issueInternalId: payload.data.issue.id,
+  };
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
-const env = loadEnvironment();
-const apiKey = env.LINEAR_API_TOKEN?.trim();
-const cliArgs = process.argv.slice(2);
-
-const issueIdRaw = readArg(cliArgs, 'issue');
-const branch = readArg(cliArgs, 'branch');
-const prUrl = readArg(cliArgs, 'pr');
-const skipTests = cliArgs.includes('--skip-tests');
-
-if (!issueIdRaw || !branch || !prUrl) {
-  console.error('Usage: pnpm codex:receive -- --issue UTV2-XXX --branch <branch> --pr <url>');
-  process.exit(1);
+async function postLinearComment(issueId: string, token: string, body: string): Promise<void> {
+  const resolved = await resolveLinearIssue(issueId, token);
+  const response = await fetch('https://api.linear.app/graphql', {
+    method: 'POST',
+    headers: {
+      Authorization: token,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      query: `
+        mutation CreateComment($issueId: String!, $body: String!) {
+          commentCreate(input: { issueId: $issueId, body: $body }) {
+            success
+          }
+        }
+      `,
+      variables: {
+        issueId: resolved.issueInternalId,
+        body,
+      },
+    }),
+  });
+  if (!response.ok) {
+    throw new Error(`Linear API error: ${response.status} ${response.statusText}`);
+  }
 }
 
-const issueId = issueIdRaw.toUpperCase();
+async function main(argv = process.argv.slice(2)): Promise<number> {
+  const { flags, bools } = parseArgs(argv);
+  let issueId = '';
+  let branch = '';
+  let prUrl = '';
 
-void (async () => {
-  const line = '─'.repeat(62);
-  console.log('');
-  console.log(c.bold(`CODEX RECEIVE — ${issueId}`));
-  console.log(line);
-  console.log(`  Branch: ${branch}`);
-  console.log(`  PR:     ${prUrl}`);
-  console.log('');
-
-  // 1. Verify branch exists on remote
-  console.log('Checking branch...');
-  const fetchResult = git('fetch', 'origin', branch);
-  if (!fetchResult.ok) {
-    console.warn(`  Warning: Could not fetch ${branch} from origin. Checking local...`);
-  }
-
-  const branchCheck = git('rev-parse', '--verify', `refs/remotes/origin/${branch}`);
-  const localCheck = git('rev-parse', '--verify', `refs/heads/${branch}`);
-  if (!branchCheck.ok && !localCheck.ok) {
-    console.error(c.red(`Error: Branch '${branch}' not found locally or on origin.`));
-    console.error('  Make sure Codex pushed the branch before reporting back.');
-    process.exit(1);
-  }
-  console.log(c.green('  ✓ Branch exists'));
-
-  // 2. Get diff summary vs main
-  console.log('');
-  console.log('Diff summary vs main:');
-  const mergeBase = git('merge-base', branch, 'main');
-  const diffFiles = mergeBase.ok
-    ? git('diff', '--name-only', mergeBase.stdout, branch)
-    : git('diff', '--name-only', 'main', `origin/${branch}`);
-
-  const changedFiles = diffFiles.ok
-    ? diffFiles.stdout.split('\n').filter(Boolean)
-    : [];
-
-  if (changedFiles.length === 0) {
-    console.log(c.yellow('  (no files changed vs main — verify Codex actually made changes)'));
-  } else {
-    for (const f of changedFiles) {
-      console.log(`  ${f}`);
-    }
-  }
-
-  // 3. Check lane registry
-  const registry = readRegistry();
-  const lane = registry.lanes.find((l) => l.id === issueId);
-
-  if (!lane) {
-    console.warn(c.yellow(`  Warning: No lane registry entry for ${issueId}. Creating one now.`));
-    registry.lanes.push({
-      id: issueId,
-      title: issueId,
-      branch,
-      worktree: null,
-      status: 'review',
-      owner: 'codex-cli',
-      createdAt: new Date().toISOString(),
-      snapshotAt: null,
-      pr: null,
-    });
-  }
-
-  // 4. Run verification gate
-  let typeCheckOk = false;
-  let testOk = false;
-
-  if (skipTests) {
-    console.log('');
-    console.log(c.yellow('Skipping tests (--skip-tests). Manual verification required.'));
-    typeCheckOk = true;
-    testOk = true;
-  } else {
-    console.log('');
-    console.log('Running verification gate...');
-    console.log(c.dim('  This may take a few minutes.'));
-
-    // We run on current checkout — Codex should have pushed to origin
-    // For a full gate, checkout the branch first
-    const currentBranch = git('branch', '--show-current').stdout;
-
-    // Stash any local changes before switching
-    const hasChanges = git('status', '--short').stdout.length > 0;
-    if (hasChanges) {
-      git('stash', 'push', '-m', 'codex-receive-temp-stash');
+  try {
+    if (flags.has('skip-tests') || bools.has('skip-tests')) {
+      throw new Error('Legacy --skip-tests flag is removed; codex-receive no longer runs verification gates');
     }
 
-    // Checkout the Codex branch
-    const checkoutRef = branchCheck.ok ? `origin/${branch}` : branch;
-    const checkoutResult = git('checkout', checkoutRef);
-    if (!checkoutResult.ok) {
-      console.warn(c.yellow(`  Warning: Could not checkout ${branch}. Running tests on current branch.`));
+    issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
+    branch = getFlag(flags, 'branch') ?? '';
+    prUrl = getFlag(flags, 'pr') ?? '';
+    const dryRun = bools.has('dry-run');
+    const json = bools.has('json');
+    const explain = bools.has('explain');
+    const noLinear = bools.has('no-linear');
+
+    if (!branch) {
+      throw new Error('Missing required --branch');
+    }
+    if (!prUrl) {
+      throw new Error('Missing required --pr');
+    }
+    validateBranchName(branch);
+    if (!PR_URL_PATTERN.test(prUrl)) {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'pr_url_invalid',
+        message: `Invalid PR URL: ${prUrl}`,
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
     }
 
-    // type-check
-    process.stdout.write('  type-check... ');
-    const tcResult = runPnpm(['type-check']);
-    typeCheckOk = tcResult.ok;
-    console.log(typeCheckOk ? c.green('PASS') : c.red('FAIL'));
-    if (!typeCheckOk) {
-      const errLines = tcResult.stderr.split('\n').filter(Boolean).slice(0, 8);
-      for (const l of errLines) console.log(c.dim(`    ${l}`));
+    const env = loadEnvironment();
+    const linearToken = env.LINEAR_API_TOKEN?.trim();
+    if (!noLinear && !linearToken) {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'missing_linear_token',
+        message: 'LINEAR_API_TOKEN is required unless --no-linear is supplied',
+        issue_id: issueId,
+        branch,
+        pr_url: prUrl,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 3;
     }
 
-    // test
-    process.stdout.write('  test...       ');
-    const testResult = runPnpm(['test']);
-    testOk = testResult.ok;
-    console.log(testOk ? c.green('PASS') : c.red('FAIL'));
-    if (!testOk) {
-      const errLines = testResult.stderr.split('\n').filter(Boolean).slice(0, 8);
-      for (const l of errLines) console.log(c.dim(`    ${l}`));
-    }
-
-    // Restore original branch
-    if (currentBranch && currentBranch !== branch) {
-      git('checkout', currentBranch);
-    }
-    if (hasChanges) {
-      git('stash', 'pop');
-    }
-  }
-
-  // 5. Determine verdict
-  const verdict = typeCheckOk && testOk ? 'PASS' : 'FAIL';
-  const verdictDisplay =
-    verdict === 'PASS' ? c.green('PASS') : c.red('FAIL');
-
-  // 6. Update lane registry
-  const laneIdx = registry.lanes.findIndex((l) => l.id === issueId);
-  if (laneIdx >= 0) {
-    registry.lanes[laneIdx].status = 'review';
-    registry.lanes[laneIdx].branch = branch;
-  }
-  writeRegistry(registry);
-
-  // 7. Post Linear comment
-  const commentBody = [
-    `**Codex returned work — ${issueId}**`,
-    '',
-    `PR: ${prUrl}`,
-    `Branch: \`${branch}\``,
-    `Verification: ${verdict}`,
-    `Files changed: ${changedFiles.length}`,
-    '',
-    changedFiles.length > 0
-      ? `Changed files:\n${changedFiles.slice(0, 10).map((f) => `- \`${f}\``).join('\n')}${changedFiles.length > 10 ? `\n- ... and ${changedFiles.length - 10} more` : ''}`
-      : '',
-    '',
-    verdict === 'PASS'
-      ? 'Ready for Claude Code review and merge.'
-      : 'FAILED verification — do not merge. Codex needs to fix before re-submission.',
-  ]
-    .filter((l) => l !== undefined)
-    .join('\n');
-
-  if (apiKey) {
+    let manifest;
     try {
-      await postLinearComment(issueId, commentBody, apiKey);
-      console.log('');
-      console.log(c.dim('  Linear comment posted.'));
-    } catch {
-      console.warn(c.yellow('  Warning: Could not post Linear comment (non-fatal).'));
+      manifest = readManifest(issueId);
+    } catch (error) {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'lane_missing',
+        message: error instanceof Error ? error.message : String(error),
+        issue_id: issueId,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
     }
-  } else {
-    console.log(c.dim('  (LINEAR_API_TOKEN not set — skipping Linear comment)'));
+
+    const manifestPath = manifestPathForIssue(issueId);
+    if (manifest.lane_type !== 'codex-cli') {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'lane_type_mismatch',
+        message: `Manifest lane_type must be codex-cli, found ${manifest.lane_type}`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch: manifest.branch,
+        status: manifest.status,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
+    }
+    if (manifest.status === 'in_review') {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'already_in_review',
+        message: `${issueId} is already in_review`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch: manifest.branch,
+        pr_url: manifest.pr_url ?? prUrl,
+        status: manifest.status,
+        heartbeat_at: manifest.heartbeat_at,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 2;
+    }
+    if (manifest.status === 'merged' || manifest.status === 'done') {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'status_not_applicable',
+        message: `${issueId} is already ${manifest.status}`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch: manifest.branch,
+        pr_url: manifest.pr_url ?? prUrl,
+        status: manifest.status,
+        heartbeat_at: manifest.heartbeat_at,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 2;
+    }
+    if (manifest.status === 'blocked') {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'status_not_transitionable',
+        message: `${issueId} is blocked and cannot transition to in_review`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch: manifest.branch,
+        status: manifest.status,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
+    }
+
+    const branchCheck = branchExistsAnywhere(branch);
+    if (!branchCheck.ok) {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'branch_not_found',
+        message: `Branch ${branch} was not found locally or on origin`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
+    }
+    if (explain && branchCheck.warning) {
+      process.stderr.write(`${branchCheck.warning}\n`);
+    }
+
+    if (dryRun) {
+      const result: ReceiveResult = {
+        ok: true,
+        code: 'receive_dry_run_ready',
+        message: 'Receive validation passed; canonical writer and Linear comment skipped due to --dry-run',
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch,
+        pr_url: prUrl,
+        worktree_path: manifest.worktree_path,
+        status: manifest.status,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 0;
+    }
+
+    const writer = runPnpm(['ops:lane-link-pr', '--', issueId, '--branch', branch, '--pr', prUrl, '--json']);
+    if (writer.status !== 0) {
+      if (writer.stdout) {
+        process.stdout.write(`${writer.stdout}\n`);
+      }
+      if (writer.stderr) {
+        process.stderr.write(`${writer.stderr}\n`);
+      }
+      return writer.status;
+    }
+
+    const writerPayload = parseWriterPayload(writer.stdout);
+    const manifestAfter = readManifest(issueId);
+    if (manifestAfter.status !== 'in_review' || manifestAfter.pr_url !== prUrl) {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'receive_manifest_drift',
+        message: 'Manifest did not reflect the canonical writer output after success',
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch: manifestAfter.branch,
+        pr_url: manifestAfter.pr_url ?? undefined,
+        status: manifestAfter.status,
+        heartbeat_at: manifestAfter.heartbeat_at,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
+    }
+
+    let linearComment: ReceiveResult['linear_comment'] = 'skipped';
+    let warning: string | undefined;
+    if (!noLinear && linearToken) {
+      try {
+        await postLinearComment(
+          issueId,
+          linearToken,
+          buildLinearComment({
+            issueId,
+            manifestPath,
+            branch: manifestAfter.branch,
+            prUrl,
+            tier: manifestAfter.tier,
+            worktreePath: manifestAfter.worktree_path,
+            fileScopeLock: manifestAfter.file_scope_lock,
+            expectedProofPaths: manifestAfter.expected_proof_paths,
+          }),
+        );
+        linearComment = 'posted';
+      } catch (error) {
+        linearComment = 'failed';
+        warning = error instanceof Error ? error.message : String(error);
+        if (!json) {
+          process.stderr.write(`Linear comment failed (non-fatal): ${warning}\n`);
+        }
+      }
+    }
+
+    const result: ReceiveResult = {
+      ok: true,
+      code: 'receive_recorded',
+      message: `Receive recorded for ${issueId}`,
+      issue_id: issueId,
+      manifest_path: String(writerPayload.manifest_path ?? manifestPath),
+      branch: manifestAfter.branch,
+      pr_url: manifestAfter.pr_url ?? prUrl,
+      worktree_path: manifestAfter.worktree_path,
+      status: manifestAfter.status,
+      heartbeat_at: manifestAfter.heartbeat_at,
+      linear_comment: linearComment,
+      warning,
+    };
+
+    if (json) {
+      emitJson(result);
+    } else {
+      process.stderr.write(`${result.message}\n`);
+    }
+    return 0;
+  } catch (error) {
+    const result: ReceiveResult = {
+      ok: false,
+      code: 'receive_failed',
+      message: error instanceof Error ? error.message : String(error),
+      issue_id: issueId || undefined,
+      branch: branch || undefined,
+      pr_url: prUrl || undefined,
+    };
+    if (bools.has('json')) {
+      emitJson(result);
+    } else {
+      process.stderr.write(`${result.message}\n`);
+    }
+    return /Not in a git repository/i.test(result.message) ? 3 : 1;
   }
+}
 
-  // 8. Final output
-  console.log('');
-  console.log(line);
-  console.log(`VERDICT: ${verdictDisplay}`);
-  console.log(line);
-  console.log('');
-
-  if (verdict === 'PASS') {
-    console.log(c.green('Codex work verified. Claude Code can now review and merge.'));
-    console.log('');
-    console.log('Next steps:');
-    console.log(`  1. Review diff: gh pr view ${prUrl}`);
-    console.log(`  2. If diff is clean: merge via GitHub or gh pr merge`);
-    console.log(`  3. After merge: pnpm lane:cleanup`);
-    console.log(`  4. Update Linear: pnpm linear:close -- ${issueId} --comment "Merged via Codex CLI"`);
-  } else {
-    console.log(c.red('Verification failed. Do NOT merge.'));
-    console.log('');
-    console.log('Next steps:');
-    console.log(`  1. Review failures above`);
-    console.log(`  2. Feed failure output back to Codex CLI for correction`);
-    console.log(`  3. Re-run: pnpm codex:receive -- --issue ${issueId} --branch ${branch} --pr ${prUrl}`);
-  }
-
-  console.log('');
-  process.exit(verdict === 'PASS' ? 0 : 1);
-})();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
+}
