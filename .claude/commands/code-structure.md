@@ -176,25 +176,7 @@ Reject and flag any of these on sight:
 
 ---
 
-## Phase-specific rules (Phase 2)
-
-These are hard invariants until Phase 3 opens. Enforced in addition to the rules above.
-
-- No writes to `picks` from the candidate layer — `pick_candidates.pick_id` must remain NULL.
-- `pick_candidates.model_score / model_tier / model_confidence` must remain NULL in Phase 2 code.
-- `pick_candidates.shadow_mode` must default `true` and **must not be set `false`** in Phase 2.
-- The materializer writes `market_universe` rows only.
-- The board scan writes `pick_candidates` rows only.
-- `system-pick-scanner` is a parallel path — it does **not** route through `market_universe` or `pick_candidates`.
-- `UTV2-459` and `UTV2-460` migrations must **not** merge in the same deploy — serial merge only.
-
-Full Phase 2 contract: `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md`.
-
----
-
 ## Verification grep patterns
-
-These patterns can be run manually or wired into CI. Each must return zero matches.
 
 ```bash
 # Domain must be pure
@@ -205,66 +187,4 @@ grep -rE "process\.env" packages/domain/src/
 # No cross-app imports
 grep -rE "from '(\.\./)+apps/" apps/
 grep -rE "from 'apps/" packages/
-
-# No hand-edits to generated types (flag if modified outside supabase:types runs)
-git log -1 --format=%s packages/db/src/database.types.ts
-
-# Phase 2 invariants
-grep -rE "pick_candidates.*pick_id.*=.*[^NULL]" apps/ packages/
-grep -rE "shadow_mode\s*=\s*false" apps/ packages/
-```
-
----
-
-## Red flags — stop if you see these
-
-- A new file placed "because the other files are here" without checking the decision tree
-- A service instantiating a Supabase client
-- A scoring weight or threshold living outside `@unit-talk/domain`
-- An app calling another app's internals
-- `@unit-talk/domain` acquiring any runtime dependency
-- `database.types.ts` showing in a diff that is not a `supabase:types` regeneration
-- A new package proposed with overlapping responsibility with an existing one
-- A fallback path that silently switches from the in-memory repository to a real client in a test context
-- Phase 2 boundary violation in any diff
-
-Report the violation and stop. Do not implement "around" the boundary.
-
----
-
-## Output format (when invoked explicitly)
-
-```
-## Code Structure Check
-
-### Scope
-Files in scope: [list]
-Package(s) touched: [list]
-App(s) touched: [list]
-
-### Dependency direction
-- packages/domain imports: CLEAN / VIOLATION ([file:line])
-- apps → apps imports: CLEAN / VIOLATION
-- packages → apps imports: CLEAN / VIOLATION
-
-### Boundary checks
-- Services use repository bundles: YES / NO
-- Handlers coerce + delegate only: YES / NO
-- Generated files untouched: YES / MODIFIED ([file])
-
-### Contract placement
-- New shared types in contracts: YES / NO / N/A
-- Duplicated logic detected: NONE / FOUND ([location])
-
-### Phase 2 invariants (if applicable)
-- candidate → picks write: CLEAN / VIOLATION
-- model_* fields NULL: CLEAN / VIOLATION
-- shadow_mode true: CLEAN / VIOLATION
-- scanner bypass candidate layer: CLEAN / VIOLATION
-
-### Verdict
-CLEAN — proceed
-— or —
-VIOLATIONS FOUND — fix before merging:
-  - [list each with file:line and rule]
 ```
