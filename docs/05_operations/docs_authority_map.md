@@ -126,7 +126,7 @@ When documents conflict:
 | `docs/05_operations/BOARD_CAP_POLICY.md` | Board cap enforcement — `perSport: 3` active; see UTV2-284 for PM policy decision | Platform |
 | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` | **Active** — SGO grading truth, odds format, CLV methodology, Pinnacle preference | Platform |
 | `docs/05_operations/PROVIDER_DATA_DECISION_RECORD.md` | Historical record of SGO vs Odds API provider decisions | Platform |
-| `docs/05_operations/lane-manager.md` | **Active** — lane registry and Codex lane management reference | Program Owner |
+| `docs/05_operations/lane-manager.md` | **Retired** — superseded by `LANE_MANIFEST_SPEC.md` | Program Owner |
 | `docs/05_operations/migration_cutover_plan.md` | V1→V2 cutover plan — completed, kept for reference | historical |
 
 ### Wave 1 Hardening Contracts (ratified 2026-03-29, shipped)

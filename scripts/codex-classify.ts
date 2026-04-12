@@ -32,9 +32,10 @@
  */
 
 import { loadEnvironment } from '@unit-talk/config';
-import fs from 'node:fs';
-import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import {
+  ACTIVE_LOCK_STATUSES,
+  readAllManifests,
+} from './ops/shared.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -58,41 +59,6 @@ interface ClassifiedIssue {
   classification: Classification;
   reason: string;
   dispatchReady: boolean;
-}
-
-interface LaneEntry {
-  id: string;
-  status: 'active' | 'review' | 'merged' | 'abandoned';
-  owner: string;
-  allowedFiles?: string[];
-}
-
-interface LaneRegistry {
-  version: number;
-  lanes: LaneEntry[];
-}
-
-// ─── Repo Context ─────────────────────────────────────────────────────────────
-
-function repoRoot(): string {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-    stdio: 'pipe',
-  });
-  if (result.status !== 0) throw new Error('Not in a git repository');
-  return result.stdout.trim();
-}
-
-const ROOT = repoRoot();
-const LANES_FILE = path.join(ROOT, '.claude', 'lanes.json');
-
-function readRegistry(): LaneRegistry {
-  if (!fs.existsSync(LANES_FILE)) return { version: 1, lanes: [] };
-  try {
-    return JSON.parse(fs.readFileSync(LANES_FILE, 'utf8')) as LaneRegistry;
-  } catch {
-    return { version: 1, lanes: [] };
-  }
 }
 
 // ─── ANSI Colors ──────────────────────────────────────────────────────────────
@@ -311,12 +277,17 @@ void (async () => {
       process.exit(0);
     }
 
-    // Load active lane IDs
-    const registry = readRegistry();
+    // Load active lane IDs from canonical manifests
+    let manifests: Array<{ issue_id: string; status: string; lane_type: string }> = [];
+    try {
+      manifests = readAllManifests();
+    } catch {
+      // Empty manifest dir is normal on a fresh clone
+    }
     const activeIssueIds = new Set(
-      registry.lanes
-        .filter((l) => l.status === 'active' || l.status === 'review')
-        .map((l) => l.id),
+      manifests
+        .filter((m) => ACTIVE_LOCK_STATUSES.has(m.status as never))
+        .map((m) => m.issue_id),
     );
 
     // Classify
@@ -414,14 +385,14 @@ void (async () => {
     console.log(line);
     console.log('');
 
-    // Active Codex lanes summary
-    const codexActive = registry.lanes.filter(
-      (l) => l.owner === 'codex-cli' && l.status === 'active',
+    // Active Codex lanes summary from canonical manifests
+    const codexActive = manifests.filter(
+      (m) => m.lane_type === 'codex-cli' && ACTIVE_LOCK_STATUSES.has(m.status as never),
     );
     if (codexActive.length > 0) {
-      console.log(c.dim(`Active Codex CLI lanes: ${codexActive.length}/3`));
-      for (const l of codexActive) {
-        console.log(c.dim(`  ${l.id}: ${l.owner} — active`));
+      console.log(c.dim(`Active Codex CLI lanes: ${codexActive.length}`));
+      for (const m of codexActive) {
+        console.log(c.dim(`  ${m.issue_id} — ${m.status}`));
       }
       console.log('');
     }

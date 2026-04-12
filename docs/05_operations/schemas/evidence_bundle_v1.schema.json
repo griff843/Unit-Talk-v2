@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/evidence_bundle_v1.schema.json",
+  "title": "Evidence Bundle V1",
+  "type": "object",
+  "required": ["schema_version", "verifier", "static_proof", "runtime_proof"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "merge_sha": { "type": "string" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "verifier": {
+      "type": "object",
+      "required": ["identity"],
+      "properties": {
+        "identity": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "static_proof": { "type": "object" },
+    "runtime_proof": { "type": "object" }
+  },
+  "additionalProperties": true
+}

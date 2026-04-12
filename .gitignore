@@ -52,3 +52,6 @@ apps/smart-form/test-results/
 
 # Governance CLI — local issue state (never committed)
 .ut-state/
+.out/ops/preflight/
+.out/ops/ci-doctor/
+.out/worktrees/

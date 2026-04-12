@@ -60,23 +60,72 @@ VALUES
 ON CONFLICT DO NOTHING;
 
 -- NHL player prop aliases
+--
+-- stat_type_id is resolved at apply time via a lookup on
+-- (stat_types.sport_id, stat_types.name) rather than hardcoded UUIDs.
+-- The original version of this migration hardcoded production-specific
+-- UUIDs copied from a `SELECT id FROM stat_types` query, which worked on
+-- production (where those UUIDs happened to exist) but failed on any
+-- fresh database — including Supabase preview branches — because
+-- `stat_types.id` defaults to `gen_random_uuid()` and produces different
+-- values every time `202603200008_reference_data_foundation.sql` runs.
+-- The (sport_id, name) pairs below are seeded by
+-- `202603200008_reference_data_foundation.sql` lines 217-224 and are
+-- stable across environments.
 INSERT INTO provider_market_aliases (provider, provider_market_key, provider_display_name, market_type_id, sport_id, stat_type_id, metadata)
-VALUES
-  ('sgo', 'points-all-game-ou',        'Player Goals',           'player_goals_ou',         'NHL', '81979f63-86b0-4963-9e8c-b3521014d140', '{}'),
-  ('sgo', 'goals+assists-all-game-ou', 'Player Points (G+A)',    'player_hockey_points_ou', 'NHL', 'b19ea690-ea51-4ae9-b9e4-a2348e5b35f4', '{}'),
-  ('sgo', 'assists-all-game-ou',       'Player Assists',         'player_assists_ou',       'NHL', '0266b206-dfe2-4a90-bb48-cb1a51062fbc', '{}'),
-  ('sgo', 'shots_onGoal-all-game-ou',  'Player Shots on Goal',   'player_shots_ou',         'NHL', 'ed88df3c-3c0a-47d1-89d2-a72463a6e5d0', '{}'),
-  ('sgo', 'goalie_saves-all-game-ou',  'Goalie Saves',           'player_saves_ou',         'NHL', 'e7de3ad4-265c-45ed-946a-56b261108ce3', '{}'),
-  ('sgo', 'blocks-all-game-ou',        'Player Blocked Shots',   'player_blocked_shots_ou', 'NHL', '621234a5-f215-43e6-a378-e41a3732fd1b', '{}')
+SELECT
+  row_data.provider,
+  row_data.provider_market_key,
+  row_data.provider_display_name,
+  row_data.market_type_id,
+  row_data.sport_id,
+  st.id,
+  row_data.metadata
+FROM (
+  VALUES
+    ('sgo', 'points-all-game-ou',        'Player Goals',         'player_goals_ou',         'NHL', 'Goals',         '{}'::jsonb),
+    ('sgo', 'goals+assists-all-game-ou', 'Player Points (G+A)',  'player_hockey_points_ou', 'NHL', 'Points',        '{}'::jsonb),
+    ('sgo', 'assists-all-game-ou',       'Player Assists',       'player_assists_ou',       'NHL', 'Assists',       '{}'::jsonb),
+    ('sgo', 'shots_onGoal-all-game-ou',  'Player Shots on Goal', 'player_shots_ou',         'NHL', 'Shots on Goal', '{}'::jsonb),
+    ('sgo', 'goalie_saves-all-game-ou',  'Goalie Saves',         'player_saves_ou',         'NHL', 'Saves',         '{}'::jsonb),
+    ('sgo', 'blocks-all-game-ou',        'Player Blocked Shots', 'player_blocked_shots_ou', 'NHL', 'Blocked Shots', '{}'::jsonb)
+) AS row_data(provider, provider_market_key, provider_display_name, market_type_id, sport_id, stat_type_name, metadata)
+JOIN public.stat_types st
+  ON st.sport_id = row_data.sport_id
+ AND st.name     = row_data.stat_type_name
 ON CONFLICT DO NOTHING;
 
 -- NFL player prop aliases
+--
+-- Same environment-agnostic stat_type_id lookup pattern as the NHL block
+-- above. NFL stat_type names are seeded by
+-- `202603200008_reference_data_foundation.sql` lines 199-205.
+-- Rows with NULL stat_type_id (passing_touchdowns, fantasyScore) are
+-- inserted via a second, UNION-ed branch because they don't participate
+-- in the join.
+INSERT INTO provider_market_aliases (provider, provider_market_key, provider_display_name, market_type_id, sport_id, stat_type_id, metadata)
+SELECT
+  row_data.provider,
+  row_data.provider_market_key,
+  row_data.provider_display_name,
+  row_data.market_type_id,
+  row_data.sport_id,
+  st.id,
+  row_data.metadata
+FROM (
+  VALUES
+    ('sgo', 'passing_yards-all-game-ou',        'Player Passing Yards',   'player_passing_yards_ou',   'NFL', 'Passing Yards',   '{}'::jsonb),
+    ('sgo', 'rushing_yards-all-game-ou',        'Player Rushing Yards',   'player_rushing_yards_ou',   'NFL', 'Rushing Yards',   '{}'::jsonb),
+    ('sgo', 'receiving_yards-all-game-ou',      'Player Receiving Yards', 'player_receiving_yards_ou', 'NFL', 'Receiving Yards', '{}'::jsonb),
+    ('sgo', 'receiving_receptions-all-game-ou', 'Player Receptions',      'player_receptions_ou',      'NFL', 'Receptions',      '{}'::jsonb)
+) AS row_data(provider, provider_market_key, provider_display_name, market_type_id, sport_id, stat_type_name, metadata)
+JOIN public.stat_types st
+  ON st.sport_id = row_data.sport_id
+ AND st.name     = row_data.stat_type_name
+ON CONFLICT DO NOTHING;
+
 INSERT INTO provider_market_aliases (provider, provider_market_key, provider_display_name, market_type_id, sport_id, stat_type_id, metadata)
 VALUES
-  ('sgo', 'passing_yards-all-game-ou',   'Player Passing Yards',   'player_passing_yards_ou',   'NFL', 'dddd7a97-ad8c-4eaa-94f4-19db8616f512', '{}'),
-  ('sgo', 'rushing_yards-all-game-ou',   'Player Rushing Yards',   'player_rushing_yards_ou',   'NFL', '97c6658e-0da6-4c00-b406-cb0270777cb3', '{}'),
-  ('sgo', 'receiving_yards-all-game-ou', 'Player Receiving Yards', 'player_receiving_yards_ou', 'NFL', 'e242cf9e-468b-4a41-ad83-3f1dc944827d', '{}'),
-  ('sgo', 'receiving_receptions-all-game-ou', 'Player Receptions', 'player_receptions_ou',      'NFL', 'dad733e2-d9b8-4965-932d-80dbcd1ee075', '{}'),
-  ('sgo', 'passing_touchdowns-all-game-ou', 'Player Passing TDs',  'player_passing_tds_ou',     'NFL', NULL,                                   '{}'),
-  ('sgo', 'fantasyScore-all-game-ou',    'Player Fantasy Score',   'player_fantasy_score_ou',   'NFL', NULL,                                   '{}')
+  ('sgo', 'passing_touchdowns-all-game-ou', 'Player Passing TDs',   'player_passing_tds_ou',     'NFL', NULL, '{}'),
+  ('sgo', 'fantasyScore-all-game-ou',       'Player Fantasy Score', 'player_fantasy_score_ou',   'NFL', NULL, '{}')
 ON CONFLICT DO NOTHING;

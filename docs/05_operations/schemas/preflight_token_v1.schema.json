@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/preflight_token_v1.schema.json",
+  "title": "Preflight Token V1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "branch",
+    "head_sha",
+    "tier",
+    "issue_id",
+    "generated_at",
+    "expires_at",
+    "checks",
+    "status"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "branch": { "type": "string" },
+    "head_sha": { "type": "string" },
+    "tier": { "enum": ["T1", "T2", "T3"] },
+    "issue_id": { "type": "string", "pattern": "^UTV2-[0-9]+$" },
+    "generated_at": { "type": "string", "format": "date-time" },
+    "expires_at": { "type": "string", "format": "date-time" },
+    "checks": {
+      "type": "object",
+      "required": ["git", "env", "deps"],
+      "properties": {
+        "git": { "enum": ["pass", "fail", "skip"] },
+        "env": { "enum": ["pass", "fail", "skip"] },
+        "deps": { "enum": ["pass", "fail", "skip"] }
+      },
+      "additionalProperties": false
+    },
+    "status": { "const": "pass" }
+  },
+  "additionalProperties": true
+}
