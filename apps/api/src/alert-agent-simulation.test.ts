@@ -3,7 +3,8 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { runAlertDetectionPass } from './alert-agent-service.js';
 import { runAlertNotificationPass } from './alert-notification-service.js';
-import { createAlertSubmissionPublisher } from './alert-submission.js';
+import { createAlertUpstreamAdapter } from './alert-submission.js';
+import type { MarketUniverseUpsertInput } from '@unit-talk/db';
 import type { AlertDetectionRecord } from '@unit-talk/db';
 
 interface ScenarioFixture {
@@ -232,19 +233,18 @@ async function runScenarioFixture(scenario: ScenarioFixture) {
   assert.equal(persisted.tier, scenario.expectedTier, `${scenario.name}: tier`);
 
   const notificationRequests: string[] = [];
-  const submissionRequests: Array<{ url: string; body: Record<string, unknown> }> = [];
-  const publishSystemPick = createAlertSubmissionPublisher({
+  const materializedRows: MarketUniverseUpsertInput[] = [];
+  const mockMarketUniverse = {
+    ...repositories.marketUniverse,
+    upsertMarketUniverse: async (rows: MarketUniverseUpsertInput[]) => {
+      materializedRows.push(...rows);
+    },
+  };
+  const publishSystemPick = createAlertUpstreamAdapter({
     enabled: true,
-    apiUrl: 'http://127.0.0.1:4000',
     events: repositories.events,
     participants: repositories.participants,
-    fetchImpl: async (url, init) => {
-      submissionRequests.push({
-        url: String(url),
-        body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>,
-      });
-      return new Response(JSON.stringify({ ok: true }), { status: 201 });
-    },
+    marketUniverse: mockMarketUniverse,
     logger: { error() {}, info() {} },
   });
 
@@ -275,7 +275,7 @@ async function runScenarioFixture(scenario: ScenarioFixture) {
   }
 
   assert.equal(
-    submissionRequests.length,
+    materializedRows.length,
     scenario.expectedSystemPickSubmissions,
     `${scenario.name}: system-pick submission count`,
   );
@@ -311,17 +311,17 @@ async function runScenarioFixture(scenario: ScenarioFixture) {
       );
       assert.equal(secondPass.notified, 0, `${scenario.name}: duplicate notification suppressed`);
       assert.equal(secondPass.skippedCooldown, 1, `${scenario.name}: cooldown skip recorded`);
-      assert.equal(submissionRequests.length, 0, `${scenario.name}: no system-pick retry`);
+      assert.equal(materializedRows.length, 0, `${scenario.name}: no system-pick retry`);
     } finally {
       restoreCooldownEnv();
     }
   }
 
-  if (submissionRequests.length > 0) {
+  if (materializedRows.length > 0) {
     assert.equal(
-      submissionRequests[0]?.url,
-      'http://127.0.0.1:4000/api/submissions',
-      `${scenario.name}: submission target`,
+      materializedRows[0]?.provider_key,
+      'alert-agent',
+      `${scenario.name}: materialized to governed upstream`,
     );
   }
 
