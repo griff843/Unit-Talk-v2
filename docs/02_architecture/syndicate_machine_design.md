@@ -163,7 +163,7 @@ The universe builder is a **materialization step**, not a new external feed. It 
 
 ### Current
 
-The system pick scanner (`system-pick-scanner.ts`) queries `provider_offers` for recent opening player props, deviggs them, picks the higher-probability side, and submits via `POST /api/submissions`.
+The system pick scanner (`system-pick-scanner.ts`) queries `provider_offers` for recent opening player props, deviggs them, picks the higher-probability side, and submits via `POST /api/submissions`. **Note:** This direct-submission path is transitional. Retirement is tracked in UTV2-495 (P7B-01) and UTV2-512 (P7B-02a), which will migrate the scanner to submit through the candidate layer instead.
 
 ### Target
 
