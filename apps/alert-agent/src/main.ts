@@ -11,12 +11,9 @@ const alertConfig = loadAlertAgentConfig(process.env);
 let stop: (() => void) | null = null;
 let shuttingDown = false;
 
+// Phase 7B UTV2-496/512: governed upstream adapter — no HTTP submission config needed
 stop = startAlertAgent(runtime.repositories, console, {
   systemPicksEnabled: process.env.SYSTEM_PICKS_ENABLED === 'true',
-  ...(process.env.UNIT_TALK_API_URL ? { systemPicksApiUrl: process.env.UNIT_TALK_API_URL } : {}),
-  ...(process.env.UNIT_TALK_API_KEY_SUBMITTER
-    ? { systemPicksApiKey: process.env.UNIT_TALK_API_KEY_SUBMITTER }
-    : {}),
 });
 
 console.log(

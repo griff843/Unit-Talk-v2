@@ -1,66 +1,51 @@
-import type { SubmissionPayload } from '@unit-talk/contracts';
+/**
+ * Alert Submission — Governed Upstream Path (Phase 7B)
+ *
+ * Prior to UTV2-496/512, alert detections were POSTed directly to
+ * /api/submissions to create picks with source='alert-agent'. That
+ * direct-submission path is retired.
+ *
+ * The adapter now materializes alert-worthy detections into market_universe
+ * rows, making them visible to the governed downstream pipeline (board scan →
+ * candidates → scoring → selection → construction → pick writer).
+ *
+ * The natural key uses provider_key='alert-agent' to distinguish
+ * alert-derived rows from SGO-derived materializer rows.
+ */
+
 import type {
   AlertDetectionRecord,
   EventRepository,
   EventRow,
+  IMarketUniverseRepository,
+  MarketUniverseUpsertInput,
   ParticipantRepository,
-  ParticipantRow,
 } from '@unit-talk/db';
 import { isAlertSportActive } from './alert-agent-service.js';
 
-export interface AlertSubmissionPublisherOptions {
+export interface AlertUpstreamAdapterOptions {
   enabled: boolean;
-  apiUrl?: string | undefined;
-  apiKey?: string | undefined;
   events: Pick<EventRepository, 'findById'>;
   participants: Pick<ParticipantRepository, 'findById'>;
-  fetchImpl?: typeof fetch;
+  marketUniverse: IMarketUniverseRepository;
   logger?: Pick<Console, 'error' | 'info'>;
-  submittedKeys?: Set<string>;
+  materializedKeys?: Set<string>;
 }
 
-export function buildAlertAgentSubmissionPayload(
-  detection: AlertDetectionRecord,
-  event: EventRow,
-  participant: ParticipantRow | null,
-): SubmissionPayload {
-  return {
-    source: 'alert-agent',
-    submittedBy: 'system:alert-agent',
-    market: buildAlertMarketString(detection.market_type, event.sport_id),
-    selection: buildAlertSelection(detection, participant),
-    line: detection.new_line,
-    confidence: 0.65,
-    eventName: event.event_name,
-    metadata: {
-      alertSignalIdempotencyKey: detection.idempotency_key,
-      alertTier: detection.tier,
-      lineChange: detection.line_change,
-      bookmakerKey: detection.bookmaker_key,
-      marketKey: detection.market_key,
-      sport: event.sport_id,
-      participantId: detection.participant_id,
-    },
-  };
-}
-
-export function createAlertSubmissionPublisher(options: AlertSubmissionPublisherOptions) {
-  const submittedKeys = options.submittedKeys ?? new Set<string>();
-  const fetchImpl = options.fetchImpl ?? fetch;
+export function createAlertUpstreamAdapter(options: AlertUpstreamAdapterOptions) {
+  const materializedKeys = options.materializedKeys ?? new Set<string>();
   const logger = options.logger ?? console;
-  const apiUrl = normalizeApiUrl(options.apiUrl);
-  const apiKey = options.apiKey?.trim();
 
   return async (detection: AlertDetectionRecord) => {
-    if (!options.enabled || detection.tier !== 'alert-worthy' || !apiUrl) {
+    if (!options.enabled || detection.tier !== 'alert-worthy') {
       return;
     }
 
     const idempotencyKey = detection.idempotency_key;
-    if (submittedKeys.has(idempotencyKey)) {
+    if (materializedKeys.has(idempotencyKey)) {
       return;
     }
-    submittedKeys.add(idempotencyKey);
+    materializedKeys.add(idempotencyKey);
 
     try {
       const event = await options.events.findById(detection.event_id);
@@ -68,7 +53,7 @@ export function createAlertSubmissionPublisher(options: AlertSubmissionPublisher
         logger.error(
           JSON.stringify({
             service: 'alert-agent',
-            event: 'system_pick_submission.skipped',
+            event: 'upstream_adapter.skipped',
             reason: 'event-not-found',
             detectionId: detection.id,
             eventId: detection.event_id,
@@ -81,7 +66,7 @@ export function createAlertSubmissionPublisher(options: AlertSubmissionPublisher
         logger.info(
           JSON.stringify({
             service: 'alert-agent',
-            event: 'system_pick_submission.skipped',
+            event: 'upstream_adapter.skipped',
             reason: 'ineligible-alert-signal',
             detectionId: detection.id,
             sport: event.sport_id,
@@ -91,48 +76,51 @@ export function createAlertSubmissionPublisher(options: AlertSubmissionPublisher
         return;
       }
 
-      const participant = detection.participant_id
-        ? await options.participants.findById(detection.participant_id)
-        : null;
-      const payload = buildAlertAgentSubmissionPayload(detection, event, participant);
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
+      const canonicalMarketKey = buildCanonicalMarketKey(detection.market_type, event.sport_id);
+
+      const row: MarketUniverseUpsertInput = {
+        provider_key: 'alert-agent',
+        provider_event_id: detection.event_id,
+        provider_participant_id: detection.participant_id,
+        provider_market_key: detection.market_key,
+        sport_key: event.sport_id,
+        league_key: event.sport_id,
+        event_id: detection.event_id,
+        participant_id: detection.participant_id,
+        market_type_id: null,
+        canonical_market_key: canonicalMarketKey,
+        current_line: detection.new_line,
+        current_over_odds: null,
+        current_under_odds: null,
+        opening_line: null,
+        opening_over_odds: null,
+        opening_under_odds: null,
+        closing_line: null,
+        closing_over_odds: null,
+        closing_under_odds: null,
+        fair_over_prob: null,
+        fair_under_prob: null,
+        is_stale: false,
+        last_offer_snapshot_at: detection.current_snapshot_at,
       };
-      if (apiKey) {
-        headers.Authorization = `Bearer ${apiKey}`;
-      }
 
-      const response = await fetchImpl(`${apiUrl}/api/submissions`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(payload),
-      });
-
-      if (!response.ok) {
-        logger.error(
-          JSON.stringify({
-            service: 'alert-agent',
-            event: 'system_pick_submission.failed',
-            detectionId: detection.id,
-            status: response.status,
-          }),
-        );
-        return;
-      }
+      await options.marketUniverse.upsertMarketUniverse([row]);
 
       logger.info(
         JSON.stringify({
           service: 'alert-agent',
-          event: 'system_pick_submission.succeeded',
+          event: 'upstream_adapter.materialized',
           detectionId: detection.id,
           idempotencyKey,
+          canonicalMarketKey,
+          sport: event.sport_id,
         }),
       );
     } catch (error) {
       logger.error(
         JSON.stringify({
           service: 'alert-agent',
-          event: 'system_pick_submission.failed',
+          event: 'upstream_adapter.failed',
           detectionId: detection.id,
           error: error instanceof Error ? error.message : String(error),
         }),
@@ -152,38 +140,18 @@ export function isSystemPickEligible(
   );
 }
 
-function buildAlertMarketString(
+function buildCanonicalMarketKey(
   marketType: AlertDetectionRecord['market_type'],
   sport: string,
 ) {
   switch (marketType) {
     case 'spread':
-      return `${sport} Spread`;
+      return `${sport.toLowerCase()}_spread`;
     case 'total':
-      return `${sport} Total`;
+      return `${sport.toLowerCase()}_total`;
     case 'moneyline':
-      return `${sport} Moneyline`;
+      return `${sport.toLowerCase()}_moneyline`;
     default:
-      return `${sport} Player Prop`;
+      return `${sport.toLowerCase()}_${marketType}`;
   }
-}
-
-function buildAlertSelection(
-  detection: AlertDetectionRecord,
-  participant: ParticipantRow | null,
-) {
-  if (detection.market_type === 'moneyline') {
-    return participant?.display_name?.trim() || (detection.direction === 'up' ? 'favorite' : 'underdog');
-  }
-
-  return detection.direction === 'up' ? 'over' : 'under';
-}
-
-function normalizeApiUrl(apiUrl?: string) {
-  const trimmed = apiUrl?.trim();
-  if (!trimmed) {
-    return null;
-  }
-
-  return trimmed.replace(/\/+$/, '');
 }

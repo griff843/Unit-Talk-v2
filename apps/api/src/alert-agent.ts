@@ -9,7 +9,7 @@ import {
   type AlertAgentConfig,
 } from './alert-agent-service.js';
 import { runAlertNotificationPass } from './alert-notification-service.js';
-import { createAlertSubmissionPublisher } from './alert-submission.js';
+import { createAlertUpstreamAdapter } from './alert-submission.js';
 import {
   type HedgeAgentConfig,
   loadHedgeAgentConfig,
@@ -20,15 +20,12 @@ import { runHedgeNotificationPass } from './hedge-notification-service.js';
 const ALERT_AGENT_INTERVAL_MS = 60_000;
 type AlertAgentRuntimeConfig = Partial<AlertAgentConfig & HedgeAgentConfig> & {
   systemPicksEnabled?: boolean;
-  systemPicksApiUrl?: string | undefined;
-  systemPicksApiKey?: string | undefined;
-  submissionFetch?: typeof fetch | undefined;
 };
 
 export function startAlertAgent(
   repositories: Pick<
     RepositoryBundle,
-    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs' | 'audit'
+    'alertDetections' | 'hedgeOpportunities' | 'events' | 'participants' | 'providerOffers' | 'runs' | 'audit' | 'marketUniverse'
   >,
   logger: Pick<Console, 'error' | 'info'> = console,
   config: AlertAgentRuntimeConfig = {},
@@ -41,14 +38,13 @@ export function startAlertAgent(
     ...loadHedgeAgentConfig(),
     ...config,
   };
-  const publishSystemPick = createAlertSubmissionPublisher({
+  // Phase 7B UTV2-496/512: governed upstream adapter replaces direct /api/submissions POST
+  const publishSystemPick = createAlertUpstreamAdapter({
     enabled: config.systemPicksEnabled === true,
     events: repositories.events,
     participants: repositories.participants,
+    marketUniverse: repositories.marketUniverse,
     logger,
-    ...(config.systemPicksApiUrl ? { apiUrl: config.systemPicksApiUrl } : {}),
-    ...(config.systemPicksApiKey ? { apiKey: config.systemPicksApiKey } : {}),
-    ...(config.submissionFetch ? { fetchImpl: config.submissionFetch } : {}),
   });
 
   if (!resolvedAlertConfig.enabled && !resolvedHedgeConfig.enabled) {
