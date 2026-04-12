@@ -110,7 +110,8 @@ jobs:
           set -euo pipefail
 
           # Fetch the Done state id for team unit-talk-v2 once
-          team_query='{"query":"query { team(id: \"unit-talk-v2\") { states { nodes { id name type } } } }"}'
+          # Use the team UUID, not the name slug. Linear's team(id:) requires UUID.
+          team_query='{"query":"query { team(id: \"00075741-4bdd-49ac-942e-eee06cc56fb5\") { states { nodes { id name type } } } }"}'
           team_resp=$(curl -sS -X POST https://api.linear.app/graphql \
             -H "Authorization: $LINEAR_API_TOKEN" \
             -H "Content-Type: application/json" \
