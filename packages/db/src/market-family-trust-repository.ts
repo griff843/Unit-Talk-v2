@@ -48,6 +48,14 @@ export interface MarketFamilyTrustRow {
   metadata: Record<string, unknown>;
 }
 
+export interface ClvFeedbackInsert {
+  market_type_id: string;
+  sport_key: string | null;
+  sample_size: number;
+  avg_clv_percent: number;
+  feedback_run_id: string;
+}
+
 export interface IMarketFamilyTrustRepository {
   /**
    * Insert a full tuning run. All rows share the same tuning_run_id.
@@ -64,6 +72,14 @@ export interface IMarketFamilyTrustRepository {
    * tuning_run_ids. If no rows exist, returns [].
    */
   listLatestRun(): Promise<MarketFamilyTrustRow[]>;
+
+  /**
+   * Phase 7C UTV2-516: Append CLV-derived market-family feedback.
+   * Uses the existing market_family_trust table with source='clv-feedback' in metadata.
+   * Insert-only — never mutates existing tuning-run rows.
+   * Idempotent: duplicate feedback_run_id rows are skipped (ON CONFLICT DO NOTHING).
+   */
+  insertClvFeedback(rows: ClvFeedbackInsert[]): Promise<string>;
 }
 
 // =============================================================================
@@ -127,6 +143,36 @@ export class InMemoryMarketFamilyTrustRepository implements IMarketFamilyTrustRe
     return this.rows
       .filter((r) => r.tuning_run_id === latestRunId)
       .sort((a, b) => a.market_type_id.localeCompare(b.market_type_id));
+  }
+
+  async insertClvFeedback(inputs: ClvFeedbackInsert[]): Promise<string> {
+    if (inputs.length === 0) {
+      return inputs[0]?.feedback_run_id ?? crypto.randomUUID();
+    }
+
+    const feedbackRunId = inputs[0]!.feedback_run_id;
+    const now = new Date().toISOString();
+
+    for (const input of inputs) {
+      this.rows.push({
+        id: crypto.randomUUID(),
+        tuning_run_id: input.feedback_run_id,
+        market_type_id: input.market_type_id,
+        sport_key: input.sport_key,
+        sample_size: input.sample_size,
+        win_count: 0,
+        loss_count: 0,
+        push_count: 0,
+        win_rate: null,
+        roi: null,
+        avg_model_score: null,
+        confidence_band: null,
+        computed_at: now,
+        metadata: { source: 'clv-feedback', avg_clv_percent: input.avg_clv_percent },
+      });
+    }
+
+    return feedbackRunId;
   }
 
   /** Test helper: return all rows. */
@@ -222,5 +268,38 @@ export class DatabaseMarketFamilyTrustRepository implements IMarketFamilyTrustRe
     }
 
     return data ?? [];
+  }
+
+  async insertClvFeedback(inputs: ClvFeedbackInsert[]): Promise<string> {
+    if (inputs.length === 0) {
+      return inputs[0]?.feedback_run_id ?? crypto.randomUUID();
+    }
+
+    const feedbackRunId = inputs[0]!.feedback_run_id;
+    const now = new Date().toISOString();
+
+    const rows = inputs.map((input) => ({
+      tuning_run_id: input.feedback_run_id,
+      market_type_id: input.market_type_id,
+      sport_key: input.sport_key,
+      sample_size: input.sample_size,
+      win_count: 0,
+      loss_count: 0,
+      push_count: 0,
+      win_rate: null,
+      roi: null,
+      avg_model_score: null,
+      confidence_band: null,
+      computed_at: now,
+      metadata: { source: 'clv-feedback', avg_clv_percent: input.avg_clv_percent },
+    }));
+
+    const { error } = await (fromUntyped(this.client, 'market_family_trust').insert(rows) as unknown as Promise<{ data: unknown; error: { message: string } | null }>);
+
+    if (error) {
+      throw new Error(`market_family_trust insertClvFeedback failed: ${error.message}`);
+    }
+
+    return feedbackRunId;
   }
 }

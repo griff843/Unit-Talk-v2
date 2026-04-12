@@ -139,6 +139,10 @@ import {
   InMemorySyndicateBoardRepository,
   DatabaseSyndicateBoardRepository,
 } from './syndicate-board-repository.js';
+import {
+  InMemoryMarketFamilyTrustRepository,
+  DatabaseMarketFamilyTrustRepository,
+} from './market-family-trust-repository.js';
 export {
   InMemoryMarketFamilyTrustRepository,
   DatabaseMarketFamilyTrustRepository,
@@ -6359,6 +6363,7 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     marketUniverse: new InMemoryMarketUniverseRepository(),
     pickCandidates: new InMemoryPickCandidateRepository(),
     syndicateBoard: new InMemorySyndicateBoardRepository(),
+    marketFamilyTrust: new InMemoryMarketFamilyTrustRepository(),
   };
 }
 
@@ -6386,6 +6391,7 @@ export function createDatabaseRepositoryBundle(
     marketUniverse: new DatabaseMarketUniverseRepository(connection),
     pickCandidates: new DatabasePickCandidateRepository(connection),
     syndicateBoard: new DatabaseSyndicateBoardRepository(connection),
+    marketFamilyTrust: new DatabaseMarketFamilyTrustRepository(connection),
   };
 }
 
