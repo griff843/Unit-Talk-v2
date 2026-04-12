@@ -4,6 +4,7 @@ import {
   InMemoryProviderOfferRepository,
   InMemoryParticipantRepository,
   InMemoryEventRepository,
+  InMemoryMarketUniverseRepository,
 } from '@unit-talk/db';
 import { runSystemPickScan, type SystemPickScanOptions } from './system-pick-scanner.js';
 
@@ -28,49 +29,21 @@ function makeOffer(overrides: Record<string, unknown> = {}) {
   };
 }
 
-function _makeParticipant(overrides: Record<string, unknown> = {}) {
+function baseOptions(overrides: Partial<SystemPickScanOptions> = {}): SystemPickScanOptions {
   return {
-    id: crypto.randomUUID(),
-    external_id: 'player-ext-1',
-    display_name: 'LeBron James',
-    participant_type: 'player' as const,
-    sport: 'NBA',
-    league: null,
-    metadata: {},
-    created_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
+    enabled: true,
+    lookbackHours: 24,
+    maxOffersPerRun: 100,
     ...overrides,
   };
 }
 
-interface SubmittedRequest {
-  url: string;
-  body: Record<string, unknown>;
-}
-
-function makeMockFetch(responses: Array<{ status: number; body?: string }>) {
-  const calls: SubmittedRequest[] = [];
-  let index = 0;
-
-  const fetchImpl = async (url: string, init?: RequestInit) => {
-    calls.push({ url, body: JSON.parse((init?.body as string) ?? '{}') as Record<string, unknown> });
-    const response = responses[index++] ?? { status: 200, body: '{"ok":true}' };
-    return {
-      ok: response.status >= 200 && response.status < 300,
-      status: response.status,
-      text: async () => response.body ?? '',
-    } as Response;
-  };
-
-  return { fetchImpl, calls };
-}
-
-function baseOptions(overrides: Partial<SystemPickScanOptions> = {}): SystemPickScanOptions {
+function makeRepos(overrides: Record<string, unknown> = {}) {
   return {
-    enabled: true,
-    apiUrl: 'http://localhost:4000',
-    lookbackHours: 24,
-    maxPicksPerRun: 100,
+    providerOffers: new InMemoryProviderOfferRepository(),
+    participants: new InMemoryParticipantRepository(),
+    events: new InMemoryEventRepository(),
+    marketUniverse: new InMemoryMarketUniverseRepository(),
     ...overrides,
   };
 }
@@ -78,242 +51,208 @@ function baseOptions(overrides: Partial<SystemPickScanOptions> = {}): SystemPick
 // ── tests ────────────────────────────────────────────────────────────────────
 
 test('returns zeros when disabled', async () => {
-  const offers = new InMemoryProviderOfferRepository();
-  const participants = new InMemoryParticipantRepository();
-  const events = new InMemoryEventRepository();
-
-  const result = await runSystemPickScan(
-    { providerOffers: offers, participants, events },
-    baseOptions({ enabled: false }),
-  );
+  const repos = makeRepos();
+  const result = await runSystemPickScan(repos, baseOptions({ enabled: false }));
 
   assert.equal(result.scanned, 0);
-  assert.equal(result.submitted, 0);
+  assert.equal(result.materialized, 0);
 });
 
-test('returns zeros when apiUrl is empty', async () => {
-  const offers = new InMemoryProviderOfferRepository();
-  const participants = new InMemoryParticipantRepository();
-  const events = new InMemoryEventRepository();
-
-  const result = await runSystemPickScan(
-    { providerOffers: offers, participants, events },
-    baseOptions({ apiUrl: '' }),
-  );
+test('returns zeros when no opening offers exist', async () => {
+  const repos = makeRepos();
+  const result = await runSystemPickScan(repos, baseOptions());
 
   assert.equal(result.scanned, 0);
-  assert.equal(result.submitted, 0);
+  assert.equal(result.materialized, 0);
 });
 
-test('skips offers with no canonical market key (resolveCanonicalMarketKey returns null)', async () => {
-  // Use a mock that returns a valid opening offer but no canonical key
+test('skips offers with no canonical market key', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => null,
     listOpeningOffers: async () => [makeOffer()],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  const events = new InMemoryEventRepository();
-  const { fetchImpl, calls } = makeMockFetch([]);
-
-  const result = await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
+  const repos = makeRepos({ providerOffers: mockOffers });
+  const result = await runSystemPickScan(repos, baseOptions());
 
   assert.equal(result.scanned, 1);
-  assert.equal(result.submitted, 0);
+  assert.equal(result.materialized, 0);
   assert.equal(result.skipped, 1);
-  assert.equal(calls.length, 0);
 });
 
-test('skips offers with no matching participant', async () => {
-  // We need a mock providerOffers that returns a canonical key but participant is missing
+test('materializes a valid offer into market_universe', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
     listOpeningOffers: async () => [makeOffer()],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  // No participant seeded
-  const events = new InMemoryEventRepository();
-
-  const { fetchImpl, calls } = makeMockFetch([]);
-
-  const result = await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
-
-  assert.equal(result.skipped, 1);
-  assert.equal(calls.length, 0);
-});
-
-test('submits a valid pick and returns submitted=1', async () => {
-  const mockOffers = {
-    ...new InMemoryProviderOfferRepository(),
-    resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [makeOffer()],
+  let upsertedRows: unknown[] = [];
+  const mockMarketUniverse = {
+    ...new InMemoryMarketUniverseRepository(),
+    upsertMarketUniverse: async (rows: unknown[]) => {
+      upsertedRows = rows;
+    },
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  await participants.upsertByExternalId({
-    externalId: 'player-ext-1',
-    displayName: 'LeBron James',
-    participantType: 'player',
-    sport: 'NBA',
-    metadata: {},
+  const repos = makeRepos({
+    providerOffers: mockOffers,
+    marketUniverse: mockMarketUniverse,
   });
 
-  const events = new InMemoryEventRepository();
+  const result = await runSystemPickScan(repos, baseOptions());
 
-  const { fetchImpl, calls } = makeMockFetch([{ status: 200, body: '{"ok":true,"data":{"pickId":"p1","submissionId":"s1"}}' }]);
-
-  const result = await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
-
-  assert.equal(result.submitted, 1);
+  assert.equal(result.scanned, 1);
+  assert.equal(result.materialized, 1);
   assert.equal(result.errors, 0);
-  assert.equal(calls.length, 1);
+  assert.equal(upsertedRows.length, 1);
 
-  const body = calls[0]?.body as Record<string, unknown>;
-  assert.equal(body.source, 'system-pick-scanner');
-  assert.equal(body.market, 'player_points_ou');
-  assert.ok(
-    typeof body.selection === 'string' && /^(Over|Under) \d/.test(body.selection),
-    `selection should be "Over N" or "Under N", got: ${String(body.selection)}`,
-  );
-  assert.equal(body.line, 24.5);
-  assert.ok(typeof body.odds === 'number', 'odds should be a number');
+  const row = upsertedRows[0] as Record<string, unknown>;
+  assert.equal(row.canonical_market_key, 'player_points_ou');
+  assert.equal(row.provider_event_id, 'event-1');
+  assert.equal(row.provider_market_key, 'points-all-game-ou');
 });
 
-test('treats 409 response as idempotent skip, not error', async () => {
+test('does not POST to /api/submissions (no HTTP calls)', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
     listOpeningOffers: async () => [makeOffer()],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  await participants.upsertByExternalId({
-    externalId: 'player-ext-1',
-    displayName: 'LeBron James',
-    participantType: 'player',
-    sport: 'NBA',
-    metadata: {},
-  });
+  const repos = makeRepos({ providerOffers: mockOffers });
+  const result = await runSystemPickScan(repos, baseOptions());
 
-  const events = new InMemoryEventRepository();
-  const { fetchImpl } = makeMockFetch([{ status: 409 }]);
-
-  const result = await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
-
-  assert.equal(result.submitted, 0);
-  assert.equal(result.skipped, 1);
+  // The key assertion: materialized > 0 means it wrote to market_universe
+  // AND there's no fetchImpl, no apiUrl, no HTTP dependency at all
+  assert.equal(result.materialized, 1);
   assert.equal(result.errors, 0);
 });
 
-test('counts API errors without throwing', async () => {
+test('computes fair probabilities in upserted rows', async () => {
+  const mockOffers = {
+    ...new InMemoryProviderOfferRepository(),
+    resolveCanonicalMarketKey: async () => 'player_points_ou',
+    listOpeningOffers: async () => [makeOffer({ over_odds: -115, under_odds: -105 })],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
+  } as ReturnType<typeof Object.assign>;
+
+  let upsertedRows: unknown[] = [];
+  const mockMarketUniverse = {
+    ...new InMemoryMarketUniverseRepository(),
+    upsertMarketUniverse: async (rows: unknown[]) => {
+      upsertedRows = rows;
+    },
+  } as ReturnType<typeof Object.assign>;
+
+  const repos = makeRepos({
+    providerOffers: mockOffers,
+    marketUniverse: mockMarketUniverse,
+  });
+
+  await runSystemPickScan(repos, baseOptions());
+
+  const row = upsertedRows[0] as Record<string, unknown>;
+  assert.ok(typeof row.fair_over_prob === 'number', 'fair_over_prob should be a number');
+  assert.ok(typeof row.fair_under_prob === 'number', 'fair_under_prob should be a number');
+  assert.ok((row.fair_over_prob as number) > 0 && (row.fair_over_prob as number) < 1, 'fair_over_prob should be a probability');
+});
+
+test('sets opening values from opening offers', async () => {
+  const offer = makeOffer({ is_opening: true, line: 24.5, over_odds: -115, under_odds: -105 });
+  const mockOffers = {
+    ...new InMemoryProviderOfferRepository(),
+    resolveCanonicalMarketKey: async () => 'player_points_ou',
+    listOpeningOffers: async () => [offer],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
+  } as ReturnType<typeof Object.assign>;
+
+  let upsertedRows: unknown[] = [];
+  const mockMarketUniverse = {
+    ...new InMemoryMarketUniverseRepository(),
+    upsertMarketUniverse: async (rows: unknown[]) => {
+      upsertedRows = rows;
+    },
+  } as ReturnType<typeof Object.assign>;
+
+  const repos = makeRepos({
+    providerOffers: mockOffers,
+    marketUniverse: mockMarketUniverse,
+  });
+
+  await runSystemPickScan(repos, baseOptions());
+
+  const row = upsertedRows[0] as Record<string, unknown>;
+  assert.equal(row.opening_line, 24.5);
+  assert.equal(row.opening_over_odds, -115);
+  assert.equal(row.opening_under_odds, -105);
+});
+
+test('counts upsert errors without throwing', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
     listOpeningOffers: async () => [makeOffer()],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  await participants.upsertByExternalId({
-    externalId: 'player-ext-1',
-    displayName: 'LeBron James',
-    participantType: 'player',
-    sport: 'NBA',
-    metadata: {},
+  const mockMarketUniverse = {
+    ...new InMemoryMarketUniverseRepository(),
+    upsertMarketUniverse: async () => {
+      throw new Error('upsert failed');
+    },
+  } as ReturnType<typeof Object.assign>;
+
+  const repos = makeRepos({
+    providerOffers: mockOffers,
+    marketUniverse: mockMarketUniverse,
   });
 
-  const events = new InMemoryEventRepository();
-  const { fetchImpl } = makeMockFetch([{ status: 500, body: 'internal error' }]);
-
-  const result = await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
+  const result = await runSystemPickScan(repos, baseOptions());
 
   assert.equal(result.errors, 1);
-  assert.equal(result.submitted, 0);
+  assert.equal(result.materialized, 0);
 });
 
-test('picks over side when overFair > underFair', async () => {
-  // -130 over, -110 under → over has higher implied prob → overFair > underFair
-  const offer = makeOffer({ over_odds: -130, under_odds: -110 });
+test('multiple offers are batched into a single upsert', async () => {
+  const offers = [
+    makeOffer({ provider_event_id: 'e1', provider_participant_id: 'p1' }),
+    makeOffer({ provider_event_id: 'e2', provider_participant_id: 'p2' }),
+  ];
 
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [offer],
+    listOpeningOffers: async () => offers,
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  await participants.upsertByExternalId({
-    externalId: 'player-ext-1',
-    displayName: 'LeBron James',
-    participantType: 'player',
-    sport: 'NBA',
-    metadata: {},
-  });
-
-  const events = new InMemoryEventRepository();
-  const { fetchImpl, calls } = makeMockFetch([{ status: 200, body: '{"ok":true}' }]);
-
-  await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
-
-  const body = calls[0]?.body as Record<string, unknown>;
-  assert.ok(
-    typeof body.selection === 'string' && body.selection.startsWith('Over'),
-    `expected Over selection, got: ${String(body.selection)}`,
-  );
-  assert.equal(body.odds, -130);
-});
-
-test('picks under side when underFair > overFair', async () => {
-  // -110 over, -130 under → under has higher implied prob → underFair > overFair
-  const offer = makeOffer({ over_odds: -110, under_odds: -130 });
-
-  const mockOffers = {
-    ...new InMemoryProviderOfferRepository(),
-    resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [offer],
+  let upsertedRows: unknown[] = [];
+  const mockMarketUniverse = {
+    ...new InMemoryMarketUniverseRepository(),
+    upsertMarketUniverse: async (rows: unknown[]) => {
+      upsertedRows = rows;
+    },
   } as ReturnType<typeof Object.assign>;
 
-  const participants = new InMemoryParticipantRepository();
-  await participants.upsertByExternalId({
-    externalId: 'player-ext-1',
-    displayName: 'LeBron James',
-    participantType: 'player',
-    sport: 'NBA',
-    metadata: {},
+  const repos = makeRepos({
+    providerOffers: mockOffers,
+    marketUniverse: mockMarketUniverse,
   });
 
-  const events = new InMemoryEventRepository();
-  const { fetchImpl, calls } = makeMockFetch([{ status: 200, body: '{"ok":true}' }]);
+  const result = await runSystemPickScan(repos, baseOptions());
 
-  await runSystemPickScan(
-    { providerOffers: mockOffers, participants, events },
-    baseOptions({ fetchImpl }),
-  );
-
-  const body = calls[0]?.body as Record<string, unknown>;
-  assert.ok(
-    typeof body.selection === 'string' && body.selection.startsWith('Under'),
-    `expected Under selection, got: ${String(body.selection)}`,
-  );
-  assert.equal(body.odds, -130);
+  assert.equal(result.materialized, 2);
+  assert.equal(upsertedRows.length, 2);
 });

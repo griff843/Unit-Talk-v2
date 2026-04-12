@@ -53,13 +53,15 @@ server.listen(port, () => {
     runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
   }, 6 * 60 * 60 * 1000);
 
-  // System pick scanner: auto-generate player prop picks from opening lines
+  // System pick scanner: materialize opening player prop lines into market_universe
+  // Phase 7B UTV2-495 — retired direct /api/submissions path; now writes to governed upstream
   const scannerConfig = loadSystemPickScannerConfig(environment);
   if (scannerConfig.enabled) {
     const scannerDeps = {
       providerOffers: runtime.repositories.providerOffers,
       participants: runtime.repositories.participants,
       events: runtime.repositories.events,
+      marketUniverse: runtime.repositories.marketUniverse,
     };
     runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
     systemPickScannerTimer = setInterval(() => {

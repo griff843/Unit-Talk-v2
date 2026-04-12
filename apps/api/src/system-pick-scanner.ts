@@ -1,10 +1,14 @@
 /**
- * System Pick Scanner
+ * System Pick Scanner — Governed Upstream Path (Phase 7B)
  *
- * Polls provider_offers for recent is_opening=true player prop rows, resolves the
- * canonical market key via provider_market_aliases, and auto-submits picks to
- * POST /api/submissions. Designed to keep the grading/CLV pipeline fed with
- * picks during the G12 canary period without manual submission.
+ * Polls provider_offers for recent is_opening=true player prop rows and
+ * materializes them into market_universe via the governed upstream path.
+ *
+ * Prior to UTV2-495, this scanner POSTed directly to /api/submissions to
+ * create picks with source='system-pick-scanner'. That direct-submission
+ * path is retired. The scanner now writes to market_universe, and the
+ * governed downstream pipeline (board scan → candidates → scoring →
+ * selection → construction → pick writer) handles pick creation.
  *
  * Gate: SYSTEM_PICK_SCANNER_ENABLED=true (default: off)
  * Interval: wired in index.ts (default 5 minutes)
@@ -14,26 +18,24 @@ import { americanToImplied, applyDevig } from '@unit-talk/domain';
 import type { AppEnv } from '@unit-talk/config';
 import type {
   EventRepository,
+  IMarketUniverseRepository,
+  MarketUniverseUpsertInput,
   ParticipantRepository,
-  ProviderOfferRecord,
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
 export interface SystemPickScanOptions {
   enabled: boolean;
-  apiUrl: string;
-  apiKey?: string | undefined;
   /** How far back to look for opening lines. Default: 24 hours. */
   lookbackHours?: number;
-  /** Max picks to submit per run. Default: 100. */
-  maxPicksPerRun?: number;
-  fetchImpl?: (input: string, init?: RequestInit) => Promise<Response>;
+  /** Max offers to process per run. Default: 100. */
+  maxOffersPerRun?: number;
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
 }
 
 export interface SystemPickScanResult {
   scanned: number;
-  submitted: number;
+  materialized: number;
   skipped: number;
   errors: number;
 }
@@ -43,15 +45,11 @@ export function loadSystemPickScannerConfig(env: Pick<
   | 'SYSTEM_PICK_SCANNER_ENABLED'
   | 'SYSTEM_PICK_SCANNER_LOOKBACK_HOURS'
   | 'SYSTEM_PICK_SCANNER_MAX_PICKS'
-  | 'UNIT_TALK_API_URL'
-  | 'UNIT_TALK_API_KEY_SUBMITTER'
->): Pick<SystemPickScanOptions, 'enabled' | 'apiUrl' | 'apiKey' | 'lookbackHours' | 'maxPicksPerRun'> {
+>): Pick<SystemPickScanOptions, 'enabled' | 'lookbackHours' | 'maxOffersPerRun'> {
   return {
     enabled: env.SYSTEM_PICK_SCANNER_ENABLED === 'true',
-    apiUrl: (env.UNIT_TALK_API_URL ?? '').replace(/\/+$/, ''),
-    apiKey: env.UNIT_TALK_API_KEY_SUBMITTER?.trim() || undefined,
     lookbackHours: parsePositiveInt(env.SYSTEM_PICK_SCANNER_LOOKBACK_HOURS, 24),
-    maxPicksPerRun: parsePositiveInt(env.SYSTEM_PICK_SCANNER_MAX_PICKS, 100),
+    maxOffersPerRun: parsePositiveInt(env.SYSTEM_PICK_SCANNER_MAX_PICKS, 100),
   };
 }
 
@@ -60,40 +58,119 @@ export async function runSystemPickScan(
     providerOffers: ProviderOfferRepository;
     participants: ParticipantRepository;
     events: EventRepository;
+    marketUniverse: IMarketUniverseRepository;
   },
   options: SystemPickScanOptions,
 ): Promise<SystemPickScanResult> {
   if (!options.enabled) {
-    return { scanned: 0, submitted: 0, skipped: 0, errors: 0 };
-  }
-
-  const apiUrl = options.apiUrl.replace(/\/+$/, '');
-  if (!apiUrl) {
-    options.logger?.warn?.('system-pick-scanner: UNIT_TALK_API_URL not set — skipping scan');
-    return { scanned: 0, submitted: 0, skipped: 0, errors: 0 };
+    return { scanned: 0, materialized: 0, skipped: 0, errors: 0 };
   }
 
   const lookbackHours = options.lookbackHours ?? 24;
-  const maxPicksPerRun = options.maxPicksPerRun ?? 100;
-  const fetchImpl = options.fetchImpl ?? fetch;
+  const maxOffersPerRun = options.maxOffersPerRun ?? 100;
 
   const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const offers = await repositories.providerOffers.listOpeningOffers(since, 'sgo', maxPicksPerRun);
+  const offers = await repositories.providerOffers.listOpeningOffers(since, 'sgo', maxOffersPerRun);
 
-  let submitted = 0;
+  if (offers.length === 0) {
+    options.logger?.info?.(
+      JSON.stringify({
+        service: 'system-pick-scanner',
+        event: 'scan.completed',
+        scanned: 0,
+        materialized: 0,
+        skipped: 0,
+        errors: 0,
+        note: 'no opening offers in window',
+      }),
+    );
+    return { scanned: 0, materialized: 0, skipped: 0, errors: 0 };
+  }
+
+  // Load alias lookup for canonical market key resolution
+  const aliasMap = new Map<string, string>();
+  try {
+    const aliasRows = await repositories.providerOffers.listAliasLookup('sgo');
+    for (const row of aliasRows) {
+      aliasMap.set(`${row.provider_market_key}:${row.sport_id ?? ''}`, row.market_type_id);
+    }
+  } catch {
+    // Non-fatal — continue without alias resolution
+  }
+
+  // Load participant alias lookup for FK resolution
+  const participantMap = new Map<string, string>();
+  try {
+    const participantAliasRows = await repositories.providerOffers.listParticipantAliasLookup('sgo');
+    for (const row of participantAliasRows) {
+      if (row.provider_entity_id && row.participant_id) {
+        participantMap.set(row.provider_entity_id, row.participant_id);
+      }
+    }
+  } catch {
+    // Non-fatal
+  }
+
+  const upsertBatch: MarketUniverseUpsertInput[] = [];
   let skipped = 0;
   let errors = 0;
 
   for (const offer of offers) {
     try {
-      const result = await processOffer(offer, repositories, {
-        apiUrl,
-        ...(options.apiKey ? { apiKey: options.apiKey } : {}),
-        fetchImpl,
-        ...(options.logger ? { logger: options.logger } : {}),
-      });
-      if (result === 'submitted') submitted++;
-      else skipped++;
+      // Resolve canonical market key
+      const canonicalMarketKey = await repositories.providerOffers.resolveCanonicalMarketKey(
+        offer.provider_market_key,
+        offer.provider_key,
+      );
+      if (!canonicalMarketKey) {
+        skipped++;
+        continue;
+      }
+
+      // Compute devigged fair probability
+      const overImplied = americanToImplied(offer.over_odds as number);
+      const underImplied = americanToImplied(offer.under_odds as number);
+      const devigged = applyDevig(overImplied, underImplied, 'proportional');
+
+      // Resolve participant FK
+      const participantId = offer.provider_participant_id
+        ? participantMap.get(offer.provider_participant_id) ?? null
+        : null;
+
+      // Resolve market_type_id from alias map
+      const sportKey = offer.sport_key ?? '';
+      const marketTypeId =
+        aliasMap.get(`${offer.provider_market_key}:${sportKey}`) ??
+        aliasMap.get(`${offer.provider_market_key}:`) ??
+        null;
+
+      const row: MarketUniverseUpsertInput = {
+        provider_key: offer.provider_key,
+        provider_event_id: offer.provider_event_id,
+        provider_participant_id: offer.provider_participant_id ?? null,
+        provider_market_key: offer.provider_market_key,
+        sport_key: offer.sport_key ?? 'unknown',
+        league_key: offer.sport_key ?? 'unknown',
+        event_id: null,
+        participant_id: participantId,
+        market_type_id: marketTypeId,
+        canonical_market_key: canonicalMarketKey,
+        current_line: offer.line ?? null,
+        current_over_odds: offer.over_odds ?? null,
+        current_under_odds: offer.under_odds ?? null,
+        opening_line: offer.is_opening ? (offer.line ?? null) : null,
+        opening_over_odds: offer.is_opening ? (offer.over_odds ?? null) : null,
+        opening_under_odds: offer.is_opening ? (offer.under_odds ?? null) : null,
+        closing_line: null,
+        closing_over_odds: null,
+        closing_under_odds: null,
+        fair_over_prob: devigged?.overFair ?? null,
+        fair_under_prob: devigged?.underFair ?? null,
+        is_stale: false,
+        last_offer_snapshot_at: offer.snapshot_at,
+      };
+
+      upsertBatch.push(row);
     } catch (err) {
       errors++;
       options.logger?.error?.(
@@ -107,124 +184,34 @@ export async function runSystemPickScan(
     }
   }
 
+  if (upsertBatch.length > 0) {
+    try {
+      await repositories.marketUniverse.upsertMarketUniverse(upsertBatch);
+    } catch (err) {
+      errors++;
+      options.logger?.error?.(
+        JSON.stringify({
+          service: 'system-pick-scanner',
+          event: 'market_universe_upsert_failed',
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      return { scanned: offers.length, materialized: 0, skipped, errors };
+    }
+  }
+
   options.logger?.info?.(
     JSON.stringify({
       service: 'system-pick-scanner',
       event: 'scan.completed',
       scanned: offers.length,
-      submitted,
+      materialized: upsertBatch.length,
       skipped,
       errors,
     }),
   );
 
-  return { scanned: offers.length, submitted, skipped, errors };
-}
-
-async function processOffer(
-  offer: ProviderOfferRecord,
-  repositories: {
-    providerOffers: ProviderOfferRepository;
-    participants: ParticipantRepository;
-    events: EventRepository;
-  },
-  ctx: { apiUrl: string; apiKey?: string; fetchImpl: (input: string, init?: RequestInit) => Promise<Response>; logger?: Pick<Console, 'info' | 'warn' | 'error'> },
-): Promise<'submitted' | 'skipped'> {
-  // Resolve canonical market key from SGO native key
-  const canonicalMarketKey = await repositories.providerOffers.resolveCanonicalMarketKey(
-    offer.provider_market_key,
-    offer.provider_key,
-  );
-  if (!canonicalMarketKey) {
-    return 'skipped'; // No canonical mapping — not a gradeable player prop
-  }
-
-  // Compute devigged fair probability
-  const overImplied = americanToImplied(offer.over_odds as number);
-  const underImplied = americanToImplied(offer.under_odds as number);
-  const devigged = applyDevig(overImplied, underImplied, 'proportional');
-  if (!devigged) {
-    return 'skipped';
-  }
-
-  // Pick the higher-probability side
-  const side = devigged.overFair >= devigged.underFair ? 'over' : 'under';
-  const odds = side === 'over' ? (offer.over_odds as number) : (offer.under_odds as number);
-  const line = offer.line as number;
-  const selection = side === 'over' ? `Over ${line}` : `Under ${line}`;
-
-  // Resolve participant display name (needed for grading's fuzzy match)
-  const participant = offer.provider_participant_id
-    ? await repositories.participants.findByExternalId(offer.provider_participant_id)
-    : null;
-  if (!participant) {
-    return 'skipped'; // No participant record — grading can't resolve it
-  }
-
-  // Resolve event name (best-effort — improves grading event matching)
-  const event = await repositories.events.findByExternalId(offer.provider_event_id);
-
-  const idempotencyKey = `system-pick:sgo:${offer.provider_event_id}:${offer.provider_participant_id}:${offer.provider_market_key}:${side}`;
-
-  const payload = {
-    source: 'system-pick-scanner' as const,
-    submittedBy: 'system:pick-scanner',
-    market: canonicalMarketKey,
-    selection,
-    line,
-    odds,
-    confidence: roundTo(side === 'over' ? devigged.overFair : devigged.underFair, 4),
-    eventName: event?.event_name ?? undefined,
-    metadata: {
-      idempotencyKey,
-      player: participant.display_name,
-      sport: participant.sport ?? undefined,
-      providerEventId: offer.provider_event_id,
-      providerMarketKey: offer.provider_market_key,
-      providerParticipantId: offer.provider_participant_id,
-      systemGenerated: true,
-    },
-  };
-
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (ctx.apiKey) {
-    headers['Authorization'] = `Bearer ${ctx.apiKey}`;
-  }
-
-  const response = await ctx.fetchImpl(`${ctx.apiUrl}/api/submissions`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload),
-  });
-
-  if (response.status === 409) {
-    // Already submitted — idempotent skip
-    return 'skipped';
-  }
-
-  if (!response.ok) {
-    const body = await response.text().catch(() => '');
-    throw new Error(`Submission API returned ${response.status}: ${body.slice(0, 200)}`);
-  }
-
-  ctx.logger?.info?.(
-    JSON.stringify({
-      service: 'system-pick-scanner',
-      event: 'pick.submitted',
-      canonicalMarketKey,
-      participant: participant.display_name,
-      side,
-      line,
-      odds,
-    }),
-  );
-
-  return 'submitted';
-}
-
-function roundTo(value: number, decimals: number): number {
-  const multiplier = 10 ** decimals;
-  return Math.round(value * multiplier) / multiplier;
+  return { scanned: offers.length, materialized: upsertBatch.length, skipped, errors };
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number): number {
