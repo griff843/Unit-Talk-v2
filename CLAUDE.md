@@ -57,24 +57,16 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 8. Apps own side effects. Packages never import from apps. Apps never import from apps.
 9. Postgres outbox is the only delivery queue. Exactly one `DeliveryOutcome` per attempt.
 10. Fail closed — never silent fallback to `qualified`, `pass`, or `done`.
-11. Phase 2 boundaries (see active build below) are hard invariants.
-12. If a rule can be enforced mechanically, it must not live only in prose.
+11. If a rule can be enforced mechanically, it must not live only in prose.
 
 ---
 
-## Active build — Phase 2: Syndicate Machine Foundation
+## Active build — Phase 7A: Governance Brake
 
-**Schema contract authority:** `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md`
+**Charter:** `docs/06_status/PHASE7_PLAN_DRAFT.md`
+**Ratification:** `docs/06_status/PHASE7R_RATIFICATION.md`
 
-**Hard boundaries (enforced until Phase 3 opens on UTV2-464 acceptance):**
-- Candidate layer does not write to `picks` — `pick_candidates.pick_id` stays NULL
-- `model_score / model_tier / model_confidence` stay NULL — Phase 3 wires the model runner
-- `shadow_mode` defaults `true` — must not be set `false`
-- Materializer writes only `market_universe`; board scan writes only `pick_candidates`
-- `system-pick-scanner` is a parallel path — do not route it through the candidate layer
-- Phase 2 migrations (`UTV2-459`, `UTV2-460`) merge serially, never in the same deploy
-
-Detailed invariant enforcement: `/code-structure` skill.
+Phase 7A focus: `awaiting_approval` lifecycle state + governance brake on autonomous sources. Phases 1–6 closed; their boundary rules are shipped and no longer load-bearing in governance.
 
 ---
 
@@ -114,7 +106,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
 | Program status | `docs/06_status/PROGRAM_STATUS.md` |
 | Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
-| Phase 2 schema contract | `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md` |
+| Phase 7 charter | `docs/06_status/PHASE7_PLAN_DRAFT.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
 | Known debt | `docs/06_status/KNOWN_DEBT.md` |
 
