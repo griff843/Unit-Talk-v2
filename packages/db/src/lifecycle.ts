@@ -144,14 +144,9 @@ export async function transitionPickLifecycle(
   // (e.g. the UTV2-491 awaiting_approval gap) after picks.status was already
   // committed. When the repository is InMemory the call throws the sentinel
   // message below and we fall back to the pre-existing sequential path.
-  // The interface method is optional — older test fakes may not implement
-  // it, in which case we also take the sequential fallback.
+  // UTV2-520: transitionPickLifecycleAtomic is now required on the interface.
+  // The typeof guard has been removed; only the InMemory sentinel catch remains.
   try {
-    if (typeof pickRepository.transitionPickLifecycleAtomic !== 'function') {
-      throw new Error(
-        'transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.',
-      );
-    }
     const atomicResult = await pickRepository.transitionPickLifecycleAtomic({
       pickId,
       fromState,

@@ -160,13 +160,11 @@ export interface PickRepository {
    * InMemory mode. Use the sequential path.'` when running against the
    * InMemory repository.
    *
-   * Optional on the interface so pre-existing test fakes and other
-   * implementers in the repo do not need to be touched as part of UTV2-519.
-   * The canonical InMemoryPickRepository and DatabasePickRepository BOTH
-   * implement it; `transitionPickLifecycle` in lifecycle.ts detects absence
-   * and falls back to the sequential write path in that case.
+   * UTV2-520: now required on the interface. All implementers (including test
+   * fakes) must provide this method. InMemory implementations throw the
+   * sentinel message; lifecycle.ts catches that and falls back to sequential.
    */
-  transitionPickLifecycleAtomic?(
+  transitionPickLifecycleAtomic(
     input: TransitionPickLifecycleAtomicInput,
   ): Promise<TransitionPickLifecycleAtomicResult>;
 }

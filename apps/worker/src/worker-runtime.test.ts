@@ -17,6 +17,8 @@ import type {
   PickLifecycleRecord,
   PickRecord,
   PickRepository,
+  TransitionPickLifecycleAtomicInput,
+  TransitionPickLifecycleAtomicResult,
   ReceiptRecord,
   ReceiptRepository,
   RepositoryBundle,
@@ -513,6 +515,10 @@ class FakePickRepository implements PickRepository {
       payload: JSON.parse(JSON.stringify(input.payload)),
       created_at: input.promotionDecidedAt,
     };
+  }
+
+  async transitionPickLifecycleAtomic(_input: TransitionPickLifecycleAtomicInput): Promise<TransitionPickLifecycleAtomicResult> {
+    throw new Error('transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.');
   }
 }
 
