@@ -35,8 +35,8 @@ The materializer (UTV2-461) reads `provider_offers` and writes/upserts `market_u
 **2.4 Board scan outputs `pick_candidates` rows only.**
 The board scan (UTV2-463) reads `market_universe` and writes `pick_candidates`. It does not create picks. It does not call `POST /api/submissions`. It does not touch `promotion_service`, `settlement_service`, or `distribution_service`.
 
-**2.5 The system-pick-scanner path is parallel and is not modified by Phase 2.**
-`system-pick-scanner` (UTV2-455) reads `provider_offers` directly and writes `picks` directly. It bypasses both `market_universe` and `pick_candidates`. This is intentional by design. Phase 2 must not route, modify, or replace this path.
+**2.5 The system-pick-scanner direct-submission path is transitional and is not modified by Phase 2.**
+`system-pick-scanner` (UTV2-455) reads `provider_offers` directly and writes `picks` directly. It bypasses both `market_universe` and `pick_candidates`. During the transitional period, Phase 2 does not route, modify, or replace this path. The direct-submission path will be retired by UTV2-495 (P7B-01) and UTV2-512 (P7B-02a), which migrate the scanner to the candidate layer.
 
 **2.6 `shadow_mode` is always `true` in Phase 2.**
 `pick_candidates.shadow_mode` defaults to `true` and must not be set to `false` by any Phase 2 code. Live candidate promotion requires Phase 4+ governance controls.
@@ -64,7 +64,7 @@ pick_candidates (evaluation layer — one active row per universe row, lifecycle
 picks (canonical pick lifecycle entity)
 
 system-pick-scanner ──────────────────────────────→ picks
-  (reads provider_offers directly, parallel path, unaffected by Phase 2)
+  (transitional — reads provider_offers directly; retirement tracked in UTV2-495)
 ```
 
 ---
@@ -282,7 +282,7 @@ CREATE INDEX pick_candidates_pick_id ON pick_candidates (pick_id)
 No relationship exists in Phase 2.
 
 - Existing `picks` rows have no `candidate_id` FK. None will be added in Phase 2.
-- Picks written by `system-pick-scanner` are not candidates and are not tracked in `pick_candidates`.
+- Picks written by `system-pick-scanner` are not candidates and are not tracked in `pick_candidates`. This is true during the transitional period while the direct-submission path remains active. Retirement is tracked in UTV2-495.
 - Picks written by `smart-form`, `discord-bot`, or `api` sources are not candidates.
 - `pick_candidates` does not back-fill, reference, or affect any existing `picks` rows.
 
