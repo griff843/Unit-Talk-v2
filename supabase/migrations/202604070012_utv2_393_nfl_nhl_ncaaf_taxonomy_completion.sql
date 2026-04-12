@@ -27,120 +27,57 @@
 --       'Tackles', 'Sacks', 'Goals Against', 'Save Percentage', 'Plus/Minus');
 
 -- ── 1. NFL stat types (missing) ───────────────────────────────────────────────
+-- Original INSERT used (sport_id, name, sort_order) but omitted the NOT NULL
+-- columns canonical_key, display_name, short_label added by 202604020002.
+-- Fixed: include all NOT NULL columns inline.
 
-INSERT INTO public.stat_types (sport_id, name, sort_order)
-SELECT 'NFL', name, sort_order
+INSERT INTO public.stat_types (sport_id, name, display_name, short_label, canonical_key, sort_order)
+SELECT 'NFL', v.name, v.display_name, v.short_label, v.canonical_key, v.sort_order
 FROM (VALUES
-  ('Rushing Attempts',   7),
-  ('Passing Attempts',   8),
-  ('Passing Touchdowns', 9),
-  ('Rush + Rec Yards',  10),
-  ('Tackles',           11),
-  ('Sacks',             12)
-) AS v(name, sort_order)
+  ('Rushing Attempts',   'Rushing Attempts',   'RUSH ATT', 'rushing_attempts',   7),
+  ('Passing Attempts',   'Passing Attempts',   'PASS ATT', 'passing_attempts',   8),
+  ('Passing Touchdowns', 'Passing Touchdowns', 'PASS TDS', 'passing_tds',        9),
+  ('Rush + Rec Yards',   'Rush + Rec Yards',   'R+R YDS',  'rush_rec_yards',    10),
+  ('Tackles',            'Tackles',            'TCKL',     'tackles',            11),
+  ('Sacks',              'Sacks',              'SACKS',    'sacks',              12)
+) AS v(name, display_name, short_label, canonical_key, sort_order)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.stat_types
-  WHERE sport_id = 'NFL' AND name = v.name
+  WHERE sport_id = 'NFL' AND canonical_key = v.canonical_key
 );
-
--- Backfill canonical_key / display_name / short_label for new NFL stat types
-UPDATE public.stat_types
-SET
-  canonical_key  = CASE name
-    WHEN 'Rushing Attempts'   THEN 'rushing_attempts'
-    WHEN 'Passing Attempts'   THEN 'passing_attempts'
-    WHEN 'Passing Touchdowns' THEN 'passing_tds'
-    WHEN 'Rush + Rec Yards'   THEN 'rush_rec_yards'
-    WHEN 'Tackles'            THEN 'tackles'
-    WHEN 'Sacks'              THEN 'sacks'
-  END,
-  display_name   = name,
-  short_label    = CASE name
-    WHEN 'Rushing Attempts'   THEN 'RUSH ATT'
-    WHEN 'Passing Attempts'   THEN 'PASS ATT'
-    WHEN 'Passing Touchdowns' THEN 'PASS TDS'
-    WHEN 'Rush + Rec Yards'   THEN 'R+R YDS'
-    WHEN 'Tackles'            THEN 'TCKL'
-    WHEN 'Sacks'              THEN 'SACKS'
-  END
-WHERE sport_id = 'NFL'
-  AND name IN ('Rushing Attempts', 'Passing Attempts', 'Passing Touchdowns',
-               'Rush + Rec Yards', 'Tackles', 'Sacks')
-  AND canonical_key IS NULL;
 
 -- ── 2. NCAAF stat types (missing) ─────────────────────────────────────────────
+-- Same fix as NFL above: include all NOT NULL columns inline.
 
-INSERT INTO public.stat_types (sport_id, name, sort_order)
-SELECT 'NCAAF', name, sort_order
+INSERT INTO public.stat_types (sport_id, name, display_name, short_label, canonical_key, sort_order)
+SELECT 'NCAAF', v.name, v.display_name, v.short_label, v.canonical_key, v.sort_order
 FROM (VALUES
-  ('Receptions',         5),
-  ('Interceptions',      6),
-  ('Rushing Attempts',   7),
-  ('Passing Attempts',   8),
-  ('Passing Touchdowns', 9),
-  ('Rush + Rec Yards',  10)
-) AS v(name, sort_order)
+  ('Receptions',         'Receptions',         'REC',      'receptions',         5),
+  ('Interceptions',      'Interceptions',      'INT',      'interceptions',      6),
+  ('Rushing Attempts',   'Rushing Attempts',   'RUSH ATT', 'rushing_attempts',   7),
+  ('Passing Attempts',   'Passing Attempts',   'PASS ATT', 'passing_attempts',   8),
+  ('Passing Touchdowns', 'Passing Touchdowns', 'PASS TDS', 'passing_tds',        9),
+  ('Rush + Rec Yards',   'Rush + Rec Yards',   'R+R YDS',  'rush_rec_yards',    10)
+) AS v(name, display_name, short_label, canonical_key, sort_order)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.stat_types
-  WHERE sport_id = 'NCAAF' AND name = v.name
+  WHERE sport_id = 'NCAAF' AND canonical_key = v.canonical_key
 );
-
--- Backfill canonical_key / display_name / short_label for new NCAAF stat types
-UPDATE public.stat_types
-SET
-  canonical_key  = CASE name
-    WHEN 'Receptions'         THEN 'receptions'
-    WHEN 'Interceptions'      THEN 'interceptions'
-    WHEN 'Rushing Attempts'   THEN 'rushing_attempts'
-    WHEN 'Passing Attempts'   THEN 'passing_attempts'
-    WHEN 'Passing Touchdowns' THEN 'passing_tds'
-    WHEN 'Rush + Rec Yards'   THEN 'rush_rec_yards'
-  END,
-  display_name   = name,
-  short_label    = CASE name
-    WHEN 'Receptions'         THEN 'REC'
-    WHEN 'Interceptions'      THEN 'INT'
-    WHEN 'Rushing Attempts'   THEN 'RUSH ATT'
-    WHEN 'Passing Attempts'   THEN 'PASS ATT'
-    WHEN 'Passing Touchdowns' THEN 'PASS TDS'
-    WHEN 'Rush + Rec Yards'   THEN 'R+R YDS'
-  END
-WHERE sport_id = 'NCAAF'
-  AND name IN ('Receptions', 'Interceptions', 'Rushing Attempts', 'Passing Attempts',
-               'Passing Touchdowns', 'Rush + Rec Yards')
-  AND canonical_key IS NULL;
 
 -- ── 3. NHL stat types (missing) ───────────────────────────────────────────────
+-- Same fix: include all NOT NULL columns inline.
 
-INSERT INTO public.stat_types (sport_id, name, sort_order)
-SELECT 'NHL', name, sort_order
+INSERT INTO public.stat_types (sport_id, name, display_name, short_label, canonical_key, sort_order)
+SELECT 'NHL', v.name, v.display_name, v.short_label, v.canonical_key, v.sort_order
 FROM (VALUES
-  ('Goals Against',    7),
-  ('Save Percentage',  8),
-  ('Plus/Minus',       9)
-) AS v(name, sort_order)
+  ('Goals Against',    'Goals Against',    'GA',  'goals_against',    7),
+  ('Save Percentage',  'Save Percentage',  'SV%', 'save_percentage',  8),
+  ('Plus/Minus',       'Plus/Minus',       '+/-', 'plus_minus',       9)
+) AS v(name, display_name, short_label, canonical_key, sort_order)
 WHERE NOT EXISTS (
   SELECT 1 FROM public.stat_types
-  WHERE sport_id = 'NHL' AND name = v.name
+  WHERE sport_id = 'NHL' AND canonical_key = v.canonical_key
 );
-
--- Backfill canonical_key / display_name / short_label for new NHL stat types
-UPDATE public.stat_types
-SET
-  canonical_key  = CASE name
-    WHEN 'Goals Against'    THEN 'goals_against'
-    WHEN 'Save Percentage'  THEN 'save_percentage'
-    WHEN 'Plus/Minus'       THEN 'plus_minus'
-  END,
-  display_name   = name,
-  short_label    = CASE name
-    WHEN 'Goals Against'    THEN 'GA'
-    WHEN 'Save Percentage'  THEN 'SV%'
-    WHEN 'Plus/Minus'       THEN '+/-'
-  END
-WHERE sport_id = 'NHL'
-  AND name IN ('Goals Against', 'Save Percentage', 'Plus/Minus')
-  AND canonical_key IS NULL;
 
 -- ── 4. New market types ───────────────────────────────────────────────────────
 
