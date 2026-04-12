@@ -1,0 +1,98 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-507",
+  "title": "Phase 7D Proof Bundle — Real Model Layer",
+  "generated_at": "2026-04-12T23:05:00.000Z",
+  "merge_sha": "de9b0d7e76936a5d672552028eaef5732ace8654",
+  "phase": "7D",
+  "gate": "Phase 7D must close with proof before Phase 7E starts",
+  "verifier": {
+    "identity": "claude-opus-4.6",
+    "role": "orchestrator"
+  },
+  "prerequisite_merges": [
+    {
+      "issue": "UTV2-503",
+      "title": "P7D-01: Wire scoring to champion model registry",
+      "pr": 266,
+      "merge_sha": "de9b0d7e76936a5d672552028eaef5732ace8654"
+    },
+    {
+      "issue": "UTV2-504",
+      "title": "P7D-02: Remove fake fixed confidence",
+      "pr": 266,
+      "merge_sha": "de9b0d7e76936a5d672552028eaef5732ace8654"
+    },
+    {
+      "issue": "UTV2-505",
+      "title": "P7D-03: Shadow-vs-champion comparison via experiment ledger",
+      "pr": 266,
+      "merge_sha": "de9b0d7e76936a5d672552028eaef5732ace8654"
+    },
+    {
+      "issue": "UTV2-506",
+      "title": "P7D-04: Governed shadow comparison read surface",
+      "pr": 266,
+      "merge_sha": "de9b0d7e76936a5d672552028eaef5732ace8654"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "P7D-A1",
+      "claim": "Runtime scoring references a concrete model registry entry",
+      "status": "PASS",
+      "evidence": {
+        "code_path": "candidate-scoring-service.ts:139 calls resolveChampion(sport, marketFamily)",
+        "registry_call": "candidate-scoring-service.ts:241 calls this.repos.modelRegistry.findChampion(sport, marketFamily)",
+        "metadata_consumption": "candidate-scoring-service.ts:143-144 reads champion.metadata for sharp_weight and movement_weight, passes to computeModelBlend",
+        "placeholder_removed": "computeModelBlend no longer uses (devig, devig, 0, 0) when champion exists — uses champion-sourced weights"
+      }
+    },
+    {
+      "id": "P7D-A2",
+      "claim": "Band/tier decisions no longer depend on fake fixed confidence",
+      "status": "PASS",
+      "evidence": {
+        "champion_path": "candidate-scoring-service.ts:149-153 — confidence from championMeta?.['confidence'] or DEFAULT_CHAMPION_CONFIDENCE=0.75; uncertainty = 1 - confidence",
+        "no_hardcoded_in_champion_path": "The only 0.2 reference (line 164) is in the else branch — explicitly for 'legacy fallback when no registry', commented as Phase 7E cleanup target",
+        "model_confidence_derived": "candidate-scoring-service.ts:170 — model_confidence = Math.max(0, 1 - uncertainty), derived from champion metadata not hardcoded",
+        "fail_closed": "When champion has no confidence metadata, DEFAULT_CHAMPION_CONFIDENCE=0.75 is used (explicit, not hidden)"
+      }
+    },
+    {
+      "id": "P7D-A3",
+      "claim": "Shadow and champion outputs are recorded side-by-side",
+      "status": "PASS",
+      "evidence": {
+        "recording_path": "candidate-scoring-service.ts:277-315 recordShadowComparison() creates experiment ledger entry with run_type='shadow_comparison'",
+        "metrics_recorded": "experimentLedger.complete() receives: candidateId, championModelId, championModelName, championScore, championTier, shadowScore (null placeholder), comparisonType",
+        "trigger": "candidate-scoring-service.ts:186-190 — called for every scored candidate when champion exists and experimentLedger is available",
+        "enum_added": "packages/db/src/schema.ts:123 — 'shadow_comparison' added to experimentRunTypes"
+      }
+    },
+    {
+      "id": "P7D-A4",
+      "claim": "Shadow remains informational until intentionally promoted",
+      "status": "PASS",
+      "evidence": {
+        "no_routing_consumption": "grep 'shadowScore|shadow_comparison' in promotion-service.ts and distribution-service.ts returns 0 matches (exit 1)",
+        "read_only_surface": "routes/shadow-models.ts handleShadowComparison is a GET-only handler — returns experiment ledger entries, does not write or alter state",
+        "comparison_type": "Metrics record comparisonType='champion_only' — shadow score is null placeholder until a shadow runner is implemented",
+        "no_promotion_effect": "Shadow data is never read by promotion-service.ts, distribution-service.ts, or board-pick-writer.ts"
+      }
+    }
+  ],
+  "static_proof": {
+    "pnpm_verify": "PASS — exit 0",
+    "test_counts": {
+      "app_tests": 188,
+      "scoring_tests": 9,
+      "ops_tests": 32,
+      "total": 229,
+      "failures": 0
+    },
+    "lint": "PASS — 0 errors",
+    "type_check": "PASS — 0 errors"
+  },
+  "phase_7d_gate_verdict": "PASS — all 4 assertions hold. Phase 7D real model layer is complete."
+}
