@@ -19,8 +19,21 @@ import {
   InMemoryMarketUniverseRepository,
   InMemoryPickCandidateRepository,
   InMemoryMarketFamilyTrustRepository,
+  InMemoryModelRegistryRepository,
 } from '@unit-talk/db';
 import type { MarketUniverseRow, PickCandidateRow } from '@unit-talk/db';
+
+/** Seed a champion model so scoring doesn't skip for missing champion (Phase 7E fail-closed). */
+async function seedChampion(modelRegistry: InMemoryModelRegistryRepository, sport = 'nba', marketFamily = 'player_prop') {
+  await modelRegistry.create({
+    modelName: 'test-champion',
+    version: '1.0.0',
+    sport,
+    marketFamily,
+    status: 'champion',
+    metadata: { confidence: 0.8 },
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -137,6 +150,8 @@ test('returns zero counts when no unscored candidates exist', async () => {
 test('scores one qualified candidate with valid fair probs', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry);
 
   const universeRow = makeUniverseRow({ id: 'universe-1', fair_over_prob: 0.56, fair_under_prob: 0.44, is_stale: false });
   seedUniverseRows(marketUniverse, [universeRow]);
@@ -144,7 +159,7 @@ test('scores one qualified candidate with valid fair probs', async () => {
   const candidate = makeCandidate({ id: 'candidate-1', universe_id: 'universe-1', status: 'qualified', model_score: null });
   seedCandidateRows(pickCandidates, [candidate]);
 
-  const result = await runCandidateScoring({ pickCandidates, marketUniverse });
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
 
   assert.equal(result.scored, 1);
   assert.equal(result.skipped, 0);
@@ -246,6 +261,8 @@ test('P7C runtime proof: trust data with sufficient sample adjusts model_score',
   const pickCandidates = new InMemoryPickCandidateRepository();
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const marketFamilyTrust = new InMemoryMarketFamilyTrustRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry);
 
   const universeRow = makeUniverseRow({ market_type_id: 'player_points_ou' });
   seedUniverseRows(marketUniverse, [universeRow]);
@@ -254,7 +271,7 @@ test('P7C runtime proof: trust data with sufficient sample adjusts model_score',
   seedCandidateRows(pickCandidates, [candidate]);
 
   // Run scoring WITHOUT trust data
-  const baseResult = await runCandidateScoring({ pickCandidates, marketUniverse });
+  const baseResult = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
   assert.equal(baseResult.scored, 1);
   assert.equal(baseResult.trustAdjusted, 0);
 
@@ -282,7 +299,7 @@ test('P7C runtime proof: trust data with sufficient sample adjusts model_score',
   }]);
 
   // Run scoring WITH trust data
-  const trustResult = await runCandidateScoring({ pickCandidates, marketUniverse, marketFamilyTrust });
+  const trustResult = await runCandidateScoring({ pickCandidates, marketUniverse, marketFamilyTrust, modelRegistry });
   assert.equal(trustResult.scored, 1);
   assert.equal(trustResult.trustAdjusted, 1, 'trust adjustment should fire');
 
@@ -296,6 +313,8 @@ test('P7C runtime proof: insufficient sample trust data leaves scoring inert', a
   const pickCandidates = new InMemoryPickCandidateRepository();
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const marketFamilyTrust = new InMemoryMarketFamilyTrustRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry);
 
   seedUniverseRows(marketUniverse, [makeUniverseRow({ market_type_id: 'player_points_ou' })]);
   seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-1' })]);
@@ -316,7 +335,7 @@ test('P7C runtime proof: insufficient sample trust data leaves scoring inert', a
     metadata: {},
   }]);
 
-  const result = await runCandidateScoring({ pickCandidates, marketUniverse, marketFamilyTrust });
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, marketFamilyTrust, modelRegistry });
   assert.equal(result.scored, 1);
   assert.equal(result.trustAdjusted, 0, 'insufficient sample should not trigger adjustment');
 });
@@ -324,12 +343,28 @@ test('P7C runtime proof: insufficient sample trust data leaves scoring inert', a
 test('P7C runtime proof: missing trust repo leaves scoring inert', async () => {
   const pickCandidates = new InMemoryPickCandidateRepository();
   const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry);
 
   seedUniverseRows(marketUniverse, [makeUniverseRow()]);
   seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-1' })]);
 
-  // No marketFamilyTrust passed — undefined
-  const result = await runCandidateScoring({ pickCandidates, marketUniverse });
+  // No marketFamilyTrust passed — undefined, but champion exists so scoring proceeds
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
   assert.equal(result.scored, 1);
   assert.equal(result.trustAdjusted, 0, 'no trust repo means no adjustment');
+});
+
+test('P7E: missing champion model skips candidate fail-closed', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  // No modelRegistry — all candidates should be skipped
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-1' })]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse });
+  assert.equal(result.scored, 0, 'no champion → no scoring');
+  assert.equal(result.noChampionSkipped, 1, 'candidate skipped for missing champion');
+  assert.equal(result.skipped, 1);
 });
