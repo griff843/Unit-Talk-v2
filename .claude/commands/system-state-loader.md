@@ -25,16 +25,16 @@ pnpm ops:brief    # point-in-time snapshot: Linear queue, GitHub, pipeline
 Run `ops:health` first. If it reports BLOCKED, resolve before proceeding.
 Run `ops:brief` for the full queue and runtime snapshot.
 
-If any active lanes exist from a previous session, check them before starting new work:
+If any active Codex lanes exist from a previous session, check them before starting new work:
 
 ```bash
-pnpm lane:list                          # see what's active
-pnpm lane:resume -- --issue UTV2-XXX   # restore context for an in-progress lane
+pnpm codex:status                       # see active Codex CLI lanes from canonical manifests
+pnpm codex:status --json                # machine-readable output
 ```
 
 `ops:health` surfaces:
-- Active lane health (snapshot freshness, merged-but-still-active, capacity)
-- Orphaned worktrees not in the lane registry
+- Active lane health (heartbeat staleness, merged-but-still-active)
+- Orphaned worktrees not in the canonical manifest directory
 - Unregistered feat/* branches older than 3 days
 - PROGRAM_STATUS.md staleness vs last commit
 

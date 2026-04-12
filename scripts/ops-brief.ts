@@ -1,19 +1,7 @@
 import { spawnSync } from 'node:child_process';
-import fs from 'node:fs';
-import path from 'node:path';
 import { loadEnvironment } from '@unit-talk/config';
+import { readAllManifests } from './ops/shared.js';
 
-// ─── Repo Root ────────────────────────────────────────────────────────────────
-
-function findRepoRoot(): string {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-    stdio: 'pipe',
-  });
-  return result.status === 0 ? result.stdout.trim() : process.cwd();
-}
-
-const ROOT = findRepoRoot();
 
 type SectionResult = {
   name: string;
@@ -104,62 +92,55 @@ function buildOverviewSection(
 }
 
 function buildCodexLanesSection(): SectionResult {
-  const lanesFile = path.join(ROOT, '.claude', 'lanes.json');
-  if (!fs.existsSync(lanesFile)) {
-    return {
-      name: 'Codex Lanes',
-      ok: true,
-      lines: ['no lane registry found (.claude/lanes.json missing)'],
-    };
-  }
+  const ACTIVE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
 
-  let registry: { version: number; lanes: Array<{
-    id: string; title: string; branch: string; status: string;
-    owner: string; createdAt: string; pr: number | null;
-  }> };
-
+  let manifests: Array<{ issue_id: string; lane_type: string; status: string; branch: string; pr_url: string | null; started_at: string; heartbeat_at: string }>;
   try {
-    registry = JSON.parse(fs.readFileSync(lanesFile, 'utf8'));
+    manifests = readAllManifests();
   } catch {
-    return { name: 'Codex Lanes', ok: false, lines: ['lanes.json is malformed'] };
+    manifests = [];
   }
 
-  const codexLanes = registry.lanes.filter(
-    (l) => l.owner === 'codex-cli' && l.status !== 'merged' && l.status !== 'abandoned',
+  const codexManifests = manifests.filter(
+    (m) => m.lane_type === 'codex-cli' && m.status !== 'merged' && m.status !== 'done',
   );
-  const allActive = registry.lanes.filter((l) => l.status === 'active');
-  const claudeActive = allActive.filter((l) => l.owner === 'claude' || l.owner === 'manual');
-  const codexCliActive = allActive.filter((l) => l.owner === 'codex-cli');
+  const codexActive = manifests.filter(
+    (m) => m.lane_type === 'codex-cli' && ACTIVE_STATUSES.has(m.status),
+  );
+  const claudeActive = manifests.filter(
+    (m) => m.lane_type === 'claude' && ACTIVE_STATUSES.has(m.status),
+  );
 
   const lines: string[] = [
-    `claude_lanes=${claudeActive.length}/3  codex_cli_lanes=${codexCliActive.length}/3`,
+    `claude_lanes=${claudeActive.length}  codex_cli_lanes=${codexActive.length}`,
   ];
 
   const FOUR_HOURS = 4 * 60 * 60 * 1000;
-  const stale = codexCliActive.filter(
-    (l) => Date.now() - new Date(l.createdAt).getTime() > FOUR_HOURS,
+  const stale = codexActive.filter(
+    (m) => Date.now() - new Date(m.heartbeat_at).getTime() > FOUR_HOURS,
   );
 
-  if (codexLanes.length === 0) {
+  if (codexManifests.length === 0) {
     lines.push('no active Codex CLI lanes');
   } else {
-    for (const lane of codexLanes) {
-      const ageMs = Date.now() - new Date(lane.createdAt).getTime();
+    for (const m of codexManifests) {
+      const ageMs = Date.now() - new Date(m.started_at).getTime();
       const ageMin = Math.floor(ageMs / 60_000);
       const age = ageMin < 60 ? `${ageMin}m` : `${Math.floor(ageMin / 60)}h`;
-      const pr = lane.pr ? ` pr=#${lane.pr}` : '';
-      const staleFlag = ageMs > FOUR_HOURS ? ' STALE' : '';
-      lines.push(`${lane.id} | ${lane.status}${staleFlag} | age=${age}${pr}`);
+      const pr = m.pr_url ? ` pr=${m.pr_url.replace(/.*\/pull\//, '#')}` : '';
+      const heartbeatAge = Date.now() - new Date(m.heartbeat_at).getTime();
+      const staleFlag = heartbeatAge > FOUR_HOURS ? ' STALE' : '';
+      lines.push(`${m.issue_id} | ${m.status}${staleFlag} | age=${age}${pr}`);
     }
   }
 
   if (stale.length > 0) {
-    lines.push(`stale_lanes=${stale.map((l) => l.id).join(',')}`);
+    lines.push(`stale_lanes=${stale.map((m) => m.issue_id).join(',')}`);
   }
 
-  const inReview = registry.lanes.filter((l) => l.owner === 'codex-cli' && l.status === 'review');
+  const inReview = manifests.filter((m) => m.lane_type === 'codex-cli' && m.status === 'in_review');
   if (inReview.length > 0) {
-    lines.push(`pending_review=${inReview.map((l) => l.id).join(',')}`);
+    lines.push(`pending_review=${inReview.map((m) => m.issue_id).join(',')}`);
   }
 
   return {
