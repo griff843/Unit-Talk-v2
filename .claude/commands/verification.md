@@ -60,3 +60,30 @@ Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-cl
 - `FAIL` — specific check failed (name it)
 - `INCOMPLETE` — required check could not run (name missing input)
 - `STALE` — proof doesn't tie to current merge SHA
+
+---
+
+## Completion discipline
+
+**Forbidden completion language** — never use these when claiming work is done:
+- "should work", "probably", "seems to", "I believe", "looks good"
+
+**Required instead:** state what you ran, paste the output, cite the SHA. Evidence, not confidence.
+
+**When receiving review feedback:**
+- Never respond with "Great point!", "You're absolutely right!", or "Thanks for catching that!"
+- Verify the feedback against actual code before implementing — reviewers can be wrong
+- Push back with technical reasoning if feedback is incorrect or unnecessary
+- YAGNI check: if a reviewer suggests adding something, grep for actual usage first
+
+---
+
+## Rationalization resistance
+
+| You might think… | But actually… |
+|---|---|
+| "Tests pass, so it's done" | Tests passing is necessary but not sufficient. truth-check requires SHA-tied proof. |
+| "CI is green on the branch" | Branch CI ≠ merge CI. Proof must reference the merge SHA on `main`. |
+| "I ran this last session" | Stale verification is not verification. Re-run in current session or don't claim. |
+| "It's only T3, I can skip the checklist" | T3 still requires type-check + test + green CI. No tier skips verification. |
+| "The proof file exists" | Existence ≠ validity. Check the header SHA matches the merge SHA. |

@@ -126,6 +126,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | `/t1-proof` | assembling a T1 evidence bundle |
 | `/linear-sync` | updating Linear state |
 | `/db-verify` | live DB verification |
+| `/systematic-debugging` | structured debugging when a fix resists quick diagnosis |
 
 All skills live in `.claude/commands/`. Add new skills there; do not expand this file.
 

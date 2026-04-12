@@ -67,3 +67,15 @@ Retain manifest, branch, worktree, and file locks. Block any new lane on overlap
 ## Reopened lanes
 
 Post-Done truth-check failure → `status: reopened`. Fix the specific failing check, then re-run truth-check. Never cosmetically re-close.
+
+---
+
+## Rationalization resistance
+
+| You might think… | But actually… |
+|---|---|
+| "I'll update the lane manifest later" | The manifest is the sole authority for active state. Update it now or the lane doesn't exist. |
+| "File scope is close enough" | Scope lock is exact. One file outside scope = rejection. Declare it or don't touch it. |
+| "Preflight passed last time" | Preflight tokens are session-scoped. New session = new preflight. |
+| "I can close without truth-check, it's obvious" | No close without truth-check. Obvious is not verified. |
+| "Two lanes won't really overlap" | Overlap check is hard. If scopes touch, the second lane is refused. No exceptions. |
