@@ -7,7 +7,6 @@ import {
   getFlag,
   parseArgs,
   readManifest,
-  relativeToRoot,
   requireIssueId,
   validateBranchName,
 } from './ops/shared.js';
