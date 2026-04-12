@@ -644,6 +644,7 @@ function createWorkerTestRepositories(entries: OutboxRecord[]): {
       marketUniverse: {} as RepositoryBundle['marketUniverse'],
       pickCandidates: {} as RepositoryBundle['pickCandidates'],
       syndicateBoard: {} as RepositoryBundle['syndicateBoard'],
+      marketFamilyTrust: {} as RepositoryBundle['marketFamilyTrust'],
     },
     picks,
     receipts,
