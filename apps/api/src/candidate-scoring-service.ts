@@ -7,6 +7,7 @@
  *
  * Phase 7C: bounded market-family trust adjustments.
  * Phase 7D: registry-backed champion models, real confidence, shadow comparison.
+ * Phase 7E: calibration metrics, legacy fallback removed (fail-closed).
  *
  * Hard boundaries (never violate):
  * - Never sets pick_id
@@ -33,7 +34,15 @@ export interface ScoringResult {
   errors: number;
   trustAdjusted: number;
   championResolved: number;
+  noChampionSkipped: number;
   shadowRecorded: number;
+  calibration: {
+    scoredCount: number;
+    avgModelScore: number;
+    trustFamiliesAvailable: number;
+    avgTrustWinRate: number | null;
+    totalTrustSampleSize: number;
+  } | null;
   durationMs: number;
 }
 
@@ -89,12 +98,12 @@ export class CandidateScoringService {
         event: 'load_failed',
         error: err instanceof Error ? err.message : String(err),
       }));
-      return { scored: 0, skipped: 0, errors: 1, trustAdjusted: 0, championResolved: 0, shadowRecorded: 0, durationMs: Date.now() - startMs };
+      return { scored: 0, skipped: 0, errors: 1, trustAdjusted: 0, championResolved: 0, noChampionSkipped: 0, shadowRecorded: 0, calibration: null, durationMs: Date.now() - startMs };
     }
 
     if (candidates.length === 0) {
       logger?.info?.(JSON.stringify({ service: 'candidate-scoring', event: 'no_unscored_candidates' }));
-      return { scored: 0, skipped: 0, errors: 0, trustAdjusted: 0, championResolved: 0, shadowRecorded: 0, durationMs: Date.now() - startMs };
+      return { scored: 0, skipped: 0, errors: 0, trustAdjusted: 0, championResolved: 0, noChampionSkipped: 0, shadowRecorded: 0, calibration: null, durationMs: Date.now() - startMs };
     }
 
     // Bulk-load market universe rows
@@ -108,7 +117,7 @@ export class CandidateScoringService {
         event: 'universe_load_failed',
         error: err instanceof Error ? err.message : String(err),
       }));
-      return { scored: 0, skipped: candidates.length, errors: 1, trustAdjusted: 0, championResolved: 0, shadowRecorded: 0, durationMs: Date.now() - startMs };
+      return { scored: 0, skipped: candidates.length, errors: 1, trustAdjusted: 0, championResolved: 0, noChampionSkipped: 0, shadowRecorded: 0, calibration: null, durationMs: Date.now() - startMs };
     }
 
     const universeMap = new Map(universeRows.map(r => [r.id, r]));
@@ -120,7 +129,9 @@ export class CandidateScoringService {
     let errors = 0;
     let trustAdjusted = 0;
     let championResolved = 0;
+    let noChampionSkipped = 0;
     let shadowRecorded = 0;
+    const scoredModelScores: number[] = [];
 
     for (const candidate of candidates) {
       try {
@@ -157,11 +168,23 @@ export class CandidateScoringService {
           trustAdjusted++;
         }
 
-        // Phase 7D: confidence from champion metadata or fail-closed default
+        // Phase 7E UTV2-553: fail-closed — no champion means no scoring
+        if (!champion) {
+          skipped++;
+          noChampionSkipped++;
+          logger?.info?.(JSON.stringify({
+            service: 'candidate-scoring',
+            event: 'no_champion_skip',
+            candidateId: candidate.id,
+            sport: universe.sport_key,
+            marketFamily,
+          }));
+          continue;
+        }
+
+        // Phase 7D: confidence from champion metadata
         const championConfidence = readFiniteNumber(championMeta?.['confidence']);
-        const uncertainty = champion
-          ? (1 - (championConfidence ?? DEFAULT_CHAMPION_CONFIDENCE))
-          : 0.2; // legacy fallback when no registry — will be removed in Phase 7E
+        const uncertainty = 1 - (championConfidence ?? DEFAULT_CHAMPION_CONFIDENCE);
 
         const edge = model_score - 0.5;
         const bandResult = initialBandAssignment({
@@ -181,6 +204,7 @@ export class CandidateScoringService {
           model_tier: bandResult.band,
           model_confidence,
         });
+        scoredModelScores.push(model_score);
 
         // Phase 7D: shadow comparison — record if both champion and shadow exist
         if (champion && this.repos.experimentLedger) {
@@ -218,14 +242,30 @@ export class CandidateScoringService {
     }
 
     const scored = candidates.length - skipped - errors;
+
+    // Phase 7E UTV2-552: calibration metrics from trust data + scoring distribution
+    const trustRows = [...trustMap.values()].filter(r => r.sample_size >= MIN_TRUST_SAMPLE_SIZE);
+    const calibration = scoredModelScores.length > 0
+      ? {
+          scoredCount: scoredModelScores.length,
+          avgModelScore: Math.round((scoredModelScores.reduce((s, v) => s + v, 0) / scoredModelScores.length) * 1e4) / 1e4,
+          trustFamiliesAvailable: trustRows.length,
+          avgTrustWinRate: trustRows.length > 0
+            ? Math.round((trustRows.reduce((s, r) => s + (r.win_rate ?? 0), 0) / trustRows.length) * 1e4) / 1e4
+            : null,
+          totalTrustSampleSize: trustRows.reduce((s, r) => s + r.sample_size, 0),
+        }
+      : null;
+
     logger?.info?.(JSON.stringify({
       service: 'candidate-scoring',
       event: 'run.completed',
-      scored, skipped, errors, trustAdjusted, championResolved, shadowRecorded,
+      scored, skipped, errors, trustAdjusted, championResolved, noChampionSkipped, shadowRecorded,
+      calibration,
       durationMs: Date.now() - startMs,
     }));
 
-    return { scored, skipped, errors, trustAdjusted, championResolved, shadowRecorded, durationMs: Date.now() - startMs };
+    return { scored, skipped, errors, trustAdjusted, championResolved, noChampionSkipped, shadowRecorded, calibration, durationMs: Date.now() - startMs };
   }
 
   private async resolveChampion(
@@ -340,3 +380,4 @@ function readFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   return null;
 }
+
