@@ -438,6 +438,26 @@ export async function runTruthCheck(
       }
     }
 
+    if (manifest.files_changed.length > 0 && manifest.file_scope_lock.length > 0) {
+      const allowedPaths = new Set([
+        ...manifest.file_scope_lock,
+        ...manifest.expected_proof_paths,
+      ]);
+      const outOfScope = manifest.files_changed.filter(
+        (f) =>
+          !allowedPaths.has(f) &&
+          !f.includes('deleted-file') &&
+          !f.startsWith('docs/06_status/proof/'),
+      );
+      if (outOfScope.length > 0) {
+        addCheck('S1', 'fail', `files_changed outside file_scope_lock: ${outOfScope.join(', ')}`);
+      } else {
+        addCheck('S1', 'pass', 'all files_changed are within file_scope_lock or proof paths');
+      }
+    } else {
+      addCheck('S1', 'pass', 'scope-diff check not applicable (empty files_changed or scope)');
+    }
+
     if (mergeSha && manifest.files_changed.length > 0) {
       const postMergeTouches = findPostMergeTouches({
         mergeSha,
