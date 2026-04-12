@@ -1,0 +1,126 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-498",
+  "title": "Phase 7B Proof Bundle — Ingress Unification",
+  "generated_at": "2026-04-12T21:30:00.000Z",
+  "merge_sha": "16bae9e2d46cd698e6c05d4cc15153f01a1bf038",
+  "phase": "7B",
+  "gate": "Phase 7B must close with proof before Phase 7C starts",
+  "verifier": {
+    "identity": "claude-opus-4.6",
+    "role": "orchestrator"
+  },
+  "prerequisite_merges": [
+    {
+      "issue": "UTV2-495",
+      "title": "P7B-01: Retire system-pick-scanner direct submission",
+      "pr": 261,
+      "merge_sha": "bcb05f16485e51e50c913ef168e944ff95af3795",
+      "merged_at": "2026-04-12"
+    },
+    {
+      "issue": "UTV2-496",
+      "title": "P7B-02: Retire alert-agent direct submission",
+      "pr": 262,
+      "merge_sha": "16bae9e2d46cd698e6c05d4cc15153f01a1bf038",
+      "merged_at": "2026-04-12"
+    },
+    {
+      "issue": "UTV2-512",
+      "title": "P7B-02a: Governed alert-to-universe adapter",
+      "pr": 262,
+      "merge_sha": "16bae9e2d46cd698e6c05d4cc15153f01a1bf038",
+      "merged_at": "2026-04-12"
+    },
+    {
+      "issue": "UTV2-513",
+      "title": "P7B-02b: Cut alert-agent onto governed adapter",
+      "status": "superseded — cutover was atomic with UTV2-512 in PR #262"
+    },
+    {
+      "issue": "UTV2-534",
+      "title": "P7B-03b: Ingress doc drift correction",
+      "pr": 258,
+      "merge_sha": "70f91bea6ffc1adffca294946169fcd7c417470b",
+      "merged_at": "2026-04-12"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "P7B-A1",
+      "claim": "Scanner no longer creates new picks through direct submission",
+      "status": "PASS",
+      "evidence": {
+        "grep_submissions": "grep '/api/submissions' apps/api/src/system-pick-scanner.ts returns only a comment (line 7) — zero executable calls",
+        "grep_fetch": "grep 'fetchImpl|fetch(' apps/api/src/system-pick-scanner.ts returns 0 matches (exit 1)",
+        "grep_upsert": "apps/api/src/system-pick-scanner.ts:189 calls repositories.marketUniverse.upsertMarketUniverse()",
+        "interface_change": "SystemPickScanOptions no longer has apiUrl, apiKey, or fetchImpl fields",
+        "tests": "9/9 scanner tests pass — verify market_universe writes, not HTTP calls",
+        "merge_sha": "bcb05f16485e51e50c913ef168e944ff95af3795"
+      }
+    },
+    {
+      "id": "P7B-A2",
+      "claim": "Alert-agent no longer creates new picks through direct submission",
+      "status": "PASS",
+      "evidence": {
+        "grep_submissions": "grep '/api/submissions' apps/api/src/alert-submission.ts returns only a comment (line 5) — zero executable calls",
+        "grep_fetch": "grep 'fetchImpl|fetch(' apps/api/src/alert-submission.ts returns 0 matches (exit 1)",
+        "grep_upsert": "apps/api/src/alert-submission.ts:107 calls options.marketUniverse.upsertMarketUniverse()",
+        "interface_change": "createAlertUpstreamAdapter replaces createAlertSubmissionPublisher — no apiUrl, apiKey, fetchImpl",
+        "agent_wiring": "alert-agent.ts passes marketUniverse from repository bundle instead of HTTP config",
+        "main_cleanup": "apps/alert-agent/src/main.ts no longer passes UNIT_TALK_API_URL or UNIT_TALK_API_KEY_SUBMITTER",
+        "tests": "9/9 alert-submission tests + 1/1 simulation test pass — verify market_universe writes",
+        "merge_sha": "16bae9e2d46cd698e6c05d4cc15153f01a1bf038"
+      }
+    },
+    {
+      "id": "P7B-A3",
+      "claim": "New scanner/alert outputs flow through the governed upstream layer",
+      "status": "PASS",
+      "evidence": {
+        "scanner_provider_key": "system-pick-scanner writes market_universe rows via upsertMarketUniverse (same contract as materializer)",
+        "alert_provider_key": "alert-submission writes market_universe rows with provider_key='alert-agent' (apps/api/src/alert-submission.ts:82)",
+        "downstream_pipeline_intact": "board-scan-service.ts, candidate-scoring-service.ts, and board-pick-writer.ts all reference marketUniverse — governed pipeline is unchanged",
+        "pipeline_chain": "market_universe → board_scan (pick_candidates) → candidate_scoring → ranked_selection → board_construction → board_pick_writer (picks)"
+      }
+    },
+    {
+      "id": "P7B-A4",
+      "claim": "No regressions in human/operator-controlled pick creation",
+      "status": "PASS",
+      "evidence": {
+        "controller_untouched": "git log bcb05f1..16bae9e -- apps/api/src/controllers/submit-pick-controller.ts returns 0 commits",
+        "submission_route_untouched": "apps/api/src/routes/submissions.ts not modified in either PR",
+        "human_sources_intact": "smart-form, api, discord-bot, feed, system sources still POST to /api/submissions through the unchanged controller",
+        "test_count": "188/188 app tests pass including all submission, lifecycle, and HTTP integration tests",
+        "verify": "pnpm verify passes — lint, type-check, build, test, commands all green"
+      }
+    },
+    {
+      "id": "P7B-A5",
+      "claim": "No contract violation around market_universe / universe_id",
+      "status": "PASS",
+      "evidence": {
+        "no_direct_candidates": "grep 'pick_candidates|pickCandidates' in system-pick-scanner.ts and alert-submission.ts returns 0 matches (exit 1)",
+        "universe_id_resolved_downstream": "board-scan-service.ts:208 assigns universe_id from universeRow.id — resolved from market_universe rows, not injected by scanner/alert",
+        "natural_key_upsert": "Both scanner and alert use market_universe natural-key conflict target (provider_key, provider_event_id, provider_participant_id, provider_market_key) — idempotent by contract"
+      }
+    }
+  ],
+  "static_proof": {
+    "pnpm_verify": "PASS — exit 0 on main at 16bae9e",
+    "test_counts": {
+      "app_tests": 188,
+      "scanner_tests": 9,
+      "ops_tests": 32,
+      "total": 229,
+      "failures": 0
+    },
+    "lint": "PASS — 0 errors",
+    "type_check": "PASS — 0 errors",
+    "migration_count": 63,
+    "migration_duplicates": 0
+  },
+  "phase_7b_gate_verdict": "PASS — all 5 assertions hold. Phase 7B ingress unification is complete."
+}
