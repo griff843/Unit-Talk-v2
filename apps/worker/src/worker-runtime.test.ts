@@ -514,6 +514,10 @@ class FakePickRepository implements PickRepository {
       created_at: input.promotionDecidedAt,
     };
   }
+
+  async transitionPickLifecycleAtomic(_input: any): Promise<any> {
+    throw new Error('transitionPickLifecycleAtomic is not supported in FakePickRepository');
+  }
 }
 
 class FakeSystemRunRepository implements SystemRunRepository {
