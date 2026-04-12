@@ -1,120 +1,99 @@
-/**
- * scripts/codex-dispatch.ts
- * Generate a Codex CLI task packet for a Linear issue.
- *
- * - Reads the issue from Linear
- * - Checks lane registry for active file-overlap conflicts
- * - Generates a copy-paste-ready Codex task packet
- * - Writes packet to .claude/codex-queue/<issue-id>.md
- * - Registers the lane in .claude/lanes.json with owner: 'codex-cli'
- *
- * Usage:
- *   pnpm codex:dispatch -- --issue UTV2-XXX [--allowed "file1,file2"] [--forbidden "file3"] [--dry-run]
- */
-
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { loadEnvironment } from '@unit-talk/config';
+import {
+  type LaneManifest,
+  ROOT,
+  currentHeadSha,
+  emitJson,
+  getFlag,
+  getFlags,
+  normalizeFileScope,
+  parseArgs,
+  preflightTokenPathForBranch,
+  readManifest,
+  relativeToRoot,
+  requireIssueId,
+  validateBranchName,
+  validatePreflightToken,
+  validateTier,
+} from './ops/shared.js';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface LaneEntry {
-  id: string;
-  title: string;
-  branch: string;
-  worktree: string | null;
-  status: 'active' | 'review' | 'merged' | 'abandoned';
-  owner: 'claude' | 'codex' | 'codex-cli' | 'manual';
-  createdAt: string;
-  snapshotAt: string | null;
-  pr: number | null;
-  allowedFiles?: string[];
-}
-
-interface LaneRegistry {
-  version: number;
-  lanes: LaneEntry[];
-}
-
-interface LinearIssue {
+type LinearIssue = {
   id: string;
   identifier: string;
   title: string;
   url: string;
-  branchName?: string | null;
   description?: string | null;
   priority?: number | null;
   labels?: { nodes: Array<{ name: string }> } | null;
   project?: { name: string } | null;
   state?: { name: string } | null;
+};
+
+type DispatchResult = {
+  ok: boolean;
+  code: string;
+  message: string;
+  issue_id?: string;
+  tier?: string;
+  branch?: string;
+  manifest_path?: string;
+  worktree_path?: string;
+  packet_path?: string;
+  preflight_token?: string;
+  file_scope_lock?: string[];
+  packet?: string;
+  details?: Record<string, unknown>;
+};
+
+type ChildResult = {
+  status: number;
+  stdout: string;
+  stderr: string;
+};
+
+const CLAUDE_DIR = path.join(ROOT, '.claude');
+const CODEX_QUEUE_DIR = path.join(CLAUDE_DIR, 'codex-queue');
+const EXECUTION_TRUTH_MODEL_PATH = path.join(ROOT, 'docs', '05_operations', 'EXECUTION_TRUTH_MODEL.md');
+
+export function parseForbiddenCsv(input: string | undefined): string[] {
+  if (!input) {
+    return [];
+  }
+  return input
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
 }
 
-// ─── Repo Context ─────────────────────────────────────────────────────────────
+function runPnpm(args: string[]): ChildResult {
+  if (process.platform === 'win32') {
+    const child = spawnSync('cmd.exe', ['/d', '/s', '/c', 'pnpm', ...args], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    return {
+      status: child.status ?? 1,
+      stdout: (child.stdout ?? '').trim(),
+      stderr: (child.stderr ?? '').trim(),
+    };
+  }
 
-function repoRoot(): string {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
+  const child = spawnSync('pnpm', args, {
+    cwd: ROOT,
     encoding: 'utf8',
     stdio: 'pipe',
   });
-  if (result.status !== 0) throw new Error('Not in a git repository');
-  return result.stdout.trim();
+  return {
+    status: child.status ?? 1,
+    stdout: (child.stdout ?? '').trim(),
+    stderr: (child.stderr ?? '').trim(),
+  };
 }
-
-const ROOT = repoRoot();
-const CLAUDE_DIR = path.join(ROOT, '.claude');
-const LANES_FILE = path.join(CLAUDE_DIR, 'lanes.json');
-const CODEX_QUEUE_DIR = path.join(CLAUDE_DIR, 'codex-queue');
-
-// ─── Registry Helpers ─────────────────────────────────────────────────────────
-
-function readRegistry(): LaneRegistry {
-  if (!fs.existsSync(LANES_FILE)) return { version: 1, lanes: [] };
-  try {
-    return JSON.parse(fs.readFileSync(LANES_FILE, 'utf8')) as LaneRegistry;
-  } catch {
-    return { version: 1, lanes: [] };
-  }
-}
-
-function writeRegistry(reg: LaneRegistry): void {
-  fs.mkdirSync(CLAUDE_DIR, { recursive: true });
-  fs.writeFileSync(LANES_FILE, JSON.stringify(reg, null, 2) + '\n', 'utf8');
-}
-
-function slugify(text: string): string {
-  return text
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 48);
-}
-
-// ─── File Overlap Detection ───────────────────────────────────────────────────
-
-function checkFileOverlap(
-  registry: LaneRegistry,
-  candidateFiles: string[],
-): { conflict: boolean; lane: string | null; files: string[] } {
-  if (candidateFiles.length === 0) return { conflict: false, lane: null, files: [] };
-
-  for (const lane of registry.lanes) {
-    if (lane.status !== 'active') continue;
-    if (!lane.allowedFiles || lane.allowedFiles.length === 0) continue;
-
-    const overlap = candidateFiles.filter((f) =>
-      lane.allowedFiles!.some((lf) => f === lf || f.startsWith(lf) || lf.startsWith(f)),
-    );
-
-    if (overlap.length > 0) {
-      return { conflict: true, lane: lane.id, files: overlap };
-    }
-  }
-
-  return { conflict: false, lane: null, files: [] };
-}
-
-// ─── Linear API ───────────────────────────────────────────────────────────────
 
 async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIssue> {
   const query = `
@@ -124,11 +103,10 @@ async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIss
         identifier
         title
         url
-        branchName
         description
         priority
         project { name }
-        labels(first: 8) { nodes { name } }
+        labels(first: 20) { nodes { name } }
         state { name }
       }
     }
@@ -136,7 +114,10 @@ async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIss
 
   const response = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
-    headers: { Authorization: apiKey, 'Content-Type': 'application/json' },
+    headers: {
+      Authorization: apiKey,
+      'Content-Type': 'application/json',
+    },
     body: JSON.stringify({ query, variables: { id: identifier } }),
   });
 
@@ -150,256 +131,394 @@ async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIss
   };
 
   if (payload.errors?.length) {
-    throw new Error(payload.errors.map((e) => e.message ?? 'Unknown').join('; '));
+    throw new Error(payload.errors.map((entry) => entry.message ?? 'Unknown Linear error').join('; '));
   }
 
   const issue = payload.data?.issue;
-  if (!issue) throw new Error(`Issue not found: ${identifier}`);
+  if (!issue) {
+    throw new Error(`Issue not found: ${identifier}`);
+  }
   return issue;
 }
 
-// ─── Packet Generator ─────────────────────────────────────────────────────────
+function parseJsonObject(input: string): Record<string, unknown> {
+  try {
+    return JSON.parse(input) as Record<string, unknown>;
+  } catch (error) {
+    throw new Error(`Expected JSON output but received invalid payload: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
 
-function generatePacket(
-  issue: LinearIssue,
-  allowedFiles: string[],
-  forbiddenFiles: string[],
-): string {
-  const labels = issue.labels?.nodes.map((l) => l.name).join(', ') ?? '';
+function validateSuppliedTokenPath(issueId: string, branch: string, tokenPathFlag: string): string {
+  const expectedRelative = relativeToRoot(preflightTokenPathForBranch(branch));
+  const normalizedInput = tokenPathFlag.replaceAll('\\', '/').replace(/^\.\/+/, '');
+  if (normalizedInput !== expectedRelative) {
+    throw new Error(`--preflight-token must match the canonical token path ${expectedRelative}`);
+  }
+
+  validatePreflightToken(issueId, branch, currentHeadSha());
+  return expectedRelative;
+}
+
+function runPreflight(
+  issueId: string,
+  tier: string,
+  branch: string,
+  files: string[],
+  dryRun: boolean,
+  explain: boolean,
+): ChildResult {
+  const args = ['ops:preflight', '--', issueId, '--tier', tier, '--branch', branch, '--json'];
+  for (const filePath of files) {
+    args.push('--files', filePath);
+  }
+  if (dryRun) {
+    args.push('--dry-run');
+  }
+  if (explain) {
+    args.push('--explain');
+  }
+  return runPnpm(args);
+}
+
+function runLaneStart(
+  issueId: string,
+  tier: string,
+  branch: string,
+  files: string[],
+): ChildResult {
+  const args = ['ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli'];
+  for (const filePath of files) {
+    args.push('--files', filePath);
+  }
+  return runPnpm(args);
+}
+
+function buildVerificationLines(manifest: LaneManifest): string[] {
+  const lines: string[] = ['* `pnpm type-check`', '* `pnpm test`'];
+  if (manifest.tier === 'T1') {
+    lines.push('* `pnpm test:db`');
+    lines.push('* Tier-specific runtime proof required before close');
+    lines.push('* Proof bundle must validate against the merge SHA');
+  } else if (manifest.tier === 'T2') {
+    lines.push('* Issue-specific verification required before close');
+    lines.push('* Diff summary + verification log must land at expected proof paths');
+  } else {
+    lines.push('* Green CI is the required proof surface for T3');
+  }
+
+  if (manifest.expected_proof_paths.length > 0) {
+    lines.push('* Expected proof paths:');
+    for (const proofPath of manifest.expected_proof_paths) {
+      lines.push(`  - \`${proofPath}\``);
+    }
+  }
+  return lines;
+}
+
+export function buildDispatchPacket(input: {
+  issue: LinearIssue;
+  manifest: LaneManifest;
+  manifestPath: string;
+  forbiddenFiles: string[];
+}): string {
+  const { issue, manifest, manifestPath, forbiddenFiles } = input;
+  const labels = issue.labels?.nodes.map((label) => label.name).join(', ') ?? '';
   const priority = issue.priority != null ? `P${issue.priority}` : 'unset';
   const project = issue.project?.name ?? 'n/a';
   const description = issue.description?.trim() ?? '(no description in Linear)';
-
-  const allowedSection =
-    allowedFiles.length > 0
-      ? allowedFiles.map((f) => `* ${f}`).join('\n')
-      : '* (not yet specified — fill in before pasting to Codex)';
-
   const forbiddenSection =
     forbiddenFiles.length > 0
-      ? forbiddenFiles.map((f) => `* ${f}`).join('\n')
-      : '* all files not in the allowed list above';
+      ? forbiddenFiles.map((entry) => `* ${entry}`).join('\n')
+      : '* none declared (all restrictions are enforced via the allowed files list above)';
+  const verificationSection = buildVerificationLines(manifest).join('\n');
 
-  const branchName = issue.branchName ?? `feat/${issue.identifier.toLowerCase()}`;
-
-  return `# Codex Task Packet — ${issue.identifier}
+  return `# Codex Task Packet — ${manifest.issue_id}
 
 Generated: ${new Date().toISOString()}
 Issue URL: ${issue.url}
-Priority: ${priority} | Project: ${project} | Labels: ${labels}
+Priority: ${priority}  Project: ${project}  Labels: ${labels}
+
+Lane manifest: ${manifestPath}
+Branch:        ${manifest.branch}
+Worktree:      ${manifest.worktree_path}
+Tier:          ${manifest.tier}
+Preflight:     ${manifest.preflight_token}
 
 ---
 
 Work only this Linear issue.
 
-You are not exploring the repo. You are executing a bounded task packet.
-
-Required output:
-1. implement only the scoped issue
-2. touch only allowed files
-3. do not modify forbidden files
-4. run the required verification commands
-5. summarize what changed
-6. provide PR-ready summary
-7. stop if scope is ambiguous or collides with active work
-
----
-
-## Task packet
+## Task
 
 * Linear issue: **${issue.identifier} — ${issue.title}**
-* Branch to work on: \`${branchName}\`
 
 ### Why it matters
 ${description}
 
 ### Allowed files
-${allowedSection}
+${manifest.file_scope_lock.map((entry) => `* ${entry}`).join('\n')}
 
-### Forbidden files
+### Forbidden files (advisory only)
 ${forbiddenSection}
 
-### Acceptance criteria
-* (fill in from Linear issue description or PM instruction)
-* All existing tests must still pass
-
 ### Verification
-* \`pnpm type-check\`
-* \`pnpm test\`
-* (add any issue-specific verification commands here)
+${verificationSection}
 
-### Merge dependencies
-* none (confirm with PM if unsure)
-
-### Rollback note
-* Revert the PR — no migrations, no shared contract changes
+### Closeout reminder
+* Canonical proof is expected at:
+${manifest.expected_proof_paths.length > 0 ? manifest.expected_proof_paths.map((entry) => `  - \`${entry}\``).join('\n') : '  - *(none declared for this tier)*'}
 
 ---
 
-## Rules
-
-* no opportunistic refactors
-* no unrelated cleanup
-* no scope expansion
-* no hidden dependency work unless explicitly included
-* if blocked, stop and report the precise blocker
-* Claude Code is the only merge authority — open a PR, do not merge
-
----
-
-## When done
-
-Report back with:
+When done, report back with:
 \`\`\`
-pnpm codex:receive -- --issue ${issue.identifier} --branch <your-branch> --pr <pr-url>
+pnpm codex:receive -- --issue ${manifest.issue_id} --branch <your-branch> --pr <pr-url>
 \`\`\`
 `;
 }
 
-// ─── Arg Parser ───────────────────────────────────────────────────────────────
-
-function readArg(args: string[], name: string): string | undefined {
-  const idx = args.indexOf(`--${name}`);
-  if (idx >= 0 && args[idx + 1] && !args[idx + 1].startsWith('--')) {
-    return args[idx + 1];
+function ensurePacketManifestTruth(
+  manifest: LaneManifest,
+  issueId: string,
+  branch: string,
+  files: string[],
+  expectedWorktreePath: string,
+): void {
+  const normalizedFiles = normalizeFileScope(files);
+  if (manifest.issue_id !== issueId) {
+    throw new Error('packet_manifest_drift: manifest issue_id does not match requested issue');
   }
-  return undefined;
+  if (manifest.branch !== branch) {
+    throw new Error('packet_manifest_drift: manifest branch does not match requested branch');
+  }
+  if (manifest.worktree_path !== expectedWorktreePath) {
+    throw new Error('packet_manifest_drift: manifest worktree_path does not match lane-start output');
+  }
+  if (JSON.stringify(manifest.file_scope_lock) !== JSON.stringify(normalizedFiles)) {
+    throw new Error('packet_manifest_drift: manifest file_scope_lock does not match requested files');
+  }
 }
 
-function parseCsvArg(args: string[], name: string): string[] {
-  const val = readArg(args, name);
-  if (!val) return [];
-  return val
-    .split(',')
-    .map((s) => s.trim())
-    .filter(Boolean);
+function packetPathForIssue(issueId: string, packetOut: string | undefined): string {
+  if (!packetOut) {
+    return path.join(CODEX_QUEUE_DIR, `${issueId}.md`);
+  }
+  return path.isAbsolute(packetOut) ? packetOut : path.join(ROOT, packetOut);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
-
-const env = loadEnvironment();
-const apiKey = env.LINEAR_API_TOKEN?.trim();
-const cliArgs = process.argv.slice(2);
-
-const issueIdRaw = readArg(cliArgs, 'issue');
-const allowedFiles = parseCsvArg(cliArgs, 'allowed');
-const forbiddenFiles = parseCsvArg(cliArgs, 'forbidden');
-const dryRun = cliArgs.includes('--dry-run');
-
-if (!issueIdRaw) {
-  console.error('Error: --issue <ID> is required.');
-  console.error('  Example: pnpm codex:dispatch -- --issue UTV2-XXX');
-  process.exit(1);
+function readTierVerificationHint(tier: string): string {
+  const truthModel = fs.readFileSync(EXECUTION_TRUTH_MODEL_PATH, 'utf8');
+  const tierLine = truthModel
+    .split(/\r?\n/)
+    .find((line) => line.includes(`**${tier}**`) && line.includes('`type-check`'));
+  return tierLine?.trim() ?? '';
 }
 
-if (!apiKey) {
-  console.error('Error: LINEAR_API_TOKEN is required to fetch issue details.');
-  process.exit(1);
+function writePacket(packetPath: string, packet: string): void {
+  fs.mkdirSync(path.dirname(packetPath), { recursive: true });
+  fs.writeFileSync(packetPath, packet, 'utf8');
 }
 
-const issueId = issueIdRaw.toUpperCase();
+async function main(): Promise<number> {
+  const { flags, bools } = parseArgs(process.argv.slice(2));
+  const dryRun = bools.has('dry-run');
+  const json = bools.has('json');
+  const explain = bools.has('explain');
+  let issueId = '';
+  let tier = '';
+  let branch = '';
 
-void (async () => {
   try {
-    // 1. Fetch issue from Linear
-    console.log(`Fetching ${issueId} from Linear...`);
-    const issue = await fetchIssue(issueId, apiKey);
-    console.log(`  ${issue.identifier}: ${issue.title}`);
-    console.log(`  State: ${issue.state?.name ?? 'unknown'}`);
+    if (flags.has('allowed')) {
+      throw new Error('Legacy --allowed flag is removed; use repeatable --files flags instead');
+    }
+    issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
+    tier = validateTier(getFlag(flags, 'tier') ?? '');
+    branch = getFlag(flags, 'branch') ?? '';
+    const files = getFlags(flags, 'files');
+    const forbiddenFiles = parseForbiddenCsv(getFlag(flags, 'forbidden'));
+    const packetOut = getFlag(flags, 'packet-out');
+    const preflightTokenFlag = getFlag(flags, 'preflight-token');
+    const env = loadEnvironment();
+    const linearToken = env.LINEAR_API_TOKEN?.trim();
 
-    // 2. Load registry and check capacity
-    const registry = readRegistry();
+    if (!linearToken) {
+      throw Object.assign(new Error('LINEAR_API_TOKEN is required to fetch issue details.'), {
+        dispatch_code: 3,
+        dispatch_result: { ok: false, code: 'missing_linear_token', message: 'LINEAR_API_TOKEN is required to fetch issue details.' } satisfies DispatchResult,
+      });
+    }
+    if (!branch) {
+      throw new Error('Missing required --branch');
+    }
+    if (files.length === 0) {
+      throw new Error('Missing required --files (repeatable, at least one required)');
+    }
+    validateBranchName(branch);
 
-    const existingActive = registry.lanes.find(
-      (l) => l.id === issueId && l.status === 'active',
-    );
-    if (existingActive) {
-      console.error(`Error: Active lane for ${issueId} already exists.`);
-      console.error(`  Owner:  ${existingActive.owner}`);
-      console.error(`  Branch: ${existingActive.branch}`);
-      console.error(`  Use: pnpm codex:status to review active lanes.`);
-      process.exit(1);
+    const issue = await fetchIssue(issueId, linearToken);
+    if (explain) {
+      process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
+      process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);
     }
 
-    const activeCodexCli = registry.lanes.filter(
-      (l) => l.owner === 'codex-cli' && l.status === 'active',
-    ).length;
-
-    if (activeCodexCli >= 3) {
-      console.error(`Error: Codex CLI lane capacity reached (${activeCodexCli}/3 active).`);
-      console.error('  Run: pnpm codex:status to review active lanes.');
-      console.error('  Wait for a lane to return or merge before dispatching another.');
-      process.exit(1);
-    }
-
-    // 3. File overlap check
-    if (allowedFiles.length > 0) {
-      const overlap = checkFileOverlap(registry, allowedFiles);
-      if (overlap.conflict) {
-        console.error(`Error: File overlap conflict with lane ${overlap.lane}.`);
-        console.error(`  Overlapping files: ${overlap.files.join(', ')}`);
-        console.error('  Resolve the active lane before dispatching this issue.');
-        process.exit(1);
+    let preflightRelativePath = relativeToRoot(preflightTokenPathForBranch(branch));
+    if (preflightTokenFlag) {
+      preflightRelativePath = validateSuppliedTokenPath(issueId, branch, preflightTokenFlag);
+    } else {
+      const preflight = runPreflight(issueId, tier, branch, files, dryRun, explain);
+      if (preflight.status !== 0) {
+        if (preflight.stdout) {
+          process.stdout.write(`${preflight.stdout}\n`);
+        }
+        if (preflight.stderr) {
+          process.stderr.write(`${preflight.stderr}\n`);
+        }
+        return preflight.status;
+      }
+      if (!dryRun) {
+        validatePreflightToken(issueId, branch, currentHeadSha());
       }
     }
 
-    // 4. Generate packet
-    const packet = generatePacket(issue, allowedFiles, forbiddenFiles);
-
-    // 5. Write packet file
-    const packetPath = path.join(CODEX_QUEUE_DIR, `${issueId}.md`);
-    if (!dryRun) {
-      fs.mkdirSync(CODEX_QUEUE_DIR, { recursive: true });
-      fs.writeFileSync(packetPath, packet, 'utf8');
+    if (dryRun) {
+      const result: DispatchResult = {
+        ok: true,
+        code: 'dispatch_dry_run_ready',
+        message: 'Dispatch validation passed; lane-start and packet write skipped due to --dry-run',
+        issue_id: issueId,
+        tier,
+        branch,
+        preflight_token: preflightRelativePath,
+        details: {
+          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli', ...files.flatMap((entry) => ['--files', entry])],
+          would_write_packet: relativeToRoot(packetPathForIssue(issueId, packetOut)),
+          tier_verification_hint: readTierVerificationHint(tier),
+        },
+      };
+      if (json) {
+        emitJson(result);
+      } else {
+        process.stderr.write(`${result.message}\n`);
+        process.stderr.write(`Issue: ${issue.identifier} — ${issue.title}\n`);
+        process.stderr.write(`Branch: ${branch}\n`);
+        process.stderr.write(`Preflight: ${preflightRelativePath}\n`);
+      }
+      return 0;
     }
 
-    // 6. Register lane
-    const idSlug = issueId.toLowerCase();
-    const titleSlug = slugify(issue.title);
-    const branch = issue.branchName ?? `feat/${idSlug}-${titleSlug}`;
+    const laneStart = runLaneStart(issueId, tier, branch, files);
+    if (laneStart.status !== 0) {
+      if (laneStart.stdout) {
+        process.stdout.write(`${laneStart.stdout}\n`);
+      }
+      if (laneStart.stderr) {
+        process.stderr.write(`${laneStart.stderr}\n`);
+      }
+      return laneStart.status;
+    }
 
-    const lane: LaneEntry = {
-      id: issueId,
-      title: issue.title,
+    const laneStartJson = parseJsonObject(laneStart.stdout);
+    const manifestPath = String(laneStartJson.manifest_path ?? '');
+    if (!manifestPath) {
+      throw new Error('lane_start_failed: missing manifest_path in lane-start output');
+    }
+    const manifestAbsolutePath = path.join(ROOT, manifestPath);
+    if (!fs.existsSync(manifestAbsolutePath)) {
+      throw new Error('lane_start_failed: manifest file missing after lane-start success');
+    }
+
+    const manifest = readManifest(issueId);
+    ensurePacketManifestTruth(
+      manifest,
+      issueId,
       branch,
-      worktree: null,
-      status: 'active',
-      owner: 'codex-cli',
-      createdAt: new Date().toISOString(),
-      snapshotAt: null,
-      pr: null,
-      allowedFiles: allowedFiles.length > 0 ? allowedFiles : undefined,
+      files,
+      String(laneStartJson.worktree_path ?? ''),
+    );
+    const packet = buildDispatchPacket({
+      issue,
+      manifest,
+      manifestPath,
+      forbiddenFiles,
+    });
+    const packetPath = packetPathForIssue(issueId, packetOut);
+
+    try {
+      writePacket(packetPath, packet);
+    } catch (error) {
+      if (!json) {
+        process.stdout.write(`${packet}\n`);
+      }
+      const result: DispatchResult = {
+        ok: false,
+        code: 'packet_write_failed',
+        message: `lane created, packet not written; copy from stdout or re-run dispatch once the disk issue is resolved (${error instanceof Error ? error.message : String(error)})`,
+        issue_id: issueId,
+        tier,
+        branch,
+        manifest_path: manifestPath,
+        worktree_path: manifest.worktree_path,
+        preflight_token: manifest.preflight_token,
+        file_scope_lock: manifest.file_scope_lock,
+        packet: json ? packet : undefined,
+      };
+      if (json) {
+        emitJson(result);
+      } else {
+        process.stderr.write(`${result.message}\n`);
+      }
+      return 1;
+    }
+
+    const result: DispatchResult = {
+      ok: true,
+      code: 'dispatch_ready',
+      message: `Codex task packet ready: ${issueId}`,
+      issue_id: issueId,
+      tier: manifest.tier,
+      branch: manifest.branch,
+      manifest_path: manifestPath,
+      worktree_path: manifest.worktree_path,
+      packet_path: relativeToRoot(packetPath),
+      preflight_token: manifest.preflight_token,
+      file_scope_lock: manifest.file_scope_lock,
+      packet: json ? packet : undefined,
     };
 
-    if (!dryRun) {
-      const existingIdx = registry.lanes.findIndex((l) => l.id === issueId);
-      if (existingIdx >= 0) {
-        registry.lanes[existingIdx] = lane;
-      } else {
-        registry.lanes.push(lane);
-      }
-      writeRegistry(registry);
+    if (json) {
+      emitJson(result);
+    } else {
+      process.stdout.write(`${packet}\n`);
+      process.stderr.write(`${result.message}\n`);
+      process.stderr.write(`Packet: ${relativeToRoot(packetPath)}\n`);
+      process.stderr.write(`Manifest: ${manifestPath}\n`);
     }
-
-    // 7. Output
-    const activeAfter = activeCodexCli + (dryRun ? 0 : 1);
-    console.log('');
-    console.log(`Codex task packet ready${dryRun ? ' (dry-run)' : ''}: ${issueId}`);
-    console.log(`  Packet: ${dryRun ? '(not written)' : packetPath}`);
-    console.log(`  Branch: ${branch}`);
-    console.log(`  Codex CLI lanes: ${activeAfter}/3`);
-    console.log('');
-    console.log('─'.repeat(62));
-    console.log('PASTE THIS INTO YOUR CODEX CLI TERMINAL:');
-    console.log('─'.repeat(62));
-    console.log('');
-    console.log(packet);
-    console.log('─'.repeat(62));
-    console.log('');
-    console.log(`When Codex returns, run:`);
-    console.log(`  pnpm codex:receive -- --issue ${issueId} --branch <branch> --pr <url>`);
+    return 0;
   } catch (error) {
-    console.error(error instanceof Error ? error.message : String(error));
-    process.exit(1);
+    const dispatched = error as { dispatch_code?: number; dispatch_result?: DispatchResult };
+    const result: DispatchResult =
+      dispatched.dispatch_result ??
+      {
+        ok: false,
+        code: 'dispatch_failed',
+        message: error instanceof Error ? error.message : String(error),
+        issue_id: issueId || undefined,
+        tier: tier || undefined,
+        branch: branch || undefined,
+      };
+    if (json) {
+      emitJson(result);
+    } else {
+      process.stderr.write(`${result.message}\n`);
+    }
+    return dispatched.dispatch_code ?? 1;
   }
-})();
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  void main().then((exitCode) => {
+    process.exitCode = exitCode;
+  });
+}
