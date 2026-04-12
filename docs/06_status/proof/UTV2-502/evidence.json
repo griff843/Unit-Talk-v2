@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-502",
+  "title": "Phase 7C Proof Bundle — Feedback Loop Closure",
+  "generated_at": "2026-04-12T22:40:00.000Z",
+  "merge_sha": "817560dd04dd62009dacd52e50e50288b1f5616a",
+  "phase": "7C",
+  "gate": "Phase 7C must close with proof before Phase 7D starts",
+  "verifier": {
+    "identity": "claude-opus-4.6",
+    "role": "orchestrator"
+  },
+  "prerequisite_merges": [
+    {
+      "issue": "UTV2-514",
+      "title": "P7C-01a: Add runtime access to market_family_trust for scoring",
+      "pr": 264,
+      "merge_sha": "817560dd04dd62009dacd52e50e50288b1f5616a"
+    },
+    {
+      "issue": "UTV2-515",
+      "title": "P7C-01b: Apply bounded trust adjustments in candidate scoring",
+      "pr": 264,
+      "merge_sha": "817560dd04dd62009dacd52e50e50288b1f5616a"
+    },
+    {
+      "issue": "UTV2-516",
+      "title": "P7C-02a: Contract-safe CLV feedback persistence",
+      "pr": 264,
+      "merge_sha": "817560dd04dd62009dacd52e50e50288b1f5616a"
+    },
+    {
+      "issue": "UTV2-517",
+      "title": "P7C-02b: Extend CLV feedback to write through approved path",
+      "pr": 264,
+      "merge_sha": "817560dd04dd62009dacd52e50e50288b1f5616a"
+    },
+    {
+      "issue": "UTV2-501",
+      "title": "P7C-03: Runtime proof that recorded tuning is consumed",
+      "commit": "39d7c9c",
+      "note": "3 targeted tests in candidate-scoring-service.test.ts"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "P7C-A1",
+      "claim": "Runtime scoring changes when trust/tuning inputs change",
+      "status": "PASS",
+      "evidence": {
+        "test": "candidate-scoring-service.test.ts: 'P7C runtime proof: trust data with sufficient sample adjusts model_score'",
+        "mechanism": "Seeds InMemoryMarketFamilyTrustRepository with win_rate=0.65, sample_size=10. Runs scoring twice — once without trust, once with. Asserts trustResult.trustAdjusted === 1 and trust-adjusted score !== base score.",
+        "code_path": "candidate-scoring-service.ts:117-122 — reads trustRow, applies bounded adjustment when sample_size >= 5 and win_rate !== null"
+      }
+    },
+    {
+      "id": "P7C-A2",
+      "claim": "The effect is bounded and inspectable",
+      "status": "PASS",
+      "evidence": {
+        "constant": "candidate-scoring-service.ts:47 — MAX_TRUST_ADJUSTMENT = 0.05",
+        "code": "candidate-scoring-service.ts:120 — Math.max(-MAX_TRUST_ADJUSTMENT, Math.min(MAX_TRUST_ADJUSTMENT, trustSignal * 0.1))",
+        "test": "Trust adjustment fires with win_rate=0.65 (15% above breakeven), capped at ±0.05",
+        "inert_test": "'insufficient sample trust data leaves scoring inert' — sample_size=2 below MIN_TRUST_SAMPLE_SIZE=5 produces trustAdjusted=0"
+      }
+    },
+    {
+      "id": "P7C-A3",
+      "claim": "CLV-driven updates propagate to the intended stores",
+      "status": "PASS",
+      "evidence": {
+        "persistence_path": "market-family-trust-repository.ts: insertClvFeedback() writes to market_family_trust with metadata.source='clv-feedback'",
+        "interface": "IMarketFamilyTrustRepository.insertClvFeedback(rows: ClvFeedbackInsert[]): Promise<string>",
+        "consumer": "clv-feedback.ts: computeAndPersistMarketFamilyClvFeedback() aggregates CLV by market, writes through insertClvFeedback()",
+        "append_only": "Existing tuning-run rows are never mutated. CLV feedback rows are insert-only with distinct metadata.source='clv-feedback'"
+      }
+    },
+    {
+      "id": "P7C-A4",
+      "claim": "Recorded tuning is demonstrably read by runtime",
+      "status": "PASS",
+      "evidence": {
+        "runtime_path": "candidate-scoring-service.ts:169-183 — loadTrustMap() calls repos.marketFamilyTrust.listLatestRun(), builds Map<market_type_id, MarketFamilyTrustRow>",
+        "scoring_consumption": "candidate-scoring-service.ts:117 — trustRow looked up by universe.market_type_id",
+        "test": "'P7C runtime proof: trust data with sufficient sample adjusts model_score' — proves listLatestRun() is called, rows are matched, and adjustment is applied",
+        "wiring": "index.ts passes runtime.repositories.marketFamilyTrust to scoring deps; RepositoryBundle.marketFamilyTrust is a required field"
+      }
+    },
+    {
+      "id": "P7C-A5",
+      "claim": "No unsupported attribution claim is used as justification",
+      "status": "PASS",
+      "evidence": {
+        "adjustment_source": "Trust adjustment is purely mechanical: (win_rate - 0.5) * 0.1, capped at ±0.05. No causal attribution claimed.",
+        "no_attribution_references": "grep 'attribution' candidate-scoring-service.ts returns 0 matches in scoring logic",
+        "bounded_signal": "The adjustment is a bounded bias correction from historical win rate, not a predictive model or causal claim"
+      }
+    }
+  ],
+  "static_proof": {
+    "pnpm_verify": "PASS — exit 0",
+    "test_counts": {
+      "app_tests": 188,
+      "scoring_tests": 9,
+      "ops_tests": 32,
+      "total": 229,
+      "failures": 0
+    },
+    "lint": "PASS — 0 errors",
+    "type_check": "PASS — 0 errors"
+  },
+  "phase_7c_gate_verdict": "PASS — all 5 assertions hold. Phase 7C feedback loop closure is complete."
+}
