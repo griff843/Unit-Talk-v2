@@ -518,7 +518,7 @@ class FakePickRepository implements PickRepository {
   }
 
   async transitionPickLifecycleAtomic(_input: TransitionPickLifecycleAtomicInput): Promise<TransitionPickLifecycleAtomicResult> {
-    throw new Error('transitionPickLifecycleAtomic is not supported in FakePickRepository');
+    throw new Error('transitionPickLifecycleAtomic is not supported in InMemory mode. Use the sequential path.');
   }
 }
 
