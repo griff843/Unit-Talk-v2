@@ -139,6 +139,18 @@ Report the drift before composing any further narrative.
 
 ---
 
+## Rationalization resistance
+
+| You might think… | But actually… |
+|---|---|
+| "I completed this" | You don't decide Done. `ops:truth-check` decides Done. Run it. |
+| "The PR was merged, so it's shipped" | Check `main` first-parent history. Merged PRs can be reverted or force-pushed over. |
+| "I remember the proof was valid" | Memory is rank 5. Open the proof file and check the SHA. |
+| "Linear says Done, so it's Done" | Linear is rank 4. GitHub `main` is rank 1. Check rank 1. |
+| "This is just a status update, accuracy isn't critical" | Status updates that cite wrong state create drift. Verify before writing. |
+
+---
+
 ## Output format (when invoked explicitly)
 
 ```
