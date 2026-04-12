@@ -1,63 +1,25 @@
 /**
  * scripts/codex-status.ts
- * Show status of all Codex CLI lanes.
+ * Show status of all Codex CLI lanes from the canonical manifest directory.
  *
- * Reads .claude/lanes.json and displays lanes with owner='codex-cli',
- * color-coded by health: merged=green, returned/review=yellow, stale>4h=red.
+ * Reads docs/06_status/lanes/*.json and displays lanes with lane_type='codex-cli',
+ * color-coded by health: merged/done=green, in-review=yellow, stale>4h=red.
  *
  * Usage:
- *   pnpm codex:status [--all]
+ *   pnpm codex:status [--all] [--json]
  */
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { spawnSync } from 'node:child_process';
+import {
+  type LaneManifest,
+  ACTIVE_LOCK_STATUSES,
+  ROOT,
+  readAllManifests,
+  relativeToRoot,
+} from './ops/shared.js';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
-
-interface LaneEntry {
-  id: string;
-  title: string;
-  branch: string;
-  worktree: string | null;
-  status: 'active' | 'review' | 'merged' | 'abandoned';
-  owner: 'claude' | 'codex' | 'codex-cli' | 'manual';
-  createdAt: string;
-  snapshotAt: string | null;
-  pr: number | null;
-  allowedFiles?: string[];
-}
-
-interface LaneRegistry {
-  version: number;
-  lanes: LaneEntry[];
-}
-
-// ─── Repo Context ─────────────────────────────────────────────────────────────
-
-function repoRoot(): string {
-  const result = spawnSync('git', ['rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-    stdio: 'pipe',
-  });
-  if (result.status !== 0) throw new Error('Not in a git repository');
-  return result.stdout.trim();
-}
-
-const ROOT = repoRoot();
-const LANES_FILE = path.join(ROOT, '.claude', 'lanes.json');
 const CODEX_QUEUE_DIR = path.join(ROOT, '.claude', 'codex-queue');
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function readRegistry(): LaneRegistry {
-  if (!fs.existsSync(LANES_FILE)) return { version: 1, lanes: [] };
-  try {
-    return JSON.parse(fs.readFileSync(LANES_FILE, 'utf8')) as LaneRegistry;
-  } catch {
-    return { version: 1, lanes: [] };
-  }
-}
 
 function humanAge(isoDate: string): string {
   const diffMs = Date.now() - new Date(isoDate).getTime();
@@ -69,9 +31,42 @@ function humanAge(isoDate: string): string {
   return `${Math.floor(diffHr / 24)}d`;
 }
 
-function isStale(isoDate: string, thresholdHours = 4): boolean {
-  const diffMs = Date.now() - new Date(isoDate).getTime();
-  return diffMs > thresholdHours * 60 * 60 * 1000;
+function ageMinutes(isoDate: string): number {
+  return Math.floor((Date.now() - new Date(isoDate).getTime()) / 60_000);
+}
+
+function isStale(heartbeatAt: string): boolean {
+  return ageMinutes(heartbeatAt) > 240; // 4h
+}
+
+function isStranded(heartbeatAt: string): boolean {
+  return ageMinutes(heartbeatAt) > 1440; // 24h
+}
+
+type DisplayBucket = 'active' | 'in-review' | 'merged' | 'done' | 'blocked' | 'reopened';
+
+function displayBucket(status: string): DisplayBucket {
+  switch (status) {
+    case 'started':
+    case 'in_progress':
+      return 'active';
+    case 'in_review':
+      return 'in-review';
+    case 'merged':
+      return 'merged';
+    case 'done':
+      return 'done';
+    case 'blocked':
+      return 'blocked';
+    case 'reopened':
+      return 'reopened';
+    default:
+      return 'active';
+  }
+}
+
+function packetExists(issueId: string): boolean {
+  return fs.existsSync(path.join(CODEX_QUEUE_DIR, `${issueId}.md`));
 }
 
 // ANSI colors — gracefully disabled if not a TTY
@@ -84,19 +79,48 @@ const c = {
   bold: (s: string) => (isTTY ? `\x1b[1m${s}\x1b[0m` : s),
 };
 
-function packetExists(issueId: string): boolean {
-  return fs.existsSync(path.join(CODEX_QUEUE_DIR, `${issueId}.md`));
-}
-
-// ─── Main ─────────────────────────────────────────────────────────────────────
+// ─── Main ────────────────────────────────────────────────────────────────────
 
 const args = process.argv.slice(2);
 const showAll = args.includes('--all');
+const jsonMode = args.includes('--json');
 
-const registry = readRegistry();
-const codexLanes = registry.lanes.filter(
-  (l) => l.owner === 'codex-cli' && (showAll || l.status !== 'merged'),
-);
+let allManifests: LaneManifest[];
+try {
+  allManifests = readAllManifests();
+} catch {
+  allManifests = [];
+}
+
+const codexLanes = allManifests
+  .filter((m) => m.lane_type === 'codex-cli')
+  .filter((m) => showAll || (m.status !== 'merged' && m.status !== 'done'))
+  .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
+
+if (jsonMode) {
+  const output = codexLanes.map((m) => ({
+    issue_id: m.issue_id,
+    lane_type: m.lane_type,
+    tier: m.tier,
+    branch: m.branch,
+    worktree_path: m.worktree_path,
+    status: m.status,
+    display_bucket: displayBucket(m.status),
+    started_at: m.started_at,
+    heartbeat_at: m.heartbeat_at,
+    age_minutes: ageMinutes(m.started_at),
+    heartbeat_age_minutes: ageMinutes(m.heartbeat_at),
+    stale: ACTIVE_LOCK_STATUSES.has(m.status) && isStale(m.heartbeat_at),
+    stranded: ACTIVE_LOCK_STATUSES.has(m.status) && isStranded(m.heartbeat_at),
+    pr_url: m.pr_url,
+    file_scope_lock: m.file_scope_lock,
+    expected_proof_paths: m.expected_proof_paths,
+    packet_present: packetExists(m.issue_id),
+    manifest_path: relativeToRoot(path.join(ROOT, 'docs', '06_status', 'lanes', `${m.issue_id}.json`)),
+  }));
+  console.log(JSON.stringify(output, null, 2));
+  process.exit(0);
+}
 
 const line = '─'.repeat(78);
 console.log('');
@@ -110,21 +134,22 @@ if (codexLanes.length === 0) {
   process.exit(0);
 }
 
-// Count active
-const active = codexLanes.filter((l) => l.status === 'active');
-const inReview = codexLanes.filter((l) => l.status === 'review');
-const merged = codexLanes.filter((l) => l.status === 'merged');
-const abandoned = codexLanes.filter((l) => l.status === 'abandoned');
+// Count by bucket
+const active = codexLanes.filter((m) => m.status === 'started' || m.status === 'in_progress');
+const inReview = codexLanes.filter((m) => m.status === 'in_review');
+const merged = codexLanes.filter((m) => m.status === 'merged');
+const done = codexLanes.filter((m) => m.status === 'done');
+const blocked = codexLanes.filter((m) => m.status === 'blocked' || m.status === 'reopened');
 
 console.log(
-  `  Active: ${active.length}/3    In Review: ${inReview.length}    Merged: ${merged.length}    Abandoned: ${abandoned.length}`,
+  `  Active: ${active.length}    In Review: ${inReview.length}    Merged: ${merged.length}    Done: ${done.length}    Blocked: ${blocked.length}`,
 );
 console.log('');
 
 // Header
 const header = [
   'ID'.padEnd(12),
-  'STATUS'.padEnd(12),
+  'STATUS'.padEnd(16),
   'AGE'.padEnd(8),
   'BRANCH'.padEnd(36),
   'PR',
@@ -132,32 +157,38 @@ const header = [
 console.log(c.dim(header));
 console.log(c.dim('─'.repeat(78)));
 
-for (const lane of codexLanes) {
-  const age = humanAge(lane.createdAt);
-  const prDisplay = lane.pr ? `PR #${lane.pr}` : '—';
-  const branchTrunc =
-    lane.branch.length > 34 ? `${lane.branch.slice(0, 31)}...` : lane.branch;
+for (const m of codexLanes) {
+  const age = humanAge(m.started_at);
+  const bucket = displayBucket(m.status);
+  const prDisplay = m.pr_url ? m.pr_url.replace(/.*\/pull\//, 'PR #') : '—';
+  const branchTrunc = m.branch.length > 34 ? `${m.branch.slice(0, 31)}...` : m.branch;
 
-  const stale = lane.status === 'active' && isStale(lane.createdAt);
+  const stale = ACTIVE_LOCK_STATUSES.has(m.status) && isStale(m.heartbeat_at);
+  const stranded = ACTIVE_LOCK_STATUSES.has(m.status) && isStranded(m.heartbeat_at);
 
   const statusDisplay = (() => {
-    switch (lane.status) {
+    if (stranded) return c.red(`${bucket} (STRANDED)`);
+    if (stale) return c.red(`${bucket} (STALE)`);
+    switch (bucket) {
       case 'merged':
-        return c.green('merged');
-      case 'review':
-        return c.yellow('in-review');
+      case 'done':
+        return c.green(bucket);
+      case 'in-review':
+        return c.yellow(bucket);
       case 'active':
-        return stale ? c.red('active (STALE)') : c.yellow('active');
-      case 'abandoned':
-        return c.dim('abandoned');
+        return c.yellow(bucket);
+      case 'blocked':
+      case 'reopened':
+        return c.red(bucket);
       default:
-        return lane.status;
+        return bucket;
     }
   })();
 
+  const displayWidth = stranded ? 28 : stale ? 24 : 16;
   const row = [
-    lane.id.padEnd(12),
-    statusDisplay.padEnd(stale ? 24 : 12),
+    m.issue_id.padEnd(12),
+    statusDisplay.padEnd(displayWidth),
     age.padEnd(8),
     branchTrunc.padEnd(36),
     prDisplay,
@@ -165,27 +196,23 @@ for (const lane of codexLanes) {
 
   console.log(row);
 
-  // Show title (truncated)
-  const titleTrunc = lane.title.length > 60 ? `${lane.title.slice(0, 57)}...` : lane.title;
-  console.log(c.dim(`  ↳ ${titleTrunc}`));
-
-  // Show packet status
-  if (lane.status === 'active') {
-    const hasPacket = packetExists(lane.id);
-    if (hasPacket) {
-      console.log(c.dim(`  ↳ packet: .claude/codex-queue/${lane.id}.md`));
-    } else {
-      console.log(c.yellow(`  ↳ packet: not found (re-run pnpm codex:dispatch -- --issue ${lane.id})`));
-    }
+  // Show file scope (truncated)
+  if (m.file_scope_lock.length > 0) {
+    const filesDisplay =
+      m.file_scope_lock.length <= 3
+        ? m.file_scope_lock.join(', ')
+        : `${m.file_scope_lock.slice(0, 3).join(', ')} +${m.file_scope_lock.length - 3} more`;
+    console.log(c.dim(`  ↳ scope: ${filesDisplay}`));
   }
 
-  // Show allowed files
-  if (lane.allowedFiles && lane.allowedFiles.length > 0) {
-    const filesDisplay =
-      lane.allowedFiles.length <= 3
-        ? lane.allowedFiles.join(', ')
-        : `${lane.allowedFiles.slice(0, 3).join(', ')} +${lane.allowedFiles.length - 3} more`;
-    console.log(c.dim(`  ↳ allowed: ${filesDisplay}`));
+  // Show packet status for active lanes
+  if (ACTIVE_LOCK_STATUSES.has(m.status) && m.status !== 'in_review') {
+    const hasPacket = packetExists(m.issue_id);
+    if (hasPacket) {
+      console.log(c.dim(`  ↳ packet: .claude/codex-queue/${m.issue_id}.md`));
+    } else {
+      console.log(c.yellow(`  ↳ packet: not found`));
+    }
   }
 
   console.log('');
@@ -194,21 +221,16 @@ for (const lane of codexLanes) {
 console.log(line);
 
 // Stale warnings
-const staleActive = active.filter((l) => isStale(l.createdAt));
+const staleActive = codexLanes.filter(
+  (m) => ACTIVE_LOCK_STATUSES.has(m.status) && isStale(m.heartbeat_at),
+);
 if (staleActive.length > 0) {
   console.log('');
-  console.log(c.red(`STALE LANES (active >4h with no PR):`));
-  for (const lane of staleActive) {
-    console.log(c.red(`  ${lane.id}: ${humanAge(lane.createdAt)} old — consider following up or cleaning up`));
+  console.log(c.red('STALE LANES (heartbeat >4h):'));
+  for (const m of staleActive) {
+    const suffix = isStranded(m.heartbeat_at) ? ' (STRANDED >24h)' : '';
+    console.log(c.red(`  ${m.issue_id}: heartbeat ${humanAge(m.heartbeat_at)} old${suffix}`));
   }
-}
-
-// Capacity info
-console.log('');
-if (active.length >= 3) {
-  console.log(c.yellow(`Capacity: ${active.length}/3 — at max. Wait for a lane to return before dispatching.`));
-} else {
-  console.log(c.dim(`Capacity: ${active.length}/3 — ${3 - active.length} slot(s) available`));
 }
 
 console.log('');
