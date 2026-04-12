@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/preflight_result_v1.schema.json",
+  "title": "Preflight Result V1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "issue_id",
+    "tier",
+    "branch",
+    "head_sha",
+    "verdict",
+    "run_at",
+    "checks",
+    "waivers",
+    "token_path"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "issue_id": { "type": "string", "pattern": "^UTV2-[0-9]+$" },
+    "tier": { "enum": ["T1", "T2", "T3"] },
+    "branch": { "type": "string" },
+    "head_sha": { "type": "string" },
+    "verdict": { "enum": ["PASS", "FAIL", "NOT_APPLICABLE", "INFRA"] },
+    "run_at": { "type": "string", "format": "date-time" },
+    "checks": { "type": "array" },
+    "waivers": { "type": "array" },
+    "token_path": { "type": "string" }
+  },
+  "additionalProperties": true
+}
