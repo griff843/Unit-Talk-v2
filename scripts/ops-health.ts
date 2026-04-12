@@ -22,6 +22,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { readAllManifests } from './ops/shared.js';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -33,20 +34,15 @@ interface HealthItem {
   message: string;
 }
 
-interface LaneEntry {
-  id: string;
+interface ManifestEntry {
+  issue_id: string;
+  lane_type: string;
   branch: string;
-  worktree: string | null;
+  worktree_path: string;
   status: string;
-  owner: string;
-  createdAt: string;
-  snapshotAt: string | null;
-  pr: number | null;
-}
-
-interface LaneRegistry {
-  version: number;
-  lanes: LaneEntry[];
+  started_at: string;
+  heartbeat_at: string;
+  pr_url: string | null;
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -61,9 +57,9 @@ function repoRoot(): string {
 }
 
 const ROOT = repoRoot();
-const LANES_FILE = path.join(ROOT, '.claude', 'lanes.json');
 const WORKTREES_DIR = path.join(ROOT, '.claude', 'worktrees');
 const SNAPSHOTS_DIR = path.join(ROOT, '.claude', 'snapshots');
+const ACTIVE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
 
 function git(...args: string[]): { ok: boolean; stdout: string } {
   const result = spawnSync('git', args, {
@@ -77,14 +73,11 @@ function git(...args: string[]): { ok: boolean; stdout: string } {
   };
 }
 
-function readRegistry(): LaneRegistry {
-  if (!fs.existsSync(LANES_FILE)) {
-    return { version: 1, lanes: [] };
-  }
+function readManifests(): ManifestEntry[] {
   try {
-    return JSON.parse(fs.readFileSync(LANES_FILE, 'utf8')) as LaneRegistry;
+    return readAllManifests() as ManifestEntry[];
   } catch {
-    return { version: 1, lanes: [] };
+    return [];
   }
 }
 
@@ -110,78 +103,64 @@ function isBranchMergedToMain(branch: string): boolean {
 
 function checkLaneRegistry(): HealthItem[] {
   const items: HealthItem[] = [];
-  const registry = readRegistry();
-  const active = registry.lanes.filter((l) => l.status === 'active');
+  const manifests = readManifests();
+  const active = manifests.filter((m) => ACTIVE_STATUSES.has(m.status));
 
   if (active.length === 0) {
-    items.push({ severity: 'info', category: 'Lanes', message: 'No active lanes in registry' });
+    items.push({ severity: 'info', category: 'Lanes', message: 'No active lanes in canonical manifests' });
     return items;
   }
 
   items.push({
     severity: 'ok',
     category: 'Lanes',
-    message: `${active.length} active lane(s) in registry`,
+    message: `${active.length} active lane(s) in canonical manifests`,
   });
 
-  // Codex capacity blocker
-  const codexCount = active.filter((l) => l.owner === 'codex').length;
-  if (codexCount >= 2) {
-    items.push({
-      severity: 'blocker',
-      category: 'Lanes',
-      message: `Codex capacity exceeded: ${codexCount}/2 active Codex lanes`,
-    });
-  }
-
-  for (const lane of active) {
+  for (const m of active) {
     // Merged but still active
-    if (isBranchMergedToMain(lane.branch)) {
+    if (isBranchMergedToMain(m.branch)) {
       items.push({
         severity: 'warn',
         category: 'Lanes',
-        message: `${lane.id}: branch merged to main but still 'active' — run pnpm lane:cleanup`,
+        message: `${m.issue_id}: branch merged to main but manifest still '${m.status}'`,
       });
       continue;
     }
 
     // Branch does not exist locally
-    const branchExists = git('rev-parse', '--verify', `refs/heads/${lane.branch}`).ok;
+    const branchExists = git('rev-parse', '--verify', `refs/heads/${m.branch}`).ok;
     if (!branchExists) {
       items.push({
         severity: 'warn',
         category: 'Lanes',
-        message: `${lane.id}: branch '${lane.branch}' not found locally`,
+        message: `${m.issue_id}: branch '${m.branch}' not found locally`,
       });
     }
 
-    // Snapshot staleness
-    if (!lane.snapshotAt) {
-      const ageDays = daysSince(lane.createdAt);
-      const severity: Severity = ageDays > 1 ? 'warn' : 'info';
-      items.push({
-        severity,
-        category: 'Lanes',
-        message: `${lane.id}: no snapshot yet (lane age: ${humanAge(lane.createdAt)})`,
-      });
-    } else {
-      const snapDays = daysSince(lane.snapshotAt);
-      if (snapDays > 3) {
-        items.push({
-          severity: 'warn',
-          category: 'Lanes',
-          message: `${lane.id}: snapshot is ${humanAge(lane.snapshotAt)} old — consider refreshing`,
-        });
-      }
-    }
-
-    // Dangerously old lane with no snapshot
-    const laneDays = daysSince(lane.createdAt);
-    if (laneDays > 14 && !lane.snapshotAt) {
+    // Heartbeat staleness (replaces legacy snapshot staleness)
+    const heartbeatHours = (Date.now() - new Date(m.heartbeat_at).getTime()) / (1000 * 60 * 60);
+    if (heartbeatHours > 24) {
       items.push({
         severity: 'warn',
         category: 'Lanes',
-        message: `${lane.id}: ${Math.floor(laneDays)}d old and never snapshotted — run cleanup or snapshot`,
+        message: `${m.issue_id}: STRANDED — heartbeat is ${humanAge(m.heartbeat_at)} old (>24h)`,
+      });
+    } else if (heartbeatHours > 4) {
+      items.push({
+        severity: 'warn',
+        category: 'Lanes',
+        message: `${m.issue_id}: STALE — heartbeat is ${humanAge(m.heartbeat_at)} old (>4h)`,
+      });
+    }
+
+    // Dangerously old lane
+    const laneDays = daysSince(m.started_at);
+    if (laneDays > 14) {
+      items.push({
+        severity: 'warn',
+        category: 'Lanes',
+        message: `${m.issue_id}: ${Math.floor(laneDays)}d old — consider closing or cleaning up`,
       });
     }
   }
@@ -215,12 +194,13 @@ function checkWorktrees(): HealthItem[] {
     return items;
   }
 
-  const registry = readRegistry();
-  const registeredNames = new Set(
-    registry.lanes
-      .filter((l) => l.worktree !== null)
-      .map((l) => path.basename(l.worktree!)),
+  const manifests = readManifests();
+  const registeredPaths = new Set(
+    manifests
+      .filter((m) => m.worktree_path)
+      .map((m) => path.basename(m.worktree_path)),
   );
+  const registeredNames = registeredPaths;
 
   const orphans = entries.filter((e) => !registeredNames.has(e));
   const registered = entries.filter((e) => registeredNames.has(e));
@@ -293,10 +273,10 @@ function checkWorktrees(): HealthItem[] {
 
 function checkBranches(): HealthItem[] {
   const items: HealthItem[] = [];
-  const registry = readRegistry();
-  const registeredBranches = new Set(registry.lanes.map((l) => l.branch));
+  const manifests = readManifests();
+  const registeredBranches = new Set(manifests.map((m) => m.branch));
 
-  // All local feat/* branches
+  // All local feat/* and codex/* branches
   const localFeat = git('branch', '--list', 'feat/*');
   if (!localFeat.ok || !localFeat.stdout) {
     items.push({ severity: 'info', category: 'Branches', message: 'No feat/* branches found' });
@@ -427,8 +407,8 @@ function checkOrphanedSnapshots(): HealthItem[] {
     return items;
   }
 
-  const registry = readRegistry();
-  const registeredIds = new Set(registry.lanes.map((l) => l.id.toUpperCase()));
+  const manifests = readManifests();
+  const registeredIds = new Set(manifests.map((m) => m.issue_id.toUpperCase()));
 
   const orphaned = snapshotFiles.filter((f) => !registeredIds.has(path.basename(f, '.json').toUpperCase()));
 
