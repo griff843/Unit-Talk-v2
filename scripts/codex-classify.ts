@@ -32,7 +32,6 @@
  */
 
 import { loadEnvironment } from '@unit-talk/config';
-import { spawnSync } from 'node:child_process';
 import {
   ACTIVE_LOCK_STATUSES,
   readAllManifests,
