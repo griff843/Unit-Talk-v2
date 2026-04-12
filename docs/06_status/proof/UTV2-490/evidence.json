@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-490",
+  "title": "Phase 7E Proof Bundle — Calibration + Schema Cleanup",
+  "generated_at": "2026-04-12T23:42:00.000Z",
+  "merge_sha": "8fd4c62eb0b6726e6156062e509e2a6cf438f4f0",
+  "phase": "7E",
+  "gate": "Phase 7E closes Phase 7 (Governed Syndicate Machine)",
+  "verifier": {
+    "identity": "claude-opus-4.6",
+    "role": "orchestrator"
+  },
+  "prerequisite_merges": [
+    {
+      "issue": "UTV2-508",
+      "title": "P7E-01: Execution plan",
+      "pr": 269,
+      "merge_sha": "af98f5d85a678fbf05142e40d65a4f70bbcea2a2"
+    },
+    {
+      "issue": "UTV2-552",
+      "title": "P7E-02: Calibration metrics in scoring telemetry",
+      "pr": 270,
+      "merge_sha": "8fd4c62eb0b6726e6156062e509e2a6cf438f4f0"
+    },
+    {
+      "issue": "UTV2-553",
+      "title": "P7E-03: Remove legacy uncertainty fallback",
+      "pr": 270,
+      "merge_sha": "8fd4c62eb0b6726e6156062e509e2a6cf438f4f0"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "P7E-A1",
+      "claim": "Per-band calibration/reliability slices are defined and wired",
+      "status": "PASS",
+      "evidence": {
+        "calibration_in_result": "ScoringResult.calibration includes scoredCount, avgModelScore, trustFamiliesAvailable, avgTrustWinRate, totalTrustSampleSize",
+        "logged": "run.completed event includes calibration summary in structured JSON",
+        "no_threshold_changes": "EDGE_THRESHOLDS, UNCERTAINTY_CAPS, CLV_THRESHOLDS unchanged in packages/domain/src/bands/thresholds.ts"
+      }
+    },
+    {
+      "id": "P7E-A2",
+      "claim": "Candidate-to-pick linkage is governed and clean",
+      "status": "PASS",
+      "evidence": {
+        "single_write_path": "board-pick-writer.ts:updatePickIdBatch() is the only path that sets pick_id on pick_candidates",
+        "no_side_channels": "grep 'pick_id.*=' in candidate-scoring-service.ts, system-pick-scanner.ts, alert-submission.ts returns 0 matches in write context",
+        "direction": "Confirmed clean in PHASE7E_EXECUTION_PLAN.md — no cleanup needed"
+      }
+    },
+    {
+      "id": "P7E-A3",
+      "claim": "No fake placeholders remain in the scoring path",
+      "status": "PASS",
+      "evidence": {
+        "no_hardcoded_uncertainty": "grep '0\\.2' candidate-scoring-service.ts returns 0 matches in scoring logic",
+        "no_hardcoded_confidence": "grep '0\\.8' candidate-scoring-service.ts returns 0 matches in scoring logic",
+        "fail_closed": "Missing champion → candidate skipped with no_champion_skip log (lines 166-175)",
+        "test": "P7E: missing champion model skips candidate fail-closed — assert noChampionSkipped === 1"
+      }
+    },
+    {
+      "id": "P7E-A4",
+      "claim": "Deprecated source cleanup conditions are explicit",
+      "status": "PASS",
+      "evidence": {
+        "documented": "PHASE7E_EXECUTION_PLAN.md §3 lists all deprecated artifacts with explicit conditions",
+        "scanner_retired": "system-pick-scanner writes market_universe only (PR #261)",
+        "alert_retired": "alert-submission writes market_universe only (PR #262)",
+        "flag_renames_deferred": "SYSTEM_PICK_SCANNER_ENABLED and SYSTEM_PICKS_ENABLED rename deferred as cosmetic"
+      }
+    }
+  ],
+  "static_proof": {
+    "pnpm_verify": "PASS",
+    "test_counts": {
+      "app_tests": 188,
+      "scoring_tests": 10,
+      "ops_tests": 32,
+      "total": 230,
+      "failures": 0
+    },
+    "lint": "PASS",
+    "type_check": "PASS"
+  },
+  "phase_7e_gate_verdict": "PASS — all 4 assertions hold. Phase 7E is complete.",
+  "phase_7_verdict": "Phase 7 (Governed Syndicate Machine) is COMPLETE. All 5 sub-phases (7A–7E) are gated and closed."
+}
