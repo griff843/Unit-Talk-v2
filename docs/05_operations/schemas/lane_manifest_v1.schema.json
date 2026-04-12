@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unit-talk.dev/schemas/lane_manifest_v1.schema.json",
+  "title": "Lane Manifest V1",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "issue_id",
+    "lane_type",
+    "tier",
+    "worktree_path",
+    "branch",
+    "base_branch",
+    "commit_sha",
+    "pr_url",
+    "files_changed",
+    "file_scope_lock",
+    "expected_proof_paths",
+    "status",
+    "started_at",
+    "heartbeat_at",
+    "closed_at",
+    "blocked_by",
+    "preflight_token",
+    "created_by",
+    "truth_check_history",
+    "reopen_history"
+  ],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "issue_id": { "type": "string", "pattern": "^UTV2-[0-9]+$" },
+    "lane_type": { "enum": ["claude", "codex-cli", "codex-cloud"] },
+    "tier": { "enum": ["T1", "T2", "T3"] },
+    "worktree_path": { "type": "string" },
+    "branch": { "type": "string" },
+    "base_branch": { "const": "main" },
+    "commit_sha": { "type": ["string", "null"] },
+    "pr_url": { "type": ["string", "null"] },
+    "files_changed": { "type": "array", "items": { "type": "string" } },
+    "file_scope_lock": {
+      "type": "array",
+      "minItems": 1,
+      "items": { "type": "string" }
+    },
+    "expected_proof_paths": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "status": {
+      "enum": ["started", "in_progress", "in_review", "merged", "done", "blocked", "reopened"]
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "heartbeat_at": { "type": "string", "format": "date-time" },
+    "closed_at": { "type": ["string", "null"], "format": "date-time" },
+    "blocked_by": { "type": "array", "items": { "type": "string" } },
+    "preflight_token": { "type": "string" },
+    "created_by": { "enum": ["claude", "codex-cli", "pm"] },
+    "truth_check_history": { "type": "array" },
+    "reopen_history": { "type": "array" }
+  },
+  "additionalProperties": true
+}
