@@ -18,6 +18,7 @@ import { runCandidateScoring } from './candidate-scoring-service.js';
 import {
   InMemoryMarketUniverseRepository,
   InMemoryPickCandidateRepository,
+  InMemoryMarketFamilyTrustRepository,
 } from '@unit-talk/db';
 import type { MarketUniverseRow, PickCandidateRow } from '@unit-talk/db';
 
@@ -235,4 +236,100 @@ test('skips already-scored candidates (model_score not null)', async () => {
   assert.equal(result.scored, 0);
   assert.equal(result.skipped, 0);
   assert.equal(result.errors, 0);
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-501: Runtime proof — trust data changes scoring output
+// ---------------------------------------------------------------------------
+
+test('P7C runtime proof: trust data with sufficient sample adjusts model_score', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const marketFamilyTrust = new InMemoryMarketFamilyTrustRepository();
+
+  const universeRow = makeUniverseRow({ market_type_id: 'player_points_ou' });
+  seedUniverseRows(marketUniverse, [universeRow]);
+
+  const candidate = makeCandidate({ universe_id: 'universe-1' });
+  seedCandidateRows(pickCandidates, [candidate]);
+
+  // Run scoring WITHOUT trust data
+  const baseResult = await runCandidateScoring({ pickCandidates, marketUniverse });
+  assert.equal(baseResult.scored, 1);
+  assert.equal(baseResult.trustAdjusted, 0);
+
+  const baseScoredRows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const baseScore = [...baseScoredRows.values()][0]!.model_score;
+  assert.ok(typeof baseScore === 'number' && baseScore > 0, 'base score should be positive');
+
+  // Reset candidate for re-scoring
+  seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-1' })]);
+
+  // Seed trust data: high win rate (0.65) with sufficient sample (10)
+  await marketFamilyTrust.insertTuningRun([{
+    tuning_run_id: 'trust-run-1',
+    market_type_id: 'player_points_ou',
+    sport_key: 'nba',
+    sample_size: 10,
+    win_count: 65,
+    loss_count: 35,
+    push_count: 0,
+    win_rate: 0.65,
+    roi: 0.08,
+    avg_model_score: 0.62,
+    confidence_band: 'B',
+    metadata: {},
+  }]);
+
+  // Run scoring WITH trust data
+  const trustResult = await runCandidateScoring({ pickCandidates, marketUniverse, marketFamilyTrust });
+  assert.equal(trustResult.scored, 1);
+  assert.equal(trustResult.trustAdjusted, 1, 'trust adjustment should fire');
+
+  const trustScoredRows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const trustScore = [...trustScoredRows.values()][0]!.model_score;
+  assert.ok(typeof trustScore === 'number' && trustScore > 0, 'trust score should be positive');
+  assert.notEqual(trustScore, baseScore, 'trust-adjusted score should differ from base score');
+});
+
+test('P7C runtime proof: insufficient sample trust data leaves scoring inert', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const marketFamilyTrust = new InMemoryMarketFamilyTrustRepository();
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow({ market_type_id: 'player_points_ou' })]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-1' })]);
+
+  // Seed trust with sample_size=2 (below MIN_TRUST_SAMPLE_SIZE=5)
+  await marketFamilyTrust.insertTuningRun([{
+    tuning_run_id: 'trust-run-low',
+    market_type_id: 'player_points_ou',
+    sport_key: 'nba',
+    sample_size: 2,
+    win_count: 2,
+    loss_count: 0,
+    push_count: 0,
+    win_rate: 1.0,
+    roi: 0.5,
+    avg_model_score: null,
+    confidence_band: null,
+    metadata: {},
+  }]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, marketFamilyTrust });
+  assert.equal(result.scored, 1);
+  assert.equal(result.trustAdjusted, 0, 'insufficient sample should not trigger adjustment');
+});
+
+test('P7C runtime proof: missing trust repo leaves scoring inert', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate({ universe_id: 'universe-1' })]);
+
+  // No marketFamilyTrust passed — undefined
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse });
+  assert.equal(result.scored, 1);
+  assert.equal(result.trustAdjusted, 0, 'no trust repo means no adjustment');
 });
