@@ -17,6 +17,8 @@ import type {
   PickLifecycleRecord,
   PickRecord,
   PickRepository,
+  TransitionPickLifecycleAtomicInput,
+  TransitionPickLifecycleAtomicResult,
   ReceiptRecord,
   ReceiptRepository,
   RepositoryBundle,
@@ -515,7 +517,7 @@ class FakePickRepository implements PickRepository {
     };
   }
 
-  async transitionPickLifecycleAtomic(_input: any): Promise<any> {
+  async transitionPickLifecycleAtomic(_input: TransitionPickLifecycleAtomicInput): Promise<TransitionPickLifecycleAtomicResult> {
     throw new Error('transitionPickLifecycleAtomic is not supported in FakePickRepository');
   }
 }
