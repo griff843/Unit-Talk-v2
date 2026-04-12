@@ -45,6 +45,7 @@ import {
   handlePicksQuery,
   handleSettlementsRecent,
   handleShadowModelSummaries,
+  handleShadowComparison,
   handleHealthConfig,
   handleBoardWritePicks,
   handleBoardRunTuning,
@@ -337,6 +338,11 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/shadow-models/summary') {
     return handleShadowModelSummaries(request, response, runtime);
+  }
+
+  // Phase 7D UTV2-506: governed shadow comparison read surface
+  if (method === 'GET' && url.pathname === '/api/shadow-models/comparison') {
+    return handleShadowComparison(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/health/config') {

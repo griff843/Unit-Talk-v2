@@ -105,11 +105,13 @@ server.listen(port, () => {
   // Candidate scoring: reads pick_candidates with model_score=NULL, computes and writes scores
   // Phase 3 UTV2-470 — always runs on 5-min cadence after board scan populates candidates
   // Hard invariants: never sets pick_id, never sets shadow_mode=false, never writes to picks
-  // Phase 7C UTV2-515: scoring now reads market_family_trust for bounded adjustments
+  // Phase 7D: scoring reads champion model from registry, trust data, and records shadow comparisons
   const scoringDeps = {
     pickCandidates: runtime.repositories.pickCandidates,
     marketUniverse: runtime.repositories.marketUniverse,
     marketFamilyTrust: runtime.repositories.marketFamilyTrust,
+    ...(runtime.repositories.modelRegistry ? { modelRegistry: runtime.repositories.modelRegistry } : {}),
+    ...(runtime.repositories.experimentLedger ? { experimentLedger: runtime.repositories.experimentLedger } : {}),
   };
   runCandidateScoring(scoringDeps, { logger: console }).catch(() => {});
   candidateScoringTimer = setInterval(() => {
