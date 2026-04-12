@@ -1,10 +1,18 @@
-import type { PickRepository, SettlementRepository } from '@unit-talk/db';
+import type { PickRepository, SettlementRepository, IMarketFamilyTrustRepository, ClvFeedbackInsert } from '@unit-talk/db';
+import crypto from 'node:crypto';
 
 export interface ClvTrustAdjustment {
   adjustment: number; // -10 to +10 added to trust score
   sampleSize: number;
   avgClvPercent: number;
   reason: string;
+}
+
+export interface MarketFamilyClvFeedback {
+  market_type_id: string;
+  sport_key: string | null;
+  sample_size: number;
+  avg_clv_percent: number;
 }
 
 export interface ClvTrustAdjustmentOptions {
@@ -34,18 +42,12 @@ export async function computeClvTrustAdjustment(
   cutoff.setDate(cutoff.getDate() - lookbackDays);
   const cutoffIso = cutoff.toISOString();
 
-  // Fetch a generous batch of recent settlements to filter locally.
-  // The repository only exposes listRecent(limit), so we pull enough rows
-  // to cover the lookback window.
   const recentSettlements = await settlementRepository.listRecent(500);
 
-  // Filter to grading-source settlements within the lookback window.
   const gradingSettlements = recentSettlements.filter(
     (s) => s.source === 'grading' && s.settled_at >= cutoffIso,
   );
 
-  // Cross-reference with picks to match the capper by metadata.capper
-  // (canonical capper identity), NOT pick.source (intake channel).
   const clvValues: number[] = [];
 
   for (const settlement of gradingSettlements) {
@@ -98,6 +100,89 @@ export async function computeClvTrustAdjustment(
     avgClvPercent,
     reason,
   };
+}
+
+/**
+ * Phase 7C UTV2-517: Compute and persist market-family CLV feedback.
+ *
+ * Aggregates CLV data from recent settled picks by market (derived from pick metadata),
+ * then writes the aggregates through the governed market_family_trust persistence path
+ * using insertClvFeedback. Append-only, idempotent per feedback_run_id.
+ *
+ * Returns the feedback rows written (empty if insufficient data).
+ */
+export async function computeAndPersistMarketFamilyClvFeedback(
+  settlementRepository: SettlementRepository,
+  pickRepository: PickRepository,
+  marketFamilyTrustRepository: IMarketFamilyTrustRepository,
+  options?: ClvTrustAdjustmentOptions,
+): Promise<MarketFamilyClvFeedback[]> {
+  const lookbackDays = options?.lookbackDays ?? 30;
+  const minSampleSize = options?.minSampleSize ?? 5;
+
+  const cutoff = new Date();
+  cutoff.setDate(cutoff.getDate() - lookbackDays);
+  const cutoffIso = cutoff.toISOString();
+
+  const recentSettlements = await settlementRepository.listRecent(500);
+  const gradingSettlements = recentSettlements.filter(
+    (s) => s.source === 'grading' && s.settled_at >= cutoffIso,
+  );
+
+  // Aggregate CLV by market key
+  const marketAgg = new Map<string, { sport: string | null; clvValues: number[] }>();
+
+  for (const settlement of gradingSettlements) {
+    const pick = await pickRepository.findPickById(settlement.pick_id);
+    if (!pick) continue;
+
+    const pickMetadata = asRecord(pick.metadata);
+    const market = typeof pick.market === 'string' ? pick.market : null;
+    if (!market) continue;
+
+    const payload = asRecord(settlement.payload);
+    const clvPercent = readFiniteNumber(payload['clvPercent']);
+    if (clvPercent === null) continue;
+
+    const existing = marketAgg.get(market);
+    if (existing) {
+      existing.clvValues.push(clvPercent);
+    } else {
+      const sport = typeof pickMetadata['sport'] === 'string' ? pickMetadata['sport'] : null;
+      marketAgg.set(market, { sport, clvValues: [clvPercent] });
+    }
+  }
+
+  // Build feedback rows for markets with sufficient samples
+  const feedbackRows: MarketFamilyClvFeedback[] = [];
+  const feedbackRunId = crypto.randomUUID();
+  const inserts: ClvFeedbackInsert[] = [];
+
+  for (const [marketTypeId, agg] of marketAgg) {
+    if (agg.clvValues.length < minSampleSize) continue;
+
+    const avgClv = agg.clvValues.reduce((sum, v) => sum + v, 0) / agg.clvValues.length;
+    const row: MarketFamilyClvFeedback = {
+      market_type_id: marketTypeId,
+      sport_key: agg.sport,
+      sample_size: agg.clvValues.length,
+      avg_clv_percent: avgClv,
+    };
+    feedbackRows.push(row);
+    inserts.push({
+      market_type_id: marketTypeId,
+      sport_key: agg.sport,
+      sample_size: agg.clvValues.length,
+      avg_clv_percent: avgClv,
+      feedback_run_id: feedbackRunId,
+    });
+  }
+
+  if (inserts.length > 0) {
+    await marketFamilyTrustRepository.insertClvFeedback(inserts);
+  }
+
+  return feedbackRows;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
