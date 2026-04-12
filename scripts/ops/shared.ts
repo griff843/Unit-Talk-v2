@@ -204,7 +204,7 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 
 const ISSUE_PATTERN = /^UTV2-\d+$/;
 const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>utv2-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
-const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
+export const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
   'started',
   'in_progress',
   'in_review',
