@@ -18,6 +18,18 @@ export interface RecapTopPlay {
   odds: number | null;
   result: 'win' | 'loss' | 'push';
   profitLossUnits: number;
+  confidence: number | null;
+  sport: string | null;
+}
+
+export interface RecapPickLine {
+  selection: string;
+  market: string;
+  result: 'win' | 'loss' | 'push';
+  profitLossUnits: number;
+  confidence: number | null;
+  sport: string | null;
+  submittedBy: string;
 }
 
 export interface RecapSummary {
@@ -35,6 +47,7 @@ export interface RecapSummary {
   windowDescription: string;
   sampleContext: string;
   topPlay: RecapTopPlay;
+  picks: RecapPickLine[];
 }
 
 export interface PostRecapOptions {
@@ -252,7 +265,18 @@ export async function computeRecapSummary(
       odds: topPlayRow.pick.odds,
       result: topPlayRow.result,
       profitLossUnits: roundToTwoDecimals(topPlayRow.profitLossUnits),
+      confidence: readConfidence(topPlayRow.pick),
+      sport: readSport(topPlayRow.pick),
     },
+    picks: joinedRows.map((row) => ({
+      selection: row.pick.selection,
+      market: row.pick.market,
+      result: row.result,
+      profitLossUnits: roundToTwoDecimals(row.profitLossUnits),
+      confidence: readConfidence(row.pick),
+      sport: readSport(row.pick),
+      submittedBy: readSubmittedBy(row.pick),
+    })),
   };
 }
 
@@ -404,42 +428,86 @@ export function buildRecapEmbed(summary: RecapSummary) {
     ? `${summary.sampleContext}\n_Small sample \u2014 interpret with caution_`
     : summary.sampleContext;
 
+  const fields: Array<{ name: string; value: string; inline: boolean }> = [
+    {
+      name: 'Record',
+      value: summary.record,
+      inline: true,
+    },
+    {
+      name: 'Net Units',
+      value: formatUnits(summary.netUnits),
+      inline: true,
+    },
+    {
+      name: 'ROI',
+      value: formatPercent(summary.roiPercent),
+      inline: true,
+    },
+    {
+      name: 'Sample',
+      value: sampleValue,
+      inline: true,
+    },
+  ];
+
+  // Per-pick breakdown (compact, max 10 picks to stay within Discord limits)
+  if (summary.picks.length > 0) {
+    const displayPicks = summary.picks.slice(0, 10);
+    const pickLines = displayPicks.map((p) => {
+      const icon = recapSportIcon(p.sport);
+      const resultEmoji = p.result === 'win' ? '\u2705' : p.result === 'loss' ? '\u274c' : '\u2796';
+      const confStr = p.confidence != null ? ` \u2022 ${Math.round(p.confidence * 100)}%` : '';
+      return `${resultEmoji} ${icon}**${p.selection}** (${p.market}) ${formatUnits(p.profitLossUnits)}${confStr}`;
+    });
+    if (summary.picks.length > 10) {
+      pickLines.push(`_...and ${summary.picks.length - 10} more_`);
+    }
+    fields.push({
+      name: 'Picks',
+      value: pickLines.join('\n'),
+      inline: false,
+    });
+  }
+
+  // Top play with enriched detail
+  const topPlayLines = [
+    `${recapSportIcon(summary.topPlay.sport)}**${summary.topPlay.selection}** (${summary.topPlay.market})`,
+    `Result: ${capitalize(summary.topPlay.result)} \u2022 P/L: ${formatUnits(summary.topPlay.profitLossUnits)}`,
+    `Capper: ${summary.topPlay.submittedBy}`,
+  ];
+  if (summary.topPlay.confidence != null) {
+    const confPct = Math.round(summary.topPlay.confidence * 100);
+    const descriptor = confPct >= 75 ? 'High' : confPct >= 50 ? 'Medium' : 'Low';
+    topPlayLines.push(`Confidence: ${confPct}% (${descriptor})`);
+  }
+  fields.push({
+    name: '\u2b50 Top Play',
+    value: topPlayLines.join('\n'),
+    inline: false,
+  });
+
   return {
     title: summary.window.label,
     color: summary.netUnits >= 0 ? 0x2f855a : 0xc53030,
-    fields: [
-      {
-        name: 'Record',
-        value: summary.record,
-        inline: true,
-      },
-      {
-        name: 'Net Units',
-        value: formatUnits(summary.netUnits),
-        inline: true,
-      },
-      {
-        name: 'ROI',
-        value: formatPercent(summary.roiPercent),
-        inline: true,
-      },
-      {
-        name: 'Sample',
-        value: sampleValue,
-        inline: true,
-      },
-      {
-        name: 'Top Play',
-        value: [
-          `${summary.topPlay.selection} (${summary.topPlay.market})`,
-          `Result: ${capitalize(summary.topPlay.result)}`,
-          `P/L: ${formatUnits(summary.topPlay.profitLossUnits)}`,
-          `Capper: ${summary.topPlay.submittedBy}`,
-        ].join('\n'),
-        inline: false,
-      },
-    ],
+    fields,
   };
+}
+
+const RECAP_SPORT_ICONS: Record<string, string> = {
+  MLB: '\u26be ',
+  NBA: '\ud83c\udfc0 ',
+  NFL: '\ud83c\udfc8 ',
+  NHL: '\ud83c\udfd2 ',
+  Soccer: '\u26bd ',
+  soccer: '\u26bd ',
+  MLS: '\u26bd ',
+  EPL: '\u26bd ',
+};
+
+function recapSportIcon(sport: string | null): string {
+  if (!sport) return '';
+  return RECAP_SPORT_ICONS[sport] ?? '';
 }
 
 function buildRecapOutboxPayload(summary: RecapSummary, channel: string, channelId: string) {
@@ -678,6 +746,17 @@ async function recordRecapDeliveryFailure(
 
 function capitalize(value: string) {
   return value.length > 0 ? `${value[0]?.toUpperCase() ?? ''}${value.slice(1)}` : value;
+}
+
+function readConfidence(pick: PickRecord): number | null {
+  return typeof pick.confidence === 'number' && Number.isFinite(pick.confidence)
+    ? pick.confidence
+    : null;
+}
+
+function readSport(pick: PickRecord): string | null {
+  const metadata = asRecord(pick.metadata);
+  return typeof metadata?.sport === 'string' ? metadata.sport : null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {

@@ -14,6 +14,9 @@ export interface RecapEmbedInput {
   profitLossUnits: number;
   clvPercent: number | null;
   submittedBy: string;
+  confidence?: number | null | undefined;
+  sport?: string | null | undefined;
+  odds?: number | null | undefined;
 }
 
 export interface RecapEmbedField {
@@ -30,46 +33,72 @@ export interface RecapEmbedData {
 }
 
 export function buildRecapEmbedData(input: RecapEmbedInput): RecapEmbedData {
+  const sportIcon = input.sport ? RECAP_SPORT_ICONS[input.sport] ?? '' : '';
+  const title = sportIcon ? `${sportIcon} Pick Recap` : 'Pick Recap';
+
+  const fields: RecapEmbedField[] = [
+    {
+      name: 'Market',
+      value: input.market.trim() || 'Unknown market',
+      inline: false,
+    },
+    {
+      name: 'Selection',
+      value: input.selection.trim() || 'Unknown selection',
+      inline: false,
+    },
+    {
+      name: 'Result',
+      value: formatResult(input.result),
+      inline: true,
+    },
+    {
+      name: 'P/L',
+      value: formatProfitLossUnits(input.profitLossUnits),
+      inline: true,
+    },
+  ];
+
+  if (input.odds != null && Number.isFinite(input.odds)) {
+    fields.push({
+      name: 'Odds',
+      value: formatAmericanOdds(input.odds),
+      inline: true,
+    });
+  }
+
+  if (input.confidence != null && Number.isFinite(input.confidence)) {
+    const confPct = Math.round(input.confidence * 100);
+    const descriptor = confPct >= 75 ? 'High' : confPct >= 50 ? 'Medium' : 'Low';
+    fields.push({
+      name: 'Confidence',
+      value: `${confPct}% (${descriptor})`,
+      inline: true,
+    });
+  }
+
+  fields.push(
+    {
+      name: 'CLV% (vs SGO close)',
+      value: formatSignedPercent(input.clvPercent),
+      inline: true,
+    },
+    {
+      name: 'Capper',
+      value: input.submittedBy.trim() || 'Unknown',
+      inline: true,
+    },
+    {
+      name: 'Stake',
+      value: formatStakeUnits(input.stakeUnits),
+      inline: true,
+    },
+  );
+
   return {
-    title: 'Pick Recap',
+    title,
     color: resolveEmbedColor(input.result),
-    fields: [
-      {
-        name: 'Market',
-        value: input.market.trim() || 'Unknown market',
-        inline: false,
-      },
-      {
-        name: 'Selection',
-        value: input.selection.trim() || 'Unknown selection',
-        inline: false,
-      },
-      {
-        name: 'Result',
-        value: formatResult(input.result),
-        inline: true,
-      },
-      {
-        name: 'P/L',
-        value: formatProfitLossUnits(input.profitLossUnits),
-        inline: true,
-      },
-      {
-        name: 'CLV% (vs SGO close)',
-        value: formatSignedPercent(input.clvPercent),
-        inline: true,
-      },
-      {
-        name: 'Capper',
-        value: input.submittedBy.trim() || 'Unknown',
-        inline: true,
-      },
-      {
-        name: 'Stake',
-        value: formatStakeUnits(input.stakeUnits),
-        inline: true,
-      },
-    ],
+    fields,
     timestamp: new Date().toISOString(),
   };
 }
@@ -111,6 +140,21 @@ function formatSignedPercent(value: number | null) {
   const normalized = value.toFixed(1);
   return value > 0 ? `+${normalized}%` : `${normalized}%`;
 }
+
+function formatAmericanOdds(odds: number): string {
+  return odds > 0 ? `+${odds}` : String(odds);
+}
+
+const RECAP_SPORT_ICONS: Record<string, string> = {
+  MLB: '\u26be',
+  NBA: '\ud83c\udfc0',
+  NFL: '\ud83c\udfc8',
+  NHL: '\ud83c\udfd2',
+  Soccer: '\u26bd',
+  soccer: '\u26bd',
+  MLS: '\u26bd',
+  EPL: '\u26bd',
+};
 
 function resolveEmbedColor(result: RecapEmbedInput['result']) {
   if (result === 'win') {
