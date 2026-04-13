@@ -585,3 +585,63 @@ export function checkRolloutControls(
 
   return { allowed: true };
 }
+
+// ---------------------------------------------------------------------------
+// UTV2-537: Typed accessor for promotion score components
+// ---------------------------------------------------------------------------
+
+/**
+ * Convenience type for the 5 promotion score components.
+ * These are the raw 0–100 inputs before weighting.
+ */
+export interface PromotionScoreComponents {
+  edge: number;
+  trust: number;
+  readiness: number;
+  uniqueness: number;
+  boardFit: number;
+  edgeSource?: EdgeSource | undefined;
+}
+
+/**
+ * Parse a promotion history payload into a typed PromotionDecisionSnapshot.
+ * Returns null if the payload is not a valid snapshot (e.g. pre-snapshot rows).
+ */
+export function parsePromotionSnapshot(
+  payload: unknown,
+): PromotionDecisionSnapshot | null {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return null;
+  }
+
+  const record = payload as Record<string, unknown>;
+  const scoreInputs = record['scoreInputs'];
+  if (!scoreInputs || typeof scoreInputs !== 'object') {
+    return null;
+  }
+
+  const si = scoreInputs as Record<string, unknown>;
+  if (
+    typeof si['edge'] !== 'number' ||
+    typeof si['trust'] !== 'number' ||
+    typeof si['readiness'] !== 'number' ||
+    typeof si['uniqueness'] !== 'number' ||
+    typeof si['boardFit'] !== 'number'
+  ) {
+    return null;
+  }
+
+  return payload as PromotionDecisionSnapshot;
+}
+
+/**
+ * Extract just the score components from a promotion history payload.
+ * Returns null if the payload doesn't contain valid score inputs.
+ */
+export function extractScoreComponents(
+  payload: unknown,
+): PromotionScoreComponents | null {
+  const snapshot = parsePromotionSnapshot(payload);
+  if (!snapshot) return null;
+  return snapshot.scoreInputs;
+}

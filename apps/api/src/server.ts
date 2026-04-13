@@ -49,6 +49,7 @@ import {
   handleHealthConfig,
   handleBoardWritePicks,
   handleBoardRunTuning,
+  handlePromotionScores,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 
@@ -343,6 +344,11 @@ export async function routeRequest(
   // Phase 7D UTV2-506: governed shadow comparison read surface
   if (method === 'GET' && url.pathname === '/api/shadow-models/comparison') {
     return handleShadowComparison(request, response, runtime);
+  }
+
+  // Phase 7 UTV2-537: typed promotion score components read surface
+  if (method === 'GET' && url.pathname === '/api/operator/promotion-scores') {
+    return handlePromotionScores(request, response, runtime);
   }
 
   if (method === 'GET' && url.pathname === '/api/health/config') {
