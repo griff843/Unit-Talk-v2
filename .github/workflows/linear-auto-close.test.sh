@@ -65,12 +65,43 @@ extract_linear_close_ids() {
   local trailer_ids
   trailer_ids=$(echo "$msg" | grep -oE '^Linear-Close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
 
-  # Union, dedupe, format as space-separated
-  printf '%s\n%s\n' "$inline_ids" "$trailer_ids" \
+  # Collect all candidate close IDs
+  local all_ids
+  all_ids=$(printf '%s\n%s\n' "$inline_ids" "$trailer_ids" \
     | sort -u \
-    | grep -v '^$' \
-    | tr '\n' ' ' \
-    | sed 's/ $//'
+    | grep -v '^$')
+
+  # UTV2-548: No-close opt-out — if message contains "No-close: UTV2-NNN"
+  # or "plan-only" or "partial-fix", remove the referenced IDs
+  local no_close_ids
+  no_close_ids=$(echo "$msg" | grep -oE 'No-close:[[:space:]]*UTV2-[0-9]+' 2>/dev/null | grep -oE 'UTV2-[0-9]+' 2>/dev/null)
+
+  local has_plan_only=false
+  if echo "$msg" | grep -qiE '\bplan-only\b|\bpartial-fix\b' 2>/dev/null; then
+    has_plan_only=true
+  fi
+
+  # If plan-only/partial-fix marker present, suppress ALL close IDs
+  if [ "$has_plan_only" = true ]; then
+    return 0
+  fi
+
+  # Remove specific No-close IDs
+  local filtered_ids=""
+  for id in $all_ids; do
+    local suppressed=false
+    for nc_id in $no_close_ids; do
+      if [ "$id" = "$nc_id" ]; then
+        suppressed=true
+        break
+      fi
+    done
+    if [ "$suppressed" = false ]; then
+      filtered_ids="$filtered_ids $id"
+    fi
+  done
+
+  echo "$filtered_ids" | xargs | tr ' ' '\n' | sort -u | tr '\n' ' ' | sed 's/ $//'
 }
 
 # ---------------------------------------------------------------------------
@@ -214,6 +245,39 @@ if [ "${BASH_SOURCE[0]}" = "$0" ]; then
   assert_match \
     "closes the loop on — not immediately followed by id" \
     "docs: closes the loop on prior UTV2-450 work" \
+    ""
+
+  echo ""
+  echo "=== UTV2-548: OPT-OUT AND PLAN-ONLY ==="
+
+  assert_match \
+    "No-close suppresses specific ID" \
+    $'Closes UTV2-539\n\nNo-close: UTV2-539' \
+    ""
+
+  assert_match \
+    "No-close suppresses one ID but not another" \
+    $'Closes UTV2-100, Closes UTV2-200\n\nNo-close: UTV2-100' \
+    "UTV2-200"
+
+  assert_match \
+    "plan-only marker suppresses all close IDs" \
+    $'Closes UTV2-539\n\nplan-only' \
+    ""
+
+  assert_match \
+    "partial-fix marker suppresses all close IDs" \
+    $'Closes UTV2-539\n\npartial-fix' \
+    ""
+
+  assert_match \
+    "Parent issue reference alone — not close intent" \
+    "docs+ops(utv2-539): cleanup plan. Parent issue: UTV2-539" \
+    ""
+
+  assert_match \
+    "Links reference alone — not close intent" \
+    "feat: something. Links: UTV2-539" \
     ""
 
   echo ""

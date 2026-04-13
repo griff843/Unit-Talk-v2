@@ -90,11 +90,12 @@ jobs:
           source .github/workflows/linear-auto-close.test.sh
 
           ids=$(extract_linear_close_ids "$COMMIT_MSG")
+          subject=$(echo "$COMMIT_MSG" | head -n 1)
           if [ -z "$ids" ]; then
-            echo "No explicit close-intent markers found in commit message — nothing to close."
+            echo "::notice title=linear-auto-close::decision=no_close reason=no_close_intent commit=\"$subject\""
             echo "ids=" >> "$GITHUB_OUTPUT"
           else
-            echo "Found close-intent ids: $ids"
+            echo "::notice title=linear-auto-close::decision=will_close ids=\"$ids\" commit=\"$subject\""
             echo "ids=$ids" >> "$GITHUB_OUTPUT"
           fi
 
