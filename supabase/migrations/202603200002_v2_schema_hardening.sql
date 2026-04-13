@@ -77,6 +77,7 @@ alter table public.pick_lifecycle
   add column if not exists from_state text;
 
 alter table public.pick_lifecycle
+  -- lint-override: sibling-constraint
   add constraint pick_lifecycle_to_state_check check (
     to_state in ('draft', 'validated', 'queued', 'posted', 'settled', 'voided')
   );
