@@ -1,12 +1,18 @@
 # Merge Gate
 #
-# Enforces tier-appropriate merge authorization. Reads tier from PR labels
-# (human-assigned only). Verifies PM verdict is from an authorized CODEOWNERS
-# member. Fail-closed: no tier label or missing approval = no merge.
+# THE tier-aware policy engine for merge authorization on main.
+# Branch protection defers review policy to this check — no universal
+# PR review is required at the branch level.
 #
-# T1: requires t1-approved label + PM_VERDICT: APPROVED + PR review approval
-# T2: requires PM_VERDICT: APPROVED + PR review approval
+# Reads tier from PR labels (human-assigned only). Verifies PM verdict
+# is from an authorized CODEOWNERS member. Fail-closed: no tier label
+# or missing approval = no merge.
+#
+# T1: requires t1-approved label + PM_VERDICT: APPROVED from CODEOWNERS
+# T2: requires PM_VERDICT: APPROVED from CODEOWNERS
 # T3: passes automatically (CI + executor-result-validator are separate gates)
+#
+# governance:pause label on PR = hard block regardless of tier.
 #
 # Spec: docs/05_operations/GOVERNED_LOOP_SPEC.md (sections 2C, 3B, 4B)
 
@@ -97,8 +103,15 @@ jobs:
                 );
               }
 
+              // ── 4b. Kill switch ──────────────────────────────────
+              if (labels.includes('governance:pause')) {
+                errors.push(
+                  'governance:pause label is active. All merges blocked until removed by PM.'
+                );
+              }
+
               if (errors.length > 0) {
-                // Can't proceed without valid tier
+                // Can't proceed without valid tier / kill switch
                 throw new Error('Tier validation failed');
               }
 
@@ -184,22 +197,10 @@ jobs:
                 }
               }
 
-              // ── 7. Require PR review approval ──────────────────────
-              const { data: reviews } = await github.rest.pulls.listReviews({
-                owner, repo, pull_number: prNumber, per_page: 100
-              });
-
-              const approvedReviews = reviews.filter(
-                r => r.state === 'APPROVED'
-              );
-
-              if (approvedReviews.length < 1) {
-                errors.push(
-                  `${tier} requires at least one approved PR review. None found.`
-                );
-              }
-
-              // ── 8. T1: require t1-approved label ───────────────────
+              // ── 7. T1: require t1-approved label ───────────────────
+              // PM verdict comment is the human gate for T1/T2.
+              // No separate GitHub PR review required — that would
+              // force the solo operator to double-approve.
               if (tier === 'T1') {
                 if (!labels.includes('t1-approved')) {
                   errors.push(
