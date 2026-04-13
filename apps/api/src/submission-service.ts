@@ -32,6 +32,7 @@ import {
   computeSubmissionDomainAnalysis,
   enrichMetadataWithDomainAnalysis,
 } from './domain-analysis-service.js';
+import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
 
 export interface SubmissionProcessingResult {
@@ -82,6 +83,7 @@ export async function processSubmission(
     audit: AuditLogRepository;
     providerOffers: ProviderOfferRepository;
     settlements?: SettlementRepository;
+    participants?: import('@unit-talk/db').ParticipantRepository;
   },
 ): Promise<SubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -197,6 +199,17 @@ export async function processSubmission(
     }
   }
 
+  // Resolve thumbnail URL from enriched participant data (fail-open)
+  let thumbnailUrl: string | null = null;
+  if (repositories.participants) {
+    const pickSport = enrichedMetadata['sport'] as string | undefined;
+    thumbnailUrl = await resolvePickThumbnailUrl(
+      payload.selection,
+      pickSport ?? null,
+      repositories.participants,
+    );
+  }
+
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
@@ -205,6 +218,7 @@ export async function processSubmission(
       kellySizing,
       ...realEdgeData,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
+      ...(thumbnailUrl ? { thumbnailUrl } : {}),
     },
   };
 
@@ -286,6 +300,7 @@ export async function processShadowSubmission(
     picks: PickRepository;
     audit: AuditLogRepository;
     providerOffers: ProviderOfferRepository;
+    participants?: import('@unit-talk/db').ParticipantRepository;
   },
 ): Promise<ShadowSubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -336,6 +351,17 @@ export async function processShadowSubmission(
     domainAnalysis,
   );
 
+  // Resolve thumbnail URL from enriched participant data (fail-open)
+  let shadowThumbnailUrl: string | null = null;
+  if (repositories.participants) {
+    const pickSport = enrichedMetadata['sport'] as string | undefined;
+    shadowThumbnailUrl = await resolvePickThumbnailUrl(
+      payload.selection,
+      pickSport ?? null,
+      repositories.participants,
+    );
+  }
+
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
@@ -343,6 +369,7 @@ export async function processShadowSubmission(
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
+      ...(shadowThumbnailUrl ? { thumbnailUrl: shadowThumbnailUrl } : {}),
     },
   };
 
