@@ -87,7 +87,8 @@
     "test": "pnpm test:apps && pnpm test:verification && pnpm test:domain-probability && pnpm test:domain-features && pnpm test:domain-signals && pnpm test:domain-hedge && pnpm test:domain-shadow && pnpm test:domain-analytics && pnpm test:ut-cli && pnpm test:ops",
     "type-check": "pnpm exec tsc -b tsconfig.json",
     "verify:pick": "tsx scripts/verify-pick.ts",
-    "verify:commands": "pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs",
+    "lint:migrations": "node scripts/lint-migrations.mjs",
+    "verify:commands": "pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs",
     "verify": "pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test && pnpm --filter @unit-talk/smart-form verify && pnpm verify:commands"
   },
   "devDependencies": {

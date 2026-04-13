@@ -8,4 +8,5 @@
 --
 -- Rollback: restore from 202603200008_reference_data_foundation.sql CREATE TABLE block.
 
+-- lint-override: drop-table
 drop table if exists public.sport_market_types cascade;
