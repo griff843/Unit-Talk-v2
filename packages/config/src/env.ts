@@ -116,7 +116,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
   const env: AppEnv = {
     NODE_ENV: normalizeNodeEnv(readEnvValue('NODE_ENV', merged)),
     UNIT_TALK_APP_ENV: normalizeAppEnv(readEnvValue('UNIT_TALK_APP_ENV', merged)),
-    UNIT_TALK_ACTIVE_WORKSPACE: requireEnv('UNIT_TALK_ACTIVE_WORKSPACE', merged),
+    UNIT_TALK_ACTIVE_WORKSPACE: optionalEnv('UNIT_TALK_ACTIVE_WORKSPACE', merged) ?? 'unit-talk-v2',
     UNIT_TALK_LEGACY_WORKSPACE: requireEnv('UNIT_TALK_LEGACY_WORKSPACE', merged),
     LINEAR_API_TOKEN: optionalEnv('LINEAR_API_TOKEN', merged),
     LINEAR_TEAM_ID: optionalEnv('LINEAR_TEAM_ID', merged),
