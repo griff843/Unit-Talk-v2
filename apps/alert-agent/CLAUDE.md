@@ -10,15 +10,13 @@ Standalone daemon for line movement detection and notification routing. Runs det
 
 ## Role in Dependency Graph
 
-**Imports:** `@unit-talk/observability`
-
-**Cross-app import violation:** `src/main.ts` imports directly from `../../api/src/server.js` and `../../api/src/alert-agent.js`. This violates the no-cross-app-imports rule.
+**Imports:** `@unit-talk/alert-runtime`, `@unit-talk/config`, `@unit-talk/db`, `@unit-talk/observability`
 
 ## What Lives Here
 
-- `src/main.ts` — entry point, imports API runtime and alert agent functions
+- `src/main.ts` — entry point, builds own repository bundle and starts the alert agent
 
-The actual alert detection logic lives in `apps/api/src/alert-agent.ts` and `apps/api/src/alert-agent-service.ts`. This app is a thin wrapper that starts the agent as a standalone process.
+Alert detection, notification, and hedge logic lives in `packages/alert-runtime/` (`@unit-talk/alert-runtime`). This app is a thin wrapper that starts the agent as a standalone process.
 
 ## Core Concepts
 
@@ -36,12 +34,12 @@ The actual alert detection logic lives in `apps/api/src/alert-agent.ts` and `app
 
 ## Tests
 
-None in this app. Alert logic is tested in `apps/api/src/alert-agent*.test.ts`.
+None in this app. Alert logic is tested in `apps/api/src/alert-agent*.test.ts` (which re-exports from `@unit-talk/alert-runtime`).
 
 ## Rules
 
 - This is a standalone process — not part of the API server
-- Alert logic should migrate out of `apps/api/src/` to avoid the cross-app import violation
+- Alert logic lives in `@unit-talk/alert-runtime` — do not move it back into app code
 - Dry-run is the safe default — never enable live notifications without explicit configuration
 
 ## What NOT to Do
@@ -52,7 +50,6 @@ None in this app. Alert logic is tested in `apps/api/src/alert-agent*.test.ts`.
 
 ## Known Drift or Cautions
 
-- **Cross-app import violation:** imports directly from `apps/api/src/` — should be refactored to a shared package
 - Alert thresholds are hardcoded in `alert-agent-service.ts` — not configurable via env vars
 - `ALERT_DRY_RUN` defaults to `true` — operators may think alerts are broken when they're just disabled
 

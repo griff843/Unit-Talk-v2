@@ -7,6 +7,8 @@
   },
   "include": ["src/**/*.ts"],
   "references": [
-    { "path": "../api" }
+    { "path": "../../packages/alert-runtime" },
+    { "path": "../../packages/config" },
+    { "path": "../../packages/db" }
   ]
 }

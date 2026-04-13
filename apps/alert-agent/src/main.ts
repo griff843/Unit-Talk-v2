@@ -1,18 +1,33 @@
 // Entry point for the alert agent process.
 // Run with: node dist/main.js (or tsx src/main.ts in dev)
 
-import { createApiRuntimeDependencies } from '../../api/src/server.js';
-// Known GP-M5 drift: alert-agent still boots through apps/api wiring until shared runtime extraction lands.
-import { startAlertAgent } from '../../api/src/alert-agent.js';
-import { loadAlertAgentConfig } from '../../api/src/alert-agent-service.js';
+import { loadEnvironment } from '@unit-talk/config';
+import {
+  createDatabaseRepositoryBundle,
+  createInMemoryRepositoryBundle,
+  createServiceRoleDatabaseConnectionConfig,
+} from '@unit-talk/db';
+import { loadAlertAgentConfig, startAlertAgent } from '@unit-talk/alert-runtime';
 
-const runtime = createApiRuntimeDependencies();
+const environment = loadEnvironment();
+let persistenceMode: 'database' | 'in_memory';
+let repositories;
+
+try {
+  const connection = createServiceRoleDatabaseConnectionConfig(environment);
+  repositories = createDatabaseRepositoryBundle(connection);
+  persistenceMode = 'database';
+} catch {
+  repositories = createInMemoryRepositoryBundle();
+  persistenceMode = 'in_memory';
+}
+
 const alertConfig = loadAlertAgentConfig(process.env);
 let stop: (() => void) | null = null;
 let shuttingDown = false;
 
 // Phase 7B UTV2-496/512: governed upstream adapter — no HTTP submission config needed
-stop = startAlertAgent(runtime.repositories, console, {
+stop = startAlertAgent(repositories, console, {
   systemPicksEnabled: process.env.SYSTEM_PICKS_ENABLED === 'true',
 });
 
@@ -20,7 +35,7 @@ console.log(
   JSON.stringify({
     service: 'alert-agent',
     status: 'started',
-    persistenceMode: runtime.persistenceMode,
+    persistenceMode,
     mode: alertConfig.dryRun ? 'dry-run' : 'live',
     systemPicksEnabled: process.env.SYSTEM_PICKS_ENABLED === 'true',
     minTier: alertConfig.minTier,
