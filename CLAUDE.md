@@ -134,6 +134,7 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 
 ## Session discipline
 
+- Before any work, run `git fetch origin && git pull --ff-only origin main` to ensure local main matches remote. Stale local state produces false premises.
 - Run `/clear` at major task boundaries.
 - After `/clear`, re-read this file and invoke `/system-state-loader`.
 - If context degrades, clear immediately.
