@@ -168,6 +168,7 @@ When documents conflict:
 | `docs/05_operations/T1_CANONICAL_BETTING_TAXONOMY_CONTRACT.md` | Canonical betting taxonomy — market_types, stat_types, combo_stat_types | UTV2-388 |
 | `docs/05_operations/T1_CANONICAL_MIGRATION_AND_COMPATIBILITY_CONTRACT.md` | Participant/player migration compatibility rules — **OPEN DEBT** | see §C audit |
 | `docs/05_operations/REPLAYABLE_SCORING_CONTRACT.md` | Deterministic promotion replay | UTV2-145 |
+| `docs/05_operations/R1_R5_OPERATING_RULE.md` | **Active** — R1-R5 verification trigger matrix, live-data boundary, overclaim guard | UTV2-554 |
 | `docs/05_operations/MP_M8_SYNDICATE_MODEL_GOVERNANCE_CONTRACT.md` | Sports Modeling Program — Phase 8 syndicate governance | Phase 7+ |
 
 ### Alert and Hedge Contracts (ratified 2026-04-04)
