@@ -1022,7 +1022,7 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
     'Canary delivery active. Validate formatting before expanding routing.',
   );
   assert.equal(embed?.title, 'Unit Talk V2 Canary');
-  assert.equal(embed?.description, 'NBA | Lakers vs Celtics');
+  assert.equal(embed?.description, '\ud83c\udfc0 NBA | Lakers vs Celtics');
   assert.equal(embed?.footer?.text, 'Unit Talk');
   // Spec-compliant fields: no pick_id, no State, no Source
   const fieldNames = embed?.fields?.map((f: Record<string, unknown>) => f.name) ?? [];

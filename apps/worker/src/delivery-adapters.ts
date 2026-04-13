@@ -226,9 +226,15 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const eventName = typeof metadata.eventName === 'string' ? metadata.eventName : null;
   const capper = typeof metadata.capper === 'string' ? metadata.capper : null;
   const stakeUnits = typeof payload.stakeUnits === 'number' ? payload.stakeUnits : null;
-  const description = [sport, eventName].filter((value): value is string => Boolean(value)).join(
-    ' | ',
-  );
+
+  // Sport icon prefix (UTV2-559)
+  const sportIcon = sport ? getSportIcon(sport) : null;
+  const descriptionParts = [
+    sportIcon ? `${sportIcon} ${sport}` : sport,
+    eventName,
+  ].filter((value): value is string => Boolean(value));
+  const description = descriptionParts.join(' | ');
+
   const presentation = buildTargetPresentation(outbox.target, {
     description,
     eventName,
@@ -247,6 +253,23 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const capperRecord = typeof metadata.capperRecord === 'string' ? metadata.capperRecord : null;
   const capperClv = typeof metadata.capperClvPct === 'number' ? metadata.capperClvPct : null;
 
+  // UTV2-559: Real edge from domain analysis
+  const hasRealEdge = domainAnalysis?.hasRealEdge === true;
+  const realEdge = typeof domainAnalysis?.realEdge === 'number' ? domainAnalysis.realEdge : null;
+  const realEdgeSource = typeof domainAnalysis?.realEdgeSource === 'string'
+    ? domainAnalysis.realEdgeSource
+    : null;
+
+  // UTV2-561: Thesis from metadata
+  const thesis = typeof metadata.thesis === 'string' ? metadata.thesis : null;
+
+  // UTV2-559: Game time from metadata
+  const eventTime = typeof metadata.eventTime === 'string'
+    ? metadata.eventTime
+    : typeof metadata.gameTime === 'string'
+      ? metadata.gameTime
+      : null;
+
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
 
   if (presentation.leadField) {
@@ -260,9 +283,18 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
     fields.push({ name: 'Units', value: String(stakeUnits), inline: true });
   }
 
+  // UTV2-559: Prominent confidence with descriptor
   if (confidence != null) {
-    const confPct = (confidence * 100).toFixed(0);
-    fields.push({ name: 'Confidence', value: `${confPct}%`, inline: true });
+    const confPct = Math.round(confidence * 100);
+    const descriptor = confPct >= 75 ? 'High' : confPct >= 50 ? 'Medium' : 'Low';
+    fields.push({ name: 'Confidence', value: `${confPct}% (${descriptor})`, inline: true });
+  }
+
+  // UTV2-559: Real edge (only when hasRealEdge is true)
+  if (hasRealEdge && realEdge != null) {
+    const edgePct = `+${(realEdge * 100).toFixed(1)}%`;
+    const edgeLabel = realEdgeSource ? `Edge (${realEdgeSource})` : 'Edge';
+    fields.push({ name: edgeLabel, value: edgePct, inline: true });
   }
 
   if (impliedProb != null) {
@@ -281,12 +313,25 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   }
   fields.push({ name: 'Capper', value: capperValue, inline: true });
 
+  // UTV2-559: Game time when available
+  if (eventTime) {
+    const formatted = formatGameTime(eventTime);
+    if (formatted) {
+      fields.push({ name: 'Game Time', value: formatted, inline: true });
+    }
+  }
+
   // Timestamp for urgency context
   fields.push({
     name: 'Posted',
     value: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit', timeZoneName: 'short' }),
     inline: true,
   });
+
+  // UTV2-561: Thesis as standalone field (not inline) — only when present
+  if (thesis) {
+    fields.push({ name: 'Thesis', value: thesis, inline: false });
+  }
 
   return {
     content: presentation.content,
@@ -372,4 +417,35 @@ function formatOdds(value: unknown) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+const SPORT_ICONS: Record<string, string> = {
+  MLB: '\u26be',
+  NBA: '\ud83c\udfc0',
+  NFL: '\ud83c\udfc8',
+  NHL: '\ud83c\udfd2',
+  Soccer: '\u26bd',
+  soccer: '\u26bd',
+  MLS: '\u26bd',
+  EPL: '\u26bd',
+};
+
+function getSportIcon(sport: string): string | null {
+  return SPORT_ICONS[sport] ?? null;
+}
+
+function formatGameTime(isoString: string): string | null {
+  try {
+    const date = new Date(isoString);
+    if (Number.isNaN(date.getTime())) return null;
+    return date.toLocaleString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      hour: 'numeric',
+      minute: '2-digit',
+      timeZoneName: 'short',
+    });
+  } catch {
+    return null;
+  }
 }
