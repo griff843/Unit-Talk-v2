@@ -35,11 +35,14 @@ function basePick(id: string, betSlipId: string): Record<string, unknown> {
   // Only include fields that 'submitter' role is authorized to write.
   // promotion_status → only promoter/poster/operator_override
   // settlement_status → only settler/operator_override
+  // V2 lifecycle: must start as 'validated' (not V1's 'pending')
   return {
     id,
     bet_slip_id: betSlipId,
-    status: 'pending',
+    status: 'validated',
     posted_to_discord: false,
+    promotion_status: null,
+    settlement_status: null,
     sport: 'NBA',
     created_at: '2024-01-15T12:00:00.000Z',
     placed_at: '2024-01-15T12:00:00.000Z',
@@ -47,7 +50,9 @@ function basePick(id: string, betSlipId: string): Record<string, unknown> {
 }
 
 function gradingData(): Record<string, unknown> {
+  // V2 lifecycle: grading must transition status to 'queued'
   return {
+    status: 'queued',
     promotion_status: 'queued',
     promotion_queued_at: '2024-01-15T13:00:00.000Z',
     meta: { tier: 'A', confidence: 0.8, grade_score: 85 },
