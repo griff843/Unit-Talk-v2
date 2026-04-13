@@ -109,6 +109,10 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Phase 7 charter | `docs/06_status/PHASE7_PLAN_DRAFT.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
 | Known debt | `docs/06_status/KNOWN_DEBT.md` |
+| Governed loop (PR schemas + gates) | `docs/05_operations/GOVERNED_LOOP_SPEC.md` |
+| Executor result schema | `docs/05_operations/schemas/executor-result-v1.md` |
+| PM verdict schema | `docs/05_operations/schemas/pm-verdict-v1.md` |
+| Proof template | `docs/06_status/proof/PROOF-TEMPLATE.md` |
 
 ---
 

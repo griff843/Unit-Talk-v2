@@ -1,0 +1,259 @@
+# Merge Gate
+#
+# Enforces tier-appropriate merge authorization. Reads tier from PR labels
+# (human-assigned only). Verifies PM verdict is from an authorized CODEOWNERS
+# member. Fail-closed: no tier label or missing approval = no merge.
+#
+# T1: requires t1-approved label + PM_VERDICT: APPROVED + PR review approval
+# T2: requires PM_VERDICT: APPROVED + PR review approval
+# T3: passes automatically (CI + executor-result-validator are separate gates)
+#
+# Spec: docs/05_operations/GOVERNED_LOOP_SPEC.md (sections 2C, 3B, 4B)
+
+name: Merge Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+  pull_request_review:
+    types: [submitted]
+  issue_comment:
+    types: [created, edited]
+
+permissions:
+  contents: read
+  pull-requests: read
+  checks: write
+
+jobs:
+  gate:
+    name: Merge Gate
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request &&
+       contains(github.event.comment.body, 'PM_VERDICT:'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Evaluate merge gate
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Authorized PM reviewers — must match .github/CODEOWNERS
+            const AUTHORIZED_REVIEWERS = new Set(['griff843']);
+
+            // ── 1. Resolve PR ──────────────────────────────────────────
+            let prNumber, headSha;
+            if (context.eventName === 'pull_request' ||
+                context.eventName === 'pull_request_review') {
+              const pr = context.payload.pull_request;
+              prNumber = pr.number;
+              headSha = pr.head.sha;
+            } else {
+              prNumber = context.payload.issue.number;
+              const { data: pr } = await github.rest.pulls.get({
+                owner, repo, pull_number: prNumber
+              });
+              headSha = pr.head.sha;
+            }
+
+            // ── 2. Create pending check run ────────────────────────────
+            const { data: check } = await github.rest.checks.create({
+              owner, repo,
+              name: 'Merge Gate',
+              head_sha: headSha,
+              status: 'in_progress',
+              started_at: new Date().toISOString()
+            });
+
+            const errors = [];
+
+            try {
+              // ── 3. Get PR labels ───────────────────────────────────
+              const { data: issue } = await github.rest.issues.get({
+                owner, repo, issue_number: prNumber
+              });
+              const labels = (issue.labels || []).map(l =>
+                typeof l === 'string' ? l : l.name
+              ).filter(Boolean);
+
+              // ── 4. Detect tier from labels ─────────────────────────
+              const tierLabels = labels.filter(l =>
+                /^tier:T[123]$/i.test(l)
+              );
+
+              if (tierLabels.length === 0) {
+                errors.push(
+                  'No tier label found. Add exactly one of: tier:T1, tier:T2, tier:T3.'
+                );
+              } else if (tierLabels.length > 1) {
+                errors.push(
+                  `Multiple tier labels found: ${tierLabels.join(', ')}. Must have exactly one.`
+                );
+              }
+
+              if (errors.length > 0) {
+                // Can't proceed without valid tier
+                throw new Error('Tier validation failed');
+              }
+
+              const tier = tierLabels[0].split(':')[1].toUpperCase();
+
+              // ── 5. T3: auto-pass ───────────────────────────────────
+              // T3 merges on green CI + valid executor result (separate
+              // required checks). No PM verdict needed.
+              if (tier === 'T3') {
+                // Pass — other required checks (CI, executor-result-
+                // validator) gate the actual merge.
+                await github.rest.checks.update({
+                  owner, repo,
+                  check_run_id: check.id,
+                  status: 'completed',
+                  conclusion: 'success',
+                  completed_at: new Date().toISOString(),
+                  output: {
+                    title: 'Merge Gate: T3 AUTO-PASS',
+                    summary: 'T3 tier — PM verdict not required. CI and executor result validation are separate required checks.'
+                  }
+                });
+                return;
+              }
+
+              // ── 6. T1/T2: Find PM verdict ──────────────────────────
+              const { data: comments } = await github.rest.issues.listComments({
+                owner, repo, issue_number: prNumber, per_page: 100
+              });
+
+              function parseVerdict(body) {
+                if (!body) return null;
+                const lines = body.split(/\r?\n/).map(l => l.trim());
+                if (lines.length < 3) return null;
+                const verdictMatch = lines[0].match(
+                  /^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i
+                );
+                if (!verdictMatch) return null;
+                if (lines[1] !== 'schema: pm-verdict/v1') return null;
+                const issueMatch = lines[2].match(
+                  /^Issue:\s+(UTV2-\d+)$/i
+                );
+                if (!issueMatch) return null;
+                return {
+                  verdict: verdictMatch[1].toUpperCase(),
+                  issueId: issueMatch[1],
+                };
+              }
+
+              // Find the MOST RECENT valid verdict from an authorized user
+              const verdicts = comments
+                .map(c => ({
+                  user: c.user?.login,
+                  userType: c.user?.type,
+                  parsed: parseVerdict(c.body),
+                  createdAt: c.created_at,
+                }))
+                .filter(v => v.parsed !== null);
+
+              if (verdicts.length === 0) {
+                errors.push(
+                  'No valid pm-verdict/v1 comment found. PM must post a structured verdict.'
+                );
+              } else {
+                const latest = verdicts[verdicts.length - 1];
+
+                // Verify author is authorized (not a bot, in CODEOWNERS)
+                if (latest.userType === 'Bot') {
+                  errors.push(
+                    `PM verdict from bot account "${latest.user}" is not authorized. Must be a human CODEOWNERS member.`
+                  );
+                } else if (!AUTHORIZED_REVIEWERS.has(latest.user)) {
+                  errors.push(
+                    `PM verdict author "${latest.user}" is not in CODEOWNERS. Authorized: ${[...AUTHORIZED_REVIEWERS].join(', ')}.`
+                  );
+                }
+
+                // Must be APPROVED
+                if (latest.parsed.verdict !== 'APPROVED') {
+                  errors.push(
+                    `Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`
+                  );
+                }
+              }
+
+              // ── 7. Require PR review approval ──────────────────────
+              const { data: reviews } = await github.rest.pulls.listReviews({
+                owner, repo, pull_number: prNumber, per_page: 100
+              });
+
+              const approvedReviews = reviews.filter(
+                r => r.state === 'APPROVED'
+              );
+
+              if (approvedReviews.length < 1) {
+                errors.push(
+                  `${tier} requires at least one approved PR review. None found.`
+                );
+              }
+
+              // ── 8. T1: require t1-approved label ───────────────────
+              if (tier === 'T1') {
+                if (!labels.includes('t1-approved')) {
+                  errors.push(
+                    'T1 requires "t1-approved" label on the PR. PM must apply this label after review.'
+                  );
+                }
+              }
+
+              // ── 9. Bounce limit check (advisory) ──────────────────
+              const changesRequested = verdicts.filter(
+                v => v.parsed.verdict === 'CHANGES_REQUIRED'
+              );
+              if (changesRequested.length >= 3) {
+                errors.push(
+                  `Bounce limit exceeded (${changesRequested.length} CHANGES_REQUIRED verdicts). Issue should be moved to Failed for PM triage.`
+                );
+              }
+
+            } catch (e) {
+              if (e.message !== 'Tier validation failed') {
+                errors.push(`Internal error: ${e.message}`);
+              }
+            }
+
+            // ── 10. Complete check run ─────────────────────────────────
+            const passed = errors.length === 0;
+
+            await github.rest.checks.update({
+              owner, repo,
+              check_run_id: check.id,
+              status: 'completed',
+              conclusion: passed ? 'success' : 'failure',
+              completed_at: new Date().toISOString(),
+              output: {
+                title: passed
+                  ? 'Merge Gate: APPROVED'
+                  : 'Merge Gate: BLOCKED',
+                summary: passed
+                  ? 'All tier-appropriate merge requirements satisfied.'
+                  : `**Merge blocked:**\n\n${errors.map(e => '- ' + e).join('\n')}`
+              }
+            });
+
+            if (!passed) {
+              // Post visible comment on failure (fail loud)
+              await github.rest.issues.createComment({
+                owner, repo,
+                issue_number: prNumber,
+                body: [
+                  '**MERGE GATE: BLOCKED**',
+                  '',
+                  ...errors.map(e => '- ' + e),
+                  '',
+                  'Address the above before merge is authorized.'
+                ].join('\n')
+              });
+              core.setFailed('Merge gate blocked.');
+            }
