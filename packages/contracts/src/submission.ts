@@ -22,6 +22,7 @@ export interface SubmissionPayload {
   stakeUnits?: number | undefined;
   confidence?: number | undefined;
   eventName?: string | undefined;
+  thesis?: string | undefined;
   metadata?: Record<string, unknown> | undefined;
 }
 

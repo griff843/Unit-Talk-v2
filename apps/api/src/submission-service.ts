@@ -204,6 +204,7 @@ export async function processSubmission(
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
       ...realEdgeData,
+      ...(payload.thesis ? { thesis: payload.thesis } : {}),
     },
   };
 
@@ -341,6 +342,7 @@ export async function processShadowSubmission(
       ...enrichedMetadata,
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
+      ...(payload.thesis ? { thesis: payload.thesis } : {}),
     },
   };
 
