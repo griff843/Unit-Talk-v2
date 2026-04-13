@@ -45,12 +45,24 @@ importers:
 
   apps/alert-agent:
     dependencies:
+      '@unit-talk/alert-runtime':
+        specifier: workspace:*
+        version: link:../../packages/alert-runtime
+      '@unit-talk/config':
+        specifier: workspace:*
+        version: link:../../packages/config
+      '@unit-talk/db':
+        specifier: workspace:*
+        version: link:../../packages/db
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
 
   apps/api:
     dependencies:
+      '@unit-talk/alert-runtime':
+        specifier: workspace:*
+        version: link:../../packages/alert-runtime
       '@unit-talk/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -287,6 +299,15 @@ importers:
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
+
+  packages/alert-runtime:
+    dependencies:
+      '@unit-talk/db':
+        specifier: workspace:*
+        version: link:../db
+      '@unit-talk/domain':
+        specifier: workspace:*
+        version: link:../domain
 
   packages/config: {}
 

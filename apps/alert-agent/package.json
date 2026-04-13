@@ -11,6 +11,9 @@
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@unit-talk/alert-runtime": "workspace:*",
+    "@unit-talk/config": "workspace:*",
+    "@unit-talk/db": "workspace:*",
     "@unit-talk/observability": "workspace:*"
   }
 }

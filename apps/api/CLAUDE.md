@@ -93,7 +93,7 @@ All writes to the database go through this server. No other app writes directly.
 
 ## Known Drift or Cautions
 
-- `alert-agent` app imports directly from `apps/api/src/` — cross-app import violation
+- Alert service modules in `apps/api/src/` are thin re-exports from `@unit-talk/alert-runtime` (UTV2-535)
 - 3 pre-existing test failures in `promotion-edge-integration.test.ts` on main
 - Rate limiting is in-memory, per-process — not distributed across instances
 
