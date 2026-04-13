@@ -22,8 +22,9 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
   checks: write
+  issues: write
 
 jobs:
   gate:
