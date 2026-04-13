@@ -222,6 +222,7 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const lifecycleState =
     typeof payload.lifecycleState === 'string' ? payload.lifecycleState : 'queued';
   const metadata = isRecord(payload.metadata) ? payload.metadata : {};
+  const thumbnailUrl = typeof metadata.thumbnailUrl === 'string' ? metadata.thumbnailUrl : null;
   const sport = typeof metadata.sport === 'string' ? metadata.sport : null;
   const eventName = typeof metadata.eventName === 'string' ? metadata.eventName : null;
   const capper = typeof metadata.capper === 'string' ? metadata.capper : null;
@@ -345,6 +346,9 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
           text: 'Unit Talk',
         },
         timestamp: new Date().toISOString(),
+        // Thumbnail: player headshot or team logo (per asset spec fallback chain)
+        // Never block delivery — absent = no thumbnail, not an error
+        ...(thumbnailUrl ? { thumbnail: { url: thumbnailUrl } } : {}),
       },
     ],
   };

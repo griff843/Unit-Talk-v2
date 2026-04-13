@@ -17,6 +17,7 @@ export interface RecapEmbedInput {
   confidence?: number | null | undefined;
   sport?: string | null | undefined;
   odds?: number | null | undefined;
+  thumbnailUrl?: string | null | undefined;
 }
 
 export interface RecapEmbedField {
@@ -30,11 +31,15 @@ export interface RecapEmbedData {
   color: number;
   fields: RecapEmbedField[];
   timestamp: string;
+  thumbnail?: { url: string } | undefined;
 }
 
 export function buildRecapEmbedData(input: RecapEmbedInput): RecapEmbedData {
   const sportIcon = input.sport ? RECAP_SPORT_ICONS[input.sport] ?? '' : '';
   const title = sportIcon ? `${sportIcon} Pick Recap` : 'Pick Recap';
+  const thumbnail = typeof input.thumbnailUrl === 'string' && input.thumbnailUrl.length > 0
+    ? { url: input.thumbnailUrl }
+    : undefined;
 
   const fields: RecapEmbedField[] = [
     {
@@ -100,6 +105,7 @@ export function buildRecapEmbedData(input: RecapEmbedInput): RecapEmbedData {
     color: resolveEmbedColor(input.result),
     fields,
     timestamp: new Date().toISOString(),
+    thumbnail,
   };
 }
 
