@@ -27,3 +27,4 @@ export { handleSettlementsRecent } from './settlements-query.js';
 export { handleShadowModelSummaries, handleShadowComparison } from './shadow-models.js';
 export { handleHealthConfig } from './config.js';
 export { handleBoardWritePicks, handleBoardRunTuning } from './board.js';
+export { handlePromotionScores } from './promotion-scores.js';
