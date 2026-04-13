@@ -3,6 +3,7 @@ import { createApiServer, createApiRuntimeDependencies } from './server.js';
 import { startRecapScheduler } from './recap-scheduler.js';
 import { startTrialExpiryScheduler } from './trial-expiry-service.js';
 import { runPlayerEnrichmentPass } from './player-enrichment-service.js';
+import { runTeamLogoEnrichmentPass } from './team-logo-enrichment-service.js';
 import { runSystemPickScan, loadSystemPickScannerConfig } from './system-pick-scanner.js';
 import { runMarketUniverseMaterializer } from './market-universe-materializer.js';
 import { runLineMovementDetection, DatabaseLineMovementRepository } from './line-movement-detector.js';
@@ -49,8 +50,10 @@ server.listen(port, () => {
     runs: runtime.repositories.runs,
   };
   runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
+  runTeamLogoEnrichmentPass(enrichmentDeps).catch(() => {});
   enrichmentTimer = setInterval(() => {
     runPlayerEnrichmentPass(enrichmentDeps).catch(() => {});
+    runTeamLogoEnrichmentPass(enrichmentDeps).catch(() => {});
   }, 6 * 60 * 60 * 1000);
 
   // System pick scanner: materialize opening player prop lines into market_universe
