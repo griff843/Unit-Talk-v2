@@ -77,6 +77,31 @@ export interface PickDetailView {
     settledAt: string | null;
     hasClv: boolean;
     createdAt: string;
+    notes: string | null;
+    reviewReason: string | null;
+    clvRaw: number | null;
+    clvPercent: number | null;
+    beatsClosingLine: boolean | null;
+    gradingContext: {
+      actualValue: number;
+      marketKey: string;
+      eventId: string;
+      gameResultId: string;
+    } | null;
+    gameResult: {
+      actualValue: number;
+      marketKey: string;
+      participantName: string | null;
+      eventName: string | null;
+      sourcedAt: string;
+    } | null;
+    outcomeExplanation: string | null;
+    correctedSettlement: {
+      id: string;
+      result: string | null;
+      settledAt: string | null;
+      settledBy: string | null;
+    } | null;
   }>;
   auditTrail: Array<{
     id: string;
@@ -183,7 +208,7 @@ export const PICK_DETAIL_FIXTURE: PickDetailView = {
       recordedAt: '2026-03-20T10:05:01.000Z',
     },
   ],
-  settlements: [],
+  settlements: [] as PickDetailView['settlements'],
   auditTrail: [
     {
       id: 'audit-1',
@@ -296,6 +321,29 @@ export async function handlePickDetailRequest(
   const submission = submissionResult ? (submissionResult.data as Record<string, unknown> | null) : null;
   const submittedBy = readSubmittedBy(pick, submission);
 
+  // Dereference game-result evidence refs
+  const gameResultIds: string[] = [];
+  for (const row of settlements) {
+    const ref = row['evidence_ref'];
+    if (typeof ref === 'string' && ref.startsWith('game-result:')) {
+      const uuid = ref.slice('game-result:'.length);
+      if (uuid.length > 0) gameResultIds.push(uuid);
+    }
+  }
+
+  const gameResultsMap = new Map<string, Record<string, unknown>>();
+  if (gameResultIds.length > 0) {
+    const gameResultsResult = await supabase
+      .from('game_results')
+      .select('*, events(event_name), participants(display_name)')
+      .in('id', gameResultIds);
+    const gameResultRows = ((gameResultsResult as { data: unknown[] }).data ?? []) as Array<Record<string, unknown>>;
+    for (const gr of gameResultRows) {
+      const grId = gr['id'] as string;
+      gameResultsMap.set(grId, gr);
+    }
+  }
+
   // Extract bet-identity fields from view columns + metadata fallback
   const metadata = (pick['metadata'] ?? {}) as Record<string, unknown>;
   const matchup = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : null;
@@ -377,18 +425,87 @@ export async function handlePickDetailRequest(
       status: (row['status'] as string | null) ?? null,
       recordedAt: row['recorded_at'] as string,
     })),
-    settlements: settlements.map((row) => ({
-      id: row['id'] as string,
-      result: (row['result'] as string | null) ?? null,
-      status: row['status'] as string,
-      confidence: (row['confidence'] as string | null) ?? null,
-      evidenceRef: (row['evidence_ref'] as string | null) ?? null,
-      correctsId: (row['corrects_id'] as string | null) ?? null,
-      settledBy: (row['settled_by'] as string | null) ?? null,
-      settledAt: (row['settled_at'] as string | null) ?? null,
-      hasClv: hasClvPayload(row['payload']),
-      createdAt: row['created_at'] as string,
-    })),
+    settlements: settlements.map((row) => {
+      const payload = parsePayload(row['payload']);
+      const evidenceRef = (row['evidence_ref'] as string | null) ?? null;
+      const correctsId = (row['corrects_id'] as string | null) ?? null;
+      const result = (row['result'] as string | null) ?? null;
+
+      // Extract CLV fields from payload
+      const clvRaw = extractNumber(payload?.['clv'], 'clvRaw') ?? extractNumber(payload, 'clvRaw');
+      const clvPercent = extractNumber(payload?.['clv'], 'clvPercent') ?? extractNumber(payload, 'clvPercent');
+      const beatsClosingLine = extractBoolean(payload?.['clv'], 'beatsClosingLine') ?? extractBoolean(payload, 'beatsClosingLine');
+
+      // Extract grading context from payload
+      const gradingContext = extractGradingContext(payload);
+
+      // Dereference game result from evidence_ref
+      let gameResult: PickDetailView['settlements'][number]['gameResult'] = null;
+      let outcomeExplanation: string | null = null;
+
+      if (evidenceRef != null && evidenceRef.startsWith('game-result:')) {
+        const grId = evidenceRef.slice('game-result:'.length);
+        const gr = gameResultsMap.get(grId);
+        if (gr) {
+          const actualValue = gr['actual_value'] as number;
+          const events = gr['events'] as Record<string, unknown> | null;
+          const participants = gr['participants'] as Record<string, unknown> | null;
+          const eventName = (typeof events?.['event_name'] === 'string' ? events['event_name'] : null);
+          const participantName = (typeof participants?.['display_name'] === 'string' ? participants['display_name'] : null);
+
+          gameResult = {
+            actualValue,
+            marketKey: gr['market_key'] as string,
+            participantName,
+            eventName,
+            sourcedAt: gr['sourced_at'] as string,
+          };
+
+          outcomeExplanation = buildOutcomeExplanation(
+            pick['selection'] as string ?? '',
+            (pick['line'] as number | null) ?? null,
+            actualValue,
+            result ?? 'unknown',
+          );
+        }
+      }
+
+      // Build correction chain from existing settlements array
+      let correctedSettlement: PickDetailView['settlements'][number]['correctedSettlement'] = null;
+      if (correctsId != null) {
+        const prior = settlements.find((s) => s['id'] === correctsId);
+        if (prior) {
+          correctedSettlement = {
+            id: prior['id'] as string,
+            result: (prior['result'] as string | null) ?? null,
+            settledAt: (prior['settled_at'] as string | null) ?? null,
+            settledBy: (prior['settled_by'] as string | null) ?? null,
+          };
+        }
+      }
+
+      return {
+        id: row['id'] as string,
+        result,
+        status: row['status'] as string,
+        confidence: (row['confidence'] as string | null) ?? null,
+        evidenceRef,
+        correctsId,
+        settledBy: (row['settled_by'] as string | null) ?? null,
+        settledAt: (row['settled_at'] as string | null) ?? null,
+        hasClv: hasClvPayload(row['payload']),
+        createdAt: row['created_at'] as string,
+        notes: (row['notes'] as string | null) ?? null,
+        reviewReason: (row['review_reason'] as string | null) ?? null,
+        clvRaw,
+        clvPercent,
+        beatsClosingLine,
+        gradingContext,
+        gameResult,
+        outcomeExplanation,
+        correctedSettlement,
+      };
+    }),
     auditTrail: audit.map((row) => ({
       id: row['id'] as string,
       entityType: (row['entity_type'] as string) ?? '',
@@ -408,6 +525,64 @@ export async function handlePickDetailRequest(
   };
 
   writeJson(response, 200, { ok: true, data: view });
+}
+
+function parsePayload(payload: unknown): Record<string, unknown> | null {
+  if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
+    return null;
+  }
+  return payload as Record<string, unknown>;
+}
+
+function extractNumber(obj: unknown, key: string): number | null {
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return null;
+  const val = (obj as Record<string, unknown>)[key];
+  return typeof val === 'number' ? val : null;
+}
+
+function extractBoolean(obj: unknown, key: string): boolean | null {
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return null;
+  const val = (obj as Record<string, unknown>)[key];
+  return typeof val === 'boolean' ? val : null;
+}
+
+function extractGradingContext(
+  payload: Record<string, unknown> | null,
+): { actualValue: number; marketKey: string; eventId: string; gameResultId: string } | null {
+  if (!payload) return null;
+  const gc = payload['gradingContext'];
+  if (typeof gc !== 'object' || gc === null || Array.isArray(gc)) return null;
+  const ctx = gc as Record<string, unknown>;
+  if (
+    typeof ctx['actualValue'] !== 'number' ||
+    typeof ctx['marketKey'] !== 'string' ||
+    typeof ctx['eventId'] !== 'string' ||
+    typeof ctx['gameResultId'] !== 'string'
+  ) {
+    return null;
+  }
+  return {
+    actualValue: ctx['actualValue'] as number,
+    marketKey: ctx['marketKey'] as string,
+    eventId: ctx['eventId'] as string,
+    gameResultId: ctx['gameResultId'] as string,
+  };
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+}
+
+function buildOutcomeExplanation(
+  selection: string,
+  line: number | null,
+  actualValue: number,
+  result: string,
+): string {
+  if (line != null) {
+    return `${selection} ${line} ${capitalize(result)} — actual: ${actualValue}`;
+  }
+  return `${capitalize(result)} (actual: ${actualValue})`;
 }
 
 function hasClvPayload(payload: unknown): boolean {
