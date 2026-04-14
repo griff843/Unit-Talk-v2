@@ -270,21 +270,46 @@ async function collectAllBundles() {
   return out.sort();
 }
 
+/**
+ * Read an allowlist file and return a Set of relative paths (from repo root).
+ * Blank lines and lines starting with '#' are ignored.
+ */
+async function readAllowlist(filePath) {
+  const content = await readFile(resolve(filePath), 'utf8');
+  const entries = new Set();
+  for (const raw of content.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    // Normalize to forward slashes for cross-platform consistency
+    entries.add(line.replace(/\\/g, '/'));
+  }
+  return entries;
+}
+
 function parseCliArgs(argv) {
   const args = argv.slice(2);
   let all = false;
   let json = false;
+  let allowlistFile = null;
   const paths = [];
-  for (const a of args) {
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i];
     if (a === '--all') all = true;
     else if (a === '--json') json = true;
+    else if (a === '--allowlist-file') {
+      allowlistFile = args[++i];
+      if (!allowlistFile) {
+        process.stderr.write('error: --allowlist-file requires a path argument\n');
+        process.exit(2);
+      }
+    }
     else paths.push(a);
   }
-  return { all, json, paths };
+  return { all, json, allowlistFile, paths };
 }
 
 async function main() {
-  const { all, json, paths } = parseCliArgs(process.argv);
+  const { all, json, allowlistFile, paths } = parseCliArgs(process.argv);
 
   let targets = [];
   if (all) {
@@ -293,15 +318,36 @@ async function main() {
     targets = paths.map((p) => resolve(process.cwd(), p));
   } else {
     process.stderr.write(
-      'usage: node scripts/evidence-bundle/validate-bundle.mjs [--json] <path> | --all\n',
+      'usage: node scripts/evidence-bundle/validate-bundle.mjs [--json] [--allowlist-file <path>] <path> | --all\n',
     );
     process.exit(2);
   }
 
+  // Load allowlist if provided
+  let allowlist = new Set();
+  if (allowlistFile) {
+    allowlist = await readAllowlist(allowlistFile);
+  }
+
   const report = [];
   let totalFindings = 0;
+  let skippedCount = 0;
 
   for (const target of targets) {
+    const rel = relative(REPO_ROOT, target).replace(/\\/g, '/');
+
+    // Check allowlist — skip if path is allowlisted
+    if (allowlist.has(rel)) {
+      report.push({
+        path: target,
+        ok: true,
+        skipped: true,
+        findings: [],
+      });
+      skippedCount++;
+      continue;
+    }
+
     let source;
     try {
       source = await readFile(target, 'utf8');
@@ -309,6 +355,7 @@ async function main() {
       report.push({
         path: target,
         ok: false,
+        skipped: false,
         findings: [{ code: 'read-error', message: String(err?.message ?? err) }],
       });
       totalFindings++;
@@ -318,17 +365,20 @@ async function main() {
     report.push({
       path: target,
       ok: findings.length === 0,
+      skipped: false,
       findings,
     });
     totalFindings += findings.length;
   }
 
   if (json) {
-    process.stdout.write(JSON.stringify({ totalFindings, report }, null, 2) + '\n');
+    process.stdout.write(JSON.stringify({ totalFindings, skippedCount, report }, null, 2) + '\n');
   } else {
     for (const r of report) {
-      const rel = relative(REPO_ROOT, r.path) || r.path;
-      if (r.ok) {
+      const rel = relative(REPO_ROOT, r.path).replace(/\\/g, '/') || r.path;
+      if (r.skipped) {
+        process.stdout.write(`SKIP  ${rel} (allowlisted)\n`);
+      } else if (r.ok) {
         process.stdout.write(`PASS  ${rel}\n`);
       } else {
         process.stdout.write(`FAIL  ${rel} (${r.findings.length} finding${r.findings.length === 1 ? '' : 's'})\n`);
@@ -337,8 +387,9 @@ async function main() {
         }
       }
     }
+    const validated = report.length - skippedCount;
     process.stdout.write(
-      `\n${report.length} bundle(s) checked, ${totalFindings} finding(s) total.\n`,
+      `\n${report.length} bundle(s) found, ${validated} validated, ${skippedCount} skipped, ${totalFindings} finding(s) total.\n`,
     );
   }
 

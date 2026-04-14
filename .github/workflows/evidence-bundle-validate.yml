@@ -1,0 +1,37 @@
+name: Evidence Bundle Validation
+
+on:
+  pull_request:
+    paths:
+      - 'docs/06_status/**EVIDENCE**'
+      - 'scripts/evidence-bundle/**'
+      - '.github/workflows/evidence-bundle-validate.yml'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate evidence bundles
+        run: node scripts/evidence-bundle/validate-bundle.mjs --all --allowlist-file scripts/evidence-bundle/.validate-allowlist | tee /tmp/evidence-validate.txt
+
+      - name: Job summary
+        if: always()
+        run: |
+          echo '## Evidence Bundle Validation' >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          cat /tmp/evidence-validate.txt >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
