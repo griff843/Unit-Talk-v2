@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { enrichPickRowsWithIdentity, isFixtureLikePick } from './pick-identity-enrichment.js';
 
 /**
  * GET /api/operator/pick-search
@@ -44,6 +45,7 @@ export async function handlePickSearchRequest(
   const dateFrom = url.searchParams.get('dateFrom')?.trim() || null;
   const dateTo = url.searchParams.get('dateTo')?.trim() || null;
   const sort = url.searchParams.get('sort')?.trim() || 'newest';
+  const includeFixtures = url.searchParams.get('includeFixtures') === 'true';
   const rawLimit = url.searchParams.get('limit');
   const rawOffset = url.searchParams.get('offset');
 
@@ -83,10 +85,6 @@ export async function handlePickSearchRequest(
       break;
   }
 
-  if (!capper && !sport) {
-    query = query.range(offset, offset + limit - 1);
-  }
-
   const { data, error, count } = await query;
 
   if (error) {
@@ -94,10 +92,11 @@ export async function handlePickSearchRequest(
     return;
   }
 
-  let picks = (data ?? []) as Array<Record<string, unknown>>;
+  let picks = await enrichPickRowsWithIdentity(client, (data ?? []) as Array<Record<string, unknown>>);
   let total = count ?? 0;
 
   picks = picks
+    .filter((pick) => includeFixtures || !isFixtureLikePick(pick))
     .map((pick) => {
       const metadata =
         typeof pick['metadata'] === 'object' &&
@@ -146,17 +145,14 @@ export async function handlePickSearchRequest(
       return typeof canonicalSport === 'string' && canonicalSport.toLowerCase().includes(sport.toLowerCase());
     });
 
-  if (capper || sport) {
-    total = picks.length;
-    picks = picks.slice(offset, offset + limit);
-  }
-
   if (result && picks.length > 0) {
     // settlement_result is available inline from picks_current_state view —
     // no secondary settlement_records query needed.
     picks = picks.filter((pick) => pick['settlement_result'] === result);
-    total = picks.length;
   }
+
+  total = picks.length;
+  picks = picks.slice(offset, offset + limit);
 
   writeJson(response, 200, {
     ok: true,

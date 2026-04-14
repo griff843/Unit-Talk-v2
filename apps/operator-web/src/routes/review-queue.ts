@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { enrichPickRowsWithIdentity, isFixtureLikePick } from './pick-identity-enrichment.js';
 
 /**
  * GET /api/operator/review-queue
@@ -30,6 +31,7 @@ export async function handleReviewQueueRequest(
   const search = url.searchParams.get('search')?.trim() || null;
   const source = url.searchParams.get('source')?.trim() || null;
   const sort = url.searchParams.get('sort')?.trim() || 'newest';
+  const includeFixtures = url.searchParams.get('includeFixtures') === 'true';
   const limit = Math.min(Math.max(1, Number(url.searchParams.get('limit')) || 50), 100);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,17 +57,18 @@ export async function handleReviewQueueRequest(
     default: query = query.order('created_at', { ascending: false }); break;
   }
 
-  const { data: pendingPicks, error: picksError } = await query.limit(limit);
+  const { data: pendingPicks, error: picksError } = await query;
 
   if (picksError) {
     writeJson(response, 500, { ok: false, error: { code: 'DB_ERROR', message: String(picksError) } });
     return;
   }
 
-  const picks = (pendingPicks ?? []) as Array<Record<string, unknown>>;
+  const picks = await enrichPickRowsWithIdentity(client, (pendingPicks ?? []) as Array<Record<string, unknown>>);
 
   // The view includes review_decision — filter out held picks without a secondary query.
   const reviewQueuePicks = picks
+    .filter((p) => includeFixtures || !isFixtureLikePick(p))
     .filter((p) => p['review_decision'] !== 'hold')
     .map((pick) => {
       const metadata = (pick['metadata'] ?? {}) as Record<string, unknown>;
@@ -91,10 +94,12 @@ export async function handleReviewQueueRequest(
       };
     });
 
+  const pagedReviewQueuePicks = reviewQueuePicks.slice(0, limit);
+
   writeJson(response, 200, {
     ok: true,
     data: {
-      picks: reviewQueuePicks,
+      picks: pagedReviewQueuePicks,
       total: reviewQueuePicks.length,
     },
   });

@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { enrichPickRowsWithIdentity, isFixtureLikePick } from './pick-identity-enrichment.js';
 
 /**
  * GET /api/operator/held-queue
@@ -30,6 +31,7 @@ export async function handleHeldQueueRequest(
   const search = url.searchParams.get('search')?.trim() || null;
   const source = url.searchParams.get('source')?.trim() || null;
   const sort = url.searchParams.get('sort')?.trim() || 'newest';
+  const includeFixtures = url.searchParams.get('includeFixtures') === 'true';
   const limit = Math.min(Math.max(1, Number(url.searchParams.get('limit')) || 50), 100);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -55,14 +57,14 @@ export async function handleHeldQueueRequest(
     default: query = query.order('created_at', { ascending: false }); break;
   }
 
-  const { data: pendingPicks, error: picksError } = await query.limit(limit);
+  const { data: pendingPicks, error: picksError } = await query;
 
   if (picksError) {
     writeJson(response, 500, { ok: false, error: { code: 'DB_ERROR', message: String(picksError) } });
     return;
   }
 
-  const picks = (pendingPicks ?? []) as Array<Record<string, unknown>>;
+  const picks = await enrichPickRowsWithIdentity(client, (pendingPicks ?? []) as Array<Record<string, unknown>>);
 
   if (picks.length === 0) {
     writeJson(response, 200, { ok: true, data: { picks: [], total: 0 } });
@@ -72,6 +74,7 @@ export async function handleHeldQueueRequest(
   // The view includes review_decision, review_decided_by, review_decided_at — use them directly.
   const now = Date.now();
   const heldPicks = picks
+    .filter((p) => includeFixtures || !isFixtureLikePick(p))
     .filter((p) => p['review_decision'] === 'hold')
     .map((p) => {
       const heldAt = p['review_decided_at'] as string | null;
@@ -105,10 +108,12 @@ export async function handleHeldQueueRequest(
       };
     });
 
+  const pagedHeldPicks = heldPicks.slice(0, limit);
+
   writeJson(response, 200, {
     ok: true,
     data: {
-      picks: heldPicks,
+      picks: pagedHeldPicks,
       total: heldPicks.length,
     },
   });

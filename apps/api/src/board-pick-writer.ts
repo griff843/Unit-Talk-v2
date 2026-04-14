@@ -34,6 +34,8 @@ import type {
   IPickCandidateRepository,
   IMarketUniverseRepository,
   AuditLogRepository,
+  EventRepository,
+  ParticipantRepository,
   PickRepository,
   SubmissionRepository,
   ProviderOfferRepository,
@@ -71,6 +73,8 @@ export class BoardPickWriter {
       syndicateBoard: ISyndicateBoardRepository;
       pickCandidates: IPickCandidateRepository;
       marketUniverse: IMarketUniverseRepository;
+      participants: ParticipantRepository;
+      events: EventRepository;
       submissions: SubmissionRepository;
       picks: PickRepository;
       audit: AuditLogRepository;
@@ -111,6 +115,14 @@ export class BoardPickWriter {
     const universeIds = [...new Set(candidates.map((c) => c.universe_id))];
     const universeRows = await this.repos.marketUniverse.findByIds(universeIds);
     const universeMap = new Map(universeRows.map((r) => [r.id, r]));
+    const participantById = await loadParticipantsById(
+      this.repos.participants,
+      universeRows.map((row) => row.participant_id),
+    );
+    const eventById = await loadEventsById(
+      this.repos.events,
+      universeRows.map((row) => row.event_id),
+    );
 
     // Step 3: For each board row: create pick, then immediately link pick_id.
     //
@@ -189,8 +201,13 @@ export class BoardPickWriter {
       const side = devigged.overFair >= devigged.underFair ? 'over' : 'under';
       const odds = side === 'over' ? (overOdds as number) : (underOdds as number);
       const line = universe.current_line ?? null;
-      const selection =
-        line !== null ? (side === 'over' ? `Over ${line}` : `Under ${line}`) : side;
+      const participant =
+        universe.participant_id != null ? participantById.get(universe.participant_id) ?? null : null;
+      const event =
+        universe.event_id != null ? eventById.get(universe.event_id) ?? null : null;
+      const selection = buildBoardSelectionLabel(participant?.display_name ?? null, side, line);
+      const eventStartTime = readEventStartTime(event);
+      const normalizedSport = event?.sport_id ?? normalizeSportKey(universe.sport_key);
 
       const payload = {
         source: 'board-construction' as const,
@@ -200,6 +217,7 @@ export class BoardPickWriter {
         ...(line !== null ? { line } : {}),
         odds,
         confidence: side === 'over' ? devigged.overFair : devigged.underFair,
+        ...(event?.event_name ? { eventName: event.event_name } : {}),
         metadata: {
           boardRunId,
           boardRank: boardRow.board_rank,
@@ -211,6 +229,14 @@ export class BoardPickWriter {
           providerKey: universe.provider_key,
           providerEventId: universe.provider_event_id,
           providerMarketKey: universe.provider_market_key,
+          ...(universe.event_id ? { eventId: universe.event_id } : {}),
+          ...(universe.participant_id ? { participantId: universe.participant_id } : {}),
+          ...(universe.market_type_id ? { marketTypeId: universe.market_type_id } : {}),
+          ...(normalizedSport ? { sport: normalizedSport } : {}),
+          ...(event?.event_name ? { eventName: event.event_name } : {}),
+          ...(eventStartTime ? { eventTime: eventStartTime, eventStartTime } : {}),
+          ...(participant?.participant_type === 'player' ? { player: participant.display_name } : {}),
+          ...(participant?.participant_type === 'team' ? { team: participant.display_name } : {}),
           ...(universe.provider_participant_id
             ? { providerParticipantId: universe.provider_participant_id }
             : {}),
@@ -230,6 +256,8 @@ export class BoardPickWriter {
           picks: this.repos.picks,
           audit: this.repos.audit,
           providerOffers: this.repos.providerOffers,
+          participants: this.repos.participants,
+          events: this.repos.events,
           ...(this.repos.settlements != null ? { settlements: this.repos.settlements } : {}),
         });
         pickId = result.pickRecord.id;
@@ -332,6 +360,8 @@ export async function runBoardPickWriter(
     syndicateBoard: ISyndicateBoardRepository;
     pickCandidates: IPickCandidateRepository;
     marketUniverse: IMarketUniverseRepository;
+    participants: ParticipantRepository;
+    events: EventRepository;
     submissions: SubmissionRepository;
     picks: PickRepository;
     audit: AuditLogRepository;
@@ -341,4 +371,68 @@ export async function runBoardPickWriter(
   options: BoardPickWriterOptions = {},
 ): Promise<BoardPickWriteResult> {
   return new BoardPickWriter(repos).run(options);
+}
+
+async function loadParticipantsById(
+  participants: ParticipantRepository,
+  ids: Array<string | null>,
+) {
+  const uniqueIds = [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  const rows = await Promise.all(uniqueIds.map(async (id) => [id, await participants.findById(id)] as const));
+  return new Map(rows.filter((entry): entry is readonly [string, NonNullable<(typeof rows)[number][1]>] => entry[1] != null));
+}
+
+async function loadEventsById(
+  events: EventRepository,
+  ids: Array<string | null>,
+) {
+  const uniqueIds = [...new Set(ids.filter((id): id is string => typeof id === 'string' && id.length > 0))];
+  const rows = await Promise.all(uniqueIds.map(async (id) => [id, await events.findById(id)] as const));
+  return new Map(rows.filter((entry): entry is readonly [string, NonNullable<(typeof rows)[number][1]>] => entry[1] != null));
+}
+
+function buildBoardSelectionLabel(
+  participantName: string | null,
+  side: 'over' | 'under',
+  line: number | null,
+) {
+  const sideLabel = side === 'over' ? 'Over' : 'Under';
+  if (participantName && line != null) {
+    return `${participantName} ${sideLabel} ${line}`;
+  }
+  if (participantName) {
+    return `${participantName} ${sideLabel}`;
+  }
+  if (line != null) {
+    return `${sideLabel} ${line}`;
+  }
+  return sideLabel;
+}
+
+function normalizeSportKey(value: string | null) {
+  if (!value) {
+    return null;
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized.includes('nba')) return 'NBA';
+  if (normalized.includes('nfl')) return 'NFL';
+  if (normalized.includes('mlb') || normalized.includes('baseball')) return 'MLB';
+  if (normalized.includes('nhl') || normalized.includes('hockey')) return 'NHL';
+  if (normalized.includes('ncaab')) return 'NCAAB';
+  if (normalized.includes('ncaaf')) return 'NCAAF';
+  return value;
+}
+
+function readEventStartTime(event: { event_date: string; metadata: Record<string, unknown> } | null) {
+  if (!event) {
+    return null;
+  }
+
+  const startsAt = event.metadata['starts_at'];
+  if (typeof startsAt === 'string' && startsAt.trim().length > 0) {
+    return startsAt.trim();
+  }
+
+  return event.event_date ? `${event.event_date}T00:00:00Z` : null;
 }

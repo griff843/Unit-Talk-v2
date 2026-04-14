@@ -5223,6 +5223,7 @@ test('GET /api/operator/pick-search surfaces submitter separately from intake so
       {
         id: 'pick-search-1',
         submission_id: 'submission-search-1',
+        participant_id: 'participant-search-1',
         source: 'smart-form',
         market: 'points-all-game-ou',
         selection: 'Over 24.5',
@@ -5247,7 +5248,16 @@ test('GET /api/operator/pick-search surfaces submitter separately from intake so
         submitted_by: 'griff843',
         payload: {
           submittedBy: 'griff843',
+          eventName: 'Knicks vs Celtics',
+          eventTime: '2026-04-02T19:30:00.000Z',
         },
+      },
+    ],
+    participants: [
+      {
+        id: 'participant-search-1',
+        display_name: 'Jalen Brunson',
+        participant_type: 'player',
       },
     ],
   });
@@ -5271,6 +5281,9 @@ test('GET /api/operator/pick-search surfaces submitter separately from intake so
         source: string;
         submitter: string | null;
         sport: string | null;
+        matchup: string | null;
+        eventStartTime: string | null;
+        metadata: Record<string, unknown>;
       }>;
     };
   };
@@ -5280,6 +5293,62 @@ test('GET /api/operator/pick-search surfaces submitter separately from intake so
   assert.equal(body.data.picks[0]?.source, 'smart-form');
   assert.equal(body.data.picks[0]?.submitter, 'griff843');
   assert.equal(body.data.picks[0]?.sport, 'NBA');
+  assert.equal(body.data.picks[0]?.matchup, 'Knicks vs Celtics');
+  assert.equal(body.data.picks[0]?.eventStartTime, '2026-04-02T19:30:00.000Z');
+  assert.equal(body.data.picks[0]?.metadata?.['player'], 'Jalen Brunson');
+});
+
+test('GET /api/operator/pick-search hides proof fixtures by default', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-fixture-hidden',
+        source: 'model-driven',
+        market: 'player-props',
+        selection: 'Player Over 18.5',
+        status: 'awaiting_approval',
+        approval_status: 'pending',
+        created_at: '2026-04-11T18:00:00.000Z',
+        metadata: {
+          proof_fixture_id: 'utv2-fixture-1',
+          proof_script: 'utv2-proof',
+        },
+      },
+      {
+        id: 'pick-real-visible',
+        source: 'smart-form',
+        market: 'player-props',
+        selection: 'Jalen Brunson Over 24.5',
+        status: 'awaiting_approval',
+        approval_status: 'pending',
+        created_at: '2026-04-11T17:00:00.000Z',
+        metadata: {},
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/pick-search');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      total: number;
+      picks: Array<{ id: string }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.picks.length, 1);
+  assert.deepEqual(body.data.picks.map((pick) => pick.id), ['pick-real-visible']);
 });
 
 test('GET /api/operator/review-queue includes awaiting_approval picks and excludes held rows', async () => {
@@ -5355,6 +5424,73 @@ test('GET /api/operator/review-queue includes awaiting_approval picks and exclud
   );
   assert.equal(body.data.picks[0]?.governanceQueueState, 'awaiting_approval');
   assert.equal(body.data.picks[1]?.governanceQueueState, 'pending_review');
+});
+
+test('GET /api/operator/review-queue enriches sparse rows with participant and submission identity', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-awaiting-review',
+        submission_id: 'submission-review-1',
+        participant_id: 'participant-review-1',
+        status: 'awaiting_approval',
+        approval_status: 'pending',
+        source: 'model-driven',
+        market: 'player-props',
+        selection: 'Player Over 18.5',
+        promotion_score: 81.2,
+        created_at: '2026-04-10T18:00:00.000Z',
+        metadata: {},
+      },
+    ],
+    submissions: [
+      {
+        id: 'submission-review-1',
+        submitted_by: 'griff843',
+        payload: {
+          eventName: 'Knicks vs Celtics',
+          eventTime: '2026-04-10T19:30:00.000Z',
+          submittedBy: 'griff843',
+        },
+      },
+    ],
+    participants: [
+      {
+        id: 'participant-review-1',
+        display_name: 'Jalen Brunson',
+        participant_type: 'player',
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/review-queue');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      picks: Array<{
+        eventName: string | null;
+        eventStartTime: string | null;
+        capperDisplayName: string | null;
+        metadata: Record<string, unknown>;
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.picks[0]?.eventName, 'Knicks vs Celtics');
+  assert.equal(body.data.picks[0]?.eventStartTime, '2026-04-10T19:30:00.000Z');
+  assert.equal(body.data.picks[0]?.capperDisplayName, 'griff843');
+  assert.equal(body.data.picks[0]?.metadata?.['player'], 'Jalen Brunson');
 });
 
 test('GET /api/operator/held-queue includes held awaiting_approval picks', async () => {

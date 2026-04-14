@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { enrichPickRowsWithIdentity, isFixtureLikePick } from './pick-identity-enrichment.js';
 
 /**
  * GET /api/operator/exception-queues
@@ -16,7 +17,7 @@ import { writeJson } from '../http-utils.js';
  * - missingMarketAliases: provider market keys seen in provider_offers but missing from provider_market_aliases
  */
 export async function handleExceptionQueuesRequest(
-  _request: IncomingMessage,
+  request: IncomingMessage,
   response: ServerResponse,
   deps: OperatorRouteDependencies,
 ): Promise<void> {
@@ -28,6 +29,8 @@ export async function handleExceptionQueuesRequest(
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const client = provider._supabaseClient as any;
+  const url = new URL(request.url ?? '/', 'http://127.0.0.1');
+  const includeFixtures = url.searchParams.get('includeFixtures') === 'true';
 
   const staleThreshold = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
   const awaitingApprovalStaleMs = 4 * 60 * 60 * 1000;
@@ -36,9 +39,9 @@ export async function handleExceptionQueuesRequest(
     client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').order('updated_at', { ascending: false }).limit(50),
     client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').order('updated_at', { ascending: false }).limit(50),
     client.from('settlement_records').select('id, pick_id, result, status, review_reason, settled_by, created_at').eq('status', 'manual_review').order('created_at', { ascending: false }).limit(50),
-    client.from('picks').select('id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold).order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval').order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']).order('created_at', { ascending: false }).limit(50),
+    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold).order('created_at', { ascending: true }).limit(50),
+    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval').order('created_at', { ascending: true }).limit(50),
+    client.from('picks').select('id, submission_id, participant_id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']).order('created_at', { ascending: false }).limit(50),
     client.from('provider_offers').select('provider_key, provider_market_key, created_at'),
     client.from('provider_book_aliases').select('provider, provider_book_key'),
     client.from('provider_market_aliases').select('provider, provider_market_key, sport_id'),
@@ -47,9 +50,12 @@ export async function handleExceptionQueuesRequest(
   const failed = (failedResult.data ?? []) as Array<Record<string, unknown>>;
   const deadLetter = (deadLetterResult.data ?? []) as Array<Record<string, unknown>>;
   const manualReview = (manualReviewResult.data ?? []) as Array<Record<string, unknown>>;
-  const stale = (stalePicks.data ?? []) as Array<Record<string, unknown>>;
-  const awaitingApproval = (awaitingApprovalResult.data ?? []) as Array<Record<string, unknown>>;
-  const rerun = (rerunCandidates.data ?? []) as Array<Record<string, unknown>>;
+  const stale = (await enrichPickRowsWithIdentity(client, (stalePicks.data ?? []) as Array<Record<string, unknown>>))
+    .filter((row) => includeFixtures || !isFixtureLikePick(row));
+  const awaitingApproval = (await enrichPickRowsWithIdentity(client, (awaitingApprovalResult.data ?? []) as Array<Record<string, unknown>>))
+    .filter((row) => includeFixtures || !isFixtureLikePick(row));
+  const rerun = (await enrichPickRowsWithIdentity(client, (rerunCandidates.data ?? []) as Array<Record<string, unknown>>))
+    .filter((row) => includeFixtures || !isFixtureLikePick(row));
   const providerOffers = (providerOffersResult.data ?? []) as Array<Record<string, unknown>>;
   const bookAliases = (bookAliasesResult.data ?? []) as Array<Record<string, unknown>>;
   const marketAliases = (marketAliasesResult.data ?? []) as Array<Record<string, unknown>>;
@@ -58,8 +64,10 @@ export async function handleExceptionQueuesRequest(
   const allOutboxPickIds = [...new Set([...failed, ...deadLetter].map((r) => r['pick_id'] as string))];
   const pickMap = new Map<string, Record<string, unknown>>();
   if (allOutboxPickIds.length > 0) {
-    const { data: picks } = await client.from('picks').select('id, market, selection, source, status, line, odds, sport_id, metadata').in('id', allOutboxPickIds);
-    for (const p of (picks ?? []) as Array<Record<string, unknown>>) {
+    const { data: picks } = await client.from('picks').select('id, submission_id, participant_id, market, selection, source, status, line, odds, sport_id, metadata').in('id', allOutboxPickIds);
+    const enrichedPicks = (await enrichPickRowsWithIdentity(client, (picks ?? []) as Array<Record<string, unknown>>))
+      .filter((row) => includeFixtures || !isFixtureLikePick(row));
+    for (const p of enrichedPicks) {
       pickMap.set(p['id'] as string, p);
     }
   }

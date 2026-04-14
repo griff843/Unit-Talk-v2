@@ -38,6 +38,8 @@ export async function handleBoardWritePicks(
       syndicateBoard: repos.syndicateBoard,
       pickCandidates: repos.pickCandidates,
       marketUniverse: repos.marketUniverse,
+      participants: repos.participants,
+      events: repos.events,
       submissions: repos.submissions,
       picks: repos.picks,
       audit: repos.audit,

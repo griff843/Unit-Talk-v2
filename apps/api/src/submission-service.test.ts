@@ -2338,6 +2338,43 @@ test('submissions with different payloads produce different picks', async () => 
   assert.equal(second.duplicate, undefined, 'different payload is not a duplicate');
 });
 
+test('processSubmission normalizes event identity fields into pick metadata', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-lal-bos-1',
+    sportId: 'NBA',
+    eventName: 'Lakers vs Celtics',
+    eventDate: '2026-04-14',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-14T19:30:00.000Z' },
+  });
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'LeBron James Over 27.5',
+      line: 27.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: {
+        eventId: event.id,
+      },
+    },
+    repositories,
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['eventId'], event.id);
+  assert.equal(metadata['eventName'], 'Lakers vs Celtics');
+  assert.equal(metadata['eventTime'], '2026-04-14T19:30:00.000Z');
+  assert.equal(metadata['eventStartTime'], '2026-04-14T19:30:00.000Z');
+  assert.equal(metadata['sport'], 'NBA');
+  assert.equal(metadata['submittedBy'], 'griff843');
+});
+
 test('processShadowSubmission records a shadow capture audit row', async () => {
   const repositories = createInMemoryRepositoryBundle();
   let capturedAuditAction: string | null = null;

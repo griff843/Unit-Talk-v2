@@ -619,11 +619,26 @@ async function runExecute(report: DryRunReport): Promise<ExecuteSummary> {
   const fixtureRows = report.rows.filter((r) => r.classification === 'fixture');
   const backfillRows = report.rows.filter((r) => r.classification === 'production-backfill');
 
-  // ---- Phase 1: fixture DELETE loop ----------------------------------------
+  // ---- Phase 1: fixture rows — SKIP (audit_log immutability trigger) ------
+  // UTV2-538: audit_log has an immutability trigger that prevents DELETE.
+  // Fixture rows (7 test artifacts from UTV2-494 proof runs) are skipped.
+  // They remain in awaiting_approval but are clearly identifiable by their
+  // proof_fixture_id / proof_script / test_key metadata markers.
+  if (fixtureRows.length > 0) {
+    console.error(`  SKIP ${fixtureRows.length} fixture rows (audit_log immutability trigger prevents cleanup)`);
+    for (const row of fixtureRows) {
+      summary.perRowResults.push({
+        pick_id: row.pick_id,
+        classification: 'fixture',
+        ok: true,
+        detail: 'skipped: audit_log immutability trigger prevents fixture deletion',
+      });
+    }
+  }
+
+  if (false) {
+  // Original fixture DELETE logic preserved for reference but disabled:
   for (const row of fixtureRows) {
-    // (a) Delete the suppression audit_log rows that the proof-script writes
-    // produced. These are tied to entity_type='pick_promotion_history' /
-    // action='promotion.suppressed' / entity_ref=<pick id>.
     const auditDel = await deleteRows('audit_log', {
       entity_ref: `eq.${row.pick_id}`,
       entity_type: 'eq.pick_promotion_history',
@@ -674,7 +689,7 @@ async function runExecute(report: DryRunReport): Promise<ExecuteSummary> {
       return summary;
     }
 
-    const matched = Array.isArray(pickDel.body) ? pickDel.body.length : 0;
+    const matched = Array.isArray(pickDel.body ?? []) ? (pickDel.body ?? []).length : 0;
     if (matched === 0) {
       // Drift detected: pick was moved out of awaiting_approval since the
       // dry-run snapshot. Fail closed.
@@ -698,6 +713,7 @@ async function runExecute(report: DryRunReport): Promise<ExecuteSummary> {
     });
     console.error(`  OK   fixture ${row.pick_id} deleted`);
   }
+  } // end disabled fixture block
 
   // ---- Intermediate checkpoint --------------------------------------------
   // Re-query the stranded set and verify every backfill target is still

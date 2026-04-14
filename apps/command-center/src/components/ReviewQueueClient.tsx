@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { Card } from '@/components/ui/Card';
 import { ReviewActions } from '@/components/ReviewActions';
 import { BulkReviewBar } from '@/components/BulkReviewBar';
-import Link from 'next/link';
+import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 
 interface ReviewPick {
   id: string;
@@ -17,6 +17,13 @@ interface ReviewPick {
   promotion_score: number | null;
   created_at: string;
   metadata: Record<string, unknown>;
+  eventName?: string | null;
+  eventStartTime?: string | null;
+  sportDisplayName?: string | null;
+  capperDisplayName?: string | null;
+  marketTypeDisplayName?: string | null;
+  settlementResult?: string | null;
+  reviewDecision?: string | null;
 }
 
 export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total: number }) {
@@ -67,7 +74,7 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
         <span className="text-xs text-gray-500">
           Showing {picks.length} of {total}
         </span>
-        <label className="flex items-center gap-2 text-xs text-gray-400 cursor-pointer select-none">
+        <label className="flex cursor-pointer select-none items-center gap-2 text-xs text-gray-400">
           <input
             type="checkbox"
             checked={allSelected}
@@ -94,27 +101,43 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
                     aria-label={`Select pick ${pick.id}`}
                   />
                   <div>
-                    <Link href={`/picks/${pick.id}`} className="font-mono text-sm text-blue-400 hover:underline" aria-label={`Pick ${pick.id}`}>
-                      {pick.id.slice(0, 12)}...
-                    </Link>
-                    <div className="mt-1 flex gap-4 text-xs text-gray-400">
-                      <span>Source: <span className="text-gray-300">{pick.source}</span></span>
-                      <span>Market: <span className="text-gray-300">{pick.market}</span></span>
-                      <span>Selection: <span className="text-gray-300">{pick.selection}</span></span>
-                    </div>
+                    <PickIdentityPanel
+                      compact
+                      pickId={`${pick.id.slice(0, 12)}...`}
+                      href={`/picks/${pick.id}`}
+                      pick={{
+                        source: pick.source,
+                        market: pick.market,
+                        selection: pick.selection,
+                        line: pick.line,
+                        odds: pick.odds,
+                        metadata: pick.metadata,
+                        eventName: pick.eventName ?? null,
+                        eventStartTime: pick.eventStartTime ?? null,
+                        sportDisplayName: pick.sportDisplayName ?? null,
+                        capperDisplayName: pick.capperDisplayName ?? null,
+                        marketTypeDisplayName: pick.marketTypeDisplayName ?? null,
+                        settlementResult: pick.settlementResult ?? null,
+                        reviewDecision: pick.reviewDecision ?? null,
+                      }}
+                    />
                     <div className="mt-1 flex gap-4 text-xs text-gray-400">
                       {pick.odds != null && <span>Odds: <span className="text-gray-300">{pick.odds}</span></span>}
                       {pick.line != null && <span>Line: <span className="text-gray-300">{pick.line}</span></span>}
                       {pick.stake_units != null && <span>Units: <span className="text-gray-300">{pick.stake_units}</span></span>}
                       <span>Created: <span className="text-gray-300">{new Date(pick.created_at).toLocaleString()}</span></span>
                     </div>
+                    <div className="mt-1 flex gap-4 text-xs text-gray-500">
+                      <span>Review: <span className="text-gray-300">{pick.reviewDecision ?? 'pending'}</span></span>
+                      <span>Result: <span className="text-gray-300">{pick.settlementResult ?? 'pending'}</span></span>
+                    </div>
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-gray-200">
-                    {pick.promotion_score != null ? pick.promotion_score.toFixed(1) : '\u2014'}
+                    {pick.promotion_score != null ? pick.promotion_score.toFixed(1) : '—'}
                   </div>
-                  <div className="text-[10px] text-gray-500">score</div>
+                  <div className="text-[10px] text-gray-500">routing score</div>
                 </div>
               </div>
 
@@ -126,11 +149,15 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
                 </div>
               )}
 
+              <p className="text-[11px] text-gray-500">
+                Routing score reflects promotion policy fit, not win probability.
+              </p>
+
               {!isSelected && (
                 <ReviewActions pickId={pick.id} decisions={['approve', 'deny', 'hold']} />
               )}
               {isSelected && (
-                <p className="text-xs text-gray-500 italic">Selected for bulk action</p>
+                <p className="text-xs italic text-gray-500">Selected for bulk action</p>
               )}
             </div>
           </Card>
