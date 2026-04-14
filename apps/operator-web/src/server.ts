@@ -268,6 +268,16 @@ export interface PickPipelineRow {
   settlementResult: string | null;
   createdAt: string;
   settledAt: string | null;
+  selection: string;
+  market: string;
+  line: number | null;
+  odds: number | null;
+  source: string;
+  stakeUnits: number | null;
+  confidence: number | null;
+  sportId: string | null;
+  eventName: string | null;
+  eventStartTime: string | null;
 }
 
 export interface PicksPipelineSummary {
@@ -1650,17 +1660,37 @@ function summarizePicksPipeline(
   counts?: PicksPipelineSummary['counts'],
 ): PicksPipelineSummary {
   const settlementByPickId = buildEffectiveSettlementResultMap(recentSettlements);
-  const recentRows: PickPipelineRow[] = recentPicks.map((row) => ({
-    id: row.id,
-    status: row.status,
-    approvalStatus: row.approval_status,
-    promotionStatus: row.promotion_status,
-    promotionTarget: row.promotion_target,
-    promotionScore: row.promotion_score,
-    settlementResult: settlementByPickId.get(row.id) ?? null,
-    createdAt: row.created_at,
-    settledAt: row.settled_at,
-  }));
+  const recentRows: PickPipelineRow[] = recentPicks.map((row) => {
+    const metadata = (row.metadata ?? {}) as Record<string, unknown>;
+    const eventName = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : null;
+    const eventStartTime =
+      typeof metadata['eventTime'] === 'string'
+        ? metadata['eventTime']
+        : typeof metadata['eventStartTime'] === 'string'
+          ? metadata['eventStartTime']
+          : null;
+    return {
+      id: row.id,
+      status: row.status,
+      approvalStatus: row.approval_status,
+      promotionStatus: row.promotion_status,
+      promotionTarget: row.promotion_target,
+      promotionScore: row.promotion_score,
+      settlementResult: settlementByPickId.get(row.id) ?? null,
+      createdAt: row.created_at,
+      settledAt: row.settled_at,
+      selection: row.selection,
+      market: row.market,
+      line: row.line,
+      odds: row.odds,
+      source: row.source,
+      stakeUnits: row.stake_units,
+      confidence: row.confidence,
+      sportId: row.sport_id,
+      eventName,
+      eventStartTime,
+    };
+  });
   const derivedCounts = counts ?? {
     validated: recentPicks.filter((row) => row.status === 'validated').length,
     queued: recentPicks.filter((row) => row.status === 'queued').length,

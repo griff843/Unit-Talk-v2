@@ -36,9 +36,9 @@ export async function handleExceptionQueuesRequest(
     client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'failed').order('updated_at', { ascending: false }).limit(50),
     client.from('distribution_outbox').select('id, pick_id, target, status, attempt_count, last_error, created_at, updated_at').eq('status', 'dead_letter').order('updated_at', { ascending: false }).limit(50),
     client.from('settlement_records').select('id, pick_id, result, status, review_reason, settled_by, created_at').eq('status', 'manual_review').order('created_at', { ascending: false }).limit(50),
-    client.from('picks').select('id, status, source, market, selection, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold).order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, status, source, market, selection, created_at').eq('status', 'awaiting_approval').order('created_at', { ascending: true }).limit(50),
-    client.from('picks').select('id, status, source, market, selection, approval_status, promotion_status, promotion_score, promotion_target, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']).order('created_at', { ascending: false }).limit(50),
+    client.from('picks').select('id, status, source, market, selection, line, odds, sport_id, metadata, promotion_score, created_at').eq('status', 'validated').lte('created_at', staleThreshold).order('created_at', { ascending: true }).limit(50),
+    client.from('picks').select('id, status, source, market, selection, line, odds, sport_id, metadata, created_at').eq('status', 'awaiting_approval').order('created_at', { ascending: true }).limit(50),
+    client.from('picks').select('id, status, source, market, selection, line, odds, sport_id, metadata, approval_status, promotion_status, promotion_score, promotion_target, created_at').eq('approval_status', 'approved').in('promotion_status', ['not_eligible', 'suppressed']).order('created_at', { ascending: false }).limit(50),
     client.from('provider_offers').select('provider_key, provider_market_key, created_at'),
     client.from('provider_book_aliases').select('provider, provider_book_key'),
     client.from('provider_market_aliases').select('provider, provider_market_key, sport_id'),
@@ -58,7 +58,7 @@ export async function handleExceptionQueuesRequest(
   const allOutboxPickIds = [...new Set([...failed, ...deadLetter].map((r) => r['pick_id'] as string))];
   const pickMap = new Map<string, Record<string, unknown>>();
   if (allOutboxPickIds.length > 0) {
-    const { data: picks } = await client.from('picks').select('id, market, selection, source, status').in('id', allOutboxPickIds);
+    const { data: picks } = await client.from('picks').select('id, market, selection, source, status, line, odds, sport_id, metadata').in('id', allOutboxPickIds);
     for (const p of (picks ?? []) as Array<Record<string, unknown>>) {
       pickMap.set(p['id'] as string, p);
     }
@@ -68,13 +68,36 @@ export async function handleExceptionQueuesRequest(
     rows.map((r) => {
       const pick = pickMap.get(r['pick_id'] as string);
       const age = Math.floor((Date.now() - new Date(r['updated_at'] as string).getTime()) / 3600000);
-      return { ...r, ageHours: age, pick: pick ? { market: pick['market'], selection: pick['selection'], source: pick['source'], status: pick['status'] } : null };
+      let pickContext: Record<string, unknown> | null = null;
+      if (pick) {
+        const pm = (pick['metadata'] ?? {}) as Record<string, unknown>;
+        pickContext = {
+          market: pick['market'],
+          selection: pick['selection'],
+          source: pick['source'],
+          status: pick['status'],
+          line: pick['line'] ?? null,
+          odds: pick['odds'] ?? null,
+          sportId: pick['sport_id'] ?? null,
+          eventName: typeof pm['eventName'] === 'string' ? pm['eventName'] : null,
+          eventStartTime: typeof pm['eventTime'] === 'string' ? pm['eventTime'] : typeof pm['eventStartTime'] === 'string' ? pm['eventStartTime'] : null,
+        };
+      }
+      return { ...r, ageHours: age, pick: pickContext };
     });
 
   const enrichStale = (rows: Array<Record<string, unknown>>) =>
     rows.map((r) => {
       const age = Math.floor((Date.now() - new Date(r['created_at'] as string).getTime()) / 3600000);
-      return { ...r, ageHours: age };
+      const md = (r['metadata'] ?? {}) as Record<string, unknown>;
+      const eventName = typeof md['eventName'] === 'string' ? md['eventName'] : null;
+      const eventStartTime =
+        typeof md['eventTime'] === 'string'
+          ? md['eventTime']
+          : typeof md['eventStartTime'] === 'string'
+            ? md['eventStartTime']
+            : null;
+      return { ...r, ageHours: age, eventName, eventStartTime };
     });
 
   const awaitingApprovalIds = [...new Set(awaitingApproval.map((row) => row['id']).filter((value): value is string => typeof value === 'string'))];
@@ -118,10 +141,21 @@ export async function handleExceptionQueuesRequest(
       const missingLifecycleEvidence = !hasValidatedToAwaiting;
       const lifecycleMismatch = latestLifecycleToState !== 'awaiting_approval';
 
+      const md = (row['metadata'] ?? {}) as Record<string, unknown>;
+      const eventName = typeof md['eventName'] === 'string' ? md['eventName'] : null;
+      const eventStartTime =
+        typeof md['eventTime'] === 'string'
+          ? md['eventTime']
+          : typeof md['eventStartTime'] === 'string'
+            ? md['eventStartTime']
+            : null;
+
       return {
         ...row,
         ageHours,
         stale,
+        eventName,
+        eventStartTime,
         missingLifecycleEvidence,
         lifecycleMismatch,
         hasValidatedToAwaiting,
@@ -201,7 +235,14 @@ export async function handleExceptionQueuesRequest(
       pendingManualReview: manualReview,
       staleValidated: enrichStale(stale),
       awaitingApprovalDrift,
-      rerunCandidates: rerun,
+      rerunCandidates: rerun.map((r) => {
+        const rm = (r['metadata'] ?? {}) as Record<string, unknown>;
+        return {
+          ...r,
+          eventName: typeof rm['eventName'] === 'string' ? rm['eventName'] : null,
+          eventStartTime: typeof rm['eventTime'] === 'string' ? rm['eventTime'] : typeof rm['eventStartTime'] === 'string' ? rm['eventStartTime'] : null,
+        };
+      }),
       missingBookAliases: missingBookRows,
       missingMarketAliases: missingMarketRows,
     },

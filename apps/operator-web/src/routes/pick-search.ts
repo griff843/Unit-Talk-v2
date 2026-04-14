@@ -99,9 +99,30 @@ export async function handlePickSearchRequest(
 
   picks = picks
     .map((pick) => {
+      const metadata =
+        typeof pick['metadata'] === 'object' &&
+        pick['metadata'] !== null &&
+        !Array.isArray(pick['metadata'])
+          ? (pick['metadata'] as Record<string, unknown>)
+          : null;
+
+      const matchup =
+        typeof metadata?.['eventName'] === 'string' && metadata['eventName'].trim().length > 0
+          ? metadata['eventName'].trim()
+          : null;
+
+      const eventStartTime =
+        typeof metadata?.['eventTime'] === 'string'
+          ? metadata['eventTime']
+          : typeof metadata?.['eventStartTime'] === 'string'
+            ? metadata['eventStartTime']
+            : null;
+
       return {
         ...pick,
         submitter: readSubmittedBy(pick),
+        matchup,
+        eventStartTime,
         sport:
           readStringField(pick, 'sport_id') ??
           readStringField(pick, 'sport_display_name') ??

@@ -36,7 +36,7 @@ export async function handleHeldQueueRequest(
   const client = provider._supabaseClient as any;
 
   let query = client
-    .from('picks')
+    .from('picks_current_state')
     .select('*')
     .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
@@ -63,45 +63,43 @@ export async function handleHeldQueueRequest(
   }
 
   const picks = (pendingPicks ?? []) as Array<Record<string, unknown>>;
-  const pickIds = picks.map((p) => p['id'] as string);
 
-  if (pickIds.length === 0) {
+  if (picks.length === 0) {
     writeJson(response, 200, { ok: true, data: { picks: [], total: 0 } });
     return;
   }
 
-  const { data: reviews } = await client
-    .from('pick_reviews')
-    .select('*')
-    .in('pick_id', pickIds)
-    .order('decided_at', { ascending: false });
-
-  const latestReviewByPick = new Map<string, Record<string, unknown>>();
-  for (const r of (reviews ?? []) as Array<Record<string, unknown>>) {
-    const pid = r['pick_id'] as string;
-    if (!latestReviewByPick.has(pid)) {
-      latestReviewByPick.set(pid, r);
-    }
-  }
-
+  // The view includes review_decision, review_decided_by, review_decided_at — use them directly.
   const now = Date.now();
   const heldPicks = picks
-    .filter((p) => {
-      const review = latestReviewByPick.get(p['id'] as string);
-      return review && review['decision'] === 'hold';
-    })
+    .filter((p) => p['review_decision'] === 'hold')
     .map((p) => {
-      const review = latestReviewByPick.get(p['id'] as string)!;
-      const heldAt = review['decided_at'] as string;
-      const ageMs = now - new Date(heldAt).getTime();
+      const heldAt = p['review_decided_at'] as string | null;
+      const ageMs = heldAt ? now - new Date(heldAt).getTime() : 0;
       const ageHours = Math.floor(ageMs / (1000 * 60 * 60));
+
+      const metadata = (p['metadata'] ?? {}) as Record<string, unknown>;
+      const eventName = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : null;
+      const eventStartTime =
+        typeof metadata['eventTime'] === 'string'
+          ? metadata['eventTime']
+          : typeof metadata['eventStartTime'] === 'string'
+            ? metadata['eventStartTime']
+            : null;
 
       return {
         ...p,
-        heldBy: review['decided_by'],
+        heldBy: p['review_decided_by'] ?? null,
         heldAt,
-        holdReason: review['reason'],
+        holdReason: null,
         ageHours,
+        eventName,
+        eventStartTime,
+        sportDisplayName: p['sport_display_name'] ?? null,
+        capperDisplayName: p['capper_display_name'] ?? null,
+        marketTypeDisplayName: p['market_type_display_name'] ?? null,
+        settlementResult: p['settlement_result'] ?? null,
+        reviewDecision: p['review_decision'] ?? null,
         governanceQueueState:
           p['status'] === 'awaiting_approval' ? 'awaiting_approval' : 'pending_review',
       };
