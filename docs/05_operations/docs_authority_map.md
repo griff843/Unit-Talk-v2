@@ -194,6 +194,7 @@ When documents conflict:
 
 | File | Purpose | Issue |
 |---|---|---|
+| `docs/02_architecture/contracts/PICK_IDENTITY_CONTRACT.md` | Canonical pick identity display rules for operator surfaces | UTV2-563 |
 | `docs/05_operations/T1_CANONICAL_OPERATOR_REVIEW_QUEUE_CONTRACT.md` | Operator review queue — `pick_reviews` + approval_status gate | active |
 | `docs/05_operations/T1_CAPPER_ONBOARDING_CONTRACT.md` | Capper onboarding flow | active |
 | `docs/05_operations/T1_CAPPER_TIER_SYSTEM_CONTRACT.md` | Capper tier system | active |
