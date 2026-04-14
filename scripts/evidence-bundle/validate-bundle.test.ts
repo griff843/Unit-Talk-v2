@@ -194,3 +194,204 @@ test('missing acceptance criteria mapping rows is flagged', () => {
     `expected acceptance-mapping-empty, got ${codes.join(',')}`,
   );
 });
+
+// ---------------------------------------------------------------------------
+// --strict semantic checks
+// ---------------------------------------------------------------------------
+
+/** Build a bundle with rich evidence blocks that satisfy all semantic checks. */
+function semanticBundle(): string {
+  return `# UTV2-600 — Evidence Bundle
+
+## Metadata
+
+| Field | Value |
+|---|---|
+| Issue ID | UTV2-600 |
+| Tier | T1 |
+| Phase / Gate | Phase 7 — governance |
+| Owner | claude/semantic-lane |
+| Date | 2026-04-13 |
+| Verifier Identity | claude/session-sem001 |
+| Commit SHA(s) | abc1234 |
+| Related PRs | #100 |
+
+## Scope
+
+**Claims:**
+- semantic checks work
+
+**Does NOT claim:**
+- nothing
+
+## Assertions
+
+| # | Assertion | Evidence Type | Source | Result | Evidence Ref |
+|---|---|---|---|---|---|
+| 1 | db query works | db-query | live DB \`feownrheeefbcsehtsiw\` | PASS | [E1](#e1) |
+| 2 | test passes | test | scripts/foo.test.ts | PASS | [E2](#e2) |
+| 3 | fixture valid | fixture | data/snap.json | PASS | [E3](#e3) |
+| 4 | http call ok | http | api endpoint | PASS | [E4](#e4) |
+| 5 | repo truth | repo-truth | git history | PASS | [E5](#e5) |
+
+## Evidence Blocks
+
+### E1 db query works
+
+Project ref: \`feownrheeefbcsehtsiw\`
+Run at: 2026-04-13T10:30:00Z
+\`\`\`sql
+SELECT count(*) FROM picks;
+\`\`\`
+Result: 42 rows
+
+### E2 test passes
+
+File: scripts/foo.test.ts
+Command: tsx --test scripts/foo.test.ts
+Output:
+ok 3 - all assertions passed
+
+### E3 fixture valid
+
+Path: data/snapshots/picks.json
+Content hash: sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+
+### E4 http call ok
+
+curl -s https://api.example.com/health
+HTTP 200 OK
+Response: {"status":"ok"}
+
+### E5 repo truth
+
+git log --oneline -3
+abc1234 feat: something
+def5678 fix: another thing
+
+## Acceptance Criteria Mapping
+
+| Acceptance Criterion (verbatim from Linear) | Assertion # |
+|---|---|
+| semantic checks work | 1 |
+
+## Stop Conditions Encountered
+
+None
+
+## Sign-off
+
+**Verifier:** claude/session-sem001 — 2026-04-13
+**PM acceptance:** pending
+`;
+}
+
+test('default validation of semantic bundle produces zero findings', () => {
+  const findings = validateBundle(semanticBundle());
+  assert.deepEqual(findings, [], `expected zero findings, got: ${JSON.stringify(findings, null, 2)}`);
+});
+
+test('strict validation of well-formed semantic bundle produces zero findings', () => {
+  const findings = validateBundle(semanticBundle(), { strict: true });
+  assert.deepEqual(findings, [], `expected zero findings, got: ${JSON.stringify(findings, null, 2)}`);
+});
+
+// --- db-query semantic negatives ---
+
+test('strict: db-query missing sql fence is flagged', () => {
+  const broken = semanticBundle().replace('```sql', '```text');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-db-query-missing-sql-fence'), `got ${codes.join(',')}`);
+});
+
+test('strict: db-query missing project ref is flagged', () => {
+  // Replace only the evidence block project ref, not the one in the assertions table
+  const broken = semanticBundle().replace(
+    'Project ref: `feownrheeefbcsehtsiw`',
+    'Project ref: `some-other-project`',
+  );
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-db-query-missing-project-ref'), `got ${codes.join(',')}`);
+});
+
+test('strict: db-query missing timestamp is flagged', () => {
+  const broken = semanticBundle().replace('2026-04-13T10:30:00Z', 'yesterday');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-db-query-missing-timestamp'), `got ${codes.join(',')}`);
+});
+
+// --- test semantic negatives ---
+
+test('strict: test missing test-file-path is flagged', () => {
+  // Replace evidence block file refs but not the assertions table Source column
+  const broken = semanticBundle()
+    .replace('File: scripts/foo.test.ts', 'File: scripts/foo.ts')
+    .replace('tsx --test scripts/foo.test.ts', 'tsx --test scripts/foo.ts');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-test-missing-test-file-path'), `got ${codes.join(',')}`);
+});
+
+test('strict: test missing test-command is flagged', () => {
+  const broken = semanticBundle().replace('tsx --test', 'npx run');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-test-missing-test-command'), `got ${codes.join(',')}`);
+});
+
+test('strict: test missing test-output is flagged', () => {
+  const broken = semanticBundle().replace('ok 3 - all assertions passed', 'all passed');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-test-missing-test-output'), `got ${codes.join(',')}`);
+});
+
+// --- fixture semantic negatives ---
+
+test('strict: fixture missing content-hash is flagged', () => {
+  const broken = semanticBundle().replace('sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855', 'checksum: unknown');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-fixture-missing-content-hash'), `got ${codes.join(',')}`);
+});
+
+// --- http semantic negatives ---
+
+test('strict: http missing http-method is flagged', () => {
+  const broken = semanticBundle().replace('curl -s', 'request');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-http-missing-http-method'), `got ${codes.join(',')}`);
+});
+
+test('strict: http missing status-code is flagged', () => {
+  const broken = semanticBundle().replace('HTTP 200 OK', 'response OK');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-http-missing-status-code'), `got ${codes.join(',')}`);
+});
+
+// --- repo-truth semantic negatives ---
+
+test('strict: repo-truth missing git-command is flagged', () => {
+  const broken = semanticBundle().replace('git log --oneline -3', 'checked the history');
+  const findings = validateBundle(broken, { strict: true });
+  const codes = findings.map((f: { code: string }) => f.code);
+  assert.ok(codes.includes('semantic-repo-truth-missing-git-command'), `got ${codes.join(',')}`);
+});
+
+// --- confirm non-strict is unchanged ---
+
+test('non-strict validation ignores semantic issues', () => {
+  // Break every semantic element but keep mechanical structure intact
+  let broken = semanticBundle();
+  broken = broken.replace('```sql', '```text');
+  broken = broken.replace('tsx --test', 'npx run');
+  broken = broken.replace('ok 3', 'done 3');
+  const findings = validateBundle(broken);
+  // Should have zero findings — all mechanical checks still pass
+  assert.deepEqual(findings, [], `expected zero findings in non-strict mode, got: ${JSON.stringify(findings, null, 2)}`);
+});
