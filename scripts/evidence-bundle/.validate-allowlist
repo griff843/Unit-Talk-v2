@@ -1,8 +1,2 @@
-# Pre-template bundles — remove as UTV2-542 retrofit completes
-docs/06_status/UTV2-464-PHASE2-EVIDENCE-BUNDLE.md
-docs/06_status/UTV2-471-PHASE3-EVIDENCE-BUNDLE.md
-docs/06_status/UTV2-473-PHASE4-P401-EVIDENCE.md
-docs/06_status/UTV2-475-PHASE4-EVIDENCE-BUNDLE.md
-docs/06_status/UTV2-478-PHASE5-EVIDENCE-BUNDLE.md
-docs/06_status/UTV2-481-PHASE6-EVIDENCE-BUNDLE.md
-docs/06_status/UTV2-494-PHASE7A-EVIDENCE-BUNDLE.md
+# All pre-template bundles retrofitted by UTV2-542. Allowlist is now empty.
+# Add paths here to skip validation for specific bundles.
