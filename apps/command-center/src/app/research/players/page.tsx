@@ -77,30 +77,63 @@ export default async function PlayerCardPage({
         ))}
       </div>
 
-      {/* Search / filter hint */}
-      <div className="flex flex-wrap items-center gap-3 text-xs text-gray-500">
-        <span>Filters:</span>
-        <code className="text-gray-400">?q=name</code>
-        <code className="text-gray-400">?sport=nba</code>
-        {q && (
-          <span className="rounded bg-blue-900/30 border border-blue-700/30 px-2 py-0.5 text-blue-300">
-            q={q}
-          </span>
-        )}
-        {sport && (
-          <span className="rounded bg-blue-900/30 border border-blue-700/30 px-2 py-0.5 text-blue-300">
-            sport={sport}
-          </span>
-        )}
-        {(q || sport) && (
+      <form method="GET" className="flex flex-wrap items-end gap-3 rounded border border-gray-800 bg-gray-900/50 p-4">
+        <input type="hidden" name="tab" value={tab} />
+        <div className="flex flex-col gap-1">
+          <label htmlFor="participant-query" className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            Search
+          </label>
+          <input
+            id="participant-query"
+            name="q"
+            defaultValue={q ?? ''}
+            placeholder="Player or team name..."
+            className="w-56 rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <label htmlFor="participant-sport" className="text-[10px] font-medium uppercase tracking-wide text-gray-500">
+            Sport
+          </label>
+          <input
+            id="participant-sport"
+            name="sport"
+            defaultValue={sport ?? ''}
+            placeholder="e.g. nba..."
+            className="w-32 rounded border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs text-gray-200 placeholder-gray-500 focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div className="flex gap-2">
+          <button
+            type="submit"
+            className="rounded bg-blue-600 px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-1 focus:ring-offset-gray-950"
+          >
+            Apply Filters
+          </button>
           <Link
             href={`/research/players?tab=${tab}`}
-            className="text-gray-400 hover:text-gray-200 underline"
+            className="rounded border border-gray-700 px-3 py-1.5 text-xs font-medium text-gray-300 transition-colors hover:bg-gray-800 hover:text-gray-200"
           >
-            clear
+            Clear
           </Link>
-        )}
-      </div>
+        </div>
+      </form>
+
+      {(q || sport) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+          <span>Active filters:</span>
+          {q && (
+            <span className="rounded border border-blue-700/30 bg-blue-900/30 px-2 py-0.5 text-blue-300">
+              q={q}
+            </span>
+          )}
+          {sport && (
+            <span className="rounded border border-blue-700/30 bg-blue-900/30 px-2 py-0.5 text-blue-300">
+              sport={sport}
+            </span>
+          )}
+        </div>
+      )}
 
       {!data ? (
         <EmptyState

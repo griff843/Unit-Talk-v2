@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { writeSystemPicks } from '../app/actions/board.js';
-import type { BoardQueueData, BoardQueueRow, WriteBoardPicksResult } from '../lib/types.js';
+import { writeSystemPicks } from '@/app/actions/board';
+import type { BoardQueueData, BoardQueueRow, WriteBoardPicksResult } from '@/lib/types';
 
 // ---------------------------------------------------------------------------
 // Helpers

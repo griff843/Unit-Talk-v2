@@ -29,8 +29,9 @@ export function QueueFilters({ basePath }: QueueFiltersProps) {
   return (
     <form onSubmit={handleSubmit} className="flex flex-wrap items-end gap-3">
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Search</label>
+        <label htmlFor="queue-search" className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Search</label>
         <input
+          id="queue-search"
           name="search"
           type="text"
           defaultValue={searchParams.get('search') ?? ''}
@@ -40,8 +41,9 @@ export function QueueFilters({ basePath }: QueueFiltersProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Source</label>
+        <label htmlFor="queue-source" className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Source</label>
         <input
+          id="queue-source"
           name="source"
           type="text"
           defaultValue={searchParams.get('source') ?? ''}
@@ -51,8 +53,8 @@ export function QueueFilters({ basePath }: QueueFiltersProps) {
       </div>
 
       <div className="flex flex-col gap-1">
-        <label className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Sort</label>
-        <select name="sort" defaultValue={searchParams.get('sort') ?? 'newest'} className={`w-24 ${inputClass}`}>
+        <label htmlFor="queue-sort" className="text-[10px] font-medium uppercase tracking-wide text-gray-500">Sort</label>
+        <select id="queue-sort" name="sort" defaultValue={searchParams.get('sort') ?? 'newest'} className={`w-24 ${inputClass}`}>
           <option value="newest">Newest</option>
           <option value="oldest">Oldest</option>
           <option value="score">Score</option>

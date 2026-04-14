@@ -145,6 +145,28 @@ function InsightRow({ label, value, color }: { label: string; value: string; col
   );
 }
 
+function SampleWarning({
+  title,
+  tone = 'warning',
+  children,
+}: {
+  title: string;
+  tone?: 'warning' | 'info';
+  children: React.ReactNode;
+}) {
+  const classes =
+    tone === 'warning'
+      ? 'border-yellow-800/60 bg-yellow-900/20 text-yellow-100'
+      : 'border-blue-800/60 bg-blue-900/20 text-blue-100';
+
+  return (
+    <div className={`rounded border p-3 text-xs ${classes}`}>
+      <div className="font-medium">{title}</div>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
 export default async function PerformancePage({
   searchParams,
 }: {
@@ -157,10 +179,24 @@ export default async function PerformancePage({
     fetchPerformance(),
     fetchLeaderboard(window),
   ]);
+  const leaderboardHasThinSignal = leaderboard.length === 0;
+  const heldReviewSignalIsThin =
+    (perf?.decisions.approved.total ?? 0) + (perf?.decisions.denied.total ?? 0) + (perf?.decisions.held.total ?? 0) < 10;
 
   return (
     <div className="flex flex-col gap-6">
       <h1 className="text-lg font-bold text-gray-100">Performance</h1>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <SampleWarning title="Operator note">
+          This page is strongest for trend watching, not absolute certainty. Small samples and unresolved holds can make ROI swings look more meaningful than they are.
+        </SampleWarning>
+        {heldReviewSignalIsThin && (
+          <SampleWarning title="Decision-quality caution" tone="info">
+            Approved versus denied comparisons are still based on thin operator-reviewed volume, so treat the delta as directional only.
+          </SampleWarning>
+        )}
+      </div>
 
       {/* Time window summaries */}
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
@@ -292,6 +328,11 @@ export default async function PerformancePage({
               </tbody>
             </table>
           </div>
+        )}
+        {leaderboardHasThinSignal && (
+          <p className="mt-3 text-xs text-gray-500">
+            Leaderboard insight is currently limited because no capper met the display criteria for this window.
+          </p>
         )}
       </Card>
     </div>

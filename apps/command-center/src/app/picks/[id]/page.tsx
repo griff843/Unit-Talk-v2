@@ -243,10 +243,11 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             />
             <InterventionAction
               label="Force Promote to Best Bets"
-              variant="success"
+              variant="warning"
               pickId={pickId}
               action="force_promote"
               target="best-bets"
+              contextNote={`Current status: ${pick.promotionStatus}. Score: ${pick.promotionScore != null ? pick.promotionScore.toFixed(1) : 'none'}.`}
             />
           </div>
         </div>

@@ -1,4 +1,4 @@
-import type { CapStatus } from '../lib/types.js';
+import type { CapStatus } from '@/lib/types';
 
 interface BoardCapacityGaugeProps {
   label: string;

@@ -1,6 +1,6 @@
-import { fetchBoardState } from '../../../lib/api.js';
-import { ScoreBreakdownBar } from '../../../components/ScoreBreakdownBar.js';
-import { EmptyState } from '../../../components/ui/EmptyState.js';
+import { fetchBoardState } from '@/lib/api';
+import { ScoreBreakdownBar } from '@/components/ScoreBreakdownBar';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default async function ScoreBreakdownPage() {
   const board = await fetchBoardState();

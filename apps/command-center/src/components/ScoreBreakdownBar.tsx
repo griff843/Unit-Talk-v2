@@ -1,4 +1,4 @@
-import type { ScoreBreakdownRow } from '../lib/types.js';
+import type { ScoreBreakdownRow } from '@/lib/types';
 
 interface ScoreBreakdownBarProps {
   breakdown: ScoreBreakdownRow;

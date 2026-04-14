@@ -1,5 +1,5 @@
-import { fetchBoardQueue } from '../../../lib/api.js';
-import { BoardQueueTable } from '../../../components/BoardQueueTable.js';
+import { fetchBoardQueue } from '@/lib/api';
+import { BoardQueueTable } from '@/components/BoardQueueTable';
 
 export default async function BoardQueuePage() {
   let queue;

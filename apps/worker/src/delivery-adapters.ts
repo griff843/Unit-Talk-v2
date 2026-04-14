@@ -236,7 +236,10 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   ].filter((value): value is string => Boolean(value));
   const description = descriptionParts.join(' | ');
 
+  // Pick selection is the title; channel context moves to footer (per embed redesign)
+  const pickTitle = `${selection}${line}`;
   const presentation = buildTargetPresentation(outbox.target, {
+    pickTitle,
     description,
     eventName,
     source,
@@ -254,11 +257,17 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
   const capperRecord = typeof metadata.capperRecord === 'string' ? metadata.capperRecord : null;
   const capperClv = typeof metadata.capperClvPct === 'number' ? metadata.capperClvPct : null;
 
-  // UTV2-559: Real edge from domain analysis
-  const hasRealEdge = domainAnalysis?.hasRealEdge === true;
-  const realEdge = typeof domainAnalysis?.realEdge === 'number' ? domainAnalysis.realEdge : null;
-  const realEdgeSource = typeof domainAnalysis?.realEdgeSource === 'string'
-    ? domainAnalysis.realEdgeSource
+  // UTV2-559: Real edge — submission service writes to metadata root, not inside domainAnalysis.
+  // Check metadata root first (where real data lives), fall back to domainAnalysis for compat.
+  const hasRealEdge =
+    metadata.hasRealEdge === true || domainAnalysis?.hasRealEdge === true;
+  const realEdge =
+    typeof metadata.realEdge === 'number' ? metadata.realEdge
+    : typeof domainAnalysis?.realEdge === 'number' ? domainAnalysis.realEdge
+    : null;
+  const realEdgeSource =
+    typeof metadata.realEdgeSource === 'string' ? metadata.realEdgeSource
+    : typeof domainAnalysis?.realEdgeSource === 'string' ? domainAnalysis.realEdgeSource
     : null;
 
   // UTV2-561: Thesis from metadata
@@ -273,11 +282,7 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
 
   const fields: Array<{ name: string; value: string; inline: boolean }> = [];
 
-  if (presentation.leadField) {
-    fields.push({ name: presentation.leadField.name, value: presentation.leadField.value, inline: false });
-  }
-
-  fields.push({ name: 'Pick', value: `${selection}${line}`, inline: true });
+  // Pick is now the embed title — no longer duplicated as a field.
   fields.push({ name: 'Odds', value: odds || '—', inline: true });
 
   if (stakeUnits != null) {
@@ -343,7 +348,7 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
         color: presentation.color,
         fields,
         footer: {
-          text: 'Unit Talk',
+          text: presentation.footer,
         },
         timestamp: new Date().toISOString(),
         // Thumbnail: player headshot or team logo (per asset spec fallback chain)
@@ -357,49 +362,44 @@ function buildDiscordMessagePayload(outbox: OutboxRecord) {
 function buildTargetPresentation(
   target: string,
   input: {
+    pickTitle: string;
     description: string;
     eventName: string | null;
     source: string;
     lifecycleState: string;
   },
 ) {
+  // Pick selection is always the embed title — channel context goes to footer.
+  // Lead fields removed post burn-in: the channel purpose text was scaffolding.
   if (target === 'discord:best-bets') {
     return {
       content: undefined,
-      title: 'Unit Talk V2 Best Bet',
+      title: input.pickTitle,
       description: input.description || 'Curated premium pick preview',
       color: 0xffd700,
-      leadField: {
-        name: 'Best Bets Purpose',
-        value:
-          'This lane is for the most presentation-ready curated picks. It should feel like a premium showcase, not a raw canary dump.',
-      },
-      footer: 'Target: discord:best-bets | Curated lane preview',
+      leadField: null,
+      footer: 'Unit Talk | Best Bets',
     };
   }
 
   if (target === 'discord:trader-insights') {
     return {
       content: undefined,
-      title: 'Unit Talk V2 Trader Insight',
+      title: input.pickTitle,
       description: input.description || 'VIP market-alerts lane preview',
       color: 0x4f8cff,
-      leadField: {
-        name: 'Trader Insights Purpose',
-        value:
-          'This lane is for sharper market-alerts signals: higher edge, higher trust, and cleaner timing than a general premium board.',
-      },
-      footer: 'Target: discord:trader-insights | Market-alerts lane preview',
+      leadField: null,
+      footer: 'Unit Talk | Trader Insights',
     };
   }
 
   return {
-    content: 'Canary delivery active. Validate formatting before expanding routing.',
-    title: 'Unit Talk V2 Canary',
+    content: undefined,
+    title: input.pickTitle,
     description: input.description || 'Initial live delivery validation',
     color: 0xf5b041,
     leadField: null,
-    footer: `Target: ${target}`,
+    footer: 'Unit Talk | Canary',
   };
 }
 

@@ -76,7 +76,11 @@ async function resolveMLBHeadshot(displayName: string): Promise<string | null> {
 
 // ── NBA ────────────────────────────────────────────────────────────
 async function resolveNBAHeadshot(displayName: string): Promise<string | null> {
-  const url = `https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=2024-25`;
+  // Season is derived from current date: if month >= October, use current-next; else previous-current
+  const now = new Date();
+  const seasonStartYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+  const season = `${seasonStartYear}-${String(seasonStartYear + 1).slice(2)}`;
+  const url = `https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=${season}`;
   const res = await fetch(url, {
     signal: AbortSignal.timeout(8000),
     headers: {

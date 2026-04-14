@@ -1017,16 +1017,13 @@ test('createDiscordDeliveryAdapter sends a live Discord embed when configured', 
     'https://discord.com/api/v10/channels/1234567890/messages',
   );
   assert.equal(request.method, 'POST');
-  assert.equal(
-    body.content,
-    'Canary delivery active. Validate formatting before expanding routing.',
-  );
-  assert.equal(embed?.title, 'Unit Talk V2 Canary');
+  assert.equal(body.content, undefined);
+  // Title is now the pick selection (embed redesign)
+  assert.ok(embed?.title?.includes('Over'), 'title must be the pick selection');
   assert.equal(embed?.description, '\ud83c\udfc0 NBA | Lakers vs Celtics');
-  assert.equal(embed?.footer?.text, 'Unit Talk');
+  assert.equal(embed?.footer?.text, 'Unit Talk | Canary');
   // Spec-compliant fields: no pick_id, no State, no Source
   const fieldNames = embed?.fields?.map((f: Record<string, unknown>) => f.name) ?? [];
-  assert.ok(fieldNames.includes('Pick'), 'must have Pick field');
   assert.ok(fieldNames.includes('Odds'), 'must have Odds field');
   assert.ok(fieldNames.includes('Capper'), 'must have Capper field');
   assert.ok(!fieldNames.includes('Pick ID'), 'must NOT show Pick ID');
@@ -1441,12 +1438,11 @@ test('buildDiscordMessagePayload omits content field for non-canary targets', as
   const body = parseDiscordRequestBody(rawBody);
   assert.equal(body.content, undefined, 'content field must be absent for non-canary targets');
   assert.ok(body.embeds?.[0] != null, 'embed must still be present');
-  assert.equal(body.embeds?.[0]?.title, 'Unit Talk V2 Best Bet');
-  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk');
-  assert.equal(
-    body.embeds?.[0]?.fields?.[0]?.name,
-    'Best Bets Purpose',
-  );
+  // Title is now the pick selection, not channel name
+  assert.ok(body.embeds?.[0]?.title?.includes('Over'), 'title must be the pick selection');
+  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk | Best Bets');
+  // Lead field removed post burn-in
+  assert.notEqual(body.embeds?.[0]?.fields?.[0]?.name, 'Best Bets Purpose');
 });
 
 test('createDiscordDeliveryAdapter renders trader-insights target-specific embed', async () => {
@@ -1470,12 +1466,9 @@ test('createDiscordDeliveryAdapter renders trader-insights target-specific embed
 
   const body = parseDiscordRequestBody(rawBody);
   assert.equal(body.content, undefined);
-  assert.equal(body.embeds?.[0]?.title, 'Unit Talk V2 Trader Insight');
-  assert.equal(
-    body.embeds?.[0]?.footer?.text,
-    'Unit Talk',
-  );
-  assert.equal(body.embeds?.[0]?.fields?.[0]?.name, 'Trader Insights Purpose');
+  assert.ok(body.embeds?.[0]?.title?.includes('Over'), 'title must be the pick selection');
+  assert.equal(body.embeds?.[0]?.footer?.text, 'Unit Talk | Trader Insights');
+  assert.notEqual(body.embeds?.[0]?.fields?.[0]?.name, 'Trader Insights Purpose');
 });
 
 // ---------------------------------------------------------------------------

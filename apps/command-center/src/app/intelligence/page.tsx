@@ -160,6 +160,32 @@ function RightWrongBadge({ value }: { value: boolean | null }) {
     : <span className="text-xs font-medium text-red-400">Wrong</span>;
 }
 
+function ConfidenceNote({
+  tone,
+  title,
+  children,
+}: {
+  tone: 'warning' | 'info';
+  title: string;
+  children: React.ReactNode;
+}) {
+  const classes =
+    tone === 'warning'
+      ? 'border-yellow-800/60 bg-yellow-900/20 text-yellow-100'
+      : 'border-blue-800/60 bg-blue-900/20 text-blue-100';
+
+  return (
+    <div className={`rounded border p-3 text-xs ${classes}`}>
+      <div className="font-medium">{title}</div>
+      <div className="mt-1">{children}</div>
+    </div>
+  );
+}
+
+function formWindowSampleSize(form: FormWindow) {
+  return form.last20.wins + form.last20.losses + form.last20.pushes;
+}
+
 export default async function IntelligencePage() {
   const data = await fetchIntelligence();
 
@@ -175,6 +201,15 @@ export default async function IntelligencePage() {
     );
   }
 
+  const correlationSample = data.scoreQuality.scoreVsOutcome.sampleSize ?? 0;
+  const overallFormSample = formWindowSampleSize(data.recentForm.overall);
+  const feedbackSample = data.feedbackLoop.length;
+  const needsCaution =
+    correlationSample < 20 ||
+    overallFormSample < 20 ||
+    data.scoreQuality.scoreVsOutcome.confidence === 'low' ||
+    data.scoreQuality.scoreVsOutcome.correlation === 'insufficient_data';
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex items-center justify-between">
@@ -182,6 +217,18 @@ export default async function IntelligencePage() {
         <span className="text-xs text-gray-500">
           Observed {new Date(data.observedAt).toLocaleTimeString()}
         </span>
+      </div>
+
+      <div className="grid gap-3 lg:grid-cols-3">
+        <ConfidenceNote tone={needsCaution ? 'warning' : 'info'} title="How to read this page">
+          Use these panels to calibrate judgment, not to auto-trust the model. Thin samples can make a score band or source look better than it really is.
+        </ConfidenceNote>
+        <ConfidenceNote tone="info" title="Current sample depth">
+          Recent form n={overallFormSample}, score/outcome n={correlationSample}, feedback rows={feedbackSample}.
+        </ConfidenceNote>
+        <ConfidenceNote tone="info" title="Best use">
+          Look for persistent patterns across multiple windows before changing operator behavior.
+        </ConfidenceNote>
       </div>
 
       {/* Warnings */}
@@ -257,6 +304,12 @@ export default async function IntelligencePage() {
             </div>
           )}
         </div>
+
+        {needsCaution && (
+          <div className="mb-4 rounded border border-yellow-800/60 bg-yellow-900/20 p-3 text-xs text-yellow-100">
+            Confidence is currently limited. Avoid treating the score-quality correlation as production-grade until the sample deepens.
+          </div>
+        )}
 
         {data.scoreQuality.bands.length > 0 && (
           <div className="overflow-x-auto">
