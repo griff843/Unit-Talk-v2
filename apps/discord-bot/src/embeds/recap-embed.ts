@@ -8,5 +8,7 @@ export type { RecapEmbedInput, RecapEmbedData } from '@unit-talk/domain';
 export { buildRecapEmbedData } from '@unit-talk/domain';
 
 export function buildRecapEmbed(input: RecapEmbedInput) {
-  return EmbedBuilder.from(buildRecapEmbedData(input));
+  const data = buildRecapEmbedData(input);
+  const { thumbnail, ...rest } = data;
+  return EmbedBuilder.from(thumbnail ? { ...rest, thumbnail } : rest);
 }
