@@ -1,4 +1,4 @@
-import type { ConflictCard as ConflictCardType, ConflictReason } from '../lib/types.js';
+import type { ConflictCard as ConflictCardType, ConflictReason } from '@/lib/types';
 
 interface ConflictCardProps {
   card: ConflictCardType;

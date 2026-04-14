@@ -1,7 +1,7 @@
-import { fetchBoardState } from '../../../lib/api.js';
-import { BoardCapacityGauge } from '../../../components/BoardCapacityGauge.js';
-import { ConflictCard } from '../../../components/ConflictCard.js';
-import { EmptyState } from '../../../components/ui/EmptyState.js';
+import { fetchBoardState } from '@/lib/api';
+import { BoardCapacityGauge } from '@/components/BoardCapacityGauge';
+import { ConflictCard } from '@/components/ConflictCard';
+import { EmptyState } from '@/components/ui/EmptyState';
 
 export default async function BoardSaturationPage() {
   const board = await fetchBoardState();

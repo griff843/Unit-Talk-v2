@@ -82,6 +82,16 @@ function DeliveryRow({ row }: { row: Record<string, unknown> }) {
   );
 }
 
+function buildForcePromoteContext(row: Record<string, unknown>) {
+  const score =
+    row['promotion_score'] != null && Number.isFinite(Number(row['promotion_score']))
+      ? Number(row['promotion_score']).toFixed(1)
+      : 'none';
+  const status = String(row['promotion_status'] ?? 'unknown');
+  const target = String(row['promotion_target'] ?? 'best-bets');
+  return `Current status: ${status}. Score: ${score}. Target will be ${target}.`;
+}
+
 export default async function ExceptionsPage({
   searchParams,
 }: {
@@ -195,6 +205,10 @@ export default async function ExceptionsPage({
       {/* Rerun / Override Candidates */}
       {(data?.rerunCandidates.length ?? 0) > 0 && (
         <Card title={`Rerun / Override Candidates (${data!.counts.rerunCandidates})`}>
+          <div className="mb-4 rounded border border-yellow-800/60 bg-yellow-900/20 p-3 text-xs text-yellow-100">
+            Use <span className="font-medium text-yellow-300">Rerun</span> first when the problem might be stale inputs or drift.
+            Reserve <span className="font-medium text-yellow-300">Force Promote</span> for deliberate overrides you would be comfortable defending in audit history.
+          </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
               <thead>
@@ -218,7 +232,14 @@ export default async function ExceptionsPage({
                       <td className="py-2">
                         <div className="flex gap-2">
                           <InterventionAction label="Rerun" variant="primary" pickId={pickId} action="rerun_promotion" />
-                          <InterventionAction label="Force Promote" variant="success" pickId={pickId} action="force_promote" />
+                          <InterventionAction
+                            label="Force Promote"
+                            variant="warning"
+                            pickId={pickId}
+                            action="force_promote"
+                            target={String(row['promotion_target'] ?? 'best-bets')}
+                            contextNote={buildForcePromoteContext(row)}
+                          />
                         </div>
                       </td>
                     </tr>

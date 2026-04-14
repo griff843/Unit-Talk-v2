@@ -84,6 +84,7 @@ export async function processSubmission(
     providerOffers: ProviderOfferRepository;
     settlements?: SettlementRepository;
     participants?: import('@unit-talk/db').ParticipantRepository;
+    events?: import('@unit-talk/db').EventRepository;
   },
 ): Promise<SubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -210,6 +211,30 @@ export async function processSubmission(
     );
   }
 
+  // Resolve event start time from events table when eventId is available (fail-open)
+  let eventTime: string | null = null;
+  if (repositories.events) {
+    const metaEventId = enrichedMetadata['eventId'] as string | undefined;
+    const metaProviderEventId = enrichedMetadata['providerEventId'] as string | undefined;
+    try {
+      let eventRow = metaEventId
+        ? await repositories.events.findById(metaEventId)
+        : null;
+      if (!eventRow && metaProviderEventId) {
+        eventRow = await repositories.events.findByExternalId(metaProviderEventId);
+      }
+      if (eventRow) {
+        const eventMeta = eventRow.metadata as Record<string, unknown> | null;
+        const startsAt = eventMeta?.['starts_at'];
+        eventTime = typeof startsAt === 'string' && startsAt.trim().length > 0
+          ? startsAt
+          : eventRow.event_date ? `${eventRow.event_date}T00:00:00Z` : null;
+      }
+    } catch {
+      // Event time resolution is fail-open
+    }
+  }
+
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
@@ -219,6 +244,7 @@ export async function processSubmission(
       ...realEdgeData,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
+      ...(eventTime ? { eventTime } : {}),
     },
   };
 

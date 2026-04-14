@@ -54,6 +54,10 @@ export async function recordPickSettlement(
     picks: PickRepository;
     settlements: SettlementRepository;
     audit: AuditLogRepository;
+    providerOffers?: ProviderOfferRepository;
+    participants?: ParticipantRepository;
+    events?: EventRepository;
+    eventParticipants?: EventParticipantRepository;
   },
 ): Promise<RecordSettlementResult> {
   const validation = validateSettlementRequest(request);
@@ -310,9 +314,47 @@ async function recordInitialSettlement(
     picks: PickRepository;
     settlements: SettlementRepository;
     audit: AuditLogRepository;
+    providerOffers?: ProviderOfferRepository;
+    participants?: ParticipantRepository;
+    events?: EventRepository;
+    eventParticipants?: EventParticipantRepository;
   },
 ): Promise<RecordSettlementResult> {
   const settledAt = new Date().toISOString();
+
+  // CLV computation (fail-open) — same logic as recordGradedSettlement
+  let clv: Awaited<ReturnType<typeof computeAndAttachCLV>> = null;
+  if (repositories.providerOffers && repositories.participants && repositories.events && repositories.eventParticipants) {
+    try {
+      clv = await computeAndAttachCLV(pick, {
+        providerOffers: repositories.providerOffers,
+        participants: repositories.participants,
+        events: repositories.events,
+        eventParticipants: repositories.eventParticipants,
+      });
+    } catch {
+      // CLV is fail-open on manual settlement
+    }
+  }
+
+  // P/L computation from result and pick odds/stake
+  const profitLossUnits = computeProfitLossUnits(
+    request.result ?? null,
+    pick.odds,
+    pick.stake_units,
+  );
+
+  const payload: Record<string, unknown> = {
+    requestStatus: request.status,
+    correction: false,
+    clv: clv ?? null,
+    ...(clv ? {
+      clvRaw: clv.clvRaw,
+      clvPercent: clv.clvPercent,
+      beatsClosingLine: clv.beatsClosingLine,
+    } : {}),
+    ...(profitLossUnits !== null ? { profitLossUnits } : {}),
+  };
 
   const settlementInput = {
     pickId: pick.id,
@@ -325,10 +367,7 @@ async function recordInitialSettlement(
     reviewReason: null,
     settledBy: request.settledBy,
     settledAt,
-    payload: {
-      requestStatus: request.status,
-      correction: false,
-    },
+    payload,
   };
 
   // Try atomic settlement (all writes in one Postgres transaction),
@@ -461,6 +500,10 @@ async function recordSettlementCorrection(
   repositories: {
     settlements: SettlementRepository;
     audit: AuditLogRepository;
+    providerOffers?: ProviderOfferRepository;
+    participants?: ParticipantRepository;
+    events?: EventRepository;
+    eventParticipants?: EventParticipantRepository;
   },
 ): Promise<RecordSettlementResult> {
   const latest = await repositories.settlements.findLatestForPick(pick.id);
@@ -471,6 +514,27 @@ async function recordSettlementCorrection(
       `Pick ${pick.id} is settled but has no prior settlement record`,
     );
   }
+
+  // CLV computation on correction (fail-open)
+  let clv: Awaited<ReturnType<typeof computeAndAttachCLV>> = null;
+  if (repositories.providerOffers && repositories.participants && repositories.events && repositories.eventParticipants) {
+    try {
+      clv = await computeAndAttachCLV(pick, {
+        providerOffers: repositories.providerOffers,
+        participants: repositories.participants,
+        events: repositories.events,
+        eventParticipants: repositories.eventParticipants,
+      });
+    } catch {
+      // CLV is fail-open on correction
+    }
+  }
+
+  const profitLossUnits = computeProfitLossUnits(
+    request.result ?? null,
+    pick.odds,
+    pick.stake_units,
+  );
 
   const settledAt = new Date().toISOString();
   const settlementRecord = await repositories.settlements.record({
@@ -489,6 +553,13 @@ async function recordSettlementCorrection(
       requestStatus: request.status,
       correction: true,
       priorSettlementRecordId: latest.id,
+      clv: clv ?? null,
+      ...(clv ? {
+        clvRaw: clv.clvRaw,
+        clvPercent: clv.clvPercent,
+        beatsClosingLine: clv.beatsClosingLine,
+      } : {}),
+      ...(profitLossUnits !== null ? { profitLossUnits } : {}),
     },
   });
 
@@ -687,5 +758,37 @@ async function buildCLVContextFromGradingEvent(
     eventStartTime,
     participantExternalId,
   };
+}
+
+/**
+ * Compute profit/loss in units from settlement result and pick odds/stake.
+ * American odds: win at +odds → profit = stake × (odds / 100)
+ *                win at -odds → profit = stake × (100 / |odds|)
+ *                loss → -stake, push → 0
+ * Returns null when result is missing (manual_review without outcome).
+ */
+function computeProfitLossUnits(
+  result: string | null,
+  odds: number | null | undefined,
+  stakeUnits: number | null | undefined,
+): number | null {
+  if (!result) return null;
+  const stake = stakeUnits ?? 1;
+
+  if (result === 'push') return 0;
+  if (result === 'loss') return -stake;
+  if (result === 'win') {
+    if (odds != null && Number.isFinite(odds) && odds !== 0) {
+      return odds > 0
+        ? roundPL(stake * (odds / 100))
+        : roundPL(stake * (100 / Math.abs(odds)));
+    }
+    return stake;
+  }
+  return null;
+}
+
+function roundPL(value: number): number {
+  return Math.round(value * 100) / 100;
 }
 
