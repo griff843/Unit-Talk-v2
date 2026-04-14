@@ -221,7 +221,7 @@ When documents conflict:
 |---|---|---|
 | `docs/06_status/PROGRAM_STATUS.md` | Canonical active program status — milestone, capabilities, risks | **Primary — high-level** |
 | `docs/06_status/ISSUE_QUEUE.md` | **DEPRECATED 2026-03-31** — historical work queue record; Linear is the live execution queue | Historical only |
-| `docs/06_status/PROOF_BUNDLE_SCHEMA.md` | Proof bundle schema definition | Closeout reference |
+| `docs/06_status/PROOF_BUNDLE_SCHEMA.md` | Proof bundle schema definition | Historical — superseded by `EVIDENCE_BUNDLE_TEMPLATE.md` (UTV2-532) |
 | `docs/06_status/PROOF_TEMPLATE.md` | Reusable T1 independent verification template | Closeout template |
 | `docs/06_status/ROLLBACK_TEMPLATE.md` | Reusable T1 rollback template | Rollback template |
 | `docs/06_status/production_readiness_checklist.md` | Production readiness gate checklist | Active reference |

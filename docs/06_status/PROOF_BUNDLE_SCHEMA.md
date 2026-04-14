@@ -1,3 +1,5 @@
+> **⚠️ SUPERSEDED** — This schema was superseded on 2026-04-11 by [`docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md`](../05_operations/EVIDENCE_BUNDLE_TEMPLATE.md) (UTV2-532). New evidence bundles must use the canonical template. This file is retained for audit trail of issues gated under UTV2-157.
+
 # Proof Bundle Schema
 
 **Status:** RATIFIED 2026-03-29
