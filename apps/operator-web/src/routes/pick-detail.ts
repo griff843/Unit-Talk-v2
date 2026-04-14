@@ -331,7 +331,7 @@ export async function handlePickDetailRequest(
     }
   }
 
-  let gameResultsMap = new Map<string, Record<string, unknown>>();
+  const gameResultsMap = new Map<string, Record<string, unknown>>();
   if (gameResultIds.length > 0) {
     const gameResultsResult = await supabase
       .from('game_results')
