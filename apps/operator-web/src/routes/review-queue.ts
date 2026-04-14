@@ -36,7 +36,7 @@ export async function handleReviewQueueRequest(
   const client = provider._supabaseClient as any;
 
   let query = client
-    .from('picks')
+    .from('picks_current_state')
     .select('*')
     .or('status.eq.awaiting_approval,approval_status.eq.pending');
 
@@ -63,38 +63,33 @@ export async function handleReviewQueueRequest(
   }
 
   const picks = (pendingPicks ?? []) as Array<Record<string, unknown>>;
-  const pickIds = picks.map((p) => p['id'] as string);
 
-  let heldPickIds: Set<string> = new Set();
-  if (pickIds.length > 0) {
-    const { data: reviews } = await client
-      .from('pick_reviews')
-      .select('pick_id, decision, decided_at')
-      .in('pick_id', pickIds)
-      .order('decided_at', { ascending: false });
-
-    const latestByPick = new Map<string, string>();
-    for (const r of (reviews ?? []) as Array<Record<string, unknown>>) {
-      const pid = r['pick_id'] as string;
-      if (!latestByPick.has(pid)) {
-        latestByPick.set(pid, r['decision'] as string);
-      }
-    }
-
-    heldPickIds = new Set(
-      [...latestByPick.entries()]
-        .filter(([, decision]) => decision === 'hold')
-        .map(([pid]) => pid),
-    );
-  }
-
+  // The view includes review_decision — filter out held picks without a secondary query.
   const reviewQueuePicks = picks
-    .filter((p) => !heldPickIds.has(p['id'] as string))
-    .map((pick) => ({
-      ...pick,
-      governanceQueueState:
-        pick['status'] === 'awaiting_approval' ? 'awaiting_approval' : 'pending_review',
-    }));
+    .filter((p) => p['review_decision'] !== 'hold')
+    .map((pick) => {
+      const metadata = (pick['metadata'] ?? {}) as Record<string, unknown>;
+      const eventName = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : null;
+      const eventStartTime =
+        typeof metadata['eventTime'] === 'string'
+          ? metadata['eventTime']
+          : typeof metadata['eventStartTime'] === 'string'
+            ? metadata['eventStartTime']
+            : null;
+
+      return {
+        ...pick,
+        eventName,
+        eventStartTime,
+        sportDisplayName: pick['sport_display_name'] ?? null,
+        capperDisplayName: pick['capper_display_name'] ?? null,
+        marketTypeDisplayName: pick['market_type_display_name'] ?? null,
+        settlementResult: pick['settlement_result'] ?? null,
+        reviewDecision: pick['review_decision'] ?? null,
+        governanceQueueState:
+          pick['status'] === 'awaiting_approval' ? 'awaiting_approval' : 'pending_review',
+      };
+    });
 
   writeJson(response, 200, {
     ok: true,

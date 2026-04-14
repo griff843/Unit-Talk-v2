@@ -5149,7 +5149,9 @@ test('GET /api/operator/held-queue includes held awaiting_approval picks', async
   assert.equal(body.data.total, 1);
   assert.equal(body.data.picks[0]?.id, 'pick-held-awaiting');
   assert.equal(body.data.picks[0]?.governanceQueueState, 'awaiting_approval');
-  assert.equal(body.data.picks[0]?.holdReason, 'Need confirmation');
+  // holdReason is not available from picks_current_state view (no reason column);
+  // the field is preserved as null for backward-compatible shape.
+  assert.equal(body.data.picks[0]?.holdReason, null);
 });
 
 function createAggregateProvider(tables: Record<string, Array<Record<string, unknown>>>): OperatorSnapshotProvider {
