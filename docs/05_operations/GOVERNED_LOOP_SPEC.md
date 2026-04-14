@@ -665,7 +665,7 @@ Step 1.3 in the rollout sequence is blocking. Steps 1.4–1.6 cannot proceed wit
 
 #### Structure
 
-Proof artifacts follow the existing `EVIDENCE_BUNDLE_TEMPLATE.md` for T1 and the existing `PROOF_BUNDLE_SCHEMA.md` for general bundles. No new format is introduced.
+Proof artifacts follow the existing `EVIDENCE_BUNDLE_TEMPLATE.md` for all tiers. (The earlier `PROOF_BUNDLE_SCHEMA.md` is historical only — superseded by `EVIDENCE_BUNDLE_TEMPLATE.md` as of UTV2-532.) No new format is introduced.
 
 #### Storage
 
