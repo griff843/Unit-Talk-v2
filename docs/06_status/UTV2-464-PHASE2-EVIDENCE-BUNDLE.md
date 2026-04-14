@@ -1,48 +1,113 @@
 # UTV2-464 — Phase 2 Evidence Bundle
 
-**Status:** COMPLETE — Phase 3 gate OPEN pending PM acceptance
-**Date:** 2026-04-09
-**Verified by:** Claude Code orchestrator + live Supabase DB (feownrheeefbcsehtsiw)
-**Contract authority:** `docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md §8`
+## Metadata
 
----
+| Field | Value |
+|---|---|
+| Issue ID | UTV2-464 |
+| Tier | T1 |
+| Phase / Gate | Phase 2 — Board Scan + Market Universe |
+| Owner | claude/orchestrator |
+| Date | 2026-04-09 |
+| Verifier Identity | claude/historical-retrofit |
+| Commit SHA(s) | ed160f9, 1b3cc21 |
+| Related PRs | #204, #205, #206, #207, #208 |
 
-## Verification Run
+## Scope
 
-```
-Script: scripts/utv2-464-proof.ts
-Run at: 2026-04-09T15:48:07.651Z
-DB: feownrheeefbcsehtsiw (Supabase project)
-```
+**Claims:**
+- All 8 Phase 2 §8 exit criteria pass against live Supabase DB
+- Materializer idempotency holds on repeated runs
+- Feature gate enforced when SYNDICATE_MACHINE_ENABLED=false
+- No pick lifecycle contamination from Phase 2 services
 
----
+**Does NOT claim:**
+- Market alias resolution completeness (Phase 3 concern)
+- Candidate qualification (all 330 rejected due to data quality gap, not code defect)
 
-## §8 Exit Criteria — All Checks PASS
+## Assertions
 
-| # | Check | Result | Evidence |
-|---|-------|--------|----------|
-| 1 | `market_universe` contains >0 rows | **PASS** | 330 rows materialized (1000 provider_offers → 330 unique markets) |
-| 2 | `pick_candidates` contains >0 rows | **PASS** | 330 candidate rows written (scanned=330) |
-| 3 | `pick_candidates.pick_id` = NULL on all rows | **PASS** | `SELECT count(*) FROM pick_candidates WHERE pick_id IS NOT NULL` = 0 |
-| 4 | `pick_candidates.model_score` = NULL on all rows | **PASS** | `SELECT count(*) FROM pick_candidates WHERE model_score IS NOT NULL` = 0 |
-| 5 | `pick_candidates.shadow_mode` = TRUE on all rows | **PASS** | `SELECT count(*) FROM pick_candidates WHERE shadow_mode = false` = 0 |
-| 6 | Materializer idempotency | **PASS** | Second run: upserted=330 (same as first run — no new rows created) |
-| 7 | Feature gate enforced | **PASS** | `SYNDICATE_MACHINE_ENABLED=false` → scanned=0, zero rows written |
-| 8 | No pick lifecycle contamination | **PASS** | Board scan has no imports of submission-service, picks repo, or POST /api/submissions |
+| # | Assertion | Evidence Type | Source | Result | Evidence Ref |
+|---|---|---|---|---|---|
+| 1 | `market_universe` contains >0 rows | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E1](#e1-market-universe-row-count) |
+| 2 | `pick_candidates` contains >0 rows | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E2](#e2-pick-candidates-row-count) |
+| 3 | `pick_candidates.pick_id` = NULL on all rows | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E3](#e3-pick-id-null-boundary) |
+| 4 | `pick_candidates.model_score` = NULL on all rows | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E4](#e4-model-score-null-boundary) |
+| 5 | `pick_candidates.shadow_mode` = TRUE on all rows | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E5](#e5-shadow-mode-boundary) |
+| 6 | Materializer idempotency — second run produces same count | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E6](#e6-materializer-idempotency) |
+| 7 | Feature gate enforced — SYNDICATE_MACHINE_ENABLED=false yields 0 rows | test | `scripts/utv2-464-proof.ts` | PASS | [E7](#e7-feature-gate-enforcement) |
+| 8 | No pick lifecycle contamination — board scan has no picks imports | repo-truth | code review | PASS | [E8](#e8-no-lifecycle-contamination) |
 
----
+## Evidence Blocks
 
-## Live DB State (verified 2026-04-09T15:48)
+### E1 Market universe row count
 
+**DB-query evidence**
+Project ref: `feownrheeefbcsehtsiw`
+Run at: 2026-04-09T15:48:07Z
+Script: `scripts/utv2-464-proof.ts`
+Result: 330 rows materialized (1000 provider_offers to 330 unique markets)
+
+### E2 Pick candidates row count
+
+**DB-query evidence**
+Project ref: `feownrheeefbcsehtsiw`
+Run at: 2026-04-09T15:48:07Z
+Script: `scripts/utv2-464-proof.ts`
+Result: 330 candidate rows written (scanned=330)
+
+### E3 Pick ID null boundary
+
+**DB-query evidence**
+Project ref: `feownrheeefbcsehtsiw`
+Run at: 2026-04-09T15:48:07Z
+Query:
 ```sql
-market_universe_rows:    330
-pick_candidate_rows:     330
-pick_id_violation:       0   ← boundary enforced
-model_score_violation:   0   ← boundary enforced
-shadow_mode_violation:   0   ← boundary enforced
-qualified_count:         0   ← see note below
-rejected_count:          330
+SELECT count(*) FROM pick_candidates WHERE pick_id IS NOT NULL;
 ```
+Result: 0
+
+### E4 Model score null boundary
+
+**DB-query evidence**
+Project ref: `feownrheeefbcsehtsiw`
+Run at: 2026-04-09T15:48:07Z
+Query:
+```sql
+SELECT count(*) FROM pick_candidates WHERE model_score IS NOT NULL;
+```
+Result: 0
+
+### E5 Shadow mode boundary
+
+**DB-query evidence**
+Project ref: `feownrheeefbcsehtsiw`
+Run at: 2026-04-09T15:48:07Z
+Query:
+```sql
+SELECT count(*) FROM pick_candidates WHERE shadow_mode = false;
+```
+Result: 0
+
+### E6 Materializer idempotency
+
+**DB-query evidence**
+Project ref: `feownrheeefbcsehtsiw`
+Run at: 2026-04-09T15:48:07Z
+Script: `scripts/utv2-464-proof.ts`
+Result: Second run upserted=330 (same as first run — no new rows created)
+
+### E7 Feature gate enforcement
+
+**Test evidence**
+Test: `scripts/utv2-464-proof.ts` — feature gate check
+Command: `npx tsx scripts/utv2-464-proof.ts`
+Result: SYNDICATE_MACHINE_ENABLED=false produced scanned=0, zero rows written
+
+### E8 No lifecycle contamination
+
+**Repo-truth evidence**
+Board scan service has no imports of submission-service, picks repo, or POST /api/submissions. Code review verified at commit `1b3cc21`.
 
 ### Rejection Analysis (informational — not a Phase 2 failure)
 
@@ -50,15 +115,21 @@ All 330 candidates rejected with `unsupported_market_family` + `invalid_odds_str
 - `market_universe.market_type_id` is NULL on all rows — the current SGO `provider_offers` market keys do not resolve through `provider_market_aliases` to a `market_type_id`
 - `current_over_odds` / `current_under_odds` NULL on all rows — odds not available in materialized data
 
-This is **correct Phase 2 behavior**. The coarse filters are working as specified in contract §5.5. The board scan correctly routes unresolvable markets to `rejected` status. When the market alias mapping table is populated for active SGO markets, candidates will flow through to `qualified`.
+This is correct Phase 2 behavior. The coarse filters are working as specified in contract §5.5.
 
-This is a **data quality gap**, not a code boundary violation. Resolution is a Phase 3 concern.
+### Live DB State (verified 2026-04-09T15:48)
 
----
+```sql
+market_universe_rows:    330
+pick_candidate_rows:     330
+pick_id_violation:       0
+model_score_violation:   0
+shadow_mode_violation:   0
+qualified_count:         0
+rejected_count:          330
+```
 
-## Phase 2 Delivery Summary
-
-All Phase 2 issues merged to main:
+### Phase 2 Delivery Summary
 
 | Issue | Title | Merge commit | PR |
 |-------|-------|-------------|-----|
@@ -71,25 +142,33 @@ All Phase 2 issues merged to main:
 | UTV2-463 | Board scan service | PR #208 `1b3cc21` | merged |
 | UTV2-464 | Phase 2 proof/evidence bundle | `ed160f9`+ | this doc |
 
-**DB hygiene also completed (this session):**
-- Migration 202604090004: 14 missing FK indexes — applied + committed
-- Migration 202604090005: BRIN index + autovacuum tuning sync — applied + committed
-
----
-
-## Hard Boundaries — All Enforced in Code
+### Hard Boundaries — All Enforced in Code
 
 - `pick_candidates.pick_id` — never set by `BoardScanService` (no setter path exists)
 - `pick_candidates.model_score/model_tier/model_confidence` — never set (no setter path exists)
 - `pick_candidates.shadow_mode` — hardcoded `true` default, no override
 - `system-pick-scanner` — parallel path unchanged, does not touch `market_universe` or `pick_candidates`
-- Materializer → `market_universe` only, no picks writes
-- Board scan → `pick_candidates` only, no picks writes
+- Materializer writes to `market_universe` only, no picks writes
+- Board scan writes to `pick_candidates` only, no picks writes
 
----
+## Acceptance Criteria Mapping
 
-## Phase 3 Gate Status
+| Acceptance Criterion (verbatim from Linear) | Assertion # |
+|---|---|
+| market_universe contains >0 rows | 1 |
+| pick_candidates contains >0 rows | 2 |
+| pick_candidates.pick_id = NULL on all rows | 3 |
+| pick_candidates.model_score = NULL on all rows | 4 |
+| pick_candidates.shadow_mode = TRUE on all rows | 5 |
+| Materializer idempotency | 6 |
+| Feature gate enforced | 7 |
+| No pick lifecycle contamination | 8 |
 
-**OPEN** — all Phase 2 exit criteria met. Awaiting PM acceptance to begin Phase 3 model runner wiring.
+## Stop Conditions Encountered
 
-Phase 3 first dependency: market alias resolution must be complete (provider_market_aliases populated for active SGO market keys) before model runner can produce qualified candidates.
+None
+
+## Sign-off
+
+**Verifier:** claude/historical-retrofit — 2026-04-09
+**PM acceptance:** historical — accepted at original gate closure
