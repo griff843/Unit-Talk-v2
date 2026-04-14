@@ -3,8 +3,10 @@ import { Table, TableHead, TableBody, Th, Td } from '@/components/ui/Table';
 import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { InterventionAction } from '@/components/InterventionAction';
+import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
+import { humanizeMarketType } from '@/lib/pick-identity';
 
 interface PickDetailPageProps {
   params: { id: string };
@@ -63,6 +65,25 @@ interface SettlementRow {
   settledAt: string | null;
   hasClv: boolean;
   createdAt: string;
+  notes?: string | null;
+  reviewReason?: string | null;
+  clvRaw?: number | null;
+  clvPercent?: number | null;
+  beatsClosingLine?: boolean | null;
+  gameResult?: {
+    actualValue: number;
+    marketKey: string;
+    participantName: string | null;
+    eventName: string | null;
+    sourcedAt: string;
+  } | null;
+  outcomeExplanation?: string | null;
+  correctedSettlement?: {
+    id: string;
+    result: string | null;
+    settledAt: string | null;
+    settledBy: string | null;
+  } | null;
 }
 
 interface AuditRow {
@@ -88,6 +109,12 @@ interface PickDetail {
   line: number | null;
   odds: number | null;
   stakeUnits: number | null;
+  confidence?: number | null;
+  sport?: string | null;
+  matchup?: string | null;
+  eventStartTime?: string | null;
+  capperName?: string | null;
+  marketTypeLabel?: string | null;
   submittedBy: string | null;
   createdAt: string;
   postedAt: string | null;
@@ -132,6 +159,43 @@ function readObject(value: unknown): Record<string, unknown> | null {
   }
 
   return null;
+}
+
+function formatRoutingScore(score: number | null) {
+  return score != null ? score.toFixed(1) : '—';
+}
+
+function summarizeScoreMeaning(pick: PickDetail) {
+  if (pick.promotionScore == null) {
+    return 'No routing score was persisted for this pick.';
+  }
+
+  if (pick.promotionTarget === 'exclusive-insights') {
+    return `Exclusive Insights uses a stricter routing bar. ${formatRoutingScore(pick.promotionScore)} is meaningful only as promotion fit, not outcome certainty.`;
+  }
+
+  if (pick.promotionTarget === 'trader-insights') {
+    return `Trader Insights routing score ${formatRoutingScore(pick.promotionScore)} reflects promotion policy fit against an 80+ lane, not a win probability.`;
+  }
+
+  return `Best Bets routing score ${formatRoutingScore(pick.promotionScore)} reflects weighted policy fit against a 70+ lane, not a win probability.`;
+}
+
+function summarizeSettlementContext(detail: PickDetailViewResponse) {
+  const latest = detail.settlements[0] ?? null;
+  if (!latest) {
+    return 'Pending settlement';
+  }
+
+  if (latest.outcomeExplanation) {
+    return latest.outcomeExplanation;
+  }
+
+  if (latest.gameResult?.eventName) {
+    return `${latest.result ?? latest.status} • ${latest.gameResult.eventName}`;
+  }
+
+  return latest.result ?? latest.status;
 }
 
 async function fetchPickDetail(pickId: string): Promise<PickDetailViewResponse | null> {
@@ -193,6 +257,8 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         ? pick.metadata['edgeSource']
         : null;
   const hasClv = detail.settlements.some((settlement) => settlement.hasClv);
+  const latestSettlementSummary = summarizeSettlementContext(detail);
+  const scoreMeaning = summarizeScoreMeaning(pick);
 
   return (
     <div className="flex flex-col gap-6">
@@ -204,13 +270,51 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         ]}
       />
 
-      <div>
-        <h1 className="text-lg font-bold text-gray-100">Pick Detail</h1>
-        <p className="mt-1 font-mono text-xs text-gray-400">{pick.id}</p>
-        <p className="mt-1 text-sm text-gray-500">
-          Status: <span className="font-medium text-gray-300">{pick.status}</span>
-        </p>
-      </div>
+      <Card>
+        <div className="flex flex-col gap-4">
+          <PickIdentityPanel
+            pickId={pick.id}
+            pick={{
+              source: pick.source,
+              market: pick.market,
+              selection: pick.selection,
+              line: pick.line,
+              odds: pick.odds,
+              metadata: pick.metadata,
+              submissionPayload: detail.submission?.payload ?? null,
+              matchup: pick.matchup ?? null,
+              eventStartTime: pick.eventStartTime ?? null,
+              sport: pick.sport ?? null,
+              submittedBy: pick.submittedBy,
+              capperName: pick.capperName ?? null,
+              marketTypeLabel: pick.marketTypeLabel ?? null,
+              settlementResult: detail.settlements[0]?.result ?? null,
+            }}
+          />
+          <div className="grid gap-3 md:grid-cols-4">
+            <div className="rounded border border-gray-800 bg-gray-950/60 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500">Lifecycle</p>
+              <p className="mt-1 text-sm font-semibold text-gray-100">{pick.status}</p>
+            </div>
+            <div className="rounded border border-gray-800 bg-gray-950/60 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500">Approval</p>
+              <p className="mt-1 text-sm font-semibold text-gray-100">{pick.approvalStatus}</p>
+            </div>
+            <div className="rounded border border-gray-800 bg-gray-950/60 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500">Promotion</p>
+              <p className="mt-1 text-sm font-semibold text-gray-100">{pick.promotionTarget ?? pick.promotionStatus}</p>
+            </div>
+            <div className="rounded border border-gray-800 bg-gray-950/60 p-3">
+              <p className="text-[11px] uppercase tracking-wide text-gray-500">Settlement</p>
+              <p className="mt-1 text-sm font-semibold text-gray-100">{latestSettlementSummary}</p>
+            </div>
+          </div>
+          <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
+            <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
+            <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>
+          </div>
+        </div>
+      </Card>
 
       <div className="rounded-lg border border-gray-800 bg-gray-900 p-6">
         {allowedActions.length === 0 ? (
@@ -257,7 +361,13 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
         <div className="flex flex-col gap-1">
           <KV label="ID" value={pick.id} />
           <KV label="Submitted By" value={pick.submittedBy} />
+          <KV label="Capper" value={pick.capperName ?? null} />
           <KV label="Source" value={pick.source} />
+          <KV label="Sport" value={pick.sport ?? null} />
+          <KV label="Matchup" value={pick.matchup ?? null} />
+          <KV label="Event Start" value={pick.eventStartTime ?? null} />
+          <KV label="Market Type" value={humanizeMarketType(pick.marketTypeLabel ?? pick.market ?? null)} />
+          <KV label="Confidence" value={pick.confidence != null ? String(pick.confidence) : null} />
           <KV label="Market" value={pick.market} />
           <KV label="Selection" value={pick.selection} />
           <KV label="Line" value={pick.line != null ? String(pick.line) : null} />
@@ -446,6 +556,30 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             )}
           </TableBody>
         </Table>
+        {detail.settlements.length > 0 && (
+          <div className="mt-4 space-y-3">
+            {detail.settlements.map((row) => (
+              <div key={`${row.id}-detail`} className="rounded border border-gray-800 bg-gray-950/60 p-3 text-sm">
+                <p className="font-medium text-gray-100">{row.outcomeExplanation ?? 'No outcome explanation available.'}</p>
+                {row.gameResult ? (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Game result source: {row.gameResult.eventName ?? 'Unknown event'}
+                    {row.gameResult.participantName ? ` • ${row.gameResult.participantName}` : ''}
+                    {` • actual ${row.gameResult.actualValue}`}
+                  </p>
+                ) : null}
+                {row.reviewReason ? (
+                  <p className="mt-1 text-xs text-yellow-400">Review reason: {row.reviewReason}</p>
+                ) : null}
+                {row.correctedSettlement ? (
+                  <p className="mt-1 text-xs text-gray-400">
+                    Corrects {row.correctedSettlement.id} ({row.correctedSettlement.result ?? '—'})
+                  </p>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
 
       <Card title="Correction History">

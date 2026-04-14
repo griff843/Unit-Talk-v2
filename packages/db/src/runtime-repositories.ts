@@ -153,12 +153,17 @@ function extractPlayerId(pick: CanonicalPick): string | null {
   return typeof raw === 'string' && raw.length > 0 ? raw : null;
 }
 
+function extractParticipantId(pick: CanonicalPick): string | null {
+  const raw = pick.metadata?.['participantId'];
+  return typeof raw === 'string' && raw.length > 0 ? raw : null;
+}
+
 function mapPickToRecord(pick: CanonicalPick, idempotencyKey?: string | null): PickRecord {
   const foreignKeyCandidates = derivePickForeignKeyCandidates(pick);
   return {
     id: pick.id,
     submission_id: pick.submissionId,
-    participant_id: null,
+    participant_id: extractParticipantId(pick),
     player_id: extractPlayerId(pick),
     capper_id: foreignKeyCandidates.capperCandidate,
     sport_id: foreignKeyCandidates.sportId,
@@ -2231,7 +2236,7 @@ export class DatabasePickRepository implements PickRepository {
       .insert({
         id: pick.id,
         submission_id: pick.submissionId,
-        participant_id: null,
+        participant_id: extractParticipantId(pick),
         player_id: extractPlayerId(pick),
         capper_id: foreignKeys.capperId,
         sport_id: foreignKeys.sportId,

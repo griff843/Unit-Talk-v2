@@ -264,6 +264,54 @@ test('source attribution is board-construction on every written pick', async () 
 // Tests — hardening (per-row linking safety)
 // ---------------------------------------------------------------------------
 
+test('board writer normalizes event and participant identity into created picks', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const boardRunId = crypto.randomUUID();
+  const participant = await repos.participants.upsertByExternalId({
+    externalId: 'player-aaron-judge',
+    displayName: 'Aaron Judge',
+    participantType: 'player',
+    sport: 'MLB',
+    league: 'MLB',
+    metadata: {},
+  });
+  const event = await repos.events.upsertByExternalId({
+    externalId: 'evt-yankees-redsox',
+    sportId: 'MLB',
+    eventName: 'Yankees vs Red Sox',
+    eventDate: '2026-04-14',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-14T19:05:00.000Z' },
+  });
+
+  await seedBoardCandidate(repos, boardRunId, 1, {
+    sport_key: 'mlb',
+    provider_event_id: event.external_id ?? 'evt-yankees-redsox',
+    event_id: event.id,
+    participant_id: participant.id,
+    provider_participant_id: participant.external_id,
+    canonical_market_key: 'player_batting_home_runs_ou',
+    provider_market_key: 'batting-home-runs-all-game-ou',
+  });
+
+  const result = await runBoardPickWriter(repos);
+  assert.equal(result.written, 1);
+
+  const pick = await repos.picks.findPickById(result.pickIds[0]!);
+  assert.ok(pick);
+  assert.equal(pick?.selection, 'Aaron Judge Over 0.5');
+  assert.equal(pick?.participant_id, participant.id);
+
+  const metadata = pick?.metadata as Record<string, unknown>;
+  assert.equal(metadata['eventId'], event.id);
+  assert.equal(metadata['participantId'], participant.id);
+  assert.equal(metadata['eventName'], 'Yankees vs Red Sox');
+  assert.equal(metadata['eventTime'], '2026-04-14T19:05:00.000Z');
+  assert.equal(metadata['eventStartTime'], '2026-04-14T19:05:00.000Z');
+  assert.equal(metadata['sport'], 'MLB');
+  assert.equal(metadata['player'], 'Aaron Judge');
+});
+
 test('per-row linking: first candidate linked before second candidate is processed', async () => {
   // Verifies that pick_id is written immediately after each row, not batched.
   // If link for row 2 fails, row 1 must already be linked.

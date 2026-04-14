@@ -211,40 +211,22 @@ export async function processSubmission(
     );
   }
 
-  // Resolve event start time from events table when eventId is available (fail-open)
-  let eventTime: string | null = null;
-  if (repositories.events) {
-    const metaEventId = enrichedMetadata['eventId'] as string | undefined;
-    const metaProviderEventId = enrichedMetadata['providerEventId'] as string | undefined;
-    try {
-      let eventRow = metaEventId
-        ? await repositories.events.findById(metaEventId)
-        : null;
-      if (!eventRow && metaProviderEventId) {
-        eventRow = await repositories.events.findByExternalId(metaProviderEventId);
-      }
-      if (eventRow) {
-        const eventMeta = eventRow.metadata as Record<string, unknown> | null;
-        const startsAt = eventMeta?.['starts_at'];
-        eventTime = typeof startsAt === 'string' && startsAt.trim().length > 0
-          ? startsAt
-          : eventRow.event_date ? `${eventRow.event_date}T00:00:00Z` : null;
-      }
-    } catch {
-      // Event time resolution is fail-open
-    }
-  }
+  const normalizedIdentity = await resolveNormalizedPickIdentityMetadata(
+    payload,
+    enrichedMetadata,
+    repositories,
+  );
 
   const enrichedPick: CanonicalPick = {
     ...materialized.pick,
     metadata: {
       ...enrichedMetadata,
+      ...normalizedIdentity,
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
       ...realEdgeData,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
       ...(thumbnailUrl ? { thumbnailUrl } : {}),
-      ...(eventTime ? { eventTime } : {}),
     },
   };
 
@@ -327,6 +309,7 @@ export async function processShadowSubmission(
     audit: AuditLogRepository;
     providerOffers: ProviderOfferRepository;
     participants?: import('@unit-talk/db').ParticipantRepository;
+    events?: import('@unit-talk/db').EventRepository;
   },
 ): Promise<ShadowSubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -377,6 +360,12 @@ export async function processShadowSubmission(
     domainAnalysis,
   );
 
+  const normalizedIdentity = await resolveNormalizedPickIdentityMetadata(
+    payload,
+    enrichedMetadata,
+    repositories,
+  );
+
   // Resolve thumbnail URL from enriched participant data (fail-open)
   let shadowThumbnailUrl: string | null = null;
   if (repositories.participants) {
@@ -392,6 +381,7 @@ export async function processShadowSubmission(
     ...materialized.pick,
     metadata: {
       ...enrichedMetadata,
+      ...normalizedIdentity,
       ...(deviggingResult ? { deviggingResult } : {}),
       kellySizing,
       ...(payload.thesis ? { thesis: payload.thesis } : {}),
@@ -472,6 +462,197 @@ export async function processShadowSubmission(
       recordedAt: shadowRecordedAt,
     },
   };
+}
+
+async function resolveNormalizedPickIdentityMetadata(
+  payload: SubmissionPayload,
+  metadata: Record<string, unknown>,
+  repositories: {
+    participants?: import('@unit-talk/db').ParticipantRepository;
+    events?: import('@unit-talk/db').EventRepository;
+  },
+): Promise<Record<string, unknown>> {
+  const normalized: Record<string, unknown> = {};
+
+  if (typeof payload.eventName === 'string' && payload.eventName.trim().length > 0 && !readMetadataString(metadata, 'eventName')) {
+    normalized['eventName'] = payload.eventName.trim();
+  }
+
+  if (typeof payload.submittedBy === 'string' && payload.submittedBy.trim().length > 0 && !readMetadataString(metadata, 'submittedBy')) {
+    normalized['submittedBy'] = payload.submittedBy.trim();
+  }
+
+  const eventContext = await resolveEventIdentityContext(payload, metadata, repositories.events);
+  if (eventContext.eventId && !readMetadataString(metadata, 'eventId')) {
+    normalized['eventId'] = eventContext.eventId;
+  }
+  if (eventContext.eventName && !readMetadataString(metadata, 'eventName')) {
+    normalized['eventName'] = eventContext.eventName;
+  }
+  if (eventContext.sport && !readMetadataString(metadata, 'sport')) {
+    normalized['sport'] = eventContext.sport;
+  }
+  if (eventContext.eventStartTime) {
+    if (!readMetadataString(metadata, 'eventTime')) {
+      normalized['eventTime'] = eventContext.eventStartTime;
+    }
+    if (!readMetadataString(metadata, 'eventStartTime')) {
+      normalized['eventStartTime'] = eventContext.eventStartTime;
+    }
+  }
+
+  const participantContext = await resolveParticipantIdentityContext(metadata, repositories.participants);
+  if (participantContext.participantId && !readMetadataString(metadata, 'participantId')) {
+    normalized['participantId'] = participantContext.participantId;
+  }
+  if (participantContext.player && !readMetadataString(metadata, 'player')) {
+    normalized['player'] = participantContext.player;
+  }
+  if (participantContext.team && !readMetadataString(metadata, 'team')) {
+    normalized['team'] = participantContext.team;
+  }
+  if (participantContext.sport && !readMetadataString(metadata, 'sport')) {
+    normalized['sport'] = participantContext.sport;
+  }
+
+  return normalized;
+}
+
+async function resolveEventIdentityContext(
+  payload: SubmissionPayload,
+  metadata: Record<string, unknown>,
+  events: import('@unit-talk/db').EventRepository | undefined,
+): Promise<{
+  eventId: string | null;
+  eventName: string | null;
+  sport: string | null;
+  eventStartTime: string | null;
+}> {
+  if (!events) {
+    return {
+      eventId: null,
+      eventName: null,
+      sport: null,
+      eventStartTime: null,
+    };
+  }
+
+  try {
+    const metadataEventId = readMetadataString(metadata, 'eventId');
+    const providerEventId = readMetadataString(metadata, 'providerEventId');
+    const payloadEventName = typeof payload.eventName === 'string' && payload.eventName.trim().length > 0
+      ? payload.eventName.trim()
+      : null;
+
+    let eventRow =
+      metadataEventId != null
+        ? await events.findById(metadataEventId)
+        : null;
+
+    if (!eventRow && providerEventId != null) {
+      eventRow = await events.findByExternalId(providerEventId);
+    }
+
+    if (!eventRow && payloadEventName != null) {
+      const matches = await events.listByName(payloadEventName);
+      if (matches.length === 1) {
+        eventRow = matches[0] ?? null;
+      }
+    }
+
+    if (!eventRow) {
+      return {
+        eventId: null,
+        eventName: null,
+        sport: null,
+        eventStartTime: null,
+      };
+    }
+
+    const eventMeta =
+      typeof eventRow.metadata === 'object' && eventRow.metadata !== null && !Array.isArray(eventRow.metadata)
+        ? (eventRow.metadata as Record<string, unknown>)
+        : null;
+    const startsAt = eventMeta != null && typeof eventMeta['starts_at'] === 'string' && eventMeta['starts_at'].trim().length > 0
+      ? eventMeta['starts_at'].trim()
+      : eventRow.event_date
+        ? `${eventRow.event_date}T00:00:00Z`
+        : null;
+
+    return {
+      eventId: eventRow.id,
+      eventName: eventRow.event_name,
+      sport: eventRow.sport_id,
+      eventStartTime: startsAt,
+    };
+  } catch {
+    return {
+      eventId: null,
+      eventName: null,
+      sport: null,
+      eventStartTime: null,
+    };
+  }
+}
+
+async function resolveParticipantIdentityContext(
+  metadata: Record<string, unknown>,
+  participants: import('@unit-talk/db').ParticipantRepository | undefined,
+): Promise<{
+  participantId: string | null;
+  player: string | null;
+  team: string | null;
+  sport: string | null;
+}> {
+  if (!participants) {
+    return {
+      participantId: null,
+      player: null,
+      team: null,
+      sport: null,
+    };
+  }
+
+  const participantId = readMetadataString(metadata, 'participantId');
+  if (!participantId) {
+    return {
+      participantId: null,
+      player: null,
+      team: null,
+      sport: null,
+    };
+  }
+
+  try {
+    const participant = await participants.findById(participantId);
+    if (!participant) {
+      return {
+        participantId: null,
+        player: null,
+        team: null,
+        sport: null,
+      };
+    }
+
+    return {
+      participantId: participant.id,
+      player: participant.participant_type === 'player' ? participant.display_name : null,
+      team: participant.participant_type === 'team' ? participant.display_name : null,
+      sport: participant.sport ?? null,
+    };
+  } catch {
+    return {
+      participantId: null,
+      player: null,
+      team: null,
+      sport: null,
+    };
+  }
+}
+
+function readMetadataString(metadata: Record<string, unknown>, key: string): string | null {
+  const value = metadata[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 async function processSubmissionDuplicate(

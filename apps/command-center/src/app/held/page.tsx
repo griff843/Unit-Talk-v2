@@ -1,8 +1,8 @@
 import { Card } from '@/components/ui/Card';
+import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { ReviewActions } from '@/components/ReviewActions';
 import { QueueFilters } from '@/components/QueueFilters';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
-import Link from 'next/link';
 import { Suspense } from 'react';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
@@ -25,6 +25,14 @@ interface HeldPick {
   status: string;
   approval_status: string;
   governanceQueueState?: string;
+  metadata?: Record<string, unknown>;
+  eventName?: string | null;
+  eventStartTime?: string | null;
+  sportDisplayName?: string | null;
+  capperDisplayName?: string | null;
+  marketTypeDisplayName?: string | null;
+  settlementResult?: string | null;
+  reviewDecision?: string | null;
 }
 
 async function fetchHeldQueue(params: Record<string, string>): Promise<{ picks: HeldPick[]; total: number }> {
@@ -96,22 +104,43 @@ export default async function HeldQueuePage({
             <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between">
                 <div>
-                  <Link href={`/picks/${pick.id}`} className="font-mono text-sm text-blue-400 hover:underline" aria-label={`Pick ${pick.id}`}>
-                    {pick.id.slice(0, 12)}...
-                  </Link>
+                  <PickIdentityPanel
+                    compact
+                    pickId={`${pick.id.slice(0, 12)}...`}
+                    href={`/picks/${pick.id}`}
+                    pick={{
+                      source: pick.source,
+                      market: pick.market,
+                      selection: pick.selection,
+                      line: pick.line,
+                      odds: pick.odds,
+                      metadata: pick.metadata ?? null,
+                      eventName: pick.eventName ?? null,
+                      eventStartTime: pick.eventStartTime ?? null,
+                      sportDisplayName: pick.sportDisplayName ?? null,
+                      capperDisplayName: pick.capperDisplayName ?? null,
+                      marketTypeDisplayName: pick.marketTypeDisplayName ?? null,
+                      settlementResult: pick.settlementResult ?? null,
+                      reviewDecision: pick.reviewDecision ?? null,
+                    }}
+                  />
                   <div className="mt-1 flex gap-4 text-xs text-gray-400">
-                    <span>Source: <span className="text-gray-300">{pick.source}</span></span>
-                    <span>Market: <span className="text-gray-300">{pick.market}</span></span>
-                    <span>Selection: <span className="text-gray-300">{pick.selection}</span></span>
+                    {pick.odds != null && <span>Odds: <span className="text-gray-300">{pick.odds}</span></span>}
+                    {pick.line != null && <span>Line: <span className="text-gray-300">{pick.line}</span></span>}
+                    {pick.stake_units != null && <span>Units: <span className="text-gray-300">{pick.stake_units}</span></span>}
                   </div>
                 </div>
                 <div className="text-right">
                   <div className="text-sm font-bold text-gray-200">
                     {pick.promotion_score != null ? pick.promotion_score.toFixed(1) : '—'}
                   </div>
-                  <div className="text-[10px] text-gray-500">score</div>
+                  <div className="text-[10px] text-gray-500">routing score</div>
                 </div>
               </div>
+
+              <p className="text-[11px] text-gray-500">
+                Routing score reflects promotion policy fit, not win probability.
+              </p>
 
               <div className="rounded border border-yellow-800 bg-yellow-950 px-3 py-2">
                 <div className="flex items-center justify-between text-xs">

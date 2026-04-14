@@ -1,6 +1,7 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { enrichPickRowsWithIdentity } from './pick-identity-enrichment.js';
 
 export interface PickDetailView {
   pick: {
@@ -299,7 +300,14 @@ export async function handlePickDetailRequest(
     return;
   }
 
-  const pick = (pickResult as { data: Record<string, unknown> }).data;
+  const [pick] = await enrichPickRowsWithIdentity(
+    supabase,
+    [(pickResult as { data: Record<string, unknown> }).data],
+  );
+  if (!pick) {
+    writeJson(response, 404, { ok: false, error: { code: 'NOT_FOUND', message: `Pick not found: ${pickId}` } });
+    return;
+  }
   const outboxRows = ((outboxResult as { data: unknown[] }).data ?? []) as Array<Record<string, unknown>>;
   const outboxIds = outboxRows.map((r) => r['id'] as string).filter(Boolean);
 

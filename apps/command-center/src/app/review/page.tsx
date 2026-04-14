@@ -21,6 +21,13 @@ interface ReviewPick {
   approval_status: string;
   governanceQueueState?: string;
   metadata: Record<string, unknown>;
+  eventName?: string | null;
+  eventStartTime?: string | null;
+  sportDisplayName?: string | null;
+  capperDisplayName?: string | null;
+  marketTypeDisplayName?: string | null;
+  settlementResult?: string | null;
+  reviewDecision?: string | null;
 }
 
 async function fetchReviewQueue(params: Record<string, string>): Promise<{ picks: ReviewPick[]; total: number }> {
