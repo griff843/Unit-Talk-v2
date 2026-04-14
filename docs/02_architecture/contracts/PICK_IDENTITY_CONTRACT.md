@@ -182,13 +182,15 @@ Implementation status per surface (to be filled by UTV2-564 audit):
 
 | Surface | Route | Tier 1 Complete | Tier 2 Complete | Compliant |
 |---|---|---|---|---|
-| Review Queue | `/api/operator/review-queue` | TBD | TBD | TBD |
-| Pick Search | `/api/operator/pick-search` | TBD | TBD | TBD |
-| Pick Detail | `/api/operator/pick-detail/:id` | TBD | TBD | TBD |
-| Board Queue | `/api/operator/board-queue` | TBD | TBD | TBD |
-| Held Queue | `/api/operator/held-queue` | TBD | TBD | TBD |
-| Exception Queues | `/api/operator/exception-queues` | TBD | TBD | TBD |
-| Picks Pipeline | `/api/operator/picks-pipeline` | TBD | TBD | TBD |
+| Review Queue | `/api/operator/review-queue` | 6/8 (75%) — missing: Sport (FK only), Matchup (in metadata) | 5/7 (71%) — missing: Capper (FK only), Event Time (in metadata) | **No** |
+| Pick Search | `/api/operator/pick-search` | 7/8 (88%) — missing: Matchup (in metadata) | 6/7 (86%) — missing: Event Time (in metadata) | **No** |
+| Pick Detail | `/api/operator/pick-detail/:id` | 6/8 (75%) — missing: Sport (FK only), Matchup (in metadata) | 5/7 (71%) — missing: Event Time (in metadata), Confidence (not mapped) | **No** |
+| Board Queue | `/api/operator/board-queue` | 3/8 (38%) — pre-pick surface, most fields N/A | 1/7 (14%) — only Pick ID when linked | **No** |
+| Held Queue | `/api/operator/held-queue` | 6/8 (75%) — missing: Sport (FK only), Matchup (in metadata) | 5/7 (71%) — missing: Capper (FK only), Event Time (in metadata) | **No** |
+| Exception Queues | `/api/operator/exception-queues` | 4/8 (50%) — missing: Sport, Matchup, Line, Odds | 3/7 (43%) — missing: Capper, Event Time, Stake, Confidence | **No** |
+| Picks Pipeline | `/api/operator/picks-pipeline` | 1/8 (13%) — only Status mapped; all identity fields dropped | 3/7 (43%) — only Approval, Pick ID, Created At | **No** |
+
+Audit completed by UTV2-564 on 2026-04-13. Full details: `docs/02_architecture/contracts/PICK_IDENTITY_AUDIT.md`.
 
 ---
 
