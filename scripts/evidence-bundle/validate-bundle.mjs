@@ -6,6 +6,7 @@
  *   node scripts/evidence-bundle/validate-bundle.mjs <path>
  *   node scripts/evidence-bundle/validate-bundle.mjs --all
  *   node scripts/evidence-bundle/validate-bundle.mjs --json <path>
+ *   node scripts/evidence-bundle/validate-bundle.mjs --strict <path>
  *
  * Exit codes:
  *   0 — all bundles passed
@@ -125,10 +126,64 @@ export function parseFieldTable(text) {
 }
 
 /**
+ * Extract the text content of a specific evidence block (### E<num> ...) from
+ * the Evidence Blocks section. Returns empty string if not found.
+ */
+function extractEvidenceBlockText(evidenceBlocksText, num) {
+  const pattern = new RegExp(`^###\\s+E${num}\\b[^\\n]*\\n`, 'm');
+  const match = pattern.exec(evidenceBlocksText);
+  if (!match) return '';
+  const start = match.index + match[0].length;
+  // Find next ### heading or end of text
+  const nextHeading = evidenceBlocksText.indexOf('\n### ', start);
+  return nextHeading === -1
+    ? evidenceBlocksText.slice(start)
+    : evidenceBlocksText.slice(start, nextHeading);
+}
+
+/** Semantic checks keyed by evidence type. Each returns array of missing element names. */
+const SEMANTIC_CHECKS = {
+  'db-query': (text) => {
+    const f = [];
+    if (!/```(?:sql|SQL)/m.test(text)) f.push('sql-fence');
+    if (!/feownrheeefbcsehtsiw|branch:/m.test(text)) f.push('project-ref');
+    if (!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/m.test(text)) f.push('timestamp');
+    return f;
+  },
+  'test': (text) => {
+    const f = [];
+    if (!/\.test\.(?:ts|js)/m.test(text)) f.push('test-file-path');
+    if (!/tsx --test|node --test/m.test(text)) f.push('test-command');
+    if (!/ok \d+/m.test(text)) f.push('test-output');
+    return f;
+  },
+  'fixture': (text) => {
+    const f = [];
+    if (!/[/\\]/.test(text)) f.push('file-path');
+    if (!/sha256:|[a-f0-9]{64}/m.test(text)) f.push('content-hash');
+    return f;
+  },
+  'http': (text) => {
+    const f = [];
+    if (!/curl|fetch|GET |POST /m.test(text)) f.push('http-method');
+    if (!/HTTP \d{3}|\b\d{3}\b/m.test(text)) f.push('status-code');
+    return f;
+  },
+  'repo-truth': (text) => {
+    const f = [];
+    if (!/git log|git show|grep|rg /m.test(text)) f.push('git-command');
+    if (text.split(/\r?\n/).filter((l) => l.trim()).length < 2) f.push('output-excerpt');
+    return f;
+  },
+};
+
+/**
  * Core validator. Returns array of findings.
  * Each finding: { code, message, section? }
+ * Options: { strict?: boolean } — enables semantic evidence-block checks.
  */
-export function validateBundle(source) {
+export function validateBundle(source, options = {}) {
+  const { strict = false } = options;
   const findings = [];
   const sections = parseBundle(source);
 
@@ -243,6 +298,30 @@ export function validateBundle(source) {
     }
   }
 
+  // Semantic checks (opt-in via --strict)
+  if (strict) {
+    for (const row of assertionsTable.rows) {
+      const num = (row['#'] ?? '').trim();
+      const result = (row['Result'] ?? '').trim().toUpperCase();
+      const evidenceType = (row['Evidence Type'] ?? '').trim().toLowerCase();
+
+      if (result !== 'PASS') continue;
+
+      const checker = SEMANTIC_CHECKS[evidenceType];
+      if (!checker) continue; // unknown type — skip
+
+      const blockText = extractEvidenceBlockText(evidenceBlocksText, num);
+      const failures = checker(blockText);
+      for (const element of failures) {
+        findings.push({
+          code: `semantic-${evidenceType}-missing-${element}`,
+          message: `assertion row ${num}: evidence block E${num} (${evidenceType}) missing required element: ${element}`,
+          section: 'Evidence Blocks',
+        });
+      }
+    }
+  }
+
   // Rule 9: acceptance criteria mapping has at least 1 row
   const mappingText = sections.get('Acceptance Criteria Mapping') ?? '';
   const mappingTable = parseMarkdownTable(mappingText);
@@ -290,12 +369,14 @@ function parseCliArgs(argv) {
   const args = argv.slice(2);
   let all = false;
   let json = false;
+  let strict = false;
   let allowlistFile = null;
   const paths = [];
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === '--all') all = true;
     else if (a === '--json') json = true;
+    else if (a === '--strict') strict = true;
     else if (a === '--allowlist-file') {
       allowlistFile = args[++i];
       if (!allowlistFile) {
@@ -305,11 +386,11 @@ function parseCliArgs(argv) {
     }
     else paths.push(a);
   }
-  return { all, json, allowlistFile, paths };
+  return { all, json, strict, allowlistFile, paths };
 }
 
 async function main() {
-  const { all, json, allowlistFile, paths } = parseCliArgs(process.argv);
+  const { all, json, strict, allowlistFile, paths } = parseCliArgs(process.argv);
 
   let targets = [];
   if (all) {
@@ -361,7 +442,7 @@ async function main() {
       totalFindings++;
       continue;
     }
-    const findings = validateBundle(source);
+    const findings = validateBundle(source, { strict });
     report.push({
       path: target,
       ok: findings.length === 0,
