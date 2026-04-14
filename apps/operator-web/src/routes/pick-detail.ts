@@ -16,6 +16,12 @@ export interface PickDetailView {
     line: number | null;
     odds: number | null;
     stakeUnits: number | null;
+    confidence: number | null;
+    sport: string | null;
+    matchup: string | null;
+    eventStartTime: string | null;
+    capperName: string | null;
+    marketTypeLabel: string | null;
     submittedBy: string | null;
     createdAt: string;
     postedAt: string | null;
@@ -103,6 +109,12 @@ export const PICK_DETAIL_FIXTURE: PickDetailView = {
     line: 25.5,
     odds: -110,
     stakeUnits: 1,
+    confidence: null,
+    sport: 'NBA',
+    matchup: 'Lakers vs Celtics',
+    eventStartTime: '2026-03-20T19:00:00.000Z',
+    capperName: 'griff843',
+    marketTypeLabel: 'Player Props',
     submittedBy: 'griff843',
     createdAt: '2026-03-20T10:00:00.000Z',
     postedAt: '2026-03-20T10:05:00.000Z',
@@ -249,7 +261,7 @@ export async function handlePickDetailRequest(
 
   const [pickResult, lifecycleResult, promotionHistoryResult, outboxResult, settlementsResult, auditResult] =
     await Promise.all([
-      supabase.from('picks').select('*').eq('id', pickId).single(),
+      supabase.from('picks_current_state').select('*').eq('id', pickId).single(),
       supabase.from('pick_lifecycle').select('*').eq('pick_id', pickId).order('created_at'),
       supabase.from('pick_promotion_history').select('*').eq('pick_id', pickId).order('created_at'),
       supabase.from('distribution_outbox').select('*').eq('pick_id', pickId).order('created_at'),
@@ -284,6 +296,23 @@ export async function handlePickDetailRequest(
   const submission = submissionResult ? (submissionResult.data as Record<string, unknown> | null) : null;
   const submittedBy = readSubmittedBy(pick, submission);
 
+  // Extract bet-identity fields from view columns + metadata fallback
+  const metadata = (pick['metadata'] ?? {}) as Record<string, unknown>;
+  const matchup = typeof metadata['eventName'] === 'string' ? metadata['eventName'] : null;
+  const eventStartTime = typeof metadata['eventTime'] === 'string'
+    ? metadata['eventTime']
+    : typeof metadata['eventStartTime'] === 'string'
+      ? metadata['eventStartTime']
+      : null;
+  const sport = (typeof pick['sport_display_name'] === 'string' ? pick['sport_display_name'] : null)
+    ?? (typeof metadata['sport'] === 'string' ? metadata['sport'] : null);
+  const capperName = (typeof pick['capper_display_name'] === 'string' ? pick['capper_display_name'] : null)
+    ?? submittedBy;
+  const marketTypeLabel = typeof pick['market_type_display_name'] === 'string'
+    ? pick['market_type_display_name']
+    : null;
+  const confidence = typeof pick['confidence'] === 'number' ? pick['confidence'] : null;
+
   const view: PickDetailView = {
     pick: {
       id: pick['id'] as string,
@@ -298,6 +327,12 @@ export async function handlePickDetailRequest(
       line: (pick['line'] as number | null) ?? null,
       odds: (pick['odds'] as number | null) ?? null,
       stakeUnits: (pick['stake_units'] as number | null) ?? null,
+      confidence,
+      sport,
+      matchup,
+      eventStartTime,
+      capperName,
+      marketTypeLabel,
       submittedBy,
       createdAt: pick['created_at'] as string,
       postedAt: (pick['posted_at'] as string | null) ?? null,
