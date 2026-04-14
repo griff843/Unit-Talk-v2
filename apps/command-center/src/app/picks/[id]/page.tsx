@@ -70,6 +70,7 @@ interface SettlementRow {
   clvRaw?: number | null;
   clvPercent?: number | null;
   beatsClosingLine?: boolean | null;
+  profitLossUnits?: number | null;
   gameResult?: {
     actualValue: number;
     marketKey: string;
@@ -523,7 +524,11 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <KV label="Edge Source" value={edgeSource} />
           <KV label="Devigging Result" value={deviggingResult ? 'present' : 'missing'} />
           <KV label="Kelly Sizing" value={kellySizing ? 'present' : 'missing'} />
-          <KV label="CLV" value={hasClv ? 'present' : 'missing'} />
+          <KV label="CLV" value={
+            hasClv
+              ? `${detail.settlements.find(s => s.clvPercent != null)?.clvPercent?.toFixed(2) ?? '?'}% (${detail.settlements.find(s => s.beatsClosingLine != null)?.beatsClosingLine ? 'beats line' : 'behind line'})`
+              : 'missing'
+          } />
         </div>
       </Card>
 
@@ -534,20 +539,22 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
             <Th>Status</Th>
             <Th>Confidence</Th>
             <Th>CLV</Th>
+            <Th>P/L</Th>
             <Th>Corrects ID</Th>
             <Th>Settled By</Th>
             <Th>Settled At</Th>
           </TableHead>
           <TableBody>
             {detail.settlements.length === 0 ? (
-              <EmptyRow cols={7} />
+              <EmptyRow cols={8} />
             ) : (
               detail.settlements.map((row) => (
                 <tr key={row.id} className="border-t border-gray-800">
                   <Td>{row.result ?? '—'}</Td>
                   <Td>{row.status}</Td>
                   <Td>{row.confidence ?? '—'}</Td>
-                  <Td>{row.hasClv ? 'present' : '—'}</Td>
+                  <Td>{row.clvPercent != null ? `${row.clvPercent.toFixed(2)}%` : row.hasClv ? 'present' : '—'}</Td>
+                  <Td>{row.profitLossUnits != null ? `${row.profitLossUnits > 0 ? '+' : ''}${row.profitLossUnits.toFixed(2)}u` : '—'}</Td>
                   <Td>{row.correctsId ?? '—'}</Td>
                   <Td>{row.settledBy ?? '—'}</Td>
                   <Td>{row.settledAt ?? '—'}</Td>

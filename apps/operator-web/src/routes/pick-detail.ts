@@ -83,6 +83,7 @@ export interface PickDetailView {
     clvRaw: number | null;
     clvPercent: number | null;
     beatsClosingLine: boolean | null;
+    profitLossUnits: number | null;
     gradingContext: {
       actualValue: number;
       marketKey: string;
@@ -444,6 +445,9 @@ export async function handlePickDetailRequest(
       const clvPercent = extractNumber(payload?.['clv'], 'clvPercent') ?? extractNumber(payload, 'clvPercent');
       const beatsClosingLine = extractBoolean(payload?.['clv'], 'beatsClosingLine') ?? extractBoolean(payload, 'beatsClosingLine');
 
+      // Extract P/L from payload
+      const profitLossUnits = extractNumber(payload, 'profitLossUnits');
+
       // Extract grading context from payload
       const gradingContext = extractGradingContext(payload);
 
@@ -508,6 +512,7 @@ export async function handlePickDetailRequest(
         clvRaw,
         clvPercent,
         beatsClosingLine,
+        profitLossUnits,
         gradingContext,
         gameResult,
         outcomeExplanation,
