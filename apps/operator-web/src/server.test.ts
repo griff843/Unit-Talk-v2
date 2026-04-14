@@ -4952,12 +4952,269 @@ test('GET /api/operator/picks/:id marks settlement rows with CLV presence', asyn
     data: {
       settlements: Array<{
         hasClv: boolean;
+        clvRaw: number | null;
+        clvPercent: number | null;
+        beatsClosingLine: boolean | null;
+        notes: string | null;
+        reviewReason: string | null;
+        gradingContext: unknown;
+        gameResult: unknown;
+        outcomeExplanation: string | null;
+        correctedSettlement: unknown;
       }>;
     };
   };
 
   assert.equal(body.ok, true);
   assert.equal(body.data.settlements[0]?.hasClv, true);
+  assert.equal(body.data.settlements[0]?.clvRaw, 0.11);
+  assert.equal(body.data.settlements[0]?.clvPercent, null);
+  assert.equal(body.data.settlements[0]?.beatsClosingLine, null);
+  assert.equal(body.data.settlements[0]?.notes, null);
+  assert.equal(body.data.settlements[0]?.reviewReason, null);
+  assert.equal(body.data.settlements[0]?.gradingContext, null);
+  assert.equal(body.data.settlements[0]?.gameResult, null);
+  assert.equal(body.data.settlements[0]?.outcomeExplanation, null);
+  assert.equal(body.data.settlements[0]?.correctedSettlement, null);
+});
+
+test('GET /api/operator/picks/:id returns enriched settlement with nested CLV, grading context, and notes', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-detail-enriched',
+        submission_id: 'sub-enriched',
+        source: 'smart-form',
+        market: 'points-all-game-ou',
+        selection: 'Over 227.5',
+        line: 227.5,
+        odds: -110,
+        stake_units: 1,
+        status: 'settled',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: 'best-bets',
+        promotion_score: 80,
+        posted_at: '2026-04-05T18:00:00.000Z',
+        settled_at: '2026-04-05T21:00:00.000Z',
+        created_at: '2026-04-05T17:55:00.000Z',
+        metadata: {},
+      },
+    ],
+    submissions: [
+      {
+        id: 'sub-enriched',
+        submitted_by: 'griff843',
+        payload: {},
+        created_at: '2026-04-05T17:54:00.000Z',
+      },
+    ],
+    pick_lifecycle: [],
+    pick_promotion_history: [],
+    distribution_outbox: [],
+    settlement_records: [
+      {
+        id: 'settlement-enriched-1',
+        pick_id: 'pick-detail-enriched',
+        result: 'loss',
+        status: 'settled',
+        confidence: 'confirmed',
+        evidence_ref: 'game-result:gr-uuid-1',
+        corrects_id: null,
+        settled_by: 'grading-service',
+        settled_at: '2026-04-05T21:00:00.000Z',
+        created_at: '2026-04-05T21:00:00.000Z',
+        notes: 'Auto-graded from SGO feed',
+        review_reason: null,
+        payload: {
+          clv: { clvRaw: -0.05, clvPercent: -2.3, beatsClosingLine: false },
+          gradingContext: {
+            actualValue: 225,
+            marketKey: 'points-all-game-ou',
+            eventId: 'event-abc',
+            gameResultId: 'gr-uuid-1',
+          },
+        },
+      },
+    ],
+    audit_log: [],
+    distribution_receipts: [],
+    game_results: [
+      {
+        id: 'gr-uuid-1',
+        event_id: 'event-abc',
+        participant_id: 'participant-xyz',
+        market_key: 'points-all-game-ou',
+        actual_value: 225,
+        source: 'sgo',
+        sourced_at: '2026-04-05T20:50:00.000Z',
+        created_at: '2026-04-05T20:50:00.000Z',
+        events: { event_name: 'Lakers vs Celtics' },
+        participants: { display_name: 'LeBron James' },
+      },
+    ],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  const response = await makeRequest(address.port, '/api/operator/picks/pick-detail-enriched');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      settlements: Array<{
+        id: string;
+        clvRaw: number | null;
+        clvPercent: number | null;
+        beatsClosingLine: boolean | null;
+        notes: string | null;
+        reviewReason: string | null;
+        gradingContext: { actualValue: number; marketKey: string; eventId: string; gameResultId: string } | null;
+        gameResult: { actualValue: number; marketKey: string; participantName: string | null; eventName: string | null; sourcedAt: string } | null;
+        outcomeExplanation: string | null;
+        correctedSettlement: unknown;
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  const s = body.data.settlements[0]!;
+  assert.equal(s.clvRaw, -0.05);
+  assert.equal(s.clvPercent, -2.3);
+  assert.equal(s.beatsClosingLine, false);
+  assert.equal(s.notes, 'Auto-graded from SGO feed');
+  assert.equal(s.reviewReason, null);
+  assert.deepEqual(s.gradingContext, {
+    actualValue: 225,
+    marketKey: 'points-all-game-ou',
+    eventId: 'event-abc',
+    gameResultId: 'gr-uuid-1',
+  });
+  assert.deepEqual(s.gameResult, {
+    actualValue: 225,
+    marketKey: 'points-all-game-ou',
+    participantName: 'LeBron James',
+    eventName: 'Lakers vs Celtics',
+    sourcedAt: '2026-04-05T20:50:00.000Z',
+  });
+  assert.equal(s.outcomeExplanation, 'Over 227.5 227.5 Loss — actual: 225');
+  assert.equal(s.correctedSettlement, null);
+});
+
+test('GET /api/operator/picks/:id builds correction chain from settlements array', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-detail-correction',
+        submission_id: 'sub-correction',
+        source: 'smart-form',
+        market: 'points-all-game-ou',
+        selection: 'Over 24.5',
+        line: 24.5,
+        odds: -110,
+        stake_units: 1,
+        status: 'settled',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: null,
+        promotion_score: null,
+        posted_at: '2026-04-10T18:00:00.000Z',
+        settled_at: '2026-04-12T10:00:00.000Z',
+        created_at: '2026-04-10T17:55:00.000Z',
+        metadata: {},
+      },
+    ],
+    submissions: [
+      {
+        id: 'sub-correction',
+        submitted_by: 'griff843',
+        payload: {},
+        created_at: '2026-04-10T17:54:00.000Z',
+      },
+    ],
+    pick_lifecycle: [],
+    pick_promotion_history: [],
+    distribution_outbox: [],
+    settlement_records: [
+      {
+        id: 'settlement-original',
+        pick_id: 'pick-detail-correction',
+        result: 'loss',
+        status: 'settled',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        corrects_id: null,
+        settled_by: 'grading-service',
+        settled_at: '2026-04-10T19:00:00.000Z',
+        created_at: '2026-04-10T19:00:00.000Z',
+        notes: null,
+        review_reason: null,
+        payload: {},
+      },
+      {
+        id: 'settlement-corrected',
+        pick_id: 'pick-detail-correction',
+        result: 'push',
+        status: 'settled',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        corrects_id: 'settlement-original',
+        settled_by: 'manual',
+        settled_at: '2026-04-12T10:00:00.000Z',
+        created_at: '2026-04-12T10:00:00.000Z',
+        notes: 'Score correction applied',
+        review_reason: 'score_correction',
+        payload: {},
+      },
+    ],
+    audit_log: [],
+    distribution_receipts: [],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  const response = await makeRequest(address.port, '/api/operator/picks/pick-detail-correction');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      settlements: Array<{
+        id: string;
+        correctsId: string | null;
+        notes: string | null;
+        reviewReason: string | null;
+        correctedSettlement: { id: string; result: string | null; settledAt: string | null; settledBy: string | null } | null;
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  // First settlement has no correction
+  const original = body.data.settlements.find((s) => s.id === 'settlement-original')!;
+  assert.equal(original.correctedSettlement, null);
+  assert.equal(original.notes, null);
+
+  // Second settlement corrects the first
+  const corrected = body.data.settlements.find((s) => s.id === 'settlement-corrected')!;
+  assert.equal(corrected.correctsId, 'settlement-original');
+  assert.equal(corrected.notes, 'Score correction applied');
+  assert.equal(corrected.reviewReason, 'score_correction');
+  assert.deepEqual(corrected.correctedSettlement, {
+    id: 'settlement-original',
+    result: 'loss',
+    settledAt: '2026-04-10T19:00:00.000Z',
+    settledBy: 'grading-service',
+  });
 });
 
 test('GET /api/operator/pick-search surfaces submitter separately from intake source', async () => {
