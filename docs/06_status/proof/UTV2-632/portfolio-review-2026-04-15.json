@@ -1,0 +1,69 @@
+{
+  "generated_at": "2026-04-15T18:05:39.692Z",
+  "period": "2026-03-16 to 2026-04-15",
+  "concentration": {
+    "total_posted_picks": 24,
+    "by_source": {
+      "smart-form": 22,
+      "api": 2
+    },
+    "by_promotion_target": {
+      "qualified": 22,
+      "not_eligible": 1,
+      "promoted": 1
+    },
+    "source_concentration_risk": "HIGH — single source dominates"
+  },
+  "champion_stability": {
+    "total_picks_with_score": 0,
+    "high_score_picks": 0,
+    "high_score_pct": 0,
+    "settlement_win_rate": 73,
+    "clv_beat_rate": 100,
+    "stability_signal": "STRONG — win rate above threshold"
+  },
+  "provider_performance": {
+    "sgo_offer_count": 1000,
+    "latest_sgo_snapshot": "2026-04-15T13:48:55.458+00:00",
+    "sgo_freshness_hrs": 4.3,
+    "provider_coverage": {
+      "sgo": 1000
+    }
+  },
+  "coverage_gaps": {
+    "participant_id_coverage_pct": 100,
+    "settlement_coverage_pct": 100,
+    "clv_coverage_pct": 25,
+    "auto_grade_pct": 0,
+    "gaps": [
+      "CLV payload coverage 25% (threshold 40%)",
+      "auto-grade coverage 0% — not yet implemented"
+    ]
+  },
+  "decisions": [
+    {
+      "area": "Concentration",
+      "observation": "92% of picks from single source. High concentration risk.",
+      "decision": "Monitor — scanner is quiesced per DEBT-003. Concentration will naturally diversify when re-enabled. No immediate action required.",
+      "owner": "orchestrator"
+    },
+    {
+      "area": "Champion Stability",
+      "observation": "Win rate 73% above 55% threshold — strong signal.",
+      "decision": "No action. Continue monitoring. Use as positive evidence for autonomous re-enablement case.",
+      "owner": "orchestrator"
+    },
+    {
+      "area": "CLV Coverage",
+      "observation": "Only 25% of settlements have CLV payload.",
+      "decision": "CLV resolution pipeline needs attention. Track via scoring:coverage CLI. Target 40%+ before claiming CLV proof.",
+      "owner": "orchestrator"
+    },
+    {
+      "area": "Worker Status",
+      "observation": "Worker idle >8h. Distribution pipeline paused.",
+      "decision": "Worker requires manual restart. This is a pre-existing operational condition (not introduced this period). See runtime:health for current state.",
+      "owner": "orchestrator"
+    }
+  ]
+}
