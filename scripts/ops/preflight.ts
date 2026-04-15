@@ -554,6 +554,7 @@ async function runLinearChecks(
     'Ready for Codex',
     'In Claude Review',
     'In Codex Review',
+    'Needs Standard',
   ]);
   if (startableStates.has(stateName)) {
     addCheck('PL3', 'pass', `issue state ${stateName} is startable`);
