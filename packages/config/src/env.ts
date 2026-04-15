@@ -68,6 +68,7 @@ export interface AppEnv {
   SYSTEM_PICK_SCANNER_ENABLED?: string | undefined;
   SYSTEM_PICK_SCANNER_LOOKBACK_HOURS?: string | undefined;
   SYSTEM_PICK_SCANNER_MAX_PICKS?: string | undefined;
+  SYNDICATE_MACHINE_ENABLED?: string | undefined;
 }
 
 function parseEnvFileEntries(filePath: string) {
@@ -204,6 +205,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     SYSTEM_PICK_SCANNER_ENABLED: optionalEnv('SYSTEM_PICK_SCANNER_ENABLED', merged),
     SYSTEM_PICK_SCANNER_LOOKBACK_HOURS: optionalEnv('SYSTEM_PICK_SCANNER_LOOKBACK_HOURS', merged),
     SYSTEM_PICK_SCANNER_MAX_PICKS: optionalEnv('SYSTEM_PICK_SCANNER_MAX_PICKS', merged),
+    SYNDICATE_MACHINE_ENABLED: optionalEnv('SYNDICATE_MACHINE_ENABLED', merged),
   };
 
   return env;
