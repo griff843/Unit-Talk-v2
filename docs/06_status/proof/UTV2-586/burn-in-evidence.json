@@ -1,0 +1,101 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-586",
+  "title": "UTV2-586: Runtime burn-in proof window — live MLB/NHL/NBA pipeline",
+  "tier": "T1",
+  "burn_in_date": "2026-04-15",
+  "authored_by": "Claude Sonnet 4.6",
+
+  "prerequisites_unblocked": {
+    "UTV2-606": {
+      "pr": 332,
+      "commit": "6277ba0",
+      "fix": "SYNDICATE_MACHINE_ENABLED threaded through AppEnv — board-scan gate now receives config value instead of reading process.env directly"
+    },
+    "UTV2-644": {
+      "pr": 333,
+      "commit": "17418f0",
+      "fix": "modelRegistry + experimentLedger added to createDatabaseRepositoryBundle — candidate-scoring was silently returning null for every champion lookup"
+    },
+    "UTV2-645": {
+      "pr": 334,
+      "commit": "cce1cb1",
+      "fix": "DatabaseMarketUniverseRepository.findByIds chunked to 100 per request — 2133 UUIDs in single IN clause exceeded Node.js fetch URL limits"
+    }
+  },
+
+  "pipeline_proof": {
+    "proof_window": "2026-04-15T19:51:00Z to 2026-04-15T20:23:00Z",
+    "api_version": "main@cce1cb1",
+    "stages": {
+      "provider_offers": {
+        "status": "HEALTHY",
+        "evidence": "system-pick-scanner: scan.completed scanned=100 materialized=83; market-universe-materializer: offersRead=1000 upserted=446"
+      },
+      "market_universe": {
+        "status": "HEALTHY",
+        "evidence": "431-446 markets across NBA/NHL/MLB updated every 5-min cycle; refreshed_at within 1 minute"
+      },
+      "pick_candidates": {
+        "status": "HEALTHY",
+        "evidence": "board-scan: scanned=1000 qualified=329-358 per cycle; total 2434 candidates in DB"
+      },
+      "candidate_scoring": {
+        "status": "HEALTHY",
+        "evidence": "ranked-selection: ranked=744; no_unscored_candidates on startup (all qualified candidates scored). noChampionSkipped blocked until UTV2-644 merged."
+      },
+      "syndicate_board": {
+        "status": "HEALTHY",
+        "evidence": "board-construction: boardSize=18 boardRunId=03ff7ca8; 726 entries in syndicate_board; skippedSportCap=294 skippedMarketDup=79"
+      },
+      "picks_created": {
+        "status": "HEALTHY",
+        "evidence": "board-pick-writer: written=9 skipped=7 errors=2 (concurrent duplicate); 11 picks created today source=board-construction all status=validated"
+      },
+      "distribution_outbox": {
+        "status": "BLOCKED",
+        "evidence": "outbox_new=0; all 11 picks have promotion_status=suppressed — board-construction picks lack promotionScores metadata; promotion policy minimum score check fails",
+        "blocker_issue": "UTV2-646"
+      },
+      "distribution_receipts": {
+        "status": "BLOCKED",
+        "evidence": "No outbox entries → no receipts"
+      }
+    }
+  },
+
+  "sport_coverage": {
+    "NBA": { "market_universe_markets": 492, "champion_models": ["player_prop", "game_line", "combo"] },
+    "NHL": { "market_universe_markets": 452, "champion_models": ["player_prop", "game_line", "combo"] },
+    "MLB": { "market_universe_markets": 446, "champion_models": ["player_prop", "game_line", "combo"] }
+  },
+
+  "model_registry": {
+    "champion_count": 9,
+    "coverage": "NBA/NHL/MLB × player_prop/game_line/combo",
+    "champion_since": "2026-04-14"
+  },
+
+  "gaps_discovered": [
+    {
+      "id": "UTV2-644",
+      "severity": "blocking",
+      "description": "modelRegistry absent from repository bundle — all candidates skipped with no_champion_skip",
+      "status": "FIXED and merged"
+    },
+    {
+      "id": "UTV2-645",
+      "severity": "blocking",
+      "description": "findByIds URL overflow with 2133+ UUIDs",
+      "status": "FIXED and merged"
+    },
+    {
+      "id": "UTV2-646",
+      "severity": "blocking for outbox",
+      "description": "board-construction picks suppressed by promotion policy — missing promotionScores metadata",
+      "status": "OPEN, T2"
+    }
+  ],
+
+  "verdict": "PARTIAL — pipeline proven from offers through pick creation (6/8 stages). Blocked at distribution by UTV2-646 (promotion scoring gap). Candidate pipeline and model registry are operational. CLV scoring will activate once picks reach outbox/posted state."
+}
