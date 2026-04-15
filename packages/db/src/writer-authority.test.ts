@@ -43,9 +43,26 @@ describe('writer-authority', () => {
       );
     });
 
-    it('allows unregistered fields by default (fail-open)', () => {
-      assert.doesNotThrow(() => assertFieldAuthority('some_unknown_field', 'submitter'));
-      assert.doesNotThrow(() => assertFieldAuthority('metadata', 'promoter'));
+    it('throws UnauthorizedWriterError for unregistered fields (fail-closed)', () => {
+      assert.throws(
+        () => assertFieldAuthority('some_unknown_field', 'submitter'),
+        (err: unknown) => {
+          assert.ok(err instanceof UnauthorizedWriterError);
+          assert.equal(err.field, 'some_unknown_field');
+          assert.equal(err.writerRole, 'submitter');
+          assert.deepEqual(err.allowedWriters, []);
+          return true;
+        },
+      );
+      assert.throws(
+        () => assertFieldAuthority('metadata', 'promoter'),
+        (err: unknown) => {
+          assert.ok(err instanceof UnauthorizedWriterError);
+          assert.equal(err.field, 'metadata');
+          assert.deepEqual(err.allowedWriters, []);
+          return true;
+        },
+      );
     });
   });
 
