@@ -26,6 +26,7 @@
     "github:summary": "tsx scripts/github-workflow.ts summary",
     "ingestor:restart": "tsx scripts/ingestor-supervisor.ts restart",
     "ingestor:alert-check": "tsx scripts/ingestor-alert-check.ts",
+    "ingestor:sgo-status": "tsx scripts/sgo-key-status.ts",
     "ingestor:start": "tsx scripts/ingestor-supervisor.ts start",
     "ingestor:status": "tsx scripts/ingestor-supervisor.ts status",
     "ingestor:stop": "tsx scripts/ingestor-supervisor.ts stop",

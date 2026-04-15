@@ -16,6 +16,8 @@ export interface AppEnv {
   SUPABASE_ANON_KEY?: string | undefined;
   SUPABASE_SERVICE_ROLE_KEY?: string | undefined;
   SGO_API_KEY?: string | undefined;
+  SGO_API_KEY_FALLBACK?: string | undefined;
+  SGO_API_KEYS?: string[] | undefined;
   ODDS_API_KEY?: string | undefined;
   UNIT_TALK_INGESTOR_LEAGUES?: string | undefined;
   UNIT_TALK_INGESTOR_POLL_MS?: string | undefined;
@@ -68,11 +70,11 @@ export interface AppEnv {
   SYSTEM_PICK_SCANNER_MAX_PICKS?: string | undefined;
 }
 
-function parseEnvFile(filePath: string) {
-  const values = new Map<string, string>();
+function parseEnvFileEntries(filePath: string) {
+  const entries: Array<[string, string]> = [];
 
   if (!fs.existsSync(filePath)) {
-    return values;
+    return entries;
   }
 
   const raw = fs.readFileSync(filePath, 'utf8');
@@ -89,29 +91,36 @@ function parseEnvFile(filePath: string) {
 
     const key = trimmed.slice(0, separatorIndex).trim();
     const value = trimmed.slice(separatorIndex + 1).trim();
-    values.set(key, value);
+    entries.push([key, value]);
   }
 
-  return values;
+  return entries;
 }
 
 export function loadEnvironment(rootDir = process.cwd()): AppEnv {
-  const templateValues = parseEnvFile(path.join(rootDir, '.env.example'));
-  const envValues = parseEnvFile(path.join(rootDir, '.env'));
-  const localValues = parseEnvFile(path.join(rootDir, 'local.env'));
+  const templateEntries = parseEnvFileEntries(path.join(rootDir, '.env.example'));
+  const envEntries = parseEnvFileEntries(path.join(rootDir, '.env'));
+  const localEntries = parseEnvFileEntries(path.join(rootDir, 'local.env'));
   const merged = new Map<string, string>();
 
-  for (const [key, value] of templateValues) {
+  for (const [key, value] of templateEntries) {
     merged.set(key, value);
   }
 
-  for (const [key, value] of envValues) {
+  for (const [key, value] of envEntries) {
     merged.set(key, value);
   }
 
-  for (const [key, value] of localValues) {
+  for (const [key, value] of localEntries) {
     merged.set(key, value);
   }
+
+  const configuredSgoKeys = collectConfiguredSgoApiKeys(
+    templateEntries,
+    envEntries,
+    localEntries,
+    process.env.SGO_API_KEYS,
+  );
 
   const env: AppEnv = {
     NODE_ENV: normalizeNodeEnv(readEnvValue('NODE_ENV', merged)),
@@ -129,6 +138,8 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     SUPABASE_ANON_KEY: optionalEnv('SUPABASE_ANON_KEY', merged),
     SUPABASE_SERVICE_ROLE_KEY: optionalEnv('SUPABASE_SERVICE_ROLE_KEY', merged),
     SGO_API_KEY: optionalEnv('SGO_API_KEY', merged),
+    SGO_API_KEY_FALLBACK: optionalEnv('SGO_API_KEY_FALLBACK', merged),
+    ...(configuredSgoKeys.length > 0 ? { SGO_API_KEYS: configuredSgoKeys } : {}),
     ODDS_API_KEY: optionalEnv('ODDS_API_KEY', merged),
     UNIT_TALK_INGESTOR_LEAGUES: optionalEnv('UNIT_TALK_INGESTOR_LEAGUES', merged),
     UNIT_TALK_INGESTOR_POLL_MS: optionalEnv('UNIT_TALK_INGESTOR_POLL_MS', merged),
@@ -249,4 +260,39 @@ function normalizeAppEnv(value: string | undefined): AppEnv['UNIT_TALK_APP_ENV']
   }
 
   return 'local';
+}
+
+function collectConfiguredSgoApiKeys(
+  ...sources: Array<Array<[string, string]> | string | undefined>
+) {
+  const configured: string[] = [];
+  const seen = new Set<string>();
+
+  for (const source of sources) {
+    if (typeof source === 'string') {
+      for (const value of source.split(',')) {
+        pushUniqueSgoKey(configured, seen, value);
+      }
+      continue;
+    }
+
+    for (const [key, value] of source ?? []) {
+      if (key !== 'SGO_API_KEY' && key !== 'SGO_API_KEY_FALLBACK') {
+        continue;
+      }
+      pushUniqueSgoKey(configured, seen, value);
+    }
+  }
+
+  return configured;
+}
+
+function pushUniqueSgoKey(target: string[], seen: Set<string>, rawValue: string) {
+  const value = rawValue.trim();
+  if (!value || seen.has(value)) {
+    return;
+  }
+
+  seen.add(value);
+  target.push(value);
 }

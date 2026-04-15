@@ -12,12 +12,19 @@ import {
 } from '@unit-talk/observability';
 import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js';
 import { parseSchedulerConfig, type SchedulerEnv } from './scheduler.js';
+import {
+  collectConfiguredSgoApiKeyCandidates,
+  resolveActiveSgoApiKey,
+} from './sgo-key-manager.js';
 
 const lokiUrl = process.env.LOKI_URL?.trim();
 const ingestorWriter = lokiUrl
   ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
   : undefined;
-const logger = createLogger({ service: 'ingestor', ...(ingestorWriter ? { writer: ingestorWriter } : {}) });
+const logger = createLogger({
+  service: 'ingestor',
+  ...(ingestorWriter ? { writer: ingestorWriter } : {}),
+});
 
 function createIngestorRuntimeDependencies() {
   const env = loadEnvironment();
@@ -29,6 +36,7 @@ function createIngestorRuntimeDependencies() {
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
   const apiUrl = env.UNIT_TALK_API_URL;
   const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
+  const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
 
   const runtimeMode = readIngestorRuntimeMode(env);
 
@@ -44,7 +52,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       schedulerConfig,
-      apiKey: env.SGO_API_KEY,
+      sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
     };
@@ -52,7 +60,7 @@ function createIngestorRuntimeDependencies() {
     if (runtimeMode === 'fail_closed') {
       throw new Error(
         'Ingestor runtime mode is fail_closed and database configuration could not be loaded. ' +
-        'Set UNIT_TALK_APP_ENV=local or UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_open to allow in-memory fallback.',
+          'Set UNIT_TALK_APP_ENV=local or UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_open to allow in-memory fallback.',
         { cause: error },
       );
     }
@@ -72,7 +80,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       schedulerConfig,
-      apiKey: env.SGO_API_KEY,
+      sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
     };
@@ -87,7 +95,7 @@ export function createIngestorRuntimeSummary() {
     persistenceMode: runtime.persistenceMode,
     runtimeMode: runtime.runtimeMode,
     providers: {
-      sgo: runtime.apiKey ? 'configured' : 'missing',
+      sgo: runtime.sgoApiKeys.length > 0 ? 'configured' : 'missing',
       oddsApi: runtime.oddsApiKey ? 'configured' : 'missing',
     },
     leagues: runtime.leagues,
@@ -99,9 +107,13 @@ export function createIngestorRuntimeSummary() {
       enabled: runtime.schedulerConfig.enabled,
       peakPollMs: runtime.schedulerConfig.peakPollMs,
       offPeakPollMs: runtime.schedulerConfig.offPeakPollMs,
-      peakWindowEt: `${runtime.schedulerConfig.peakStartHourEt}:00–${runtime.schedulerConfig.peakEndHourEt}:00`,
+      peakWindowEt: `${runtime.schedulerConfig.peakStartHourEt}:00-${runtime.schedulerConfig.peakEndHourEt}:00`,
     },
-    apiKeyConfigured: Boolean(runtime.apiKey),
+    sgoApiKeys: runtime.sgoApiKeys.map((candidate) => ({
+      source: candidate.source,
+      tag: candidate.tag,
+    })),
+    apiKeyConfigured: runtime.sgoApiKeys.length > 0,
     apiUrlConfigured: Boolean(runtime.apiUrl),
     nextStep: runtime.autorun
       ? 'ingestor cycles will execute with the configured SGO provider settings'
@@ -112,23 +124,34 @@ export function createIngestorRuntimeSummary() {
 const runtime = createIngestorRuntimeDependencies();
 
 if (runtime.autorun) {
-  runIngestorCycles({
-    repositories: runtime.repositories,
-    leagues: runtime.leagues,
-    ...(runtime.apiKey ? { apiKey: runtime.apiKey } : {}),
-    ...(runtime.oddsApiKey ? { oddsApiKey: runtime.oddsApiKey } : {}),
-    ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
-    maxCycles: runtime.maxCycles ?? Number.POSITIVE_INFINITY,
-    skipResults: runtime.skipResults,
-    pollIntervalMs: runtime.pollIntervalMs,
-    schedulerConfig: runtime.schedulerConfig,
-    logger: console,
-  })
-    .then((cycles) => {
+  resolveActiveSgoApiKey(runtime.sgoApiKeys)
+    .then(async (sgoSelection) => ({
+      sgoSelection,
+      cycles: await runIngestorCycles({
+        repositories: runtime.repositories,
+        leagues: runtime.leagues,
+        ...(sgoSelection.active ? { apiKey: sgoSelection.active.apiKey } : {}),
+        ...(runtime.oddsApiKey ? { oddsApiKey: runtime.oddsApiKey } : {}),
+        ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
+        maxCycles: runtime.maxCycles ?? Number.POSITIVE_INFINITY,
+        skipResults: runtime.skipResults,
+        pollIntervalMs: runtime.pollIntervalMs,
+        schedulerConfig: runtime.schedulerConfig,
+        logger: console,
+      }),
+    }))
+    .then(({ cycles, sgoSelection }) => {
       console.log(
         JSON.stringify(
           {
             ...createIngestorRuntimeSummary(),
+            activeSgoKey: sgoSelection.active
+              ? {
+                  source: sgoSelection.active.source,
+                  tag: sgoSelection.active.tag,
+                }
+              : null,
+            sgoKeyProbe: sgoSelection.probes,
             executedCycles: cycles.length,
             results: cycles,
           },
