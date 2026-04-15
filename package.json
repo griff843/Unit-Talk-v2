@@ -72,6 +72,7 @@
     "stranded:cleanup": "tsx scripts/stranded-picks-cleanup.ts",
     "runtime:health": "tsx scripts/runtime-health.ts",
     "scoring:coverage": "tsx scripts/scoring-provenance.ts",
+    "stage:freshness": "tsx scripts/stage-freshness-checks.ts",
     "report:nba-readiness": "tsx scripts/utv2-404-nba-readiness-report.ts",
     "pipeline:health": "tsx scripts/pipeline-health.ts",
     "proof:sgo-closing": "tsx scripts/proof-sgo-closing.ts",
