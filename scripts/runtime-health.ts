@@ -174,7 +174,6 @@ async function main() {
     } else {
       const m = ageMin(latest.snapshot_at)
       const state: SubsystemState = m > T.providerCritMin ? 'FAILED' : m > T.providerWarnMin ? 'DEGRADED' : 'HEALTHY'
-      const window = m > T.providerCritMin ? `>${T.providerCritMin}m (>${T.providerCritMin / 60}h)` : m > T.providerWarnMin ? `>${T.providerWarnMin}m` : `${m}m`
 
       subsystems.push({
         name: 'Provider Freshness',
