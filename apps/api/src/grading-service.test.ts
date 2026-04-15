@@ -797,6 +797,60 @@ test('recordGradedSettlement omits top-level CLV keys when no closing line exist
   assert.equal('clvRaw' in payload, false);
   assert.equal('clvPercent' in payload, false);
   assert.equal('beatsClosingLine' in payload, false);
+  assert.equal(payload.clvStatus, 'missing_closing_line');
+  assert.equal(payload.clvUnavailableReason, 'missing_closing_line');
+});
+
+test('recordGradedSettlement persists opening-line fallback visibility when CLV uses opening line', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -105,
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+    eventExternalId: 'evt-clv-opening-fallback',
+    participantExternalId: 'PLAYER_CLV_OPENING',
+  });
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-clv-opening-fallback',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_CLV_OPENING',
+      sportKey: 'NBA',
+      line: 24.5,
+      overOdds: -115,
+      underOdds: -105,
+      devigMode: 'PAIRED',
+      isOpening: true,
+      isClosing: false,
+      snapshotAt: '2026-03-26T23:35:00.000Z',
+      idempotencyKey: 'opening-line-clv-visibility',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload.clvStatus, 'opening_line_fallback');
+  assert.equal(payload.clvUnavailableReason, null);
+  assert.equal(payload.isOpeningLineFallback, true);
 });
 
 test('recordGradedSettlement produces non-null CLV when a future sibling event is closer by date (UTV2-453 regression)', async () => {

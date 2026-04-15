@@ -4812,6 +4812,92 @@ test('GET /api/operator/exception-queues surfaces awaiting_approval lifecycle dr
   }
 });
 
+test('GET /api/operator/picks/:id surfaces CLV diagnostics when settlement payload records a miss reason', async () => {
+  const provider = createAggregateProvider({
+    picks: [
+      {
+        id: 'pick-detail-clv-diagnostic',
+        submission_id: 'sub-clv-diagnostic',
+        source: 'smart-form',
+        market: 'player_assists_ou',
+        selection: 'Over 8.5',
+        line: 8.5,
+        odds: -110,
+        stake_units: 1,
+        status: 'settled',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: 'best-bets',
+        promotion_score: 80,
+        posted_at: '2026-04-05T18:00:00.000Z',
+        settled_at: '2026-04-05T21:00:00.000Z',
+        created_at: '2026-04-05T17:55:00.000Z',
+        metadata: {},
+      },
+    ],
+    submissions: [
+      {
+        id: 'sub-clv-diagnostic',
+        submitted_by: 'griff843',
+        payload: {},
+        created_at: '2026-04-05T17:54:00.000Z',
+      },
+    ],
+    pick_lifecycle: [],
+    pick_promotion_history: [],
+    distribution_outbox: [],
+    settlement_records: [
+      {
+        id: 'settlement-clv-diagnostic',
+        pick_id: 'pick-detail-clv-diagnostic',
+        result: 'win',
+        status: 'settled',
+        confidence: 'confirmed',
+        evidence_ref: null,
+        corrects_id: null,
+        settled_by: 'grading-service',
+        settled_at: '2026-04-05T21:00:00.000Z',
+        created_at: '2026-04-05T21:00:00.000Z',
+        payload: {
+          clvStatus: 'missing_closing_line',
+          clvUnavailableReason: 'missing_closing_line',
+          clvResolvedMarketKey: 'assists-all-game-ou',
+          clvAvailableMarkets: ['rebounds-all-game-ou'],
+        },
+      },
+    ],
+    audit_log: [],
+    distribution_receipts: [],
+  });
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') throw new Error('Expected server address');
+
+  const response = await makeRequest(address.port, '/api/operator/picks/pick-detail-clv-diagnostic');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    data: {
+      settlements: Array<{
+        clvStatus: string | null;
+        clvUnavailableReason: string | null;
+        clvResolvedMarketKey: string | null;
+        clvAvailableMarkets: string[];
+      }>;
+    };
+  };
+
+  assert.equal(body.ok, true);
+  assert.equal(body.data.settlements[0]?.clvStatus, 'missing_closing_line');
+  assert.equal(body.data.settlements[0]?.clvUnavailableReason, 'missing_closing_line');
+  assert.equal(body.data.settlements[0]?.clvResolvedMarketKey, 'assists-all-game-ou');
+  assert.deepEqual(body.data.settlements[0]?.clvAvailableMarkets, ['rebounds-all-game-ou']);
+});
+
 test('GET /api/operator/picks/:id returns canonical submittedBy from submission identity', async () => {
   const provider = createAggregateProvider({
     picks: [
@@ -4955,6 +5041,11 @@ test('GET /api/operator/picks/:id marks settlement rows with CLV presence', asyn
         clvRaw: number | null;
         clvPercent: number | null;
         beatsClosingLine: boolean | null;
+        clvStatus: string | null;
+        clvUnavailableReason: string | null;
+        clvResolvedMarketKey: string | null;
+        clvAvailableMarkets: string[];
+        isOpeningLineFallback: boolean | null;
         notes: string | null;
         reviewReason: string | null;
         gradingContext: unknown;
@@ -4970,6 +5061,11 @@ test('GET /api/operator/picks/:id marks settlement rows with CLV presence', asyn
   assert.equal(body.data.settlements[0]?.clvRaw, 0.11);
   assert.equal(body.data.settlements[0]?.clvPercent, null);
   assert.equal(body.data.settlements[0]?.beatsClosingLine, null);
+  assert.equal(body.data.settlements[0]?.clvStatus, null);
+  assert.equal(body.data.settlements[0]?.clvUnavailableReason, null);
+  assert.equal(body.data.settlements[0]?.clvResolvedMarketKey, null);
+  assert.deepEqual(body.data.settlements[0]?.clvAvailableMarkets, []);
+  assert.equal(body.data.settlements[0]?.isOpeningLineFallback, null);
   assert.equal(body.data.settlements[0]?.notes, null);
   assert.equal(body.data.settlements[0]?.reviewReason, null);
   assert.equal(body.data.settlements[0]?.gradingContext, null);
@@ -5072,6 +5168,11 @@ test('GET /api/operator/picks/:id returns enriched settlement with nested CLV, g
         clvRaw: number | null;
         clvPercent: number | null;
         beatsClosingLine: boolean | null;
+        clvStatus: string | null;
+        clvUnavailableReason: string | null;
+        clvResolvedMarketKey: string | null;
+        clvAvailableMarkets: string[];
+        isOpeningLineFallback: boolean | null;
         notes: string | null;
         reviewReason: string | null;
         gradingContext: { actualValue: number; marketKey: string; eventId: string; gameResultId: string } | null;
@@ -5087,6 +5188,11 @@ test('GET /api/operator/picks/:id returns enriched settlement with nested CLV, g
   assert.equal(s.clvRaw, -0.05);
   assert.equal(s.clvPercent, -2.3);
   assert.equal(s.beatsClosingLine, false);
+  assert.equal(s.clvStatus, null);
+  assert.equal(s.clvUnavailableReason, null);
+  assert.equal(s.clvResolvedMarketKey, null);
+  assert.deepEqual(s.clvAvailableMarkets, []);
+  assert.equal(s.isOpeningLineFallback, null);
   assert.equal(s.notes, 'Auto-graded from SGO feed');
   assert.equal(s.reviewReason, null);
   assert.deepEqual(s.gradingContext, {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
-import { computeAndAttachCLV } from './clv-service.js';
+import { computeAndAttachCLV, computeCLVOutcome } from './clv-service.js';
 
 test('ProviderOfferRepository.findClosingLine returns latest offer before cutoff for player props', async () => {
   const repositories = createInMemoryRepositoryBundle();
@@ -368,6 +368,174 @@ test('computeAndAttachCLV logs market mismatches and returns null', async () => 
   assert.equal(result, null);
   assert.equal(warnings.length, 1);
   assert.match(warnings[0] ?? '', /market mismatch/i);
+});
+
+test('computeCLVOutcome returns missing_closing_line diagnostics with available markets', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_3',
+    displayName: 'Player Three',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-3',
+    sportId: 'NBA',
+    eventName: 'Mismatch Event',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {
+      starts_at: '2026-03-28T23:00:00.000Z',
+    },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-3',
+      providerMarketKey: 'rebounds-all-game-ou',
+      providerParticipantId: 'PLAYER_3',
+      sportKey: 'NBA',
+      line: 9.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-28T22:50:00.000Z',
+      idempotencyKey: 'mismatch-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const outcome = await computeCLVOutcome(
+    {
+      id: 'pick-clv-3',
+      submission_id: 'submission-clv-3',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'assists-all-game-ou',
+      selection: 'Over 8.5',
+      line: 8.5,
+      odds: -105,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 88,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-03-28T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-03-28T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: {},
+      created_at: '2026-03-28T20:00:00.000Z',
+      updated_at: '2026-03-28T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.result, null);
+  assert.equal(outcome.status, 'missing_closing_line');
+  assert.equal(outcome.resolvedMarketKey, 'assists-all-game-ou');
+  assert.deepEqual(outcome.availableMarkets, ['rebounds-all-game-ou']);
+});
+
+test('computeCLVOutcome reports opening_line_fallback when opening line is used', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_OL_1',
+    displayName: 'Opening Line Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-opening-1',
+    sportId: 'NBA',
+    eventName: 'Bulls vs. Knicks',
+    eventDate: '2026-02-01',
+    status: 'completed',
+    metadata: { starts_at: '2026-02-01T23:00:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-opening-1',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_OL_1',
+      sportKey: 'NBA',
+      line: 25.5,
+      overOdds: -115,
+      underOdds: -105,
+      devigMode: 'PAIRED',
+      isOpening: true,
+      isClosing: false,
+      snapshotAt: '2026-02-01T23:30:00.000Z',
+      idempotencyKey: 'opening-line-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const outcome = await computeCLVOutcome(
+    {
+      id: 'pick-opening-1',
+      submission_id: 'sub-opening-1',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'points-all-game-ou',
+      selection: 'Opening Line Player Over 25.5',
+      line: 25.5,
+      odds: -110,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 75,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-02-01T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-02-01T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Bulls vs. Knicks' },
+      created_at: '2026-02-01T20:00:00.000Z',
+      updated_at: '2026-02-01T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'opening_line_fallback');
+  assert.equal(outcome.result?.isOpeningLineFallback, true);
 });
 
 test('computeAndAttachCLV resolves participant from metadata.player when participant_id is null', async () => {

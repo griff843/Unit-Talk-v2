@@ -290,7 +290,6 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
       : typeof pick.metadata['edgeSource'] === 'string'
         ? pick.metadata['edgeSource']
         : null;
-  const hasClv = detail.settlements.some((settlement) => settlement.hasClv);
   const latestSettlementSummary = summarizeSettlementContext(detail);
   const scoreMeaning = summarizeScoreMeaning(pick);
   const scoreInsight = buildScoreInsight(pick.metadata);

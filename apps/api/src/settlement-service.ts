@@ -29,7 +29,6 @@ import type {
 import { ensurePickLifecycleState, transitionPickLifecycle } from './lifecycle-service.js';
 import { ApiError } from './errors.js';
 import {
-  computeAndAttachCLV,
   computeCLVOutcome,
   type CLVComputationOutcome,
   type CLVPreResolvedContext,

@@ -115,7 +115,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, profitLossUnits: 1.5 } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', profitLossUnits: 1.5 } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
@@ -123,7 +123,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, profitLossUnits: 1.5 } },
+      { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', profitLossUnits: 1.5 } },
     ],
   },
   {
@@ -164,7 +164,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, profitLossUnits: 0 } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 0 } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
@@ -172,7 +172,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, profitLossUnits: 0 } },
+      { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 0 } },
     ],
   },
   {
@@ -228,7 +228,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context' } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
@@ -236,7 +236,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null } },
+      { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context' } },
     ],
   },
   {
@@ -278,14 +278,14 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, profitLossUnits: -1 } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: -1 } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
         downstream: { effectiveSettlement: { effectiveRecordId: 'settlement_1', result: 'loss', status: 'settled', confidence: 'confirmed', correctionDepth: 0, isFinal: true }, settlementSummary: { totalRecords: 1, totalPicks: 1, byResult: { loss: 1 }, byStatus: { settled: 1 }, byConfidence: { confirmed: 1 }, hitRatePct: 0, flatBetRoi: { roiPct: -100, totalWagered: 110, totalProfit: -110 }, correctionCount: 0, pendingReviewCount: 0 }, lossAttribution: { classification: 'UNKNOWN', notes: ['no_feature_snapshot_available'] }, lossAttributionSummary: { totalLosses: 1, byCategory: [{ category: 'UNKNOWN', count: 1, pct: 100 }], topCategory: 'UNKNOWN', actionableInsights: [{ category: 'UNKNOWN', count: 1, pct: 100, recommendation: 'Instrument feature snapshots for better attribution' }], version: 'loss-attribution-v1.0' }, unresolvedReason: null },
       },
       {
-        settlement: { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, profitLossUnits: 1 } },
+        settlement: { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 1 } },
         lifecycleToState: null,
         auditAction: 'settlement.corrected',
         finalLifecycleState: 'settled',
@@ -293,8 +293,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, profitLossUnits: 1 } },
-      { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, profitLossUnits: -1 } },
+      { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 1 } },
+      { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: -1 } },
     ],
   },
 ];
