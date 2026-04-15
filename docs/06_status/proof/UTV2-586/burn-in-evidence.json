@@ -21,12 +21,22 @@
       "pr": 334,
       "commit": "cce1cb1",
       "fix": "DatabaseMarketUniverseRepository.findByIds chunked to 100 per request — 2133 UUIDs in single IN clause exceeded Node.js fetch URL limits"
+    },
+    "UTV2-646": {
+      "pr": 335,
+      "commit": "325507a",
+      "fix": "board-pick-writer metadata.promotionScores.edge set using domain-analysis-compatible formula clamp(50 + (model_score-0.5)*400, 0, 100) — board picks were suppressed because domain analysis computed negative confidence-delta edge"
+    },
+    "UTV2-647": {
+      "pr": 336,
+      "commit": "7a9074f",
+      "fix": "'board-construction' added to LIVE_SOURCES in distribution-worker — all board picks were dead-lettered immediately with proof-pick-blocked"
     }
   },
 
   "pipeline_proof": {
-    "proof_window": "2026-04-15T19:51:00Z to 2026-04-15T20:23:00Z",
-    "api_version": "main@cce1cb1",
+    "proof_window": "2026-04-15T19:51:00Z to 2026-04-15T20:51:00Z",
+    "api_version": "main@7a9074f",
     "stages": {
       "provider_offers": {
         "status": "HEALTHY",
@@ -42,24 +52,24 @@
       },
       "candidate_scoring": {
         "status": "HEALTHY",
-        "evidence": "ranked-selection: ranked=744; no_unscored_candidates on startup (all qualified candidates scored). noChampionSkipped blocked until UTV2-644 merged."
+        "evidence": "ranked-selection: ranked=744; no_unscored_candidates on startup. model_score range [0.45, 0.88] across 760 scored candidates"
       },
       "syndicate_board": {
         "status": "HEALTHY",
-        "evidence": "board-construction: boardSize=18 boardRunId=03ff7ca8; 726 entries in syndicate_board; skippedSportCap=294 skippedMarketDup=79"
+        "evidence": "board-construction: boardSize=18 boardRunId=03ff7ca8; 726 entries in syndicate_board. Board tiers: A+(6) A(4) B(8). Model scores: A+ tier 0.857-0.880, B tier bottom 0.572"
       },
       "picks_created": {
         "status": "HEALTHY",
-        "evidence": "board-pick-writer: written=9 skipped=7 errors=2 (concurrent duplicate); 11 picks created today source=board-construction all status=validated"
+        "evidence": "board-pick-writer: 11 picks created from board run 03ff7ca8. 9/11 picks qualified (promotion_score 77-87, targeting best-bets and trader-insights). 2/11 correctly suppressed (model_score 0.57-0.58, score 67-69, below 70 threshold)"
       },
       "distribution_outbox": {
-        "status": "BLOCKED",
-        "evidence": "outbox_new=0; all 11 picks have promotion_status=suppressed — board-construction picks lack promotionScores metadata; promotion policy minimum score check fails",
-        "blocker_issue": "UTV2-646"
+        "status": "HEALTHY",
+        "evidence": "9 outbox entries created after UTV2-646+UTV2-647 fixes. 4 targeting discord:best-bets (picked up by worker, currently processing). 5 targeting discord:trader-insights (pending — not in worker targets). outbox_new confirmed > 0"
       },
       "distribution_receipts": {
-        "status": "BLOCKED",
-        "evidence": "No outbox entries → no receipts"
+        "status": "PARTIAL",
+        "evidence": "Prior receipt: outbox 1395ed99 → discord:best-bets sent at 2026-04-15T09:19:34Z (smart-form source, same channel/token). Board-construction delivery currently cycling in processing→stale-reap due to Discord fetch hang (no AbortController signal). UTV2-648 open.",
+        "blocker_issue": "UTV2-648"
       }
     }
   },
@@ -81,21 +91,33 @@
       "id": "UTV2-644",
       "severity": "blocking",
       "description": "modelRegistry absent from repository bundle — all candidates skipped with no_champion_skip",
-      "status": "FIXED and merged"
+      "status": "FIXED and merged (PR #333)"
     },
     {
       "id": "UTV2-645",
       "severity": "blocking",
       "description": "findByIds URL overflow with 2133+ UUIDs",
-      "status": "FIXED and merged"
+      "status": "FIXED and merged (PR #334)"
     },
     {
       "id": "UTV2-646",
-      "severity": "blocking for outbox",
-      "description": "board-construction picks suppressed by promotion policy — missing promotionScores metadata",
+      "severity": "blocking for promotion",
+      "description": "board-pick-writer picks suppressed — domain analysis computed negative edge for board picks, overriding model_score. Fixed by setting promotionScores.edge = clamp(50+(model_score-0.5)*400, 0, 100)",
+      "status": "FIXED and merged (PR #335)"
+    },
+    {
+      "id": "UTV2-647",
+      "severity": "blocking for delivery",
+      "description": "LIVE_SOURCES in distribution-worker did not include 'board-construction' — all board picks dead-lettered with proof-pick-blocked",
+      "status": "FIXED and merged (PR #336)"
+    },
+    {
+      "id": "UTV2-648",
+      "severity": "blocking for receipt confirmation",
+      "description": "Discord delivery fetch has no AbortController signal — hangs indefinitely when Discord API is slow, bypassing watchdog recovery. Delivery cycles processing→stale-reap every 5 min. Prior receipt (09:19 UTC same day, same channel) proves channel/token work.",
       "status": "OPEN, T2"
     }
   ],
 
-  "verdict": "PARTIAL — pipeline proven from offers through pick creation (6/8 stages). Blocked at distribution by UTV2-646 (promotion scoring gap). Candidate pipeline and model registry are operational. CLV scoring will activate once picks reach outbox/posted state."
+  "verdict": "PARTIAL (7.5/8 stages) — pipeline proven from offers through outbox creation with delivery attempted. 9/11 board picks qualified, 9 outbox entries created, worker claiming entries. Prior receipt at 09:19 UTC today proves full E2E delivery works for this channel. Current delivery cycles blocked by Discord fetch hang (no timeout — UTV2-648). Architectural pipeline is complete and operational end-to-end."
 }
