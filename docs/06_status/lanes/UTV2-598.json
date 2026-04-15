@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-598",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-598-audit-prerequisite-resolve-stranded-awaiting-approval-picks",
+  "branch": "griffadavi/utv2-598-audit-prerequisite-resolve-stranded-awaiting-approval-picks",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/stranded-picks-cleanup.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-598/diff-summary.md",
+    "docs/06_status/proof/UTV2-598/verification.log"
+  ],
+  "status": "started",
+  "started_at": "2026-04-15T17:42:02.136Z",
+  "heartbeat_at": "2026-04-15T17:42:02.136Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-598-audit-prerequisite-resolve-stranded-awaiting-approval-picks.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
