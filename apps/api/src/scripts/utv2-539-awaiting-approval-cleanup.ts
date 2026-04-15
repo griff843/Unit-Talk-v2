@@ -211,7 +211,7 @@ interface RestResult<T = unknown> {
  * execute, the DELETE matches zero rows and the loop reports the drift
  * before continuing.
  */
-async function deleteRows<T = unknown>(
+async function _deleteRows<T = unknown>(
   table: string,
   filters: Record<string, string>,
 ): Promise<RestResult<T[]>> {
@@ -636,8 +636,8 @@ async function runExecute(report: DryRunReport): Promise<ExecuteSummary> {
     }
   }
 
-  if (false) {
-  // Original fixture DELETE logic preserved for reference but disabled:
+  /*
+  Original fixture DELETE logic preserved for reference but disabled:
   for (const row of fixtureRows) {
     const auditDel = await deleteRows('audit_log', {
       entity_ref: `eq.${row.pick_id}`,
@@ -713,7 +713,7 @@ async function runExecute(report: DryRunReport): Promise<ExecuteSummary> {
     });
     console.error(`  OK   fixture ${row.pick_id} deleted`);
   }
-  } // end disabled fixture block
+  */ // end disabled fixture block
 
   // ---- Intermediate checkpoint --------------------------------------------
   // Re-query the stranded set and verify every backfill target is still
