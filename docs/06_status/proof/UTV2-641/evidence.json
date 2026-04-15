@@ -1,0 +1,55 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-641",
+  "title": "Build one-command runtime health CLI",
+  "tier": "T1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/327",
+  "branch_sha": "ea5957a8",
+  "merge_sha": null,
+  "generated_at": "2026-04-15T17:16:00.000Z",
+  "verifier": "claude-sonnet-4-6 / griff843",
+
+  "static_checks": {
+    "type_check": { "result": "PASS", "command": "pnpm type-check", "notes": "tsc -b tsconfig.json — zero errors" },
+    "unit_tests": { "result": "PASS", "command": "pnpm test", "notes": "32/32 tests pass" },
+    "lint": { "result": "PASS", "command": "pnpm lint", "notes": "fixed unused window variable in runtime-health.ts" }
+  },
+
+  "runtime_proof": {
+    "command": "pnpm runtime:health --json",
+    "executed_at": "2026-04-15T17:15:59.901Z",
+    "against": "live Supabase (feownrheeefbcsehtsiw)",
+    "result": {
+      "timestamp": "2026-04-15T17:15:59.901Z",
+      "state": "FAILED",
+      "subsystems": [
+        { "name": "Worker Supervision", "state": "FAILED", "value": "last run 7.9h ago (succeeded)", "detail": "idle 476m (>120m threshold)" },
+        { "name": "Queue Movement", "state": "HEALTHY", "value": "0 pending, 0 dead_letter", "detail": "total=23; completed=0" },
+        { "name": "Provider Freshness", "state": "DEGRADED", "value": "latest offer 3.5h ago", "detail": "sport=MLB; provider=sgo" },
+        { "name": "Scheduler Safety", "state": "FAILED", "value": "last autonomous pick 111.9h ago", "detail": "scanner quiesced per DEBT-003" },
+        { "name": "Discord Delivery", "state": "DEGRADED", "value": "23 receipts, last 7.9h ago", "detail": "no delivery in 7.9h (>4h warn)" },
+        { "name": "API Activity", "state": "HEALTHY", "value": "last pick 8.4h ago (smart-form)", "detail": "5 recent non-autonomous picks" }
+      ]
+    },
+    "notes": "CLI correctly surfaces real system state. Worker FAILED (idle >2h, needs restart). Scheduler FAILED (scanner quiesced per DEBT-003 — expected, not a CLI defect). Output is accurate and matches known live system state."
+  },
+
+  "db_proof": {
+    "command": "pnpm test:db",
+    "result": "PASS",
+    "notes": "database repository bundle persists a submission and settlement when Supabase is configured — 1 test pass"
+  },
+
+  "acceptance_criteria": {
+    "one_command_exists": true,
+    "subsystem_states_visible": true,
+    "staleness_and_supervision_visible": true,
+    "human_readable_output": true,
+    "machine_readable_json": true,
+    "exits_1_on_failure": true
+  },
+
+  "known_issues": [
+    "Worker is currently FAILED (idle >2h). This is a pre-existing operational condition (worker needs restart), not a CLI defect. The CLI correctly identifies and surfaces it."
+  ]
+}
