@@ -7,6 +7,7 @@ import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
+import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 
 interface PickDetailPageProps {
   params: { id: string };
@@ -260,6 +261,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const hasClv = detail.settlements.some((settlement) => settlement.hasClv);
   const latestSettlementSummary = summarizeSettlementContext(detail);
   const scoreMeaning = summarizeScoreMeaning(pick);
+  const scoreInsight = buildScoreInsight(pick.metadata);
 
   return (
     <div className="flex flex-col gap-6">
@@ -313,6 +315,14 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
             <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
             <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className={`rounded border px-2 py-1 text-[11px] ${scoreToneClasses(scoreInsight.reliabilityTone)}`}>
+                {scoreInsight.edgeSourceLabel}
+              </span>
+              <span className="rounded border border-blue-900/60 bg-blue-950/30 px-2 py-1 text-[11px] text-blue-100/90">
+                {scoreInsight.reliabilityLabel}
+              </span>
+            </div>
           </div>
         </div>
       </Card>
