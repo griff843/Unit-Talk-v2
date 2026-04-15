@@ -527,7 +527,15 @@ async function runLinearChecks(
   }
 
   const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
-  const tierLabels = [...new Set(labels.filter((label) => label === 't1' || label === 't2' || label === 't3'))];
+  // Normalize labels: strip optional "tier:" prefix so both "t1" and "tier:t1" match
+  const normalizeTierLabel = (l: string) => l.replace(/^tier:/, '');
+  const tierLabels = [
+    ...new Set(
+      labels
+        .map(normalizeTierLabel)
+        .filter((label) => label === 't1' || label === 't2' || label === 't3'),
+    ),
+  ];
   if (tierLabels.length !== 1 || tierLabels[0] !== tier.toLowerCase()) {
     addCheck('PL2', 'fail', `issue tier labels ${tierLabels.join(', ') || '(none)'} do not match --tier ${tier}`);
   } else {
@@ -535,7 +543,16 @@ async function runLinearChecks(
   }
 
   const stateName = issue.state?.name ?? '';
-  if (stateName === 'Ready' || stateName === 'In Progress') {
+  // Accept workflow-specific state names alongside generic "Ready" / "In Progress"
+  const startableStates = new Set([
+    'Ready',
+    'In Progress',
+    'Ready for Claude',
+    'Ready for Codex',
+    'In Claude Review',
+    'In Codex Review',
+  ]);
+  if (startableStates.has(stateName)) {
     addCheck('PL3', 'pass', `issue state ${stateName} is startable`);
   } else if (stateName === 'Backlog' && refresh) {
     addCheck('PL3', 'waived', 'issue state Backlog tolerated via --refresh');
