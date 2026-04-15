@@ -241,6 +241,12 @@ export class BoardPickWriter {
             ? { providerParticipantId: universe.provider_participant_id }
             : {}),
           modelScore: candidate.model_score,
+          promotionScores: {
+            // Map champion model score to promotion edge scale (same as domain analysis:
+            // clamp(50 + (model_edge * 400), 0, 100) where model_edge = model_score - 0.5).
+            // Overrides domain analysis confidence-delta edge which is negative for board picks.
+            edge: Math.max(0, Math.min(100, 50 + ((candidate.model_score ?? 0.5) - 0.5) * 400)),
+          },
           modelTier: candidate.model_tier,
           systemGenerated: true,
           governedBoardWrite: true,
