@@ -100,9 +100,9 @@ server.listen(port, () => {
     marketUniverse: runtime.repositories.marketUniverse,
     pickCandidates: runtime.repositories.pickCandidates,
   };
-  runBoardScan(boardScanDeps, { logger: console }).catch(() => {});
+  runBoardScan(boardScanDeps, { logger: console, enabled: environment.SYNDICATE_MACHINE_ENABLED === 'true' }).catch(() => {});
   boardScanTimer = setInterval(() => {
-    runBoardScan(boardScanDeps, { logger: console }).catch(() => {});
+    runBoardScan(boardScanDeps, { logger: console, enabled: environment.SYNDICATE_MACHINE_ENABLED === 'true' }).catch(() => {});
   }, BOARD_SCAN_INTERVAL_MS);
 
   // Candidate scoring: reads pick_candidates with model_score=NULL, computes and writes scores
