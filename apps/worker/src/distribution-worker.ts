@@ -24,7 +24,7 @@ export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
  * Only picks from these sources are eligible for live Discord delivery.
  * All other sources (proof, test, synthetic) are blocked at claim time.
  */
-const LIVE_SOURCES = new Set(['smart-form', 'discord', 'api', 'alert-agent']);
+const LIVE_SOURCES = new Set(['smart-form', 'discord', 'api', 'alert-agent', 'board-construction']);
 
 /**
  * Event name patterns that indicate synthetic/test picks.
