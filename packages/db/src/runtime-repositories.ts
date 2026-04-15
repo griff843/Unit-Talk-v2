@@ -6374,6 +6374,8 @@ export function createInMemoryRepositoryBundle(): RepositoryBundle {
     pickCandidates: new InMemoryPickCandidateRepository(),
     syndicateBoard: new InMemorySyndicateBoardRepository(),
     marketFamilyTrust: new InMemoryMarketFamilyTrustRepository(),
+    modelRegistry: new InMemoryModelRegistryRepository(),
+    experimentLedger: new InMemoryExperimentLedgerRepository(),
   };
 }
 
@@ -6402,6 +6404,8 @@ export function createDatabaseRepositoryBundle(
     pickCandidates: new DatabasePickCandidateRepository(connection),
     syndicateBoard: new DatabaseSyndicateBoardRepository(connection),
     marketFamilyTrust: new DatabaseMarketFamilyTrustRepository(connection),
+    modelRegistry: new DatabaseModelRegistryRepository(createDatabaseClientFromConnection(connection)),
+    experimentLedger: new DatabaseExperimentLedgerRepository(createDatabaseClientFromConnection(connection)),
   };
 }
 
