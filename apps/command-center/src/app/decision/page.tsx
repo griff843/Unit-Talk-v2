@@ -4,7 +4,7 @@ interface DecisionModule {
   name: string;
   href: string;
   description: string;
-  status: 'live' | 'shell';
+  status: 'live' | 'shell' | 'not-connected';
   statusDetail: string;
 }
 
@@ -27,15 +27,15 @@ const modules: DecisionModule[] = [
     name: 'Promotion Preview',
     href: '/decision/preview',
     description: 'Preview qualification, target routing, and intervention options.',
-    status: 'live',
-    statusDetail: 'Best operator surface for promotion sanity checks.',
+    status: 'not-connected',
+    statusDetail: 'Not connected — requires read-only promotion re-evaluation API endpoint. Tracked in UTV2-583/608.',
   },
   {
     name: 'Routing Preview',
     href: '/decision/routing',
     description: 'Validate downstream channel routing and guardrail decisions.',
-    status: 'live',
-    statusDetail: 'Helps explain why a pick can or cannot reach a live target.',
+    status: 'not-connected',
+    statusDetail: 'Not connected — requires pick-level routing resolution API endpoint. Tracked in UTV2-583/608.',
   },
   {
     name: 'Board Saturation',
@@ -56,11 +56,13 @@ const modules: DecisionModule[] = [
 const statusClasses: Record<DecisionModule['status'], string> = {
   live: 'border-emerald-700 bg-emerald-900/40 text-emerald-300',
   shell: 'border-gray-700 bg-gray-800 text-gray-300',
+  'not-connected': 'border-yellow-800 bg-yellow-900/20 text-yellow-500',
 };
 
 const statusLabels: Record<DecisionModule['status'], string> = {
   live: 'Live',
   shell: 'Shell',
+  'not-connected': 'Not Connected',
 };
 
 export default function DecisionPage() {
