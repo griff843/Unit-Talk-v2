@@ -240,7 +240,6 @@ function main() {
 
     for (const s of signals) {
       const color = s.status === 'RED' ? RED : s.status === 'YELLOW' ? YELLOW : s.status === 'GREEN' ? GREEN : CYAN
-      const icon = s.status === 'RED' ? '✗' : s.status === 'YELLOW' ? '⚠' : s.status === 'GREEN' ? '✓' : '?'
       console.log(`  ${color}${BOLD}[${s.status.padEnd(7)}]${RESET} ${s.name}`)
       console.log(`            Value:  ${s.value}`)
       console.log(`            Detail: ${s.detail}\n`)
