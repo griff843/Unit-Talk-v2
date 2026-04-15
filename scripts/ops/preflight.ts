@@ -48,10 +48,13 @@ type LinearIssueRecord = {
   labels?: { nodes: Array<{ name: string }> } | null;
 };
 
+// PE3 (GITHUB_TOKEN) is waivable across all tiers: the token is only needed at
+// PR-creation time (ops:lane-link-pr), not during the coding/doc work itself.
+// Teams using SSH-based gh auth or PAT-less local environments can waive PE3.
 const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
-  T1: new Set(),
-  T2: new Set(['PL4']),
-  T3: new Set(['PB2', 'PG3', 'PL4', 'PR7']),
+  T1: new Set(['PE3']),
+  T2: new Set(['PE3', 'PL4']),
+  T3: new Set(['PE3', 'PB2', 'PG3', 'PL4', 'PR7']),
 };
 
 async function main(): Promise<number> {
