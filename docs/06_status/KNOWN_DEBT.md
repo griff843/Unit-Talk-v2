@@ -109,7 +109,9 @@ As of 2026-04-11 (UTV2-531 initial backfill). Sorted by impact, then area.
 | DEBT-010 | runtime | `claimNext()` in `apps/worker` performs non-atomic SELECT-then-UPDATE for outbox row claims. The window between the two operations is small but non-zero. No observed incident; UTV2-441 (merged) addressed adjacent transient-network crash class | Low | none — no observed incident; open one if the race is ever reproduced | `apps/worker/CLAUDE.md` | open |
 | DEBT-011 | operational | No lint rule yet enforcing the "TODO must reference UTV2-NNN" convention defined in this dashboard. Currently enforced by convention and review only | Low | none — open when the convention has been in place for one merge cycle and is ready to mechanize | this file, `## Code TODO / debt marker convention` section | open |
 
-Current max ID: `DEBT-011`. Next insertion uses `DEBT-012`.
+| DEBT-012 | operational | Stale lane manifests with no heartbeat activity — UTV2-575, UTV2-580, UTV2-622, UTV2-624, UTV2-625 show `status: started` but heartbeat >8h stale as of 2026-04-15. These represent lanes that were opened but not actively worked or formally closed. Each needs a decision: close or restart. | Medium | UTV2-585 | `pnpm proof:check` output 2026-04-15; `docs/06_status/lanes/*.json` heartbeat_at fields | open |
+
+Current max ID: `DEBT-012`. Next insertion uses `DEBT-013`.
 
 ## Closed Debt (audit trail)
 
