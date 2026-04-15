@@ -68,6 +68,7 @@
     "migration:audit": "tsx scripts/utv2-356-migration-audit.ts",
     "proof:check": "tsx scripts/proof-check.ts",
     "readiness:report": "tsx scripts/readiness-report.ts",
+    "stranded:cleanup": "tsx scripts/stranded-picks-cleanup.ts",
     "runtime:health": "tsx scripts/runtime-health.ts",
     "scoring:coverage": "tsx scripts/scoring-provenance.ts",
     "report:nba-readiness": "tsx scripts/utv2-404-nba-readiness-report.ts",
