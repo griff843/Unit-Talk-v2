@@ -2375,6 +2375,39 @@ test('processSubmission normalizes event identity fields into pick metadata', as
   assert.equal(metadata['submittedBy'], 'griff843');
 });
 
+test('processSubmission upgrades smart-form playerId metadata into canonical participantId', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'player-lebron',
+    displayName: 'LeBron James',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      submittedBy: 'griff843',
+      market: 'player_points_ou',
+      selection: 'LeBron James Over 27.5',
+      line: 27.5,
+      odds: -110,
+      eventName: 'Lakers vs Celtics',
+      metadata: {
+        playerId: participant.id,
+      },
+    },
+    repositories,
+  );
+
+  const metadata = created.pick.metadata as Record<string, unknown>;
+  assert.equal(created.pickRecord.player_id, participant.id);
+  assert.equal(created.pickRecord.participant_id, participant.id);
+  assert.equal(metadata['participantId'], participant.id);
+});
+
 test('processShadowSubmission records a shadow capture audit row', async () => {
   const repositories = createInMemoryRepositoryBundle();
   let capturedAuditAction: string | null = null;

@@ -516,6 +516,39 @@ test('runGradingPass resolves participant linkage from pick metadata when partic
   assert.equal(result.details[0]?.result, 'win');
 });
 
+test('runGradingPass resolves participant linkage from metadata playerId before fuzzy name matching', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    selection: 'Jalen Brunson Over 24.5',
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    participantExternalId: 'JALEN_BRUNSON_1_NBA',
+    participantName: 'Jalen Brunson',
+    eventName,
+  });
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      playerId: participant.id,
+      eventName,
+    },
+  }));
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.skipped, 0);
+  assert.equal(result.details[0]?.result, 'win');
+});
+
 test('runGradingPass keeps fail-closed behavior when metadata-only participant resolution is ambiguous', async () => {
   const { repositories, pickId } = await createPostedPickFixture({
     selection: 'Jalen Brunson Over 24.5',

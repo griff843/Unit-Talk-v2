@@ -253,6 +253,7 @@ test('buildSubmissionPayload records canonical browse metadata for live-offer se
   assert.equal(payload.metadata?.eventId, 'evt-1');
   assert.equal(payload.metadata?.leagueId, 'nba');
   assert.equal(payload.metadata?.playerId, 'player-1');
+  assert.equal(payload.metadata?.participantId, 'player-1');
   assert.equal(payload.metadata?.teamId, 'team-1');
   assert.equal(payload.metadata?.sportsbookId, 'fanatics');
   assert.deepEqual(payload.metadata?.selectedOffer, {
