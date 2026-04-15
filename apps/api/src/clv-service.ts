@@ -21,6 +21,23 @@ export interface CLVResult {
   isOpeningLineFallback?: boolean;
 }
 
+export type CLVComputationStatus =
+  | 'computed'
+  | 'opening_line_fallback'
+  | 'missing_pick_odds'
+  | 'missing_selection_side'
+  | 'missing_event_context'
+  | 'missing_closing_line'
+  | 'missing_priced_side'
+  | 'devig_failed';
+
+export interface CLVComputationOutcome {
+  result: CLVResult | null;
+  status: CLVComputationStatus;
+  resolvedMarketKey: string | null;
+  availableMarkets: string[];
+}
+
 /**
  * Pre-resolved event context for use in the graded-settlement path.
  * Passing this bypasses the internal event resolution in computeAndAttachCLV,
@@ -55,19 +72,48 @@ export async function computeAndAttachCLV(
   },
   options: ComputeAndAttachClvOptions = {},
 ): Promise<CLVResult | null> {
+  const outcome = await computeCLVOutcome(pick, repositories, options);
+  return outcome.result;
+}
+
+export async function computeCLVOutcome(
+  pick: PickRecord,
+  repositories: {
+    providerOffers: ProviderOfferRepository;
+    participants: ParticipantRepository;
+    events: EventRepository;
+    eventParticipants: EventParticipantRepository;
+  },
+  options: ComputeAndAttachClvOptions = {},
+): Promise<CLVComputationOutcome> {
   if (!Number.isFinite(pick.odds ?? null)) {
-    return null;
+    return {
+      result: null,
+      status: 'missing_pick_odds',
+      resolvedMarketKey: null,
+      availableMarkets: [],
+    };
   }
 
   const selectionSide = inferSelectionSide(pick.selection);
   if (!selectionSide) {
-    return null;
+    return {
+      result: null,
+      status: 'missing_selection_side',
+      resolvedMarketKey: null,
+      availableMarkets: [],
+    };
   }
 
   const eventContext: PickEventContext | null = options.preResolvedContext
     ?? await resolvePickEventContext(pick, repositories);
   if (!eventContext) {
-    return null;
+    return {
+      result: null,
+      status: 'missing_event_context',
+      resolvedMarketKey: null,
+      availableMarkets: [],
+    };
   }
 
   // Translate canonical pick.market (e.g. 'player_turnovers_ou') to the SGO
@@ -106,13 +152,28 @@ export async function computeAndAttachCLV(
   }
 
   if (!closingLine) {
-    await logMarketMismatchIfNeeded(pick, eventContext, repositories.providerOffers, options.logger);
-    return null;
+    const availableMarkets = await logMarketMismatchIfNeeded(
+      pick,
+      eventContext,
+      repositories.providerOffers,
+      options.logger,
+    );
+    return {
+      result: null,
+      status: 'missing_closing_line',
+      resolvedMarketKey,
+      availableMarkets,
+    };
   }
 
   const pricedSide = readClosingSideOdds(closingLine, selectionSide);
   if (!pricedSide) {
-    return null;
+    return {
+      result: null,
+      status: 'missing_priced_side',
+      resolvedMarketKey,
+      availableMarkets: [],
+    };
   }
 
   const pickImpliedProb = americanToImplied(pick.odds as number);
@@ -120,14 +181,19 @@ export async function computeAndAttachCLV(
   const underImplied = americanToImplied(closingLine.under_odds as number);
   const devigged = applyDevig(overImplied, underImplied, 'proportional');
   if (!devigged) {
-    return null;
+    return {
+      result: null,
+      status: 'devig_failed',
+      resolvedMarketKey,
+      availableMarkets: [],
+    };
   }
 
   const closingImpliedProb =
     selectionSide === 'over' ? devigged.overFair : devigged.underFair;
   const clvRaw = roundTo(pickImpliedProb - closingImpliedProb, 6);
 
-  return {
+  const result = {
     pickOdds: pick.odds as number,
     closingOdds: pricedSide,
     closingLine: closingLine.line,
@@ -137,6 +203,13 @@ export async function computeAndAttachCLV(
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
     ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
+  };
+
+  return {
+    result,
+    status: isOpeningFallback ? 'opening_line_fallback' : 'computed',
+    resolvedMarketKey,
+    availableMarkets: [],
   };
 }
 
@@ -229,7 +302,7 @@ async function logMarketMismatchIfNeeded(
   eventContext: PickEventContext,
   providerOffers: ProviderOfferRepository,
   logger: Pick<Console, 'warn'> | undefined,
-) {
+): Promise<string[]> {
   const offers = await providerOffers.listByProvider('sgo');
   const relatedOffers = offers.filter(
     (offer) =>
@@ -239,13 +312,14 @@ async function logMarketMismatchIfNeeded(
   );
 
   if (relatedOffers.length === 0) {
-    return;
+    return [];
   }
 
   const availableMarkets = [...new Set(relatedOffers.map((offer) => offer.provider_market_key))].sort();
   logger?.warn?.(
     `CLV market mismatch for pick ${pick.id}: pick.market="${pick.market}" available=${availableMarkets.join(', ')}`,
   );
+  return availableMarkets;
 }
 
 /**

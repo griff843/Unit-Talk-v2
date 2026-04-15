@@ -28,7 +28,12 @@ import type {
 } from '@unit-talk/db';
 import { ensurePickLifecycleState, transitionPickLifecycle } from './lifecycle-service.js';
 import { ApiError } from './errors.js';
-import { computeAndAttachCLV, type CLVPreResolvedContext } from './clv-service.js';
+import {
+  computeAndAttachCLV,
+  computeCLVOutcome,
+  type CLVComputationOutcome,
+  type CLVPreResolvedContext,
+} from './clv-service.js';
 
 export interface RecordSettlementResult {
   pickRecord: PickRecord;
@@ -141,13 +146,15 @@ export async function recordGradedSettlement(
     pick,
     repositories,
   );
-  const clv = await computeAndAttachCLV(pick, repositories, {
+  const clvOutcome = await computeCLVOutcome(pick, repositories, {
     ...(clvContext ? { preResolvedContext: clvContext } : {}),
   });
+  const clv = clvOutcome.result;
   const payload: Record<string, unknown> = {
     gradingContext,
     correction: false,
     clv: clv ?? null,
+    ...buildClvDiagnosticPayload(clvOutcome),
   };
 
   if (clv) {
@@ -323,10 +330,10 @@ async function recordInitialSettlement(
   const settledAt = new Date().toISOString();
 
   // CLV computation (fail-open) — same logic as recordGradedSettlement
-  let clv: Awaited<ReturnType<typeof computeAndAttachCLV>> = null;
+  let clvOutcome: CLVComputationOutcome | null = null;
   if (repositories.providerOffers && repositories.participants && repositories.events && repositories.eventParticipants) {
     try {
-      clv = await computeAndAttachCLV(pick, {
+      clvOutcome = await computeCLVOutcome(pick, {
         providerOffers: repositories.providerOffers,
         participants: repositories.participants,
         events: repositories.events,
@@ -336,6 +343,7 @@ async function recordInitialSettlement(
       // CLV is fail-open on manual settlement
     }
   }
+  const clv = clvOutcome?.result ?? null;
 
   // P/L computation from result and pick odds/stake
   const profitLossUnits = computeProfitLossUnits(
@@ -348,6 +356,7 @@ async function recordInitialSettlement(
     requestStatus: request.status,
     correction: false,
     clv: clv ?? null,
+    ...(clvOutcome ? buildClvDiagnosticPayload(clvOutcome) : {}),
     ...(clv ? {
       clvRaw: clv.clvRaw,
       clvPercent: clv.clvPercent,
@@ -516,10 +525,10 @@ async function recordSettlementCorrection(
   }
 
   // CLV computation on correction (fail-open)
-  let clv: Awaited<ReturnType<typeof computeAndAttachCLV>> = null;
+  let clvOutcome: CLVComputationOutcome | null = null;
   if (repositories.providerOffers && repositories.participants && repositories.events && repositories.eventParticipants) {
     try {
-      clv = await computeAndAttachCLV(pick, {
+      clvOutcome = await computeCLVOutcome(pick, {
         providerOffers: repositories.providerOffers,
         participants: repositories.participants,
         events: repositories.events,
@@ -529,6 +538,7 @@ async function recordSettlementCorrection(
       // CLV is fail-open on correction
     }
   }
+  const clv = clvOutcome?.result ?? null;
 
   const profitLossUnits = computeProfitLossUnits(
     request.result ?? null,
@@ -554,6 +564,7 @@ async function recordSettlementCorrection(
       correction: true,
       priorSettlementRecordId: latest.id,
       clv: clv ?? null,
+      ...(clvOutcome ? buildClvDiagnosticPayload(clvOutcome) : {}),
       ...(clv ? {
         clvRaw: clv.clvRaw,
         clvPercent: clv.clvPercent,
@@ -593,6 +604,16 @@ async function recordSettlementCorrection(
     auditRecords: [audit],
     finalLifecycleState: pick.status,
     downstream,
+  };
+}
+
+function buildClvDiagnosticPayload(outcome: CLVComputationOutcome): Record<string, unknown> {
+  return {
+    clvStatus: outcome.status,
+    clvUnavailableReason: outcome.result ? null : outcome.status,
+    ...(outcome.result?.isOpeningLineFallback ? { isOpeningLineFallback: true } : {}),
+    ...(outcome.resolvedMarketKey ? { clvResolvedMarketKey: outcome.resolvedMarketKey } : {}),
+    ...(outcome.availableMarkets.length > 0 ? { clvAvailableMarkets: outcome.availableMarkets } : {}),
   };
 }
 

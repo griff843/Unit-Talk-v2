@@ -83,6 +83,11 @@ export interface PickDetailView {
     clvRaw: number | null;
     clvPercent: number | null;
     beatsClosingLine: boolean | null;
+    clvStatus: string | null;
+    clvUnavailableReason: string | null;
+    clvResolvedMarketKey: string | null;
+    clvAvailableMarkets: string[];
+    isOpeningLineFallback: boolean | null;
     profitLossUnits: number | null;
     gradingContext: {
       actualValue: number;
@@ -444,6 +449,15 @@ export async function handlePickDetailRequest(
       const clvRaw = extractNumber(payload?.['clv'], 'clvRaw') ?? extractNumber(payload, 'clvRaw');
       const clvPercent = extractNumber(payload?.['clv'], 'clvPercent') ?? extractNumber(payload, 'clvPercent');
       const beatsClosingLine = extractBoolean(payload?.['clv'], 'beatsClosingLine') ?? extractBoolean(payload, 'beatsClosingLine');
+      const clvStatus =
+        extractString(payload?.['clv'], 'status')
+        ?? extractString(payload, 'clvStatus');
+      const clvUnavailableReason = extractString(payload, 'clvUnavailableReason');
+      const clvResolvedMarketKey = extractString(payload, 'clvResolvedMarketKey');
+      const clvAvailableMarkets = extractStringArray(payload, 'clvAvailableMarkets');
+      const isOpeningLineFallback =
+        extractBoolean(payload?.['clv'], 'isOpeningLineFallback')
+        ?? extractBoolean(payload, 'isOpeningLineFallback');
 
       // Extract P/L from payload
       const profitLossUnits = extractNumber(payload, 'profitLossUnits');
@@ -512,6 +526,11 @@ export async function handlePickDetailRequest(
         clvRaw,
         clvPercent,
         beatsClosingLine,
+        clvStatus,
+        clvUnavailableReason,
+        clvResolvedMarketKey,
+        clvAvailableMarkets,
+        isOpeningLineFallback,
         profitLossUnits,
         gradingContext,
         gameResult,
@@ -557,6 +576,18 @@ function extractBoolean(obj: unknown, key: string): boolean | null {
   if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return null;
   const val = (obj as Record<string, unknown>)[key];
   return typeof val === 'boolean' ? val : null;
+}
+
+function extractString(obj: unknown, key: string): string | null {
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return null;
+  const val = (obj as Record<string, unknown>)[key];
+  return typeof val === 'string' && val.trim().length > 0 ? val : null;
+}
+
+function extractStringArray(obj: unknown, key: string): string[] {
+  if (typeof obj !== 'object' || obj === null || Array.isArray(obj)) return [];
+  const val = (obj as Record<string, unknown>)[key];
+  return Array.isArray(val) ? val.filter((item): item is string => typeof item === 'string') : [];
 }
 
 function extractGradingContext(
