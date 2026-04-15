@@ -211,7 +211,7 @@ export async function runTruthCheck(
     const linearIssue = await fetchLinearIssue(issueId, linearToken);
     addCheck('L1', 'pass', `Linear issue ${linearIssue.identifier} exists`);
     const tierLabels = (linearIssue.labels?.nodes ?? [])
-      .map((label) => label.name.toLowerCase())
+      .map((label) => label.name.toLowerCase().replace(/^tier:/, ''))
       .filter((label) => label === 't1' || label === 't2' || label === 't3');
     const uniqueTierLabels = [...new Set(tierLabels)];
     if (uniqueTierLabels.length !== 1) {

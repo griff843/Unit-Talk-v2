@@ -1,0 +1,14 @@
+Verification Log — UTV2-642
+Merge SHA: e9df8965ee6efd92854df04318bd84afe84c4de9
+
+pnpm type-check — PASS
+  Project references build clean. scripts/ excluded from tsconfig project refs.
+
+pnpm test — PASS
+  32/32 tests pass. No new test files (operator scripts use tsx directly).
+
+Issue-specific:
+  - scripts/scoring-provenance.ts exists and is 271 lines
+  - pnpm scoring:coverage script entry in package.json
+  - Follows pipeline-health.ts pattern (loadEnvironment, createClient, exit codes)
+  - No packages added or modified
