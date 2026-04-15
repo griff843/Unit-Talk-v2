@@ -10,7 +10,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "local.env"
+    "packages/config/src/env.ts",
+    "apps/api/src/index.ts",
+    ".env.example"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-606/evidence.json"
