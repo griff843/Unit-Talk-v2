@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-641",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-641-build-one-command-runtime-health-cli-backed-by-supervised",
+  "branch": "griffadavi/utv2-641-build-one-command-runtime-health-cli-backed-by-supervised",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/runtime-health.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-641/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-04-15T16:59:30.494Z",
+  "heartbeat_at": "2026-04-15T16:59:30.494Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-641-build-one-command-runtime-health-cli-backed-by-supervised.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
