@@ -1,0 +1,25 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-585",
+  "lane_type": "codex-cli",
+  "tier": "T3",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-585-audit-follow-up-clean-repo-and-ops-drift-that-inflates",
+  "branch": "griffadavi/utv2-585-audit-follow-up-clean-repo-and-ops-drift-that-inflates",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/KNOWN_DEBT.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-04-15T17:00:36.973Z",
+  "heartbeat_at": "2026-04-15T17:00:36.973Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-585-audit-follow-up-clean-repo-and-ops-drift-that-inflates.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
