@@ -6087,11 +6087,18 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
 
   async findByIds(ids: string[]): Promise<MarketUniverseRow[]> {
     if (ids.length === 0) return [];
-    const { data, error } = await fromUntyped(this.client, 'market_universe')
-      .select('*')
-      .in('id', ids);
-    if (error) throw new Error(`Failed to find market universe by ids: ${error.message}`);
-    return (data ?? []) as MarketUniverseRow[];
+    // Chunk to avoid URL length limits on large IN clauses (Supabase REST uses query params)
+    const CHUNK_SIZE = 100;
+    const results: MarketUniverseRow[] = [];
+    for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+      const chunk = ids.slice(i, i + CHUNK_SIZE);
+      const { data, error } = await fromUntyped(this.client, 'market_universe')
+        .select('*')
+        .in('id', chunk);
+      if (error) throw new Error(`Failed to find market universe by ids: ${error.message}`);
+      results.push(...((data ?? []) as MarketUniverseRow[]));
+    }
+    return results;
   }
 }
 
