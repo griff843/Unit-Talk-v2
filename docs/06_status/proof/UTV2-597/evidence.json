@@ -1,0 +1,19 @@
+{
+  "issue": "UTV2-597",
+  "title": "Regenerate Supabase types and verify schema parity",
+  "verified_at": "2026-04-15",
+  "project_ref": "feownrheeefbcsehtsiw",
+  "command": "pnpm supabase:types",
+  "result": "PASS",
+  "line_count": 2742,
+  "semantic_changes": false,
+  "finding": "database.types.ts is in sync with the live Supabase schema. No semantic drift. Line endings normalized LF→CRLF only.",
+  "key_functions_present": [
+    "process_submission_atomic",
+    "backfill_pick_awaiting_approval",
+    "confirm_delivery_atomic",
+    "enqueue_distribution_atomic",
+    "settle_pick_atomic",
+    "transition_pick_lifecycle_atomic"
+  ]
+}
