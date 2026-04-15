@@ -355,7 +355,7 @@ function resolveSubmissionMarketKey(
     return 'team_total_ou';
   }
 
-  const statType = values.statType.trim().toLowerCase();
+  const statType = (values.statType ?? '').trim().toLowerCase();
   const statDrivenMarketKey = STAT_TYPE_TO_SUBMISSION_MARKET_KEY[statType];
   if (statDrivenMarketKey) {
     return statDrivenMarketKey;
