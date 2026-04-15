@@ -66,6 +66,7 @@
     "ops:truth-check": "tsx scripts/ops/truth-check.ts",
     "pi-m5:verify": "tsx scripts/pi-m5-verify.ts",
     "migration:audit": "tsx scripts/utv2-356-migration-audit.ts",
+    "readiness:report": "tsx scripts/readiness-report.ts",
     "report:nba-readiness": "tsx scripts/utv2-404-nba-readiness-report.ts",
     "pipeline:health": "tsx scripts/pipeline-health.ts",
     "proof:sgo-closing": "tsx scripts/proof-sgo-closing.ts",
