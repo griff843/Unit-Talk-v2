@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-579",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-579-audit-blocker-add-live-freshness-and-stage-proof-checks-for",
+  "branch": "griffadavi/utv2-579-audit-blocker-add-live-freshness-and-stage-proof-checks-for",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-579/diff-summary.md",
+    "docs/06_status/proof/UTV2-579/verification.log"
+  ],
+  "status": "started",
+  "started_at": "2026-04-15T18:29:56.380Z",
+  "heartbeat_at": "2026-04-15T18:29:56.380Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-579-audit-blocker-add-live-freshness-and-stage-proof-checks-for.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
