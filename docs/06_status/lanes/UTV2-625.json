@@ -7,7 +7,7 @@
   "branch": "griffadavi/utv2-625-modeling-gap-feature-completeness-standards",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/313",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/FEATURE_COMPLETENESS_STANDARD.md"
@@ -16,10 +16,10 @@
     "docs/06_status/proof/UTV2-625/diff-summary.md",
     "docs/06_status/proof/UTV2-625/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-15T08:12:30.503Z",
-  "heartbeat_at": "2026-04-15T08:12:30.503Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-15T18:20:00.000Z",
+  "closed_at": "2026-04-15T18:20:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-625-modeling-gap-feature-completeness-standards.json",
   "created_by": "claude",

@@ -7,7 +7,7 @@
   "branch": "griffadavi/utv2-580-audit-blocker-score-provenance-coverage",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/310",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/SCORE_PROVENANCE_STANDARD.md"
@@ -16,10 +16,10 @@
     "docs/06_status/proof/UTV2-580/diff-summary.md",
     "docs/06_status/proof/UTV2-580/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-15T08:12:32.866Z",
-  "heartbeat_at": "2026-04-15T08:12:32.866Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-15T18:20:00.000Z",
+  "closed_at": "2026-04-15T18:20:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-580-audit-blocker-score-provenance-coverage.json",
   "created_by": "claude",
