@@ -1,9 +1,10 @@
-import { Card } from '@/components/ui/Card';
-import { PickFilters } from '@/components/PickFilters';
-import { PickIdentityPanel } from '@/components/PickIdentityPanel';
-import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { PickFilters } from '@/components/PickFilters';
+import { PickIdentityPanel } from '@/components/PickIdentityPanel';
+import { Card } from '@/components/ui/Card';
+import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
+import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
@@ -18,9 +19,12 @@ interface SearchResult {
 async function fetchPickSearch(params: Record<string, string>): Promise<SearchResult> {
   try {
     const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/pick-search?${qs}`, { cache: 'no-store' });
-    if (!res.ok) return { picks: [], total: 0, limit: 25, offset: 0 };
-    const json = (await res.json()) as { ok: boolean; data: SearchResult };
+    const response = await fetch(`${OPERATOR_WEB_BASE}/api/operator/pick-search?${qs}`, { cache: 'no-store' });
+    if (!response.ok) {
+      return { picks: [], total: 0, limit: 25, offset: 0 };
+    }
+
+    const json = (await response.json()) as { ok: boolean; data: SearchResult };
     return json.ok ? json.data : { picks: [], total: 0, limit: 25, offset: 0 };
   } catch {
     return { picks: [], total: 0, limit: 25, offset: 0 };
@@ -40,7 +44,7 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
   const id = String(pick['id'] ?? '');
   const status = String(pick['status'] ?? '');
   const approval = String(pick['approval_status'] ?? '');
-  const score = pick['promotion_score'] as number | null;
+  const score = typeof pick['promotion_score'] === 'number' ? pick['promotion_score'] : null;
   const createdAt = String(pick['created_at'] ?? '');
   const reviewDecision = typeof pick['review_decision'] === 'string' ? pick['review_decision'] : null;
   const settlementResult = typeof pick['settlement_result'] === 'string' ? pick['settlement_result'] : null;
@@ -48,9 +52,10 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
     typeof pick['metadata'] === 'object' && pick['metadata'] !== null && !Array.isArray(pick['metadata'])
       ? (pick['metadata'] as Record<string, unknown>)
       : null;
+  const scoreInsight = buildScoreInsight(metadata);
 
   return (
-    <tr className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
+    <tr className="border-b border-gray-800 transition-colors hover:bg-gray-800/50">
       <td className="py-3 pr-3 align-top">
         <PickIdentityPanel
           compact
@@ -75,7 +80,16 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
           }}
         />
       </td>
-      <td className="py-3 pr-3 align-top text-xs text-gray-300">{score != null ? score.toFixed(1) : '—'}</td>
+      <td className="py-3 pr-3 align-top text-xs text-gray-300">
+        <div className="flex flex-col gap-1">
+          <span>{score != null ? score.toFixed(1) : '—'}</span>
+          <span
+            className={`inline-flex w-fit rounded border px-2 py-0.5 text-[10px] ${scoreToneClasses(scoreInsight.reliabilityTone)}`}
+          >
+            {scoreInsight.edgeSourceLabel}
+          </span>
+        </div>
+      </td>
       <td className="py-3 pr-3 align-top text-xs text-gray-300">{status}</td>
       <td className="py-3 pr-3 align-top text-xs text-gray-300">{approval}</td>
       <td className="py-3 pr-3 align-top text-xs text-gray-300">{reviewDecision ?? '—'}</td>
@@ -91,8 +105,10 @@ export default async function PicksListPage({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   const params: Record<string, string> = {};
-  for (const [key, val] of Object.entries(searchParams)) {
-    if (typeof val === 'string' && val.trim()) params[key] = val.trim();
+  for (const [key, value] of Object.entries(searchParams)) {
+    if (typeof value === 'string' && value.trim()) {
+      params[key] = value.trim();
+    }
   }
 
   const { picks, total, limit, offset } = await fetchPickSearch(params);
@@ -107,9 +123,15 @@ export default async function PicksListPage({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <h1 className="text-lg font-bold text-gray-100">Picks</h1>
-          <p className="text-sm text-gray-500">{hasFilters ? `Filtered results (${total})` : `${total} picks in the search index`}</p>
+          <p className="text-sm text-gray-500">
+            {hasFilters ? `Filtered results (${total})` : `${total} picks in the search index`}
+          </p>
         </div>
-        <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
+        <AutoRefreshStatusBar
+          lastUpdatedAt={observedAt}
+          intervalMs={intervalMs}
+          className="lg:min-w-[360px]"
+        />
       </div>
 
       <Card>
@@ -130,7 +152,7 @@ export default async function PicksListPage({
                 <thead>
                   <tr className="border-b border-gray-700 text-xs uppercase text-gray-400">
                     <th className="py-2 pr-3">Bet</th>
-                    <th className="py-2 pr-3">Score</th>
+                    <th className="py-2 pr-3">Routing Score</th>
                     <th className="py-2 pr-3">Status</th>
                     <th className="py-2 pr-3">Approval</th>
                     <th className="py-2 pr-3">Review</th>
@@ -148,7 +170,9 @@ export default async function PicksListPage({
 
             {totalPages > 1 && (
               <div className="mt-4 flex items-center justify-between text-xs text-gray-400">
-                <span>Page {page} of {totalPages} ({total} total)</span>
+                <span>
+                  Page {page} of {totalPages} ({total} total)
+                </span>
                 <div className="flex gap-2">
                   {offset > 0 && (
                     <Link

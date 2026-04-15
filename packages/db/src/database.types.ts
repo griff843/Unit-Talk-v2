@@ -2530,6 +2530,10 @@ export type Database = {
       }
     }
     Functions: {
+      backfill_pick_awaiting_approval: {
+        Args: { p_linear_issue: string; p_pick_id: string }
+        Returns: Json
+      }
       bootstrap_canonical_reference_data: { Args: never; Returns: undefined }
       claim_next_outbox: {
         Args: { p_target: string; p_worker_id: string }

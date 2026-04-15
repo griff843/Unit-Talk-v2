@@ -7,6 +7,7 @@ import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
+import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 
 interface PickDetailPageProps {
   params: { id: string };
@@ -70,6 +71,11 @@ interface SettlementRow {
   clvRaw?: number | null;
   clvPercent?: number | null;
   beatsClosingLine?: boolean | null;
+  clvStatus?: string | null;
+  clvUnavailableReason?: string | null;
+  clvResolvedMarketKey?: string | null;
+  clvAvailableMarkets?: string[];
+  isOpeningLineFallback?: boolean | null;
   profitLossUnits?: number | null;
   gameResult?: {
     actualValue: number;
@@ -199,6 +205,33 @@ function summarizeSettlementContext(detail: PickDetailViewResponse) {
   return latest.result ?? latest.status;
 }
 
+function renderClvSummary(settlement: SettlementRow | undefined) {
+  if (!settlement) {
+    return 'missing';
+  }
+
+  if (settlement.clvPercent != null) {
+    const lineVerdict =
+      settlement.beatsClosingLine == null
+        ? 'CLV present'
+        : settlement.beatsClosingLine
+          ? 'beats line'
+          : 'behind line';
+    const fallbackSuffix = settlement.isOpeningLineFallback ? ' via opening fallback' : '';
+    return `${settlement.clvPercent.toFixed(2)}% (${lineVerdict}${fallbackSuffix})`;
+  }
+
+  if (settlement.clvUnavailableReason) {
+    return `missing (${settlement.clvUnavailableReason})`;
+  }
+
+  if (settlement.clvStatus) {
+    return settlement.clvStatus;
+  }
+
+  return settlement.hasClv ? 'present' : 'missing';
+}
+
 async function fetchPickDetail(pickId: string): Promise<PickDetailViewResponse | null> {
   const operatorWebUrl = process.env['OPERATOR_WEB_URL'] ?? 'http://localhost:4200';
   try {
@@ -257,9 +290,9 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
       : typeof pick.metadata['edgeSource'] === 'string'
         ? pick.metadata['edgeSource']
         : null;
-  const hasClv = detail.settlements.some((settlement) => settlement.hasClv);
   const latestSettlementSummary = summarizeSettlementContext(detail);
   const scoreMeaning = summarizeScoreMeaning(pick);
+  const scoreInsight = buildScoreInsight(pick.metadata);
 
   return (
     <div className="flex flex-col gap-6">
@@ -313,6 +346,14 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <div className="rounded border border-blue-900/60 bg-blue-950/30 p-3 text-sm text-blue-100">
             <p className="font-medium">Routing score: {formatRoutingScore(pick.promotionScore)}</p>
             <p className="mt-1 text-xs text-blue-200/80">{scoreMeaning}</p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <span className={`rounded border px-2 py-1 text-[11px] ${scoreToneClasses(scoreInsight.reliabilityTone)}`}>
+                {scoreInsight.edgeSourceLabel}
+              </span>
+              <span className="rounded border border-blue-900/60 bg-blue-950/30 px-2 py-1 text-[11px] text-blue-100/90">
+                {scoreInsight.reliabilityLabel}
+              </span>
+            </div>
           </div>
         </div>
       </Card>
@@ -525,9 +566,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <KV label="Devigging Result" value={deviggingResult ? 'present' : 'missing'} />
           <KV label="Kelly Sizing" value={kellySizing ? 'present' : 'missing'} />
           <KV label="CLV" value={
-            hasClv
-              ? `${detail.settlements.find(s => s.clvPercent != null)?.clvPercent?.toFixed(2) ?? '?'}% (${detail.settlements.find(s => s.beatsClosingLine != null)?.beatsClosingLine ? 'beats line' : 'behind line'})`
-              : 'missing'
+            renderClvSummary(detail.settlements[0])
           } />
         </div>
       </Card>
@@ -553,7 +592,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
                   <Td>{row.result ?? '—'}</Td>
                   <Td>{row.status}</Td>
                   <Td>{row.confidence ?? '—'}</Td>
-                  <Td>{row.clvPercent != null ? `${row.clvPercent.toFixed(2)}%` : row.hasClv ? 'present' : '—'}</Td>
+                  <Td>{renderClvSummary(row)}</Td>
                   <Td>{row.profitLossUnits != null ? `${row.profitLossUnits > 0 ? '+' : ''}${row.profitLossUnits.toFixed(2)}u` : '—'}</Td>
                   <Td>{row.correctsId ?? '—'}</Td>
                   <Td>{row.settledBy ?? '—'}</Td>
@@ -577,6 +616,18 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
                 ) : null}
                 {row.reviewReason ? (
                   <p className="mt-1 text-xs text-yellow-400">Review reason: {row.reviewReason}</p>
+                ) : null}
+                {row.clvUnavailableReason ? (
+                  <p className="mt-1 text-xs text-amber-300">
+                    CLV unavailable: {row.clvUnavailableReason}
+                    {row.clvResolvedMarketKey ? ` • resolved market ${row.clvResolvedMarketKey}` : ''}
+                    {row.clvAvailableMarkets && row.clvAvailableMarkets.length > 0
+                      ? ` • available ${row.clvAvailableMarkets.join(', ')}`
+                      : ''}
+                  </p>
+                ) : null}
+                {row.isOpeningLineFallback ? (
+                  <p className="mt-1 text-xs text-blue-300">CLV used opening-line fallback instead of a true close.</p>
                 ) : null}
                 {row.correctedSettlement ? (
                   <p className="mt-1 text-xs text-gray-400">

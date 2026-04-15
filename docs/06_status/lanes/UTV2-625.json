@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-625",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-625-modeling-gap-feature-completeness-standards",
+  "branch": "griffadavi/utv2-625-modeling-gap-feature-completeness-standards",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/FEATURE_COMPLETENESS_STANDARD.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-625/diff-summary.md",
+    "docs/06_status/proof/UTV2-625/verification.log"
+  ],
+  "status": "started",
+  "started_at": "2026-04-15T08:12:30.503Z",
+  "heartbeat_at": "2026-04-15T08:12:30.503Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-625-modeling-gap-feature-completeness-standards.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

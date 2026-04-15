@@ -3,6 +3,7 @@ import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { ReviewActions } from '@/components/ReviewActions';
 import { QueueFilters } from '@/components/QueueFilters';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
+import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { Suspense } from 'react';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
@@ -101,6 +102,9 @@ export default async function HeldQueuePage({
       ) : (
         picks.map((pick) => (
           <Card key={pick.id}>
+            {(() => {
+              const scoreInsight = buildScoreInsight(pick.metadata ?? null);
+              return (
             <div className="flex flex-col gap-4">
               <div className="flex items-start justify-between">
                 <div>
@@ -135,11 +139,14 @@ export default async function HeldQueuePage({
                     {pick.promotion_score != null ? pick.promotion_score.toFixed(1) : '—'}
                   </div>
                   <div className="text-[10px] text-gray-500">routing score</div>
+                  <div className={`mt-1 rounded border px-2 py-1 text-[10px] ${scoreToneClasses(scoreInsight.reliabilityTone)}`}>
+                    {scoreInsight.edgeSourceLabel}
+                  </div>
                 </div>
               </div>
 
               <p className="text-[11px] text-gray-500">
-                Routing score reflects promotion policy fit, not win probability.
+                Routing score reflects promotion policy fit, not win probability. Trust: {scoreInsight.reliabilityLabel.toLowerCase()}.
               </p>
 
               <div className="rounded border border-yellow-800 bg-yellow-950 px-3 py-2">
@@ -160,6 +167,8 @@ export default async function HeldQueuePage({
 
               <ReviewActions pickId={pick.id} decisions={['return', 'approve', 'deny']} />
             </div>
+              );
+            })()}
           </Card>
         ))
       )}

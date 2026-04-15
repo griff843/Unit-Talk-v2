@@ -48,10 +48,13 @@ type LinearIssueRecord = {
   labels?: { nodes: Array<{ name: string }> } | null;
 };
 
+// PE3 (GITHUB_TOKEN) is waivable across all tiers: the token is only needed at
+// PR-creation time (ops:lane-link-pr), not during the coding/doc work itself.
+// Teams using SSH-based gh auth or PAT-less local environments can waive PE3.
 const WAIVABLE_CHECKS: Record<LaneTier, Set<string>> = {
-  T1: new Set(),
-  T2: new Set(['PL4']),
-  T3: new Set(['PB2', 'PG3', 'PL4', 'PR7']),
+  T1: new Set(['PE3']),
+  T2: new Set(['PE3', 'PL4']),
+  T3: new Set(['PE3', 'PB2', 'PG3', 'PL4', 'PR7']),
 };
 
 async function main(): Promise<number> {
@@ -527,7 +530,15 @@ async function runLinearChecks(
   }
 
   const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
-  const tierLabels = [...new Set(labels.filter((label) => label === 't1' || label === 't2' || label === 't3'))];
+  // Normalize labels: strip optional "tier:" prefix so both "t1" and "tier:t1" match
+  const normalizeTierLabel = (l: string) => l.replace(/^tier:/, '');
+  const tierLabels = [
+    ...new Set(
+      labels
+        .map(normalizeTierLabel)
+        .filter((label) => label === 't1' || label === 't2' || label === 't3'),
+    ),
+  ];
   if (tierLabels.length !== 1 || tierLabels[0] !== tier.toLowerCase()) {
     addCheck('PL2', 'fail', `issue tier labels ${tierLabels.join(', ') || '(none)'} do not match --tier ${tier}`);
   } else {
@@ -535,7 +546,17 @@ async function runLinearChecks(
   }
 
   const stateName = issue.state?.name ?? '';
-  if (stateName === 'Ready' || stateName === 'In Progress') {
+  // Accept workflow-specific state names alongside generic "Ready" / "In Progress"
+  const startableStates = new Set([
+    'Ready',
+    'In Progress',
+    'Ready for Claude',
+    'Ready for Codex',
+    'In Claude Review',
+    'In Codex Review',
+    'Needs Standard',
+  ]);
+  if (startableStates.has(stateName)) {
     addCheck('PL3', 'pass', `issue state ${stateName} is startable`);
   } else if (stateName === 'Backlog' && refresh) {
     addCheck('PL3', 'waived', 'issue state Backlog tolerated via --refresh');

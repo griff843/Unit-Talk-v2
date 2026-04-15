@@ -26,6 +26,10 @@ import {
   SGO_GAME_LINE_CANONICAL_ID,
   SGO_MARKET_KEY_TO_CANONICAL_ID,
 } from './results-resolver.js';
+import {
+  collectConfiguredSgoApiKeyCandidates,
+  resolveActiveSgoApiKey,
+} from './sgo-key-manager.js';
 
 test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped market key and idempotency key', () => {
   const normalized = normalizeSGOPairedProp({
@@ -49,6 +53,59 @@ test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped mar
     normalized.idempotencyKey,
     'sgo:evt-1:points-all-game-ou:player-123:22.5:2026-03-25T12:00:00.000Z',
   );
+});
+
+test('collectConfiguredSgoApiKeyCandidates preserves both configured subscriptions without duplicating the active key', () => {
+  const candidates = collectConfiguredSgoApiKeyCandidates({
+    SGO_API_KEYS: ['active-subscription', 'inactive-subscription'],
+    SGO_API_KEY: 'inactive-subscription',
+    SGO_API_KEY_FALLBACK: 'fallback-subscription',
+  });
+
+  assert.deepEqual(
+    candidates.map((candidate) => ({ source: candidate.source, tag: candidate.tag })),
+    [
+      { source: 'SGO_API_KEYS[0]', tag: 'acti...tion' },
+      { source: 'SGO_API_KEYS[1]', tag: 'inac...tion' },
+      { source: 'SGO_API_KEY_FALLBACK', tag: 'fall...tion' },
+    ],
+  );
+});
+
+test('resolveActiveSgoApiKey selects the first working subscription and records failed probes', async () => {
+  let usageFetches = 0;
+  const selection = await resolveActiveSgoApiKey(
+    [
+      { apiKey: 'inactive-subscription', source: 'SGO_API_KEY', tag: 'inac...tion' },
+      { apiKey: 'active-subscription', source: 'SGO_API_KEY_FALLBACK', tag: 'acti...tion' },
+    ],
+    {
+      fetchImpl: async (input) => {
+        usageFetches += 1;
+        const url = String(input);
+        if (url.includes('inactive-subscription')) {
+          return new Response('forbidden', { status: 403, statusText: 'Forbidden' });
+        }
+
+        return new Response(
+          JSON.stringify({
+            plan: 'starter',
+            creditsUsed: 10,
+            creditsLimit: 1000,
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
+      },
+    },
+  );
+
+  assert.equal(usageFetches, 2);
+  assert.equal(selection.active?.source, 'SGO_API_KEY_FALLBACK');
+  assert.equal(selection.probes[0]?.status, 'invalid');
+  assert.equal(selection.probes[1]?.status, 'active');
 });
 
 test('normalizeSGOPairedProp returns FALLBACK_SINGLE_SIDED when only one side is present', () => {

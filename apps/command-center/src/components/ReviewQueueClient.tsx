@@ -5,6 +5,7 @@ import { Card } from '@/components/ui/Card';
 import { ReviewActions } from '@/components/ReviewActions';
 import { BulkReviewBar } from '@/components/BulkReviewBar';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
+import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 
 interface ReviewPick {
   id: string;
@@ -87,6 +88,7 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
 
       {picks.map((pick) => {
         const scores = pick.metadata?.['promotionScores'] as Record<string, number> | undefined;
+        const scoreInsight = buildScoreInsight(pick.metadata);
         const isSelected = selectedIds.has(pick.id);
         return (
           <Card key={pick.id}>
@@ -138,6 +140,9 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
                     {pick.promotion_score != null ? pick.promotion_score.toFixed(1) : '—'}
                   </div>
                   <div className="text-[10px] text-gray-500">routing score</div>
+                  <div className={`mt-1 rounded border px-2 py-1 text-[10px] ${scoreToneClasses(scoreInsight.reliabilityTone)}`}>
+                    {scoreInsight.edgeSourceLabel}
+                  </div>
                 </div>
               </div>
 
@@ -150,7 +155,7 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
               )}
 
               <p className="text-[11px] text-gray-500">
-                Routing score reflects promotion policy fit, not win probability.
+                Routing score reflects promotion policy fit, not win probability. Trust: {scoreInsight.reliabilityLabel.toLowerCase()}.
               </p>
 
               {!isSelected && (

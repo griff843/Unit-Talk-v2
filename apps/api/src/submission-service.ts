@@ -613,7 +613,8 @@ async function resolveParticipantIdentityContext(
     };
   }
 
-  const participantId = readMetadataString(metadata, 'participantId');
+  const participantId =
+    readMetadataString(metadata, 'participantId') ?? readMetadataString(metadata, 'playerId');
   if (!participantId) {
     return {
       participantId: null,
