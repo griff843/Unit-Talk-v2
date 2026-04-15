@@ -1,0 +1,58 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-606",
+  "title": "UTV2-606: Thread SYNDICATE_MACHINE_ENABLED through AppEnv to fix board-scan gate",
+  "tier": "T1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/332",
+  "commit_sha": "f86f655",
+  "merged_at": null,
+  "authored_by": "Claude Sonnet 4.6",
+  "created_at": "2026-04-15T00:00:00.000Z",
+
+  "root_cause": {
+    "summary": "board-scan-service.ts reads `process.env['SYNDICATE_MACHINE_ENABLED']` directly as its fallback. The @unit-talk/config package never injects env vars into process.env — it returns a typed AppEnv object. As a result, SYNDICATE_MACHINE_ENABLED in local.env was never seen by board-scan, the gate always evaluated to false, and no candidates were ever materialized.",
+    "file": "apps/api/src/board-scan-service.ts",
+    "line": 53,
+    "evidence": "API logs showed: {\"service\":\"board-scan\",\"event\":\"gate.skip\",\"reason\":\"SYNDICATE_MACHINE_ENABLED=false\",\"scanRunId\":\"ffbe33a9...\"} on every 5-minute cycle despite local.env containing SYNDICATE_MACHINE_ENABLED=true"
+  },
+
+  "fix": {
+    "summary": "Add SYNDICATE_MACHINE_ENABLED to AppEnv interface and loadEnvironment() return object in packages/config/src/env.ts. Pass environment.SYNDICATE_MACHINE_ENABLED === 'true' as the explicit `enabled` option to both runBoardScan() call sites in apps/api/src/index.ts. The existing isSyndicateMachineEnabled(override?: boolean) function already prefers the explicit override — no changes to board-scan-service logic needed.",
+    "files_changed": [
+      "packages/config/src/env.ts",
+      "apps/api/src/index.ts",
+      ".env.example"
+    ]
+  },
+
+  "verification": {
+    "type_check": {
+      "command": "pnpm type-check",
+      "result": "PASS",
+      "notes": "Clean on main. Worktree errors are pre-existing Cannot find module artifacts from unbuilt packages."
+    },
+    "unit_tests": {
+      "command": "pnpm test",
+      "result": "PASS",
+      "totals": { "pass": 32, "fail": 0 },
+      "board_scan_tests": { "pass": 24, "fail": 0 }
+    },
+    "runtime_proof": {
+      "result": "GATE_BEHAVIOR_CONFIRMED_VIA_CODE",
+      "notes": "Pre-fix: API logs gate.skip on every cycle (confirmed). Post-fix: isSyndicateMachineEnabled(override) returns override when provided — override is now environment.SYNDICATE_MACHINE_ENABLED (from config, not process.env). Full live runtime confirmation deferred to UTV2-586 burn-in window after merge.",
+      "pre_fix_log_evidence": "gate.skip — SYNDICATE_MACHINE_ENABLED=false (every 5-min cycle)",
+      "code_proof": "board-scan-service.ts:51-53: if (override !== undefined) return override; — fix passes override=true when config reads SYNDICATE_MACHINE_ENABLED=true from local.env"
+    },
+    "governance_brake": {
+      "notes": "Governance brake (awaiting_approval) is independent of this fix — it applies at pick submission time in promotion-service.ts for autonomous sources. Board-scan writes to pick_candidates only (never picks). The brake proof is in UTV2-586 burn-in scope."
+    },
+    "pre_existing_failures": []
+  },
+
+  "debt_resolution": {
+    "debt_id": "DEBT-003",
+    "description": "system-pick-scanner quiesced 2026-04-10 — board-scan never enabled due to env var threading gap",
+    "resolved": true,
+    "resolution_notes": "SYNDICATE_MACHINE_ENABLED=true in local.env will now correctly flow through config → index.ts → board-scan options on next API restart post-merge"
+  }
+}
