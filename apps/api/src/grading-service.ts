@@ -378,6 +378,19 @@ async function resolvePickParticipantId(
   }
 
   const metadata = asRecord(pick.metadata);
+  const metadataParticipantId =
+    typeof metadata?.participantId === 'string'
+      ? metadata.participantId.trim()
+      : typeof metadata?.playerId === 'string'
+        ? metadata.playerId.trim()
+        : '';
+  if (metadataParticipantId) {
+    const participant = await repositories.participants.findById(metadataParticipantId);
+    if (participant) {
+      return participant.id;
+    }
+  }
+
   const playerName = typeof metadata?.player === 'string' ? metadata.player.trim() : '';
   if (!playerName) {
     return null;

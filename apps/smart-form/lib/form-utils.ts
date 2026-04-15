@@ -307,6 +307,7 @@ export function buildSubmissionPayload(
       sportsbookId: context.sportsbookId ?? null,
       player: values.playerName,
       playerId: context.playerId ?? null,
+      participantId: context.playerId ?? null,
       statType: values.statType,
       overUnder: values.direction,
       team: values.team,

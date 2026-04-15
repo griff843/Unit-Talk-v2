@@ -155,7 +155,12 @@ function extractPlayerId(pick: CanonicalPick): string | null {
 
 function extractParticipantId(pick: CanonicalPick): string | null {
   const raw = pick.metadata?.['participantId'];
-  return typeof raw === 'string' && raw.length > 0 ? raw : null;
+  if (typeof raw === 'string' && raw.length > 0) {
+    return raw;
+  }
+
+  const legacyPlayerId = pick.metadata?.['playerId'];
+  return typeof legacyPlayerId === 'string' && legacyPlayerId.length > 0 ? legacyPlayerId : null;
 }
 
 function mapPickToRecord(pick: CanonicalPick, idempotencyKey?: string | null): PickRecord {
