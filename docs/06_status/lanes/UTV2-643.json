@@ -6,7 +6,7 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-643-build-proof-freshness-cli-that-detects-stale-or-missing",
   "branch": "griffadavi/utv2-643-build-proof-freshness-cli-that-detects-stale-or-missing",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "1094e775b175af1923d58a971428382da0e05e11",
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
@@ -17,10 +17,10 @@
     "docs/06_status/proof/UTV2-643/diff-summary.md",
     "docs/06_status/proof/UTV2-643/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-15T16:50:55.361Z",
-  "heartbeat_at": "2026-04-15T16:50:55.361Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-15T17:14:58.947Z",
+  "closed_at": "2026-04-15T17:14:58.947Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-643-build-proof-freshness-cli-that-detects-stale-or-missing.json",
   "created_by": "codex-cli",
