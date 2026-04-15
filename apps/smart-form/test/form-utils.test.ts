@@ -224,7 +224,7 @@ test('buildSubmissionPayload keeps smart-form identity and conviction mapping', 
 
   assert.equal(payload.source, 'smart-form');
   assert.equal(payload.submittedBy, 'griff843');
-  assert.equal(payload.market, 'NBA - Player Prop');
+  assert.equal(payload.market, 'player.assists');
   assert.equal(payload.selection, 'Jamal Murray Assists O 7');
   assert.equal(payload.confidence, 0.8);
   assert.equal(payload.metadata?.capperConviction, 8);
@@ -262,6 +262,28 @@ test('buildSubmissionPayload records canonical browse metadata for live-offer se
     providerParticipantId: 'provider-player-1',
     snapshotAt: '2026-04-02T18:30:00.000Z',
   });
+});
+
+test('buildSubmissionPayload uses normalized manual market keys instead of lossy display strings', () => {
+  const totalPayload = buildSubmissionPayload(
+    buildBaseValues({
+      marketType: 'total',
+      direction: 'over',
+      playerName: '',
+      statType: '',
+      team: '',
+      line: 228.5,
+    }),
+  );
+  const propPayload = buildSubmissionPayload(
+    buildBaseValues({
+      marketType: 'player-prop',
+      statType: 'Points + Assists',
+    }),
+  );
+
+  assert.equal(totalPayload.market, 'game_total_ou');
+  assert.equal(propPayload.market, 'player.points_assists');
 });
 
 test('buildSubmissionPayload records sportsbook manual override metadata when book is typed', () => {
