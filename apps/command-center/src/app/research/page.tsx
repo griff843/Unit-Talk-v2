@@ -61,7 +61,7 @@ const statusColors: Record<ResearchModule['status'], string> = {
 
 const statusLabels: Record<ResearchModule['status'], string> = {
   live: 'Live',
-  'no-data': 'No Data',
+  'no-data': 'No Backend',
   deferred: 'Deferred',
 };
 
