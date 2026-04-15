@@ -60,12 +60,12 @@ export function getFieldAuthority(field: string): FieldAuthority | undefined {
 /**
  * Asserts that the given writer role is authorized to write the given field.
  * Throws UnauthorizedWriterError if the role is not in the allowed list.
- * Unregistered fields are allowed by default (fail-open).
+ * Unregistered fields are rejected (fail-closed) — every writable field must be explicitly registered.
  */
 export function assertFieldAuthority(field: string, writerRole: WriterRole): void {
   const authority = getFieldAuthority(field);
   if (!authority) {
-    return; // fail-open for unregistered fields
+    throw new UnauthorizedWriterError(field, writerRole, []); // fail-closed: unregistered fields are denied
   }
   if (!authority.allowedWriters.includes(writerRole)) {
     throw new UnauthorizedWriterError(field, writerRole, authority.allowedWriters);
