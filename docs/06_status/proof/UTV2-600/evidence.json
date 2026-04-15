@@ -1,0 +1,50 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-600",
+  "title": "Add ingestion staleness alerting with operator-visible thresholds",
+  "tier": "T1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/303",
+  "branch_sha": "63ac885",
+  "merge_sha": "79e85b59c5aefedbd5e6bc6e1043bf033220ee7f",
+  "generated_at": "2026-04-15T18:24:00.000Z",
+  "verifier": "claude-sonnet-4-6 / griff843",
+
+  "static_checks": {
+    "type_check": { "result": "PASS", "command": "pnpm type-check", "notes": "tsc -b tsconfig.json — zero errors" },
+    "unit_tests": { "result": "PASS", "command": "pnpm test", "notes": "all test suites pass" },
+    "lint": { "result": "PASS", "command": "pnpm lint", "notes": "no lint errors" }
+  },
+
+  "runtime_proof": {
+    "command": "pnpm ingestor:alert-check",
+    "executed_at": "2026-04-15T18:23:42.423Z",
+    "against": "live Supabase (feownrheeefbcsehtsiw)",
+    "result": {
+      "cycle": { "level": "OK", "ageMinutes": 1, "threshold": 30, "message": "Ingestor cycle freshness is 1m old (threshold: 30m). Last status: running." },
+      "offers": { "level": "CRITICAL", "ageMinutes": null, "threshold": 30, "message": "No offers timestamp found; ingestor offers freshness cannot be proven." },
+      "results": { "level": "CRITICAL", "ageMinutes": 782, "threshold": 60, "message": "Ingestor results freshness is 782m old (threshold: 60m)." }
+    },
+    "notes": "Ingestor was just restarted. Cycle is fresh (1m). Offers will populate on next ingestor cycle. Results stale reflects no incoming settlement data from SGO — expected given scanner is quiesced. Alert script correctly detects and surfaces staleness with structured JSON. Exit code 1 on any CRITICAL threshold breach is correct behavior per acceptance criteria."
+  },
+
+  "db_proof": {
+    "command": "pnpm test:db",
+    "result": "PASS",
+    "notes": "database repository bundle passes — 1 test"
+  },
+
+  "acceptance_criteria": {
+    "stale_thresholds_defined": true,
+    "automated_detection_implemented": true,
+    "operator_visible_command": "pnpm ingestor:alert-check",
+    "structured_json_alerts": true,
+    "exits_1_on_critical": true,
+    "configurable_thresholds": true,
+    "recovery_signal": "level OK when age < threshold — emitted on every run"
+  },
+
+  "known_issues": [
+    "Results freshness is stale (782m). This is a pre-existing operational condition: SGO results ingest depends on game settlement data which is not flowing while scanner is quiesced (DEBT-003). Not a defect in the alert implementation.",
+    "Delivered as part of multi-issue PR #303 (runtime truth spine) alongside UTV2-596/599/614/616/617. Work is attributable to the staleness alerting acceptance criteria."
+  ]
+}

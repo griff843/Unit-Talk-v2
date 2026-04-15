@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-600",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-runtime-truth-spine",
+  "branch": "griffadavi/utv2-600-audit-prerequisite-add-ingestion-staleness-alerting-with",
+  "base_branch": "main",
+  "commit_sha": "79e85b59c5aefedbd5e6bc6e1043bf033220ee7f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/303",
+  "files_changed": [
+    "scripts/ingestor-alert-check.ts",
+    "apps/ingestor/src/index.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/ingestor-alert-check.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-600/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-04-15T04:22:36.000Z",
+  "heartbeat_at": "2026-04-15T18:24:00.000Z",
+  "closed_at": "2026-04-15T18:24:00.000Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-runtime-truth-spine.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
