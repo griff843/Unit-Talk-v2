@@ -2151,7 +2151,7 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
       p_pick: {
         id: pick.id,
         submission_id: pick.submissionId,
-        participant_id: null,
+        participant_id: extractParticipantId(pick),
         player_id: extractPlayerId(pick),
         capper_id: foreignKeys.capperId,
         sport_id: foreignKeys.sportId,
