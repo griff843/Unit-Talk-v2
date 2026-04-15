@@ -19,6 +19,11 @@ import { readCircuitBreakerThreshold, readCircuitBreakerCooldownMs } from './run
  * side effects: fetch failures, Supabase/Cloudflare 5xx, rate limits.
  * These should never crash the worker process — the supervisor restart
  * loop adds no value and the stale claim reaper handles any orphaned rows.
+ *
+ * Includes Cloudflare 521 ("Web server is down") which Supabase returns
+ * when the underlying Postgres instance is temporarily unavailable.
+ * HTML responses (<!DOCTYPE) are also treated as transient — PostgREST
+ * never returns HTML on success, so any HTML body indicates infrastructure issues.
  */
 function isTransientNetworkError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
@@ -32,9 +37,12 @@ function isTransientNetworkError(error: unknown): boolean {
     msg.includes('502') ||
     msg.includes('503') ||
     msg.includes('504') ||
+    msg.includes('521') ||
     msg.includes('429') ||
     msg.includes('Bad gateway') ||
-    msg.includes('Service Unavailable')
+    msg.includes('Service Unavailable') ||
+    msg.includes('Web server is down') ||
+    msg.includes('<!DOCTYPE')
   );
 }
 

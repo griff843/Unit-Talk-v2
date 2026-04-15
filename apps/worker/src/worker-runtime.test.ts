@@ -1852,3 +1852,36 @@ test('simulation adapter always succeeds', async () => {
   assert.equal(receipt.status, 'sent');
   assert.equal(receipt.receiptType, 'worker.simulation');
 });
+
+test('runWorkerCycles survives Supabase 521 transient error during stale claim reap', async () => {
+  // Regression test for UTV2-572: Supabase 521 "Web server is down" caused the worker
+  // to crash because isTransientNetworkError did not include '521' or HTML responses.
+  const { repositories } = createWorkerTestRepositories([]);
+
+  // Inject a 521 failure on the first reapStaleClaims call only
+  let reapCallCount = 0;
+  const originalReap = repositories.outbox.reapStaleClaims.bind(repositories.outbox);
+  repositories.outbox.reapStaleClaims = async (...args) => {
+    reapCallCount += 1;
+    if (reapCallCount === 1) {
+      throw new Error(
+        'Failed to query stale outbox claims: <!DOCTYPE html>\n' +
+        '<title>feownrheeefbcsehtsiw.supabase.co | 521: Web server is down</title>',
+      );
+    }
+    return originalReap(...args);
+  };
+
+  // Worker should complete one cycle without crashing despite the 521 on cycle 1
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-521-test',
+    targets: ['discord:canary'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    persistenceMode: 'in_memory',
+  });
+
+  assert.equal(cycles.length, 1, 'worker should complete the cycle without crashing');
+  assert.equal(cycles[0]?.results[0]?.status, 'idle', 'no outbox rows — result is idle');
+});
