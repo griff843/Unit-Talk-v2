@@ -281,8 +281,7 @@ export function buildSubmissionPayload(
   values: BetFormValues,
   context: SubmissionContext = {},
 ): SubmitPickPayload {
-  const marketLabel = MARKET_TYPE_LABELS[values.marketType];
-  const market = context.canonicalMarketTypeId ?? `${values.sport} - ${marketLabel}`;
+  const market = resolveSubmissionMarketKey(values, context);
   const selection = buildSelectionString(values);
   const trustScore = values.capperConviction * 10;
 
@@ -334,3 +333,55 @@ export function buildSubmissionPayload(
     },
   };
 }
+
+function resolveSubmissionMarketKey(
+  values: BetFormValues,
+  context: SubmissionContext,
+) {
+  if (context.canonicalMarketTypeId) {
+    return context.canonicalMarketTypeId;
+  }
+
+  if (values.marketType === 'moneyline') {
+    return 'moneyline';
+  }
+  if (values.marketType === 'spread') {
+    return 'spread';
+  }
+  if (values.marketType === 'total') {
+    return 'game_total_ou';
+  }
+  if (values.marketType === 'team-total') {
+    return 'team_total_ou';
+  }
+
+  const statType = values.statType.trim().toLowerCase();
+  const statDrivenMarketKey = STAT_TYPE_TO_SUBMISSION_MARKET_KEY[statType];
+  if (statDrivenMarketKey) {
+    return statDrivenMarketKey;
+  }
+
+  const marketLabel = MARKET_TYPE_LABELS[values.marketType];
+  return `${values.sport} - ${marketLabel}`;
+}
+
+const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
+  points: 'player.points',
+  rebounds: 'player.rebounds',
+  assists: 'player.assists',
+  threes: 'player.threes',
+  steals: 'player.steals',
+  blocks: 'player.blocks',
+  turnovers: 'player.turnovers',
+  'points + rebounds + assists': 'player.pra',
+  'points + rebounds': 'player.points_rebounds',
+  'points + assists': 'player.points_assists',
+  'rebounds + assists': 'player.rebounds_assists',
+  hits: 'player.hits',
+  'home runs': 'player.home_runs',
+  rbi: 'player.rbi',
+  walks: 'player.walks',
+  'total bases': 'player.total_bases',
+  'pitching strikeouts': 'player.pitching_strikeouts',
+  'pitching innings pitched': 'player.pitching_innings_pitched',
+};
