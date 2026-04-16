@@ -25,7 +25,13 @@ import type {
   SuppressionEffectivenessSection,
   DriftStatusSection,
   CalibrationImpactSection,
+  ModelHealthState,
+  ModelHealthTransition,
 } from './system-health-types.js';
+import {
+  CALIBRATION_THRESHOLDS,
+} from '../probability/calibration.js';
+import type { SliceCalibrationMetrics } from '../probability/calibration.js';
 import type { BandTier } from '../bands/types.js';
 import type { DriftReport } from '../rollups/drift-detector.js';
 
@@ -336,6 +342,10 @@ function mean(values: number[]): number {
   return values.reduce((s, v) => s + v, 0) / values.length;
 }
 
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 function round4(n: number): number {
   return Math.round(n * 10000) / 10000;
 }
@@ -387,6 +397,259 @@ function computeCalibrationMetrics(
     ece,
     reliabilityCurve,
     sampleSize: predictions.length,
+  };
+}
+
+// ── Model Health State Machine ───────────────────────────────────────────────
+
+/**
+ * Evaluate whether the model's health state should transition, and what caused it.
+ *
+ * Transition rules:
+ *   green → watch:    roi_pct < -5% OR any calibration warning
+ *   watch → warning:  roi_pct < -10% OR any calibration critical OR drift_warnings > 2
+ *   warning → critical: roi_pct < -15% OR ECE > critical threshold
+ *   any → green:      roi_pct > 0 AND calibration green AND no active drift
+ *   critical for > criticalWindowHours without operator decision: requiresOperatorDecision = true
+ *
+ * Pure — no I/O, no DB.
+ */
+export function evaluateModelHealthState(
+  report: import('./system-health-types.js').SystemHealthReport,
+  currentState: ModelHealthState,
+  criticalWindowHours: number = 24,
+  lastTransitionAt?: string,
+): { newState: ModelHealthState; trigger: ModelHealthTransition | null } {
+  // Aggregate ROI across all published bands
+  const roiValues = report.roiByBand
+    .filter((b) => b.sample_size > 0)
+    .map((b) => b.roi_pct);
+  const avgRoi = roiValues.length > 0 ? mean(roiValues) : 0;
+
+  // Calibration state
+  const cal = report.calibrationMetrics;
+  const calibrationCritical =
+    cal.sample_size >= CALIBRATION_THRESHOLDS.minSampleForAlert &&
+    (cal.ece >= CALIBRATION_THRESHOLDS.ece.critical ||
+      cal.brier_score >= CALIBRATION_THRESHOLDS.brier.critical ||
+      cal.log_loss >= CALIBRATION_THRESHOLDS.logLoss.critical);
+
+  const calibrationWarning =
+    cal.sample_size >= CALIBRATION_THRESHOLDS.minSampleForAlert &&
+    !calibrationCritical &&
+    (cal.ece >= CALIBRATION_THRESHOLDS.ece.warning ||
+      cal.brier_score >= CALIBRATION_THRESHOLDS.brier.warning ||
+      cal.log_loss >= CALIBRATION_THRESHOLDS.logLoss.warning);
+
+  const driftWarnings = report.driftStatus.drift_warnings;
+
+  // ── Recovery path: any state → green ──────────────────────────────────────
+  const isHealthy = avgRoi > 0 && !calibrationWarning && !calibrationCritical && driftWarnings === 0;
+  if (isHealthy && currentState !== 'green') {
+    return {
+      newState: 'green',
+      trigger: {
+        fromState: currentState,
+        toState: 'green',
+        triggeredBy: 'roi',
+        reason: `Recovery: avgRoi=${round2(avgRoi)}%, calibration green, no drift`,
+        requiresOperatorDecision: false,
+      },
+    };
+  }
+
+  // ── Degradation paths ──────────────────────────────────────────────────────
+
+  if (currentState === 'green') {
+    if (avgRoi < -5) {
+      return {
+        newState: 'watch',
+        trigger: {
+          fromState: 'green',
+          toState: 'watch',
+          triggeredBy: 'roi',
+          reason: `avgRoi=${round2(avgRoi)}% < -5%`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+    if (calibrationWarning) {
+      return {
+        newState: 'watch',
+        trigger: {
+          fromState: 'green',
+          toState: 'watch',
+          triggeredBy: 'calibration',
+          reason: `Calibration warning: ECE=${round4(cal.ece)}, Brier=${round4(cal.brier_score)}, LogLoss=${round4(cal.log_loss)}`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+  }
+
+  if (currentState === 'watch') {
+    if (avgRoi < -10) {
+      return {
+        newState: 'warning',
+        trigger: {
+          fromState: 'watch',
+          toState: 'warning',
+          triggeredBy: 'roi',
+          reason: `avgRoi=${round2(avgRoi)}% < -10%`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+    if (calibrationCritical) {
+      return {
+        newState: 'warning',
+        trigger: {
+          fromState: 'watch',
+          toState: 'warning',
+          triggeredBy: 'calibration',
+          reason: `Calibration critical: ECE=${round4(cal.ece)}, Brier=${round4(cal.brier_score)}, LogLoss=${round4(cal.log_loss)}`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+    if (driftWarnings > 2) {
+      return {
+        newState: 'warning',
+        trigger: {
+          fromState: 'watch',
+          toState: 'warning',
+          triggeredBy: 'drift',
+          reason: `drift_warnings=${driftWarnings} > 2`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+  }
+
+  if (currentState === 'warning') {
+    if (avgRoi < -15) {
+      return {
+        newState: 'critical',
+        trigger: {
+          fromState: 'warning',
+          toState: 'critical',
+          triggeredBy: 'roi',
+          reason: `avgRoi=${round2(avgRoi)}% < -15%`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+    if (cal.ece >= CALIBRATION_THRESHOLDS.ece.critical) {
+      return {
+        newState: 'critical',
+        trigger: {
+          fromState: 'warning',
+          toState: 'critical',
+          triggeredBy: 'calibration',
+          reason: `ECE=${round4(cal.ece)} >= critical threshold ${CALIBRATION_THRESHOLDS.ece.critical}`,
+          requiresOperatorDecision: false,
+        },
+      };
+    }
+  }
+
+  // ── Critical window check (re-alert if stuck critical) ────────────────────
+  if (currentState === 'critical' && lastTransitionAt != null) {
+    const elapsedMs = Date.now() - new Date(lastTransitionAt).getTime();
+    const elapsedHours = elapsedMs / (1000 * 60 * 60);
+    if (elapsedHours > criticalWindowHours) {
+      return {
+        newState: 'critical',
+        trigger: {
+          fromState: 'critical',
+          toState: 'critical',
+          triggeredBy: 'roi',
+          reason: `Still critical after ${round2(elapsedHours)}h (window=${criticalWindowHours}h) — operator decision required`,
+          requiresOperatorDecision: true,
+        },
+      };
+    }
+  }
+
+  // No transition
+  return { newState: currentState, trigger: null };
+}
+
+// ── Model Review Packet ──────────────────────────────────────────────────────
+
+export interface ModelReviewPacket {
+  modelId: string;
+  weekWindow: { start: string; end: string };
+  generatedAt: string;
+  overallHealth: { roi_pct: number; calibration_alert_level: string };
+  sliceBreakdown: SliceCalibrationMetrics[];
+  roiByBand: BandROIMetrics[];
+  driftStatus: DriftStatusSection;
+  recommendedAction: 'none' | 'review' | 'demote' | 'investigate';
+}
+
+/**
+ * Bundle all health signals for a model into a single weekly review artifact.
+ *
+ * Pure — no I/O, no DB. Deterministic given the same inputs.
+ */
+export function generateModelReviewPacket(
+  report: import('./system-health-types.js').SystemHealthReport,
+  modelId: string,
+  sliceMetrics: SliceCalibrationMetrics[],
+  weekWindow: { start: string; end: string },
+): ModelReviewPacket {
+  const cal = report.calibrationMetrics;
+
+  // Derive alert level from report calibration metrics (uses CALIBRATION_THRESHOLDS)
+  let calibration_alert_level: string = 'green';
+  if (
+    cal.sample_size >= CALIBRATION_THRESHOLDS.minSampleForAlert &&
+    (cal.ece >= CALIBRATION_THRESHOLDS.ece.critical ||
+      cal.brier_score >= CALIBRATION_THRESHOLDS.brier.critical ||
+      cal.log_loss >= CALIBRATION_THRESHOLDS.logLoss.critical)
+  ) {
+    calibration_alert_level = 'critical';
+  } else if (
+    cal.sample_size >= CALIBRATION_THRESHOLDS.minSampleForAlert &&
+    (cal.ece >= CALIBRATION_THRESHOLDS.ece.warning ||
+      cal.brier_score >= CALIBRATION_THRESHOLDS.brier.warning ||
+      cal.log_loss >= CALIBRATION_THRESHOLDS.logLoss.warning)
+  ) {
+    calibration_alert_level = 'warning';
+  }
+
+  // Aggregate ROI across bands
+  const roiValues = report.roiByBand.filter((b) => b.sample_size > 0).map((b) => b.roi_pct);
+  const avgRoi = roiValues.length > 0 ? mean(roiValues) : 0;
+
+  // Determine recommended action
+  let recommendedAction: ModelReviewPacket['recommendedAction'] = 'none';
+  if (
+    avgRoi < -15 ||
+    calibration_alert_level === 'critical' ||
+    report.driftStatus.drift_critical_flags > 0
+  ) {
+    recommendedAction = 'demote';
+  } else if (
+    avgRoi < -5 ||
+    calibration_alert_level === 'warning' ||
+    report.driftStatus.drift_warnings > 2
+  ) {
+    recommendedAction = 'investigate';
+  } else if (avgRoi < 0 || calibration_alert_level !== 'green') {
+    recommendedAction = 'review';
+  }
+
+  return {
+    modelId,
+    weekWindow,
+    generatedAt: new Date().toISOString(),
+    overallHealth: { roi_pct: round4(avgRoi), calibration_alert_level },
+    sliceBreakdown: sliceMetrics,
+    roiByBand: report.roiByBand,
+    driftStatus: report.driftStatus,
+    recommendedAction,
   };
 }
 
