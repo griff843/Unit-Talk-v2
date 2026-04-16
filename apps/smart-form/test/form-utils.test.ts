@@ -297,6 +297,44 @@ test('buildSubmissionPayload records sportsbook manual override metadata when bo
   assert.equal(payload.metadata?.sportsbookId, null);
 });
 
+// UTV2-615: NHL stat types in STAT_TYPE_TO_SUBMISSION_MARKET_KEY
+test('buildSubmissionPayload resolves NHL stat types to canonical player prop market keys', () => {
+  const goalsPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'goals', playerName: 'Connor McDavid' }),
+  );
+  assert.equal(goalsPayload.market, 'player.goals');
+
+  const shotsPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'shots on goal', playerName: 'Connor McDavid' }),
+  );
+  assert.equal(shotsPayload.market, 'player.shots');
+
+  const savesPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'saves', playerName: 'Marc-Andre Fleury' }),
+  );
+  assert.equal(savesPayload.market, 'player.saves');
+
+  const pimPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'penalty minutes', playerName: 'Connor McDavid' }),
+  );
+  assert.equal(pimPayload.market, 'player.pim');
+});
+
+test('buildSubmissionPayload resolves MLB batting strikeouts to player.strikeouts', () => {
+  const payload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'MLB', statType: 'strikeouts', playerName: 'Aaron Judge' }),
+  );
+  assert.equal(payload.market, 'player.strikeouts');
+});
+
+test('buildSubmissionPayload populates metadata.player from playerName for participant resolution', () => {
+  const payload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'goals', playerName: 'Connor McDavid' }),
+  );
+  assert.equal(payload.metadata?.player, 'Connor McDavid');
+  assert.equal(payload.metadata?.sport, 'NHL');
+});
+
 // UTV2-255: conviction=8/9/4 trust mapping proof
 test('conviction=9 maps to trust=90 and confidence=0.9', () => {
   const payload = buildSubmissionPayload(buildBaseValues({ capperConviction: 9 }));

@@ -46,3 +46,32 @@ test('MARKET_KEY_MAP includes legacy labels plus smart-form market ids', () => {
   assert.equal(MARKET_KEY_MAP['player.points_assists'], 'pa-all-game-ou');
   assert.equal(MARKET_KEY_MAP['game_total'], 'game_total_ou');
 });
+
+// ── UTV2-615: NHL + MLB strikeout entries ─────────────────────────────────────
+
+test('normalizeMarketKey maps NHL player prop keys to canonical grading keys', () => {
+  assert.equal(normalizeMarketKey('player.goals'), 'goals-all-game-ou');
+  assert.equal(normalizeMarketKey('player.shots'), 'shots-all-game-ou');
+  assert.equal(normalizeMarketKey('player.saves'), 'saves-all-game-ou');
+  assert.equal(normalizeMarketKey('player.pim'), 'pim-all-game-ou');
+});
+
+test('normalizeMarketKey maps NHL display-string aliases to canonical grading keys', () => {
+  assert.equal(normalizeMarketKey('NHL goals'), 'goals-all-game-ou');
+  assert.equal(normalizeMarketKey('NHL shots on goal'), 'shots-all-game-ou');
+  assert.equal(normalizeMarketKey('NHL saves'), 'saves-all-game-ou');
+  assert.equal(normalizeMarketKey('NHL penalty minutes'), 'pim-all-game-ou');
+});
+
+test('normalizeMarketKey maps MLB batting strikeouts (batter, not pitcher)', () => {
+  assert.equal(normalizeMarketKey('player.strikeouts'), 'batting-strikeouts-all-game-ou');
+  assert.equal(normalizeMarketKey('MLB batting strikeouts'), 'batting-strikeouts-all-game-ou');
+});
+
+test('normalizeMarketKey passes through already-canonical SGO-format keys unchanged', () => {
+  assert.equal(normalizeMarketKey('turnovers-all-game-ou'), 'turnovers-all-game-ou');
+  assert.equal(normalizeMarketKey('points-all-game-ou'), 'points-all-game-ou');
+  assert.equal(normalizeMarketKey('goals-all-game-ou'), 'goals-all-game-ou');
+  assert.equal(normalizeMarketKey('saves-all-game-ou'), 'saves-all-game-ou');
+  assert.equal(normalizeMarketKey('batting-strikeouts-all-game-ou'), 'batting-strikeouts-all-game-ou');
+});
