@@ -1,7 +1,6 @@
 import type { CatalogData, MarketTypeId } from './catalog';
 import type { EventOfferBrowseResult } from './api-client';
 import type { BetFormValues } from './form-schema';
-import { MARKET_TYPE_LABELS } from './form-schema';
 import type { SubmitPickPayload } from './api-client';
 
 export interface SubmissionContext {
