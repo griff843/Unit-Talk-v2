@@ -1318,12 +1318,10 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     snapshotAt: string,
     options?: { includeBookmakerKey?: boolean },
   ): Promise<number> {
-    // Scope to events that commenced within the last 48 hours (mirrors Database implementation).
-    const windowStart = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // InMemory: no row-count problem, so no time-window filter needed.
     let updated = 0;
     for (const { providerEventId, commenceTime } of events) {
       if (snapshotAt < commenceTime) continue;
-      if (commenceTime < windowStart) continue;
 
       // Find all pre-commence offers for this event
       const candidates = Array.from(this.offers.values()).filter(
@@ -4045,8 +4043,8 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const startedEvents = events.filter((e) => snapshotAt >= e.commenceTime);
     if (startedEvents.length === 0) return 0;
 
-    // Scope to events that commenced within the last 48 hours to avoid scanning stale data.
-    const windowStart = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // Scope to events that commenced within 48 hours of snapshotAt to avoid scanning stale data.
+    const windowStart = new Date(new Date(snapshotAt).getTime() - 48 * 60 * 60 * 1000).toISOString();
     const recentEvents = startedEvents.filter((e) => e.commenceTime >= windowStart);
     const skipped = startedEvents.length - recentEvents.length;
     if (skipped > 0) {
