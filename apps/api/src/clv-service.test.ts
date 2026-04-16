@@ -366,8 +366,11 @@ test('computeAndAttachCLV logs market mismatches and returns null', async () => 
   );
 
   assert.equal(result, null);
-  assert.equal(warnings.length, 1);
-  assert.match(warnings[0] ?? '', /market mismatch/i);
+  // Two warnings: market-mismatch string (from resolveAvailableMarkets) +
+  // structured CLV skip object (from computeAndAttachCLV).
+  assert.equal(warnings.length, 2);
+  const marketMismatchWarning = warnings.find((w) => typeof w === 'string' && /market mismatch/i.test(w));
+  assert.ok(marketMismatchWarning, 'expected a market-mismatch warning string');
 });
 
 test('computeCLVOutcome returns missing_closing_line diagnostics with available markets', async () => {

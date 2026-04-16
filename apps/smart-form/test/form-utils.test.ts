@@ -311,3 +311,39 @@ test('conviction=4 maps to trust=40 and confidence=0.4', () => {
   assert.equal(payload.metadata?.capperConviction, 4);
   assert.deepEqual(payload.metadata?.promotionScores, { trust: 40 });
 });
+
+// UTV2-577: unknown stat type must throw rather than return a lossy display string
+test('buildSubmissionPayload throws for unknown player-prop stat type', () => {
+  assert.throws(
+    () =>
+      buildSubmissionPayload(
+        buildBaseValues({ marketType: 'player-prop', statType: 'unknown-future-stat' }),
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(
+        err.message.includes('Cannot resolve canonical market key'),
+        `Expected error to mention canonical market key, got: ${err.message}`,
+      );
+      return true;
+    },
+  );
+});
+
+// UTV2-577: NHL stat types resolve to canonical market keys
+test('buildSubmissionPayload resolves NHL stat types to canonical keys', () => {
+  const goalsPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'Goals' }),
+  );
+  assert.equal(goalsPayload.market, 'player.goals');
+
+  const sogPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'Shots on Goal' }),
+  );
+  assert.equal(sogPayload.market, 'player.shots_on_goal');
+
+  const blockedPayload = buildSubmissionPayload(
+    buildBaseValues({ sport: 'NHL', statType: 'Blocked Shots' }),
+  );
+  assert.equal(blockedPayload.market, 'player.blocked_shots');
+});
