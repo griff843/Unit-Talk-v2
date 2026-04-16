@@ -198,6 +198,29 @@ function calculateScore(
       ? input.pick.metadata['sport']
       : null;
 
+  // When market context is absent (e.g., historical replay snapshots written before UTV2-623
+  // introduced market-family modifiers), skip modifiers entirely to preserve deterministic
+  // replay of pre-modifier decisions.
+  if (!market) {
+    const rawTotal = weighted.edge + weighted.trust + weighted.readiness + weighted.uniqueness + weighted.boardFit;
+    return {
+      edge: weighted.edge,
+      trust: weighted.trust,
+      readiness: weighted.readiness,
+      uniqueness: weighted.uniqueness,
+      boardFit: weighted.boardFit,
+      total: rawTotal,
+      provenance: {
+        marketFamily: 'unknown',
+        sport: sport ?? '',
+        modifiersApplied: false,
+        unsupportedSlice: false,
+        capApplied: false,
+        capValue: null,
+      },
+    };
+  }
+
   const modified = applyPromotionModifiers(weighted, market, sport);
 
   return {

@@ -47,7 +47,7 @@ function makeBaseInput(
     pick: {
       id: 'test-pick',
       submissionId: 'sub-1',
-      market: 'NBA points',
+      market: '',
       selection: 'Player Over 22.5',
       source: 'api',
       approvalStatus: 'approved',
