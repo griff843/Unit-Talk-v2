@@ -155,7 +155,7 @@ export async function processNextDistributionWork(
       outboxId: claimed.id,
       target,
     },
-    idempotencyKey: `${claimed.id}:${workerId}:distribution-process`,
+    idempotencyKey: `${claimed.id}:${workerId}:distribution-process:${claimed.attempt_count}`,
   });
 
   try {
