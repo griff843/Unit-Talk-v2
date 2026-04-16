@@ -131,6 +131,27 @@ export interface CalibrationImpactSection {
   calibration_helped: boolean;
 }
 
+// ── Model Health State Machine ───────────────────────────────────────────────
+
+export type ModelHealthState = 'green' | 'watch' | 'warning' | 'critical';
+
+export interface ModelHealthTransition {
+  fromState: ModelHealthState;
+  toState: ModelHealthState;
+  /** The metric domain that caused this transition. */
+  triggeredBy: 'roi' | 'calibration' | 'drift' | 'sample_exhausted';
+  reason: string;
+  /** True when the model has been critical for longer than the allowed window. */
+  requiresOperatorDecision: boolean;
+}
+
+export interface ModelReviewTrigger {
+  modelId: string;
+  currentState: ModelHealthState;
+  transitions: ModelHealthTransition[];
+  requiresImmediateAction: boolean;
+}
+
 // ── Full Report ─────────────────────────────────────────────────────────────
 
 /**

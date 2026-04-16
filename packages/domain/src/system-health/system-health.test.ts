@@ -10,12 +10,14 @@ import {
   computeSuppressionEffectiveness,
   computeDriftStatus,
   computeCalibrationImpact,
+  evaluateModelHealthState,
+  generateModelReviewPacket,
 } from './system-health-report.js';
 import { generateSystemHealthReport } from './system-health-runner.js';
 import { SYSTEM_HEALTH_REPORT_VERSION } from './system-health-types.js';
 
 import type { DriftReport } from '../rollups/drift-detector.js';
-import type { SystemHealthRecord } from './system-health-types.js';
+import type { SystemHealthRecord, ModelHealthState } from './system-health-types.js';
 
 // ── Test Data Helpers ───────────────────────────────────────────────────────
 
@@ -486,5 +488,169 @@ describe('generateSystemHealthReport', () => {
     const aPlusRoi = rois.find((r) => r.band === 'A+')!.roi_pct;
     const cRoi = rois.find((r) => r.band === 'C')!.roi_pct;
     assert.ok(aPlusRoi > cRoi);
+  });
+});
+
+// ── evaluateModelHealthState ──────────────────────────────────────────────────
+
+function makeReportWithRoi(roiPct: number, calibrationAlert: 'green' | 'warning' | 'critical' = 'green', driftWarnings = 0): import('./system-health-types.js').SystemHealthReport {
+  const base = generateSystemHealthReport(makeRecordSet(), null, '2026-03-06T12:00:00Z');
+
+  // Override ROI by band so aggregate matches desired roiPct
+  const roiByBand = base.roiByBand.map((b) => ({ ...b, roi_pct: roiPct, sample_size: 10 }));
+
+  // Build calibration metrics matching the requested alert level
+  let brier_score = 0.10;
+  let ece = 0.02;
+  let log_loss = 0.30;
+  let sample_size = 50;
+  if (calibrationAlert === 'warning') {
+    brier_score = 0.29; ece = 0.07; log_loss = 0.67;
+  } else if (calibrationAlert === 'critical') {
+    brier_score = 0.33; ece = 0.11; log_loss = 0.76;
+  }
+
+  return {
+    ...base,
+    roiByBand,
+    calibrationMetrics: { ...base.calibrationMetrics, brier_score, ece, log_loss, sample_size },
+    driftStatus: {
+      ...base.driftStatus,
+      drift_warnings: driftWarnings,
+      drift_critical_flags: 0,
+      regime_stability: driftWarnings > 0 ? 'warning' : 'stable',
+      flags: [],
+    },
+  };
+}
+
+describe('evaluateModelHealthState', () => {
+  it('transitions green → watch on bad ROI', () => {
+    const report = makeReportWithRoi(-6);
+    const { newState, trigger } = evaluateModelHealthState(report, 'green');
+    assert.equal(newState, 'watch');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.fromState, 'green');
+    assert.equal(trigger!.toState, 'watch');
+    assert.equal(trigger!.triggeredBy, 'roi');
+  });
+
+  it('transitions green → watch on calibration warning', () => {
+    const report = makeReportWithRoi(2, 'warning'); // positive ROI but bad calibration
+    const { newState, trigger } = evaluateModelHealthState(report, 'green');
+    assert.equal(newState, 'watch');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.triggeredBy, 'calibration');
+  });
+
+  it('transitions watch → warning on calibration critical', () => {
+    const report = makeReportWithRoi(-3, 'critical');
+    const { newState, trigger } = evaluateModelHealthState(report, 'watch');
+    assert.equal(newState, 'warning');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.triggeredBy, 'calibration');
+  });
+
+  it('transitions watch → warning on high drift warnings', () => {
+    const report = makeReportWithRoi(-3, 'green', 3); // 3 drift warnings
+    const { newState, trigger } = evaluateModelHealthState(report, 'watch');
+    assert.equal(newState, 'warning');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.triggeredBy, 'drift');
+  });
+
+  it('transitions watch → warning on very bad ROI', () => {
+    const report = makeReportWithRoi(-11);
+    const { newState, trigger } = evaluateModelHealthState(report, 'watch');
+    assert.equal(newState, 'warning');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.triggeredBy, 'roi');
+  });
+
+  it('transitions warning → critical on extreme ROI', () => {
+    const report = makeReportWithRoi(-16);
+    const { newState, trigger } = evaluateModelHealthState(report, 'warning');
+    assert.equal(newState, 'critical');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.triggeredBy, 'roi');
+  });
+
+  it('transitions any → green on recovery', () => {
+    const report = makeReportWithRoi(3, 'green', 0); // positive ROI, green calibration, no drift
+    const { newState, trigger } = evaluateModelHealthState(report, 'warning');
+    assert.equal(newState, 'green');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.toState, 'green');
+    assert.equal(trigger!.requiresOperatorDecision, false);
+  });
+
+  it('returns no transition when state is already appropriate', () => {
+    const report = makeReportWithRoi(5, 'green', 0);
+    const { newState, trigger } = evaluateModelHealthState(report, 'green');
+    assert.equal(newState, 'green');
+    assert.equal(trigger, null);
+  });
+
+  it('sets requiresOperatorDecision when critical for longer than criticalWindowHours', () => {
+    const report = makeReportWithRoi(-16, 'critical');
+    // lastTransitionAt is 48 hours ago
+    const lastTransitionAt = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    const { newState, trigger } = evaluateModelHealthState(report, 'critical', 24, lastTransitionAt);
+    assert.equal(newState, 'critical');
+    assert.ok(trigger !== null);
+    assert.equal(trigger!.requiresOperatorDecision, true);
+  });
+
+  it('does NOT set requiresOperatorDecision when critical within window', () => {
+    const report = makeReportWithRoi(-16, 'critical');
+    // lastTransitionAt is only 1 hour ago
+    const lastTransitionAt = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+    const { newState, trigger } = evaluateModelHealthState(report, 'critical', 24, lastTransitionAt);
+    // Should not trigger a requiresOperatorDecision flag yet
+    // (may or may not transition depending on other conditions)
+    if (trigger !== null && trigger.fromState === 'critical' && trigger.toState === 'critical') {
+      assert.equal(trigger.requiresOperatorDecision, false);
+    } else {
+      // No operator decision trigger in the short window
+      assert.ok(trigger === null || trigger.requiresOperatorDecision === false);
+    }
+  });
+});
+
+// ── generateModelReviewPacket ─────────────────────────────────────────────────
+
+describe('generateModelReviewPacket', () => {
+  it('produces a review packet with all required fields', () => {
+    const records = makeRecordSet();
+    const report = generateSystemHealthReport(records, null, '2026-03-06T12:00:00Z');
+    const packet = generateModelReviewPacket(report, 'model-nba-v1', [], { start: '2026-03-01', end: '2026-03-07' });
+
+    assert.equal(packet.modelId, 'model-nba-v1');
+    assert.deepEqual(packet.weekWindow, { start: '2026-03-01', end: '2026-03-07' });
+    assert.ok(typeof packet.generatedAt === 'string');
+    assert.ok('roi_pct' in packet.overallHealth);
+    assert.ok('calibration_alert_level' in packet.overallHealth);
+    assert.ok(Array.isArray(packet.sliceBreakdown));
+    assert.ok(Array.isArray(packet.roiByBand));
+    assert.ok('drift_warnings' in packet.driftStatus);
+    assert.ok(['none', 'review', 'demote', 'investigate'].includes(packet.recommendedAction));
+  });
+
+  it('recommends demote when ROI is very negative', () => {
+    const report = makeReportWithRoi(-20, 'green');
+    const packet = generateModelReviewPacket(report, 'model-v1', [], { start: '2026-03-01', end: '2026-03-07' });
+    assert.equal(packet.recommendedAction, 'demote');
+  });
+
+  it('recommends investigate when calibration is warning level', () => {
+    const report = makeReportWithRoi(-3, 'warning');
+    const packet = generateModelReviewPacket(report, 'model-v1', [], { start: '2026-03-01', end: '2026-03-07' });
+    assert.ok(['investigate', 'demote'].includes(packet.recommendedAction));
+  });
+
+  it('recommends none when health is good', () => {
+    const report = makeReportWithRoi(5, 'green', 0);
+    const packet = generateModelReviewPacket(report, 'model-v1', [], { start: '2026-03-01', end: '2026-03-07' });
+    assert.equal(packet.recommendedAction, 'none');
   });
 });

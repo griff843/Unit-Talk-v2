@@ -6,6 +6,11 @@ export interface PredictionOutcome {
   pickId?: string;
 }
 
+export interface SlicedPredictionOutcome extends PredictionOutcome {
+  sport?: string;
+  marketFamily?: string;
+}
+
 export interface ReliabilityBucket {
   bucketLower: number;
   bucketUpper: number;
@@ -173,4 +178,121 @@ export function computeCalibrationMetrics(
     modelVersion,
     probabilityModelVersion
   };
+}
+
+// ── Per-Slice Calibration ────────────────────────────────────────────────────
+
+export interface SliceCalibrationMetrics extends CalibrationMetrics {
+  /** e.g. "NBA:player-prop" or "global:all" */
+  sliceKey: string;
+  sport: string | null;
+  marketFamily: string | null;
+}
+
+const MIN_SLICE_SAMPLES = 10;
+
+/**
+ * Compute calibration metrics broken out by sport + marketFamily.
+ *
+ * Groups with >= 10 samples get full metrics computed.
+ * Groups with < 10 samples return a minimal entry with sampleSize set but all
+ * metric fields at zero (not enough data to be meaningful).
+ */
+export function computeSliceCalibrationMetrics(
+  predictions: SlicedPredictionOutcome[],
+  modelVersion: string,
+  probabilityModelVersion: string,
+): SliceCalibrationMetrics[] {
+  // Group by sport + marketFamily
+  const groups = new Map<string, SlicedPredictionOutcome[]>();
+
+  for (const p of predictions) {
+    const sport = p.sport ?? null;
+    const mf = p.marketFamily ?? null;
+    const key = `${sport ?? 'null'}:${mf ?? 'null'}`;
+    const existing = groups.get(key) ?? [];
+    existing.push(p);
+    groups.set(key, existing);
+  }
+
+  const results: SliceCalibrationMetrics[] = [];
+
+  for (const [key, group] of groups) {
+    const firstItem = group[0]!;
+    const sport = firstItem.sport ?? null;
+    const marketFamily = firstItem.marketFamily ?? null;
+    const sliceKey = `${sport ?? 'global'}:${marketFamily ?? 'all'}`;
+
+    if (group.length < MIN_SLICE_SAMPLES) {
+      // Not enough data — return minimal entry with null-like metrics
+      results.push({
+        sliceKey,
+        sport,
+        marketFamily,
+        sampleSize: group.length,
+        winCount: group.filter(p => p.outcome === 1).length,
+        lossCount: group.filter(p => p.outcome === 0).length,
+        brierScore: 0,
+        ece: 0,
+        mce: 0,
+        logLoss: 0,
+        buckets: [],
+        modelVersion,
+        probabilityModelVersion,
+      });
+      continue;
+    }
+
+    const base = computeCalibrationMetrics(group, modelVersion, probabilityModelVersion);
+
+    results.push({
+      ...base,
+      sliceKey,
+      sport,
+      marketFamily,
+    });
+  }
+
+  return results;
+}
+
+// ── Alert Thresholds ─────────────────────────────────────────────────────────
+
+export const CALIBRATION_THRESHOLDS = {
+  brier: { warning: 0.28, critical: 0.32 },   // Lower is better
+  ece: { warning: 0.06, critical: 0.10 },       // Lower is better
+  logLoss: { warning: 0.65, critical: 0.75 },   // Lower is better
+  minSampleForAlert: 30,                         // Don't alert on tiny samples
+} as const;
+
+export type CalibrationAlertLevel = 'green' | 'warning' | 'critical';
+
+/**
+ * Derive an alert level for a set of CalibrationMetrics.
+ *
+ * Returns 'green' when sample size is below the minimum threshold so we
+ * never fire on statistically insignificant slices.
+ */
+export function computeCalibrationAlertLevel(
+  metrics: CalibrationMetrics,
+): CalibrationAlertLevel {
+  if (metrics.sampleSize < CALIBRATION_THRESHOLDS.minSampleForAlert) return 'green';
+
+  if (
+    metrics.brierScore >= CALIBRATION_THRESHOLDS.brier.critical ||
+    metrics.ece >= CALIBRATION_THRESHOLDS.ece.critical ||
+    metrics.logLoss >= CALIBRATION_THRESHOLDS.logLoss.critical
+  ) {
+    return 'critical';
+  }
+
+  if (
+    metrics.brierScore >= CALIBRATION_THRESHOLDS.brier.warning ||
+    metrics.ece >= CALIBRATION_THRESHOLDS.ece.warning ||
+    metrics.logLoss >= CALIBRATION_THRESHOLDS.logLoss.warning
+  ) {
+    return 'warning';
+  }
+
+  return 'green';
 }
