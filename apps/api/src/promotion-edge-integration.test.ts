@@ -196,11 +196,11 @@ test('confidence fallback is used when both promotionScores.edge and domain anal
     repositories,
   );
 
-  // Confidence=0.90 → fallback edge score=90 ≥ 85 → ti edge passes
-  // trust=90 ≥ 85 → ti trust passes
-  // overall = 90*0.35 + 90*0.25 + 88*0.2 + 84*0.1 + 89*0.1 = 31.5+22.5+17.6+8.4+8.9 = 88.9 ≥ 80
-  // → trader-insights qualifies
-  assert.equal(result.pick.promotionTarget, 'trader-insights');
+  // Confidence=0.90 → fallback edge score=90 ≥ 90 (ei minimum) → all gates pass
+  // 'NBA steals' normalizes to 'steals-all-game-ou' (player-prop): trust×1.1, uniqueness×1.1
+  // ei score: (90*0.45)*1.0 + (90*0.30)*1.1 + (88*0.10)*1.0 + (84*0.10)*1.1 + (89*0.05)*1.0 = 92.59 ≥ 90
+  // → exclusive-insights qualifies (highest qualifying tier)
+  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');
 });
 
@@ -377,7 +377,7 @@ test('domain readiness signal activates when Kelly fraction is present', async (
   const result = await processSubmission(
     {
       source: 'api',
-      market: 'NBA dunks',
+      market: 'player.points',
       selection: 'Player Over 0.5',
       odds: 150,
       confidence: 0.65,
@@ -396,9 +396,11 @@ test('domain readiness signal activates when Kelly fraction is present', async (
     repositories,
   );
 
-  // edge: 90 (explicit), trust: 90 (explicit), readiness: 85 (domain Kelly), uniqueness: 84, boardFit: 89
-  // ti: edge=90≥85✓, trust=90≥85✓
-  // score = 90*0.35 + 90*0.25 + 85*0.2 + 84*0.1 + 89*0.1 = 31.5+22.5+17+8.4+8.9 = 88.3 ≥ 80 → qualifies
+  // edge: 90 (explicit), trust: 90 (explicit), readiness: 51 (Kelly at max_bet_fraction=0.05), uniqueness: 84, boardFit: 89
+  // 'player.points' normalizes to 'points-all-game-ou' (player-prop): trust×1.1, uniqueness×1.1
+  // ti score: (90*0.40)*1.0 + (90*0.30)*1.1 + (51*0.15)*1.0 + (84*0.10)*1.1 + (89*0.05)*1.0 = 87.04 ≥ 80 ✓
+  // exclusive-insights score = 88.99 < 90 → ei suppressed
+  // → trader-insights qualifies as highest passing tier
   assert.equal(result.pick.promotionTarget, 'trader-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');
 });
@@ -629,7 +631,7 @@ test('alert-agent pick with baseline confidence is not floor-clamped', async () 
     {
       source: 'alert-agent',
       submittedBy: 'system:alert-agent',
-      market: 'NBA Spread',
+      market: 'spread',
       selection: 'over',
       line: 6.5,
       confidence: 0.65,
@@ -660,7 +662,7 @@ test('alert-agent pick with low confidence bypasses the confidence floor entirel
     {
       source: 'alert-agent',
       submittedBy: 'system:alert-agent',
-      market: 'NBA Spread',
+      market: 'spread',
       selection: 'over',
       line: 6.5,
       confidence: 0.3,
