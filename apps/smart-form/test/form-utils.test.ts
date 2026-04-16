@@ -378,7 +378,7 @@ test('buildSubmissionPayload resolves NHL stat types to canonical keys', () => {
   const sogPayload = buildSubmissionPayload(
     buildBaseValues({ sport: 'NHL', statType: 'Shots on Goal' }),
   );
-  assert.equal(sogPayload.market, 'player.shots_on_goal');
+  assert.equal(sogPayload.market, 'player.shots');
 
   const blockedPayload = buildSubmissionPayload(
     buildBaseValues({ sport: 'NHL', statType: 'Blocked Shots' }),

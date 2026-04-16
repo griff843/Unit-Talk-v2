@@ -49,7 +49,6 @@ export const MARKET_KEY_MAP: Record<string, string> = {
   'MLB batting walks': 'batting-walks-all-game-ou',
   'MLB pitching strikeouts': 'pitching-strikeouts-all-game-ou',
   'MLB pitching innings': 'pitching-innings-all-game-ou',
-  'MLB batting strikeouts': 'batting-strikeouts-all-game-ou',
   'NHL goals': 'goals-all-game-ou',
   'NHL shots on goal': 'shots-all-game-ou',
   'NHL saves': 'saves-all-game-ou',
