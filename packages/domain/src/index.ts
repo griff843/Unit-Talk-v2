@@ -36,6 +36,7 @@ export * from './member-lifecycle.js';
 export * from './correlation-detection.js';
 export * from './execution-quality.js';
 export * from './shadow-mode.js';
+export * from './portfolio/index.js';
 // strategy/ not re-exported here (name collision: americanToDecimal with risk/kelly-sizer)
 // import directly: import { ExecutionSimulator } from '@unit-talk/domain/strategy'
 // evaluation/ not re-exported here (name collision: computeBrierScore/computeLogLoss)
