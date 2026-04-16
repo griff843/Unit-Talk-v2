@@ -9,13 +9,30 @@ import {
   type PromotionScoreBreakdown,
   type PromotionScoreWeights,
 } from '@unit-talk/contracts';
+import { applyPromotionModifiers, type ScoreProvenance } from './scoring/promotion-weight-profiles.js';
 
 export { bestBetsPromotionPolicy, exclusiveInsightsPromotionPolicy, traderInsightsPromotionPolicy } from '@unit-talk/contracts';
+export type { ScoreProvenance, MarketFamily, PromotionWeightModifiers } from './scoring/promotion-weight-profiles.js';
+export {
+  MARKET_FAMILY_PROMOTION_MODIFIERS,
+  SUPPORTED_SPORTS,
+  UNSUPPORTED_SPORT_SCORE_CAP,
+  classifyMarketFamily,
+  isSupportedSport,
+} from './scoring/promotion-weight-profiles.js';
+
+/**
+ * Extended promotion decision that includes score provenance tracking.
+ * Returned by evaluatePromotionEligibilityWithProvenance().
+ */
+export interface BoardPromotionDecisionWithProvenance extends BoardPromotionDecision {
+  scoreProvenance: ScoreProvenance;
+}
 
 export function evaluatePromotionEligibility(
   input: BoardPromotionEvaluationInput,
   policy: PromotionPolicy,
-): BoardPromotionDecision {
+): BoardPromotionDecisionWithProvenance {
   const decidedAt = input.decidedAt ?? new Date().toISOString();
   const decidedBy = input.decidedBy ?? 'system';
   const version = input.version ?? policy.version;
@@ -148,32 +165,72 @@ export function evaluatePromotionEligibility(
 
 export function evaluateBestBetsPromotion(
   input: BoardPromotionEvaluationInput,
-): BoardPromotionDecision {
+): BoardPromotionDecisionWithProvenance {
   return evaluatePromotionEligibility(input, bestBetsPromotionPolicy);
+}
+
+interface PromotionScoreBreakdownWithProvenance extends PromotionScoreBreakdown {
+  provenance: ScoreProvenance;
 }
 
 function calculateScore(
   input: BoardPromotionEvaluationInput,
   weights: PromotionScoreWeights,
-): PromotionScoreBreakdown {
+): PromotionScoreBreakdownWithProvenance {
   const e = normalizeScore(input.scoreInputs.edge);
   const t = normalizeScore(input.scoreInputs.trust);
   const r = normalizeScore(input.scoreInputs.readiness);
   const u = normalizeScore(input.scoreInputs.uniqueness);
   const b = normalizeScore(input.scoreInputs.boardFit);
 
-  return {
+  const weighted = {
     edge: e * weights.edge,
     trust: t * weights.trust,
     readiness: r * weights.readiness,
     uniqueness: u * weights.uniqueness,
     boardFit: b * weights.boardFit,
-    total:
-      e * weights.edge +
-      t * weights.trust +
-      r * weights.readiness +
-      u * weights.uniqueness +
-      b * weights.boardFit,
+  };
+
+  const market = input.pick.market ?? '';
+  const sport =
+    input.pick.metadata &&
+    typeof input.pick.metadata['sport'] === 'string'
+      ? input.pick.metadata['sport']
+      : null;
+
+  // When market context is absent (e.g., historical replay snapshots written before UTV2-623
+  // introduced market-family modifiers), skip modifiers entirely to preserve deterministic
+  // replay of pre-modifier decisions.
+  if (!market) {
+    const rawTotal = weighted.edge + weighted.trust + weighted.readiness + weighted.uniqueness + weighted.boardFit;
+    return {
+      edge: weighted.edge,
+      trust: weighted.trust,
+      readiness: weighted.readiness,
+      uniqueness: weighted.uniqueness,
+      boardFit: weighted.boardFit,
+      total: rawTotal,
+      provenance: {
+        marketFamily: 'unknown',
+        sport: sport ?? '',
+        modifiersApplied: false,
+        unsupportedSlice: false,
+        capApplied: false,
+        capValue: null,
+      },
+    };
+  }
+
+  const modified = applyPromotionModifiers(weighted, market, sport);
+
+  return {
+    edge: modified.edge,
+    trust: modified.trust,
+    readiness: modified.readiness,
+    uniqueness: modified.uniqueness,
+    boardFit: modified.boardFit,
+    total: modified.total,
+    provenance: modified.provenance,
   };
 }
 
@@ -190,19 +247,22 @@ function buildDecision(input: {
   decidedAt: string;
   decidedBy: string;
   version: string;
-  breakdown: PromotionScoreBreakdown;
+  breakdown: PromotionScoreBreakdownWithProvenance;
   reasons: string[];
   suppressionReasons: string[];
   policyWeights: PromotionScoreWeights;
   status: BoardPromotionDecision['status'];
   qualified: boolean;
-}): BoardPromotionDecision {
+}): BoardPromotionDecisionWithProvenance {
+  // Extract provenance from the extended breakdown but strip it from the
+  // contracts-typed breakdown field to keep the breakdown shape conformant.
+  const { provenance, ...coreBreakdown } = input.breakdown;
   return {
     status: input.status,
     target: input.qualified ? input.input.target : undefined,
     qualified: input.qualified,
     score: input.breakdown.total,
-    breakdown: input.breakdown,
+    breakdown: coreBreakdown,
     explanation: {
       target: input.input.target,
       reasons: input.reasons,
@@ -212,6 +272,7 @@ function buildDecision(input: {
     version: input.version,
     decidedAt: input.decidedAt,
     decidedBy: input.decidedBy,
+    scoreProvenance: provenance,
   };
 }
 
@@ -232,7 +293,7 @@ export function replayPromotion(
   snapshot: PromotionDecisionSnapshot,
   policy: PromotionPolicy,
   decidedAt?: string,
-): BoardPromotionDecision {
+): BoardPromotionDecisionWithProvenance {
   const input: BoardPromotionEvaluationInput = {
     target: policy.target,
     pick: {

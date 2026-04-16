@@ -30,7 +30,7 @@ function makeMinimalPick(confidence: number): CanonicalPick {
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
-    metadata: {},
+    metadata: { sport: 'NBA' },
     createdAt: new Date().toISOString(),
   };
 }

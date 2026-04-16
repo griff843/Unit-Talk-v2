@@ -82,8 +82,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.65,
       promotionStatus: 'qualified',
       promotionTarget: 'exclusive-insights',
-      promotionScore: 93.65,
-      promotionReason: 'hard eligibility checks passed | promotion score 93.65 meets threshold 90.00',
+      promotionScore: 97.19000000000001,
+      promotionReason: 'hard eligibility checks passed | promotion score 97.19 meets threshold 90.00',
       promotionVersion: 'exclusive-insights-v2',
       metadata: {
         sport: 'NBA',
@@ -111,11 +111,17 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.510834,
         hasRealEdge: true,
         realEdgeBookCount: 1,
+        contrarySignal: {
+          contrarianism: 'strongly-contrarian',
+          divergence: 0.139166,
+          direction: 'against-market',
+          marketSource: 'sgo',
+        },
       },
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', profitLossUnits: 1.5 } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', clvSkipReason: 'Event could not be resolved from pick metadata', profitLossUnits: 1.5 } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
@@ -123,7 +129,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', profitLossUnits: 1.5 } },
+      { id: 'settlement_1', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nba-win', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', clvSkipReason: 'Event could not be resolved from pick metadata', profitLossUnits: 1.5 } },
     ],
   },
   {
@@ -152,8 +158,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.72,
       promotionStatus: 'qualified',
       promotionTarget: 'best-bets',
-      promotionScore: 81.85000000000001,
-      promotionReason: 'hard eligibility checks passed | promotion score 81.85 meets threshold 70.00',
+      promotionScore: 84.645,
+      promotionReason: 'hard eligibility checks passed | promotion score 84.64 meets threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'MLB',
@@ -164,7 +170,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 0 } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: 0 } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
@@ -172,7 +178,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 0 } },
+      { id: 'settlement_1', status: 'settled', result: 'push', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://mlb-push', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: 0 } },
     ],
   },
   {
@@ -202,8 +208,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.6,
       promotionStatus: 'suppressed',
       promotionTarget: null,
-      promotionScore: 57.4,
-      promotionReason: 'promotion score 57.40 is below threshold 70.00',
+      promotionScore: 60.49000000000001,
+      promotionReason: 'promotion score 60.49 is below threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'NFL',
@@ -224,11 +230,17 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.75,
         hasRealEdge: false,
         realEdgeBookCount: 0,
+        contrarySignal: {
+          contrarianism: 'consensus-fade',
+          divergence: 0.15,
+          direction: 'with-market',
+          marketSource: 'confidence-delta',
+        },
       },
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context' } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', clvSkipReason: 'Event could not be resolved from pick metadata' } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
@@ -236,7 +248,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context' } },
+      { id: 'settlement_1', status: 'settled', result: 'void', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nfl-void', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_event_context', clvUnavailableReason: 'missing_event_context', clvSkipReason: 'Event could not be resolved from pick metadata' } },
     ],
   },
   {
@@ -265,10 +277,10 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       odds: null,
       confidence: 0.9,
       promotionStatus: 'qualified',
-      promotionTarget: 'trader-insights',
-      promotionScore: 89.05000000000001,
-      promotionReason: 'hard eligibility checks passed | promotion score 89.05 meets threshold 80.00',
-      promotionVersion: 'trader-insights-v2',
+      promotionTarget: 'exclusive-insights',
+      promotionScore: 92.69000000000001,
+      promotionReason: 'hard eligibility checks passed | promotion score 92.69 meets threshold 90.00',
+      promotionVersion: 'exclusive-insights-v2',
       metadata: {
         sport: 'NHL',
         eventName: 'Rangers vs Bruins',
@@ -278,14 +290,14 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
     },
     expectedSettlements: [
       {
-        settlement: { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: -1 } },
+        settlement: { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: -1 } },
         lifecycleToState: 'settled',
         auditAction: 'settlement.recorded',
         finalLifecycleState: 'settled',
         downstream: { effectiveSettlement: { effectiveRecordId: 'settlement_1', result: 'loss', status: 'settled', confidence: 'confirmed', correctionDepth: 0, isFinal: true }, settlementSummary: { totalRecords: 1, totalPicks: 1, byResult: { loss: 1 }, byStatus: { settled: 1 }, byConfidence: { confirmed: 1 }, hitRatePct: 0, flatBetRoi: { roiPct: -100, totalWagered: 110, totalProfit: -110 }, correctionCount: 0, pendingReviewCount: 0 }, lossAttribution: { classification: 'UNKNOWN', notes: ['no_feature_snapshot_available'] }, lossAttributionSummary: { totalLosses: 1, byCategory: [{ category: 'UNKNOWN', count: 1, pct: 100 }], topCategory: 'UNKNOWN', actionableInsights: [{ category: 'UNKNOWN', count: 1, pct: 100, recommendation: 'Instrument feature snapshots for better attribution' }], version: 'loss-attribution-v1.0' }, unresolvedReason: null },
       },
       {
-        settlement: { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 1 } },
+        settlement: { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: 1 } },
         lifecycleToState: null,
         auditAction: 'settlement.corrected',
         finalLifecycleState: 'settled',
@@ -293,8 +305,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
     ],
     expectedPersisted: [
-      { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: 1 } },
-      { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', profitLossUnits: -1 } },
+      { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: 1 } },
+      { id: 'settlement_1', status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-loss', notes: null, reviewReason: null, settledBy: 'operator', correctsId: null, payload: { requestStatus: 'settled', correction: false, clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: -1 } },
     ],
   },
 ];

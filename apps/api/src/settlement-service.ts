@@ -606,10 +606,21 @@ async function recordSettlementCorrection(
   };
 }
 
+const CLV_SKIP_REASON_MAP: Record<string, string> = {
+  missing_pick_odds: 'Pick has no valid odds',
+  missing_selection_side: "Selection doesn't contain 'over' or 'under'",
+  missing_event_context: 'Event could not be resolved from pick metadata',
+  missing_closing_line: 'No closing line available for this market',
+  missing_priced_side: 'Closing line missing price for selected side',
+  devig_failed: 'Probability devigging calculation failed',
+  opening_line_fallback: 'Used opening line as closing line proxy',
+};
+
 function buildClvDiagnosticPayload(outcome: CLVComputationOutcome): Record<string, unknown> {
   return {
     clvStatus: outcome.status,
     clvUnavailableReason: outcome.result ? null : outcome.status,
+    clvSkipReason: outcome.result ? null : (CLV_SKIP_REASON_MAP[outcome.status] ?? outcome.status),
     ...(outcome.result?.isOpeningLineFallback ? { isOpeningLineFallback: true } : {}),
     ...(outcome.resolvedMarketKey ? { clvResolvedMarketKey: outcome.resolvedMarketKey } : {}),
     ...(outcome.availableMarkets.length > 0 ? { clvAvailableMarkets: outcome.availableMarkets } : {}),

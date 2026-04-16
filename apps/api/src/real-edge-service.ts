@@ -19,7 +19,7 @@
  */
 
 import type { ProviderOfferRepository } from '@unit-talk/db';
-import { americanToImplied, proportionalDevig, roundTo } from '@unit-talk/domain';
+import { americanToImplied, proportionalDevig, roundTo, classifyContrarianism, type ContrarySignal } from '@unit-talk/domain';
 
 export interface RealEdgeResult {
   /** Real edge: model probability - market probability */
@@ -34,6 +34,8 @@ export interface RealEdgeResult {
   bookCount: number;
   /** Whether the model has positive edge vs market */
   hasRealEdge: boolean;
+  /** Contrarian classification — present when model diverges from market */
+  contrarySignal?: ContrarySignal;
 }
 
 export interface RealEdgeOptions {
@@ -68,7 +70,9 @@ export async function computeRealEdge(
     confidence, marketKey, selection, 'odds-api:pinnacle', providerOffers,
   );
   if (pinnacleEdge) {
-    return { ...pinnacleEdge, marketSource: 'pinnacle' };
+    const marketSource = 'pinnacle' as const;
+    const contrarySignal = classifyContrarianism(pinnacleEdge.modelProbability, pinnacleEdge.marketProbability, marketSource);
+    return { ...pinnacleEdge, marketSource, contrarySignal };
   }
 
   // Try multi-book consensus
@@ -76,7 +80,8 @@ export async function computeRealEdge(
     confidence, marketKey, selection, providerOffers,
   );
   if (consensusEdge) {
-    return consensusEdge;
+    const contrarySignal = classifyContrarianism(consensusEdge.modelProbability, consensusEdge.marketProbability, consensusEdge.marketSource);
+    return { ...consensusEdge, contrarySignal };
   }
 
   // Try SGO (existing single provider)
@@ -84,12 +89,15 @@ export async function computeRealEdge(
     confidence, marketKey, selection, 'sgo', providerOffers,
   );
   if (sgoEdge) {
-    return { ...sgoEdge, marketSource: 'sgo' };
+    const marketSource = 'sgo' as const;
+    const contrarySignal = classifyContrarianism(sgoEdge.modelProbability, sgoEdge.marketProbability, marketSource);
+    return { ...sgoEdge, marketSource, contrarySignal };
   }
 
   // Fallback: confidence delta (not real edge, but better than nothing)
   const impliedFromOdds = americanToImplied(submittedOdds);
   const confidenceDelta = roundTo(confidence - impliedFromOdds, 6);
+  const contrarySignal = classifyContrarianism(confidence, impliedFromOdds, 'confidence-delta');
 
   return {
     realEdge: confidenceDelta,
@@ -98,6 +106,7 @@ export async function computeRealEdge(
     marketSource: 'confidence-delta',
     bookCount: 0,
     hasRealEdge: confidenceDelta > 0,
+    contrarySignal,
   };
 }
 

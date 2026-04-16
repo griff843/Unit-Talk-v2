@@ -28,6 +28,11 @@ export const MARKET_KEY_MAP: Record<string, string> = {
   'player.total_bases': 'batting-total-bases-all-game-ou',
   'player.pitching_strikeouts': 'pitching-strikeouts-all-game-ou',
   'player.pitching_innings_pitched': 'pitching-innings-all-game-ou',
+  'player.goals': 'goals-all-game-ou',
+  'player.shots': 'shots-all-game-ou',
+  'player.saves': 'saves-all-game-ou',
+  'player.pim': 'pim-all-game-ou',
+  'player.strikeouts': 'batting-strikeouts-all-game-ou',
   'NBA points': 'points-all-game-ou',
   'NBA assists': 'assists-all-game-ou',
   'NBA rebounds': 'rebounds-all-game-ou',
@@ -44,10 +49,29 @@ export const MARKET_KEY_MAP: Record<string, string> = {
   'MLB batting walks': 'batting-walks-all-game-ou',
   'MLB pitching strikeouts': 'pitching-strikeouts-all-game-ou',
   'MLB pitching innings': 'pitching-innings-all-game-ou',
+  'NHL goals': 'goals-all-game-ou',
+  'NHL shots on goal': 'shots-all-game-ou',
+  'NHL saves': 'saves-all-game-ou',
+  'NHL penalty minutes': 'pim-all-game-ou',
 };
+
+/** Keys that are already in canonical form — pass them through unchanged. */
+const CANONICAL_GAME_LINE_KEYS = new Set([
+  'moneyline',
+  'spread',
+  'game_total_ou',
+  'team_total_ou',
+]);
 
 export function normalizeMarketKey(market: string): string {
   const trimmed = market.trim();
+
+  // Already a canonical key — return as-is (handles SGO-format keys like
+  // "turnovers-all-game-ou" or "points-all-game-ou" that arrive from provider_offers).
+  if (CANONICAL_GAME_LINE_KEYS.has(trimmed) || trimmed.endsWith('-all-game-ou')) {
+    return trimmed;
+  }
+
   const normalizedLookup = MARKET_KEY_MAP[trimmed] ?? MARKET_KEY_MAP[trimmed.toLowerCase()];
   if (normalizedLookup) {
     return normalizedLookup;
