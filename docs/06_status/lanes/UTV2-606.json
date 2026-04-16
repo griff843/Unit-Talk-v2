@@ -6,9 +6,12 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-606-audit-prerequisite-enable-the-autonomous-pick-pipeline",
   "branch": "griffadavi/utv2-606-audit-prerequisite-enable-the-autonomous-pick-pipeline",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "6277ba0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/332",
+  "files_changed": [
+    "packages/config/src/env.ts",
+    "apps/api/src/index.ts"
+  ],
   "file_scope_lock": [
     "packages/config/src/env.ts",
     "apps/api/src/index.ts",
@@ -17,10 +20,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-606/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-15T19:21:58.598Z",
-  "heartbeat_at": "2026-04-15T19:21:58.598Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-16T00:19:00.000Z",
+  "closed_at": "2026-04-16T00:19:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-606-audit-prerequisite-enable-the-autonomous-pick-pipeline.json",
   "created_by": "codex-cli",
