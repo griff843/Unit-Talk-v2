@@ -1318,6 +1318,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     snapshotAt: string,
     options?: { includeBookmakerKey?: boolean },
   ): Promise<number> {
+    // InMemory: no row-count problem, so no time-window filter needed.
     let updated = 0;
     for (const { providerEventId, commenceTime } of events) {
       if (snapshotAt < commenceTime) continue;
@@ -4042,17 +4043,27 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const startedEvents = events.filter((e) => snapshotAt >= e.commenceTime);
     if (startedEvents.length === 0) return 0;
 
+    // Scope to events that commenced within 48 hours of snapshotAt to avoid scanning stale data.
+    const windowStart = new Date(new Date(snapshotAt).getTime() - 48 * 60 * 60 * 1000).toISOString();
+    const recentEvents = startedEvents.filter((e) => e.commenceTime >= windowStart);
+    const skipped = startedEvents.length - recentEvents.length;
+    if (skipped > 0) {
+      console.warn(`[markClosingLines] skipping ${skipped} event(s) outside the 48h window`);
+    }
+    if (recentEvents.length === 0) return 0;
+
     let totalUpdated = 0;
 
-    for (const { providerEventId, commenceTime } of startedEvents) {
-      // Fetch all pre-commence offers for this event
+    for (const { providerEventId, commenceTime } of recentEvents) {
+      // Fetch pre-commence offers for this event. Limit 5000 rows as a safety cap.
       const { data, error } = await this.client
         .from('provider_offers')
         .select('id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing')
         .eq('provider_event_id', providerEventId)
         .lt('snapshot_at', commenceTime)
         .eq('is_closing', false)
-        .order('snapshot_at', { ascending: false });
+        .order('snapshot_at', { ascending: false })
+        .limit(5000);
 
       if (error) {
         throw new Error(`Failed to fetch offers for closing line marking: ${error.message}`);
