@@ -185,6 +185,19 @@ export async function processSubmission(
         marketProbability: realEdgeResult.marketProbability,
         hasRealEdge: realEdgeResult.hasRealEdge,
         realEdgeBookCount: realEdgeResult.bookCount,
+        ...(
+          realEdgeResult.contrarySignal &&
+          realEdgeResult.contrarySignal.contrarianism !== 'aligned'
+            ? {
+                contrarySignal: {
+                  contrarianism: realEdgeResult.contrarySignal.contrarianism,
+                  divergence: realEdgeResult.contrarySignal.divergence,
+                  direction: realEdgeResult.contrarySignal.direction,
+                  marketSource: realEdgeResult.contrarySignal.marketSource,
+                },
+              }
+            : {}
+        ),
       };
 
       // Enrich domain analysis with real edge if available

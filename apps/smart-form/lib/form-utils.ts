@@ -1,7 +1,6 @@
 import type { CatalogData, MarketTypeId } from './catalog';
 import type { EventOfferBrowseResult } from './api-client';
 import type { BetFormValues } from './form-schema';
-import { MARKET_TYPE_LABELS } from './form-schema';
 import type { SubmitPickPayload } from './api-client';
 
 export interface SubmissionContext {
@@ -361,11 +360,13 @@ function resolveSubmissionMarketKey(
     return statDrivenMarketKey;
   }
 
-  const marketLabel = MARKET_TYPE_LABELS[values.marketType];
-  return `${values.sport} - ${marketLabel}`;
+  throw new Error(
+    `Cannot resolve canonical market key: sport=${values.sport}, marketType=${values.marketType}, statType=${values.statType ?? 'none'}. Add this combination to STAT_TYPE_TO_SUBMISSION_MARKET_KEY.`,
+  );
 }
 
 const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
+  // NBA / basketball
   points: 'player.points',
   rebounds: 'player.rebounds',
   assists: 'player.assists',
@@ -377,11 +378,38 @@ const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
   'points + rebounds': 'player.points_rebounds',
   'points + assists': 'player.points_assists',
   'rebounds + assists': 'player.rebounds_assists',
+  // MLB / baseball
   hits: 'player.hits',
   'home runs': 'player.home_runs',
   rbi: 'player.rbi',
   walks: 'player.walks',
   'total bases': 'player.total_bases',
+  singles: 'player.singles',
+  doubles: 'player.doubles',
+  triples: 'player.triples',
+  'hits + runs + rbis': 'player.hits_runs_rbis',
+  'earned runs': 'player.earned_runs',
+  'hits allowed': 'player.hits_allowed',
+  'pitcher outs': 'player.pitcher_outs',
   'pitching strikeouts': 'player.pitching_strikeouts',
   'pitching innings pitched': 'player.pitching_innings_pitched',
+  strikeouts: 'player.strikeouts',
+  // NHL / hockey
+  goals: 'player.goals',
+  'shots on goal': 'player.shots',
+  'blocked shots': 'player.blocked_shots',
+  saves: 'player.saves',
+  'penalty minutes': 'player.pim',
+  // NFL / football
+  'passing yards': 'player.passing_yards',
+  'passing touchdowns': 'player.passing_touchdowns',
+  'passing attempts': 'player.passing_attempts',
+  'rushing yards': 'player.rushing_yards',
+  'rushing attempts': 'player.rushing_attempts',
+  'rush + rec yards': 'player.rush_rec_yards',
+  'receiving yards': 'player.receiving_yards',
+  receptions: 'player.receptions',
+  touchdowns: 'player.touchdowns',
+  tackles: 'player.tackles',
+  interceptions: 'player.interceptions',
 };
