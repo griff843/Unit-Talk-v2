@@ -63,6 +63,8 @@ export function createDiscordDeliveryAdapter(options?: {
   targetMap?: Record<string, string>;
   apiBaseUrl?: string;
   fetchImpl?: typeof fetch;
+  /** Abort fetch after this many ms (default 25000). Set 0 to disable. */
+  fetchTimeoutMs?: number;
 }): DeliveryAdapter {
   const dryRun = options?.dryRun ?? true;
   const environment = loadDeliveryEnvironment();
@@ -74,6 +76,7 @@ export function createDiscordDeliveryAdapter(options?: {
     );
   const apiBaseUrl = options?.apiBaseUrl ?? 'https://discord.com/api/v10';
   const fetchImpl = options?.fetchImpl ?? fetch;
+  const fetchTimeoutMs = options?.fetchTimeoutMs ?? 25000;
 
   return async (outbox: OutboxRecord) => {
     const resolvedChannelId = safelyResolveDiscordChannelId(outbox.target, targetMap);
@@ -85,14 +88,25 @@ export function createDiscordDeliveryAdapter(options?: {
       }
 
       try {
-        const response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
-          method: 'POST',
-          headers: {
-            Authorization: `Bot ${botToken}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(buildDiscordMessagePayload(outbox)),
-        });
+        const controller = fetchTimeoutMs > 0 ? new AbortController() : null;
+        const fetchTimer = controller
+          ? setTimeout(() => controller.abort(), fetchTimeoutMs)
+          : null;
+
+        let response: Response;
+        try {
+          response = await fetchImpl(`${apiBaseUrl}/channels/${channelId}/messages`, {
+            method: 'POST',
+            headers: {
+              Authorization: `Bot ${botToken}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(buildDiscordMessagePayload(outbox)),
+            ...(controller ? { signal: controller.signal } : {}),
+          });
+        } finally {
+          if (fetchTimer) clearTimeout(fetchTimer);
+        }
 
         if (!response.ok) {
           const errorText = await response.text();
