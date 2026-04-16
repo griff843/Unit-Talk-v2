@@ -111,6 +111,12 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.510834,
         hasRealEdge: true,
         realEdgeBookCount: 1,
+        contrarySignal: {
+          contrarianism: 'strongly-contrarian',
+          divergence: 0.139166,
+          direction: 'against-market',
+          marketSource: 'sgo',
+        },
       },
     },
     expectedSettlements: [
@@ -224,6 +230,12 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.75,
         hasRealEdge: false,
         realEdgeBookCount: 0,
+        contrarySignal: {
+          contrarianism: 'consensus-fade',
+          divergence: 0.15,
+          direction: 'with-market',
+          marketSource: 'confidence-delta',
+        },
       },
     },
     expectedSettlements: [
