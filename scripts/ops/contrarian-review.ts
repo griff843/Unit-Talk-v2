@@ -21,15 +21,6 @@ import { evaluateContraryVerdict, type Contrarianism, type ContrarySignal } from
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
-interface PickRow {
-  id: string;
-  metadata: Record<string, unknown> | null;
-  promotion_status: string | null;
-  // Settlement data joined via settlement_records
-  outcome?: string | null;
-  clv_percent?: number | null;
-}
-
 interface BucketStats {
   contrarianism: Contrarianism;
   count: number;
