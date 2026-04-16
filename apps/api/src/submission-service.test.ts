@@ -33,7 +33,7 @@ test('handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued
     {
       body: {
         source: 'enqueue-gap-test',
-        market: 'NFL passing yards',
+        market: 'player.passing_yards',
         selection: 'QB Over 287.5',
         line: 287.5,
         odds: -115,
@@ -42,7 +42,7 @@ test('handleSubmitPick auto-enqueues a qualified pick and returns outboxEnqueued
         eventName: 'NFL Proof Game',
         metadata: {
           sport: 'NFL',
-          promotionScores: { edge: 92, trust: 88, readiness: 85, uniqueness: 85, boardFit: 90 },
+          promotionScores: { edge: 88, trust: 88, readiness: 85, uniqueness: 85, boardFit: 90 },
         },
       },
     },
@@ -998,10 +998,10 @@ test('approval does not imply best-bets promotion in runtime', async () => {
   );
 
   assert.equal(result.pickRecord.approval_status, 'approved');
-  // With eager eval at submission, edge=92 trust=88 qualify for trader-insights (higher priority).
-  // picks.promotion_target = 'trader-insights', not 'best-bets'.
+  // With eager eval at submission, edge=92 trust=88 qualify for exclusive-insights (highest priority).
+  // picks.promotion_target = 'exclusive-insights', not 'best-bets'.
   assert.equal(result.pickRecord.promotion_status, 'qualified');
-  assert.equal(result.pickRecord.promotion_target, 'trader-insights');
+  assert.equal(result.pickRecord.promotion_target, 'exclusive-insights');
 
   await assert.rejects(
     () =>
@@ -1220,7 +1220,7 @@ test('qualified picks are allowed to route to trader-insights', async () => {
         sport: 'NBA',
         eventName: 'Bulls vs Knicks',
         promotionScores: {
-          edge: 91,
+          edge: 88,
           trust: 90,
           readiness: 88,
           uniqueness: 84,
@@ -1814,21 +1814,21 @@ test('dual-qualifying pick routes exclusively to trader-insights and is blocked 
     repositories,
   );
 
-  // After eager eval: trader-insights wins (both qualify, ti has higher priority).
-  assert.equal(result.pick.promotionTarget, 'trader-insights');
+  // After eager eval: exclusive-insights wins (all three qualify, ei has highest priority).
+  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');
 
-  // Routes successfully to trader-insights.
+  // Routes successfully to exclusive-insights.
   const tiTracked = await enqueueDistributionWithRunTracking(
     result.pick,
-    'discord:trader-insights',
+    'discord:exclusive-insights',
     'api',
     repositories.picks,
     repositories.outbox,
     repositories.runs,
     repositories.audit,
   );
-  assert.equal(tiTracked.target, 'discord:trader-insights');
+  assert.equal(tiTracked.target, 'discord:exclusive-insights');
 
   // Best-bets routing is blocked even though the pick would qualify on score alone.
   await assert.rejects(
@@ -1850,14 +1850,14 @@ test('exclusive-insights qualifies at its minimum threshold', () => {
   const pick: CanonicalPick = {
     id: 'pick-exclusive-threshold',
     submissionId: 'submission-exclusive-threshold',
-    market: 'NBA points',
+    market: 'player.points',
     selection: 'Player Over 30.5',
     confidence: 0.95,
     source: 'api',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
-    metadata: {},
+    metadata: { sport: 'NBA' },
     createdAt: '2026-03-28T00:00:00.000Z',
   };
 
