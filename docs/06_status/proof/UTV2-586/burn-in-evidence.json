@@ -31,12 +31,21 @@
       "pr": 336,
       "commit": "7a9074f",
       "fix": "'board-construction' added to LIVE_SOURCES in distribution-worker — all board picks were dead-lettered immediately with proof-pick-blocked"
+    },
+    "UTV2-648": {
+      "pr": 337,
+      "commit": "12fef52",
+      "fix": "AbortController signal added to Discord delivery fetch with 25s timeout — fetch was hanging indefinitely, bypassing watchdog recovery"
+    },
+    "UTV2-649": {
+      "commit": "fda31ac",
+      "fix": "attempt_count included in distribution-process system_run idempotency key — retry attempts after 40+ stale reaps hit duplicate key constraint on startup"
     }
   },
 
   "pipeline_proof": {
-    "proof_window": "2026-04-15T19:51:00Z to 2026-04-15T20:51:00Z",
-    "api_version": "main@7a9074f",
+    "proof_window": "2026-04-15T19:51:00Z to 2026-04-16T00:16:14Z",
+    "api_version": "main@fda31ac",
     "stages": {
       "provider_offers": {
         "status": "HEALTHY",
@@ -64,12 +73,11 @@
       },
       "distribution_outbox": {
         "status": "HEALTHY",
-        "evidence": "9 outbox entries created after UTV2-646+UTV2-647 fixes. 4 targeting discord:best-bets (picked up by worker, currently processing). 5 targeting discord:trader-insights (pending — not in worker targets). outbox_new confirmed > 0"
+        "evidence": "9 outbox entries created: 4 targeting discord:best-bets, 5 targeting discord:trader-insights. All 4 best-bets entries transitioned to status=sent (attempt_count=41-42)"
       },
       "distribution_receipts": {
-        "status": "PARTIAL",
-        "evidence": "Prior receipt: outbox 1395ed99 → discord:best-bets sent at 2026-04-15T09:19:34Z (smart-form source, same channel/token). Board-construction delivery currently cycling in processing→stale-reap due to Discord fetch hang (no AbortController signal). UTV2-648 open.",
-        "blocker_issue": "UTV2-648"
+        "status": "HEALTHY",
+        "evidence": "4 live Discord receipts confirmed: receipt_type=discord.message, status=sent, dryRun=false, channelId=1296531122234327100. Discord messageIds: 1494128900039770132, 1494128903210663957, 1494128905567735961, 1494129256371064852. Recorded at 2026-04-16T00:14:49Z – 2026-04-16T00:16:14Z. Source=board-construction on all 4."
       }
     }
   },
@@ -114,10 +122,16 @@
     {
       "id": "UTV2-648",
       "severity": "blocking for receipt confirmation",
-      "description": "Discord delivery fetch has no AbortController signal — hangs indefinitely when Discord API is slow, bypassing watchdog recovery. Delivery cycles processing→stale-reap every 5 min. Prior receipt (09:19 UTC same day, same channel) proves channel/token work.",
-      "status": "OPEN, T2"
+      "description": "Discord delivery fetch had no AbortController signal — hung indefinitely when Discord API was slow, bypassing watchdog recovery. Delivery cycled processing→stale-reap every 5 min.",
+      "status": "FIXED and merged (PR #337, commit 12fef52)"
+    },
+    {
+      "id": "UTV2-649",
+      "severity": "blocking for worker restart after high attempt_count",
+      "description": "distribution-process system_run idempotency key lacked attempt_count — after 40+ stale reaps, worker crashed on startup with duplicate key constraint violation on every claim attempt.",
+      "status": "FIXED and merged (commit fda31ac)"
     }
   ],
 
-  "verdict": "PARTIAL (7.5/8 stages) — pipeline proven from offers through outbox creation with delivery attempted. 9/11 board picks qualified, 9 outbox entries created, worker claiming entries. Prior receipt at 09:19 UTC today proves full E2E delivery works for this channel. Current delivery cycles blocked by Discord fetch hang (no timeout — UTV2-648). Architectural pipeline is complete and operational end-to-end."
+  "verdict": "COMPLETE (8/8 stages) — full autonomous pick pipeline proven end-to-end. 4 live Discord receipts from board-construction source to discord:best-bets channel, dryRun=false, real Discord message IDs confirmed. Pipeline: offers → market_universe → candidates → scoring → board → picks → outbox → receipts. 7 prerequisite fixes merged during burn-in window."
 }
