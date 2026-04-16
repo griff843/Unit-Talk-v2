@@ -393,11 +393,13 @@ const STAT_TYPE_TO_SUBMISSION_MARKET_KEY: Record<string, string> = {
   'pitcher outs': 'player.pitcher_outs',
   'pitching strikeouts': 'player.pitching_strikeouts',
   'pitching innings pitched': 'player.pitching_innings_pitched',
+  strikeouts: 'player.strikeouts',
   // NHL / hockey
   goals: 'player.goals',
-  'shots on goal': 'player.shots_on_goal',
+  'shots on goal': 'player.shots',
   'blocked shots': 'player.blocked_shots',
   saves: 'player.saves',
+  'penalty minutes': 'player.pim',
   // NFL / football
   'passing yards': 'player.passing_yards',
   'passing touchdowns': 'player.passing_touchdowns',

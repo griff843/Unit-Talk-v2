@@ -1287,3 +1287,100 @@ test('runGradingPass grades a game_total_ou over pick as loss when actual < line
   assert.equal(detail.outcome, 'graded');
   assert.equal(detail.result, 'loss');
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-614: participant resolution via metadata.player fuzzy match
+// ---------------------------------------------------------------------------
+
+test('runGradingPass resolves participant via metadata.player fuzzy match when participant_id is null', async () => {
+  // Simulate a Smart Form pick: no participant_id set on the pick row itself,
+  // but metadata.player contains the player display name and metadata.sport is set.
+  const { repositories, pickId } = await createPostedPickFixture({
+    market: 'points-all-game-ou',
+    selection: 'Over 24.5',
+    line: 24.5,
+  });
+
+  // Seed the participant — this is what the ingestor would have stored.
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'nba-player-lebron-james',
+    displayName: 'LeBron James',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+
+  // Seed a completed event linked to that participant.
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-lebron-fuzzy',
+    sportId: 'NBA',
+    eventName: 'Lakers vs Celtics',
+    eventDate: '2026-04-15',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-15T23:30:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+
+  // Seed a game result for that participant + market.
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 32,
+    source: 'sgo',
+    sourcedAt: '2026-04-15T23:59:00.000Z',
+  });
+
+  // Mutate the pick to simulate what Smart Form produces:
+  // no participant_id on the row, but metadata.player and metadata.sport are set.
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      player: 'LeBron James',
+      sport: 'NBA',
+      eventName: 'Lakers vs Celtics',
+    },
+  }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1, 'pick should be graded via fuzzy name match');
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail, 'detail entry must exist');
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win', 'actual 32 > line 24.5 → win');
+});
+
+test('runGradingPass skips pick with missing_participant_id when metadata.player is absent', async () => {
+  // No metadata.player and no participant_id — should remain skipped.
+  const { repositories, pickId } = await createPostedPickFixture({
+    market: 'points-all-game-ou',
+    selection: 'Over 24.5',
+    line: 24.5,
+  });
+
+  // Ensure participant_id is null and metadata has no player field.
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      sport: 'NBA',
+      eventName: 'Some Game',
+    },
+  }));
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.equal(detail.reason, 'missing_participant_id');
+});
