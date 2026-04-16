@@ -12,7 +12,8 @@ import {
   type ExposureGateConfig,
   resolveExposureGateConfig,
 } from '@unit-talk/contracts';
-import { evaluatePromotionEligibility, detectCorrelatedPicks, computeCorrelationPenalty } from '@unit-talk/domain';
+import { evaluatePromotionEligibility, computeBoardFitScore } from '@unit-talk/domain';
+import type { PortfolioSlot } from '@unit-talk/domain';
 import type {
   AuditLogRecord,
   AuditLogRepository,
@@ -826,13 +827,26 @@ async function readPromotionScoreInputs(
     }
   }
 
-  let boardFit = readScore(configured, 'boardFit', 75);
+  const explicitBoardFit =
+    typeof configured?.['boardFit'] === 'number' && Number.isFinite(configured['boardFit'] as number)
+      ? (configured['boardFit'] as number)
+      : null;
 
-  // Apply correlation penalty when open picks are available
-  if (openPicks && openPicks.length > 0) {
-    const correlationInfo = detectCorrelatedPicks(pick, openPicks);
-    const penalty = computeCorrelationPenalty(correlationInfo);
-    boardFit = Math.max(0, boardFit + penalty);
+  let boardFit: number;
+  if (explicitBoardFit !== null) {
+    // Operator-provided explicit override takes precedence over live computation
+    boardFit = explicitBoardFit;
+  } else if (openPicks && openPicks.length > 0) {
+    // Compute from live portfolio state: concentration + correlation penalties.
+    // Exclude self: the pick being evaluated is already in validated state in the
+    // open picks list (saved before promotion runs). Without this filter, the pick
+    // would be counted twice in the board (once in board[], once as candidate).
+    const board = openPicks.filter(p => p.id !== pick.id).map(pickToPortfolioSlot);
+    const candidate = pickToPortfolioSlot(pick);
+    boardFit = computeBoardFitScore(board, candidate).score;
+  } else {
+    // No board data available — neutral fallback
+    boardFit = 75;
   }
 
   return {
@@ -1010,6 +1024,57 @@ function readScore(
   }
 
   return fallback;
+}
+
+/**
+ * Map a CanonicalPick to a PortfolioSlot for board-fit computation.
+ *
+ * Extracts sport, market family, participant, team, and sizing signals from
+ * pick fields and metadata. Fields not present in metadata default to safe
+ * neutral values — the concentration/correlation engine handles missing data
+ * gracefully (null participantId → no player concentration penalty, etc.).
+ */
+function pickToPortfolioSlot(pick: CanonicalPick): PortfolioSlot {
+  const market = pick.market.toLowerCase();
+  let marketFamily: PortfolioSlot['marketFamily'] = 'unknown';
+  if (market.startsWith('player_') || market.startsWith('player-') || market.includes('player')) {
+    marketFamily = 'player-prop';
+  } else if (market.startsWith('team_') || market.startsWith('team-')) {
+    marketFamily = 'team-prop';
+  } else if (
+    market.includes('spread') ||
+    market.includes('moneyline') ||
+    market.includes('total') ||
+    market.includes('game_line') ||
+    market.includes('game-line')
+  ) {
+    marketFamily = 'game-line';
+  }
+
+  const domainEdge = readDomainAnalysisEdgeScore(pick.metadata);
+  const edge = domainEdge !== null ? domainEdge / 100 : 0;
+  const stake = typeof pick.stakeUnits === 'number' ? Math.min(1, pick.stakeUnits / 10) : 0.1;
+  const modelProbability =
+    typeof pick.confidence === 'number'
+      ? Math.min(1, Math.max(0, pick.confidence / 100))
+      : 0.5;
+
+  return {
+    pickId: pick.id,
+    sport: readMetadataString(pick.metadata, 'sport') ?? 'unknown',
+    marketFamily,
+    participantId:
+      readMetadataString(pick.metadata, 'playerId') ??
+      readMetadataString(pick.metadata, 'participantId') ??
+      null,
+    teamId:
+      readMetadataString(pick.metadata, 'teamId') ??
+      readMetadataString(pick.metadata, 'team') ??
+      null,
+    modelProbability,
+    edge,
+    stake,
+  };
 }
 
 function normalizeConfidenceForScoring(confidence: number | undefined) {

@@ -5,6 +5,7 @@ import {
   readDomainAnalysisEdgeSource,
   readDomainAnalysisTrustSignal,
   readDomainAnalysisReadinessSignal,
+  evaluateAndPersistBestBetsPromotion,
 } from './promotion-service.js';
 import { processSubmission } from './submission-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
@@ -715,6 +716,75 @@ test('non-smart-form pick with low confidence is correctly suppressed by confide
 
   // Non-smart-form pick should be blocked: confidence 0.3 < floor 0.6.
   assert.equal(result.pick.promotionStatus, 'not_eligible', 'system pick with low confidence must be blocked by confidence floor');
+});
+
+// ── boardFit: computeBoardFitScore wired call ────────────────────────────────
+
+test('boardFit uses computeBoardFitScore when open picks exist — concentration penalty reduces score below 75', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  // Submit pick A: NBA player prop for a specific player. Explicit scores so it
+  // qualifies and sits in the open board (validated state) when pick B is evaluated.
+  const resultA = await processSubmission(
+    {
+      source: 'api',
+      market: 'player_points',
+      selection: 'Over 22.5',
+      odds: -110,
+      confidence: 0.70,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Warriors',
+        playerId: 'player-test-abc',
+        teamId: 'LAL',
+        promotionScores: { edge: 80, trust: 80, readiness: 80, uniqueness: 80, boardFit: 80 },
+      },
+    },
+    repositories,
+  );
+
+  // Pick A must be stored as a valid open pick.
+  assert.ok(resultA.pick.id, 'pick A must have an id');
+
+  // Submit pick B: same player, same team, same sport — but NO explicit boardFit.
+  // readPromotionScoreInputs will call computeBoardFitScore([slotA], slotB).
+  const resultB = await processSubmission(
+    {
+      source: 'api',
+      market: 'player_assists',
+      selection: 'Over 8.5',
+      odds: -110,
+      confidence: 0.70,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Warriors',
+        playerId: 'player-test-abc',
+        teamId: 'LAL',
+        // No explicit boardFit — must be computed from live portfolio
+        promotionScores: { edge: 80, trust: 80, readiness: 80, uniqueness: 80 },
+      },
+    },
+    repositories,
+  );
+
+  // Re-evaluate pick B's best-bets promotion to get the full snapshot.
+  // openPicks at this point = [pickA] (pickB self-filters as it is the candidate).
+  const evalResult = await evaluateAndPersistBestBetsPromotion(
+    resultB.pick.id,
+    'test',
+    repositories.picks,
+    repositories.audit,
+  );
+
+  // With player-test-abc appearing in both the board (pick A) and the candidate (pick B),
+  // playerConcentration = 1.0 >> limit (0.25) → significant concentration penalty applied.
+  // boardFit should be well below the 75 neutral fallback.
+  const boardFit = evalResult.snapshot.scoreInputs.boardFit;
+  assert.ok(
+    boardFit < 75,
+    `boardFit=${boardFit} should be < 75 due to player concentration penalty from pick A on same player`,
+  );
+  assert.ok(boardFit >= 0, 'boardFit must be non-negative');
 });
 
 test('smart-form submission payload includes submittedBy from capper field', async () => {
