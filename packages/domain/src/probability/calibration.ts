@@ -217,7 +217,7 @@ export function computeSliceCalibrationMetrics(
 
   const results: SliceCalibrationMetrics[] = [];
 
-  for (const [key, group] of groups) {
+  for (const [_key, group] of groups) {
     const firstItem = group[0]!;
     const sport = firstItem.sport ?? null;
     const marketFamily = firstItem.marketFamily ?? null;

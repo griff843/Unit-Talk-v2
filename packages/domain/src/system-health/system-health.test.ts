@@ -17,7 +17,7 @@ import { generateSystemHealthReport } from './system-health-runner.js';
 import { SYSTEM_HEALTH_REPORT_VERSION } from './system-health-types.js';
 
 import type { DriftReport } from '../rollups/drift-detector.js';
-import type { SystemHealthRecord, ModelHealthState } from './system-health-types.js';
+import type { SystemHealthRecord } from './system-health-types.js';
 
 // ── Test Data Helpers ───────────────────────────────────────────────────────
 
@@ -503,7 +503,7 @@ function makeReportWithRoi(roiPct: number, calibrationAlert: 'green' | 'warning'
   let brier_score = 0.10;
   let ece = 0.02;
   let log_loss = 0.30;
-  let sample_size = 50;
+  const sample_size = 50;
   if (calibrationAlert === 'warning') {
     brier_score = 0.29; ece = 0.07; log_loss = 0.67;
   } else if (calibrationAlert === 'critical') {
@@ -605,7 +605,7 @@ describe('evaluateModelHealthState', () => {
     const report = makeReportWithRoi(-16, 'critical');
     // lastTransitionAt is only 1 hour ago
     const lastTransitionAt = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
-    const { newState, trigger } = evaluateModelHealthState(report, 'critical', 24, lastTransitionAt);
+    const { newState: _newState, trigger } = evaluateModelHealthState(report, 'critical', 24, lastTransitionAt);
     // Should not trigger a requiresOperatorDecision flag yet
     // (may or may not transition depending on other conditions)
     if (trigger !== null && trigger.fromState === 'critical' && trigger.toState === 'critical') {
