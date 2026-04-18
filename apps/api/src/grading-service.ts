@@ -36,6 +36,9 @@ export type GradingRetryState = Map<
   }
 >;
 
+const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
+const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
+
 export async function runGradingPass(
   repositories: Pick<
     RepositoryBundle,
@@ -110,6 +113,19 @@ export async function runGradingPass(
           pickId: pick.id,
           outcome: 'skipped',
           reason: 'event_not_completed',
+        });
+        continue;
+      }
+
+      const provenance = validateEventProvenanceForGrading(pick, event);
+      if (!provenance.ok) {
+        options.logger?.warn?.(
+          `Skipping grading for pick ${pick.id}: ${provenance.reason}`,
+        );
+        details.push({
+          pickId: pick.id,
+          outcome: 'skipped',
+          reason: provenance.reason,
         });
         continue;
       }
@@ -249,6 +265,74 @@ export async function runGradingPass(
     errors: errorCount,
     details,
   };
+}
+
+function validateEventProvenanceForGrading(
+  pick: PickRecord,
+  event: EventRow,
+): { ok: true } | { ok: false; reason: string } {
+  if (!readNonEmptyString(event.external_id)) {
+    return { ok: false, reason: 'event_provenance_missing_external_id' };
+  }
+
+  const metadata = asRecord(event.metadata);
+  const provider = normalizeProviderKey(
+    readNonEmptyString(metadata?.providerKey) ??
+      readNonEmptyString(metadata?.provider_key) ??
+      readNonEmptyString(metadata?.source),
+  );
+  if (!provider || !TRUSTED_GRADING_EVENT_PROVIDERS.has(provider)) {
+    return { ok: false, reason: 'event_provenance_untrusted_provider' };
+  }
+
+  const ingestionCycleRunId =
+    readNonEmptyString(metadata?.ingestionCycleRunId) ??
+    readNonEmptyString(metadata?.ingestion_cycle_run_id) ??
+    readNonEmptyString(metadata?.ingestionRunId) ??
+    readNonEmptyString(metadata?.runId);
+  if (!ingestionCycleRunId) {
+    return { ok: false, reason: 'event_provenance_missing_ingestion_cycle' };
+  }
+  const ingestionSource = readNonEmptyString(metadata?.ingestionSource);
+  if (ingestionSource !== 'ingestor.cycle') {
+    return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
+  }
+
+  if (
+    hasExplicitEventReferenceTime(pick) &&
+    eventReferenceMismatchMs(pick, event) > MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS
+  ) {
+    return { ok: false, reason: 'event_provenance_historical_mismatch' };
+  }
+
+  return { ok: true };
+}
+
+function normalizeProviderKey(value: string | null) {
+  return value?.trim().toLowerCase() ?? null;
+}
+
+function readNonEmptyString(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function hasExplicitEventReferenceTime(pick: PickRecord) {
+  const metadata = asRecord(pick.metadata);
+  return [metadata?.eventStartTime, metadata?.eventTime, metadata?.starts_at].some(
+    (candidate) => typeof candidate === 'string' && candidate.trim().length > 0,
+  );
+}
+
+function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
+  const referenceTime = readPickEventReferenceTime(pick);
+  if (referenceTime === null) {
+    return 0;
+  }
+
+  const eventTime = new Date(readEventStartTime(event)).getTime();
+  return Number.isFinite(eventTime)
+    ? Math.abs(eventTime - referenceTime)
+    : Number.POSITIVE_INFINITY;
 }
 
 async function postSettlementRecapIfPossible(
