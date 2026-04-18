@@ -374,6 +374,14 @@ function inferSelectionSide(selection: string) {
   if (/\bunder\b/.test(normalized)) {
     return 'under' as const;
   }
+  // Smart-form serializes picks as "Player Name O X.5" / "O X.5" with abbreviated O/U.
+  // Match standalone O/U token followed by a digit (e.g. "Brunson O 28.5", "O 8").
+  if (/\bO\s+\d/.test(selection) || /^O\s+\d/.test(selection)) {
+    return 'over' as const;
+  }
+  if (/\bU\s+\d/.test(selection) || /^U\s+\d/.test(selection)) {
+    return 'under' as const;
+  }
   return null;
 }
 

@@ -408,26 +408,40 @@ async function resolvePickParticipantId(
 function chooseEventForPick(pick: PickRecord, events: EventRow[]): EventRow | null {
   const metadata = asRecord(pick.metadata);
   const eventName = typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
+  const namedCandidates = eventName
+    ? events.filter((event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase())
+    : [];
+  const eventCandidates = namedCandidates.length > 0 ? namedCandidates : events;
 
-  if (eventName) {
-    const namedMatch = events.find(
-      (event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
-    );
-    if (namedMatch) {
-      return namedMatch;
-    }
+  if (eventCandidates.length === 0) {
+    return null;
   }
 
-  const pickCreatedAt = new Date(pick.created_at).getTime();
+  const referenceTime = readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
   return (
-    [...events].sort((left, right) => {
-      const leftDistance = Math.abs(new Date(readEventStartTime(left)).getTime() - pickCreatedAt);
+    [...eventCandidates].sort((left, right) => {
+      const leftDistance = Math.abs(new Date(readEventStartTime(left)).getTime() - referenceTime);
       const rightDistance = Math.abs(
-        new Date(readEventStartTime(right)).getTime() - pickCreatedAt,
+        new Date(readEventStartTime(right)).getTime() - referenceTime,
       );
       return leftDistance - rightDistance;
     })[0] ?? null
   );
+}
+
+function readPickEventReferenceTime(pick: PickRecord): number | null {
+  const metadata = asRecord(pick.metadata);
+  const candidates = [metadata?.eventStartTime, metadata?.eventTime, metadata?.starts_at];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
+      continue;
+    }
+    const timestamp = new Date(candidate).getTime();
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+  return null;
 }
 
 function readEventStartTime(event: EventRow) {
