@@ -1402,12 +1402,25 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
       (row) => row.external_id === input.externalId,
     );
     const now = new Date().toISOString();
+
+    // Preserve enrichment-only fields (headshot_url, logo_url) managed by the
+    // enrichment service. The ingestor passes null for these — do not overwrite
+    // a previously enriched value with null.
+    const incomingMeta = input.metadata as Record<string, unknown>;
+    const existingMeta = (existing?.metadata as Record<string, unknown>) ?? {};
+    const mergedMeta: Record<string, unknown> = { ...incomingMeta };
+    for (const field of ['headshot_url', 'logo_url']) {
+      if (mergedMeta[field] == null && existingMeta[field] != null) {
+        mergedMeta[field] = existingMeta[field];
+      }
+    }
+
     const record: ParticipantRow = {
       id: existing?.id ?? crypto.randomUUID(),
       display_name: input.displayName,
       external_id: input.externalId,
       league: input.league ?? null,
-      metadata: toJsonObject(input.metadata),
+      metadata: toJsonObject(mergedMeta),
       participant_type: input.participantType,
       sport: input.sport ?? null,
       created_at: existing?.created_at ?? now,
@@ -4247,13 +4260,26 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
   }
 
   async upsertByExternalId(input: ParticipantUpsertInput): Promise<ParticipantRow> {
+    // Preserve enrichment-only fields (headshot_url, logo_url) managed by the
+    // enrichment service. The ingestor passes null for these — do not overwrite
+    // a previously enriched value with null.
+    const existing = await this.findByExternalId(input.externalId);
+    const incomingMeta = input.metadata as Record<string, unknown>;
+    const existingMeta = (existing?.metadata as Record<string, unknown>) ?? {};
+    const mergedMeta: Record<string, unknown> = { ...incomingMeta };
+    for (const field of ['headshot_url', 'logo_url']) {
+      if (mergedMeta[field] == null && existingMeta[field] != null) {
+        mergedMeta[field] = existingMeta[field];
+      }
+    }
+
     const row = {
       external_id: input.externalId,
       display_name: input.displayName,
       participant_type: input.participantType,
       sport: input.sport ?? null,
       league: input.league ?? null,
-      metadata: toJsonObject(input.metadata),
+      metadata: toJsonObject(mergedMeta),
       updated_at: new Date().toISOString(),
     };
 
