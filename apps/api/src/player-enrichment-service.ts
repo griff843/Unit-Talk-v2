@@ -62,16 +62,50 @@ export async function resolveHeadshotUrl(
 }
 
 // ── MLB ────────────────────────────────────────────────────────────
-async function resolveMLBHeadshot(displayName: string): Promise<string | null> {
-  const url = `https://statsapi.mlb.com/api/v1/people/search?names=${encodeURIComponent(displayName)}`;
-  const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+// Cache the full MLB roster for 2 hours to avoid making one HTTP call per player.
+// statsapi.mlb.com rate-limits sequential per-player search requests, causing most
+// MLB players to get skipped on the enrichment pass without this.
+interface MlbRosterCache {
+  players: Array<{ id: number; fullName: string }>;
+  fetchedAt: number;
+}
+let mlbRosterCache: MlbRosterCache | null = null;
+const MLB_ROSTER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+async function fetchMlbRoster(): Promise<Array<{ id: number; fullName: string }> | null> {
+  const now = Date.now();
+  if (mlbRosterCache && now - mlbRosterCache.fetchedAt < MLB_ROSTER_CACHE_TTL_MS) {
+    return mlbRosterCache.players;
+  }
+
+  // MLB season runs March–October; use previous year in off-season
+  const season = new Date().getMonth() >= 2 ? new Date().getFullYear() : new Date().getFullYear() - 1;
+  const url = `https://statsapi.mlb.com/api/v1/sports/1/players?season=${season}`;
+  const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
   if (!res.ok) return null;
 
-  const data = (await res.json()) as { people?: Array<{ id: number }> };
-  if (!data.people?.length) return null;
+  const data = (await res.json()) as { people?: Array<{ id: number; fullName: string }> };
+  const players = data.people;
+  if (!players?.length) return null;
 
-  const playerId = data.people[0]!.id;
-  return `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${playerId}/headshot/67/current`;
+  mlbRosterCache = { players, fetchedAt: now };
+  return players;
+}
+
+async function resolveMLBHeadshot(displayName: string): Promise<string | null> {
+  const players = await fetchMlbRoster();
+  if (!players) return null;
+
+  const nameLower = displayName.toLowerCase();
+  const match = players.find((p) => {
+    const fullNameLower = p.fullName.toLowerCase();
+    // Exact match first, then all name parts present (handles "Bobby Witt Jr." etc.)
+    return fullNameLower === nameLower ||
+      nameLower.split(' ').filter(Boolean).every((part) => fullNameLower.includes(part));
+  });
+
+  if (!match) return null;
+  return `https://img.mlbstatic.com/mlb-photos/image/upload/w_213,d_people:generic:headshot:silo:current.png,q_auto:best,f_auto/v1/people/${match.id}/headshot/67/current`;
 }
 
 // ── NBA ────────────────────────────────────────────────────────────
