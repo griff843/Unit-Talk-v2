@@ -75,10 +75,23 @@ async function resolveMLBHeadshot(displayName: string): Promise<string | null> {
 }
 
 // ── NBA ────────────────────────────────────────────────────────────
-async function resolveNBAHeadshot(displayName: string): Promise<string | null> {
-  // Season is derived from current date: if month >= October, use current-next; else previous-current
-  const now = new Date();
-  const seasonStartYear = now.getMonth() >= 9 ? now.getFullYear() : now.getFullYear() - 1;
+// Cache the full NBA roster for 2 hours to avoid making one HTTP call per player.
+// stats.nba.com rate-limits sequential per-player requests, causing most NBA
+// players to get skipped on the enrichment pass without this.
+interface NbaRosterCache {
+  rows: Array<Array<string | number>>;
+  fetchedAt: number;
+}
+let nbaRosterCache: NbaRosterCache | null = null;
+const NBA_ROSTER_CACHE_TTL_MS = 2 * 60 * 60 * 1000; // 2 hours
+
+async function fetchNbaRoster(): Promise<Array<Array<string | number>> | null> {
+  const now = Date.now();
+  if (nbaRosterCache && now - nbaRosterCache.fetchedAt < NBA_ROSTER_CACHE_TTL_MS) {
+    return nbaRosterCache.rows;
+  }
+
+  const seasonStartYear = new Date().getMonth() >= 9 ? new Date().getFullYear() : new Date().getFullYear() - 1;
   const season = `${seasonStartYear}-${String(seasonStartYear + 1).slice(2)}`;
   const url = `https://stats.nba.com/stats/commonallplayers?IsOnlyCurrentSeason=1&LeagueID=00&Season=${season}`;
   const res = await fetch(url, {
@@ -94,6 +107,14 @@ async function resolveNBAHeadshot(displayName: string): Promise<string | null> {
     resultSets?: Array<{ rowSet?: Array<Array<string | number>> }>;
   };
   const rows = data.resultSets?.[0]?.rowSet;
+  if (!rows) return null;
+
+  nbaRosterCache = { rows, fetchedAt: now };
+  return rows;
+}
+
+async function resolveNBAHeadshot(displayName: string): Promise<string | null> {
+  const rows = await fetchNbaRoster();
   if (!rows) return null;
 
   const nameLower = displayName.toLowerCase();
