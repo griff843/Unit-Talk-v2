@@ -2696,55 +2696,70 @@ export function BetForm() {
                 <div className="rounded-xl border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
                   Matchup locked from Browse Setup: {formatMatchup(selectedMatchup)}
                 </div>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {matchupTeams.map((team) => {
-                    const teamKey = team.teamId ?? team.participantId;
-                    const isSelected = selectedTeamId === teamKey;
-                    const selectedLineLabel =
-                      isSelected && typeof watchedValues.line === 'number'
-                        ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
-                        : null;
-                    return (
-                      <button
-                        key={team.participantId}
-                        type="button"
-                        onClick={() => {
-                          form.setValue('team', team.displayName, {
-                            shouldDirty: true,
-                            shouldTouch: true,
-                            shouldValidate: true,
-                          });
-                          setSelectedTeamId(teamKey);
-                        }}
-                        className={cn(
-                          'rounded-xl border px-4 py-4 text-left transition-colors',
-                          isSelected
-                            ? 'border-primary bg-primary/10'
-                            : 'border-border bg-background hover:border-primary/50',
-                        )}
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="font-semibold text-foreground">{team.displayName}</p>
-                            <p className="text-xs text-muted-foreground">
-                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual spread entry'}
-                            </p>
+                {matchupTeams.length > 0 ? (
+                  <div className="grid gap-2 sm:grid-cols-2">
+                    {matchupTeams.map((team) => {
+                      const teamKey = team.teamId ?? team.participantId;
+                      const isSelected = selectedTeamId === teamKey;
+                      const selectedLineLabel =
+                        isSelected && typeof watchedValues.line === 'number'
+                          ? formatLineLabel(watchedValues.line) ?? `${watchedValues.line}`
+                          : null;
+                      return (
+                        <button
+                          key={team.participantId}
+                          type="button"
+                          onClick={() => {
+                            form.setValue('team', team.displayName, {
+                              shouldDirty: true,
+                              shouldTouch: true,
+                              shouldValidate: true,
+                            });
+                            setSelectedTeamId(teamKey);
+                          }}
+                          className={cn(
+                            'rounded-xl border px-4 py-4 text-left transition-colors',
+                            isSelected
+                              ? 'border-primary bg-primary/10'
+                              : 'border-border bg-background hover:border-primary/50',
+                          )}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="font-semibold text-foreground">{team.displayName}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual spread entry'}
+                              </p>
+                            </div>
+                            <span
+                              className={cn(
+                                'rounded-full border px-2.5 py-1 text-xs font-semibold',
+                                isSelected
+                                  ? 'border-primary/40 bg-primary/10 text-primary'
+                                  : 'border-border text-muted-foreground',
+                              )}
+                            >
+                              {selectedLineLabel ?? 'Enter line'}
+                            </span>
                           </div>
-                          <span
-                            className={cn(
-                              'rounded-full border px-2.5 py-1 text-xs font-semibold',
-                              isSelected
-                                ? 'border-primary/40 bg-primary/10 text-primary'
-                                : 'border-border text-muted-foreground',
-                            )}
-                          >
-                            {selectedLineLabel ?? 'Enter line'}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  <ParticipantAutocompleteField
+                    form={form}
+                    name="team"
+                    label="Team"
+                    placeholder="Type a team name"
+                    searchType="team"
+                    eventId={selectedMatchupId}
+                    sport={selectedSport}
+                    allowedParticipantIds={allowedTeamIds}
+                    onSuggestionSelected={handleTeamSuggestionSelection}
+                    onManualChange={() => setSelectedTeamId(null)}
+                  />
+                )}
               </div>
               <div className="rounded-xl border border-border bg-background/60 px-4 py-4">
                 <div className="flex items-center justify-between gap-3">
