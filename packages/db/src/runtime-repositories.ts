@@ -4299,20 +4299,35 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
   }
 
   async listByType(participantType: ParticipantUpsertInput['participantType'], sport?: string) {
-    let query = this.client
-      .from('participants')
-      .select('*')
-      .eq('participant_type', participantType);
-    if (sport) {
-      query = query.eq('sport', sport);
+    // Supabase PostgREST enforces a server-side max-rows of 1000. Paginate to fetch all rows.
+    const PAGE_SIZE = 1000;
+    const allRows: ParticipantRow[] = [];
+    let offset = 0;
+
+    while (true) {
+      let query = this.client
+        .from('participants')
+        .select('*')
+        .eq('participant_type', participantType);
+      if (sport) {
+        query = query.eq('sport', sport);
+      }
+      const { data, error } = await query
+        .order('display_name')
+        .range(offset, offset + PAGE_SIZE - 1);
+
+      if (error) {
+        throw new Error(`Failed to list participants by type: ${error.message}`);
+      }
+
+      const page = data ?? [];
+      allRows.push(...page);
+
+      if (page.length < PAGE_SIZE) break;
+      offset += PAGE_SIZE;
     }
 
-    const { data, error } = await query.order('display_name');
-    if (error) {
-      throw new Error(`Failed to list participants by type: ${error.message}`);
-    }
-
-    return data ?? [];
+    return allRows;
   }
 
   async updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<ParticipantRow> {
