@@ -72,11 +72,14 @@ export interface SGOResolvedPlayer {
 
 export interface SGOEventStatus {
   started: boolean;
+  /** Not reliably set by SGO — use `finalized` as the authoritative completion gate. */
   completed: boolean;
   cancelled: boolean;
+  /** Game has ended (scores available but not yet finalized). Acceptable for early scoring with correction risk. */
   ended: boolean;
   live: boolean;
   delayed: boolean;
+  /** Authoritative completion signal from SGO. Use this to mark events completed and trigger settlement. */
   finalized: boolean;
   oddsAvailable: boolean;
 }
@@ -648,7 +651,9 @@ function extractEventResult(event: Record<string, unknown>): SGOEventResult | nu
   }
 
   const status = extractStatus(event.status);
-  if (!status || !status.completed || !status.finalized) {
+  // Use status.finalized as the completion gate — SGO does not reliably set status.completed.
+  // See: docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md
+  if (!status || !status.finalized) {
     return null;
   }
 

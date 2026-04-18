@@ -941,6 +941,22 @@ test('mapSGOStatus marks completed and in-progress events from SGO booleans', ()
     'completed',
   );
 
+  // SGO does not reliably set status.completed — finalized alone must be sufficient.
+  // Playoff games (and some regular-season events) return finalized=true with completed=false.
+  assert.equal(
+    mapSGOStatus({
+      started: true,
+      completed: false,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    }),
+    'completed',
+  );
+
   assert.equal(
     mapSGOStatus({
       started: true,
