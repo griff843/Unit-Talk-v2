@@ -613,6 +613,83 @@ test('runGradingPass skips picks whose betting line is null', async () => {
   assert.equal(result.details[0]?.reason, 'missing_line');
 });
 
+test('runGradingPass uses pick eventStartTime to disambiguate repeat player events', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    eventName: 'Nuggets vs Clippers',
+    selection: 'Fixture Player Over 24.5',
+    line: 24.5,
+  });
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_REPEAT_APR17',
+    displayName: 'Fixture Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const wrongApril16Event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-repeat-apr16',
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-04-16',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-16T23:30:00.000Z' },
+  });
+  const intendedApril17Event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-repeat-apr17',
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-04-17',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-17T23:30:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: wrongApril16Event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: intendedApril17Event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: participant.id,
+    created_at: '2026-04-16T23:45:00.000Z',
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventName,
+      eventStartTime: '2026-04-17T23:30:00.000Z',
+    },
+  }));
+  await seedGameResult(repositories, {
+    eventId: wrongApril16Event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 12,
+    sourcedAt: '2026-04-17T02:00:00.000Z',
+  });
+  await seedGameResult(repositories, {
+    eventId: intendedApril17Event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 31,
+    sourcedAt: '2026-04-18T02:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+  const settlements = await repositories.settlements.listByPick(pickId);
+  const payload = settlements[0]?.payload as Record<string, unknown> | undefined;
+  const gradingContext = payload?.gradingContext as Record<string, unknown> | undefined;
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal(settlements[0]?.result, 'win');
+  assert.equal(gradingContext?.eventId, intendedApril17Event.id);
+  assert.notEqual(gradingContext?.eventId, wrongApril16Event.id);
+});
+
 test('recordGradedSettlement enriches the grading settlement payload with CLV when a closing line exists', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
@@ -1178,6 +1255,66 @@ test('runGradingPass grades a game_total_ou pick as win when actual > line', asy
   assert.ok(detail);
   assert.equal(detail.outcome, 'graded');
   assert.equal(detail.result, 'win');
+});
+
+test('runGradingPass does not match an earlier-season same-name event when eventTime points to April 18', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    eventName: 'Lakers vs Warriors',
+    selection: 'Over 224.5',
+    line: 224.5,
+  });
+  const wrongFebruaryEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-lal-gsw-feb6',
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-02-06',
+    status: 'completed',
+    metadata: { starts_at: '2026-02-06T03:00:00.000Z' },
+  });
+  const intendedAprilEvent = await repositories.events.upsertByExternalId({
+    externalId: 'evt-lal-gsw-apr18',
+    sportId: 'NBA',
+    eventName,
+    eventDate: '2026-04-18',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-18T02:30:00.000Z' },
+  });
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    created_at: '2026-02-06T02:45:00.000Z',
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventName,
+      eventTime: '2026-04-18T02:30:00.000Z',
+    },
+  }));
+  await repositories.gradeResults.insert({
+    eventId: wrongFebruaryEvent.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 198,
+    source: 'sgo',
+    sourcedAt: '2026-02-06T05:30:00.000Z',
+  });
+  await repositories.gradeResults.insert({
+    eventId: intendedAprilEvent.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 231,
+    source: 'sgo',
+    sourcedAt: '2026-04-18T05:30:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+  const settlements = await repositories.settlements.listByPick(pickId);
+  const payload = settlements[0]?.payload as Record<string, unknown> | undefined;
+  const gradingContext = payload?.gradingContext as Record<string, unknown> | undefined;
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal(settlements[0]?.result, 'win');
+  assert.equal(gradingContext?.eventId, intendedAprilEvent.id);
+  assert.notEqual(gradingContext?.eventId, wrongFebruaryEvent.id);
 });
 
 test('runGradingPass grades a game_total_ou under pick as win when actual < line', async () => {
