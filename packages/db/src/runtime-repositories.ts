@@ -4720,6 +4720,27 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     const teamMap = await this.loadCanonicalTeamsByParticipantIds(participantIds);
     const eventParticipantRows = eventParticipants ?? [];
 
+    // Detect doubleheaders: group events by event_name to find duplicates
+    const eventsByName = new Map<string, typeof events>();
+    for (const event of events) {
+      const name = event.event_name as string;
+      const group = eventsByName.get(name) ?? [];
+      group.push(event);
+      eventsByName.set(name, group);
+    }
+    // For each duplicate group, sort by external_id (alphabetical) for deterministic ordering
+    const gameLabelMap = new Map<string, string>();
+    for (const [, group] of eventsByName) {
+      if (group.length >= 2) {
+        const sorted = [...group].sort((a, b) =>
+          ((a.external_id as string) ?? '').localeCompare((b.external_id as string) ?? ''),
+        );
+        sorted.forEach((event, index) => {
+          gameLabelMap.set(event.id as string, ` · Game ${index + 1}`);
+        });
+      }
+    }
+
     return events.map((event) => {
       const teams = eventParticipantRows
         .filter(
@@ -4743,10 +4764,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         .map((team) => teamMap.get(team.participantId)?.league_id ?? null)
         .find((value) => value !== null) ?? null;
 
+      const eventId = event.id as string;
+      const baseEventName = event.event_name as string;
+      const gameLabel = gameLabelMap.get(eventId) ?? '';
+
       return {
-        eventId: event.id as string,
+        eventId,
         externalId: (event.external_id as string | null) ?? null,
-        eventName: event.event_name as string,
+        eventName: baseEventName + gameLabel,
         eventDate: event.event_date as string,
         startTime: extractStartsAt(event.metadata),
         status: event.status as string,
