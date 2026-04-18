@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForm, useWatch, type UseFormReturn } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import type {
@@ -54,6 +54,7 @@ import {
 } from '@/components/ui/select';
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
+import { Spinner } from '@/components/ui/spinner';
 import { BetSlipPanel } from './BetSlipPanel';
 import { MarketTypeGrid } from './MarketTypeGrid';
 import { SuccessReceipt } from './SuccessReceipt';
@@ -65,6 +66,11 @@ const PARTICIPANT_QUERY_MIN = 2;
 const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
 const DEFAULT_OPERATOR_SPORTSBOOK_ID = 'fanatics';
+const PRIMARY_SPORTSBOOKS = ['fanatics', 'fanduel', 'draftkings', 'bet365', 'betmgm', 'pinnacle', 'bovada'] as const;
+const CONVICTION_PRESETS = [6, 7, 8, 9, 10] as const;
+const UNITS_PRESETS = [0.5, 1, 2, 3] as const;
+const SPORTSBOOK_SESSION_KEY = 'ut_last_sportsbook';
+const CAPPER_SESSION_KEY = 'ut_last_capper';
 
 type BrowseMode = 'live-offer' | 'manual';
 type LiveEntryMode = 'browse' | 'search';
@@ -104,24 +110,36 @@ function formatMatchup(matchup: MatchupBrowseResult) {
   return matchup.eventName;
 }
 
+function getRelativeDayPrefix(dateStr: string): string {
+  const today = new Date().toISOString().slice(0, 10);
+  const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+  if (dateStr === today) return 'Today · ';
+  if (dateStr === tomorrow) return 'Tomorrow · ';
+  return '';
+}
+
 function formatTimestampLabel(isoString: string) {
   if (/^\d{4}-\d{2}-\d{2}$/.test(isoString)) {
+    const prefix = getRelativeDayPrefix(isoString);
     const [year, month, day] = isoString.split('-').map((value) => Number.parseInt(value, 10));
     const dateOnly = new Date(year, (month ?? 1) - 1, day ?? 1);
-    return dateOnly.toLocaleDateString([], {
+    const formatted = dateOnly.toLocaleDateString([], {
       month: 'short',
       day: 'numeric',
     });
+    return `${prefix}${formatted}`;
   }
 
   const timestamp = new Date(isoString);
   if (Number.isNaN(timestamp.getTime())) {
     return 'Unknown time';
   }
-  return timestamp.toLocaleTimeString([], {
+  const dateStr = timestamp.toISOString().slice(0, 10);
+  const prefix = getRelativeDayPrefix(dateStr);
+  return `${prefix}${timestamp.toLocaleTimeString([], {
     hour: 'numeric',
     minute: '2-digit',
-  });
+  })}`;
 }
 
 function formatSearchTimestamp(isoString: string) {
@@ -165,9 +183,14 @@ function getOfferAgeMinutes(snapshotAt: string) {
   return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
 }
 
-function buildOfferStatus(eventBrowse: EventBrowseResult | null) {
+function buildOfferStatus(eventBrowse: EventBrowseResult | null, filteredCount?: number) {
   if (!eventBrowse || eventBrowse.offers.length === 0) {
     return { tone: 'none' as const, label: 'No live offers' };
+  }
+
+  // Offers exist globally but none match selected sportsbook
+  if (filteredCount === 0) {
+    return { tone: 'none' as const, label: 'No offers for this book' };
   }
 
   const ages = eventBrowse.offers
@@ -572,6 +595,7 @@ function SearchableCapperField({
                         setQuery(capper.displayName);
                         setIsFocused(false);
                         form.clearErrors('capper');
+                        try { sessionStorage.setItem(CAPPER_SESSION_KEY, capper.id); } catch { /* ignore */ }
                       }}
                     >
                       <span>{capper.displayName}</span>
@@ -598,146 +622,87 @@ function SearchableCapperField({
   );
 }
 
-function SearchableSportsbookField({
+function SportsbookPillField({
   form,
   sportsbooks,
 }: {
   form: UseFormReturn<BetFormValues>;
   sportsbooks: SportsbookDefinition[];
 }) {
-  const selectedSportsbookValue = useWatch({ control: form.control, name: 'sportsbook' }) ?? '';
-  const [query, setQuery] = useState('');
-  const [isFocused, setIsFocused] = useState(false);
-  const [manualEntry, setManualEntry] = useState(false);
+  const selectedValue = useWatch({ control: form.control, name: 'sportsbook' }) ?? '';
+  const [showOther, setShowOther] = useState(false);
 
-  const selectedSportsbook = useMemo(
+  const primaryBooks = useMemo(
     () =>
-      sportsbooks.find(
-        (sportsbook) =>
-          sportsbook.id === selectedSportsbookValue ||
-          sportsbook.name.toLocaleLowerCase() === selectedSportsbookValue.toLocaleLowerCase(),
-      ) ?? null,
-    [sportsbooks, selectedSportsbookValue],
+      PRIMARY_SPORTSBOOKS.map((id) => sportsbooks.find((sb) => sb.id === id)).filter(
+        (sb): sb is SportsbookDefinition => sb !== undefined,
+      ),
+    [sportsbooks],
   );
-  const filteredSportsbooks = useMemo(() => {
-    const normalizedQuery = query.trim().toLocaleLowerCase();
-    if (normalizedQuery.length === 0) {
-      return sportsbooks;
-    }
-
-    return sportsbooks.filter((sportsbook) => {
-      const displayName = sportsbook.name.toLocaleLowerCase();
-      const canonicalId = sportsbook.id.toLocaleLowerCase();
-      return displayName.includes(normalizedQuery) || canonicalId.includes(normalizedQuery);
-    });
-  }, [sportsbooks, query]);
-
-  useEffect(() => {
-    if (selectedSportsbookValue && !selectedSportsbook) {
-      setManualEntry(true);
-      return;
-    }
-
-    if (selectedSportsbook) {
-      setManualEntry(false);
-    }
-  }, [selectedSportsbook, selectedSportsbookValue]);
-
-  useEffect(() => {
-    if (!isFocused) {
-      setQuery(selectedSportsbook?.name ?? (manualEntry ? selectedSportsbookValue : ''));
-    }
-  }, [isFocused, manualEntry, selectedSportsbook, selectedSportsbookValue]);
+  const isPrimarySelected = (PRIMARY_SPORTSBOOKS as readonly string[]).includes(selectedValue);
+  const isOtherSelected = selectedValue !== '' && !isPrimarySelected;
 
   return (
     <FormField
       control={form.control}
       name="sportsbook"
       render={({ field }) => (
-        <FormItem className="relative">
-          <div className="flex items-center justify-between gap-3">
-            <FormLabel>Sportsbook</FormLabel>
+        <FormItem>
+          <FormLabel>Sportsbook</FormLabel>
+          <div className="flex flex-wrap gap-1.5">
+            {primaryBooks.map((sb) => (
+              <button
+                key={sb.id}
+                type="button"
+                onClick={() => {
+                  field.onChange(sb.id);
+                  setShowOther(false);
+                  try { sessionStorage.setItem(SPORTSBOOK_SESSION_KEY, sb.id); } catch { /* ignore */ }
+                }}
+                className={cn(
+                  'rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors',
+                  field.value === sb.id
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                )}
+              >
+                {sb.name}
+              </button>
+            ))}
             <button
               type="button"
-              className="text-[11px] font-semibold uppercase tracking-wider text-primary transition-colors hover:text-primary/80"
               onClick={() => {
-                setManualEntry((current) => !current);
-                if (!manualEntry) {
-                  setQuery(field.value ?? '');
-                } else {
-                  setQuery(selectedSportsbook?.name ?? '');
+                const opening = !showOther;
+                setShowOther(opening);
+                // Clear the field when opening Other so the input starts blank
+                if (opening && isPrimarySelected) {
+                  field.onChange('');
                 }
               }}
+              className={cn(
+                'rounded-md border px-2.5 py-1 text-xs font-semibold transition-colors',
+                showOther || isOtherSelected
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+              )}
             >
-              {manualEntry ? 'Use catalog list' : 'Book not listed? Type it'}
+              Other
             </button>
           </div>
-          <FormControl>
-            <Input
-              autoComplete="off"
-              placeholder={manualEntry ? 'Type sportsbook name' : 'Search sportsbook'}
-              value={manualEntry ? field.value ?? '' : isFocused ? query : (selectedSportsbook?.name ?? query)}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => {
-                window.setTimeout(() => {
-                  setIsFocused(false);
-                  setQuery(selectedSportsbook?.name ?? (manualEntry ? field.value ?? '' : ''));
-                }, 120);
-              }}
-              onChange={(event) => {
-                const nextValue = event.target.value;
-                if (manualEntry) {
-                  field.onChange(nextValue);
-                  return;
-                }
-
-                setQuery(nextValue);
-                if (field.value) {
-                  form.setValue('sportsbook', '', {
-                    shouldDirty: true,
-                    shouldTouch: true,
-                    shouldValidate: false,
-                  });
-                }
-              }}
-            />
-          </FormControl>
-          {!manualEntry && isFocused ? (
-            <div className="absolute inset-x-0 top-full z-20 mt-2 max-h-64 overflow-y-auto rounded-md border border-border bg-background shadow-lg">
-              {filteredSportsbooks.length > 0 ? (
-                <div className="py-1">
-                  {filteredSportsbooks.map((sportsbook) => (
-                    <button
-                      key={sportsbook.id}
-                      type="button"
-                      className="flex w-full items-center justify-between gap-3 px-3 py-2 text-left text-sm transition-colors hover:bg-muted"
-                      onMouseDown={(event) => {
-                        event.preventDefault();
-                        field.onChange(sportsbook.id);
-                        setQuery(sportsbook.name);
-                        setIsFocused(false);
-                        form.clearErrors('sportsbook');
-                      }}
-                    >
-                      <span>{sportsbook.name}</span>
-                      <span className="text-xs uppercase tracking-wide text-muted-foreground">
-                        {sportsbook.id}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              ) : (
-                <div className="px-3 py-2 text-sm text-muted-foreground">
-                  No matching books found. Use manual entry to type the book.
-                </div>
-              )}
-            </div>
+          {showOther || isOtherSelected ? (
+            <FormControl>
+              <Input
+                autoComplete="off"
+                placeholder="Type sportsbook name"
+                {...field}
+                value={field.value ?? ''}
+                onChange={(event) => {
+                  field.onChange(event.target.value);
+                  try { sessionStorage.setItem(SPORTSBOOK_SESSION_KEY, event.target.value); } catch { /* ignore */ }
+                }}
+              />
+            </FormControl>
           ) : null}
-          <p className="text-xs text-muted-foreground">
-            {manualEntry
-              ? 'Manual sportsbook entry is allowed when the canonical list is missing a book. The typed value is preserved for operator review.'
-              : 'Search the canonical sportsbook list. Fanatics is included; provider-only books are hidden from operator entry.'}
-          </p>
           <FormMessage />
         </FormItem>
       )}
@@ -761,6 +726,8 @@ export function BetForm() {
   const [eventBrowse, setEventBrowse] = useState<EventBrowseResult | null>(null);
   const [eventBrowseError, setEventBrowseError] = useState<string | null>(null);
   const [isLoadingEventBrowse, setIsLoadingEventBrowse] = useState(false);
+  const [isRefreshingOffers, setIsRefreshingOffers] = useState(false);
+  const [sessionPickKeys, setSessionPickKeys] = useState<Set<string>>(new Set());
   const [selectedPlayerId, setSelectedPlayerId] = useState<string | null>(null);
   const [selectedTeamId, setSelectedTeamId] = useState<string | null>(null);
   const [selectedOffer, setSelectedOffer] = useState<SelectedOfferState | null>(null);
@@ -771,6 +738,8 @@ export function BetForm() {
   const [browseSearchError, setBrowseSearchError] = useState<string | null>(null);
   const [isSearchingBrowse, setIsSearchingBrowse] = useState(false);
   const [hasSearchedBrowse, setHasSearchedBrowse] = useState(false);
+
+  const marketSectionRef = useRef<HTMLElement>(null);
 
   const form = useForm<BetFormValues>({
     resolver: zodResolver(betFormSchema),
@@ -1002,7 +971,7 @@ export function BetForm() {
       ...inferredStatTypes.filter((statType) => !availableStatTypes.includes(statType)),
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
-  const offerStatus = buildOfferStatus(eventBrowse);
+  const offerStatus = buildOfferStatus(eventBrowse, filteredOffers.length);
   const hasInlineGuidedMarket =
     browseMode === 'live-offer' &&
     Boolean(selectedMatchup) &&
@@ -1028,9 +997,15 @@ export function BetForm() {
       .catch((err: unknown) => setCatalogError(err instanceof Error ? err.message : 'Reference data unavailable'));
   }, []);
 
-  // Prefer Griff843 as the default capper for operator submissions; otherwise fall back to a single known capper.
+  // Prefer saved capper from session, then griff843, then single-capper fallback.
   useEffect(() => {
     if (!catalog || form.getValues('capper')) {
+      return;
+    }
+
+    const savedCapper = (() => { try { return sessionStorage.getItem(CAPPER_SESSION_KEY); } catch { return null; } })();
+    if (savedCapper && catalog.cappers.find((c) => c.id === savedCapper)) {
+      form.setValue('capper', savedCapper, { shouldValidate: true });
       return;
     }
 
@@ -1038,6 +1013,7 @@ export function BetForm() {
     const fallbackCapper = preferredCapper ?? (catalog.cappers.length === 1 ? catalog.cappers[0] : null);
     if (fallbackCapper) {
       form.setValue('capper', fallbackCapper.id, { shouldValidate: true });
+      try { sessionStorage.setItem(CAPPER_SESSION_KEY, fallbackCapper.id); } catch { /* ignore */ }
     }
   }, [catalog, form]);
 
@@ -1075,7 +1051,8 @@ export function BetForm() {
     form.resetField('direction');
     form.resetField('line');
     form.resetField('odds');
-    form.setValue('sportsbook', DEFAULT_OPERATOR_SPORTSBOOK_ID);
+    const savedBook = (() => { try { return sessionStorage.getItem(SPORTSBOOK_SESSION_KEY); } catch { return null; } })();
+    form.setValue('sportsbook', savedBook ?? DEFAULT_OPERATOR_SPORTSBOOK_ID);
   }, [selectedSport, form]);
 
   useEffect(() => {
@@ -1175,13 +1152,28 @@ export function BetForm() {
     setIsLoadingEventBrowse(true);
     setEventBrowseError(null);
 
+    // Auto-fallback to manual if offers take >10s
+    const timeoutId = window.setTimeout(() => {
+      if (!active) return;
+      active = false;
+      setIsLoadingEventBrowse(false);
+      setBrowseMode('manual');
+      toast({
+        title: 'Live offers unavailable',
+        description: 'Switched to manual entry — offers took too long.',
+        variant: 'destructive',
+      });
+    }, 10000);
+
     getEventBrowse(selectedMatchupId)
       .then((result) => {
         if (!active) return;
+        window.clearTimeout(timeoutId);
         setEventBrowse(result);
       })
       .catch((error: unknown) => {
         if (!active) return;
+        window.clearTimeout(timeoutId);
         setEventBrowse(null);
         setEventBrowseError(error instanceof Error ? error.message : 'Unable to load live offers');
       })
@@ -1192,7 +1184,9 @@ export function BetForm() {
 
     return () => {
       active = false;
+      window.clearTimeout(timeoutId);
     };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [browseMode, selectedMatchupId]);
 
   useEffect(() => {
@@ -1281,6 +1275,11 @@ export function BetForm() {
     form.resetField('line');
     form.resetField('odds');
     form.clearErrors('eventName');
+
+    // Scroll to market/pick-details section after a short render delay
+    window.setTimeout(() => {
+      marketSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }, 120);
   }
 
   function clearSelectedMatchup() {
@@ -1624,9 +1623,30 @@ export function BetForm() {
     });
   }
 
+  function buildPickKey(values: BetFormValues): string {
+    return [
+      selectedMatchupId ?? values.eventName,
+      values.marketType,
+      values.playerName ?? '',
+      values.statType ?? '',
+      values.team ?? '',
+      String(values.line ?? ''),
+    ].join('|');
+  }
+
   async function onSubmit(values: BetFormValues) {
     if (!catalog) {
       return;
+    }
+
+    // Soft warn on duplicate pick within same session
+    const pickKey = buildPickKey(values);
+    if (sessionPickKeys.has(pickKey)) {
+      toast({
+        title: 'Possible duplicate pick',
+        description: 'This looks like a pick you already submitted this session. Submitting anyway.',
+        variant: 'default',
+      });
     }
 
     setIsSubmitting(true);
@@ -1657,6 +1677,7 @@ export function BetForm() {
         selectedOffer: selectedOffer?.offer ?? null,
       });
       const result = await submitPick(payload);
+      setSessionPickKeys((prev) => { const next = new Set(prev); next.add(buildPickKey(values)); return next; });
       setSubmittedValues(values);
       setSuccessResult(result);
     } catch (err) {
@@ -1691,13 +1712,16 @@ export function BetForm() {
             setBrowseSearchResults([]);
             setBrowseSearchError(null);
             setHasSearchedBrowse(false);
+            const savedBook = (() => { try { return sessionStorage.getItem(SPORTSBOOK_SESSION_KEY); } catch { return null; } })();
+            const savedCapper = (() => { try { return sessionStorage.getItem(CAPPER_SESSION_KEY); } catch { return null; } })();
             form.reset({
               sport: '',
               eventName: '',
               playerName: '',
               statType: '',
               team: '',
-              sportsbook: DEFAULT_OPERATOR_SPORTSBOOK_ID,
+              sportsbook: savedBook ?? DEFAULT_OPERATOR_SPORTSBOOK_ID,
+              capper: savedCapper ?? '',
               capperConviction: undefined,
               gameDate: TODAY,
               units: 1.0,
@@ -1895,14 +1919,17 @@ export function BetForm() {
           <div className="rounded-xl border border-border bg-card p-4 space-y-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <p className="text-sm font-semibold text-foreground">{selectedMatchup.eventName}</p>
+                <p className="text-sm font-semibold text-foreground">{formatMatchup(selectedMatchup)}</p>
                 <p className="text-xs text-muted-foreground">
                   {formatTimestampLabel(selectedMatchup.startTime ?? selectedMatchup.eventDate)}
                 </p>
               </div>
               <div className="flex items-center gap-2">
                 {isLoadingEventBrowse ? (
-                  <span className="text-xs text-muted-foreground">Loading offers...</span>
+                  <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Spinner className="h-3 w-3" />
+                    Loading offers…
+                  </span>
                 ) : null}
                 <Button
                   type="button"
@@ -2270,12 +2297,13 @@ export function BetForm() {
                         type="button"
                         variant="ghost"
                         size="sm"
+                        disabled={isRefreshingOffers}
                         onClick={() => {
-                          if (!selectedMatchupId) {
+                          if (!selectedMatchupId || isRefreshingOffers) {
                             return;
                           }
 
-                          setEventBrowse(null);
+                          setIsRefreshingOffers(true);
                           setSelectedOffer(null);
                           getEventBrowse(selectedMatchupId)
                             .then(setEventBrowse)
@@ -2283,10 +2311,18 @@ export function BetForm() {
                               setEventBrowseError(
                                 error instanceof Error ? error.message : 'Unable to refresh offers',
                               );
-                            });
+                            })
+                            .finally(() => setIsRefreshingOffers(false));
                         }}
                       >
-                        Refresh
+                        {isRefreshingOffers ? (
+                          <span className="flex items-center gap-1.5">
+                            <Spinner className="h-3 w-3" />
+                            Checking…
+                          </span>
+                        ) : (
+                          'Re-check offers'
+                        )}
                       </Button>
                     </div>
 
@@ -2748,12 +2784,24 @@ export function BetForm() {
                         <FormLabel>Spread</FormLabel>
                         <FormControl>
                           <Input
-                            type="number"
-                            step="0.5"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="e.g. -3.5"
                             {...field}
-                            value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            value={
+                              typeof field.value === 'number' && field.value > 0
+                                ? `+${field.value}`
+                                : (field.value ?? '')
+                            }
+                            onChange={(event) => {
+                              const raw = event.target.value;
+                              if (raw === '' || raw === '-' || raw === '+') {
+                                field.onChange(raw === '' ? undefined : raw as unknown as number);
+                                return;
+                              }
+                              const n = Number(raw);
+                              field.onChange(Number.isNaN(n) ? field.value : n);
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
@@ -3313,14 +3361,14 @@ export function BetForm() {
                     )}
                   />
 
-                  <SearchableSportsbookField form={form} sportsbooks={catalog.sportsbooks} />
+                  <SportsbookPillField form={form} sportsbooks={catalog.sportsbooks} />
                 </div>
               </section>
 
               {renderLiveOfferSection()}
 
               {shouldRenderPickDetailsSection ? (
-                <section className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
+                <section ref={marketSectionRef} className="space-y-5 rounded-2xl border border-border bg-card p-5 shadow-sm">
                 <div className="space-y-2">
                   <div className="flex items-center justify-between gap-3">
                     <h2 className="text-lg font-semibold text-foreground">Pick Details</h2>
@@ -3379,12 +3427,25 @@ export function BetForm() {
                         <FormLabel>Odds</FormLabel>
                         <FormControl>
                           <Input
-                            type="number"
-                            step="1"
+                            type="text"
+                            inputMode="numeric"
                             placeholder="e.g. -110"
                             {...field}
-                            value={field.value ?? ''}
-                            onChange={(event) => field.onChange(event.target.value === '' ? undefined : Number(event.target.value))}
+                            value={
+                              typeof field.value === 'number' && field.value > 0
+                                ? `+${field.value}`
+                                : (field.value ?? '')
+                            }
+                            onChange={(event) => {
+                              const raw = event.target.value;
+                              // Allow typing "-" or "+" prefix mid-entry without clearing
+                              if (raw === '' || raw === '-' || raw === '+') {
+                                field.onChange(raw === '' ? undefined : raw as unknown as number);
+                                return;
+                              }
+                              const n = Number(raw);
+                              field.onChange(Number.isNaN(n) ? field.value : n);
+                            }}
                           />
                         </FormControl>
                         <FormMessage />
@@ -3400,18 +3461,44 @@ export function BetForm() {
                     render={({ field }) => (
                       <FormItem>
                         <FormLabel>Units</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="0.5"
-                            min="0.5"
-                            max="5"
-                            placeholder="1.0"
-                            {...field}
-                            value={field.value ?? ''}
-                            onChange={(event) => field.onChange(normalizeUnitsValue(event.target.value))}
-                          />
-                        </FormControl>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => field.onChange(Math.max(0.5, ((field.value as number | undefined) ?? 1) - 0.5))}
+                              className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
+                            >
+                              −
+                            </button>
+                            <span className="min-w-[2.5rem] text-center text-sm font-semibold">
+                              {field.value ?? 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => field.onChange(Math.min(10, ((field.value as number | undefined) ?? 1) + 0.5))}
+                              className="rounded-md border border-border px-3 py-1 text-sm font-bold leading-none hover:bg-muted"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {UNITS_PRESETS.map((v) => (
+                              <button
+                                key={v}
+                                type="button"
+                                onClick={() => field.onChange(v)}
+                                className={cn(
+                                  'rounded-md border px-2 py-0.5 text-xs font-semibold transition-colors',
+                                  field.value === v
+                                    ? 'border-primary bg-primary/10 text-primary'
+                                    : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                                )}
+                              >
+                                {v}u
+                              </button>
+                            ))}
+                          </div>
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
@@ -3422,22 +3509,24 @@ export function BetForm() {
                     name="capperConviction"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Conviction (1-10)</FormLabel>
-                        <FormControl>
-                          <Input
-                            type="number"
-                            step="1"
-                            min="1"
-                            max="10"
-                            placeholder="8"
-                            {...field}
-                            value={field.value ?? ''}
-                            onChange={(event) => field.onChange(normalizeConvictionValue(event.target.value))}
-                          />
-                        </FormControl>
-                        <p className="text-xs text-muted-foreground">
-                          How confident are you in this pick? (1 = low, 10 = highest conviction)
-                        </p>
+                        <FormLabel>Conviction</FormLabel>
+                        <div className="flex flex-wrap gap-1.5">
+                          {CONVICTION_PRESETS.map((v) => (
+                            <button
+                              key={v}
+                              type="button"
+                              onClick={() => field.onChange(v)}
+                              className={cn(
+                                'rounded-md border px-3 py-1 text-xs font-semibold transition-colors',
+                                field.value === v
+                                  ? 'border-primary bg-primary/10 text-primary'
+                                  : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                              )}
+                            >
+                              {v}
+                            </button>
+                          ))}
+                        </div>
                         <FormMessage />
                       </FormItem>
                     )}
