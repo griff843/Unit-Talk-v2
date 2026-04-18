@@ -43,6 +43,9 @@ export interface IngestorCycleSummary {
   sgoUsage: SGOAccountUsage | null;
 }
 
+/** Warn when a cycle gap exceeds this threshold (10 minutes). */
+const CYCLE_GAP_WARN_MS = 10 * 60 * 1000;
+
 export async function runIngestorCycles(
   options: IngestorRunnerOptions,
 ): Promise<IngestorCycleSummary[]> {
@@ -52,8 +55,18 @@ export async function runIngestorCycles(
   const fixedPollIntervalMs = options.pollIntervalMs ?? 300_000;
   const sleep = options.sleep ?? defaultSleep;
   const summaries: IngestorCycleSummary[] = [];
+  let lastCycleEndMs: number | null = null;
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
+    if (lastCycleEndMs !== null) {
+      const gapMs = Date.now() - lastCycleEndMs;
+      if (gapMs > CYCLE_GAP_WARN_MS) {
+        options.logger?.warn?.(
+          `[ingestor] cycle=${cycle} STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last cycle — offers may be stale`,
+        );
+      }
+    }
+
     const results: IngestLeagueSummary[] = [];
 
     for (const league of options.leagues) {
@@ -104,6 +117,7 @@ export async function runIngestorCycles(
     }
 
     summaries.push({ cycle, results, oddsApiResults, gradingTrigger, sgoUsage });
+    lastCycleEndMs = Date.now();
 
     const isLastCycle = cycle >= maxCycles;
     if (!isLastCycle) {
