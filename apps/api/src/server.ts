@@ -357,7 +357,7 @@ export async function routeRequest(
 
   // --- Auth gate: all POST routes require authentication ---
   if (method === 'POST') {
-    const auth = authenticateRequest(request, runtime.authConfig);
+    const auth = await authenticateRequest(request, runtime.authConfig);
     if (!auth) {
       return writeJson(response, 401, {
         ok: false,
@@ -381,7 +381,8 @@ export async function routeRequest(
   }
 
   if (method === 'POST' && url.pathname === '/api/submissions') {
-    return handleSubmissions(request, response, runtime, requestLogger);
+    const auth = (request as IncomingMessage & { auth?: AuthContext }).auth ?? null;
+    return handleSubmissions(request, response, runtime, requestLogger, auth);
   }
 
   const settleMatch =

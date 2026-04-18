@@ -3,10 +3,13 @@ import type { RepositoryBundle } from '@unit-talk/db';
 import { normalizeApiError } from '../errors.js';
 import type { ApiResponse } from '../http.js';
 import { errorResponse } from '../http.js';
+import type { AuthContext } from '../auth.js';
 import { submitPickController } from '../controllers/index.js';
 
 export interface SubmitPickRequest {
   body: unknown;
+  /** Auth context from the bearer token — capperId overrides submittedBy when role === 'capper'. */
+  auth?: AuthContext | null | undefined;
 }
 
 export type SubmitPickResponse = ApiResponse<{
@@ -21,7 +24,7 @@ export async function handleSubmitPick(
 ): Promise<SubmitPickResponse> {
   try {
     return await submitPickController(
-      coerceSubmissionPayload(request.body),
+      coerceSubmissionPayload(request.body, request.auth),
       repositories,
     );
   } catch (error) {
@@ -30,12 +33,24 @@ export async function handleSubmitPick(
   }
 }
 
-function coerceSubmissionPayload(body: unknown): SubmissionPayload {
+/**
+ * Coerce raw request body into a typed SubmissionPayload.
+ *
+ * When the authenticated role is 'capper', the capperId from the JWT claim
+ * takes precedence over whatever submittedBy the form sent — the form field
+ * is ignored entirely. This is the trust boundary enforcement for UTV2-658.
+ */
+function coerceSubmissionPayload(body: unknown, auth?: AuthContext | null): SubmissionPayload {
   const payload = isRecord(body) ? body : {};
+
+  // Capper JWT claim overrides any form-supplied submittedBy value.
+  const submittedBy = auth?.role === 'capper' && auth.capperId
+    ? auth.capperId
+    : readOptionalString(payload.submittedBy);
 
   return {
     source: readString(payload.source) as SubmissionPayload['source'],
-    submittedBy: readOptionalString(payload.submittedBy),
+    submittedBy,
     market: readString(payload.market),
     selection: readString(payload.selection),
     line: readOptionalNumber(payload.line),

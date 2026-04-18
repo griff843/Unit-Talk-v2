@@ -205,9 +205,18 @@ export async function searchBrowse(sportId: string, date: string, query: string)
 }
 
 export async function submitPick(payload: SubmitPickPayload): Promise<SubmitPickResult> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // Attach capper JWT if present in localStorage (UTV2-658).
+  // The API validates the token and derives capperId from the claim.
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('ut_capper_token') : null;
+    if (token) headers['Authorization'] = `Bearer ${token}`;
+  } catch {
+    // Ignore storage errors — request proceeds without auth header (API may 401)
+  }
   const res = await fetch(`${API}/api/submissions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(payload),
   });
   return readJsonResponse<SubmitPickResult>(res, 'Submit failed');

@@ -5,6 +5,7 @@ import {
   loadAuthConfig,
   authenticateRequest,
   authorizeRoute,
+  signCapperToken,
 } from './auth.js';
 
 function fakeRequest(headers: Record<string, string> = {}): IncomingMessage {
@@ -51,41 +52,41 @@ describe('loadAuthConfig', () => {
 });
 
 describe('authenticateRequest', () => {
-  test('returns bypass context when auth is disabled', () => {
+  test('returns bypass context when auth is disabled', async () => {
     const config = loadAuthConfig({});
-    const auth = authenticateRequest(fakeRequest(), config);
+    const auth = await authenticateRequest(fakeRequest(), config);
     assert.ok(auth);
     assert.equal(auth.role, 'operator');
     assert.ok(auth.identity.includes('bypass'));
   });
 
-  test('returns null when auth enabled but no Authorization header', () => {
+  test('returns null when auth enabled but no Authorization header', async () => {
     const config = loadAuthConfig({ UNIT_TALK_API_KEY_OPERATOR: 'secret' });
-    const auth = authenticateRequest(fakeRequest(), config);
+    const auth = await authenticateRequest(fakeRequest(), config);
     assert.equal(auth, null);
   });
 
-  test('returns null for invalid token', () => {
+  test('returns null for invalid token', async () => {
     const config = loadAuthConfig({ UNIT_TALK_API_KEY_OPERATOR: 'secret' });
-    const auth = authenticateRequest(
+    const auth = await authenticateRequest(
       fakeRequest({ authorization: 'Bearer wrong-token' }),
       config,
     );
     assert.equal(auth, null);
   });
 
-  test('returns null for malformed Authorization header', () => {
+  test('returns null for malformed Authorization header', async () => {
     const config = loadAuthConfig({ UNIT_TALK_API_KEY_OPERATOR: 'secret' });
-    const auth = authenticateRequest(
+    const auth = await authenticateRequest(
       fakeRequest({ authorization: 'Basic dXNlcjpwYXNz' }),
       config,
     );
     assert.equal(auth, null);
   });
 
-  test('returns context for valid token', () => {
+  test('returns context for valid token', async () => {
     const config = loadAuthConfig({ UNIT_TALK_API_KEY_OPERATOR: 'secret' });
-    const auth = authenticateRequest(
+    const auth = await authenticateRequest(
       fakeRequest({ authorization: 'Bearer secret' }),
       config,
     );
@@ -93,17 +94,53 @@ describe('authenticateRequest', () => {
     assert.equal(auth.role, 'operator');
   });
 
-  test('matches correct role for submitter key', () => {
+  test('matches correct role for submitter key', async () => {
     const config = loadAuthConfig({
       UNIT_TALK_API_KEY_OPERATOR: 'op-key',
       UNIT_TALK_API_KEY_SUBMITTER: 'sub-key',
     });
-    const auth = authenticateRequest(
+    const auth = await authenticateRequest(
       fakeRequest({ authorization: 'Bearer sub-key' }),
       config,
     );
     assert.ok(auth);
     assert.equal(auth.role, 'submitter');
+  });
+
+  test('validates signed capper JWT and extracts capperId', async () => {
+    const secret = 'test-jwt-secret-32-bytes-long-xx';
+    const token = await signCapperToken(
+      { sub: 'griff843', capperId: 'griff843', displayName: 'Griff' },
+      secret,
+    );
+    const config = loadAuthConfig({
+      UNIT_TALK_API_KEY_OPERATOR: 'op-key',
+      UNIT_TALK_JWT_SECRET: secret,
+    });
+    const auth = await authenticateRequest(
+      fakeRequest({ authorization: `Bearer ${token}` }),
+      config,
+    );
+    assert.ok(auth);
+    assert.equal(auth.role, 'capper');
+    assert.equal(auth.capperId, 'griff843');
+    assert.equal(auth.displayName, 'Griff');
+  });
+
+  test('rejects JWT signed with wrong secret', async () => {
+    const token = await signCapperToken(
+      { sub: 'griff843', capperId: 'griff843', displayName: 'Griff' },
+      'wrong-secret',
+    );
+    const config = loadAuthConfig({
+      UNIT_TALK_API_KEY_OPERATOR: 'op-key',
+      UNIT_TALK_JWT_SECRET: 'correct-secret',
+    });
+    const auth = await authenticateRequest(
+      fakeRequest({ authorization: `Bearer ${token}` }),
+      config,
+    );
+    assert.equal(auth, null);
   });
 });
 

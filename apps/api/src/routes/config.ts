@@ -46,7 +46,7 @@ export async function handleHealthConfig(
   runtime: ApiRuntimeDependencies,
 ): Promise<void> {
   // Operator auth required — fail closed
-  const auth = authenticateRequest(request, runtime.authConfig);
+  const auth = await authenticateRequest(request, runtime.authConfig);
   if (!auth || auth.role !== 'operator') {
     writeJson(response, 401, {
       ok: false,

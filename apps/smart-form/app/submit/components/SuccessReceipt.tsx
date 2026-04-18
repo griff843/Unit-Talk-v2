@@ -42,7 +42,7 @@ export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: Suc
       <Separator className="bg-border/50" />
 
       <div className="space-y-2.5">
-        <Row label="Capper" value={v.capper} />
+        {v.capper && <Row label="Capper" value={v.capper} />}
         <Row label="Sport" value={v.sport.toUpperCase()} />
         <Row label="Market" value={marketLabel} />
         {selection && <Row label="Selection" value={selection} />}

@@ -55,6 +55,7 @@ import {
 import { useToast } from '@/components/ui/use-toast';
 import { cn } from '@/lib/utils';
 import { Spinner } from '@/components/ui/spinner';
+import { getStoredCapperClaims, clearStoredToken } from '@/lib/auth-token';
 import { BetSlipPanel } from './BetSlipPanel';
 import { MarketTypeGrid } from './MarketTypeGrid';
 import { SuccessReceipt } from './SuccessReceipt';
@@ -712,6 +713,11 @@ function SportsbookPillField({
 
 export function BetForm() {
   const { toast } = useToast();
+  // Capper identity from stored JWT (display only — API validates on each submission)
+  const [capperClaims] = useState(() => {
+    if (typeof window === 'undefined') return null;
+    return getStoredCapperClaims();
+  });
   const [catalog, setCatalog] = useState<CatalogData | null>(null);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [browseMode, setBrowseMode] = useState<BrowseMode>('live-offer');
@@ -997,25 +1003,8 @@ export function BetForm() {
       .catch((err: unknown) => setCatalogError(err instanceof Error ? err.message : 'Reference data unavailable'));
   }, []);
 
-  // Prefer saved capper from session, then griff843, then single-capper fallback.
-  useEffect(() => {
-    if (!catalog || form.getValues('capper')) {
-      return;
-    }
-
-    const savedCapper = (() => { try { return sessionStorage.getItem(CAPPER_SESSION_KEY); } catch { return null; } })();
-    if (savedCapper && catalog.cappers.find((c) => c.id === savedCapper)) {
-      form.setValue('capper', savedCapper, { shouldValidate: true });
-      return;
-    }
-
-    const preferredCapper = catalog.cappers.find((capper) => capper.id === 'griff843');
-    const fallbackCapper = preferredCapper ?? (catalog.cappers.length === 1 ? catalog.cappers[0] : null);
-    if (fallbackCapper) {
-      form.setValue('capper', fallbackCapper.id, { shouldValidate: true });
-      try { sessionStorage.setItem(CAPPER_SESSION_KEY, fallbackCapper.id); } catch { /* ignore */ }
-    }
-  }, [catalog, form]);
+  // Capper identity is set from the JWT token on the server (UTV2-658).
+  // No client-side capper init needed.
 
   useEffect(() => {
     if (!catalog || form.getValues('sportsbook')) {
@@ -1713,7 +1702,6 @@ export function BetForm() {
             setBrowseSearchError(null);
             setHasSearchedBrowse(false);
             const savedBook = (() => { try { return sessionStorage.getItem(SPORTSBOOK_SESSION_KEY); } catch { return null; } })();
-            const savedCapper = (() => { try { return sessionStorage.getItem(CAPPER_SESSION_KEY); } catch { return null; } })();
             form.reset({
               sport: '',
               eventName: '',
@@ -1721,7 +1709,6 @@ export function BetForm() {
               statType: '',
               team: '',
               sportsbook: savedBook ?? DEFAULT_OPERATOR_SPORTSBOOK_ID,
-              capper: savedCapper ?? '',
               capperConviction: undefined,
               gameDate: TODAY,
               units: 1.0,
@@ -3532,7 +3519,22 @@ export function BetForm() {
                     )}
                   />
 
-                  <SearchableCapperField form={form} cappers={catalog.cappers} />
+                  {capperClaims && (
+                    <div className="flex items-center justify-between rounded-lg border border-border bg-card px-4 py-3">
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Capper</p>
+                        <p className="text-sm font-medium text-foreground">{capperClaims.displayName}</p>
+                        <p className="text-xs text-muted-foreground">{capperClaims.capperId}</p>
+                      </div>
+                      <button
+                        type="button"
+                        className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                        onClick={() => { clearStoredToken(); window.location.href = '/login'; }}
+                      >
+                        Sign out
+                      </button>
+                    </div>
+                  )}
                 </div>
               </section>
             </form>

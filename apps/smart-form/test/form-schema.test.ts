@@ -274,9 +274,10 @@ describe('universal required fields', () => {
     assert.ok(passes(validProp({ sportsbook: undefined })));
   });
 
-  test('missing capper is rejected', () => {
-    const fields = errorFields(validProp({ capper: '' }));
-    assert.ok(fields.includes('capper'));
+  test('capper is optional (identity derived from bearer token on server, UTV2-658)', () => {
+    // capper field is no longer required — the API sets it from the JWT capperId claim
+    assert.ok(passes(validProp({ capper: '' })));
+    assert.ok(passes(validProp({ capper: undefined })));
   });
 
   test('missing gameDate is rejected', () => {

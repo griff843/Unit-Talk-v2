@@ -26,6 +26,7 @@
     "@unit-talk/events": "workspace:*",
     "@unit-talk/intelligence": "workspace:*",
     "@unit-talk/observability": "workspace:*",
-    "@unit-talk/verification": "workspace:*"
+    "@unit-talk/verification": "workspace:*",
+    "jose": "^6.2.2"
   }
 }

@@ -47,7 +47,8 @@ export const betFormSchema = z
       .int('Conviction must be a whole number')
       .min(1, 'Conviction must be between 1 and 10')
       .max(10, 'Conviction must be between 1 and 10'),
-    capper: z.string().min(1, 'Capper is required'),
+    // capper identity is derived from the bearer token on the server (UTV2-658)
+    capper: z.string().optional(),
     gameDate: z.string().min(1, 'Date is required'),
   })
   .superRefine((data, ctx) => {

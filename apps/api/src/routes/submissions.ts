@@ -3,6 +3,7 @@ import type { ApiRuntimeDependencies } from '../server.js';
 import { handleSubmitPick } from '../handlers/index.js';
 import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import type { AuthContext } from '../auth.js';
 import type { Logger } from '@unit-talk/observability';
 
 export async function handleSubmissions(
@@ -10,6 +11,7 @@ export async function handleSubmissions(
   response: ServerResponse,
   runtime: ApiRuntimeDependencies,
   requestLogger: Logger,
+  auth: AuthContext | null = null,
 ): Promise<void> {
   // Read body first so we can key the rate limiter by Discord user ID when present.
   const body = await readJsonBody(request, runtime.bodyLimitBytes);
@@ -31,7 +33,7 @@ export async function handleSubmissions(
     return;
   }
 
-  const apiResponse = await handleSubmitPick({ body }, runtime.repositories);
+  const apiResponse = await handleSubmitPick({ body, auth }, runtime.repositories);
   writeJson(response, apiResponse.status, apiResponse.body);
 }
 
