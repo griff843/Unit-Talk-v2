@@ -116,8 +116,13 @@ async function resolveNFLHeadshot(displayName: string): Promise<string | null> {
   const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
   if (!res.ok) return null;
 
+  // ESPN returns headshot as either a plain URL string OR an object {alt, href}
   const data = (await res.json()) as {
-    items?: Array<{ id?: string; headshot?: string; displayName?: string }>;
+    items?: Array<{
+      id?: string;
+      headshot?: string | { href?: string; alt?: string };
+      displayName?: string;
+    }>;
   };
   if (!data.items?.length) return null;
 
@@ -126,7 +131,11 @@ async function resolveNFLHeadshot(displayName: string): Promise<string | null> {
     item.displayName?.toLowerCase() === displayName.toLowerCase(),
   ) ?? data.items[0];
 
-  if (match?.headshot) return match.headshot;
+  if (match?.headshot) {
+    // headshot may be an object {href, alt} or a plain URL string
+    if (typeof match.headshot === 'string') return match.headshot;
+    if (typeof match.headshot === 'object' && match.headshot.href) return match.headshot.href;
+  }
 
   // Fallback: construct ESPN headshot URL from athlete ID
   if (match?.id) {
@@ -170,6 +179,13 @@ export async function runPlayerEnrichmentPass(
     errors: [],
   };
 
+  // Start run record before processing so started_at reflects actual start time
+  const run = await deps.runs.startRun({
+    runType: 'player.enrichment',
+    actor: 'system',
+    details: {},
+  });
+
   // Get all player participants
   const players = await deps.participants.listByType('player');
   result.scanned = players.length;
@@ -202,12 +218,6 @@ export async function runPlayerEnrichmentPass(
     }
   }
 
-  // Write system_runs record
-  const run = await deps.runs.startRun({
-    runType: 'player.enrichment',
-    actor: 'system',
-    details: {},
-  });
   await deps.runs.completeRun({
     runId: run.id,
     status: 'succeeded',

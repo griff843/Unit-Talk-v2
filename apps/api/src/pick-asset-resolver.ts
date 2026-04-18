@@ -14,6 +14,7 @@
  */
 
 import type { ParticipantRepository } from '@unit-talk/db';
+import { resolveHeadshotUrl } from './player-enrichment-service.js';
 
 /**
  * Attempts to resolve a thumbnail URL for a pick by matching the
@@ -38,6 +39,17 @@ export async function resolvePickThumbnailUrl(
       const headshot = meta['headshot_url'];
       if (typeof headshot === 'string' && headshot.length > 0) {
         return headshot;
+      }
+
+      const resolvedHeadshot = await resolveHeadshotUrl(
+        playerMatch.display_name,
+        sport,
+        typeof meta['external_id'] === 'string' ? meta['external_id'] : null,
+      );
+      if (resolvedHeadshot) {
+        // Write back to DB so the scheduled pass doesn't need to re-resolve this player
+        participants.updateMetadata(playerMatch.id, { headshot_url: resolvedHeadshot }).catch(() => {});
+        return resolvedHeadshot;
       }
     }
 
@@ -68,10 +80,11 @@ export async function resolvePickThumbnailUrl(
 function findBestMatch(
   selection: string,
   participants: ReadonlyArray<{
+    id: string;
     display_name: string;
     metadata: unknown;
   }>,
-): { display_name: string; metadata: unknown } | null {
+): { id: string; display_name: string; metadata: unknown } | null {
   const selLower = selection.toLowerCase();
 
   for (const p of participants) {
