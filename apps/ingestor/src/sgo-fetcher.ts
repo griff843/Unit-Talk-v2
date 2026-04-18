@@ -131,7 +131,7 @@ interface FlatSGOOddsRow {
 }
 
 /** Priority bookmakers to extract from byBookmaker (in preference order for CLV). */
-const PRIORITY_BOOKMAKERS = ['pinnacle', 'draftkings', 'fanduel', 'betmgm'] as const;
+const PRIORITY_BOOKMAKERS = ['pinnacle', 'draftkings', 'fanduel', 'betmgm', 'fanatics', 'bet365', 'bovada'] as const;
 
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
