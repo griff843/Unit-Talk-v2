@@ -348,6 +348,51 @@ test('runGradingPass grades under selections by inverting the over-side result',
   assert.equal(settlements[0]?.result, 'win');
 });
 
+test('runGradingPass grades picks with abbreviated O/U selection format from smart-form', async () => {
+  // Smart-form serializes player props as "Player Name O X.5" not "Player Name Over X.5"
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    selection: 'Jalen Brunson O 28.5',
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+  });
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 30,
+  });
+
+  const result = await runGradingPass(repositories);
+  const settlements = await repositories.settlements.listByPick(pickId);
+
+  assert.equal(result.graded, 1, 'abbreviated O should be recognized as over');
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal(settlements[0]?.result, 'win');
+});
+
+test('runGradingPass grades picks with abbreviated U/X selection format from smart-form', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    selection: 'Donovan Mitchell U 28.5',
+  });
+  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
+    eventName,
+  });
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 20,
+  });
+
+  const result = await runGradingPass(repositories);
+  const settlements = await repositories.settlements.listByPick(pickId);
+
+  assert.equal(result.graded, 1, 'abbreviated U should be recognized as under');
+  assert.equal(result.details[0]?.result, 'win');
+  assert.equal(settlements[0]?.result, 'win');
+});
+
 test('runGradingPass skips picks whose linked event is not completed', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
   const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
