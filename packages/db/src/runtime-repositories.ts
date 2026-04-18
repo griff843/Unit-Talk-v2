@@ -5147,10 +5147,18 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return [];
     }
 
+    // Limit to offers from the last 2 hours, newest first. Without this filter,
+    // events accumulate 90K+ rows over their lifetime and Supabase's default
+    // 1000-row page limit silently drops most books/markets. 5000 covers all
+    // unique combos for any event (typically ~1000-2000 per latest cycle).
+    const recentSince = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const { data: offers, error: offersError } = await this.client
       .from('provider_offers')
       .select('*')
-      .eq('provider_event_id', providerEventId);
+      .eq('provider_event_id', providerEventId)
+      .gte('snapshot_at', recentSince)
+      .order('snapshot_at', { ascending: false })
+      .limit(5000);
     if (offersError) {
       throw new Error(`Failed to load event offers: ${offersError.message}`);
     }
