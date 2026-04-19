@@ -124,6 +124,47 @@ export async function fetchBoardPerformance(boardRunId?: string): Promise<Govern
   return json.data;
 }
 
+export interface RoutingPreviewData {
+  pickId: string;
+  status: string;
+  promotionTarget: string | null;
+  distributionTarget: string | null;
+  routingReason: string;
+  outboxStatus: string;
+}
+
+export async function fetchRoutingPreview(pickId: string): Promise<RoutingPreviewData> {
+  const res = await fetch(
+    `${OPERATOR_WEB_BASE}/api/operator/picks/${encodeURIComponent(pickId)}/routing-preview`,
+    { cache: 'no-store' },
+  );
+  const json = await res.json() as { ok: boolean; data?: RoutingPreviewData; error?: { message?: string } };
+  if (!res.ok || !json.ok || !json.data) {
+    throw new Error(json.error?.message ?? `Routing preview fetch failed: ${res.status}`);
+  }
+  return json.data;
+}
+
+export interface PromotionPreviewData {
+  pickId: string;
+  wouldPromoteTo: string | null;
+  score: number | null;
+  reasons: string[];
+  qualifies: boolean;
+}
+
+export async function fetchPromotionPreview(pickId: string): Promise<PromotionPreviewData> {
+  const res = await fetch(
+    `${OPERATOR_WEB_BASE}/api/operator/picks/${encodeURIComponent(pickId)}/promotion-preview`,
+    { cache: 'no-store' },
+  );
+  const json = await res.json() as { ok: boolean; data?: PromotionPreviewData; error?: { message?: string } };
+  if (!res.ok || !json.ok || !json.data) {
+    throw new Error(json.error?.message ?? `Promotion preview fetch failed: ${res.status}`);
+  }
+  return json.data;
+}
+
 // ── Type-safe accessors (unknown → primitive) ────────────────────────────────
 
 function asRecord(v: unknown): Record<string, unknown> {

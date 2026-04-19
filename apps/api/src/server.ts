@@ -30,6 +30,8 @@ import {
   handleRetryDeliveryRoute,
   handleRerunPromotionRoute,
   handleOverridePromotionRoute,
+  handleRoutingPreviewRoute,
+  handlePromotionPreviewRoute,
   handleRequeuePick,
   handleReferenceDataCatalog,
   handleReferenceDataLeagues,
@@ -331,6 +333,24 @@ export async function routeRequest(
 
   if (traceMatch) {
     return handleTracePickRoute(request, response, runtime, traceMatch[1] ?? '');
+  }
+
+  const routingPreviewMatch =
+    method === 'GET'
+      ? /^\/api\/picks\/([^/]+)\/routing-preview$/.exec(url.pathname)
+      : null;
+
+  if (routingPreviewMatch) {
+    return handleRoutingPreviewRoute(request, response, runtime, routingPreviewMatch[1] ?? '');
+  }
+
+  const promotionPreviewMatch =
+    method === 'GET'
+      ? /^\/api\/picks\/([^/]+)\/promotion-preview$/.exec(url.pathname)
+      : null;
+
+  if (promotionPreviewMatch) {
+    return handlePromotionPreviewRoute(request, response, runtime, promotionPreviewMatch[1] ?? '');
   }
 
   if (method === 'GET' && url.pathname === '/api/settlements/recent') {
