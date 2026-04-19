@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-651",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-651-learning-ledger-ops",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "package.json"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/learning-ledger.ts",
+    "package.json"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_progress",
+  "started_at": "2026-04-19T23:20:00.000Z",
+  "heartbeat_at": "2026-04-19T23:25:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
