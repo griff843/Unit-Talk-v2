@@ -2,8 +2,8 @@ name: Proof Coverage Guard
 
 # Any PR that touches sensitive runtime paths (lifecycle, promotion, audit,
 # distribution, review controller, migrations) must also include a
-# corresponding change in a live-DB proof file (apps/api/src/t1-proof-*.test.ts
-# or similar). Catches the InMemory-vs-Database drift class at CI time,
+# corresponding change in a live-DB proof file or scoped proof script.
+# Catches the InMemory-vs-Database drift class at CI time,
 # before merge, instead of in a downstream proof bundle.
 #
 # Context: UTV2-519 and UTV2-521 both shipped broken against live Postgres
@@ -101,11 +101,13 @@ jobs:
       - name: Check for corresponding live-DB proof changes
         if: steps.skip.outputs.skip != 'true' && steps.sensitive.outputs.required == 'true'
         run: |
-          # Accept any change to a file whose path matches a live-DB proof pattern
+          # Accept any change to a file whose path matches a live-DB proof pattern.
+          # Proof scripts may live with the app/package that owns the runtime surface.
           proof_patterns=(
             'apps/api/src/t1-proof-.*\.test\.ts$'
             'apps/api/src/.*test-db.*\.ts$'
-            'apps/api/src/scripts/utv2-.*-proof.*\.ts$'
+            'apps/[^/]+/src/scripts/.*\.ts$'
+            'packages/[^/]+/src/scripts/.*\.ts$'
           )
 
           proof_changed=""
@@ -135,7 +137,8 @@ jobs:
           echo ""
           echo "Required: add or update a live-DB proof case under one of:"
           echo "  - apps/api/src/t1-proof-*.test.ts (gated on SUPABASE_SERVICE_ROLE_KEY)"
-          echo "  - apps/api/src/scripts/utv2-*-proof*.ts (proof script)"
+          echo "  - apps/*/src/scripts/*.ts (proof script)"
+          echo "  - packages/*/src/scripts/*.ts (proof script)"
           echo ""
           echo "The proof must exercise your change against the real submission or"
           echo "review pipeline via in-process controller calls with live repos."

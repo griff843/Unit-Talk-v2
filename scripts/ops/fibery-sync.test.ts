@@ -7,6 +7,7 @@ import {
   buildSyncActions,
   loadFiberyPolicy,
   loadSyncMetadata,
+  runFiberySync,
   validateSyncMetadata,
   type FiberyPolicy,
   type SyncContext,
@@ -132,4 +133,31 @@ test('policy loader reads entity mappings', () => {
   const loaded = loadFiberyPolicy('.ops/fibery-policy.yml');
   assert.strictEqual(loaded.entities.issues.state_updates.pr_open, 'In Review');
   assert.strictEqual(loaded.entities.controls.state_updates.merge, undefined);
+});
+
+test('sync runner skips when sync-required bypass is explicitly configured', async () => {
+  const metadata = loadSyncMetadata(tempYaml(`
+version: 1
+approval:
+  skip_sync_required: true
+entities:
+  issues: []
+`));
+  const result = await runFiberySync({
+    metadata,
+    policy,
+    context,
+    dryRun: true,
+    client: {
+      appendNote: async () => {
+        throw new Error('appendNote should not run');
+      },
+      setState: async () => {
+        throw new Error('setState should not run');
+      },
+    } as never,
+  });
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'fibery_sync_skipped');
+  assert.match(result.comment_markdown, /Skipped:/);
 });

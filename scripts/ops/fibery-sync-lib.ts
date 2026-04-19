@@ -10,6 +10,7 @@ export type SyncMetadata = {
   version: 1;
   approval: {
     allow_multiple_issues: boolean;
+    skip_sync_required: boolean;
   };
   entities: Record<EntityKind, string[]>;
 };
@@ -60,6 +61,15 @@ export type SyncResult = {
 
 const ENTITY_KINDS: EntityKind[] = ['issues', 'findings', 'controls', 'proofs'];
 const ISSUE_ID_PATTERN = /^UTV2-\d+$/;
+const ISSUE_ID_SCAN_PATTERN = /\bUTV2-\d+\b/gi;
+
+export function extractIssueIds(text: string): string[] {
+  const seen = new Set<string>();
+  for (const match of text.matchAll(ISSUE_ID_SCAN_PATTERN)) {
+    seen.add(match[0].toUpperCase());
+  }
+  return [...seen].sort((left, right) => left.localeCompare(right));
+}
 
 export function loadSyncMetadata(filePath: string): SyncMetadata {
   const parsed = parseYamlFile(filePath);
@@ -71,6 +81,7 @@ export function loadSyncMetadata(filePath: string): SyncMetadata {
     version: 1,
     approval: {
       allow_multiple_issues: approval.allow_multiple_issues === true,
+      skip_sync_required: approval.skip_sync_required === true,
     },
     entities: {
       issues: readIdList(entities.issues),
@@ -151,6 +162,18 @@ export async function runFiberySync(input: {
   client: FiberyClient;
   dryRun: boolean;
 }): Promise<SyncResult> {
+  if (input.metadata.approval.skip_sync_required) {
+    return buildResult({
+      event: input.context.event,
+      dryRun: input.dryRun,
+      code: 'fibery_sync_skipped',
+      actions: [],
+      results: [],
+      errors: [],
+      skippedReason: 'approval.skip_sync_required is true in .ops/sync.yml',
+    });
+  }
+
   const errors = validateSyncMetadata(input.metadata);
   if (errors.length > 0) {
     const result = buildResult({
@@ -193,6 +216,7 @@ export function buildResult(input: {
   actions: SyncAction[];
   results: FiberyOperationResult[];
   errors: string[];
+  skippedReason?: string;
 }): SyncResult {
   return {
     ok: input.errors.length === 0,
@@ -213,6 +237,7 @@ export function buildCommentMarkdown(input: {
   actions: SyncAction[];
   results: FiberyOperationResult[];
   errors: string[];
+  skippedReason?: string;
 }): string {
   const lines = [
     '### Fibery Sync',
@@ -227,6 +252,11 @@ export function buildCommentMarkdown(input: {
     for (const error of input.errors) {
       lines.push(`- ${error}`);
     }
+    return `${lines.join('\n')}\n`;
+  }
+
+  if (input.skippedReason) {
+    lines.push(`Skipped: ${input.skippedReason}`);
     return `${lines.join('\n')}\n`;
   }
 

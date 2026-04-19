@@ -1,0 +1,35 @@
+version: 1
+
+fibery:
+  api_url_env: FIBERY_API_URL
+  api_token_env: FIBERY_API_TOKEN
+  dry_run_env: FIBERY_SYNC_DRY_RUN
+
+defaults:
+  append_only: true
+  note_separator: "\n\n---\n\n"
+
+entities:
+  issues:
+    type: "Unit Talk/Issue"
+    lookup_field: "Unit Talk/Public Id"
+    note_field: "Unit Talk/Sync Notes"
+    state_field: "workflow/state"
+    state_updates:
+      pr_open: "In Review"
+      merge: "Done"
+  findings:
+    type: "Unit Talk/Finding"
+    lookup_field: "Unit Talk/Public Id"
+    note_field: "Unit Talk/Sync Notes"
+    state_updates: {}
+  controls:
+    type: "Unit Talk/Control"
+    lookup_field: "Unit Talk/Public Id"
+    note_field: "Unit Talk/Sync Notes"
+    state_updates: {}
+  proofs:
+    type: "Unit Talk/Proof"
+    lookup_field: "Unit Talk/Public Id"
+    note_field: "Unit Talk/Sync Notes"
+    state_updates: {}
