@@ -10,13 +10,4 @@ approval:
 
 entities:
   issues:
-    - UTV2-662
-    - UTV2-663
-    - UTV2-666
-    - UTV2-667
-  findings:
-    # - FINDING-123
-  controls:
-    # - CTRL-123
-  proofs:
-    - PROOF-UTV2-662-663-666-667
+    - UTV2-661
