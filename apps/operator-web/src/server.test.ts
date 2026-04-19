@@ -14,6 +14,7 @@ import {
   createStatsRows,
   readOperatorSimulationMode,
   resolveOperatorWorkspaceRoot,
+  summarizeObservability,
   type OperatorCapperRecapProvider,
   type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
@@ -162,6 +163,94 @@ test('GET /api/operator/snapshot returns recent operational rows', async () => {
   );
   assert.equal(
     body.data.picksPipeline.recentPicks.some((row) => row.settlementResult === 'win'),
+    true,
+  );
+});
+
+test('GET /api/operator/observability returns stack, exported metrics, and alert conditions', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/observability');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    ok: boolean;
+    observability: {
+      stack: { logs: string; metrics: string; errors: string; dashboards: string };
+      metrics: { failedRuns: number; failedOutbox: number; deadLetterOutbox: number; activeIncidents: number };
+      alertConditions: Array<{ id: string; active: boolean; severity: string }>;
+    };
+  };
+  assert.equal(body.ok, true);
+  assert.deepEqual(body.observability.stack, {
+    logs: 'loki',
+    metrics: 'prometheus-json',
+    errors: 'structured-error-events',
+    dashboards: 'operator-web',
+  });
+  assert.equal(body.observability.metrics.failedRuns, 0);
+  assert.equal(body.observability.metrics.failedOutbox, 0);
+  assert.equal(body.observability.metrics.deadLetterOutbox, 0);
+  assert.ok(body.observability.alertConditions.some((condition) => condition.id === 'dead-letter-outbox'));
+});
+
+test('summarizeObservability activates critical alert conditions from runtime rows', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [
+      {
+        id: 'outbox-dead-1',
+        pick_id: 'pick-dead-1',
+        target: 'discord:canary',
+        status: 'dead_letter',
+        attempt_count: 3,
+        next_attempt_at: null,
+        last_error: 'discord rejected message',
+        payload: {},
+        claimed_at: null,
+        claimed_by: null,
+        idempotency_key: 'dead-letter-key',
+        created_at: '2026-03-21T12:00:00.000Z',
+        updated_at: '2026-03-21T12:05:00.000Z',
+      },
+    ],
+    recentReceipts: [],
+    recentRuns: [
+      {
+        id: 'run-failed-1',
+        run_type: 'distribution.process',
+        status: 'failed',
+        started_at: '2026-03-21T12:01:00.000Z',
+        finished_at: '2026-03-21T12:01:05.000Z',
+        actor: 'worker-dev',
+        details: { error: 'discord rejected message' },
+        created_at: '2026-03-21T12:01:00.000Z',
+        idempotency_key: null,
+      },
+    ],
+    recentPicks: [],
+    recentAudit: [],
+    now: new Date('2026-03-21T12:06:00.000Z'),
+  });
+
+  const observability = summarizeObservability(snapshot);
+
+  assert.equal(observability.metrics.failedRuns, 1);
+  assert.equal(observability.metrics.deadLetterOutbox, 1);
+  assert.equal(
+    observability.alertConditions.find((condition) => condition.id === 'failed-runs')?.active,
+    true,
+  );
+  assert.equal(
+    observability.alertConditions.find((condition) => condition.id === 'dead-letter-outbox')?.active,
     true,
   );
 });
@@ -382,6 +471,8 @@ test('GET / returns an html dashboard', async () => {
   assert.match(response.body, /Trader Insights Health/);
   assert.match(response.body, /discord:trader-insights/);
   assert.match(response.body, /Picks Pipeline/);
+  assert.match(response.body, /Observability/);
+  assert.match(response.body, /structured-error-events/);
   assert.match(response.body, /pick-2/);
 });
 

@@ -7,6 +7,7 @@ import {
 import {
   createConsoleLogWriter,
   createDualLogWriter,
+  createErrorTracker,
   createLogger,
   createLokiLogWriter,
 } from '@unit-talk/observability';
@@ -25,6 +26,7 @@ const logger = createLogger({
   service: 'ingestor',
   ...(ingestorWriter ? { writer: ingestorWriter } : {}),
 });
+const errorTracker = createErrorTracker({ service: 'ingestor', logger });
 
 function createIngestorRuntimeDependencies() {
   const env = loadEnvironment();
@@ -178,6 +180,19 @@ if (runtime.autorun) {
       );
     })
     .catch((error: unknown) => {
+      void errorTracker.captureException({
+        operation: 'ingestor.autorun',
+        error,
+        severity: 'critical',
+        fields: {
+          leagues: runtime.leagues,
+          skipResults: runtime.skipResults,
+          providers: {
+            sgo: runtime.sgoApiKeys.length > 0 ? 'configured' : 'missing',
+            oddsApi: runtime.oddsApiKey ? 'configured' : 'missing',
+          },
+        },
+      });
       console.error(
         JSON.stringify(
           {

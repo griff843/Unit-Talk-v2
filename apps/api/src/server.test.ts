@@ -1553,6 +1553,87 @@ test('GET /api/picks/:id/trace returns 404 for unknown pick', async () => {
   }
 });
 
+test('GET /api/picks/:id/routing-preview returns live promotion and outbox routing state', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+  await enqueueDistributionWithRunTracking(
+    created.pick,
+    'discord:best-bets',
+    'server-test',
+    repositories.picks,
+    repositories.outbox,
+    repositories.runs,
+    repositories.audit,
+  );
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/routing-preview`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data: {
+        pickId: string;
+        promotionTarget: string | null;
+        distributionTarget: string | null;
+        outboxStatus: string;
+        routingReason: string;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data.pickId, created.pick.id);
+    assert.equal(body.data.promotionTarget, 'best-bets');
+    assert.equal(body.data.distributionTarget, 'discord:best-bets');
+    assert.match(body.data.outboxStatus, /pending|processing|sent|failed|dead_letter/);
+    assert.match(body.data.routingReason, /discord:best-bets/);
+  } finally {
+    server.close();
+  }
+});
+
+test('GET /api/picks/:id/promotion-preview dry-runs the promotion engine', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await createQualifiedPick(repositories);
+
+  const server = createApiServer({ repositories });
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/promotion-preview`,
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      data: {
+        pickId: string;
+        wouldPromoteTo: string | null;
+        score: number | null;
+        reasons: string[];
+        qualifies: boolean;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.ok, true);
+    assert.equal(body.data.pickId, created.pick.id);
+    assert.equal(body.data.qualifies, true);
+    assert.equal(body.data.wouldPromoteTo, 'best-bets');
+    assert.equal(typeof body.data.score, 'number');
+    assert.ok(body.data.reasons.length > 0);
+  } finally {
+    server.close();
+  }
+});
+
 // --- Settlement query endpoint ---
 
 test('GET /api/settlements/recent returns empty array when no settlements', async () => {

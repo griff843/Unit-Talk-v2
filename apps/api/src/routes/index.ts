@@ -8,6 +8,8 @@ export {
   handleRerunPromotionRoute,
   handleOverridePromotionRoute,
   handleRequeuePick,
+  handleRoutingPreviewRoute,
+  handlePromotionPreviewRoute,
 } from './picks.js';
 export {
   handleReferenceDataCatalog,

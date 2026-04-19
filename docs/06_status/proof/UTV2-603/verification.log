@@ -1,0 +1,17 @@
+# UTV2-603 Verification Log
+
+## Focused Verification
+
+- `pnpm exec tsx --test packages/observability/src/index.test.ts`
+- `pnpm exec tsx --test apps/operator-web/src/server.test.ts`
+- `pnpm exec tsx --test apps/api/src/server.test.ts apps/api/src/server.http.test.ts apps/api/src/http-integration.test.ts`
+- `pnpm exec tsx --test apps/worker/src/worker-runtime.test.ts apps/ingestor/src/ingestor.test.ts`
+- `pnpm type-check`
+
+Result: passed before full gate.
+
+## Full Gate
+
+- `pnpm verify`
+
+Result: passed after local ignored `local.env` setup and command manifest normalization.

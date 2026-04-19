@@ -35,6 +35,16 @@ type WorkflowDoc = {
   secretRefs: string[];
 };
 
+const SUPPORTED_WORKFLOW_TRIGGERS = new Set([
+  'push',
+  'pull_request',
+  'pull_request_review',
+  'issue_comment',
+  'schedule',
+  'workflow_dispatch',
+  'workflow_call',
+]);
+
 const SUPPORTED_SCOPES: Scope[] = [
   'workflows',
   'secrets',
@@ -323,7 +333,7 @@ function runWorkflowChecks(
         : Array.isArray(onBlock)
           ? onBlock.map(String)
           : Object.keys(onBlock as Record<string, unknown>);
-      const unsupported = triggers.filter((trigger) => !['push', 'pull_request', 'schedule', 'workflow_dispatch', 'workflow_call'].includes(trigger));
+      const unsupported = triggers.filter((trigger) => !SUPPORTED_WORKFLOW_TRIGGERS.has(trigger));
       addCheck('CW4', unsupported.length === 0 ? 'pass' : 'fail', unsupported.length === 0 ? `${doc.path} uses supported triggers` : `${doc.path} uses unsupported triggers: ${unsupported.join(', ')}`);
     }
 

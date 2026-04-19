@@ -38,6 +38,20 @@ export interface Logger {
   error(message: string, error?: unknown, fields?: LogFields): void;
 }
 
+export interface ObservabilityStackDecision {
+  logs: 'loki';
+  metrics: 'prometheus-json';
+  errors: 'structured-error-events';
+  dashboards: 'operator-web';
+}
+
+export const OBSERVABILITY_STACK_DECISION: ObservabilityStackDecision = {
+  logs: 'loki',
+  metrics: 'prometheus-json',
+  errors: 'structured-error-events',
+  dashboards: 'operator-web',
+};
+
 export interface CreateLoggerOptions {
   service: string;
   fields?: LogFields;
@@ -205,6 +219,115 @@ export function createConsoleLogWriter(): LogWriter {
 
       console.log(line);
     },
+  };
+}
+
+export interface ErrorCaptureInput {
+  error: unknown;
+  service: string;
+  operation: string;
+  severity?: 'warning' | 'error' | 'critical';
+  correlationId?: string;
+  fields?: LogFields;
+}
+
+export interface ErrorCaptureEvent {
+  timestamp: string;
+  service: string;
+  operation: string;
+  severity: 'warning' | 'error' | 'critical';
+  error: LogValue;
+  correlationId?: string;
+  fields: LogFields;
+}
+
+export interface ErrorTrackingSink {
+  capture(event: ErrorCaptureEvent): void | Promise<void>;
+}
+
+export interface ErrorTracker {
+  captureException(input: Omit<ErrorCaptureInput, 'service'>): Promise<ErrorCaptureEvent>;
+}
+
+export interface CreateErrorTrackerOptions {
+  service: string;
+  sink?: ErrorTrackingSink;
+  logger?: Logger;
+  now?: () => string;
+}
+
+export function createErrorTracker(options: CreateErrorTrackerOptions): ErrorTracker {
+  const now = options.now ?? (() => new Date().toISOString());
+  const sink = options.sink ?? createLoggerErrorTrackingSink(options.logger);
+
+  return {
+    async captureException(input) {
+      const event = createErrorCaptureEvent(
+        {
+          ...input,
+          service: options.service,
+        },
+        now,
+      );
+      await sink.capture(event);
+      return event;
+    },
+  };
+}
+
+export function createLoggerErrorTrackingSink(logger?: Logger): ErrorTrackingSink {
+  return {
+    capture(event) {
+      const message = `error-tracking: ${event.operation}`;
+      const fields: LogFields = {
+        errorTracking: true,
+        operation: event.operation,
+        severity: event.severity,
+        ...(event.correlationId ? { correlationId: event.correlationId } : {}),
+        ...event.fields,
+      };
+
+      if (logger) {
+        logger.error(message, event.error, fields);
+        return;
+      }
+
+      createConsoleLogWriter().write('error', {
+        timestamp: event.timestamp,
+        level: 'error',
+        service: event.service,
+        message,
+        ...fields,
+        error: event.error,
+      });
+    },
+  };
+}
+
+export function createMemoryErrorTrackingSink() {
+  const events: ErrorCaptureEvent[] = [];
+  return {
+    events,
+    sink: {
+      capture(event: ErrorCaptureEvent) {
+        events.push(event);
+      },
+    } satisfies ErrorTrackingSink,
+  };
+}
+
+export function createErrorCaptureEvent(
+  input: ErrorCaptureInput,
+  now: () => string = () => new Date().toISOString(),
+): ErrorCaptureEvent {
+  return {
+    timestamp: now(),
+    service: input.service,
+    operation: input.operation,
+    severity: input.severity ?? 'error',
+    error: serializeError(input.error),
+    ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+    fields: sanitizeFields(input.fields),
   };
 }
 
