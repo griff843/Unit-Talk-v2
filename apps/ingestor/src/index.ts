@@ -123,6 +123,20 @@ export function createIngestorRuntimeSummary() {
 
 const runtime = createIngestorRuntimeDependencies();
 
+const opsAlertWebhookUrl = process.env['UNIT_TALK_OPS_ALERT_WEBHOOK_URL']?.trim() || undefined;
+
+async function postOpsAlert(webhookUrl: string, message: string): Promise<void> {
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    });
+  } catch {
+    // intentionally swallowed — best-effort ops notification
+  }
+}
+
 if (runtime.autorun) {
   resolveActiveSgoApiKey(runtime.sgoApiKeys)
     .then(async (sgoSelection) => ({
@@ -138,6 +152,9 @@ if (runtime.autorun) {
         pollIntervalMs: runtime.pollIntervalMs,
         schedulerConfig: runtime.schedulerConfig,
         logger: console,
+        ...(opsAlertWebhookUrl
+          ? { onStalenessAlert: (msg: string) => postOpsAlert(opsAlertWebhookUrl, msg) }
+          : {}),
       }),
     }))
     .then(({ cycles, sgoSelection }) => {

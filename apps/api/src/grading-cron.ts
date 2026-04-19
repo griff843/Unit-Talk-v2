@@ -33,6 +33,8 @@ export interface GradingCronRunnerOptions {
   sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'error' | 'info' | 'warn'>;
   runGradingPass?: typeof runGradingPass;
+  /** Called with the staleness message when gap > GRADING_STALE_WARN_MS. Wire to Discord in production. */
+  onStalenessAlert?: (message: string) => Promise<void>;
 }
 
 export interface GradingCronRuntimeDependencies {
@@ -72,6 +74,11 @@ export async function runGradingCronCycles(
   return summaries;
 }
 
+const GRADING_STALE_WARN_MS = parseInt(
+  process.env.UNIT_TALK_GRADING_STALE_WARN_MS ?? '2700000',
+  10,
+); // default 45 minutes
+
 export async function startGradingCronLoop(
   options: Omit<GradingCronRunnerOptions, 'maxCycles'>,
 ): Promise<void> {
@@ -97,6 +104,31 @@ export async function startGradingCronLoop(
       options.logger?.info?.(
         `Grading cron cycle ${cycle} completed: attempted=${summary.result.attempted} graded=${summary.result.graded} skipped=${summary.result.skipped} errors=${summary.result.errors}`,
       );
+    }
+
+    // Write heartbeat so external monitoring can detect gaps
+    const heartbeatRun = await options.repositories.runs.startRun({
+      runType: 'grading.cron.heartbeat',
+      details: { cycle },
+    });
+    await options.repositories.runs.completeRun({
+      runId: heartbeatRun.id,
+      status: 'succeeded',
+      details: { cycle },
+    });
+
+    // Staleness check: warn if grading.run gap exceeds threshold
+    const recentRuns = await options.repositories.runs.listByType('grading.run', 1);
+    if (recentRuns.length > 0) {
+      const lastRunAt = new Date(recentRuns[0]!.created_at).getTime();
+      const gapMs = Date.now() - lastRunAt;
+      if (gapMs > GRADING_STALE_WARN_MS) {
+        const stalenessMsg = `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`;
+        options.logger?.error?.(stalenessMsg);
+        if (options.onStalenessAlert) {
+          void options.onStalenessAlert(stalenessMsg).catch(() => {/* fire-and-forget */});
+        }
+      }
     }
 
     await sleep(pollIntervalMs);
@@ -188,14 +220,34 @@ function defaultSleep(ms: number) {
   });
 }
 
+/**
+ * Fire-and-forget post to a Discord webhook URL.
+ * Used for ops staleness alerts. Never throws.
+ */
+async function postOpsAlert(webhookUrl: string, message: string): Promise<void> {
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    });
+  } catch {
+    // intentionally swallowed — this is a best-effort ops notification
+  }
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const runtime = createGradingCronRuntimeDependencies();
+  const opsAlertWebhookUrl = process.env['UNIT_TALK_OPS_ALERT_WEBHOOK_URL']?.trim() || undefined;
 
   if (runtime.autorun) {
     void startGradingCronLoop({
       repositories: runtime.repositories,
       pollIntervalMs: runtime.pollIntervalMs,
       logger: console,
+      ...(opsAlertWebhookUrl
+        ? { onStalenessAlert: (msg) => postOpsAlert(opsAlertWebhookUrl, msg) }
+        : {}),
     }).catch((error: unknown) => {
       console.error(
         JSON.stringify(

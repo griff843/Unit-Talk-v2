@@ -780,7 +780,7 @@ test('runIngestorCycles polls across cycles and leagues', async () => {
   assert.equal(cycles[0]?.results[0]?.status, 'skipped');
   assert.equal(cycles[1]?.results[0]?.status, 'skipped');
   assert.equal(cycles[0]?.gradingTrigger.status, 'skipped');
-  assert.equal(cycles[0]?.gradingTrigger.reason, 'no_completed_results');
+  assert.equal(cycles[0]?.gradingTrigger.reason, 'api_url_not_configured');
   assert.deepEqual(sleeps, [1234]);
 });
 
@@ -863,6 +863,42 @@ test('runIngestorCycles records a failed grading trigger without failing ingest 
   assert.equal(cycles[0]?.gradingTrigger.status, 'failed');
   assert.equal(cycles[0]?.gradingTrigger.reason, 'api unavailable');
   assert.equal(warnings.some((warning) => warning.includes('api unavailable')), true);
+});
+
+test('runIngestorCycles triggers grading even when resultsEventsCount is zero', async () => {
+  // Verifies the no_completed_results gate was removed — grading should fire on every cycle
+  // when apiUrl is configured, regardless of whether the cycle found result events.
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const triggeredUrls: string[] = [];
+
+  const cycles = await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    apiUrl: 'http://127.0.0.1:3000',
+    triggerGradingRun: async (apiUrl) => {
+      triggeredUrls.push(apiUrl);
+    },
+    fetchImpl: async (input) => {
+      const url = String(input);
+      if (url.includes('oddsAvailable=true')) {
+        // Return events with no results — resultsEventsCount will be 0
+        return new Response(JSON.stringify({ data: [createSgoApiEvent()] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      // results endpoint returns empty list
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  assert.equal(cycles[0]?.results[0]?.resultsEventsCount, 0);
+  assert.deepEqual(triggeredUrls, ['http://127.0.0.1:3000']);
+  assert.equal(cycles[0]?.gradingTrigger.status, 'triggered');
 });
 
 test('runIngestorCycles records rate limit backoff telemetry in quota summary', async () => {
