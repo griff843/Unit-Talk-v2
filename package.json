@@ -66,6 +66,7 @@
     "ops:fibery-ci-enforce": "tsx scripts/ops/fibery-ci-enforcement.ts",
     "ops:fibery-sync": "tsx scripts/ops/fibery-sync.ts",
     "ops:health": "tsx scripts/ops-health.ts",
+    "ops:digest": "tsx scripts/ops/daily-digest.ts",
     "ops:lane-alert": "tsx scripts/ops/stale-lane-alerter.ts",
     "ops:lane-close": "tsx scripts/ops/lane-close.ts",
     "ops:lane-link-pr": "tsx scripts/ops/lane-link-pr.ts",

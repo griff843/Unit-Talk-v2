@@ -1,0 +1,48 @@
+name: Daily Ops Digest
+
+on:
+  schedule:
+    - cron: '0 8 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  digest:
+    name: Run daily digest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run daily digest
+        run: pnpm ops:digest -- --write-result --json > digest-result.json
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          LINEAR_TEAM_KEY: UTV2
+          FIBERY_API_URL: ${{ secrets.FIBERY_API_URL }}
+          FIBERY_API_TOKEN: ${{ secrets.FIBERY_API_TOKEN }}
+          UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
+
+      - name: Upload digest report
+        uses: actions/upload-artifact@v4
+        with:
+          name: digest-result.json
+          path: digest-result.json
+          retention-days: 30
