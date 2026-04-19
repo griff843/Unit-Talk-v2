@@ -10,4 +10,5 @@ approval:
 
 entities:
   issues:
-    - UTV2-661
+    - UTV2-633
+    - UTV2-634
