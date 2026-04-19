@@ -126,6 +126,10 @@ export async function ingestLeague(
 
     const resolved = await resolveSgoEntities(fetched.events, repositories, {
       ...(options.logger ? { logger: options.logger } : {}),
+      providerKey: 'sgo',
+      ingestionCycleRunId: run.id,
+      snapshotAt,
+      historical: options.historical ?? false,
     });
 
     const providerEventIds = fetched.events
@@ -231,6 +235,10 @@ export async function ingestLeague(
     if (completedResultEvents.length > 0) {
       await resolveSgoEntities(completedResultEvents, repositories, {
         ...(options.logger ? { logger: options.logger } : {}),
+        providerKey: 'sgo',
+        ingestionCycleRunId: run.id,
+        snapshotAt,
+        historical: options.historical ?? false,
       });
     }
 
