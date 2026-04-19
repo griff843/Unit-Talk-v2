@@ -12,6 +12,7 @@ import {
   type FiberyPolicy,
   type SyncContext,
 } from './fibery-sync-lib.js';
+import { FiberyClient } from './fibery-client.js';
 
 function tempYaml(contents: string): string {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ut-fibery-sync-'));
@@ -160,4 +161,152 @@ entities:
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.code, 'fibery_sync_skipped');
   assert.match(result.comment_markdown, /Skipped:/);
+});
+
+test('FiberyClient creates missing Unit Talk issue shells before primitive note append', async () => {
+  const requests: unknown[] = [];
+  const originalFetch = globalThis.fetch;
+  let queryCount = 0;
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as Array<{ command: string; args: unknown }>;
+    requests.push(body);
+    const command = body[0]?.command;
+    let payload: unknown[];
+    if (command === 'fibery.entity/query') {
+      queryCount += 1;
+      payload = queryCount === 1
+        ? [{ success: true, result: [] }]
+        : [{ success: true, result: [{ 'fibery/id': 'issue-1', 'Sync Notes': '' }] }];
+    } else {
+      payload = [{ success: true, result: {} }];
+    }
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const client = new FiberyClient({
+      apiUrl: 'https://fibery.example',
+      token: 'token',
+    });
+    const result = await client.appendNote(
+      {
+        type: 'Unit Talk/Issue',
+        lookup_field: 'Unit Talk/Identifier',
+        note_field: 'Sync Notes',
+      },
+      'UTV2-668',
+      'sync note',
+      '\n\n---\n\n',
+    );
+
+    assert.strictEqual(result.operation, 'append_note');
+    assert.deepStrictEqual(
+      requests
+        .flatMap((request) => request as Array<{ command: string }>)
+        .map((entry) => entry.command),
+      ['fibery.entity/query', 'fibery.entity/create', 'fibery.entity/query', 'fibery.entity/update'],
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('FiberyClient does not select or update Fibery document note fields as primitives', async () => {
+  const requests: unknown[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as Array<{ command: string; args: unknown }>;
+    requests.push(body);
+    const payload = [{ success: true, result: [{ 'fibery/id': 'issue-1' }] }];
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const client = new FiberyClient({
+      apiUrl: 'https://fibery.example',
+      token: 'token',
+    });
+    const result = await client.appendNote(
+      {
+        type: 'Unit Talk/Issue',
+        lookup_field: 'Unit Talk/Identifier',
+        note_field: 'Unit Talk/Description',
+      },
+      'UTV2-668',
+      'sync note',
+      '\n\n---\n\n',
+    );
+
+    assert.strictEqual(result.operation, 'append_note');
+    assert.match(result.detail, /document field/);
+    assert.deepStrictEqual(
+      requests
+        .flatMap((request) => request as Array<{ command: string }>)
+        .map((entry) => entry.command),
+      ['fibery.entity/query'],
+    );
+    const query = (requests[0] as Array<{ args: { query: { 'q/select': string[] } } }>)[0].args.query;
+    assert.deepStrictEqual(query['q/select'], ['fibery/id', 'Unit Talk/Identifier']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('FiberyClient resolves workflow states before updating workflow/state', async () => {
+  const requests: unknown[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async (_input, init) => {
+    const body = JSON.parse(String(init?.body)) as Array<{ command: string; args: unknown }>;
+    requests.push(body);
+    const command = body[0]?.command;
+    let payload: unknown[];
+    if (command === 'fibery.entity/query' && requests.length === 1) {
+      payload = [{ success: true, result: [{ 'fibery/id': 'issue-1' }] }];
+    } else if (command === 'fibery.entity/query') {
+      payload = [{ success: true, result: [{ 'fibery/id': 'state-review', 'enum/name': 'In Review' }] }];
+    } else {
+      payload = [{ success: true, result: {} }];
+    }
+    return new Response(JSON.stringify(payload), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  }) as typeof fetch;
+
+  try {
+    const client = new FiberyClient({
+      apiUrl: 'https://fibery.example',
+      token: 'token',
+    });
+    const result = await client.setState(
+      {
+        type: 'Unit Talk/Issue',
+        lookup_field: 'Unit Talk/Identifier',
+        note_field: 'Unit Talk/Description',
+        state_field: 'workflow/state',
+      },
+      'UTV2-668',
+      'In Review',
+    );
+
+    assert.strictEqual(result.operation, 'set_state');
+    assert.deepStrictEqual(
+      requests
+        .flatMap((request) => request as Array<{ command: string }>)
+        .map((entry) => entry.command),
+      ['fibery.entity/query', 'fibery.entity/query', 'fibery.entity/update'],
+    );
+    const stateQuery = (requests[1] as Array<{ args: { query: { 'q/from': string } } }>)[0].args.query;
+    assert.strictEqual(stateQuery['q/from'], 'workflow/state_Unit Talk/Issue');
+    const update = (requests[2] as Array<{ args: { entity: Record<string, unknown> } }>)[0].args.entity;
+    assert.deepStrictEqual(update['workflow/state'], { 'fibery/id': 'state-review' });
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
