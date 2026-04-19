@@ -45,6 +45,14 @@ export class DeliveryCircuitBreaker {
     this.reset(target);
   }
 
+  /** Restore an open circuit from durable runtime state after a worker restart. */
+  restoreOpen(target: string, openedAt: number): void {
+    this.state.set(target, {
+      consecutiveFailures: this.threshold,
+      openedAt,
+    });
+  }
+
   /** Returns the estimated resume time (epoch ms) for an open circuit, or null if closed. */
   resumeAt(target: string): number | null {
     const s = this.state.get(target);
