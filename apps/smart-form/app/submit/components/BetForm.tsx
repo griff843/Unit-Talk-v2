@@ -2321,29 +2321,25 @@ export function BetForm() {
                             : 'No live offers for this market. The form below is ready for manual completion using the selected canonical matchup.'}
                         </p>
                         {selectedSportsbookMissingLiveCoverage && alternateLiveSportsbooks.length > 0 ? (
-                          <div className="space-y-2">
-                            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                              Live books available now
-                            </p>
-                            <div className="flex flex-wrap gap-2">
-                              {alternateLiveSportsbooks.map((sportsbook) => (
-                                <Button
-                                  key={sportsbook.id}
-                                  type="button"
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => {
-                                    form.setValue('sportsbook', sportsbook.id, {
-                                      shouldDirty: true,
-                                      shouldTouch: true,
-                                      shouldValidate: true,
-                                    });
-                                  }}
-                                >
-                                  {sportsbook.name}
-                                </Button>
-                              ))}
-                            </div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Available on:</span>
+                            {alternateLiveSportsbooks.map((sportsbook) => (
+                              <Button
+                                key={sportsbook.id}
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  form.setValue('sportsbook', sportsbook.id, {
+                                    shouldDirty: true,
+                                    shouldTouch: true,
+                                    shouldValidate: true,
+                                  });
+                                }}
+                              >
+                                {sportsbook.name}
+                              </Button>
+                            ))}
                           </div>
                         ) : null}
                       </div>
