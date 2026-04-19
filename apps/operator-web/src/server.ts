@@ -51,6 +51,8 @@ import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
 import { handleBoardStateRequest } from './routes/board-state.js';
 import { handleBoardQueueRequest } from './routes/board-queue.js';
 import { handleBoardPerformanceRequest } from './routes/board-performance.js';
+import { handleRoutingPreviewRequest } from './routes/routing-preview.js';
+import { handlePromotionPreviewRequest } from './routes/promotion-preview.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
@@ -522,6 +524,16 @@ export async function routeOperatorRequest(
   const pickDetailMatch = /^\/api\/operator\/picks\/([^/]+)$/.exec(url.pathname);
   if (method === 'GET' && pickDetailMatch) {
     return handlePickDetailRequest(request, response, deps, pickDetailMatch[1] ?? '');
+  }
+
+  const routingPreviewMatch = /^\/api\/operator\/picks\/([^/]+)\/routing-preview$/.exec(url.pathname);
+  if (method === 'GET' && routingPreviewMatch) {
+    return handleRoutingPreviewRequest(request, response, deps, routingPreviewMatch[1] ?? '');
+  }
+
+  const promotionPreviewMatch = /^\/api\/operator\/picks\/([^/]+)\/promotion-preview$/.exec(url.pathname);
+  if (method === 'GET' && promotionPreviewMatch) {
+    return handlePromotionPreviewRequest(request, response, deps, promotionPreviewMatch[1] ?? '');
   }
 
   if (method === 'GET' && url.pathname === '/') {
