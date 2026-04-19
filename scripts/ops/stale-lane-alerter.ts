@@ -50,7 +50,8 @@ interface StaleLaneReport {
 
 // ── Config ─────────────────────────────────────────────────────────────────
 
-const ZOMBIE_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
+const ZOMBIE_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours (claude lanes)
+const CODEX_ZOMBIE_THRESHOLD_MS = 1 * 60 * 60 * 1000; // 1 hour (codex lanes — faster reclaim)
 const LANE_DRIFT_DIR = path.join(ROOT, '.out', 'ops', 'lane-drift');
 
 const githubToken = process.env.GITHUB_TOKEN?.trim() ?? '';
@@ -241,15 +242,20 @@ async function checkManifest(
     });
   }
 
-  // 5. Zombie: in_progress with heartbeat older than 48h
+  // 5. Zombie: in_progress with heartbeat older than threshold
+  //    Codex lanes use a 1h threshold for faster slot reclaim.
+  //    Claude lanes keep the 48h threshold.
   if (manifest.status === 'in_progress' && manifest.heartbeat_at) {
+    const isCodex = manifest.lane_type === 'codex-cli' || manifest.lane_type === 'codex-cloud';
+    const threshold = isCodex ? CODEX_ZOMBIE_THRESHOLD_MS : ZOMBIE_THRESHOLD_MS;
+    const thresholdLabel = isCodex ? '1h' : '48h';
     const ageMs = Date.now() - Date.parse(manifest.heartbeat_at);
-    if (ageMs > ZOMBIE_THRESHOLD_MS) {
+    if (ageMs > threshold) {
       const ageHours = Math.round(ageMs / (60 * 60 * 1000));
       entries.push({
         issue_id: manifest.issue_id,
         kind: 'zombie_lane',
-        detail: `heartbeat_at is ${ageHours}h old (threshold: 48h) — lane may be abandoned`,
+        detail: `heartbeat_at is ${ageHours}h old (threshold: ${thresholdLabel}, lane_type: ${manifest.lane_type}) — lane may be abandoned`,
         manifest_status: manifest.status,
         pr_url: manifest.pr_url,
         branch: manifest.branch,
