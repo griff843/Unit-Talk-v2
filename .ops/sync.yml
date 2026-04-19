@@ -3,12 +3,13 @@ version: 1
 # Required for every PR using Fibery auto-sync.
 # Keep this file scoped to the PR's execution unit.
 approval:
-  allow_multiple_issues: true
+  allow_multiple_issues: false
   # Emergency/config bypass for PRs that touch implementation-like files but should not sync.
   # Prefer the fibery-sync-bypass-approved PR label so approval is visible in GitHub.
   skip_sync_required: true
 
 entities:
   issues:
-    - UTV2-633
-    - UTV2-634
+    - UTV2-660
+  proofs:
+    - PROOF-UTV2-660
