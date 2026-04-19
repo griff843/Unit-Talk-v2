@@ -16,6 +16,10 @@ export default tseslint.config(
       '.out/**',
       'scripts/debug-*.ts',
       'scripts/live-data-lab-*.ts',
+      // smart-form is a Next.js app with its own eslint-config-next setup.
+      // Root lint covers .ts only; Next.js handles .tsx linting via `next lint`.
+      'apps/smart-form/**/*.tsx',
+      'apps/smart-form/**/*.jsx',
     ],
   },
   js.configs.recommended,
@@ -100,4 +104,3 @@ export default tseslint.config(
     },
   },
 );
-
