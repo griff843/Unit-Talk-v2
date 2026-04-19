@@ -4,7 +4,7 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-RLS
+    - UTV2-604
   proofs:
-    - docs/06_status/proof/UTV2-RLS/diff-summary.md
-    - docs/06_status/proof/UTV2-RLS/verification.log
+    - docs/06_status/proof/UTV2-604/diff-summary.md
+    - docs/06_status/proof/UTV2-604/verification.log

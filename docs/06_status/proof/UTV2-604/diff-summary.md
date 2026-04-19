@@ -1,4 +1,4 @@
-# UTV2-RLS Diff Summary
+# UTV2-604 Diff Summary
 
 Implemented fail-closed Supabase RLS posture:
 
