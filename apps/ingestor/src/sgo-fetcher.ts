@@ -2,6 +2,8 @@ import type { SGOPairedProp } from './sgo-normalizer.js';
 
 const SGO_EVENTS_ENDPOINT = 'https://api.sportsgameodds.com/v2/events';
 const SGO_USAGE_ENDPOINT = 'https://api.sportsgameodds.com/v2/account/usage';
+const SGO_EVENTS_PAGE_LIMIT = '100';
+const MAX_SGO_PAGINATION_PAGES = 100;
 
 export interface SGOFetchOptions {
   apiKey: string;
@@ -72,11 +74,14 @@ export interface SGOResolvedPlayer {
 
 export interface SGOEventStatus {
   started: boolean;
+  /** Not reliably set by SGO — use `finalized` as the authoritative completion gate. */
   completed: boolean;
   cancelled: boolean;
+  /** Game has ended (scores available but not yet finalized). Acceptable for early scoring with correction risk. */
   ended: boolean;
   live: boolean;
   delayed: boolean;
+  /** Authoritative completion signal from SGO. Use this to mark events completed and trigger settlement. */
   finalized: boolean;
   oddsAvailable: boolean;
 }
@@ -139,6 +144,7 @@ export async function fetchAndPairSGOProps(
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
+  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('includeOpposingOdds', 'true');
   if (options.historical) {
     // Historical mode: target finalized/completed events with scores.
@@ -154,13 +160,13 @@ export async function fetchAndPairSGOProps(
     options.startsBefore ?? addDaysToIso(options.snapshotAt, 7),
   );
 
-  const { payload, telemetry } = await fetchSgoJson({
+  const { payloads, telemetry } = await fetchSgoPages({
     endpoint: 'odds',
     url,
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
   });
-  const rawEvents = extractEvents(payload);
+  const rawEvents = payloads.flatMap(extractEvents);
   const events = rawEvents
     .map(extractResolvedEvent)
     .filter((event): event is SGOResolvedEvent => event !== null);
@@ -220,6 +226,7 @@ export async function fetchSGOResults(
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
+  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
   url.searchParams.set(
     'startsAfter',
@@ -227,13 +234,13 @@ export async function fetchSGOResults(
       subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
   );
 
-  const { payload } = await fetchSgoJson({
+  const { payloads } = await fetchSgoPages({
     endpoint: 'results',
     url,
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
   });
-  const rawEvents = extractEvents(payload);
+  const rawEvents = payloads.flatMap(extractEvents);
 
   return rawEvents
     .map(extractEventResult)
@@ -246,6 +253,7 @@ export async function fetchSGOResultsWithTelemetry(
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
+  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
   url.searchParams.set(
     'startsAfter',
@@ -253,13 +261,13 @@ export async function fetchSGOResultsWithTelemetry(
       subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
   );
 
-  const { payload, telemetry } = await fetchSgoJson({
+  const { payloads, telemetry } = await fetchSgoPages({
     endpoint: 'results',
     url,
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
   });
-  const rawEvents = extractEvents(payload);
+  const rawEvents = payloads.flatMap(extractEvents);
 
   return {
     results: rawEvents
@@ -271,6 +279,43 @@ export async function fetchSGOResultsWithTelemetry(
 
 const MAX_RATE_LIMIT_RETRIES = 1;
 const DEFAULT_BACKOFF_MS = 60_000;
+
+async function fetchSgoPages(input: {
+  endpoint: 'odds' | 'results';
+  url: URL;
+  fetchImpl: typeof fetch;
+  sleep?: (ms: number) => Promise<void>;
+}) {
+  const telemetry = createEmptyTelemetry(input.endpoint);
+  const payloads: unknown[] = [];
+  const seenCursors = new Set<string>();
+  let nextCursor: string | null = null;
+
+  for (let page = 0; page < MAX_SGO_PAGINATION_PAGES; page += 1) {
+    const pageUrl = new URL(input.url.toString());
+    if (nextCursor) {
+      pageUrl.searchParams.set('cursor', nextCursor);
+    }
+
+    const result = await fetchSgoJson({
+      ...input,
+      url: pageUrl,
+    });
+    mergeTelemetry(telemetry, result.telemetry);
+    payloads.push(result.payload);
+
+    nextCursor = extractNextCursor(result.payload);
+    if (!nextCursor) {
+      return { payloads, telemetry };
+    }
+    if (seenCursors.has(nextCursor)) {
+      throw new Error(`SGO ${input.endpoint} pagination repeated cursor: ${nextCursor}`);
+    }
+    seenCursors.add(nextCursor);
+  }
+
+  throw new Error(`SGO ${input.endpoint} pagination exceeded ${MAX_SGO_PAGINATION_PAGES} pages`);
+}
 
 async function fetchSgoJson(input: {
   endpoint: 'odds' | 'results';
@@ -317,6 +362,37 @@ async function fetchSgoJson(input: {
   }
 
   throw new Error(`SGO ${input.endpoint} fetch failed: ${telemetry.lastStatus ?? 0} ${lastStatusText}`);
+}
+
+function mergeTelemetry(target: SGORequestTelemetry, source: SGORequestTelemetry) {
+  target.requestCount += source.requestCount;
+  target.successfulRequests += source.successfulRequests;
+  target.creditsUsed += source.creditsUsed;
+  target.lastStatus = source.lastStatus ?? target.lastStatus;
+  target.rateLimitHitCount += source.rateLimitHitCount;
+  target.backoffCount += source.backoffCount;
+  target.backoffMs += source.backoffMs;
+  target.retryAfterMs = source.retryAfterMs ?? target.retryAfterMs;
+  target.throttled = target.throttled || source.throttled;
+  target.headersSeen = target.headersSeen || source.headersSeen;
+  target.limit = source.limit ?? target.limit;
+  target.remaining = source.remaining ?? target.remaining;
+  target.resetAt = source.resetAt ?? target.resetAt;
+}
+
+function extractNextCursor(payload: unknown) {
+  if (!isRecord(payload)) {
+    return null;
+  }
+
+  return (
+    firstString(payload.nextCursor, payload.next_cursor) ??
+    getNestedString(payload, ['pagination', 'nextCursor']) ??
+    getNestedString(payload, ['pagination', 'next_cursor']) ??
+    getNestedString(payload, ['meta', 'nextCursor']) ??
+    getNestedString(payload, ['meta', 'next_cursor']) ??
+    null
+  );
 }
 
 function createEmptyTelemetry(endpoint: 'odds' | 'results'): SGORequestTelemetry {
@@ -648,7 +724,9 @@ function extractEventResult(event: Record<string, unknown>): SGOEventResult | nu
   }
 
   const status = extractStatus(event.status);
-  if (!status || !status.completed || !status.finalized) {
+  // Use status.finalized as the completion gate — SGO does not reliably set status.completed.
+  // See: docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md
+  if (!status || !status.finalized) {
     return null;
   }
 

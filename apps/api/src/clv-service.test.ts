@@ -932,3 +932,80 @@ test('computeAndAttachCLV does not set isOpeningLineFallback when closing line i
   assert.ok(result !== null, 'CLV should not be null when a snapshot is available');
   assert.equal(result.isOpeningLineFallback, undefined, 'isOpeningLineFallback should not be set when closing line found');
 });
+
+test('computeCLVOutcome computes CLV for smart-form abbreviated O/U selections', async () => {
+  const cases = [
+    { selection: 'O 20.5', expectedClosingOdds: -108, expectedSide: 'over' },
+    { selection: 'U 20.5', expectedClosingOdds: -112, expectedSide: 'under' },
+  ] as const;
+
+  for (const { selection, expectedClosingOdds, expectedSide } of cases) {
+    const repositories = createInMemoryRepositoryBundle();
+    await repositories.providerOffers.upsertBatch([
+      {
+        providerKey: 'sgo',
+        providerEventId: `evt-short-${expectedSide}`,
+        providerMarketKey: 'points-all-game-ou',
+        providerParticipantId: 'PLAYER_SHORT_OU',
+        sportKey: 'NBA',
+        line: 20.5,
+        overOdds: -108,
+        underOdds: -112,
+        devigMode: 'PAIRED',
+        isOpening: false,
+        isClosing: false,
+        snapshotAt: '2026-04-01T22:30:00.000Z',
+        idempotencyKey: `short-ou-offer-${expectedSide}`,
+        bookmakerKey: null,
+      },
+    ]);
+
+    const outcome = await computeCLVOutcome(
+      {
+        id: `pick-short-${expectedSide}`,
+        submission_id: `sub-short-${expectedSide}`,
+        participant_id: null,
+        player_id: null,
+        capper_id: null,
+        market_type_id: null,
+        sport_id: null,
+        market: 'points-all-game-ou',
+        selection,
+        line: 20.5,
+        odds: -105,
+        stake_units: 1,
+        confidence: 0.7,
+        source: 'smart-form',
+        approval_status: 'approved',
+        promotion_status: 'qualified',
+        promotion_target: 'best-bets',
+        promotion_score: 82,
+        promotion_reason: 'test',
+        promotion_version: 'v1',
+        promotion_decided_at: '2026-04-01T20:00:00.000Z',
+        promotion_decided_by: 'api',
+        status: 'posted',
+        posted_at: '2026-04-01T20:05:00.000Z',
+        settled_at: null,
+        idempotency_key: null,
+        metadata: {},
+        created_at: '2026-04-01T20:00:00.000Z',
+        updated_at: '2026-04-01T20:05:00.000Z',
+      },
+      repositories,
+      {
+        preResolvedContext: {
+          providerEventId: `evt-short-${expectedSide}`,
+          eventStartTime: '2026-04-01T23:00:00.000Z',
+          participantExternalId: 'PLAYER_SHORT_OU',
+        },
+      },
+    );
+
+    assert.equal(outcome.status, 'computed');
+    assert.notEqual(outcome.status, 'missing_selection_side');
+    assert.ok(outcome.result, `${selection} should produce a CLV result`);
+    assert.equal(outcome.result.closingOdds, expectedClosingOdds);
+    assert.equal(typeof outcome.result.clvRaw, 'number');
+  }
+});

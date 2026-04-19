@@ -1,0 +1,75 @@
+name: Fibery Sync On Merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  fibery-sync:
+    name: Append merge sync to Fibery
+    runs-on: ubuntu-latest
+    if: ${{ github.event.pull_request.merged == true && !contains(github.event.pull_request.labels.*.name, 'fibery-sync-bypass-approved') }}
+    steps:
+      - name: Checkout merged head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Sync Fibery from merge event
+        id: sync
+        continue-on-error: true
+        env:
+          FIBERY_API_URL: ${{ secrets.FIBERY_API_URL }}
+          FIBERY_API_TOKEN: ${{ secrets.FIBERY_API_TOKEN }}
+        run: |
+          pnpm ops:fibery-sync -- \
+            --event merge \
+            --sync-file .ops/sync.yml \
+            --policy-file .ops/fibery-policy.yml \
+            --pr-number "${{ github.event.pull_request.number }}" \
+            --pr-title "${{ github.event.pull_request.title }}" \
+            --pr-url "${{ github.event.pull_request.html_url }}" \
+            --actor "${{ github.actor }}" \
+            --sha "${{ github.event.pull_request.merge_commit_sha }}" \
+            --repository "${{ github.repository }}" \
+            --result-file .out/fibery-sync/result.json \
+            --comment-file .out/fibery-sync/comment.md
+
+      - name: Comment sync result
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.existsSync('.out/fibery-sync/comment.md')
+              ? fs.readFileSync('.out/fibery-sync/comment.md', 'utf8')
+              : '### Fibery Sync\n\nResult: FAILED\n\nNo sync result file was produced.\n';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+              body
+            });
+
+      - name: Fail on sync error
+        if: steps.sync.outcome == 'failure'
+        run: exit 1

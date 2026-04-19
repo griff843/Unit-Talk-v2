@@ -172,6 +172,15 @@ This works for ALL market types: moneylines, spreads, totals, player props.
 - Production default: wait for `finalized=true`
 - Speed mode: grade on `ended=true`, re-check on `finalized=true` for corrections
 
+> **CRITICAL — `status.completed` is not a reliable SGO field.**
+> SGO does not consistently set `status.completed`. Playoff games and some event types return
+> `status.finalized=true` without ever setting `status.completed=true`. Never gate on
+> `status.completed` — use `status.finalized` as the sole authoritative completion signal.
+> Code in `mapSGOStatus` and `extractEventResult` must check `finalized` only.
+> (Confirmed via investigation 2026-04-18: 22 playoff picks unsettled because events were never
+> marked `completed` in DB. Root cause: `status.completed && status.finalized` guard — fixed to
+> `status.finalized` only.)
+
 ### 1.8 Open/Close Odds — CLV and Line Movement
 
 **Without extra params** (always available):

@@ -9,6 +9,10 @@ import { deriveDisplayNameFromProviderId } from './sgo-fetcher.js';
 
 export interface ResolveEntityOptions {
   logger?: Pick<Console, 'warn'>;
+  providerKey?: string;
+  ingestionCycleRunId?: string;
+  snapshotAt?: string;
+  historical?: boolean;
 }
 
 export interface EntityResolutionSummary {
@@ -45,6 +49,12 @@ export async function resolveSgoEntities(
       eventDate: startsAt.slice(0, 10),
       status: mapSGOStatus(event.status),
       metadata: {
+        source: options.providerKey ?? 'sgo',
+        providerKey: options.providerKey ?? 'sgo',
+        ingestionSource: 'ingestor.cycle',
+        ingestionCycleRunId: options.ingestionCycleRunId ?? null,
+        ingestedAt: options.snapshotAt ?? new Date().toISOString(),
+        ingestionMode: options.historical ? 'historical' : 'live',
         venue: event.venue ?? null,
         broadcast: event.broadcast ?? null,
         home_team_external_id: event.teams.home?.teamId ?? null,
@@ -202,7 +212,11 @@ export function mapSGOStatus(status: SGOEventStatus | null | undefined) {
   if (!status) {
     return 'scheduled';
   }
-  if (status.completed && status.finalized) {
+  // SGO uses status.finalized (not status.completed) as the authoritative completion signal.
+  // status.completed is unreliable — SGO does not set it consistently across all event types
+  // (e.g. playoff games). Use status.finalized as the sole gate for 'completed'.
+  // See: docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md
+  if (status.finalized) {
     return 'completed';
   }
   if (status.live) {

@@ -16,6 +16,9 @@
     "deploy:check": "tsx scripts/deploy-check.ts",
     "clean": "pnpm -r --if-present run clean",
     "dev": "pnpm --filter @unit-talk/api dev",
+    "dev:operator-web": "npx tsx apps/operator-web/src/index.ts",
+    "dev:command-center": "pnpm --filter @unit-talk/command-center dev",
+    "dev:smart-form": "pnpm --filter @unit-talk/smart-form dev",
     "env:check": "node scripts/validate-env.mjs",
     "evidence:new": "node scripts/evidence-bundle/new-bundle.mjs",
     "evidence:validate": "node scripts/evidence-bundle/validate-bundle.mjs",
@@ -56,7 +59,12 @@
     "codex:receive": "tsx scripts/codex-receive.ts",
     "codex:status": "tsx scripts/codex-status.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
+    "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
     "ops:ci-doctor": "tsx scripts/ops/ci-doctor.ts",
+    "ops:clean-scripts": "tsx scripts/ops/clean-scripts.ts",
+    "ops:fibery-scaffold": "tsx scripts/ops/fibery-update-scaffold.ts",
+    "ops:fibery-ci-enforce": "tsx scripts/ops/fibery-ci-enforcement.ts",
+    "ops:fibery-sync": "tsx scripts/ops/fibery-sync.ts",
     "ops:health": "tsx scripts/ops-health.ts",
     "ops:lane-close": "tsx scripts/ops/lane-close.ts",
     "ops:lane-link-pr": "tsx scripts/ops/lane-link-pr.ts",
@@ -64,6 +72,7 @@
     "ops:preflight": "tsx scripts/ops/preflight.ts",
     "ops:lane-start": "tsx scripts/ops/lane-start.ts",
     "ops:truth-check": "tsx scripts/ops/truth-check.ts",
+    "ops:update-record": "tsx scripts/ops/update-record.ts",
     "pi-m5:verify": "tsx scripts/pi-m5-verify.ts",
     "migration:audit": "tsx scripts/utv2-356-migration-audit.ts",
     "portfolio:review": "tsx scripts/portfolio-review.ts",
@@ -96,7 +105,7 @@
     "test:domain-shadow": "tsx --test packages/domain/src/shadow-mode.test.ts && tsx --test packages/domain/src/promotion-conviction.test.ts",
     "test:domain-analytics": "tsx --test packages/domain/src/outcomes/outcomes.test.ts packages/domain/src/market/market-reaction.test.ts packages/domain/src/evaluation/evaluation.test.ts packages/domain/src/edge-validation/edge-validation.test.ts packages/domain/src/rollups/rollups.test.ts packages/domain/src/system-health/system-health.test.ts packages/domain/src/risk/risk.test.ts packages/domain/src/strategy/strategy.test.ts packages/domain/src/market-key.test.ts",
     "test:domain-portfolio": "tsx --test packages/domain/src/portfolio/concentration.test.ts packages/domain/src/portfolio/correlation.test.ts",
-    "test:ops": "tsx --test scripts/ops/shared.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/preflight.test.ts scripts/ops/ci-doctor.test.ts scripts/codex-dispatch.test.ts scripts/ops/lane-link-pr.test.ts scripts/codex-receive.test.ts scripts/codex-status.test.ts scripts/codex-classify.test.ts",
+    "test:ops": "tsx --test scripts/ops/shared.test.ts scripts/ops/truth-check-lib.test.ts scripts/ops/preflight.test.ts scripts/ops/ci-doctor.test.ts scripts/codex-dispatch.test.ts scripts/ops/lane-link-pr.test.ts scripts/ops/update-record.test.ts scripts/ops/workflow-hardening.test.ts scripts/ops/fibery-sync.test.ts scripts/ops/fibery-ci-enforcement.test.ts scripts/codex-receive.test.ts scripts/codex-status.test.ts scripts/codex-classify.test.ts",
     "test:ut-cli": "tsx --test scripts/ut-cli/ut-cli.test.ts",
     "test": "pnpm test:apps && pnpm test:verification && pnpm test:domain-probability && pnpm test:domain-features && pnpm test:domain-signals && pnpm test:domain-hedge && pnpm test:domain-shadow && pnpm test:domain-analytics && pnpm test:domain-portfolio && pnpm test:ut-cli && pnpm test:ops",
     "type-check": "pnpm exec tsc -b tsconfig.json",
@@ -109,6 +118,7 @@
     "@eslint/js": "^9.24.0",
     "@types/node": "^24.5.2",
     "eslint": "^9.24.0",
+    "eslint-plugin-react-hooks": "^7.1.1",
     "globals": "^16.0.0",
     "micromatch": "^4.0.8",
     "prettier": "^3.5.3",
@@ -117,14 +127,15 @@
     "typescript-eslint": "^8.29.1",
     "yaml": "^2.8.1"
   },
-  "dependencies": {},
   "pnpm": {
     "overrides": {
       "react": "18.3.1",
       "react-dom": "18.3.1"
     },
     "peerDependencyRules": {
-      "ignoreMissing": ["@playwright/test"]
+      "ignoreMissing": [
+        "@playwright/test"
+      ]
     }
   }
 }

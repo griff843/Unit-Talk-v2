@@ -36,6 +36,9 @@ export type GradingRetryState = Map<
   }
 >;
 
+const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
+const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
+
 export async function runGradingPass(
   repositories: Pick<
     RepositoryBundle,
@@ -110,6 +113,19 @@ export async function runGradingPass(
           pickId: pick.id,
           outcome: 'skipped',
           reason: 'event_not_completed',
+        });
+        continue;
+      }
+
+      const provenance = validateEventProvenanceForGrading(pick, event);
+      if (!provenance.ok) {
+        options.logger?.warn?.(
+          `Skipping grading for pick ${pick.id}: ${provenance.reason}`,
+        );
+        details.push({
+          pickId: pick.id,
+          outcome: 'skipped',
+          reason: provenance.reason,
         });
         continue;
       }
@@ -249,6 +265,74 @@ export async function runGradingPass(
     errors: errorCount,
     details,
   };
+}
+
+function validateEventProvenanceForGrading(
+  pick: PickRecord,
+  event: EventRow,
+): { ok: true } | { ok: false; reason: string } {
+  if (!readNonEmptyString(event.external_id)) {
+    return { ok: false, reason: 'event_provenance_missing_external_id' };
+  }
+
+  const metadata = asRecord(event.metadata);
+  const provider = normalizeProviderKey(
+    readNonEmptyString(metadata?.providerKey) ??
+      readNonEmptyString(metadata?.provider_key) ??
+      readNonEmptyString(metadata?.source),
+  );
+  if (!provider || !TRUSTED_GRADING_EVENT_PROVIDERS.has(provider)) {
+    return { ok: false, reason: 'event_provenance_untrusted_provider' };
+  }
+
+  const ingestionCycleRunId =
+    readNonEmptyString(metadata?.ingestionCycleRunId) ??
+    readNonEmptyString(metadata?.ingestion_cycle_run_id) ??
+    readNonEmptyString(metadata?.ingestionRunId) ??
+    readNonEmptyString(metadata?.runId);
+  if (!ingestionCycleRunId) {
+    return { ok: false, reason: 'event_provenance_missing_ingestion_cycle' };
+  }
+  const ingestionSource = readNonEmptyString(metadata?.ingestionSource);
+  if (ingestionSource !== 'ingestor.cycle') {
+    return { ok: false, reason: 'event_provenance_invalid_ingestion_cycle' };
+  }
+
+  if (
+    hasExplicitEventReferenceTime(pick) &&
+    eventReferenceMismatchMs(pick, event) > MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS
+  ) {
+    return { ok: false, reason: 'event_provenance_historical_mismatch' };
+  }
+
+  return { ok: true };
+}
+
+function normalizeProviderKey(value: string | null) {
+  return value?.trim().toLowerCase() ?? null;
+}
+
+function readNonEmptyString(value: unknown) {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function hasExplicitEventReferenceTime(pick: PickRecord) {
+  const metadata = asRecord(pick.metadata);
+  return [metadata?.eventStartTime, metadata?.eventTime, metadata?.starts_at].some(
+    (candidate) => typeof candidate === 'string' && candidate.trim().length > 0,
+  );
+}
+
+function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
+  const referenceTime = readPickEventReferenceTime(pick);
+  if (referenceTime === null) {
+    return 0;
+  }
+
+  const eventTime = new Date(readEventStartTime(event)).getTime();
+  return Number.isFinite(eventTime)
+    ? Math.abs(eventTime - referenceTime)
+    : Number.POSITIVE_INFINITY;
 }
 
 async function postSettlementRecapIfPossible(
@@ -408,26 +492,40 @@ async function resolvePickParticipantId(
 function chooseEventForPick(pick: PickRecord, events: EventRow[]): EventRow | null {
   const metadata = asRecord(pick.metadata);
   const eventName = typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
+  const namedCandidates = eventName
+    ? events.filter((event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase())
+    : [];
+  const eventCandidates = namedCandidates.length > 0 ? namedCandidates : events;
 
-  if (eventName) {
-    const namedMatch = events.find(
-      (event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
-    );
-    if (namedMatch) {
-      return namedMatch;
-    }
+  if (eventCandidates.length === 0) {
+    return null;
   }
 
-  const pickCreatedAt = new Date(pick.created_at).getTime();
+  const referenceTime = readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
   return (
-    [...events].sort((left, right) => {
-      const leftDistance = Math.abs(new Date(readEventStartTime(left)).getTime() - pickCreatedAt);
+    [...eventCandidates].sort((left, right) => {
+      const leftDistance = Math.abs(new Date(readEventStartTime(left)).getTime() - referenceTime);
       const rightDistance = Math.abs(
-        new Date(readEventStartTime(right)).getTime() - pickCreatedAt,
+        new Date(readEventStartTime(right)).getTime() - referenceTime,
       );
       return leftDistance - rightDistance;
     })[0] ?? null
   );
+}
+
+function readPickEventReferenceTime(pick: PickRecord): number | null {
+  const metadata = asRecord(pick.metadata);
+  const candidates = [metadata?.eventStartTime, metadata?.eventTime, metadata?.starts_at];
+  for (const candidate of candidates) {
+    if (typeof candidate !== 'string' || candidate.trim().length === 0) {
+      continue;
+    }
+    const timestamp = new Date(candidate).getTime();
+    if (Number.isFinite(timestamp)) {
+      return timestamp;
+    }
+  }
+  return null;
 }
 
 function readEventStartTime(event: EventRow) {
@@ -473,6 +571,14 @@ function inferSelectionSide(selection: string) {
     return 'over' as const;
   }
   if (/\bunder\b/.test(normalized)) {
+    return 'under' as const;
+  }
+  // Smart-form serializes picks as "Player Name O X.5" / "O X.5" with abbreviated O/U.
+  // Match standalone O/U token followed by a digit (e.g. "Brunson O 28.5", "O 8").
+  if (/\bO\s+\d/.test(selection) || /^O\s+\d/.test(selection)) {
+    return 'over' as const;
+  }
+  if (/\bU\s+\d/.test(selection) || /^U\s+\d/.test(selection)) {
     return 'under' as const;
   }
   return null;

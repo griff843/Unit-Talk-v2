@@ -941,6 +941,22 @@ test('mapSGOStatus marks completed and in-progress events from SGO booleans', ()
     'completed',
   );
 
+  // SGO does not reliably set status.completed — finalized alone must be sufficient.
+  // Playoff games (and some regular-season events) return finalized=true with completed=false.
+  assert.equal(
+    mapSGOStatus({
+      started: true,
+      completed: false,
+      cancelled: false,
+      ended: true,
+      live: false,
+      delayed: false,
+      finalized: true,
+      oddsAvailable: false,
+    }),
+    'completed',
+  );
+
   assert.equal(
     mapSGOStatus({
       started: true,
@@ -1252,6 +1268,52 @@ test('fetchSGOResults respects explicit historical window overrides', async () =
   const url = new URL(capturedUrl);
   assert.equal(url.searchParams.get('startsAfter'), '2026-03-20T00:00:00.000Z');
   assert.equal(url.searchParams.get('startsBefore'), '2026-03-21T00:00:00.000Z');
+});
+
+test('fetchSGOResults follows nextCursor pagination and merges events from all pages', async () => {
+  const capturedUrls: string[] = [];
+
+  const page1Event = {
+    ...createCompletedSgoResultsEvent(),
+    eventID: 'evt-page1-1',
+  };
+  const page2Event = {
+    ...createCompletedSgoResultsEvent(),
+    eventID: 'evt-page2-1',
+  };
+
+  const results = await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'MLB',
+    snapshotAt: '2026-04-18T12:00:00.000Z',
+    fetchImpl: async (input) => {
+      const url = String(input);
+      capturedUrls.push(url);
+      const parsedUrl = new URL(url);
+      const cursor = parsedUrl.searchParams.get('cursor');
+
+      if (cursor === 'page-2-token') {
+        // Second page: no nextCursor — end of pagination
+        return new Response(
+          JSON.stringify({ data: [page2Event] }),
+          { status: 200, headers: { 'content-type': 'application/json' } },
+        );
+      }
+
+      // First page: return nextCursor
+      return new Response(
+        JSON.stringify({ data: [page1Event], nextCursor: 'page-2-token' }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
+      );
+    },
+  });
+
+  assert.equal(capturedUrls.length, 2, 'should make exactly 2 requests (page 1 + page 2)');
+  assert.ok(!new URL(capturedUrls[0]!).searchParams.has('cursor'), 'first request should have no cursor param');
+  assert.equal(new URL(capturedUrls[1]!).searchParams.get('cursor'), 'page-2-token', 'second request should carry the cursor');
+  assert.equal(results.length, 2, 'events from both pages should be merged');
+  assert.ok(results.some((r) => r.providerEventId === 'evt-page1-1'), 'page 1 event present');
+  assert.ok(results.some((r) => r.providerEventId === 'evt-page2-1'), 'page 2 event present');
 });
 
 test('runHistoricalBackfill walks an inclusive date range and passes bounded daily windows', async () => {
