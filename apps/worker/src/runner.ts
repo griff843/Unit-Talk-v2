@@ -1,4 +1,4 @@
-import type { OutboxRecord, RepositoryBundle } from '@unit-talk/db';
+import type { OutboxRecord, RepositoryBundle, SystemRunRecord } from '@unit-talk/db';
 import { isTargetEnabled, resolveTargetRegistry, type TargetRegistryEntry } from '@unit-talk/contracts';
 import {
   processNextDistributionWork,
@@ -94,6 +94,7 @@ export async function runWorkerCycles(
   const summaries: WorkerCycleSummary[] = [];
   // Track system_run IDs for open circuits so we can close them when the circuit resets
   const openCircuitRunIds = new Map<string, string>();
+  await hydrateOpenCircuitRuns(options.repositories, cb, openCircuitRunIds);
   // Write a worker.heartbeat row per cycle so the operator can detect silent failures.
   // Pass workerHeartbeatIntervalMs=0 to disable. Default: 30000.
   const heartbeatIntervalMs = options.workerHeartbeatIntervalMs ?? 30000;
@@ -136,6 +137,12 @@ export async function runWorkerCycles(
       if (cb.isOpen(target)) {
         results.push({ status: 'circuit-open', target, workerId: options.workerId });
         continue;
+      }
+
+      if (openCircuitRunIds.has(target)) {
+        const runId = openCircuitRunIds.get(target)!;
+        openCircuitRunIds.delete(target);
+        await completeCircuitRun(options.repositories, runId, target, 'cooldown-expired');
       }
 
       const promotionTarget = target.startsWith('discord:') ? target.slice('discord:'.length) : null;
@@ -217,15 +224,7 @@ export async function runWorkerCycles(
         if (wasOpen) {
           const runId = openCircuitRunIds.get(target)!;
           openCircuitRunIds.delete(target);
-          try {
-            await options.repositories.runs.completeRun({
-              runId,
-              status: 'succeeded',
-              details: { target, closedAt: new Date().toISOString() },
-            });
-          } catch {
-            // Non-fatal
-          }
+          await completeCircuitRun(options.repositories, runId, target, 'delivery-succeeded');
         }
       }
       // 'idle' and 'skipped' do not affect circuit state
@@ -299,4 +298,80 @@ function defaultSleep(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+async function hydrateOpenCircuitRuns(
+  repositories: RepositoryBundle,
+  circuitBreaker: DeliveryCircuitBreaker,
+  openCircuitRunIds: Map<string, string>,
+) {
+  let runs: SystemRunRecord[] = [];
+  try {
+    runs = await repositories.runs.listByType('worker.circuit-open', 100);
+  } catch {
+    return;
+  }
+
+  for (const run of runs) {
+    if (run.status !== 'running') {
+      continue;
+    }
+
+    const details = parseCircuitRunDetails(run);
+    if (!details) {
+      continue;
+    }
+
+    if (openCircuitRunIds.has(details.target)) {
+      await completeCircuitRun(repositories, run.id, details.target, 'duplicate-open-run');
+      continue;
+    }
+
+    circuitBreaker.restoreOpen(details.target, details.openedAtMs);
+    if (circuitBreaker.isOpen(details.target)) {
+      openCircuitRunIds.set(details.target, run.id);
+    } else {
+      await completeCircuitRun(repositories, run.id, details.target, 'cooldown-expired-on-startup');
+    }
+  }
+}
+
+function parseCircuitRunDetails(run: SystemRunRecord) {
+  if (!run.details || typeof run.details !== 'object' || Array.isArray(run.details)) {
+    return null;
+  }
+
+  const target = run.details['target'];
+  if (typeof target !== 'string' || target.length === 0) {
+    return null;
+  }
+
+  const openedAt = run.details['openedAt'];
+  const openedAtMs =
+    typeof openedAt === 'string' && Number.isFinite(Date.parse(openedAt))
+      ? Date.parse(openedAt)
+      : Date.parse(run.started_at);
+
+  if (!Number.isFinite(openedAtMs)) {
+    return null;
+  }
+
+  return { target, openedAtMs };
+}
+
+async function completeCircuitRun(
+  repositories: RepositoryBundle,
+  runId: string,
+  target: string,
+  closeReason: string,
+) {
+  try {
+    await repositories.runs.completeRun({
+      runId,
+      status: 'succeeded',
+      details: { target, closedAt: new Date().toISOString(), closeReason },
+    });
+  } catch {
+    // Non-fatal: delivery can continue and the next health snapshot will retry from durable state.
+  }
 }

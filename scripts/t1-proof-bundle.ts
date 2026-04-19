@@ -26,10 +26,15 @@ type PipelineSummary = {
   latestSuccessfulRunAt: string | null;
   staleProcessingCount: number;
   stalePendingCount: number;
+  deferredPendingCount: number;
   workerVerdict: string;
 };
 
 const env = loadEnvironment();
+const workerTargets = (env.UNIT_TALK_DISTRIBUTION_TARGETS?.trim() || 'discord:canary')
+  .split(',')
+  .map((target) => target.trim())
+  .filter(Boolean);
 const args = process.argv.slice(2);
 const pickIds = readMultiOption('pick');
 const issueId = readOption('issue');
@@ -99,7 +104,7 @@ async function collectPipelineSummary(): Promise<PipelineSummary> {
   const now = Date.now();
   const { data: outboxRows, error: outboxError } = await client
     .from('distribution_outbox')
-    .select('id,status,created_at,claimed_at');
+    .select('id,status,target,created_at,claimed_at');
 
   if (outboxError) {
     throw new Error(`Failed reading distribution_outbox: ${outboxError.message}`);
@@ -116,15 +121,32 @@ async function collectPipelineSummary(): Promise<PipelineSummary> {
     throw new Error(`Failed reading system_runs: ${runsError.message}`);
   }
 
+  const { data: heartbeats, error: heartbeatsError } = await client
+    .from('system_runs')
+    .select('status,started_at,finished_at,run_type')
+    .eq('run_type', 'worker.heartbeat')
+    .order('started_at', { ascending: false })
+    .limit(10);
+
+  if (heartbeatsError) {
+    throw new Error(`Failed reading worker heartbeats: ${heartbeatsError.message}`);
+  }
+
   const counts: Record<string, number> = {};
   const staleProcessing = (outboxRows ?? []).filter((row) => {
-    if (row.status !== 'processing' || !row.claimed_at) {
+    if (!workerTargets.includes(row.target) || row.status !== 'processing' || !row.claimed_at) {
       return false;
     }
     return ageMinutes(now, row.claimed_at) > 5;
   });
   const stalePending = (outboxRows ?? []).filter((row) => {
-    if (row.status !== 'pending') {
+    if (!workerTargets.includes(row.target) || row.status !== 'pending') {
+      return false;
+    }
+    return ageMinutes(now, row.created_at) > 30;
+  });
+  const deferredPending = (outboxRows ?? []).filter((row) => {
+    if (workerTargets.includes(row.target) || row.status !== 'pending') {
       return false;
     }
     return ageMinutes(now, row.created_at) > 30;
@@ -137,13 +159,17 @@ async function collectPipelineSummary(): Promise<PipelineSummary> {
   const latestRun = runs?.[0] ?? null;
   const latestSuccessfulRun =
     runs?.find((run) => run.status === 'succeeded') ?? null;
+  const runsInWindow = (runs ?? []).filter((run) => ageMinutes(now, run.started_at) <= 120);
+  const heartbeatsInWindow = (heartbeats ?? []).filter((heartbeat) => ageMinutes(now, heartbeat.started_at) <= 10);
 
   let workerVerdict = 'HEALTHY';
-  if (!latestRun) {
-    workerVerdict = 'DOWN_NO_RUNS';
-  } else if (latestRun.status === 'failed') {
+  if (heartbeatsInWindow.length === 0 && !latestRun) {
+    workerVerdict = 'DOWN_NO_RUNS_OR_HEARTBEATS';
+  } else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0) {
+    workerVerdict = 'DOWN_NO_RUNS_OR_HEARTBEATS_IN_WINDOW';
+  } else if (latestRun?.status === 'failed') {
     workerVerdict = 'DEGRADED_LAST_RUN_FAILED';
-  } else if (latestRun.status === 'cancelled') {
+  } else if (latestRun?.status === 'cancelled') {
     workerVerdict = 'DEGRADED_LAST_RUN_CANCELLED';
   } else if (staleProcessing.length > 0) {
     workerVerdict = 'DEGRADED_STALE_PROCESSING';
@@ -156,6 +182,7 @@ async function collectPipelineSummary(): Promise<PipelineSummary> {
     latestSuccessfulRunAt: latestSuccessfulRun?.started_at ?? null,
     staleProcessingCount: staleProcessing.length,
     stalePendingCount: stalePending.length,
+    deferredPendingCount: deferredPending.length,
     workerVerdict,
   };
 }
@@ -296,6 +323,7 @@ function printBundle(bundle: {
     console.log(`- outbox counts: ${counts || '(none)'}`);
     console.log(`- stale processing: ${bundle.pipeline.staleProcessingCount}`);
     console.log(`- stale pending: ${bundle.pipeline.stalePendingCount}`);
+    console.log(`- deferred pending: ${bundle.pipeline.deferredPendingCount}`);
   }
 
   console.log('');

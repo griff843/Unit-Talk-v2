@@ -1,6 +1,23 @@
+import {
+  createConsoleLogWriter,
+  createDualLogWriter,
+  createErrorTracker,
+  createLogger,
+  createLokiLogWriter,
+} from '@unit-talk/observability';
 import { createWorkerRuntimeDependencies } from './runtime.js';
 import { createDeliveryAdapter, createSimulationDeliveryAdapter } from './delivery-adapters.js';
 import { runWorkerCycles } from './runner.js';
+
+const lokiUrl = process.env.LOKI_URL?.trim();
+const workerWriter = lokiUrl
+  ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
+  : undefined;
+const logger = createLogger({
+  service: 'worker',
+  ...(workerWriter ? { writer: workerWriter } : {}),
+});
+const errorTracker = createErrorTracker({ service: 'worker', logger });
 
 export function createWorkerRuntimeSummary() {
   const runtime = createWorkerRuntimeDependencies();
@@ -63,6 +80,16 @@ if (runtime.autorun) {
       );
     })
     .catch((error: unknown) => {
+      void errorTracker.captureException({
+        operation: 'worker.autorun',
+        error,
+        severity: 'critical',
+        fields: {
+          workerId: runtime.workerId,
+          adapterKind: runtime.adapterKind,
+          targets: runtime.distributionTargets,
+        },
+      });
       console.error(
         JSON.stringify(
           {

@@ -57,6 +57,30 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "purpose": "Linear API write token used by linear-auto-close to transition referenced UTV2 issues to Done and post merge-SHA comments on push to main."
     },
     {
+      "name": "FIBERY_API_URL",
+      "required": true,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/fibery-sync-on-pr.yml", ".github/workflows/fibery-sync-on-merge.yml", ".github/workflows/ops-daily-digest.yml"],
+      "purpose": "Fibery workspace API URL used by PR and merge sync workflows to append GitHub activity to referenced Unit Talk audit entities."
+    },
+    {
+      "name": "FIBERY_API_TOKEN",
+      "required": true,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/fibery-sync-on-pr.yml", ".github/workflows/fibery-sync-on-merge.yml", ".github/workflows/ops-daily-digest.yml"],
+      "purpose": "Fibery API token used by PR and merge sync workflows to update referenced Unit Talk audit entities."
+    },
+    {
+      "name": "UNIT_TALK_OPS_ALERT_WEBHOOK_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/stale-lane-alerter.yml", ".github/workflows/ops-daily-digest.yml"],
+      "purpose": "Discord webhook URL for ops alert notifications. Optional — alerter and digest exit 0 and skip Discord post when absent."
+    },
+    {
       "name": "SUPABASE_ACCESS_TOKEN",
       "required": true,
       "source": "manual",
@@ -94,7 +118,29 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
 - **Fail-closed implications when missing:** `linear-auto-close` job fails; the workflow is not in main's required-check set, so this does not block merges. Linear drift accumulates silently until the token is restored, which is a known acceptable degradation (the close intent is derivable from merge SHA at any later point).
 - **Rotation:** after rotation, re-run `pnpm ops:ci-doctor -- --scope secrets` locally to confirm the new secret existence.
 
-### 3.3 `SUPABASE_ACCESS_TOKEN`
+### 3.3 `FIBERY_API_URL`
+
+- **Required:** Yes for Fibery PR and merge sync workflows.
+- **Scope:** Repo-level secret. Stores the Fibery workspace API URL, for example `https://unit-talk.fibery.io`.
+- **Used by:** `.github/workflows/fibery-sync-on-pr.yml` and `.github/workflows/fibery-sync-on-merge.yml`.
+- **Local vs CI:**
+  - **CI:** required when Fibery sync is not bypassed by the `fibery-sync-bypass-approved` label.
+  - **Local:** required for live `pnpm ops:fibery-sync`; not required for `--dry-run`.
+- **Fail-closed implications when missing:** Fibery sync fails before any entity update is attempted. PR and merge checks remain red until the secret is configured or an approved bypass label is applied.
+- **Rotation:** after changing the workspace URL, re-run `pnpm ops:ci-doctor -- --scope secrets` locally with a valid `GITHUB_TOKEN`.
+
+### 3.4 `FIBERY_API_TOKEN`
+
+- **Required:** Yes for Fibery PR and merge sync workflows.
+- **Scope:** Repo-level secret. Token must have permission to query and update the configured Unit Talk Fibery databases.
+- **Used by:** `.github/workflows/fibery-sync-on-pr.yml` and `.github/workflows/fibery-sync-on-merge.yml`.
+- **Local vs CI:**
+  - **CI:** required when Fibery sync is not bypassed by the `fibery-sync-bypass-approved` label.
+  - **Local:** required for live `pnpm ops:fibery-sync`; not required for `--dry-run`.
+- **Fail-closed implications when missing:** Fibery sync cannot resolve or update audit entities, so the PR or merge sync check fails.
+- **Rotation:** rotate in Fibery first, update the GitHub secret, then re-run `pnpm ops:ci-doctor -- --scope secrets` locally with a valid `GITHUB_TOKEN`.
+
+### 3.5 `SUPABASE_ACCESS_TOKEN`
 
 - **Required:** Conditionally required — only when a PR modifies files under `supabase/migrations/**`. The preview workflow's `plan` job detects migration changes and skips the `validate` job when no migrations are touched.
 - **Scope:** Repo-level secret. Scoped to the Supabase management API (create/delete preview branches, fetch branch credentials, apply migrations via CLI).

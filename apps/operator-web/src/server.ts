@@ -48,14 +48,42 @@ import { handleIntelligenceRequest } from './routes/intelligence.js';
 import { handleIntelligenceCoverageRequest } from './routes/intelligence-coverage.js';
 import { handleProviderHealthRequest } from './routes/provider-health.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
+import { handleObservabilityRequest } from './routes/observability.js';
 import { handleBoardStateRequest } from './routes/board-state.js';
 import { handleBoardQueueRequest } from './routes/board-queue.js';
 import { handleBoardPerformanceRequest } from './routes/board-performance.js';
+import { handleRoutingPreviewRequest } from './routes/routing-preview.js';
+import { handlePromotionPreviewRequest } from './routes/promotion-preview.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
   status: 'healthy' | 'degraded' | 'down';
   detail: string;
+}
+
+export interface OperatorObservabilitySummary {
+  stack: {
+    logs: 'loki';
+    metrics: 'prometheus-json';
+    errors: 'structured-error-events';
+    dashboards: 'operator-web';
+  };
+  metrics: {
+    failedRuns: number;
+    failedOutbox: number;
+    deadLetterOutbox: number;
+    activeIncidents: number;
+    pendingOutboxAgeMaxMinutes: number | null;
+    latestDistributionRunAt: string | null;
+    latestIngestorRunAt: string | null;
+    latestWorkerHeartbeatAt: string | null;
+  };
+  alertConditions: Array<{
+    id: string;
+    severity: 'warning' | 'critical';
+    active: boolean;
+    detail: string;
+  }>;
 }
 
 export interface OperatorEntityHealth {
@@ -171,6 +199,7 @@ export interface OperatorSnapshot {
   rolloutConfig: RolloutConfigEntry[];
   exposureGateRejections: number;
   incidents: OperatorIncident[];
+  observability: OperatorObservabilitySummary;
   aging: {
     staleValidated: number;
     stalePosted: number;
@@ -495,6 +524,10 @@ export async function routeOperatorRequest(
     return handleExceptionQueuesRequest(request, response, deps);
   }
 
+  if (method === 'GET' && url.pathname === '/api/operator/observability') {
+    return handleObservabilityRequest(request, response, deps);
+  }
+
   if (method === 'GET' && url.pathname === '/api/operator/review-history') {
     return handleReviewHistoryRequest(request, response, deps);
   }
@@ -522,6 +555,16 @@ export async function routeOperatorRequest(
   const pickDetailMatch = /^\/api\/operator\/picks\/([^/]+)$/.exec(url.pathname);
   if (method === 'GET' && pickDetailMatch) {
     return handlePickDetailRequest(request, response, deps, pickDetailMatch[1] ?? '');
+  }
+
+  const routingPreviewMatch = /^\/api\/operator\/picks\/([^/]+)\/routing-preview$/.exec(url.pathname);
+  if (method === 'GET' && routingPreviewMatch) {
+    return handleRoutingPreviewRequest(request, response, deps, routingPreviewMatch[1] ?? '');
+  }
+
+  const promotionPreviewMatch = /^\/api\/operator\/picks\/([^/]+)\/promotion-preview$/.exec(url.pathname);
+  if (method === 'GET' && promotionPreviewMatch) {
+    return handlePromotionPreviewRequest(request, response, deps, promotionPreviewMatch[1] ?? '');
   }
 
   if (method === 'GET' && url.pathname === '/') {
@@ -1294,11 +1337,13 @@ export function createSnapshotFromRows(input: {
       (p) => typeof p.promotion_reason === 'string' && p.promotion_reason.startsWith('exposure-'),
     ).length,
     incidents: [],
+    observability: createEmptyObservabilitySummary(),
     aging,
   };
 
   snapshot.simulationMode = snapshot.counts.simulatedDeliveries > 0 || readOperatorSimulationMode();
   snapshot.incidents = detectIncidents(snapshot, input.now);
+  snapshot.observability = summarizeObservability(snapshot);
   return snapshot;
 }
 
@@ -1519,6 +1564,111 @@ export function detectIncidents(
   }
 
   return incidents;
+}
+
+function createEmptyObservabilitySummary(): OperatorObservabilitySummary {
+  return {
+    stack: {
+      logs: 'loki',
+      metrics: 'prometheus-json',
+      errors: 'structured-error-events',
+      dashboards: 'operator-web',
+    },
+    metrics: {
+      failedRuns: 0,
+      failedOutbox: 0,
+      deadLetterOutbox: 0,
+      activeIncidents: 0,
+      pendingOutboxAgeMaxMinutes: null,
+      latestDistributionRunAt: null,
+      latestIngestorRunAt: null,
+      latestWorkerHeartbeatAt: null,
+    },
+    alertConditions: [],
+  };
+}
+
+export function summarizeObservability(
+  snapshot: Omit<OperatorSnapshot, 'observability'>,
+): OperatorObservabilitySummary {
+  const failedRuns = snapshot.recentRuns.filter(
+    (run) => run.status === 'failed' || run.status === 'cancelled',
+  ).length;
+  const latestDistributionRun = snapshot.recentRuns.find(
+    (run) => run.run_type === 'distribution.process',
+  );
+  const latestIngestorRun = snapshot.recentRuns.find((run) =>
+    run.run_type.startsWith('ingestor'),
+  );
+  const latestWorkerHeartbeat = snapshot.recentRuns.find(
+    (run) => run.run_type === 'worker.heartbeat',
+  );
+  const staleWorkerActive = snapshot.incidents.some((incident) => incident.type === 'stale-worker');
+  const deliveryStallActive = snapshot.incidents.some((incident) => incident.type === 'delivery-stall');
+  const circuitOpenActive = snapshot.incidents.some((incident) => incident.type === 'circuit-open');
+  const staleIngestorActive = snapshot.health.some(
+    (signal) => signal.component === 'ingestor' && signal.status !== 'healthy',
+  );
+
+  return {
+    stack: createEmptyObservabilitySummary().stack,
+    metrics: {
+      failedRuns,
+      failedOutbox: snapshot.counts.failedOutbox,
+      deadLetterOutbox: snapshot.counts.deadLetterOutbox,
+      activeIncidents: snapshot.incidents.length,
+      pendingOutboxAgeMaxMinutes: snapshot.counts.pendingOutboxAgeMaxMinutes,
+      latestDistributionRunAt: latestDistributionRun?.started_at ?? null,
+      latestIngestorRunAt: latestIngestorRun?.started_at ?? null,
+      latestWorkerHeartbeatAt: latestWorkerHeartbeat?.started_at ?? null,
+    },
+    alertConditions: [
+      {
+        id: 'failed-runs',
+        severity: 'critical',
+        active: failedRuns > 0,
+        detail: `${failedRuns} failed or cancelled system run(s) in the current snapshot`,
+      },
+      {
+        id: 'dead-letter-outbox',
+        severity: 'critical',
+        active: snapshot.counts.deadLetterOutbox > 0,
+        detail: `${snapshot.counts.deadLetterOutbox} dead-letter delivery row(s) require manual intervention`,
+      },
+      {
+        id: 'delivery-stall',
+        severity: 'critical',
+        active: deliveryStallActive,
+        detail: deliveryStallActive
+          ? 'Distribution has sent rows but receipts are stale or missing'
+          : 'No delivery stall incident is active',
+      },
+      {
+        id: 'stale-worker',
+        severity: 'warning',
+        active: staleWorkerActive,
+        detail: staleWorkerActive
+          ? 'Worker heartbeat or distribution activity is stale'
+          : 'Worker heartbeat is within the accepted window',
+      },
+      {
+        id: 'circuit-open',
+        severity: 'warning',
+        active: circuitOpenActive,
+        detail: circuitOpenActive
+          ? 'At least one delivery target circuit breaker is open'
+          : 'No open delivery circuit breaker is visible',
+      },
+      {
+        id: 'ingestor-stale',
+        severity: 'warning',
+        active: staleIngestorActive,
+        detail: staleIngestorActive
+          ? 'Ingestor freshness health is degraded'
+          : 'Ingestor freshness health is acceptable',
+      },
+    ],
+  };
 }
 
 function summarizeCanaryLane(

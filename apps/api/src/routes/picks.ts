@@ -6,6 +6,8 @@ import { reviewPickController } from '../controllers/review-pick-controller.js';
 import { retryDeliveryController } from '../controllers/retry-delivery-controller.js';
 import { rerunPromotionController } from '../controllers/rerun-promotion-controller.js';
 import { overridePromotionController } from '../controllers/override-promotion-controller.js';
+import { routingPreviewController } from '../controllers/routing-preview-controller.js';
+import { promotionPreviewController } from '../controllers/promotion-preview-controller.js';
 import { tracePickController } from '../controllers/trace-pick-controller.js';
 import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
@@ -88,5 +90,25 @@ export async function handleTracePickRoute(
   pickId: string,
 ): Promise<void> {
   const apiResponse = await tracePickController(pickId, runtime.repositories);
+  writeJson(response, apiResponse.status, apiResponse.body);
+}
+
+export async function handleRoutingPreviewRoute(
+  _request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+  pickId: string,
+): Promise<void> {
+  const apiResponse = await routingPreviewController(pickId, runtime.repositories);
+  writeJson(response, apiResponse.status, apiResponse.body);
+}
+
+export async function handlePromotionPreviewRoute(
+  _request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+  pickId: string,
+): Promise<void> {
+  const apiResponse = await promotionPreviewController(pickId, runtime.repositories);
   writeJson(response, apiResponse.status, apiResponse.body);
 }

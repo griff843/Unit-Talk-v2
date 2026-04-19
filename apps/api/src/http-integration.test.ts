@@ -3,7 +3,7 @@ import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import type { AppEnv } from '@unit-talk/config';
-import { createLogger, createMetricsCollector, type StructuredLogEntry } from '@unit-talk/observability';
+import { createErrorTracker, createLogger, createMetricsCollector, type StructuredLogEntry } from '@unit-talk/observability';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
@@ -403,6 +403,7 @@ function createTestRuntime(
       windowMs: 60_000,
     },
     logger: createLogger({ service: 'api', fields: { env: 'test' } }),
+    errorTracker: createErrorTracker({ service: 'api' }),
     now: Date.now,
     metricsCollector: createMetricsCollector(),
     rateLimitStore: {

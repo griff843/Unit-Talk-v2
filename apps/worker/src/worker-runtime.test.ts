@@ -1520,6 +1520,16 @@ test('DeliveryCircuitBreaker resets on success', () => {
   assert.equal(cb.resumeAt(target), null, 'resumeAt must be null after reset');
 });
 
+test('DeliveryCircuitBreaker restores open state from persisted runtime metadata', () => {
+  const cb = new DeliveryCircuitBreaker({ threshold: 3, cooldownMs: 60_000 });
+  const target = 'discord:restore-test';
+
+  cb.restoreOpen(target, Date.now() - 1000);
+
+  assert.equal(cb.isOpen(target), true, 'restored target must be open during cooldown');
+  assert.ok(cb.openTargets().includes(target), 'restored target must be listed as open');
+});
+
 test('runWorkerCycles skips target with open circuit and returns circuit-open result', async () => {
   // Three outbox rows for discord:best-bets — force threshold=2 failures to open the circuit,
   // then the third cycle should return circuit-open without calling deliver.
@@ -1585,6 +1595,85 @@ test('runWorkerCycles writes system_runs row when circuit opens', async () => {
   const details = circuitRun.details as Record<string, unknown> | null;
   assert.equal(typeof details?.target, 'string', 'details.target must be set');
   assert.equal(typeof details?.resumeAt, 'string', 'details.resumeAt must be set');
+});
+
+test('runWorkerCycles restores persisted open circuit after restart', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories, runs } = createWorkerTestRepositories([outbox]);
+  const openedAt = new Date().toISOString();
+  await runs.startRun({
+    runType: 'worker.circuit-open',
+    actor: 'worker-before-restart',
+    details: {
+      target: 'discord:best-bets',
+      openedAt,
+      resumeAt: new Date(Date.now() + 60_000).toISOString(),
+    },
+  });
+
+  let deliverCallCount = 0;
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-after-restart',
+    targets: ['discord:best-bets'],
+    deliver: async () => {
+      deliverCallCount += 1;
+      return {
+        receiptType: 'discord.message',
+        status: 'sent',
+        channel: 'best-bets',
+        payload: {},
+      };
+    },
+    maxCycles: 1,
+    circuitBreaker: new DeliveryCircuitBreaker({ threshold: 2, cooldownMs: 60_000 }),
+    persistenceMode: 'in_memory',
+  });
+
+  assert.equal(cycles[0]?.results[0]?.status, 'circuit-open');
+  assert.equal(deliverCallCount, 0, 'restored open circuit must block delivery');
+  assert.equal(runs.records.find((row) => row.run_type === 'worker.circuit-open')?.status, 'running');
+});
+
+test('runWorkerCycles closes expired persisted circuit before probing target', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories, runs } = createWorkerTestRepositories([outbox]);
+  const circuitRun = await runs.startRun({
+    runType: 'worker.circuit-open',
+    actor: 'worker-before-restart',
+    details: {
+      target: 'discord:best-bets',
+      openedAt: new Date(Date.now() - 60_000).toISOString(),
+      resumeAt: new Date(Date.now() - 30_000).toISOString(),
+    },
+  });
+
+  let deliverCallCount = 0;
+  const cycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-after-cooldown',
+    targets: ['discord:best-bets'],
+    deliver: async () => {
+      deliverCallCount += 1;
+      return {
+        receiptType: 'discord.message',
+        status: 'sent',
+        channel: 'best-bets',
+        payload: {},
+      };
+    },
+    maxCycles: 1,
+    circuitBreaker: new DeliveryCircuitBreaker({ threshold: 2, cooldownMs: 10 }),
+    persistenceMode: 'in_memory',
+  });
+
+  assert.equal(cycles[0]?.results[0]?.status, 'sent');
+  assert.equal(deliverCallCount, 1, 'expired persisted circuit should allow a delivery probe');
+  assert.equal(circuitRun.status, 'succeeded');
+  assert.equal(
+    (circuitRun.details as Record<string, unknown>).closeReason,
+    'cooldown-expired-on-startup',
+  );
 });
 
 // ---------------------------------------------------------------------------

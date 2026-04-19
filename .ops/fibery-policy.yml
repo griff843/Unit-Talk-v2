@@ -12,24 +12,24 @@ defaults:
 entities:
   issues:
     type: "Unit Talk/Issue"
-    lookup_field: "Unit Talk/Public Id"
-    note_field: "Unit Talk/Sync Notes"
+    lookup_field: "Unit Talk/Identifier"
+    note_field: "Unit Talk/Description"
     state_field: "workflow/state"
     state_updates:
       pr_open: "In Review"
       merge: "Done"
   findings:
-    type: "Unit Talk/Finding"
-    lookup_field: "Unit Talk/Public Id"
-    note_field: "Unit Talk/Sync Notes"
+    type: "Unit Talk/Findings"
+    lookup_field: "Unit Talk/Finding ID"
+    note_field: "Unit Talk/Notes"
     state_updates: {}
   controls:
-    type: "Unit Talk/Control"
-    lookup_field: "Unit Talk/Public Id"
-    note_field: "Unit Talk/Sync Notes"
+    type: "Unit Talk/Controls"
+    lookup_field: "Unit Talk/Control ID"
+    note_field: "Unit Talk/Notes"
     state_updates: {}
   proofs:
-    type: "Unit Talk/Proof"
-    lookup_field: "Unit Talk/Public Id"
-    note_field: "Unit Talk/Sync Notes"
+    type: "Unit Talk/Proof Artifacts"
+    lookup_field: "Unit Talk/Artifact ID"
+    note_field: "Unit Talk/Notes"
     state_updates: {}

@@ -11,10 +11,10 @@ type FiberyIssueUpdatePayload = {
     sha: string;
     subject: string;
   }>;
-  fibery: {
-    operation: 'update_issue_from_commit_activity';
-    entity_lookup: {
-      field: 'Public Id';
+    fibery: {
+      operation: 'update_issue_from_commit_activity';
+      entity_lookup: {
+      field: 'Unit Talk/Identifier';
       value: string;
     };
     fields: {
@@ -52,7 +52,7 @@ export function buildFiberyPayloads(commits: CommitInfo[]): FiberyIssueUpdatePay
         fibery: {
           operation: 'update_issue_from_commit_activity',
           entity_lookup: {
-            field: 'Public Id',
+            field: 'Unit Talk/Identifier',
             value: issueId,
           },
           fields: {
