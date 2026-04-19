@@ -1,0 +1,236 @@
+name: Post-Merge Lane Close
+
+# On push to main, identify the associated lane manifest (if any) and
+# auto-close it after truth-check passes. This is the "chain link" in the
+# automation conveyor — the merge itself triggers lane closure.
+#
+# Step classification (adversarial review):
+#   1. Identify merged lane     — hard-gate (no lane = exit 0 silently)
+#   2. Run truth-check          — hard-gate (failure halts)
+#   3. Close manifest           — hard-gate (must succeed)
+#   4. Update Linear            — skipped (linear-auto-close.yml handles it)
+#   5. Update Fibery            — skipped (fibery-sync-on-merge.yml handles it)
+#
+# Issue ID extraction:
+#   Scans the head commit message for UTV2-\d+ patterns from:
+#     - Branch name in merge commit (e.g., claude/utv2-670-stale-lane-alerter)
+#     - Explicit close markers (Closes UTV2-###, Fixes UTV2-###)
+#     - Conventional commit scope (e.g., feat(ops): UTV2-670)
+#   Only the FIRST matched ID is used (one commit = one lane).
+#
+# Requirements:
+#   - Repo secret LINEAR_API_TOKEN (for truth-check's Linear checks)
+#   - GITHUB_TOKEN (automatic)
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  lane-close:
+    name: Auto-close merged lane
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Extract issue ID from commit message
+        id: extract
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # Extract the first UTV2-NNN identifier from the commit message.
+          # Sources: branch name in merge line, close markers, conventional
+          # commit scope, or any freeform mention.
+          issue_id=$(echo "$COMMIT_MSG" | grep -oP 'UTV2-\d+' | head -n 1 || true)
+
+          if [ -z "$issue_id" ]; then
+            echo "::notice title=post-merge-lane-close::No UTV2-### found in commit message. Nothing to close."
+            echo "issue_id=" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=post-merge-lane-close::Found issue $issue_id"
+            echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Checkout
+        if: steps.extract.outputs.issue_id != ''
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check lane manifest exists
+        if: steps.extract.outputs.issue_id != ''
+        id: manifest
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+        run: |
+          manifest_path="docs/06_status/lanes/${ISSUE_ID}.json"
+          if [ ! -f "$manifest_path" ]; then
+            echo "::notice title=post-merge-lane-close::No manifest at $manifest_path. Nothing to close."
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "path=$manifest_path" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check manifest status
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true'
+        id: status
+        env:
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+        run: |
+          status=$(jq -r '.status' "$MANIFEST_PATH")
+          echo "::notice title=post-merge-lane-close::Manifest status: $status"
+
+          if [ "$status" = "done" ]; then
+            echo "::notice title=post-merge-lane-close::Lane already done. Skipping."
+            echo "closeable=false" >> "$GITHUB_OUTPUT"
+          elif [ "$status" = "in_review" ] || [ "$status" = "merged" ]; then
+            echo "closeable=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=post-merge-lane-close::Status '$status' is not closeable (expected in_review or merged). Skipping."
+            echo "closeable=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Setup pnpm
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Run truth-check (hard-gate)
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
+        id: truth_check
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -eo pipefail
+
+          # Run truth-check and capture both output and exit code
+          truth_output=$(pnpm ops:truth-check -- "$ISSUE_ID" --json 2>&1) || exit_code=$?
+          exit_code=${exit_code:-0}
+
+          echo "$truth_output"
+          echo "truth_output<<TRUTH_EOF" >> "$GITHUB_OUTPUT"
+          echo "$truth_output" >> "$GITHUB_OUTPUT"
+          echo "TRUTH_EOF" >> "$GITHUB_OUTPUT"
+          echo "exit_code=$exit_code" >> "$GITHUB_OUTPUT"
+
+          case $exit_code in
+            0)
+              echo "::notice title=post-merge-lane-close::Truth-check PASSED for $ISSUE_ID"
+              ;;
+            2)
+              # Ineligible — wrong status, not an error
+              echo "::notice title=post-merge-lane-close::Truth-check ineligible for $ISSUE_ID (exit 2). Skipping close."
+              ;;
+            1|3|4)
+              echo "::warning title=post-merge-lane-close::Truth-check FAILED for $ISSUE_ID (exit $exit_code). Lane will NOT be closed."
+              exit $exit_code
+              ;;
+            *)
+              echo "::warning title=post-merge-lane-close::Truth-check returned unexpected exit code $exit_code for $ISSUE_ID."
+              exit $exit_code
+              ;;
+          esac
+
+      - name: Update manifest to done
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.truth_check.outputs.exit_code == '0'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+          TRUTH_OUTPUT: ${{ steps.truth_check.outputs.truth_output }}
+          MERGE_SHA: ${{ github.sha }}
+        run: |
+          node -e "
+            const fs = require('fs');
+            const path = process.env.MANIFEST_PATH;
+            const manifest = JSON.parse(fs.readFileSync(path, 'utf8'));
+            const now = new Date().toISOString();
+
+            // Parse truth-check output — find the last JSON line
+            const truthLines = (process.env.TRUTH_OUTPUT || '').split('\n');
+            let truthResult = null;
+            for (let i = truthLines.length - 1; i >= 0; i--) {
+              const line = truthLines[i].trim();
+              if (line.startsWith('{')) {
+                try { truthResult = JSON.parse(line); break; } catch {}
+              }
+            }
+
+            // Update manifest fields
+            manifest.status = 'done';
+            manifest.closed_at = now;
+            manifest.heartbeat_at = now;
+
+            // Append truth-check history entry
+            if (!Array.isArray(manifest.truth_check_history)) {
+              manifest.truth_check_history = [];
+            }
+            manifest.truth_check_history.push({
+              timestamp: now,
+              runner: 'post-merge-lane-close',
+              merge_sha: process.env.MERGE_SHA,
+              verdict: truthResult?.verdict ?? 'pass',
+              exit_code: 0,
+              checks: truthResult?.checks ?? [],
+            });
+
+            fs.writeFileSync(path, JSON.stringify(manifest, null, 2) + '\n');
+            console.log('Manifest updated: status=done closed_at=' + now);
+          "
+
+      - name: Commit and push manifest change
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.truth_check.outputs.exit_code == '0'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_PATH: ${{ steps.manifest.outputs.path }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add "$MANIFEST_PATH"
+
+          # Check if there are actually changes to commit
+          if git diff --cached --quiet; then
+            echo "::notice title=post-merge-lane-close::No manifest changes to commit (already up to date)."
+          else
+            git commit -m "ops: auto-close lane $ISSUE_ID [skip ci]"
+            git push
+            echo "::notice title=post-merge-lane-close::Lane $ISSUE_ID closed and manifest committed."
+          fi
+
+      - name: Post summary annotation
+        if: always() && steps.extract.outputs.issue_id != ''
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          MANIFEST_EXISTS: ${{ steps.manifest.outputs.exists }}
+          CLOSEABLE: ${{ steps.status.outputs.closeable }}
+          TC_EXIT: ${{ steps.truth_check.outputs.exit_code }}
+        run: |
+          if [ "$MANIFEST_EXISTS" != "true" ]; then
+            echo "::notice title=post-merge-lane-close::Summary: No manifest for $ISSUE_ID — no action taken."
+          elif [ "$CLOSEABLE" != "true" ]; then
+            echo "::notice title=post-merge-lane-close::Summary: $ISSUE_ID manifest not in closeable state — no action taken."
+          elif [ "$TC_EXIT" = "0" ]; then
+            echo "::notice title=post-merge-lane-close::Summary: $ISSUE_ID lane closed successfully after truth-check pass."
+          elif [ "$TC_EXIT" = "2" ]; then
+            echo "::notice title=post-merge-lane-close::Summary: $ISSUE_ID truth-check ineligible — no action taken."
+          else
+            echo "::warning title=post-merge-lane-close::Summary: $ISSUE_ID truth-check failed (exit $TC_EXIT) — lane NOT closed."
+          fi

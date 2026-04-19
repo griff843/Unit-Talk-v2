@@ -1,11 +1,12 @@
 /**
  * UTV2-669: Daily ops health digest
  *
- * Aggregates four read-only sources into a structured JSON report:
+ * Aggregates five read-only sources into a structured JSON report:
  *   1. Lane manifests → zombie stale-lane check (no GitHub/Linear API calls)
  *   2. ci-doctor subprocess → CI failures (status === 'fail' only; infra_error = skip)
  *   3. Linear GraphQL → active lanes + top-3 backlog
  *   4. Fibery API → open Controls (graceful skip when token absent)
+ *   5. Linear GraphQL → top-3 dispatchable issues with executor routing
  *
  * Outputs:
  *   - Structured JSON at .out/ops/digest/YYYY-MM-DD.json (when --write-result)
@@ -54,19 +55,30 @@ interface LinearSummary {
   error?: string;
 }
 
+interface DispatchCandidate {
+  identifier: string;
+  title: string;
+  tier: 'T1' | 'T2' | 'T3';
+  recommended_executor: 'claude' | 'codex';
+  url: string;
+  has_acceptance_criteria: boolean;
+  labels: string[];
+}
+
 interface FiberyBlocker {
   control_id: string;
   name: string;
 }
 
 interface DigestReport {
-  schema_version: 1;
+  schema_version: 1 | 2;
   run_at: string;
   mode: 'local' | 'scheduled';
   stale_lanes: StaleLaneEntry[];
   ci_failures: string[];
   linear: LinearSummary;
   fibery_blockers: FiberyBlocker[];
+  dispatch_candidates: DispatchCandidate[];
   recommended_next: string[];
   infra_errors: string[];
   brief_text: string;
@@ -172,17 +184,21 @@ function fetchCiFailures(infraErrors: string[]): string[] {
   }
 }
 
-// ── Source 3: Linear active lanes + top-3 backlog ─────────────────────────
+// ── Linear shared helpers ─────────────────────────────────────────────────
 
-async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary> {
+const linearOpts = { token: linearToken, userAgent: 'unit-talk-ops-daily-digest' };
+
+let _cachedTeamId: string | null | undefined;
+
+/** Resolve team ID from LINEAR_TEAM_KEY. Returns null and pushes to infraErrors on failure. Cached after first call. */
+async function resolveLinearTeamId(infraErrors: string[]): Promise<string | null> {
+  if (_cachedTeamId !== undefined) return _cachedTeamId;
   if (!linearToken) {
-    infraErrors.push('LINEAR_API_TOKEN not set — skipping Linear summary');
-    return { active_lanes: [], backlog_top3: [], skipped: true, error: 'token absent' };
+    infraErrors.push('LINEAR_API_TOKEN not set — skipping Linear query');
+    _cachedTeamId = null;
+    return null;
   }
 
-  const opts = { token: linearToken, userAgent: 'unit-talk-ops-daily-digest' };
-
-  // Step 1: resolve team ID
   const teamResult = await linearQuery<{
     teams: { nodes: Array<{ id: string; key: string }> };
   }>(
@@ -192,25 +208,35 @@ async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary>
        }
      }`,
     { key: linearTeamKey },
-    opts,
+    linearOpts,
   );
 
   if (!teamResult.ok || !teamResult.data) {
-    const err = `Linear team resolve failed: ${teamResult.error ?? 'unknown'}`;
-    infraErrors.push(err);
-    return { active_lanes: [], backlog_top3: [], skipped: true, error: err };
+    infraErrors.push(`Linear team resolve failed: ${teamResult.error ?? 'unknown'}`);
+    _cachedTeamId = null;
+    return null;
   }
 
   const team = teamResult.data.teams.nodes[0];
   if (!team) {
-    const err = `Linear team not found: ${linearTeamKey}`;
-    infraErrors.push(err);
-    return { active_lanes: [], backlog_top3: [], skipped: true, error: err };
+    infraErrors.push(`Linear team not found: ${linearTeamKey}`);
+    _cachedTeamId = null;
+    return null;
   }
 
-  const teamId = team.id;
+  _cachedTeamId = team.id;
+  return team.id;
+}
 
-  // Step 2: active lanes (state.type = started)
+// ── Source 3: Linear active lanes + top-3 backlog ─────────────────────────
+
+async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary> {
+  const teamId = await resolveLinearTeamId(infraErrors);
+  if (!teamId) {
+    return { active_lanes: [], backlog_top3: [], skipped: true, error: infraErrors[infraErrors.length - 1] };
+  }
+
+  // Step 1: active lanes (state.type = started)
   const activeResult = await linearQuery<{
     team: {
       issues: {
@@ -238,7 +264,7 @@ async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary>
        }
      }`,
     { teamId },
-    opts,
+    linearOpts,
   );
 
   const activeNodes = activeResult.data?.team?.issues.nodes ?? [];
@@ -254,7 +280,7 @@ async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary>
     infraErrors.push(`Linear active-issues query failed: ${activeResult.error ?? 'unknown'}`);
   }
 
-  // Step 3: top-3 backlog (state.type in [backlog, unstarted])
+  // Step 2: top-3 backlog (state.type in [backlog, unstarted])
   const backlogResult = await linearQuery<{
     team: {
       issues: {
@@ -282,7 +308,7 @@ async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary>
        }
      }`,
     { teamId },
-    opts,
+    linearOpts,
   );
 
   const backlogNodes = backlogResult.data?.team?.issues.nodes ?? [];
@@ -354,6 +380,127 @@ async function fetchFiberyBlockers(infraErrors: string[]): Promise<FiberyBlocker
   }
 }
 
+// ── Source 5: dispatch candidates from Linear ─────────────────────────────
+
+function parseTierLabel(labels: string[]): 'T1' | 'T2' | 'T3' | null {
+  for (const l of labels) {
+    const lower = l.toLowerCase();
+    if (lower === 't1') return 'T1';
+    if (lower === 't2') return 'T2';
+    if (lower === 't3') return 'T3';
+  }
+  return null;
+}
+
+function routeExecutor(tier: 'T1' | 'T2' | 'T3', labels: string[]): 'claude' | 'codex' {
+  if (tier === 'T1') return 'claude';
+  if (tier === 'T3') return 'claude';
+  // T2: claude if migration or contract label present
+  const lowerLabels = labels.map((l) => l.toLowerCase());
+  if (lowerLabels.some((l) => l.includes('migration') || l.includes('contract'))) return 'claude';
+  return 'codex';
+}
+
+function hasAcceptanceCriteria(description: string | null | undefined): boolean {
+  if (!description) return false;
+  return /acceptance\s+criteria|AC:/i.test(description);
+}
+
+async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchCandidate[]> {
+  const teamId = await resolveLinearTeamId(infraErrors);
+  if (!teamId) return [];
+
+  try {
+    const result = await linearQuery<{
+      team: {
+        issues: {
+          nodes: Array<{
+            identifier: string;
+            title: string;
+            url: string;
+            description: string | null;
+            labels: { nodes: Array<{ name: string }> };
+            state: { name: string; type: string } | null;
+            relations: {
+              nodes: Array<{
+                type: string;
+                relatedIssue: {
+                  identifier: string;
+                  state: { type: string } | null;
+                };
+              }>;
+            };
+          }>;
+        };
+      } | null;
+    }>(
+      `query DispatchCandidates($teamId: String!) {
+         team(id: $teamId) {
+           issues(
+             first: 10
+             filter: { state: { type: { in: ["unstarted"] } } }
+             orderBy: priority
+           ) {
+             nodes {
+               identifier
+               title
+               url
+               description
+               labels { nodes { name } }
+               state { name type }
+               relations { nodes { type relatedIssue { identifier state { type } } } }
+             }
+           }
+         }
+       }`,
+      { teamId },
+      linearOpts,
+    );
+
+    if (!result.ok || !result.data?.team) {
+      infraErrors.push(`Linear dispatch query failed: ${result.error ?? 'unknown'}`);
+      return [];
+    }
+
+    const nodes = result.data.team.issues.nodes;
+
+    const candidates: DispatchCandidate[] = [];
+    for (const n of nodes) {
+      const labelNames = n.labels.nodes.map((l) => l.name);
+      const tier = parseTierLabel(labelNames);
+      if (!tier) continue;
+
+      // Skip blocked issues (has a "blocks" relation where the blocking issue is not completed/cancelled)
+      const isBlocked = n.relations.nodes.some(
+        (r) =>
+          r.type === 'blocks' &&
+          r.relatedIssue.state?.type !== 'completed' &&
+          r.relatedIssue.state?.type !== 'canceled',
+      );
+      if (isBlocked) continue;
+
+      candidates.push({
+        identifier: n.identifier,
+        title: n.title,
+        tier,
+        recommended_executor: routeExecutor(tier, labelNames),
+        url: n.url,
+        has_acceptance_criteria: hasAcceptanceCriteria(n.description),
+        labels: labelNames,
+      });
+
+      if (candidates.length >= 3) break;
+    }
+
+    return candidates;
+  } catch (err) {
+    infraErrors.push(
+      `Dispatch candidates fetch error: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return [];
+  }
+}
+
 // ── ops:brief subprocess ───────────────────────────────────────────────────
 
 function runBriefText(): string {
@@ -371,6 +518,7 @@ function deriveRecommendedNext(
   stale_lanes: StaleLaneEntry[],
   ci_failures: string[],
   fibery_blockers: FiberyBlocker[],
+  dispatch_candidates: DispatchCandidate[],
 ): string[] {
   const recs: string[] = [];
   if (ci_failures.length > 0) {
@@ -381,6 +529,10 @@ function deriveRecommendedNext(
   }
   if (fibery_blockers.length > 0) {
     recs.push(`Review ${fibery_blockers.length} open Fibery control(s)`);
+  }
+  if (dispatch_candidates.length > 0) {
+    const d = dispatch_candidates[0];
+    recs.push(`Next dispatch: ${d.identifier} [${d.tier} → ${d.recommended_executor}]`);
   }
   return recs;
 }
@@ -414,17 +566,19 @@ async function main(): Promise<void> {
   const ci_failures = fetchCiFailures(infraErrors);
   const linear = await fetchLinearSummary(infraErrors);
   const fibery_blockers = await fetchFiberyBlockers(infraErrors);
+  const dispatch_candidates = await fetchDispatchCandidates(infraErrors);
   const brief_text = runBriefText();
-  const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, fibery_blockers);
+  const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, fibery_blockers, dispatch_candidates);
 
   const report: DigestReport = {
-    schema_version: 1,
+    schema_version: 2,
     run_at: runAt,
     mode,
     stale_lanes,
     ci_failures,
     linear,
     fibery_blockers,
+    dispatch_candidates,
     recommended_next,
     infra_errors: infraErrors,
     brief_text,
@@ -446,6 +600,11 @@ async function main(): Promise<void> {
     console.log(`  active_lanes:   ${linear.active_lanes.length}${linear.skipped ? ' (skipped)' : ''}`);
     console.log(`  backlog_top3:   ${linear.backlog_top3.length}${linear.skipped ? ' (skipped)' : ''}`);
     console.log(`  fibery_blockers: ${fibery_blockers.length}`);
+    console.log(`  dispatch_candidates: ${dispatch_candidates.length}`);
+    for (let i = 0; i < dispatch_candidates.length; i++) {
+      const d = dispatch_candidates[i];
+      console.log(`    ${i + 1}. ${d.identifier} [${d.tier} → ${d.recommended_executor}] "${d.title}"`);
+    }
     if (infraErrors.length > 0) {
       console.log(`  infra_errors:   ${infraErrors.length}`);
       for (const e of infraErrors) {
