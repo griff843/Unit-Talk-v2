@@ -5,3 +5,6 @@ approval:
 entities:
   issues:
     - UTV2-RLS
+  proofs:
+    - docs/06_status/proof/UTV2-RLS/diff-summary.md
+    - docs/06_status/proof/UTV2-RLS/verification.log
