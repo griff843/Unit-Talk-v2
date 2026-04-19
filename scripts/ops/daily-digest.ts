@@ -297,8 +297,8 @@ async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary>
        team(id: $teamId) {
          issues(
            first: 3
-           filter: { state: { type: { in: ["backlog", "unstarted"] } } }
-           orderBy: priority
+           filter: { state: { type: { eq: "unstarted" } } }
+           orderBy: updatedAt
          ) {
            nodes {
              identifier title url
@@ -421,15 +421,6 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
             description: string | null;
             labels: { nodes: Array<{ name: string }> };
             state: { name: string; type: string } | null;
-            relations: {
-              nodes: Array<{
-                type: string;
-                relatedIssue: {
-                  identifier: string;
-                  state: { type: string } | null;
-                };
-              }>;
-            };
           }>;
         };
       } | null;
@@ -439,7 +430,7 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
            issues(
              first: 10
              filter: { state: { type: { in: ["unstarted"] } } }
-             orderBy: priority
+             orderBy: updatedAt
            ) {
              nodes {
                identifier
@@ -448,7 +439,6 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
                description
                labels { nodes { name } }
                state { name type }
-               relations { nodes { type relatedIssue { identifier state { type } } } }
              }
            }
          }
@@ -469,15 +459,6 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
       const labelNames = n.labels.nodes.map((l) => l.name);
       const tier = parseTierLabel(labelNames);
       if (!tier) continue;
-
-      // Skip blocked issues (has a "blocks" relation where the blocking issue is not completed/cancelled)
-      const isBlocked = n.relations.nodes.some(
-        (r) =>
-          r.type === 'blocks' &&
-          r.relatedIssue.state?.type !== 'completed' &&
-          r.relatedIssue.state?.type !== 'canceled',
-      );
-      if (isBlocked) continue;
 
       candidates.push({
         identifier: n.identifier,
