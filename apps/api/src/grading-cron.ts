@@ -33,6 +33,8 @@ export interface GradingCronRunnerOptions {
   sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'error' | 'info' | 'warn'>;
   runGradingPass?: typeof runGradingPass;
+  /** Called with the staleness message when gap > GRADING_STALE_WARN_MS. Wire to Discord in production. */
+  onStalenessAlert?: (message: string) => Promise<void>;
 }
 
 export interface GradingCronRuntimeDependencies {
@@ -121,9 +123,11 @@ export async function startGradingCronLoop(
       const lastRunAt = new Date(recentRuns[0]!.created_at).getTime();
       const gapMs = Date.now() - lastRunAt;
       if (gapMs > GRADING_STALE_WARN_MS) {
-        options.logger?.error?.(
-          `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`,
-        );
+        const stalenessMsg = `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`;
+        options.logger?.error?.(stalenessMsg);
+        if (options.onStalenessAlert) {
+          void options.onStalenessAlert(stalenessMsg).catch(() => {/* fire-and-forget */});
+        }
       }
     }
 
@@ -216,14 +220,34 @@ function defaultSleep(ms: number) {
   });
 }
 
+/**
+ * Fire-and-forget post to a Discord webhook URL.
+ * Used for ops staleness alerts. Never throws.
+ */
+async function postOpsAlert(webhookUrl: string, message: string): Promise<void> {
+  try {
+    await fetch(webhookUrl, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ content: message }),
+    });
+  } catch {
+    // intentionally swallowed — this is a best-effort ops notification
+  }
+}
+
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const runtime = createGradingCronRuntimeDependencies();
+  const opsAlertWebhookUrl = process.env['UNIT_TALK_OPS_ALERT_WEBHOOK_URL']?.trim() || undefined;
 
   if (runtime.autorun) {
     void startGradingCronLoop({
       repositories: runtime.repositories,
       pollIntervalMs: runtime.pollIntervalMs,
       logger: console,
+      ...(opsAlertWebhookUrl
+        ? { onStalenessAlert: (msg) => postOpsAlert(opsAlertWebhookUrl, msg) }
+        : {}),
     }).catch((error: unknown) => {
       console.error(
         JSON.stringify(

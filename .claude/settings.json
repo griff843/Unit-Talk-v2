@@ -48,6 +48,14 @@
         ]
       },
       {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "untracked=$(git -C \"$(git rev-parse --show-toplevel 2>/dev/null)\" ls-files --others --exclude-standard -- 'scripts/' 'apps/*/src/scripts/' 'packages/*/src/scripts/' 2>/dev/null); if [ -n \"$untracked\" ]; then echo '{\"systemMessage\": \"WARNING: Untracked files in scripts/ at session end — commit or delete before closing:\\n'\"$untracked\"'\"}'; fi"
+          }
+        ]
+      },
+      {
         "matcher": "Bash",
         "hooks": [
           {

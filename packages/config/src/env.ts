@@ -69,6 +69,8 @@ export interface AppEnv {
   SYSTEM_PICK_SCANNER_LOOKBACK_HOURS?: string | undefined;
   SYSTEM_PICK_SCANNER_MAX_PICKS?: string | undefined;
   SYNDICATE_MACHINE_ENABLED?: string | undefined;
+  /** Discord webhook URL for ops staleness alerts (grading-cron, ingestor). Fire-and-forget POST. */
+  UNIT_TALK_OPS_ALERT_WEBHOOK_URL?: string | undefined;
 }
 
 function parseEnvFileEntries(filePath: string) {

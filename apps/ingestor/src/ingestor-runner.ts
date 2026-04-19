@@ -27,6 +27,8 @@ export interface IngestorRunnerOptions {
   skipResults?: boolean;
   logger?: Pick<Console, 'warn' | 'info'>;
   triggerGradingRun?: typeof triggerGradingRun;
+  /** Called with the staleness message when cycle gap > CYCLE_GAP_WARN_MS. Wire to Discord in production. */
+  onStalenessAlert?: (message: string) => Promise<void>;
 }
 
 export interface IngestorGradingTriggerSummary {
@@ -61,9 +63,11 @@ export async function runIngestorCycles(
     if (lastCycleEndMs !== null) {
       const gapMs = Date.now() - lastCycleEndMs;
       if (gapMs > CYCLE_GAP_WARN_MS) {
-        options.logger?.warn?.(
-          `[ingestor] cycle=${cycle} STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last cycle — offers may be stale`,
-        );
+        const stalenessMsg = `[ingestor] cycle=${cycle} STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last cycle — offers may be stale`;
+        options.logger?.warn?.(stalenessMsg);
+        if (options.onStalenessAlert) {
+          void options.onStalenessAlert(stalenessMsg).catch(() => {/* fire-and-forget */});
+        }
       }
     }
 
