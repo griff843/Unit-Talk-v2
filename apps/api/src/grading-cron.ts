@@ -72,6 +72,11 @@ export async function runGradingCronCycles(
   return summaries;
 }
 
+const GRADING_STALE_WARN_MS = parseInt(
+  process.env.UNIT_TALK_GRADING_STALE_WARN_MS ?? '2700000',
+  10,
+); // default 45 minutes
+
 export async function startGradingCronLoop(
   options: Omit<GradingCronRunnerOptions, 'maxCycles'>,
 ): Promise<void> {
@@ -97,6 +102,29 @@ export async function startGradingCronLoop(
       options.logger?.info?.(
         `Grading cron cycle ${cycle} completed: attempted=${summary.result.attempted} graded=${summary.result.graded} skipped=${summary.result.skipped} errors=${summary.result.errors}`,
       );
+    }
+
+    // Write heartbeat so external monitoring can detect gaps
+    const heartbeatRun = await options.repositories.runs.startRun({
+      runType: 'grading.cron.heartbeat',
+      details: { cycle },
+    });
+    await options.repositories.runs.completeRun({
+      runId: heartbeatRun.id,
+      status: 'succeeded',
+      details: { cycle },
+    });
+
+    // Staleness check: warn if grading.run gap exceeds threshold
+    const recentRuns = await options.repositories.runs.listByType('grading.run', 1);
+    if (recentRuns.length > 0) {
+      const lastRunAt = new Date(recentRuns[0]!.created_at).getTime();
+      const gapMs = Date.now() - lastRunAt;
+      if (gapMs > GRADING_STALE_WARN_MS) {
+        options.logger?.error?.(
+          `[grading-cron] STALENESS WARNING: ${Math.round(gapMs / 60000)}m since last grading.run — picks may be accumulating ungraded`,
+        );
+      }
     }
 
     await sleep(pollIntervalMs);

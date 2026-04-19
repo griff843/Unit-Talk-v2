@@ -9,6 +9,18 @@
             "command": "bash .claude/hooks/bash-safety-guard.sh"
           }
         ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "if": "Bash(git push *)",
+            "command": "echo '[pre-push] Running pnpm verify before push...' && pnpm verify && echo '[pre-push] verify passed.' || { echo '[pre-push] BLOCKED: pnpm verify failed.'; exit 2; }",
+            "timeout": 120,
+            "statusMessage": "Running pnpm verify before push..."
+          }
+        ]
       }
     ],
     "PostToolUse": [

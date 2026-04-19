@@ -145,14 +145,6 @@ async function triggerGradingForCycle(
     };
   }
 
-  if (!results.some((summary) => summary.resultsEventsCount > 0)) {
-    return {
-      attempted: false,
-      status: 'skipped',
-      reason: 'no_completed_results',
-    };
-  }
-
   if (!options.apiUrl) {
     return {
       attempted: false,
