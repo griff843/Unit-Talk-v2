@@ -1,4 +1,4 @@
-# UTV2-607 Diff Summary
+# UTV2-611 Diff Summary
 
 Implemented persistent worker circuit-breaker recovery:
 
