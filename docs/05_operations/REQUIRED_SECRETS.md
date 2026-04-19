@@ -73,6 +73,14 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "purpose": "Fibery API token used by PR and merge sync workflows to update referenced Unit Talk audit entities."
     },
     {
+      "name": "UNIT_TALK_OPS_ALERT_WEBHOOK_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/stale-lane-alerter.yml"],
+      "purpose": "Discord webhook URL for ops alert notifications. Optional — alerter exits 0 and skips Discord post when absent."
+    },
+    {
       "name": "SUPABASE_ACCESS_TOKEN",
       "required": true,
       "source": "manual",
