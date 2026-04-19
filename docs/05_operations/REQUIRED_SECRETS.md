@@ -61,7 +61,7 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": true,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/fibery-sync-on-pr.yml", ".github/workflows/fibery-sync-on-merge.yml"],
+      "used_by": [".github/workflows/fibery-sync-on-pr.yml", ".github/workflows/fibery-sync-on-merge.yml", ".github/workflows/ops-daily-digest.yml"],
       "purpose": "Fibery workspace API URL used by PR and merge sync workflows to append GitHub activity to referenced Unit Talk audit entities."
     },
     {
@@ -69,7 +69,7 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": true,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/fibery-sync-on-pr.yml", ".github/workflows/fibery-sync-on-merge.yml"],
+      "used_by": [".github/workflows/fibery-sync-on-pr.yml", ".github/workflows/fibery-sync-on-merge.yml", ".github/workflows/ops-daily-digest.yml"],
       "purpose": "Fibery API token used by PR and merge sync workflows to update referenced Unit Talk audit entities."
     },
     {
@@ -77,8 +77,8 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/stale-lane-alerter.yml"],
-      "purpose": "Discord webhook URL for ops alert notifications. Optional — alerter exits 0 and skips Discord post when absent."
+      "used_by": [".github/workflows/stale-lane-alerter.yml", ".github/workflows/ops-daily-digest.yml"],
+      "purpose": "Discord webhook URL for ops alert notifications. Optional — alerter and digest exit 0 and skip Discord post when absent."
     },
     {
       "name": "SUPABASE_ACCESS_TOKEN",
