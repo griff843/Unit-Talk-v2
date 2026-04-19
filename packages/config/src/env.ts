@@ -208,6 +208,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     SYSTEM_PICK_SCANNER_LOOKBACK_HOURS: optionalEnv('SYSTEM_PICK_SCANNER_LOOKBACK_HOURS', merged),
     SYSTEM_PICK_SCANNER_MAX_PICKS: optionalEnv('SYSTEM_PICK_SCANNER_MAX_PICKS', merged),
     SYNDICATE_MACHINE_ENABLED: optionalEnv('SYNDICATE_MACHINE_ENABLED', merged),
+    UNIT_TALK_OPS_ALERT_WEBHOOK_URL: optionalEnv('UNIT_TALK_OPS_ALERT_WEBHOOK_URL', merged),
   };
 
   return env;
