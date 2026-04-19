@@ -138,6 +138,58 @@ function renderRolloutConfigSection(snapshot: OperatorSnapshot): string {
       </section>`;
 }
 
+function renderObservabilitySection(snapshot: OperatorSnapshot): string {
+  const observability = snapshot.observability;
+  const activeAlerts = observability.alertConditions.filter((condition) => condition.active);
+  const alertRows = observability.alertConditions
+    .map(
+      (condition) => `<tr>
+        <td><code>${escapeHtml(condition.id)}</code></td>
+        <td><span class="badge badge-${condition.active ? (condition.severity === 'critical' ? 'down' : 'degraded') : 'healthy'}">${condition.active ? escapeHtml(condition.severity) : 'clear'}</span></td>
+        <td>${escapeHtml(condition.detail)}</td>
+      </tr>`,
+    )
+    .join('');
+
+  const stackEntries: Array<[string, string]> = [
+    ['Logs', observability.stack.logs],
+    ['Metrics', observability.stack.metrics],
+    ['Errors', observability.stack.errors],
+    ['Dashboards', observability.stack.dashboards],
+  ];
+  const stackRows = stackEntries
+    .map(([label, value]) => `<tr><td>${escapeHtml(label)}</td><td><code>${escapeHtml(value)}</code></td></tr>`)
+    .join('');
+
+  const metricEntries: Array<[string, number]> = [
+    ['failed runs', observability.metrics.failedRuns],
+    ['failed outbox', observability.metrics.failedOutbox],
+    ['dead-letter outbox', observability.metrics.deadLetterOutbox],
+    ['active incidents', observability.metrics.activeIncidents],
+  ];
+  const metricCards = metricEntries
+    .map(
+      ([label, value]) => `<article class="card stat">
+        <h2>${escapeHtml(String(label))}</h2>
+        <p class="stat-value">${escapeHtml(String(value))}</p>
+      </article>`,
+    )
+    .join('');
+
+  return `<section>
+        <h2>Observability <span class="badge badge-${activeAlerts.length > 0 ? 'degraded' : 'healthy'}">${activeAlerts.length > 0 ? `${activeAlerts.length} alert(s)` : 'clear'}</span></h2>
+        <div class="grid count-grid">${metricCards}</div>
+        <table>
+          <thead><tr><th>Stack</th><th>Choice</th></tr></thead>
+          <tbody>${stackRows}</tbody>
+        </table>
+        <table style="margin-top: 12px;">
+          <thead><tr><th>Condition</th><th>Status</th><th>Detail</th></tr></thead>
+          <tbody>${alertRows}</tbody>
+        </table>
+      </section>`;
+}
+
 function renderAgingSection(snapshot: OperatorSnapshot): string {
   const { aging } = snapshot;
   const hasWarning = aging.staleValidated > 0 || aging.stalePosted > 0 || aging.staleProcessing > 0;
@@ -676,6 +728,7 @@ export function renderOperatorDashboard(snapshot: OperatorSnapshot) {
       ${incidentBanner}
       ${renderActiveIncidentsSection(snapshot.incidents)}
       ${incidentTriageSection}
+      ${renderObservabilitySection(snapshot)}
       <section>
         <div class="grid health-grid">${healthCards}${entityCatalogCard}${ingestorCard}${quotaCard}${workerRuntimeCard}</div>
         <div class="grid count-grid">${countCards}</div>

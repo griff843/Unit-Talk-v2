@@ -9,11 +9,13 @@ import {
 import {
   createConsoleLogWriter,
   createDualLogWriter,
+  createErrorTracker,
   createLogger,
   createLokiLogWriter,
   createMetricsCollector,
   createRequestLogFields,
   getOrCreateCorrelationId,
+  type ErrorTracker,
   type Logger,
   type MetricsCollector,
 } from '@unit-talk/observability';
@@ -60,6 +62,7 @@ export interface ApiServerOptions {
   runtime?: ApiRuntimeDependencies;
   environment?: AppEnv;
   logger?: Logger;
+  errorTracker?: ErrorTracker;
   now?: () => number;
   rateLimitStore?: ApiRateLimitStore;
 }
@@ -79,6 +82,7 @@ export interface ApiRuntimeDependencies {
   bodyLimitBytes: number;
   submissionRateLimit: ApiSubmissionRateLimit;
   logger: Logger;
+  errorTracker: ErrorTracker;
   now: () => number;
   rateLimitStore: ApiRateLimitStore;
   metricsCollector: MetricsCollector;
@@ -131,6 +135,7 @@ export function createApiRuntimeDependencies(
       fields: { runtimeMode },
       ...(writer ? { writer } : {}),
     });
+  const errorTracker = options.errorTracker ?? createErrorTracker({ service: 'api', logger });
 
   if (options.repositories) {
     return {
@@ -141,6 +146,7 @@ export function createApiRuntimeDependencies(
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit: readSubmissionRateLimit(environment),
       logger,
+      errorTracker,
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
@@ -158,6 +164,7 @@ export function createApiRuntimeDependencies(
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit: readSubmissionRateLimit(environment),
       logger,
+      errorTracker,
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
@@ -183,6 +190,7 @@ export function createApiRuntimeDependencies(
       bodyLimitBytes: readBodyLimitBytes(environment),
       submissionRateLimit: readSubmissionRateLimit(environment),
       logger,
+      errorTracker,
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
@@ -229,6 +237,18 @@ export function createApiServer(options: ApiServerOptions = {}) {
       const durationMs = Math.max(runtime.now() - startedAt, 0);
       runtime.metricsCollector.histogram('api_request_duration_ms', durationMs, { method, path: url.pathname });
       runtime.metricsCollector.increment('api_errors_total', { method, path: url.pathname, status: String(failure.status) });
+      if (failure.status >= 500) {
+        await runtime.errorTracker.captureException({
+          operation: `${method} ${url.pathname}`,
+          error,
+          severity: 'critical',
+          correlationId,
+          fields: {
+            statusCode: failure.status,
+            durationMs,
+          },
+        });
+      }
 
       if (!response.headersSent) {
         writeJson(response, failure.status, failure.body);

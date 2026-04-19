@@ -4,13 +4,17 @@ import { describe, it } from 'node:test';
 import {
   createCorrelationId,
   createDualLogWriter,
+  createErrorCaptureEvent,
+  createErrorTracker,
   createLogger,
   createLokiLogWriter,
+  createMemoryErrorTrackingSink,
   createMetricsCollector,
   createRequestLogFields,
   getOrCreateCorrelationId,
   MetricsCollector,
   normalizeCorrelationId,
+  OBSERVABILITY_STACK_DECISION,
   serializeError,
   type LogLevel,
   type LogWriter,
@@ -116,6 +120,58 @@ test('serializeError handles nested causes and plain objects', () => {
     retries: 2,
     success: false,
   });
+});
+
+test('observability stack decision names the production telemetry surfaces', () => {
+  assert.deepEqual(OBSERVABILITY_STACK_DECISION, {
+    logs: 'loki',
+    metrics: 'prometheus-json',
+    errors: 'structured-error-events',
+    dashboards: 'operator-web',
+  });
+});
+
+test('createErrorCaptureEvent serializes errors with operation and correlation context', () => {
+  const event = createErrorCaptureEvent(
+    {
+      service: 'api',
+      operation: 'POST /api/submissions',
+      severity: 'critical',
+      correlationId: 'corr-605',
+      error: new Error('db unavailable'),
+      fields: { statusCode: 500 },
+    },
+    () => '2026-04-19T09:30:00.000Z',
+  );
+
+  assert.equal(event.timestamp, '2026-04-19T09:30:00.000Z');
+  assert.equal(event.service, 'api');
+  assert.equal(event.operation, 'POST /api/submissions');
+  assert.equal(event.severity, 'critical');
+  assert.equal(event.correlationId, 'corr-605');
+  assert.equal((event.error as { message?: string }).message, 'db unavailable');
+  assert.deepEqual(event.fields, { statusCode: 500 });
+});
+
+test('createErrorTracker sends normalized events to the configured sink', async () => {
+  const memory = createMemoryErrorTrackingSink();
+  const tracker = createErrorTracker({
+    service: 'worker',
+    sink: memory.sink,
+    now: () => '2026-04-19T09:31:00.000Z',
+  });
+
+  const event = await tracker.captureException({
+    operation: 'worker.autorun',
+    error: new Error('delivery failed'),
+    fields: { target: 'discord:canary' },
+  });
+
+  assert.equal(memory.events.length, 1);
+  assert.equal(memory.events[0], event);
+  assert.equal(event.service, 'worker');
+  assert.equal(event.operation, 'worker.autorun');
+  assert.deepEqual(event.fields, { target: 'discord:canary' });
 });
 
 // --- Loki log writer tests ---
