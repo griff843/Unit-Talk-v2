@@ -385,9 +385,9 @@ async function fetchFiberyBlockers(infraErrors: string[]): Promise<FiberyBlocker
 function parseTierLabel(labels: string[]): 'T1' | 'T2' | 'T3' | null {
   for (const l of labels) {
     const lower = l.toLowerCase();
-    if (lower === 't1') return 'T1';
-    if (lower === 't2') return 'T2';
-    if (lower === 't3') return 'T3';
+    if (lower === 't1' || lower === 'tier:t1') return 'T1';
+    if (lower === 't2' || lower === 'tier:t2') return 'T2';
+    if (lower === 't3' || lower === 'tier:t3') return 'T3';
   }
   return null;
 }
@@ -397,7 +397,7 @@ function routeExecutor(tier: 'T1' | 'T2' | 'T3', labels: string[]): 'claude' | '
   if (tier === 'T3') return 'claude';
   // T2: claude if migration or contract label present
   const lowerLabels = labels.map((l) => l.toLowerCase());
-  if (lowerLabels.some((l) => l.includes('migration') || l.includes('contract'))) return 'claude';
+  if (lowerLabels.some((l) => l.includes('migration') || l.includes('contract') || l === 'kind:migration' || l === 'kind:contract')) return 'claude';
   return 'codex';
 }
 
