@@ -53,27 +53,27 @@ export class FiberyClient {
       };
     }
 
-    // note_field is Collaboration~Documents/Document — not a primitive, cannot be
-    // selected via q/select or written via fibery.entity/update.
-    // Use the REST document API instead: GET/PUT /api/documents/<fibery-id>.
-    const entity = await this.resolveEntity(config, publicId, []);
-    const fiberyId = entity['fibery/id'];
-    if (typeof fiberyId !== 'string') {
-      throw new Error(`Fibery entity ${publicId} missing fibery/id`);
+    // Collaboration~Documents fields (e.g. Unit Talk/Description, Unit Talk/Notes) cannot
+    // be selected via q/select or written via fibery.entity/update — skip them gracefully.
+    if (isDocumentNoteField(config.note_field)) {
+      await this.resolveEntity(config, publicId, []);
+      return {
+        entity_id: publicId,
+        dry_run: false,
+        operation: 'append_note',
+        detail: `verified ${config.type} ${publicId}; ${config.note_field} is a Fibery document field, so primitive note append was skipped`,
+      };
     }
 
-    const doc = await this.getDocument(fiberyId);
-    const currentContent = doc.content ?? '';
-    const nextContent = currentContent.trim()
-      ? `${currentContent}${separator}${note}`
-      : note;
-    await this.putDocument(doc.secret, nextContent);
-
+    const entity = await this.resolveEntity(config, publicId, [config.note_field]);
+    const currentNote = typeof entity[config.note_field] === 'string' ? entity[config.note_field] : '';
+    const nextNote = currentNote.trim().length > 0 ? `${currentNote}${separator}${note}` : note;
+    await this.updateEntity(config.type, entity, { [config.note_field]: nextNote });
     return {
       entity_id: publicId,
       dry_run: false,
       operation: 'append_note',
-      detail: `appended note to ${config.type} ${publicId} via document REST API`,
+      detail: `appended note to ${config.type} ${publicId}`,
     };
   }
 
@@ -125,15 +125,12 @@ export class FiberyClient {
         },
       },
     ]);
-    const envelope = payload[0] as { success?: boolean; result?: unknown[] } | undefined;
-    if (!envelope?.success || !Array.isArray(envelope.result) || envelope.result.length === 0) {
+    // postCommands unwraps envelopes; payload[0] is the result array.
+    const firstResult = Array.isArray(payload[0]) ? (payload[0][0] as { 'fibery/id'?: string } | undefined) : undefined;
+    if (typeof firstResult?.['fibery/id'] !== 'string') {
       throw new Error(`Fibery state "${stateName}" not found for ${entityType}`);
     }
-    const stateEntity = envelope.result[0] as { 'fibery/id'?: string } | undefined;
-    if (typeof stateEntity?.['fibery/id'] !== 'string') {
-      throw new Error(`Fibery state "${stateName}" missing fibery/id for ${entityType}`);
-    }
-    return stateEntity['fibery/id'];
+    return firstResult['fibery/id'];
   }
 
   private async resolveEntity(
@@ -141,6 +138,27 @@ export class FiberyClient {
     publicId: string,
     extraFields: string[],
   ): Promise<QueryEntity> {
+    const entity = await this.queryEntity(config, publicId, extraFields);
+    if (entity) {
+      return entity;
+    }
+
+    if (config.type === 'Unit Talk/Issue' && /^UTV2-\d+$/.test(publicId)) {
+      await this.createIssueShell(config, publicId);
+      const created = await this.queryEntity(config, publicId, extraFields);
+      if (created) {
+        return created;
+      }
+    }
+
+    throw new Error(`Fibery entity not found: ${config.type} ${publicId}`);
+  }
+
+  private async queryEntity(
+    config: FiberyEntityConfig,
+    publicId: string,
+    extraFields: string[],
+  ): Promise<QueryEntity | null> {
     const fields = ['fibery/id', config.lookup_field, ...extraFields];
     const payload = await this.postCommands([
       {
@@ -158,16 +176,51 @@ export class FiberyClient {
         },
       },
     ]);
-    // Fibery returns [{ success, result: [...entities] }] — one envelope per command.
-    const envelope = payload[0] as { success?: boolean; result?: unknown[] } | undefined;
-    if (!envelope?.success) {
-      throw new Error(`Fibery entity not found: ${config.type} ${publicId}`);
-    }
-    const firstResult = Array.isArray(envelope.result) ? envelope.result[0] : undefined;
+    // postCommands unwraps the Fibery envelope, so payload[0] is the result array.
+    const firstResult = Array.isArray(payload[0]) ? payload[0][0] : undefined;
     if (!isRecord(firstResult) || typeof firstResult['fibery/id'] !== 'string') {
-      throw new Error(`Fibery entity not found: ${config.type} ${publicId}`);
+      return null;
     }
     return firstResult as QueryEntity;
+  }
+
+  private async createIssueShell(config: FiberyEntityConfig, publicId: string): Promise<void> {
+    await this.postCommands([
+      {
+        command: 'fibery.entity/create',
+        args: {
+          type: config.type,
+          entity: {
+            [config.lookup_field]: publicId,
+            'Unit Talk/Name': `${publicId} - GitHub sync shell`,
+          },
+        },
+      },
+    ]);
+  }
+
+  private async queryWorkflowStateId(type: string, state: string): Promise<string> {
+    const payload = await this.postCommands([
+      {
+        command: 'fibery.entity/query',
+        args: {
+          query: {
+            'q/from': `workflow/state_${type}`,
+            'q/select': ['fibery/id', 'enum/name'],
+            'q/where': ['=', ['enum/name'], '$state'],
+            'q/limit': 1,
+          },
+          params: {
+            '$state': state,
+          },
+        },
+      },
+    ]);
+    const firstResult = Array.isArray(payload[0]) ? payload[0][0] : undefined;
+    if (!isRecord(firstResult) || typeof firstResult['fibery/id'] !== 'string') {
+      throw new Error(`Fibery workflow state not found: ${type} ${state}`);
+    }
+    return firstResult['fibery/id'];
   }
 
   private async updateEntity(
@@ -179,7 +232,8 @@ export class FiberyClient {
     if (!id) {
       throw new Error(`Cannot update ${type}: missing fibery/id`);
     }
-    const payload = await this.postCommands([
+    // postCommands already throws on Fibery command failure; no additional check needed.
+    await this.postCommands([
       {
         command: 'fibery.entity/update',
         args: {
@@ -191,10 +245,6 @@ export class FiberyClient {
         },
       },
     ]);
-    const envelope = payload[0] as { success?: boolean; result?: unknown } | undefined;
-    if (!envelope?.success) {
-      throw new Error(`Fibery entity update failed for ${type} ${String(id)}`);
-    }
   }
 
   private async getDocument(fiberyId: string): Promise<{ secret: string; content: string }> {
@@ -237,10 +287,25 @@ export class FiberyClient {
     if (!Array.isArray(payload)) {
       throw new Error('Fibery API returned a non-array response');
     }
-    return payload;
+    return payload.map((entry) => {
+      if (!isRecord(entry) || !('success' in entry)) {
+        return entry;
+      }
+      if (entry.success !== true) {
+        const error = isRecord(entry.error) && typeof entry.error.message === 'string'
+          ? entry.error.message
+          : JSON.stringify(entry.error ?? entry);
+        throw new Error(`Fibery command failed: ${error}`);
+      }
+      return entry.result;
+    });
   }
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isDocumentNoteField(field: string): boolean {
+  return field === 'Unit Talk/Description' || field === 'Unit Talk/Notes';
 }
