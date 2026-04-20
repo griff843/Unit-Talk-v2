@@ -1,0 +1,83 @@
+{
+  "schema": "submission-proof/v1",
+  "issue_id": "UTV2-675",
+  "run_at": "2026-04-20T00:45:24.681Z",
+  "controls_proven": 4,
+  "controls_total": 4,
+  "proofs": [
+    {
+      "control": "Submission timestamps are accurate and consistent",
+      "verdict": "PROVEN",
+      "evidence": {
+        "total_picks": 100,
+        "valid_timestamps": 100,
+        "future_timestamps": 0,
+        "null_timestamps": 0,
+        "newest": "2026-04-18T23:40:53.89+00:00",
+        "oldest": "2026-04-10T20:56:59.928+00:00",
+        "suspicious_duplicate_seconds": 1,
+        "server_generated": true,
+        "notes": "created_at is set by Supabase default (now()) — not client-supplied"
+      },
+      "notes": "All 100 picks have valid server-generated timestamps. No future timestamps, no nulls. Timestamps are Supabase-generated (default: now()), not client-supplied."
+    },
+    {
+      "control": "Submission validation is deterministic",
+      "verdict": "PROVEN",
+      "evidence": {
+        "validation_approach": "Pure type coercion in coerceSubmissionPayload() — readString, readOptionalNumber, readOptionalString",
+        "no_randomness": true,
+        "no_external_calls": true,
+        "no_time_dependency": true,
+        "submission_event_types": [
+          "submission.accepted"
+        ],
+        "total_events_sampled": 50,
+        "code_path": "apps/api/src/handlers/submit-pick.ts → controllers/submit-pick-controller.ts → submission-service.ts",
+        "governance_brake": "Non-human sources routed to awaiting_approval (Phase 7A)"
+      },
+      "notes": "Validation uses pure type coercion functions with no randomness, no external calls, and no time-dependency. Same input always produces same validation result. Governance brake adds deterministic source-based gating for autonomous submissions."
+    },
+    {
+      "control": "Capper attribution is correct and immutable",
+      "verdict": "PROVEN",
+      "evidence": {
+        "total_picks": 200,
+        "distinct_sources": [
+          "proof-utv2-667",
+          "smart-form",
+          "system-pick-scanner",
+          "model-driven",
+          "alert-agent",
+          "t1-proof",
+          "board-construction",
+          "api",
+          "discord-bot"
+        ],
+        "null_source_count": 0,
+        "all_attributed": true,
+        "jwt_enforcement": "auth.capperId overrides form submittedBy when role=capper (submit-pick.ts:47)",
+        "immutability": "source column has no UPDATE path in submission-service — set once at creation",
+        "trust_boundary": "UTV2-658: capper identity is server-enforced via JWT, not client-editable"
+      },
+      "notes": "All 200 picks have non-null source attribution. Source is set at creation and has no update path. JWT claim overrides client-supplied submittedBy for capper role (UTV2-658)."
+    },
+    {
+      "control": "Smart Form enforces required fields and formats",
+      "verdict": "PROVEN",
+      "evidence": {
+        "total_picks": 200,
+        "empty_market": 0,
+        "empty_source": 0,
+        "null_odds": 0,
+        "enforcement_layers": [
+          "Smart Form: React state + HTML required attributes",
+          "API handler: coerceSubmissionPayload() type coercion",
+          "Controller: ApiError on pick creation failure",
+          "Database: NOT NULL constraints on critical columns"
+        ]
+      },
+      "notes": "All 200 picks have non-empty market and source fields. Enforcement operates at 4 layers: Smart Form UI, API handler type coercion, controller error handling, and database NOT NULL constraints."
+    }
+  ]
+}
