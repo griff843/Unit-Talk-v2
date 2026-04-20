@@ -1,0 +1,115 @@
+name: Proof Regression Check
+
+# Re-runs relevant proof scripts when files in their scope change.
+# Keeps proof artifacts evergreen — not just point-in-time snapshots.
+#
+# Currently advisory (exits 0 always). Future: make required check
+# once proof scripts are stable.
+
+on:
+  pull_request:
+    paths:
+      - 'apps/api/src/settlement-service.ts'
+      - 'apps/api/src/submission-service.ts'
+      - 'apps/api/src/recap-service.ts'
+      - 'apps/api/src/promotion-service.ts'
+      - 'apps/api/src/distribution-service.ts'
+      - 'apps/api/src/handlers/submit-pick.ts'
+      - 'apps/api/src/controllers/**'
+      - 'apps/worker/src/delivery-adapters.ts'
+      - 'apps/worker/src/circuit-breaker.ts'
+      - 'packages/domain/src/scoring/**'
+      - 'packages/domain/src/member-lifecycle.ts'
+      - 'packages/domain/src/promotion.ts'
+      - 'packages/db/src/lifecycle.ts'
+      - 'packages/db/src/schema.ts'
+
+permissions:
+  contents: read
+
+jobs:
+  regression:
+    name: Proof regression
+    runs-on: ubuntu-latest
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Determine affected proof scripts
+        id: affected
+        run: |
+          changed=$(gh pr diff ${{ github.event.pull_request.number }} --name-only 2>/dev/null || git diff --name-only origin/main...HEAD)
+          scripts=""
+
+          # Settlement changes → settlement proof
+          if echo "$changed" | grep -q "settlement"; then
+            scripts="$scripts scripts/ops/settlement-proof.ts"
+          fi
+
+          # Submission changes → submission proof
+          if echo "$changed" | grep -q "submission\|submit-pick"; then
+            scripts="$scripts scripts/ops/submission-proof.ts"
+          fi
+
+          # Promotion changes → promotion proof
+          if echo "$changed" | grep -q "promotion"; then
+            scripts="$scripts scripts/ops/promotion-proof.ts"
+          fi
+
+          # Scoring changes → scoring proof
+          if echo "$changed" | grep -q "scoring"; then
+            scripts="$scripts scripts/ops/scoring-proof.ts"
+          fi
+
+          # Delivery changes → discord delivery proof
+          if echo "$changed" | grep -q "delivery\|circuit-breaker\|distribution"; then
+            scripts="$scripts scripts/ops/discord-delivery-proof.ts"
+          fi
+
+          # Recap changes → analytics proof
+          if echo "$changed" | grep -q "recap"; then
+            scripts="$scripts scripts/ops/analytics-proof.ts"
+          fi
+
+          # Member lifecycle → monetization proof
+          if echo "$changed" | grep -q "member-lifecycle"; then
+            scripts="$scripts scripts/ops/monetization-proof.ts"
+          fi
+
+          echo "scripts=$scripts" >> "$GITHUB_OUTPUT"
+          if [ -z "$scripts" ]; then
+            echo "::notice title=proof-regression::No proof-relevant files changed."
+          else
+            echo "::notice title=proof-regression::Will re-run: $scripts"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Run affected proof scripts
+        if: steps.affected.outputs.scripts != ''
+        run: |
+          for script in ${{ steps.affected.outputs.scripts }}; do
+            echo "Running $script..."
+            npx tsx "$script" || echo "::warning title=proof-regression::$script produced non-zero exit"
+          done
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}

@@ -89,6 +89,16 @@ When dispatching multiple lanes:
 3. After Claude lane PR is open, check Codex status
 4. Review Codex results when they return
 
+### Phase 5.5: Fibery auto-sync (for proof lanes)
+
+After a proof lane merges, automatically sync proof artifacts to Fibery:
+```bash
+source local.env && export FIBERY_API_URL FIBERY_API_TOKEN && npx tsx scripts/ops/fibery-proof-sync.ts UTV2-###
+```
+
+This replaces the manual Fibery update cycle (create artifacts → link → update status).
+If Fibery credentials are not set, skip with a note.
+
 ### Phase 6: Report
 
 After all dispatches:
