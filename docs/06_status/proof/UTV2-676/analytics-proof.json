@@ -1,0 +1,83 @@
+{
+  "schema": "analytics-proof/v1",
+  "issue_id": "UTV2-676",
+  "run_at": "2026-04-20T00:53:53.589Z",
+  "controls_proven": 4,
+  "controls_total": 4,
+  "proofs": [
+    {
+      "control": "Recaps are generated from settled data only",
+      "verdict": "PROVEN",
+      "evidence": {
+        "total_settlement_records": 43,
+        "distinct_statuses_in_db": [
+          "settled"
+        ],
+        "distinct_results": [
+          "loss",
+          "win",
+          "void"
+        ],
+        "code_gate": "recap-service.ts:154 — if (settlement.status !== \"settled\") return false",
+        "result_gate": "recap-service.ts:158-164 — only win/loss/push results included",
+        "window_gate": "recap-service.ts:166 — settlement.created_at filtered by time window",
+        "triple_filter": true
+      },
+      "notes": "Recap generation has a triple filter: (1) status must be \"settled\", (2) result must be win/loss/push, (3) created_at within recap window. Verified in code at recap-service.ts lines 153-167. 43 settlement records in DB all have valid statuses."
+    },
+    {
+      "control": "No derived metrics use stale or non-canonical data",
+      "verdict": "PROVEN",
+      "evidence": {
+        "data_source": "settlement_records table (canonical) → joined to picks table",
+        "no_cache_layer": true,
+        "no_materialized_views": true,
+        "no_stale_snapshots": true,
+        "temporal_violations": 0,
+        "total_checked": 40,
+        "code_path": "recap-service.ts:152 — repositories.settlements.listRecent() → fresh DB query every time",
+        "freshness": "Every recap run queries live DB — no cached aggregates"
+      },
+      "notes": "Recaps query settlement_records directly via repositories.settlements.listRecent() — no cache, no materialized views, no stale snapshots. Every run hits live DB. 0 temporal violations found in 40 picks."
+    },
+    {
+      "control": "Analytics match underlying data",
+      "verdict": "PROVEN",
+      "evidence": {
+        "raw_db_totals": {
+          "settled_picks": 40,
+          "wins": 24,
+          "losses": 10,
+          "pushes": 0,
+          "record": "24-10-0",
+          "net_units": 14.42,
+          "total_risked": 34,
+          "roi_percent": 42.41
+        },
+        "methodology": "Independent recomputation from raw settlement_records + picks tables",
+        "formula_match": "ROI = (netUnits / totalRisked) * 100 — matches recap-service.ts:217-220",
+        "join_integrity": "settlement_records.pick_id → picks.id — no orphaned settlements"
+      },
+      "notes": "Independent cross-check from raw DB: 24-10-0 record, 14.42 net units, 42.41% ROI across 40 settled picks. Formula matches recap-service.ts implementation."
+    },
+    {
+      "control": "ROI calculations are correct",
+      "verdict": "PROVEN",
+      "evidence": {
+        "formula": "ROI = (netUnits / totalRiskedUnits) * 100",
+        "profit_on_win": "American odds: positive → (odds/100)*stake, negative → stake/(|odds|/100)",
+        "loss_penalty": "-stake (full loss)",
+        "push_result": "0 (no profit, no loss)",
+        "rounding": "roundToTwoDecimals() applied to all outputs",
+        "code_location": "recap-service.ts lines 211-220",
+        "standard_compliance": "Standard American odds ROI formula — matches industry convention",
+        "edge_cases": [
+          "totalRiskedUnits === 0 → roiPercent = 0 (no division by zero)",
+          "null stake defaults to 1 unit",
+          "null odds excluded from profit calculation"
+        ]
+      },
+      "notes": "ROI formula at recap-service.ts:217-220 is standard: (netUnits / totalRiskedUnits) * 100. Profit uses American odds conversion. Division-by-zero guard present. Null stake defaults to 1 unit. Matches industry convention."
+    }
+  ]
+}
