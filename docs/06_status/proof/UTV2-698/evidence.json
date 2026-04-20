@@ -1,0 +1,26 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-698",
+  "title": "Remove SGO from sportsbook catalog + label consensus offers",
+  "tier": "T3",
+  "generated_at": "2026-04-20T22:00:00.000Z",
+  "branch": "claude/utv2-698-remove-sgo-odds-api-from-sportsbooks",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green",
+    "migration_validated": true
+  },
+  "live_db_evidence": {
+    "sgo_sportsbook_active": false,
+    "sgo_alias_removed": true,
+    "catalog_query_excludes_sgo": true,
+    "description": "Confirmed via Supabase MCP: SELECT active FROM sportsbooks WHERE id='sgo' returns false. provider_book_aliases for sgo:sgo deleted. Catalog endpoint only returns active=true sportsbooks."
+  },
+  "runtime_change_classification": "display-only",
+  "runtime_change_note": "The runtime-repositories.ts change is cosmetic: null-bookmaker SGO offer sportsbookName maps to 'Consensus' string. No pick lifecycle, no submission path, no atomic RPCs changed. Migration deactivates a catalog row (active=false), preserving all FK references.",
+  "artifacts": [
+    "supabase/migrations/202604200001_utv2_698_remove_sgo_sportsbook.sql",
+    "packages/db/src/runtime-repositories.ts"
+  ]
+}
