@@ -5360,7 +5360,11 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
 
       grouped.set(key, {
         sportsbookId,
-        sportsbookName: sportsbookId ? sportsbookMap.get(sportsbookId) ?? sportsbookId : providerKey,
+        // Null-bookmaker "consensus" offers come from SGO with no specific book.
+        // Display as "Consensus" rather than the raw provider key.
+        sportsbookName: sportsbookId
+          ? (sportsbookMap.get(sportsbookId) ?? sportsbookId)
+          : (providerKey === 'sgo' || providerKey.startsWith('sgo:') ? 'Consensus' : providerKey),
         marketTypeId: (marketAlias?.market_type_id as string | null) ?? null,
         marketDisplayName:
           (marketAlias?.market_type_id

@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-698",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-698-remove-sgo-odds-api-from-sportsbooks",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": ["supabase/migrations/", "apps/api/src/routes/reference-data.ts", "packages/db/src/database.types.ts"],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-04-20T22:18:00.000Z",
+  "heartbeat_at": "2026-04-20T22:18:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
