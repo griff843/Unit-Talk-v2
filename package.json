@@ -59,6 +59,8 @@
     "codex:receive": "tsx scripts/codex-receive.ts",
     "codex:status": "tsx scripts/codex-status.ts",
     "codex:health": "tsx scripts/ops/codex-health-check.ts",
+    "ops:fibery-proof-sync": "tsx scripts/ops/fibery-proof-sync.ts",
+    "ops:queue-grooming": "tsx scripts/ops/queue-grooming.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
     "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
     "ops:ci-doctor": "tsx scripts/ops/ci-doctor.ts",
