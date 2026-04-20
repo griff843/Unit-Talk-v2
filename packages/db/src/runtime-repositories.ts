@@ -3853,12 +3853,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const deduped = [...new Map(offers.map((o) => [o.idempotencyKey, o])).values()];
     const rows = deduped.map(mapProviderOfferInsertToRow);
 
-    const { error } = await this.client
-      .from('provider_offers')
-      .upsert(rows, { onConflict: 'idempotency_key', ignoreDuplicates: true });
-
-    if (error) {
-      throw new Error(`Failed to upsert provider offers: ${error.message}`);
+    // Chunk upsert to avoid Supabase statement timeout on large MLB/NHL batches.
+    const UPSERT_CHUNK_SIZE = 500;
+    for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
+      const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
+      const { error } = await this.client
+        .from('provider_offers')
+        .upsert(chunk, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+      if (error) {
+        throw new Error(`Failed to upsert provider offers: ${error.message}`);
+      }
     }
 
     return {
@@ -5172,22 +5176,46 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return [];
     }
 
-    // Limit to offers from the last 2 hours, newest first. Without this filter,
-    // events accumulate 90K+ rows over their lifetime and Supabase's default
-    // 1000-row page limit silently drops most books/markets. 5000 covers all
-    // unique combos for any event (typically ~1000-2000 per latest cycle).
+    // Split into two queries to bypass Supabase PostgREST's 1000-row page cap.
+    // A single query ordered by snapshot_at fills the 1000 slots with player-prop
+    // rows, silently dropping all game-level markets (ML, spread, total, 1H, F5,
+    // innings, team total). Separating by provider_participant_id guarantees both
+    // categories are always represented regardless of row counts.
     const recentSince = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const { data: offers, error: offersError } = await this.client
-      .from('provider_offers')
-      .select('*')
-      .eq('provider_event_id', providerEventId)
-      .gte('snapshot_at', recentSince)
-      .order('snapshot_at', { ascending: false })
-      .limit(5000);
-    if (offersError) {
-      throw new Error(`Failed to load event offers: ${offersError.message}`);
+    const [gameLevelResult, playerPropResult] = await Promise.all([
+      // Game-level: ML, spread, totals, halves, innings, team totals (~200 rows max)
+      this.client
+        .from('provider_offers')
+        .select('*')
+        .eq('provider_event_id', providerEventId)
+        .gte('snapshot_at', recentSince)
+        .is('provider_participant_id', null)
+        .order('snapshot_at', { ascending: false })
+        .limit(1000),
+      // Player props: batting, pitching, etc. (~1000 rows, one snapshot cycle)
+      this.client
+        .from('provider_offers')
+        .select('*')
+        .eq('provider_event_id', providerEventId)
+        .gte('snapshot_at', recentSince)
+        .not('provider_participant_id', 'is', null)
+        .order('snapshot_at', { ascending: false })
+        .limit(1000),
+    ]);
+
+    if (gameLevelResult.error) {
+      throw new Error(`Failed to load game-level offers: ${gameLevelResult.error.message}`);
     }
-    if (!offers || offers.length === 0) {
+    if (playerPropResult.error) {
+      throw new Error(`Failed to load player-prop offers: ${playerPropResult.error.message}`);
+    }
+
+    const offers = [
+      ...(gameLevelResult.data ?? []),
+      ...(playerPropResult.data ?? []),
+    ];
+
+    if (offers.length === 0) {
       return [];
     }
 
