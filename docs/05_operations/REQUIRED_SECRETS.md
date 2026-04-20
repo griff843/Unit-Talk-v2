@@ -87,6 +87,30 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "scope": "repo",
       "used_by": [".github/workflows/supabase-pr-db-branch.yml"],
       "purpose": "Supabase management API token used by the preview-branch workflow to create, attach, and tear down per-PR Supabase branches and to apply migrations on isolated branches."
+    },
+    {
+      "name": "SUPABASE_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/proof-regression.yml"],
+      "purpose": "Supabase project URL used by proof-regression workflow to run live DB proof scripts. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+    },
+    {
+      "name": "SUPABASE_SERVICE_ROLE_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/proof-regression.yml"],
+      "purpose": "Supabase service role key for proof-regression workflow. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+    },
+    {
+      "name": "SUPABASE_ANON_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/proof-regression.yml"],
+      "purpose": "Supabase anon key for proof-regression workflow. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
     }
   ]
 }
@@ -164,7 +188,9 @@ The following are intentionally excluded and must stay out of the fenced JSON bl
 
 ### 4.1 Workflow-local placeholder env vars
 
-The `ci.yml` `verify` job writes a `local.env` file with empty placeholder values for `LINEAR_API_TOKEN`, `NOTION_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ANNOUNCEMENT_CHANNEL_ID`, and `OPENAI_API_KEY`. These are **not** `${{ secrets.* }}` references; they are empty strings used to satisfy `@unit-talk/config` validation in CI mode. Including them here would cause `CS3` to fail because they are not actually configured as GitHub secrets.
+The `ci.yml` `verify` job writes a `local.env` file with empty placeholder values for `LINEAR_API_TOKEN`, `NOTION_TOKEN`, `SLACK_BOT_TOKEN`, `SLACK_SIGNING_SECRET`, `DISCORD_BOT_TOKEN`, `DISCORD_GUILD_ID`, `DISCORD_ANNOUNCEMENT_CHANNEL_ID`, and `OPENAI_API_KEY`. These are **not** `${{ secrets.* }}` references; they are empty strings used to satisfy `@unit-talk/config` validation in CI mode. Including them here would cause `CS3` to fail because they are not actually configured as GitHub secrets.
+
+**Note:** `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `SUPABASE_SERVICE_ROLE_KEY` were previously excluded here because `ci.yml` used them as placeholder env vars. They are now included in §2 because `proof-regression.yml` also references them as actual `${{ secrets.* }}` references (guarded by `HAS_SUPABASE`). The `ci.yml` placeholder usage remains excluded per the above rule — those are not `${{ secrets.* }}` references and are not counted by `CW6`.
 
 ### 4.2 Repository variables
 
