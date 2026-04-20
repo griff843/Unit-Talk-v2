@@ -18,7 +18,7 @@ except Exception:
 matched=""
 
 echo "$command" | grep -qE 'git\s+reset\s+--hard'       && matched="git reset --hard"
-echo "$command" | grep -qE 'git\s+push\s+(--force|-f)'  && matched="git push --force / -f"
+echo "$command" | grep -qE 'git\s+push\s+(--force[^-]|--force$|-f\s|-f$)'  && matched="git push --force / -f"
 echo "$command" | grep -qE 'git\s+checkout\s+--\s'      && matched="git checkout --"
 echo "$command" | grep -qE 'git\s+restore\s+\.'         && matched="git restore ."
 echo "$command" | grep -qE 'git\s+clean\s+.*-f'         && matched="git clean -f"
