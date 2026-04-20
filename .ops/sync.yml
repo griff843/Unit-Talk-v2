@@ -4,4 +4,10 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-668
+    - UTV2-670
+    - UTV2-672
+    - UTV2-683
+    - UTV2-686
+    - UTV2-687
+    - UTV2-688
+    - UTV2-690
