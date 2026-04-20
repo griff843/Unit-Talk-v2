@@ -4850,10 +4850,12 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       });
     }
 
+    const startTime = extractStartsAt(event.metadata);
     const offers = await this.loadEventOffers(
       (event.external_id as string | null) ?? null,
       participants,
       event.sport_id as string,
+      buildEventOfferRecentSince(startTime, event.status as string),
     );
 
     const leagueId = participants
@@ -4869,7 +4871,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       externalId: (event.external_id as string | null) ?? null,
       eventName: event.event_name as string,
       eventDate: event.event_date as string,
-      startTime: extractStartsAt(event.metadata),
+      startTime,
       status: event.status as string,
       sportId: event.sport_id as string,
       leagueId,
@@ -5171,6 +5173,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     providerEventId: string | null,
     participants: EventParticipantBrowseResult[],
     sportId: string,
+    recentSince: string = buildEventOfferRecentSince(null, 'scheduled'),
   ): Promise<EventOfferBrowseResult[]> {
     if (!providerEventId) {
       return [];
@@ -5181,7 +5184,6 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     // rows, silently dropping all game-level markets (ML, spread, total, 1H, F5,
     // innings, team total). Separating by provider_participant_id guarantees both
     // categories are always represented regardless of row counts.
-    const recentSince = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const [gameLevelResult, playerPropResult] = await Promise.all([
       // Game-level: ML, spread, totals, halves, innings, team totals (~200 rows max)
       this.client
@@ -5402,6 +5404,18 @@ function extractStartsAt(metadata: unknown): string | null {
     return typeof raw === 'string' && raw.length > 0 ? raw : null;
   }
   return null;
+}
+
+function buildEventOfferRecentSince(startTime: string | null, status: string) {
+  const normalizedStatus = status.trim().toLowerCase();
+  const parsedStartTime = startTime ? Date.parse(startTime) : Number.NaN;
+  const isLive =
+    !Number.isNaN(parsedStartTime) &&
+    parsedStartTime < Date.now() &&
+    normalizedStatus !== 'final' &&
+    normalizedStatus !== 'cancelled';
+  const hours = isLive ? 6 : 2;
+  return new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
 }
 
 function splitProviderBookKey(providerKey: string) {
