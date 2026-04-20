@@ -1,8 +1,8 @@
 {
   "schema": "settlement-proof/v1",
   "issue_id": "UTV2-672",
-  "run_at": "2026-04-20T00:36:25.896Z",
-  "controls_proven": 4,
+  "run_at": "2026-04-20T11:10:33.802Z",
+  "controls_proven": 3,
   "controls_total": 4,
   "proofs": [
     {
@@ -28,7 +28,7 @@
     },
     {
       "control": "Settlement results are immutable after finalization",
-      "verdict": "PROVEN",
+      "verdict": "NEEDS_INVESTIGATION",
       "evidence": {
         "total_settled_picks": 40,
         "picks_with_multiple_settlements": 3,
@@ -58,9 +58,9 @@
             ]
           }
         ],
-        "pattern": "Corrections use append-only model — original settlement preserved, correction added as new record with distinct source/settled_by. Immutability confirmed."
+        "pattern": "Corrections exist via append (not mutation) — verify correction chain safety"
       },
-      "notes": "3 picks have multiple settlement records. Originals are preserved — corrections appended as new records with distinct source attribution (grading vs operator). Append-only immutability confirmed."
+      "notes": "3 picks have multiple settlement records. This is expected for corrections but needs verification that originals are preserved."
     },
     {
       "control": "All bet types are handled correctly",

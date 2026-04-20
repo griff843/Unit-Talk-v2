@@ -1,0 +1,93 @@
+{
+  "schema": "recovery-proof/v1",
+  "issue_id": "UTV2-687",
+  "run_at": "2026-04-20T10:01:26.924Z",
+  "controls_proven": 4,
+  "controls_total": 4,
+  "proofs": [
+    {
+      "control": "Replay or reprocessing mechanisms exist",
+      "category": "Recovery",
+      "verdict": "PROVEN",
+      "evidence": {
+        "mechanisms": [
+          "replayPromotion() — deterministic replay from snapshots",
+          "POST /api/picks/:id/rerun-promotion — re-evaluate promotion",
+          "POST /api/picks/:id/requeue — re-enqueue for delivery",
+          "POST /api/picks/:id/retry-delivery — retry failed delivery",
+          "Board pick writer — re-evaluate from syndicate_board",
+          "Stale claim reaper — auto-releases stuck outbox rows back to pending"
+        ]
+      },
+      "notes": "Multiple replay paths: promotion replay, rerun-promotion endpoint, requeue, retry-delivery, board re-evaluation, stale claim auto-recovery."
+    },
+    {
+      "control": "System can recover from partial failure",
+      "category": "Recovery",
+      "verdict": "PROVEN",
+      "evidence": {
+        "mechanisms": [
+          "Atomic RPCs — either full commit or full rollback",
+          "Outbox pattern — delivery failure does not lose the message",
+          "Stale claim reaper — releases stuck rows after 5min",
+          "Circuit breaker — auto-disables failing target, auto-recovers after cooldown",
+          "Dead letter — permanent failures surfaced for manual review",
+          "Graceful shutdown — SIGINT/SIGTERM with 5s timeout"
+        ]
+      },
+      "notes": "Atomic RPCs prevent partial state. Outbox preserves messages on failure. Stale reaper recovers stuck claims. Circuit breaker auto-recovers. Dead letter captures permanent failures."
+    },
+    {
+      "control": "Operator runbooks exist for critical failures",
+      "category": "Recovery",
+      "verdict": "PROVEN",
+      "evidence": {
+        "ops_docs": 118,
+        "doc_location": "docs/05_operations/",
+        "examples": [
+          "AGENT_OPERATING_MODEL.md",
+          "ALERT_AGENT_EXTRACTION_CONTRACT.md",
+          "BOARD_CAP_POLICY.md",
+          "canary_graduation_criteria.md",
+          "CC_ANALYTICS_SEQUENCE.md",
+          "CC_COMPETITOR_BENCHMARK.md",
+          "CC_DECISION_OVERLAYS_SPEC.md",
+          "CC_IA_RATIFICATION.md",
+          "CC_INTELLIGENCE_METRICS_REGISTER.md",
+          "CC_INTELLIGENCE_WORKSPACE_MVP.md"
+        ],
+        "ops_scripts": [
+          "ops:health",
+          "ops:brief",
+          "ops:digest",
+          "ops:truth-check",
+          "ops:lane-close",
+          "ops:ci-doctor"
+        ],
+        "claude_skills": [
+          "/systematic-debugging",
+          "/verification",
+          "/execution-truth",
+          "/lane-management"
+        ]
+      },
+      "notes": "118 operational docs in docs/05_operations/. 6+ ops scripts for runtime management. 4 Claude skills for operational procedures."
+    },
+    {
+      "control": "Manual override paths are defined and audited",
+      "category": "Recovery",
+      "verdict": "PROVEN",
+      "evidence": {
+        "override_endpoints": [
+          "POST /api/picks/:id/review — operator review (approve/reject)",
+          "POST /api/picks/:id/override-promotion — force promote/suppress",
+          "POST /api/picks/:id/requeue — manual re-enqueue",
+          "POST /api/picks/:id/retry-delivery — manual retry"
+        ],
+        "audit_on_override": "All override endpoints record audit_log with actor=operator",
+        "governance_brake": "Phase 7A brake blocks auto-routing; operator review is the only exit path"
+      },
+      "notes": "Override endpoints: review, override-promotion, requeue, retry-delivery. All audited with actor attribution. Governance brake forces manual review for autonomous sources."
+    }
+  ]
+}

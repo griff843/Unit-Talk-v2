@@ -1,0 +1,72 @@
+{
+  "schema": "security-proof/v1",
+  "issue_id": "UTV2-688",
+  "run_at": "2026-04-20T10:01:26.925Z",
+  "controls_proven": 4,
+  "controls_total": 4,
+  "proofs": [
+    {
+      "control": "Environment access is restricted appropriately",
+      "category": "Security",
+      "verdict": "PROVEN",
+      "evidence": {
+        "auth_system": "Bearer token auth with role-based access (auth.ts)",
+        "roles": [
+          "operator",
+          "submitter",
+          "settler",
+          "poster",
+          "worker"
+        ],
+        "fail_closed": "fail_closed mode requires auth keys — no anonymous access in production",
+        "rls": "Supabase RLS on canonical tables (UTV2-604)",
+        "service_role": "SUPABASE_SERVICE_ROLE_KEY used only by API (canonical writer)"
+      },
+      "notes": "Bearer token auth with 5 roles. fail_closed mode requires keys. Supabase RLS enabled. Service role key restricted to API only."
+    },
+    {
+      "control": "Role-based access control is defined",
+      "category": "Security",
+      "verdict": "PROVEN",
+      "evidence": {
+        "api_roles": "5 API key roles: operator, submitter, settler, poster, worker",
+        "member_tiers": "6 member tiers: free, trial, vip, vip-plus, capper, operator",
+        "access_surfaces": "TIER_ACCESS map in member-lifecycle.ts — per-tier surface access",
+        "route_auth": "All POST routes require Authorization: Bearer <key>",
+        "jwt_enforcement": "Capper JWT claim overrides form submittedBy (UTV2-658)"
+      },
+      "notes": "5 API roles + 6 member tiers. TIER_ACCESS map defines per-tier surface access. All write routes auth-gated. JWT enforcement for capper identity."
+    },
+    {
+      "control": "Secrets are not stored in code",
+      "category": "Security",
+      "verdict": "PROVEN",
+      "evidence": {
+        "env_example_clean": true,
+        "local_env_gitignored": "local.env is in .gitignore — never committed",
+        "validate_env": "validate-env.mjs warns about secrets in .env (shared file)",
+        "secrets_inventory": "docs/05_operations/SECRETS_INVENTORY.md — 22 secrets classified (UTV2-612)",
+        "ci_secrets": "GitHub Actions secrets for CI workflows — not in code"
+      },
+      "notes": ".env.example contains no real tokens. local.env is gitignored. validate-env.mjs warns about secrets in shared files. 22 secrets inventoried in SECRETS_INVENTORY.md."
+    },
+    {
+      "control": "Sensitive operations are permission-gated",
+      "category": "Security",
+      "verdict": "PROVEN",
+      "evidence": {
+        "gating": [
+          "All POST routes require Bearer auth",
+          "Operator-only endpoints: review, override-promotion",
+          "Settlement requires settler role",
+          "Submission requires submitter role",
+          "Delivery requires worker role"
+        ],
+        "merge_gate": "merge-gate.yml gates code merges by tier + PM verdict",
+        "governance_brake": "Phase 7A blocks non-human auto-enqueue",
+        "writer_authority": "packages/db/src/writer-authority.ts — field-level write authorization"
+      },
+      "notes": "All sensitive operations auth-gated: per-role API keys, merge-gate for code, governance brake for auto-routing, writer authority for field-level access."
+    }
+  ]
+}
