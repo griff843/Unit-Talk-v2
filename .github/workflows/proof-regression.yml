@@ -101,8 +101,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run affected proof scripts
+      - name: Check proof secrets available
         if: steps.affected.outputs.scripts != ''
+        id: secrets
+        env:
+          HAS_SUPABASE: ${{ secrets.SUPABASE_URL != '' }}
+        run: |
+          if [ "$HAS_SUPABASE" = "true" ]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=proof-regression::Supabase secrets not configured — skipping live proof runs. Proof scripts require SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY."
+            echo "available=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run affected proof scripts
+        if: steps.affected.outputs.scripts != '' && steps.secrets.outputs.available == 'true'
         run: |
           for script in ${{ steps.affected.outputs.scripts }}; do
             echo "Running $script..."
