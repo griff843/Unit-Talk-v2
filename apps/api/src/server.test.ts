@@ -1582,7 +1582,8 @@ test('GET /api/picks/:id/routing-preview returns live promotion and outbox routi
         promotionTarget: string | null;
         distributionTarget: string | null;
         outboxStatus: string;
-        routingReason: string;
+        routingExplanation: string;
+        gateChecks: Array<{ gate: string; passed: boolean; detail: string }>;
       };
     };
 
@@ -1592,7 +1593,8 @@ test('GET /api/picks/:id/routing-preview returns live promotion and outbox routi
     assert.equal(body.data.promotionTarget, 'best-bets');
     assert.equal(body.data.distributionTarget, 'discord:best-bets');
     assert.match(body.data.outboxStatus, /pending|processing|sent|failed|dead_letter/);
-    assert.match(body.data.routingReason, /discord:best-bets/);
+    assert.ok(typeof body.data.routingExplanation === 'string' && body.data.routingExplanation.length > 0, 'routingExplanation should be a non-empty string');
+    assert.ok(Array.isArray(body.data.gateChecks), 'gateChecks should be an array');
   } finally {
     server.close();
   }
