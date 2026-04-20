@@ -1,13 +1,6 @@
 version: 1
 approval:
-  allow_multiple_issues: true
-  skip_sync_required: false
+  allow_multiple_issues: false
+  skip_sync_required: true
 entities:
-  issues:
-    - UTV2-670
-    - UTV2-672
-    - UTV2-683
-    - UTV2-686
-    - UTV2-687
-    - UTV2-688
-    - UTV2-690
+  issues: []
