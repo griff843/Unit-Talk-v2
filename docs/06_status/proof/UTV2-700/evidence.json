@@ -1,0 +1,26 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-700",
+  "title": "Period / half / quarter / inning market types + SGO provider aliases",
+  "tier": "T3",
+  "generated_at": "2026-04-20T23:00:00.000Z",
+  "branch": "claude/utv2-700-period-half-inning-market-types",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green",
+    "migration_validated": true
+  },
+  "live_db_evidence": {
+    "market_types_added": 30,
+    "sport_market_type_availability_added": 33,
+    "provider_market_aliases_added": 35,
+    "query": "SELECT COUNT(*) FROM market_types WHERE id ~ '^(1h|2h|1q|2q|3q|4q|f3|f5|f7|1p)_' returned 30",
+    "description": "Migration applied via Supabase MCP apply_migration. 30 new market_type rows, 33 availability rows (18 NBA + 12 MLB + 3 NHL), 35 SGO aliases covering halves, quarters, and first-N-innings markets."
+  },
+  "runtime_change_classification": "catalog-data-only",
+  "runtime_change_note": "Pure data migration — no code changed. Adds catalog rows so period markets appear in the smart-form market-family picker. No lifecycle, submission, or delivery paths touched.",
+  "artifacts": [
+    "supabase/migrations/202604200002_utv2_700_period_half_inning_market_types.sql"
+  ]
+}
