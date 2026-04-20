@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-697",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "claude/utv2-697-live-game-badge-offer-panel",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "apps/smart-form/app/submit/components/BetForm.tsx",
+    "apps/smart-form/lib/api-client.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "file_scope_lock": [
+    "apps/smart-form/app/submit/components/BetForm.tsx",
+    "apps/smart-form/lib/api-client.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "pr_open",
+  "started_at": "2026-04-20T21:00:00.000Z",
+  "heartbeat_at": "2026-04-20T22:45:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex",
+  "truth_check_history": [],
+  "reopen_history": []
+}
