@@ -53,6 +53,8 @@ export class FiberyClient {
       };
     }
 
+    // Collaboration~Documents fields (e.g. Unit Talk/Description, Unit Talk/Notes) cannot
+    // be selected via q/select or written via fibery.entity/update — skip them gracefully.
     if (isDocumentNoteField(config.note_field)) {
       await this.resolveEntity(config, publicId, []);
       return {
@@ -123,15 +125,12 @@ export class FiberyClient {
         },
       },
     ]);
-    const envelope = payload[0] as { success?: boolean; result?: unknown[] } | undefined;
-    if (!envelope?.success || !Array.isArray(envelope.result) || envelope.result.length === 0) {
+    // postCommands unwraps envelopes; payload[0] is the result array.
+    const firstResult = Array.isArray(payload[0]) ? (payload[0][0] as { 'fibery/id'?: string } | undefined) : undefined;
+    if (typeof firstResult?.['fibery/id'] !== 'string') {
       throw new Error(`Fibery state "${stateName}" not found for ${entityType}`);
     }
-    const stateEntity = envelope.result[0] as { 'fibery/id'?: string } | undefined;
-    if (typeof stateEntity?.['fibery/id'] !== 'string') {
-      throw new Error(`Fibery state "${stateName}" missing fibery/id for ${entityType}`);
-    }
-    return stateEntity['fibery/id'];
+    return firstResult['fibery/id'];
   }
 
   private async resolveEntity(
@@ -177,12 +176,8 @@ export class FiberyClient {
         },
       },
     ]);
-    // Fibery returns [{ success, result: [...entities] }] — one envelope per command.
-    const envelope = payload[0] as { success?: boolean; result?: unknown[] } | undefined;
-    if (!envelope?.success) {
-      throw new Error(`Fibery entity not found: ${config.type} ${publicId}`);
-    }
-    const firstResult = Array.isArray(envelope.result) ? envelope.result[0] : undefined;
+    // postCommands unwraps the Fibery envelope, so payload[0] is the result array.
+    const firstResult = Array.isArray(payload[0]) ? payload[0][0] : undefined;
     if (!isRecord(firstResult) || typeof firstResult['fibery/id'] !== 'string') {
       return null;
     }
@@ -237,7 +232,8 @@ export class FiberyClient {
     if (!id) {
       throw new Error(`Cannot update ${type}: missing fibery/id`);
     }
-    const payload = await this.postCommands([
+    // postCommands already throws on Fibery command failure; no additional check needed.
+    await this.postCommands([
       {
         command: 'fibery.entity/update',
         args: {
@@ -249,10 +245,6 @@ export class FiberyClient {
         },
       },
     ]);
-    const envelope = payload[0] as { success?: boolean; result?: unknown } | undefined;
-    if (!envelope?.success) {
-      throw new Error(`Fibery entity update failed for ${type} ${String(id)}`);
-    }
   }
 
   private async getDocument(fiberyId: string): Promise<{ secret: string; content: string }> {
