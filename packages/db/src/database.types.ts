@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "14.4"
+    PostgrestVersion: "14.5"
   }
   public: {
     Tables: {
@@ -2530,6 +2530,21 @@ export type Database = {
       }
     }
     Functions: {
+      awaiting_approval_drift_state: {
+        Args: { stale_threshold?: string }
+        Returns: {
+          age_hours: number
+          created_at: string
+          has_validated_to_awaiting: boolean
+          latest_lifecycle_at: string
+          latest_lifecycle_to_state: string
+          market: string
+          pick_id: string
+          selection: string
+          source: string
+          stale: boolean
+        }[]
+      }
       backfill_pick_awaiting_approval: {
         Args: { p_linear_issue: string; p_pick_id: string }
         Returns: Json
@@ -2581,6 +2596,10 @@ export type Database = {
           p_pick: Json
           p_submission: Json
         }
+        Returns: Json
+      }
+      run_awaiting_approval_drift_monitor: {
+        Args: { stale_threshold?: string }
         Returns: Json
       }
       settle_pick_atomic: {

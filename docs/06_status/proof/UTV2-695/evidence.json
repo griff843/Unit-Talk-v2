@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-695",
+  "title": "UTV2-695 — PostgREST 1000-row cap: split loadEventOffers + MLB player-prop fix",
+  "generated_at": "2026-04-20T18:00:00.000Z",
+  "merge_sha": null,
+  "pr": 395,
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "assertions": [
+    {
+      "id": "UTV2-695-A1",
+      "claim": "loadEventOffers split into two parallel queries — game-level (IS NULL) + player-prop (IS NOT NULL)",
+      "status": "PASS",
+      "evidence": {
+        "file": "packages/db/src/runtime-repositories.ts",
+        "fix": "Promise.all([gameLevelQuery.is('provider_participant_id', null), playerPropQuery.not('provider_participant_id', 'is', null)])",
+        "db_audit": "Braves @ Nationals: 8 ML, 8 spread, 24 game total, 90 1H rows confirmed present within 2h window — all previously silently dropped"
+      }
+    },
+    {
+      "id": "UTV2-695-A2",
+      "claim": "mapOfferToFormMarketType detects MLB player props via marketTypeId prefix + providerParticipantId fallback",
+      "status": "PASS",
+      "evidence": {
+        "file": "apps/smart-form/lib/form-utils.ts",
+        "fix": "marketTypeId.startsWith('player_') || marketTypeId.startsWith('player.') -> 'player-prop'; providerParticipantId fallback when participantId null",
+        "tests": "3 new tests in apps/smart-form/test/form-utils.test.ts — all pass"
+      }
+    },
+    {
+      "id": "UTV2-695-A3",
+      "claim": "upsertBatch chunked in 500-row batches to avoid Supabase statement timeout",
+      "status": "PASS",
+      "evidence": {
+        "file": "packages/db/src/runtime-repositories.ts",
+        "fix": "chunk(records, 500) with sequential upsert per chunk"
+      }
+    },
+    {
+      "id": "UTV2-695-A4",
+      "claim": "next.config.ts replaced with next.config.mjs in command-center (Next.js 14 TypeScript config unsupported)",
+      "status": "PASS",
+      "evidence": {
+        "file": "apps/command-center/next.config.mjs",
+        "fix": "Created .mjs; deleted .ts"
+      }
+    }
+  ],
+  "static_proof": {
+    "pnpm_verify": "PASS",
+    "test_counts": {
+      "total": 99,
+      "failures": 0
+    },
+    "lint": "PASS",
+    "type_check": "PASS"
+  },
+  "verdict": "PASS — PostgREST 1000-row cap bypassed via split query. Game-level markets (ML, spread, totals, 1H, F5) now returned for all events. MLB player-prop classification fixed."
+}

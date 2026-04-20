@@ -27,7 +27,7 @@ pnpm supabase:types    # regenerate database.types.ts after a migration
 tsx --test apps/api/src/submission-service.test.ts
 ```
 
-Environment loads `local.env` > `.env` > `.env.example`, parsed by `@unit-talk/config` (no dotenv). Supabase project ref: `feownrheeefbcsehtsiw`.
+Environment loads `local.env` > `.env` > `.env.example`, parsed by `@unit-talk/config` (no dotenv). Supabase project ref: `zfzdnfwdarxucxtaojxm`.
 
 ---
 

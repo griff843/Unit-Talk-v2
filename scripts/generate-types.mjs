@@ -58,7 +58,7 @@ function getEnv(key) {
 const projectRefPath = path.join(root, 'supabase', '.temp', 'project-ref');
 if (!fs.existsSync(projectRefPath)) {
   console.error('ERROR: supabase/.temp/project-ref not found.');
-  console.error('       Run: npx supabase link --project-ref feownrheeefbcsehtsiw');
+  console.error('       Run: npx supabase link --project-ref zfzdnfwdarxucxtaojxm');
   process.exit(1);
 }
 const projectRef = fs.readFileSync(projectRefPath, 'utf8').trim();

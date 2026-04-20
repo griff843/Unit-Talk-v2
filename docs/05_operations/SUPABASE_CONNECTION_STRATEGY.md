@@ -38,7 +38,7 @@ Unit Talk V2 uses `@supabase/supabase-js` (the Supabase JS client) for all appli
 ### Application runtime
 
 ```
-SUPABASE_URL         = https://feownrheeefbcsehtsiw.supabase.co
+SUPABASE_URL         = https://zfzdnfwdarxucxtaojxm.supabase.co
 SUPABASE_ANON_KEY    = (public, safe for browser — used by smart-form)
 SUPABASE_SERVICE_ROLE_KEY = (secret, server-only — used by API, worker, ingestor)
 ```
@@ -51,11 +51,11 @@ SUPABASE_SERVICE_ROLE_KEY = (secret, server-only — used by API, worker, ingest
 
 ```
 SUPABASE_ACCESS_TOKEN = sbp_... (personal access token from Supabase dashboard)
-SUPABASE_PROJECT_REF  = feownrheeefbcsehtsiw
+SUPABASE_PROJECT_REF  = zfzdnfwdarxucxtaojxm
 ```
 
 Required for:
-- `supabase link --project-ref feownrheeefbcsehtsiw`
+- `supabase link --project-ref zfzdnfwdarxucxtaojxm`
 - `supabase db push` (apply migrations)
 - `pnpm supabase:types` (regenerate database.types.ts)
 
@@ -96,7 +96,7 @@ Apply via:
 ```bash
 supabase db push --linked
 # or
-supabase db push --project-ref feownrheeefbcsehtsiw
+supabase db push --project-ref zfzdnfwdarxucxtaojxm
 ```
 
 Never apply schema changes directly via:

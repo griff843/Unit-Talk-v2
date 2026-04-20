@@ -74,7 +74,7 @@ export function buildSelectionString(values: BetFormValues): string {
   return '';
 }
 
-export function mapOfferToFormMarketType(offer: Pick<EventOfferBrowseResult, 'marketTypeId' | 'participantId'>): MarketTypeId {
+export function mapOfferToFormMarketType(offer: Pick<EventOfferBrowseResult, 'marketTypeId' | 'participantId' | 'providerParticipantId'>): MarketTypeId {
   const marketTypeId = offer.marketTypeId?.toLowerCase() ?? '';
   if (marketTypeId === 'moneyline') {
     return 'moneyline';
@@ -85,7 +85,13 @@ export function mapOfferToFormMarketType(offer: Pick<EventOfferBrowseResult, 'ma
   if (marketTypeId.includes('team-total') || marketTypeId.includes('team_total')) {
     return 'team-total';
   }
-  if (offer.participantId) {
+  // Market type IDs starting with "player_" or "player." are player props regardless
+  // of whether a canonical entity alias exists (providerParticipantId may be set but
+  // participantId is null when provider_entity_aliases has no row for the player).
+  if (marketTypeId.startsWith('player_') || marketTypeId.startsWith('player.')) {
+    return 'player-prop';
+  }
+  if (offer.participantId || offer.providerParticipantId) {
     return 'player-prop';
   }
   return 'total';

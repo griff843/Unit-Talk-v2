@@ -90,7 +90,28 @@ test('buildSelectionString formats team totals', () => {
 
 test('mapOfferToFormMarketType identifies combo player props', () => {
   assert.equal(
-    mapOfferToFormMarketType({ marketTypeId: 'player.points_assists', participantId: 'player-1' }),
+    mapOfferToFormMarketType({ marketTypeId: 'player.points_assists', participantId: 'player-1', providerParticipantId: null }),
+    'player-prop',
+  );
+});
+
+test('mapOfferToFormMarketType identifies MLB player props without canonical participantId', () => {
+  // MLB offers often have a providerParticipantId but no canonical participantId
+  // because provider_entity_aliases may not have a row yet. The marketTypeId
+  // starting with "player_" is the reliable signal.
+  assert.equal(
+    mapOfferToFormMarketType({ marketTypeId: 'player_batting_hits_ou', participantId: null, providerParticipantId: 'sgo-player-123' }),
+    'player-prop',
+  );
+  assert.equal(
+    mapOfferToFormMarketType({ marketTypeId: 'player_batting_home_runs_ou', participantId: null, providerParticipantId: 'sgo-player-456' }),
+    'player-prop',
+  );
+});
+
+test('mapOfferToFormMarketType falls back to providerParticipantId for player props with no marketTypeId', () => {
+  assert.equal(
+    mapOfferToFormMarketType({ marketTypeId: null, participantId: null, providerParticipantId: 'sgo-player-789' }),
     'player-prop',
   );
 });

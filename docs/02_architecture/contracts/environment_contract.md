@@ -23,7 +23,7 @@ This contract defines how environment variables are loaded, what the three envir
 |---|---|
 | `local` | Developer workstation. Uses `local.env` and/or `.env`. No production credentials required. |
 | `staging` | Not currently provisioned in V2. Reserved for future use. |
-| `production` | Deployed services against the live Supabase project (`feownrheeefbcsehtsiw`) and live Discord guild. |
+| `production` | Deployed services against the live Supabase project (`zfzdnfwdarxucxtaojxm`) and live Discord guild. |
 
 ---
 
