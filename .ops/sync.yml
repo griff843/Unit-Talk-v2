@@ -5,3 +5,5 @@ approval:
 entities:
   issues:
     - UTV2-698
+  proofs:
+    - UTV2-698
