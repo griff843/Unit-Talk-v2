@@ -58,6 +58,7 @@
     "codex:dispatch": "tsx scripts/codex-dispatch.ts",
     "codex:receive": "tsx scripts/codex-receive.ts",
     "codex:status": "tsx scripts/codex-status.ts",
+    "codex:health": "tsx scripts/ops/codex-health-check.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
     "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
     "ops:ci-doctor": "tsx scripts/ops/ci-doctor.ts",

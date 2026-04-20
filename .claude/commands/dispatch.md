@@ -41,6 +41,18 @@ For `--dry-run`: stop here and report the dispatch plan as a table:
 | Issue | Title | Tier | Executor | Prerequisites |
 ```
 
+### Phase 2.5: Codex health check (before routing to Codex)
+
+Before routing any lane to Codex, run:
+```bash
+npx tsx scripts/ops/codex-health-check.ts --json
+```
+
+If `healthy: false`:
+- **Do not dispatch to Codex.** Route the lane to Claude instead.
+- Report: "Codex unavailable ({error}), falling back to Claude for {issue_id}"
+- This prevents silent failures and fake slot occupancy (UTV2-681).
+
 ### Phase 3: Start lanes
 
 For each validated target:
@@ -57,14 +69,14 @@ For each validated target:
 
 ### Phase 4: Execute
 
-**Claude lanes** (T1, T3, T2 with migration/contract):
+**Claude lanes** (T1, T3, T2 with migration/contract, or T2 when Codex unavailable):
 - Execute the work directly in this conversation
 - Follow the acceptance criteria from the issue description
 - Run `pnpm verify` after implementation
 - Open PR via `gh pr create`
 - Post executor-result comment on the PR
 
-**Codex lanes** (T2 clear-scope):
+**Codex lanes** (T2 clear-scope, only when Codex health check passes):
 - Dispatch via Codex rescue agent with the issue description as the prompt
 - Include: issue ID, acceptance criteria, file scope, branch name
 - Report that Codex lane is dispatched and will need review on return
