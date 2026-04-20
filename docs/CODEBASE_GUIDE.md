@@ -123,7 +123,7 @@ Each package and app has its own `tsconfig.json` with a `references` array point
 
 ## Database Layer
 
-**Database:** Supabase (PostgreSQL), project ref `feownrheeefbcsehtsiw` [CONFIRMED — AGENTS.md, .env.example]
+**Database:** Supabase (PostgreSQL), project ref `zfzdnfwdarxucxtaojxm` [CONFIRMED — AGENTS.md, .env.example]
 
 **Schema managed via migrations in `supabase/migrations/`** [CONFIRMED — directory listing showing 26+ migration files from 2026-03-20 onward]
 

@@ -50,11 +50,11 @@ supabase/migrations/*.sql                      ← schema source of truth
 
 ### Current state
 
-`packages/db/src/database.types.ts` is **generated from the live Supabase project** (`feownrheeefbcsehtsiw`). Both migrations were applied on **2026-03-20** and types were regenerated successfully. The type pipeline is fully operational.
+`packages/db/src/database.types.ts` is **generated from the live Supabase project** (`zfzdnfwdarxucxtaojxm`). Both migrations were applied on **2026-03-20** and types were regenerated successfully. The type pipeline is fully operational.
 
 ### To regenerate
 
-With the project linked (`supabase link --project-ref feownrheeefbcsehtsiw`):
+With the project linked (`supabase link --project-ref zfzdnfwdarxucxtaojxm`):
 
 ```bash
 pnpm supabase:types
@@ -106,7 +106,7 @@ V2 supports `player`, `team`, `league`, `event`. Legacy types (`horse`, `fighter
 
 ## Live DB Verification (2026-03-20)
 
-Verified on project `feownrheeefbcsehtsiw` after applying both migrations:
+Verified on project `zfzdnfwdarxucxtaojxm` after applying both migrations:
 
 ### Migrations applied
 | File | Status |

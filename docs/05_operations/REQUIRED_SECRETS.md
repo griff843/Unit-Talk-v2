@@ -170,7 +170,7 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
 - **Scope:** Repo-level secret. Scoped to the Supabase management API (create/delete preview branches, fetch branch credentials, apply migrations via CLI).
 - **Used by:** `.github/workflows/supabase-pr-db-branch.yml` (`validate` and `teardown` jobs).
 - **Companion variables (not secrets):**
-  - `vars.SUPABASE_PROJECT_REF` — repo variable, must be set to `feownrheeefbcsehtsiw`. Not a secret; tracked outside this inventory.
+  - `vars.SUPABASE_PROJECT_REF` — repo variable, must be set to `zfzdnfwdarxucxtaojxm`. Not a secret; tracked outside this inventory.
 - **Local vs CI:**
   - **CI:** required for PRs that touch migrations. Missing token causes an explicit `::error::` from the workflow's validation step.
   - **Local:** not used by ci-doctor itself. Developers running migrations locally use separate env-loaded credentials from `local.env`, not this CI secret.
