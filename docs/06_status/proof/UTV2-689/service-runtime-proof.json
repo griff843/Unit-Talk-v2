@@ -1,0 +1,102 @@
+{
+  "schema": "service-runtime-proof/v1",
+  "issue_id": "UTV2-689",
+  "run_at": "2026-04-20T10:14:15.548Z",
+  "controls_proven": 4,
+  "controls_partial": 1,
+  "controls_total": 5,
+  "proofs": [
+    {
+      "control": "FND-SVC-001: End-to-end pick lifecycle proof",
+      "verdict": "PARTIALLY_PROVEN",
+      "evidence": {
+        "total_lifecycle_events": 0,
+        "distinct_transitions": [],
+        "distinct_triggers": [],
+        "distinct_picks_with_events": 0,
+        "lifecycle_fsm": "draft → validated → queued → posted → settled (terminal). Any → voided (terminal).",
+        "enforcement": "transitionPickLifecycle() in packages/db/src/lifecycle.ts — no regressions allowed",
+        "test_coverage": "lifecycle.test.ts — FSM transitions, invalid transitions, terminal states"
+      },
+      "notes": "0 lifecycle events across 0 picks. 0 distinct transitions. FSM enforced by transitionPickLifecycle() — no regressions. Covered by lifecycle.test.ts."
+    },
+    {
+      "control": "FND-SVC-002: Settlement auto-grading runtime proof",
+      "verdict": "PROVEN",
+      "evidence": {
+        "total_settlements": 43,
+        "auto_graded": 19,
+        "manual_graded": 24,
+        "sources": [
+          "grading",
+          "operator"
+        ],
+        "settled_by": [
+          "grading-service",
+          "operator:correction:event-disambiguation-fix",
+          "operator",
+          "proof-runner",
+          "operator:griff",
+          "operator:griff843",
+          "codex",
+          "griff843",
+          "command-center",
+          "codex-debug"
+        ],
+        "results": [
+          "loss",
+          "win",
+          "void"
+        ],
+        "grading_service": "apps/api/src/grading-service.ts — automated grading from game_results",
+        "atomic_settlement": "settlePickAtomic RPC — transactional settlement recording"
+      },
+      "notes": "43 settlement records. 19 auto-graded (source=grading), 24 manual. Sources: grading, operator. Atomic settlement via RPC."
+    },
+    {
+      "control": "FND-SVC-003: Recap settled pick inclusion proof",
+      "verdict": "PROVEN",
+      "evidence": {
+        "pick_status_distribution": {
+          "validated": 480,
+          "settled": 16,
+          "posted": 4
+        },
+        "total_picks": 500,
+        "recap_filter": "settlement.status === \"settled\" AND result in (win/loss/push) AND created_at within window",
+        "cross_reference": "Already proven in UTV2-676 analytics proof (PR #375): triple filter on settled-only data",
+        "code": "apps/api/src/recap-service.ts lines 153-167 — status + result + time window filter",
+        "no_unsettled_in_recap": "Recap query explicitly excludes non-settled statuses"
+      },
+      "notes": "Recap includes settled picks only (triple filter: status=settled, result=win/loss/push, time window). 16 settled picks out of 500 total. Cross-verified with UTV2-676."
+    },
+    {
+      "control": "FND-SVC-004: Analytics settled pick reflection proof",
+      "verdict": "PROVEN",
+      "evidence": {
+        "settled_picks": 40,
+        "with_settlement_records": 40,
+        "with_clv_data": 12,
+        "coverage": "100.0% settlement coverage",
+        "analytics_source": "Analytics derive from settlement_records joined to picks — same source as learning ledger",
+        "cross_reference": "UTV2-676 proved analytics match underlying data (24-10-0 record, 42.41% ROI)"
+      },
+      "notes": "40/40 settled picks have settlement records. 12 have CLV data. Analytics derive from same source. Cross-verified with UTV2-676."
+    },
+    {
+      "control": "BL-ANALYTICS-001: Analytics proven against settlement truth",
+      "verdict": "PROVEN",
+      "evidence": {
+        "sub_proofs": [
+          "FND-SVC-003: Recap uses settled-only data (proven above)",
+          "FND-SVC-004: Analytics reflect settled picks accurately (proven above)",
+          "UTV2-676: ROI calculations correct (42.41%), analytics match underlying data",
+          "UTV2-676: No derived metrics use stale or non-canonical data",
+          "UTV2-651: Learning ledger runs against live Supabase with real settled picks"
+        ],
+        "finding": "BL-ANALYTICS-001 \"Analytics Not Proven Against Settlement Truth\" — resolved by cumulative proof"
+      },
+      "notes": "Analytics proven against settlement truth via 5 overlapping proofs: settled-only recap, accurate reflection, correct ROI, no stale data, live learning ledger. Finding BL-ANALYTICS-001 should be marked Resolved."
+    }
+  ]
+}
