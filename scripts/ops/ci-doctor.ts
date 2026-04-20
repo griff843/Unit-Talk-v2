@@ -672,6 +672,10 @@ function checkWorkflowSecretLeak(workflowDocs: WorkflowDoc[]): boolean {
       if (/\$\{\{\s*secrets\./.test(line)) {
         return false;
       }
+      // Skip grep anchor patterns like grep -q '^SECRET_NAME=' — not a leak
+      if (/['"]?\^[A-Z0-9_]+=/.test(line)) {
+        return false;
+      }
       return knownSecretNames.some((secretName) => {
         const bareNamePattern = new RegExp(`\\b${escapeRegExp(secretName)}\\b`);
         if (!bareNamePattern.test(line)) {
