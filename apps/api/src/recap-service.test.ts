@@ -19,7 +19,7 @@ import {
 } from './recap-scheduler.js';
 
 test('getRecapWindow returns the prior UTC day for daily recaps', () => {
-  const window = getRecapWindow('daily', new Date('2026-03-28T11:00:00.000Z'));
+  const window = getRecapWindow('daily', new Date('2026-03-28T16:00:00.000Z'));
 
   assert.deepEqual(window, {
     startsAt: '2026-03-27T00:00:00.000Z',
@@ -29,7 +29,7 @@ test('getRecapWindow returns the prior UTC day for daily recaps', () => {
 });
 
 test('getRecapWindow returns the prior Monday-through-Sunday week for weekly recaps', () => {
-  const window = getRecapWindow('weekly', new Date('2026-03-30T11:00:00.000Z'));
+  const window = getRecapWindow('weekly', new Date('2026-03-30T16:00:00.000Z'));
 
   assert.deepEqual(window, {
     startsAt: '2026-03-23T00:00:00.000Z',
@@ -40,18 +40,18 @@ test('getRecapWindow returns the prior Monday-through-Sunday week for weekly rec
 
 test('detectRecapCollision returns combined on the first Monday of a month', () => {
   assert.equal(
-    detectRecapCollision(new Date('2026-06-01T11:00:00.000Z')),
+    detectRecapCollision(new Date('2026-06-01T16:00:00.000Z')),
     'combined',
   );
 });
 
 test('detectRecapCollision returns weekly on later Mondays and daily on non-Mondays', () => {
   assert.equal(
-    detectRecapCollision(new Date('2026-06-08T11:00:00.000Z')),
+    detectRecapCollision(new Date('2026-06-08T16:00:00.000Z')),
     'weekly',
   );
   assert.equal(
-    detectRecapCollision(new Date('2026-06-09T11:00:00.000Z')),
+    detectRecapCollision(new Date('2026-06-09T16:00:00.000Z')),
     'daily',
   );
   assert.equal(
@@ -93,7 +93,7 @@ test('computeRecapSummary returns record, net units, ROI, and top play for settl
   const summary = await computeRecapSummary(
     'daily',
     repositories,
-    new Date('2026-03-28T11:00:00.000Z'),
+    new Date('2026-03-28T16:00:00.000Z'),
   );
 
   assert.ok(summary);
@@ -125,7 +125,7 @@ test('computeRecapSummary returns null when no settlements land inside the reque
   const summary = await computeRecapSummary(
     'daily',
     repositories,
-    new Date('2026-03-28T11:00:00.000Z'),
+    new Date('2026-03-28T16:00:00.000Z'),
   );
 
   assert.equal(summary, null);
@@ -164,7 +164,7 @@ test('computeRecapSummary includes totalPicks, windowDescription, and sampleCont
   const summary = await computeRecapSummary(
     'daily',
     repositories,
-    new Date('2026-03-28T11:00:00.000Z'),
+    new Date('2026-03-28T16:00:00.000Z'),
   );
 
   assert.ok(summary);
@@ -188,7 +188,7 @@ test('buildRecapEmbed includes Sample field with small-sample caution for fewer 
   const summary = await computeRecapSummary(
     'daily',
     repositories,
-    new Date('2026-03-28T11:00:00.000Z'),
+    new Date('2026-03-28T16:00:00.000Z'),
   );
 
   assert.ok(summary);
@@ -217,7 +217,7 @@ test('computeRecapSummary weekly window produces correct windowDescription and s
   const summary = await computeRecapSummary(
     'weekly',
     repositories,
-    new Date('2026-03-30T11:00:00.000Z'),
+    new Date('2026-03-30T16:00:00.000Z'),
   );
 
   assert.ok(summary);
@@ -252,7 +252,7 @@ test('postRecapSummary defaults recap posts to discord:recaps', async () => {
 
   try {
     const result = await postRecapSummary('daily', repositories, {
-      now: new Date('2026-03-28T11:00:00.000Z'),
+      now: new Date('2026-03-28T16:00:00.000Z'),
       fetchImpl: async (input, init) => {
         capturedUrl = String(input);
         capturedBody = String(init?.body ?? '');
@@ -345,7 +345,7 @@ test('postRecapSummary dry run computes recap without posting to Discord', async
 
   try {
     const result = await postRecapSummary('daily', repositories, {
-      now: new Date('2026-03-28T11:00:00.000Z'),
+      now: new Date('2026-03-28T16:00:00.000Z'),
       fetchImpl: async () => {
         fetchCalled = true;
         throw new Error('dry run must not call fetch');
@@ -375,7 +375,7 @@ test('postRecapSummary dry run computes recap without posting to Discord', async
 
 test('shouldPostRecap suppresses reposts after the current window is marked as posted', () => {
   resetRecapSchedulerStateForTests();
-  const now = new Date('2026-06-09T11:00:00.000Z');
+  const now = new Date('2026-06-09T16:00:00.000Z');
 
   const first = shouldPostRecap(now);
   markRecapPostedForTests('daily', now);
@@ -400,7 +400,7 @@ test('checkAndPostRecaps logs structured error when postRecapSummary throws, doe
   } as unknown as ReturnType<typeof createInMemoryRepositoryBundle>;
 
   // Use a time that triggers daily recap so shouldPostRecap returns 'daily'
-  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+  const postingTime = new Date('2026-06-09T16:00:00.000Z');
 
   // Must not throw
   await checkAndPostRecapsForTests(brokenRepositories, logger, () => postingTime);
@@ -440,7 +440,7 @@ test('checkAndPostRecaps dry run logs summary and does not set the idempotency m
       infoLogs.push(msg);
     },
   };
-  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+  const postingTime = new Date('2026-06-09T16:00:00.000Z');
 
   process.env.RECAP_DRY_RUN = 'true';
   process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
@@ -511,7 +511,7 @@ test('DB-backed idempotency prevents duplicate post after in-memory state is res
     error: (_msg: string) => {},
     info: (msg: string) => { infoLogs.push(msg); },
   };
-  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+  const postingTime = new Date('2026-06-09T16:00:00.000Z');
 
   // First tick — "no settled picks in window" triggers markPosted + recordRecapRun
   await checkAndPostRecapsForTests(repositories, logger, () => postingTime);
@@ -582,7 +582,7 @@ test('checkForMissedRecaps posts catch-up recap for a missed daily trigger after
           infoLogs.push(msg);
         },
       },
-      () => new Date('2026-03-28T13:00:00.000Z'),
+      () => new Date('2026-03-28T17:00:00.000Z'),
     );
 
     const runs = await repositories.runs.listByType('recap.post', 10);
@@ -649,7 +649,7 @@ test('checkForMissedRecaps skips duplicate catch-up when the matching system run
         infoLogs.push(msg);
       },
     },
-    () => new Date('2026-03-28T13:00:00.000Z'),
+    () => new Date('2026-03-28T17:00:00.000Z'),
   );
 
   const dedupLog = infoLogs.find((entry) => {
@@ -671,7 +671,7 @@ test('checkAndPostRecaps writes system_runs record after recap completion', asyn
 
   const repositories = createInMemoryRepositoryBundle();
   const logger = { error: (_msg: string) => {}, info: (_msg: string) => {} };
-  const postingTime = new Date('2026-06-09T11:00:00.000Z');
+  const postingTime = new Date('2026-06-09T16:00:00.000Z');
 
   // Before posting, no recap runs should exist
   const runsBefore = await repositories.runs.listByType('recap.post', 10);
@@ -746,7 +746,7 @@ test('computeRecapSummary uses batched pick lookup instead of N+1 queries', asyn
   const summary = await computeRecapSummary(
     'daily',
     repositories,
-    new Date('2026-03-28T11:00:00.000Z'),
+    new Date('2026-03-28T16:00:00.000Z'),
   );
 
   assert.ok(summary);

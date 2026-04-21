@@ -124,7 +124,7 @@ export function getRecapWindow(period: RecapPeriod, now: Date = new Date()): Rec
 export function detectRecapCollision(
   now: Date,
 ): 'weekly' | 'monthly' | 'combined' | 'daily' | 'none' {
-  if (now.getUTCHours() !== 11 || now.getUTCMinutes() !== 0) {
+  if (now.getUTCHours() !== 16 || now.getUTCMinutes() !== 0) {
     return 'none';
   }
 
