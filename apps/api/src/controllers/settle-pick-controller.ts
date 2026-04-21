@@ -4,6 +4,7 @@ import type { ApiResponse } from '../http.js';
 import { successResponse } from '../http.js';
 import { recordPickSettlement } from '../settlement-service.js';
 import { postSettlementRecapIfPossible } from '../grading-service.js';
+import { loadEnvironment } from '@unit-talk/config';
 
 export interface SettlePickControllerResult {
   pickId: string;
@@ -36,10 +37,13 @@ export async function settlePickController(
 ): Promise<ApiResponse<SettlePickControllerResult>> {
   const result = await recordPickSettlement(pickId, payload, repositories);
 
-  // Fire Discord recap — same downstream as auto-settle; non-fatal if it fails
-  postSettlementRecapIfPossible(result.pickRecord, result.settlementRecord, repositories, {}).catch(
-    () => undefined,
-  );
+  // Fire immediate per-pick Discord recap in non-production environments only.
+  // Production relies on the scheduled batch recap (11 AM EST daily).
+  if (loadEnvironment().UNIT_TALK_APP_ENV !== 'production') {
+    postSettlementRecapIfPossible(result.pickRecord, result.settlementRecord, repositories, {}).catch(
+      () => undefined,
+    );
+  }
 
   return successResponse(201, {
     pickId,

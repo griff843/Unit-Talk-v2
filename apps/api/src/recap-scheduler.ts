@@ -42,14 +42,12 @@ export function shouldPostRecap(now: Date): RecapPeriod | 'combined' | null {
  * Starts the recap scheduler loop. Fires once per minute; posts recap embeds
  * at the ratified UTC schedule:
  *
- *   Daily:          11:00 AM UTC every day
- *   Weekly:         11:00 AM UTC every Monday
- *   Monthly:        11:00 AM UTC on the first day of the month
- *   Combined:       11:00 AM UTC on the first Monday of the month
+ *   Daily:          11:00 AM EST (16:00 UTC) every day
+ *   Weekly:         11:00 AM EST (16:00 UTC) every Monday
+ *   Monthly:        11:00 AM EST (16:00 UTC) on the first day of the month
+ *   Combined:       11:00 AM EST (16:00 UTC) on the first Monday of the month
  *
- * Note: the original `discord_embed_system_spec.md` specified weekly/monthly at
- * 5:00 PM UTC. V2 ratifies 11:00 AM for all periods (simpler, consistent with
- * daily). The spec reference is intentionally superseded here.
+ * EST = UTC-5. Using fixed offset (not EDT) for year-round consistency.
  *
  * Returns a cleanup function that stops the interval (called on SIGINT/SIGTERM).
  */
@@ -274,7 +272,7 @@ async function checkForMissedRecaps(
 }
 
 function detectRecapTrigger(now: Date): RecapPeriod | 'combined' | 'none' {
-  if (now.getUTCHours() !== 11 || now.getUTCMinutes() !== 0) {
+  if (now.getUTCHours() !== 16 || now.getUTCMinutes() !== 0) {
     return 'none';
   }
 
@@ -321,7 +319,7 @@ function latestEligibleTrigger(now: Date) {
       now.getUTCFullYear(),
       now.getUTCMonth(),
       now.getUTCDate(),
-      11,
+      16,
       0,
       0,
       0,
