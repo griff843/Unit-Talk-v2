@@ -1,0 +1,28 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-701",
+  "title": "feat(catalog): NCAAB 1H/2H period market type availability",
+  "tier": "T3",
+  "generated_at": "2026-04-21T01:00:00.000Z",
+  "branch": "claude/utv2-701-ncaab-period-half-market-types",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green (99 pass, 0 fail)"
+  },
+  "root_cause": "NCAAB had no sport_market_type_availability rows for period/half market types. Cross-sport (sport_id=NULL) SGO aliases from UTV2-700 already covered the provider keys, so only availability rows were needed.",
+  "fix": {
+    "file": "supabase/migrations/202604210002_utv2_701_ncaab_period_half_market_types.sql",
+    "change": "Added 6 sport_market_type_availability rows for NCAAB: 1h_moneyline, 1h_spread, 1h_total_ou, 2h_moneyline, 2h_spread, 2h_total_ou. No new aliases required."
+  },
+  "runtime_change_classification": "catalog-data-only",
+  "runtime_change_note": "Pure data migration. No schema changes, no code changes. NCAAB 1H/2H period offers will now resolve to canonical market_type_ids via existing cross-sport aliases.",
+  "db_verification": {
+    "rows_inserted": 6,
+    "query": "SELECT sport_id, market_type_id FROM sport_market_type_availability WHERE sport_id = 'NCAAB' AND market_type_id IN ('1h_moneyline','1h_spread','1h_total_ou','2h_moneyline','2h_spread','2h_total_ou')",
+    "result": "6 rows confirmed"
+  },
+  "artifacts": [
+    "supabase/migrations/202604210002_utv2_701_ncaab_period_half_market_types.sql"
+  ]
+}
