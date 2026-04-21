@@ -20,8 +20,9 @@ import {
   InMemoryPickCandidateRepository,
   InMemoryMarketFamilyTrustRepository,
   InMemoryModelRegistryRepository,
+  InMemoryParticipantRepository,
 } from '@unit-talk/db';
-import type { MarketUniverseRow, PickCandidateRow } from '@unit-talk/db';
+import type { MarketUniverseRow, ParticipantRow, PickCandidateRow } from '@unit-talk/db';
 
 /** Seed a champion model so scoring doesn't skip for missing champion (Phase 7E fail-closed). */
 async function seedChampion(modelRegistry: InMemoryModelRegistryRepository, sport = 'nba', marketFamily = 'player_prop') {
@@ -127,6 +128,22 @@ function makeCandidate(overrides: Partial<PickCandidateRow> = {}): PickCandidate
     expires_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+function makeParticipant(overrides: Partial<ParticipantRow> = {}): ParticipantRow {
+  const now = new Date().toISOString();
+  return {
+    id: 'participant-1',
+    display_name: 'Test Player',
+    external_id: 'player-1',
+    league: null,
+    metadata: {},
+    participant_type: 'player',
+    sport: 'NBA',
+    created_at: now,
+    updated_at: now,
     ...overrides,
   };
 }
@@ -367,4 +384,127 @@ test('P7E: missing champion model skips candidate fail-closed', async () => {
   assert.equal(result.scored, 0, 'no champion → no scoring');
   assert.equal(result.noChampionSkipped, 1, 'candidate skipped for missing champion');
   assert.equal(result.skipped, 1);
+});
+
+test('UTV2-634: fresh confirmed availability keeps player-prop scoring live', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const participants = new InMemoryParticipantRepository([
+    makeParticipant({
+      metadata: {
+        availability: {
+          source: 'sportsdata',
+          status: 'confirmed',
+          lastUpdatedAt: new Date().toISOString(),
+        },
+      },
+    }),
+  ]);
+  await seedChampion(modelRegistry);
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({
+    pickCandidates,
+    marketUniverse,
+    modelRegistry,
+    participants,
+  });
+
+  assert.equal(result.scored, 1);
+  assert.equal(result.availabilityAdjusted, 0);
+  assert.equal(result.availabilityNoDataSkipped, 0);
+});
+
+test('UTV2-634: missing availability data skips player-prop candidates distinctly', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const participants = new InMemoryParticipantRepository([makeParticipant()]);
+  await seedChampion(modelRegistry);
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({
+    pickCandidates,
+    marketUniverse,
+    modelRegistry,
+    participants,
+  });
+
+  assert.equal(result.scored, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.availabilityNoDataSkipped, 1);
+});
+
+test('UTV2-634: questionable availability reduces model confidence from real participant metadata', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const participants = new InMemoryParticipantRepository([
+    makeParticipant({
+      metadata: {
+        availability: {
+          source: 'sportsdata',
+          status: 'questionable',
+          lastUpdatedAt: new Date().toISOString(),
+          injuryNote: 'Hamstring',
+        },
+      },
+    }),
+  ]);
+  await seedChampion(modelRegistry);
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({
+    pickCandidates,
+    marketUniverse,
+    modelRegistry,
+    participants,
+  });
+
+  assert.equal(result.scored, 1);
+  assert.equal(result.availabilityAdjusted, 1);
+
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const updated = rows.get('universe-1');
+  assert.ok(updated, 'candidate should be updated');
+  assert.ok(updated.model_confidence !== null);
+  assert.ok(updated.model_confidence < 0.8);
+});
+
+test('UTV2-634: out availability suppresses scoring instead of degrading silently', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const participants = new InMemoryParticipantRepository([
+    makeParticipant({
+      metadata: {
+        availability: {
+          source: 'sportsdata',
+          status: 'out',
+          lastUpdatedAt: new Date().toISOString(),
+        },
+      },
+    }),
+  ]);
+  await seedChampion(modelRegistry);
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({
+    pickCandidates,
+    marketUniverse,
+    modelRegistry,
+    participants,
+  });
+
+  assert.equal(result.scored, 0);
+  assert.equal(result.availabilitySuppressed, 1);
 });
