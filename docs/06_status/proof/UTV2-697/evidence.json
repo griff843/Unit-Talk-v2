@@ -1,0 +1,20 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-697",
+  "title": "Live game badge and offer panel fallback in smart-form",
+  "tier": "T3",
+  "generated_at": "2026-04-20T23:00:00.000Z",
+  "branch": "claude/utv2-697-live-game-badge-offer-panel",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green"
+  },
+  "runtime_change_classification": "ui-display-and-offer-window",
+  "runtime_change_note": "runtime-repositories.ts change extends the offer lookup window to 6h for live games (was 2h). No lifecycle, submission, atomic RPCs, or settlement paths changed. UI changes are purely presentational (LIVE badge, stale indicator, fallback message).",
+  "artifacts": [
+    "apps/smart-form/app/submit/components/BetForm.tsx",
+    "apps/smart-form/lib/api-client.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ]
+}

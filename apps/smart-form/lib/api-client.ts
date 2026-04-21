@@ -189,8 +189,17 @@ export async function getMatchups(sportId: string, date: string): Promise<Matchu
   return readJsonResponse<MatchupBrowseResult[]>(res, 'Matchups unavailable');
 }
 
-export async function getEventBrowse(eventId: string): Promise<EventBrowseResult> {
-  const res = await fetch(`${API}/api/reference-data/events/${encodeURIComponent(eventId)}/browse`);
+export async function getEventBrowse(
+  eventId: string,
+  options?: { recentSince?: string },
+): Promise<EventBrowseResult> {
+  const params = new URLSearchParams();
+  if (options?.recentSince) {
+    params.set('recentSince', options.recentSince);
+  }
+
+  const query = params.size > 0 ? `?${params.toString()}` : '';
+  const res = await fetch(`${API}/api/reference-data/events/${encodeURIComponent(eventId)}/browse${query}`);
   return readJsonResponse<EventBrowseResult>(res, 'Event browse unavailable');
 }
 

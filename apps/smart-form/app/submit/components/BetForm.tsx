@@ -66,6 +66,8 @@ const TODAY = new Date().toISOString().slice(0, 10);
 const PARTICIPANT_QUERY_MIN = 2;
 const BROWSE_SEARCH_MIN = 2;
 const OFFER_STALE_MINUTES = 30;
+const OFFER_STALE_NOTE_MINUTES = 120;
+const LIVE_OFFER_RECENCY_HOURS = 6;
 const DEFAULT_OPERATOR_SPORTSBOOK_ID = 'fanatics';
 const PRIMARY_SPORTSBOOKS = ['fanatics', 'fanduel', 'draftkings', 'bet365', 'betmgm', 'pinnacle', 'bovada'] as const;
 const CONVICTION_PRESETS = [6, 7, 8, 9, 10] as const;
@@ -182,6 +184,57 @@ function getOfferAgeMinutes(snapshotAt: string) {
     return null;
   }
   return Math.max(0, Math.floor((Date.now() - parsed) / 60000));
+}
+
+function isLiveGame(matchup: Pick<MatchupBrowseResult, 'startTime' | 'status'> | null | undefined) {
+  if (!matchup?.startTime) {
+    return false;
+  }
+
+  const startTime = Date.parse(matchup.startTime);
+  if (Number.isNaN(startTime) || startTime >= Date.now()) {
+    return false;
+  }
+
+  const status = matchup.status.trim().toLocaleLowerCase();
+  return status !== 'final' && status !== 'cancelled';
+}
+
+function buildEventBrowseOptions(matchup: MatchupBrowseResult | null) {
+  if (!isLiveGame(matchup)) {
+    return undefined;
+  }
+
+  return {
+    recentSince: new Date(Date.now() - LIVE_OFFER_RECENCY_HOURS * 60 * 60 * 1000).toISOString(),
+  };
+}
+
+function getLatestOfferSnapshotAt(eventBrowse: EventBrowseResult | null) {
+  if (!eventBrowse || eventBrowse.offers.length === 0) {
+    return null;
+  }
+
+  return eventBrowse.offers
+    .map((offer) => offer.snapshotAt)
+    .filter((snapshotAt) => !Number.isNaN(Date.parse(snapshotAt)))
+    .sort((left, right) => Date.parse(right) - Date.parse(left))[0] ?? null;
+}
+
+function formatOfferSnapshotTime(snapshotAt: string) {
+  return new Date(snapshotAt).toLocaleTimeString([], {
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function isOfferSnapshotStale(snapshotAt: string | null) {
+  if (!snapshotAt) {
+    return false;
+  }
+
+  const ageMinutes = getOfferAgeMinutes(snapshotAt);
+  return ageMinutes !== null && ageMinutes > OFFER_STALE_NOTE_MINUTES;
 }
 
 function buildOfferStatus(eventBrowse: EventBrowseResult | null, filteredCount?: number) {
@@ -978,6 +1031,8 @@ export function BetForm() {
     ];
   }, [availableStatTypes, eventBrowse, selectedMarketType, selectedOfferParticipantId]);
   const offerStatus = buildOfferStatus(eventBrowse, filteredOffers.length);
+  const latestOfferSnapshotAt = getLatestOfferSnapshotAt(eventBrowse);
+  const isLatestOfferSnapshotStale = isOfferSnapshotStale(latestOfferSnapshotAt);
   const hasInlineGuidedMarket =
     browseMode === 'live-offer' &&
     Boolean(selectedMatchup) &&
@@ -1154,7 +1209,7 @@ export function BetForm() {
       });
     }, 10000);
 
-    getEventBrowse(selectedMatchupId)
+    getEventBrowse(selectedMatchupId, buildEventBrowseOptions(selectedMatchup))
       .then((result) => {
         if (!active) return;
         window.clearTimeout(timeoutId);
@@ -1821,6 +1876,7 @@ export function BetForm() {
               <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
                 {browseSearchResults.map((result) => {
                   const isSelected = result.matchup.eventId === selectedMatchupId;
+                  const isLive = isLiveGame(result.matchup);
 
                   return (
                     <button
@@ -1844,6 +1900,11 @@ export function BetForm() {
                           <p className="text-xs text-muted-foreground">{result.contextLabel}</p>
                           <p className="text-xs text-muted-foreground">
                             {formatMatchup(result.matchup)} · {formatSearchTimestamp(result.matchup.eventDate)}
+                            {isLive ? (
+                              <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
+                                LIVE
+                              </span>
+                            ) : null}
                           </p>
                         </div>
                         <span className="rounded-full bg-muted px-2.5 py-1 text-[11px] font-semibold tracking-wide text-muted-foreground">
@@ -1871,6 +1932,7 @@ export function BetForm() {
           <div className="grid max-h-80 gap-2 overflow-y-auto pr-1">
             {matchups.map((matchup) => {
               const isSelected = matchup.eventId === selectedMatchupId;
+              const isLive = isLiveGame(matchup);
               return (
                 <button
                   key={matchup.eventId}
@@ -1888,6 +1950,11 @@ export function BetForm() {
                       <p className="font-medium text-foreground">{formatMatchup(matchup)}</p>
                       <p className="text-xs text-muted-foreground">
                         {formatTimestampLabel(matchup.startTime ?? matchup.eventDate)} · {matchup.status}
+                        {isLive ? (
+                          <span className="ml-2 rounded bg-red-600 px-1.5 py-0.5 text-xs font-bold text-white">
+                            LIVE
+                          </span>
+                        ) : null}
                       </p>
                     </div>
                     {matchup.leagueId ? (
@@ -1931,12 +1998,23 @@ export function BetForm() {
 
             {eventBrowseError ? <p className="text-sm text-destructive">{eventBrowseError}</p> : null}
 
-            {eventBrowse && availableOfferFamilies.length > 0 ? (
+            {isLatestOfferSnapshotStale && latestOfferSnapshotAt ? (
+              <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3 text-sm font-medium text-amber-200">
+                Odds as of {formatOfferSnapshotTime(latestOfferSnapshotAt)}
+              </div>
+            ) : null}
+
+            {eventBrowse ? (
               <div className="space-y-4">
                 <div className="space-y-2">
                   <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
                     Market Family
                   </p>
+                  {eventBrowse.offers.length === 0 ? (
+                    <p className="rounded-lg border border-dashed border-border bg-background/60 px-4 py-3 text-sm text-muted-foreground">
+                      No live odds available — enter manually
+                    </p>
+                  ) : null}
                   <MarketTypeGrid
                     availableTypes={visibleMarketFamilies}
                     selected={selectedMarketType}
@@ -2292,7 +2370,7 @@ export function BetForm() {
 
                           setIsRefreshingOffers(true);
                           setSelectedOffer(null);
-                          getEventBrowse(selectedMatchupId)
+                          getEventBrowse(selectedMatchupId, buildEventBrowseOptions(selectedMatchup))
                             .then(setEventBrowse)
                             .catch((error: unknown) => {
                               setEventBrowseError(
