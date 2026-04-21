@@ -130,10 +130,17 @@ export async function runGradingPass(
         continue;
       }
 
+      // Normalize SGO raw provider key → canonical market_type_id if needed
+      let marketKey = pick.market;
+      const canonicalKey = await repositories.providerOffers.resolveCanonicalMarketKey(pick.market, 'sgo');
+      if (canonicalKey) {
+        marketKey = canonicalKey;
+      }
+
       const gameResult = await repositories.gradeResults.findResult({
         eventId: event.id,
         participantId: resolvedParticipantId,
-        marketKey: pick.market,
+        marketKey,
       });
 
       if (!gameResult) {
