@@ -1,0 +1,56 @@
+services:
+  api:
+    build:
+      context: .
+      target: api
+    image: unit-talk/api:local
+    ports:
+      - "4001:4000"
+    env_file:
+      - .env.container
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  worker:
+    build:
+      context: .
+      target: worker
+    image: unit-talk/worker:local
+    env_file:
+      - .env.container
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  ingestor:
+    build:
+      context: .
+      target: ingestor
+    image: unit-talk/ingestor:local
+    env_file:
+      - .env.container
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  discord-bot:
+    build:
+      context: .
+      target: discord-bot
+    image: unit-talk/discord-bot:local
+    env_file:
+      - .env.container
+    # on-failure without max_attempts cap — Compose standalone doesn't support
+    # deploy.restart_policy.max_attempts outside Swarm mode. Monitor logs for
+    # repeated Discord gateway auth failures.
+    restart: on-failure
+    depends_on:
+      api:
+        condition: service_healthy
