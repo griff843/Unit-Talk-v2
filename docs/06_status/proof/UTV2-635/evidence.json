@@ -1,0 +1,51 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-635",
+  "title": "Template-based pick narrative generation",
+  "tier": "T2",
+  "generated_at": "2026-04-21T14:30:00.000Z",
+  "branch": "claude/utv2-635-pick-explanation",
+  "merge_sha": "5667850a4e2f078aa107e20ddfe890a7de5047a4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/415",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green",
+    "lint": "green"
+  },
+  "test_evidence": {
+    "file": "packages/domain/src/pick-narrative.test.ts",
+    "tests_run": 10,
+    "tests_passed": 10,
+    "tests_failed": 0,
+    "cases": [
+      "qualified: includes edge phrase, trust, score, and target",
+      "qualified: SGO edge source produces SGO label",
+      "qualified: explicit edge source",
+      "qualified: confidence-fallback edge source",
+      "qualified: exclusive-insights target",
+      "suppressed: board cap reason",
+      "suppressed: score below threshold",
+      "suppressed: gate failure",
+      "suppressed: no reasons falls back to score line",
+      "narrative is always a non-empty string"
+    ]
+  },
+  "acceptance_criteria": {
+    "per_pick_explanations_from_real_inputs": "generatePickNarrative() derives output entirely from PickNarrativeInput — score, breakdown, edgeSource, suppressionReasons",
+    "concise_specific_traceable": "1-3 sentence output, every sentence maps 1:1 to a signal value",
+    "market_vs_matchup_reasons": "edgeSourceQuality distinguishes market-backed vs explicit vs confidence-derived",
+    "no_hallucination": "Pure template logic — no AI generation, no LLM calls, deterministic output"
+  },
+  "wiring": {
+    "domain_export": "packages/domain/src/index.ts exports generatePickNarrative",
+    "service_integration": "apps/api/src/promotion-service.ts payload.narrative field populated on every promotion decision"
+  },
+  "runtime_change_classification": "new-pure-function + service-payload-extension",
+  "artifacts": [
+    "packages/domain/src/pick-narrative.ts",
+    "packages/domain/src/pick-narrative.test.ts",
+    "packages/domain/src/index.ts",
+    "apps/api/src/promotion-service.ts"
+  ]
+}
