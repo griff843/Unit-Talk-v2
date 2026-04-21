@@ -40,9 +40,15 @@ const SHARP_WEIGHTS: Record<string, number> = {
 /**
  * Compute equal-weight and sharp-weighted consensus from provider offers.
  * Returns null if fewer than 2 usable books.
+ *
+ * @param providerTrustContext - Optional map of provider → trust multiplier
+ *   (from buildProviderTrustContext in provider-quality.ts). When supplied,
+ *   each provider's sharp weight is scaled by its multiplier so degraded
+ *   providers contribute less to the weighted consensus.
  */
 export function computeSharpConsensus(
   offers: ProviderOfferSlim[],
+  providerTrustContext?: Record<string, number>,
 ): SharpConsensusResult | null {
   const bookProbs: { prob: number; weight: number }[] = [];
 
@@ -57,7 +63,9 @@ export function computeSharpConsensus(
     if (!devigged) continue;
 
     const profile = getBookProfile(offer.provider);
-    const weight = SHARP_WEIGHTS[profile.profile] ?? 1.0;
+    const baseWeight = SHARP_WEIGHTS[profile.profile] ?? 1.0;
+    const trustMultiplier = providerTrustContext?.[offer.provider.toLowerCase()] ?? 1.0;
+    const weight = baseWeight * trustMultiplier;
 
     bookProbs.push({ prob: devigged.overFair, weight });
   }

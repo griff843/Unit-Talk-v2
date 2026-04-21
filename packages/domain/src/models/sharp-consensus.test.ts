@@ -63,4 +63,29 @@ describe('computeSharpConsensus', () => {
     assert.ok(result !== null);
     assert.ok([-1, 0, 1].includes(result!.sharp_direction));
   });
+
+  it('provider trust context reduces degraded provider contribution', () => {
+    const offers = [
+      makeOffer({ provider: 'pinnacle', over_odds: -105, under_odds: -115 }),
+      makeOffer({ provider: 'betmgm', over_odds: -115, under_odds: -105 }),
+    ];
+    const withoutTrust = computeSharpConsensus(offers);
+    // betmgm degraded → its weight drops from 1.0 * retail(1.0) to 1.0 * 0.70
+    const withTrust = computeSharpConsensus(offers, { betmgm: 0.7 });
+    assert.ok(withoutTrust !== null && withTrust !== null);
+    // p_sharp should differ when a book's effective weight changes
+    assert.notEqual(withTrust.p_sharp, withoutTrust.p_sharp);
+  });
+
+  it('trust context of 1.0 for all providers produces identical result', () => {
+    const offers = [
+      makeOffer({ provider: 'pinnacle', over_odds: -105, under_odds: -115 }),
+      makeOffer({ provider: 'fanduel', over_odds: -110, under_odds: -110 }),
+    ];
+    const withoutTrust = computeSharpConsensus(offers);
+    const withFullTrust = computeSharpConsensus(offers, { pinnacle: 1.0, fanduel: 1.0 });
+    assert.ok(withoutTrust !== null && withFullTrust !== null);
+    assert.equal(withFullTrust.p_sharp, withoutTrust.p_sharp);
+    assert.equal(withFullTrust.p_equal, withoutTrust.p_equal);
+  });
 });
