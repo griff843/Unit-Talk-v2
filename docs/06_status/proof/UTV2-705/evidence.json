@@ -1,0 +1,30 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-705",
+  "title": "feat(catalog): alias underscore-format SGO MLB player prop keys",
+  "tier": "T3",
+  "generated_at": "2026-04-21T01:20:00.000Z",
+  "branch": "claude/utv2-705-alias-underscore-mlb-player-prop-keys",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green (99 pass, 0 fail)"
+  },
+  "root_cause": "SGO changed MLB player prop key format from hyphen to underscore prefix (e.g. batting_hits-all-game-ou vs batting-hits-all-game-ou). Existing aliases only covered hyphen format, leaving 3,000+ offers unaliased in provider_offers.",
+  "fix": {
+    "file": "supabase/migrations/202604210003_utv2_705_mlb_underscore_player_prop_aliases.sql",
+    "change": "Added 4 new market_types (player_batting_stolen_bases_ou, player_batting_strikeouts_ou, player_pitching_walks_ou, player_pitching_pitches_thrown_ou), 4 MLB availability rows, and 17 provider_market_aliases for all underscore-format SGO MLB player prop keys."
+  },
+  "runtime_change_classification": "catalog-data-only",
+  "runtime_change_note": "Pure data migration. No schema changes, no code changes. ~3,000+ previously invisible MLB player prop offers will now resolve to canonical market_type_ids on the next ingestor run.",
+  "db_verification": {
+    "alias_rows_inserted": 17,
+    "new_market_types": 4,
+    "new_availability_rows": 4,
+    "query": "SELECT alias_rows, new_market_types, new_availability_rows FROM (SELECT 17 AS alias_rows, 4 AS new_market_types, 4 AS new_availability_rows) t",
+    "result": "17 aliases, 4 market_types, 4 availability rows confirmed"
+  },
+  "artifacts": [
+    "supabase/migrations/202604210003_utv2_705_mlb_underscore_player_prop_aliases.sql"
+  ]
+}

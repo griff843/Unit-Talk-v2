@@ -335,7 +335,7 @@ function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
     : Number.POSITIVE_INFINITY;
 }
 
-async function postSettlementRecapIfPossible(
+export async function postSettlementRecapIfPossible(
   pick: PickRecord,
   settlementRecord: SettlementRecord,
   repositories: Pick<RepositoryBundle, 'outbox' | 'receipts' | 'runs'>,
