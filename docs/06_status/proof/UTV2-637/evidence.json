@@ -1,0 +1,30 @@
+{
+  "schema_version": "evidence-bundle/v1",
+  "issue_id": "UTV2-637",
+  "tier": "T1",
+  "branch": "claude/utv2-637-execution-map",
+  "merge_sha": null,
+  "generated_at": "2026-04-21T15:30:00.000Z",
+  "verification": {
+    "type_check": "pass",
+    "tests": "pass",
+    "governance": {
+      "execution_map_created": "docs/05_operations/EXECUTION_MAP.md",
+      "phases_documented": 8,
+      "sequencing_rules_encoded": true,
+      "lane_rules_explicit": true,
+      "non_negotiable_gates": [
+        "No elite claim before UTV2-590 passes",
+        "No human-like claim before UTV2-633–636 materially pass",
+        "No syndicate PASS before UTV2-595 passes"
+      ],
+      "claude_md_updated": true
+    }
+  },
+  "files_changed": [
+    "docs/05_operations/EXECUTION_MAP.md",
+    "CLAUDE.md",
+    "docs/06_status/lanes/UTV2-637.json",
+    "docs/06_status/proof/UTV2-637/evidence.json"
+  ]
+}
