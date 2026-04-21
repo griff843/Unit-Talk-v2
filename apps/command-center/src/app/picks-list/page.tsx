@@ -5,6 +5,7 @@ import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { Card } from '@/components/ui/Card';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
+import { InlineSettleButton } from '@/components/InlineSettleButton';
 
 const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
@@ -95,6 +96,9 @@ function PickResultRow({ pick }: { pick: Record<string, unknown> }) {
       <td className="py-3 pr-3 align-top text-xs text-gray-300">{reviewDecision ?? '—'}</td>
       <td className="py-3 pr-3 align-top text-xs text-gray-300">{settlementResult ?? '—'}</td>
       <td className="py-3 align-top text-xs text-gray-400">{new Date(createdAt).toLocaleDateString()}</td>
+      <td className="py-3 align-top">
+        {status === 'posted' && <InlineSettleButton pickId={id} />}
+      </td>
     </tr>
   );
 }
@@ -157,7 +161,8 @@ export default async function PicksListPage({
                     <th className="py-2 pr-3">Approval</th>
                     <th className="py-2 pr-3">Review</th>
                     <th className="py-2 pr-3">Result</th>
-                    <th className="py-2">Created</th>
+                    <th className="py-2 pr-3">Created</th>
+                    <th className="py-2">Settle</th>
                   </tr>
                 </thead>
                 <tbody>

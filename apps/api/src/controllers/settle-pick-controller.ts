@@ -3,6 +3,7 @@ import type { RepositoryBundle } from '@unit-talk/db';
 import type { ApiResponse } from '../http.js';
 import { successResponse } from '../http.js';
 import { recordPickSettlement } from '../settlement-service.js';
+import { postSettlementRecapIfPossible } from '../grading-service.js';
 
 export interface SettlePickControllerResult {
   pickId: string;
@@ -34,6 +35,11 @@ export async function settlePickController(
   repositories: RepositoryBundle,
 ): Promise<ApiResponse<SettlePickControllerResult>> {
   const result = await recordPickSettlement(pickId, payload, repositories);
+
+  // Fire Discord recap — same downstream as auto-settle; non-fatal if it fails
+  postSettlementRecapIfPossible(result.pickRecord, result.settlementRecord, repositories, {}).catch(
+    () => undefined,
+  );
 
   return successResponse(201, {
     pickId,
