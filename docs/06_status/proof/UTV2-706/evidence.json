@@ -1,0 +1,27 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-706",
+  "title": "docs(ops): NRFI/YRFI SGO gap documented",
+  "tier": "T3",
+  "generated_at": "2026-04-21T01:10:00.000Z",
+  "branch": "claude/utv2-706-nrfi-gap-documented",
+  "verification": {
+    "pnpm_verify": "green (no code changes)",
+    "type_check": "green",
+    "tests": "green"
+  },
+  "root_cause": "SGO does not provide a dedicated NRFI/YRFI boolean market key for MLB. No nrfi, yrfi, -yn, or yes/no first-inning variants exist in the SGO MLB offer set.",
+  "fix": {
+    "file": "docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md",
+    "change": "Added §2026-04-21 NRFI/YRFI gap entry: confirmed absence of SGO key, documented closest proxy (points-all-1i-ou at line ≤0.5), flagged derivation path and SGO support request as required next steps. Added future unlock row."
+  },
+  "runtime_change_classification": "docs-only",
+  "runtime_change_note": "No schema, code, or data changes. Gap documented; no implementation until SGO confirms availability or derivation approach is ratified.",
+  "db_verification": {
+    "query": "SELECT DISTINCT provider_market_key FROM provider_offers WHERE sport_key = 'MLB' AND provider_market_key ILIKE ANY(ARRAY['%nrfi%','%yrfi%','%-yn%','%firstInning%'])",
+    "result": "0 rows — confirmed absence"
+  },
+  "artifacts": [
+    "docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md"
+  ]
+}
