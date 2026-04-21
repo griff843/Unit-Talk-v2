@@ -2441,3 +2441,113 @@ test('processShadowSubmission records a shadow capture audit row', async () => {
   assert.equal(capturedAuditAction, 'shadow.prediction.recorded');
   assert.equal(capturedAuditRef, result.pick.id);
 });
+
+// ─── Event existence gate tests ───────────────────────────────────────────────
+
+test('event gate: pick with matching event in populated repo is accepted', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // Seed a real event so the gate is active
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-lakers-celtics-001',
+    sportId: 'nba',
+    eventName: 'Lakers vs Celtics',
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'NBA Player Props',
+      selection: 'LeBron James Over 25.5 pts',
+      odds: -110,
+      confidence: 0.72,
+      eventName: 'Lakers vs Celtics',
+      metadata: { sport: 'NBA' },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.lifecycleState, 'validated');
+});
+
+test('event gate: pick with unknown eventName is rejected when events repo is populated', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // Seed an event (activates the gate) but for a different game
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-knicks-heat-001',
+    sportId: 'nba',
+    eventName: 'Knicks vs Heat',
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  await assert.rejects(
+    () => processSubmission(
+      {
+        source: 'smart-form',
+        market: 'NBA Player Props',
+        selection: 'LeBron James Over 25.5 pts',
+        odds: -110,
+        confidence: 0.72,
+        eventName: 'Lakers vs Celtics',  // does not match seeded event
+        metadata: { sport: 'NBA' },
+      },
+      repositories,
+    ),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('EVENT_NOT_FOUND') || err.message.includes('Lakers vs Celtics'));
+      return true;
+    },
+  );
+});
+
+test('event gate: pick without eventName is accepted even when events repo is populated', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-any-001',
+    sportId: 'nba',
+    eventName: 'Any Game',
+    eventDate: new Date().toISOString().slice(0, 10),
+    status: 'scheduled',
+    metadata: {},
+  });
+
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'NBA Player Props',
+      selection: 'Player Over 10.5 pts',
+      odds: -110,
+      confidence: 0.65,
+      // no eventName
+      metadata: { sport: 'NBA' },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.lifecycleState, 'validated');
+});
+
+test('event gate: pick with eventName is accepted when events repo is empty (cold start)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // events repo is empty — gate is skipped
+
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'NBA Player Props',
+      selection: 'Player Over 10.5 pts',
+      odds: -110,
+      confidence: 0.65,
+      eventName: 'Nonexistent Game',
+      metadata: { sport: 'NBA' },
+    },
+    repositories,
+  );
+
+  assert.equal(result.pick.lifecycleState, 'validated');
+});

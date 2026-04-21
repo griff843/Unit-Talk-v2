@@ -8,6 +8,7 @@ import type {
 import {
   mapValidatedSubmissionToSubmissionCreateInput,
   type AuditLogRepository,
+  type EventRepository,
   type PickLifecycleRecord,
   type PickRecord,
   type PickRepository,
@@ -18,6 +19,7 @@ import {
   type SubmissionRecord,
   type SubmissionRepository,
 } from '@unit-talk/db';
+import { ApiError } from './errors.js';
 import {
   americanToImplied,
   americanToDecimal,
@@ -84,7 +86,7 @@ export async function processSubmission(
     providerOffers: ProviderOfferRepository;
     settlements?: SettlementRepository;
     participants?: import('@unit-talk/db').ParticipantRepository;
-    events?: import('@unit-talk/db').EventRepository;
+    events?: EventRepository;
   },
 ): Promise<SubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -134,6 +136,20 @@ export async function processSubmission(
       lifecycleEventRecord: {} as PickLifecycleRecord,
       duplicate: true,
     };
+  }
+
+  // Event existence gate: for human submission surfaces (smart-form, alert-agent), if the
+  // events repository has been populated and the pick specifies an eventName, verify a
+  // matching event exists before accepting.
+  // Gate is skipped for api/model-driven/other sources and when the events repo is empty.
+  const isHumanSource = payload.source === 'smart-form' || payload.source === 'alert-agent';
+  if (
+    isHumanSource &&
+    repositories.events &&
+    typeof payload.eventName === 'string' &&
+    payload.eventName.trim().length > 0
+  ) {
+    await checkEventExistenceGate(payload.eventName.trim(), repositories.events);
   }
 
   const submission = createValidatedSubmission(nextSubmissionId(), {
@@ -322,7 +338,7 @@ export async function processShadowSubmission(
     audit: AuditLogRepository;
     providerOffers: ProviderOfferRepository;
     participants?: import('@unit-talk/db').ParticipantRepository;
-    events?: import('@unit-talk/db').EventRepository;
+    events?: EventRepository;
   },
 ): Promise<ShadowSubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
@@ -661,6 +677,26 @@ async function resolveParticipantIdentityContext(
       team: null,
       sport: null,
     };
+  }
+}
+
+/**
+ * Rejects the submission with a 422 when the events table has data but contains
+ * no event matching the given name. Skipped when the events repository is empty
+ * (cold start before first ingest, or InMemory tests without seeded events).
+ */
+async function checkEventExistenceGate(eventName: string, events: EventRepository): Promise<void> {
+  const upcoming = await events.listUpcoming(undefined, 90);
+  if (upcoming.length === 0) {
+    return;
+  }
+  const matching = await events.listByName(eventName);
+  if (matching.length === 0) {
+    throw new ApiError(
+      422,
+      'EVENT_NOT_FOUND',
+      `No event found matching "${eventName}" — verify the event name and try again`,
+    );
   }
 }
 
