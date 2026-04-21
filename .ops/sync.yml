@@ -1,9 +1,7 @@
 version: 1
 approval:
   allow_multiple_issues: false
-  skip_sync_required: false
+  skip_sync_required: true
 entities:
-  issues:
-    - UTV2-573
-  proofs:
-    - UTV2-573
+  issues: []
+  proofs: []
