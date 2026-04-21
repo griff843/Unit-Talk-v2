@@ -88,10 +88,10 @@ jobs:
           if [ "$status" = "done" ]; then
             echo "::notice title=post-merge-lane-close::Lane already done. Skipping."
             echo "closeable=false" >> "$GITHUB_OUTPUT"
-          elif [ "$status" = "in_review" ] || [ "$status" = "merged" ]; then
+          elif [ "$status" = "in_review" ] || [ "$status" = "merged" ] || [ "$status" = "started" ] || [ "$status" = "in_progress" ] || [ "$status" = "reopened" ]; then
             echo "closeable=true" >> "$GITHUB_OUTPUT"
           else
-            echo "::notice title=post-merge-lane-close::Status '$status' is not closeable (expected in_review or merged). Skipping."
+            echo "::notice title=post-merge-lane-close::Status '$status' is not closeable. Skipping."
             echo "closeable=false" >> "$GITHUB_OUTPUT"
           fi
 
