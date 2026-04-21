@@ -16,7 +16,12 @@
  * - Never calls promotion/distribution/settlement services
  */
 
-import { computeModelBlend, initialBandAssignment } from '@unit-talk/domain';
+import {
+  computeModelBlend,
+  evaluateAvailabilityConfidence,
+  initialBandAssignment,
+  type PlayerAvailability,
+} from '@unit-talk/domain';
 import type {
   IPickCandidateRepository,
   IMarketUniverseRepository,
@@ -26,6 +31,8 @@ import type {
   ModelRegistryRecord,
   ExperimentLedgerRepository,
   ModelScoreUpdate,
+  ParticipantRepository,
+  ParticipantRow,
 } from '@unit-talk/db';
 
 export interface ScoringResult {
@@ -33,6 +40,9 @@ export interface ScoringResult {
   skipped: number;
   errors: number;
   trustAdjusted: number;
+  availabilityAdjusted: number;
+  availabilityNoDataSkipped: number;
+  availabilitySuppressed: number;
   championResolved: number;
   noChampionSkipped: number;
   shadowRecorded: number;
@@ -80,6 +90,7 @@ export class CandidateScoringService {
       marketFamilyTrust?: IMarketFamilyTrustRepository;
       modelRegistry?: ModelRegistryRepository;
       experimentLedger?: ExperimentLedgerRepository;
+      participants?: ParticipantRepository;
     },
   ) {}
 
@@ -98,12 +109,12 @@ export class CandidateScoringService {
         event: 'load_failed',
         error: err instanceof Error ? err.message : String(err),
       }));
-      return { scored: 0, skipped: 0, errors: 1, trustAdjusted: 0, championResolved: 0, noChampionSkipped: 0, shadowRecorded: 0, calibration: null, durationMs: Date.now() - startMs };
+      return makeEmptyResult({ errors: 1, durationMs: Date.now() - startMs });
     }
 
     if (candidates.length === 0) {
       logger?.info?.(JSON.stringify({ service: 'candidate-scoring', event: 'no_unscored_candidates' }));
-      return { scored: 0, skipped: 0, errors: 0, trustAdjusted: 0, championResolved: 0, noChampionSkipped: 0, shadowRecorded: 0, calibration: null, durationMs: Date.now() - startMs };
+      return makeEmptyResult({ durationMs: Date.now() - startMs });
     }
 
     // Bulk-load market universe rows
@@ -117,7 +128,11 @@ export class CandidateScoringService {
         event: 'universe_load_failed',
         error: err instanceof Error ? err.message : String(err),
       }));
-      return { scored: 0, skipped: candidates.length, errors: 1, trustAdjusted: 0, championResolved: 0, noChampionSkipped: 0, shadowRecorded: 0, calibration: null, durationMs: Date.now() - startMs };
+      return makeEmptyResult({
+        skipped: candidates.length,
+        errors: 1,
+        durationMs: Date.now() - startMs,
+      });
     }
 
     const universeMap = new Map(universeRows.map(r => [r.id, r]));
@@ -128,6 +143,9 @@ export class CandidateScoringService {
     let skipped = 0;
     let errors = 0;
     let trustAdjusted = 0;
+    let availabilityAdjusted = 0;
+    let availabilityNoDataSkipped = 0;
+    let availabilitySuppressed = 0;
     let championResolved = 0;
     let noChampionSkipped = 0;
     let shadowRecorded = 0;
@@ -196,7 +214,37 @@ export class CandidateScoringService {
           selectionScore: model_score * 100,
         });
 
-        const model_confidence = Math.max(0, 1 - uncertainty);
+        let model_confidence = Math.max(0, 1 - uncertainty);
+        const availability = await this.evaluateAvailability(universe, logger);
+        if (availability.status === 'missing') {
+          skipped++;
+          availabilityNoDataSkipped++;
+          logger?.info?.(JSON.stringify({
+            service: 'candidate-scoring',
+            event: 'availability_no_data_skip',
+            candidateId: candidate.id,
+            participantId: universe.participant_id,
+            reason: availability.reason,
+          }));
+          continue;
+        }
+        if (availability.status === 'suppress') {
+          skipped++;
+          availabilitySuppressed++;
+          logger?.info?.(JSON.stringify({
+            service: 'candidate-scoring',
+            event: 'availability_suppressed',
+            candidateId: candidate.id,
+            participantId: universe.participant_id,
+            reason: availability.reason,
+          }));
+          continue;
+        }
+        if (availability.status === 'adjust') {
+          model_score = Math.max(0, Math.min(1, model_score * availability.confidenceMultiplier));
+          model_confidence = Math.max(0, Math.min(1, model_confidence * availability.confidenceMultiplier));
+          availabilityAdjusted++;
+        }
 
         updates.push({
           id: candidate.id,
@@ -209,7 +257,14 @@ export class CandidateScoringService {
         // Phase 7D: shadow comparison — record if both champion and shadow exist
         if (champion && this.repos.experimentLedger) {
           const shadowRecordResult = await this.recordShadowComparison(
-            candidate.id, universe.sport_key, marketFamily, champion, model_score, bandResult.band, logger,
+            candidate.id,
+            universe.sport_key,
+            marketFamily,
+            champion,
+            model_score,
+            bandResult.band,
+            availability.status === 'adjust' ? availability : null,
+            logger,
           );
           if (shadowRecordResult) shadowRecorded++;
         }
@@ -261,11 +316,80 @@ export class CandidateScoringService {
       service: 'candidate-scoring',
       event: 'run.completed',
       scored, skipped, errors, trustAdjusted, championResolved, noChampionSkipped, shadowRecorded,
+      availabilityAdjusted, availabilityNoDataSkipped, availabilitySuppressed,
       calibration,
       durationMs: Date.now() - startMs,
     }));
 
-    return { scored, skipped, errors, trustAdjusted, championResolved, noChampionSkipped, shadowRecorded, calibration, durationMs: Date.now() - startMs };
+    return {
+      scored,
+      skipped,
+      errors,
+      trustAdjusted,
+      availabilityAdjusted,
+      availabilityNoDataSkipped,
+      availabilitySuppressed,
+      championResolved,
+      noChampionSkipped,
+      shadowRecorded,
+      calibration,
+      durationMs: Date.now() - startMs,
+    };
+  }
+
+  private async evaluateAvailability(
+    universe: { participant_id: string | null; market_type_id: string | null },
+    logger?: Pick<Console, 'info' | 'warn' | 'error'>,
+  ): Promise<CandidateAvailabilityDecision> {
+    if (!this.repos.participants || !isPlayerPropMarket(universe.market_type_id)) {
+      return { status: 'not_applicable' };
+    }
+
+    if (!universe.participant_id) {
+      return { status: 'missing', reason: 'missing_participant_id' };
+    }
+
+    let participant: ParticipantRow | null = null;
+    try {
+      participant = await this.repos.participants.findById(universe.participant_id);
+    } catch (err) {
+      logger?.warn?.(JSON.stringify({
+        service: 'candidate-scoring',
+        event: 'availability_load_failed',
+        participantId: universe.participant_id,
+        error: err instanceof Error ? err.message : String(err),
+      }));
+      return { status: 'missing', reason: 'availability_load_failed' };
+    }
+
+    const availability = readAvailabilityFromParticipant(participant);
+    if (!availability) {
+      return { status: 'missing', reason: 'availability_no_data' };
+    }
+
+    const evaluated = evaluateAvailabilityConfidence(availability);
+    if (evaluated.recommendationAdjustment === 'suppress' || evaluated.recommendationAdjustment === 'hold') {
+      return {
+        status: 'suppress',
+        reason: evaluated.reason,
+        confidenceMultiplier: evaluated.confidenceMultiplier,
+        recommendationAdjustment: evaluated.recommendationAdjustment,
+      };
+    }
+
+    if (
+      evaluated.recommendationAdjustment === 'reduce_stake' ||
+      evaluated.confidenceMultiplier < 1
+    ) {
+      return {
+        status: 'adjust',
+        reason: evaluated.reason,
+        confidenceMultiplier: evaluated.confidenceMultiplier,
+        recommendationAdjustment: evaluated.recommendationAdjustment,
+      };
+    }
+
+    return { status: 'ok', reason: evaluated.reason };
   }
 
   private async resolveChampion(
@@ -321,6 +445,7 @@ export class CandidateScoringService {
     champion: ModelRegistryRecord,
     championScore: number,
     championTier: string,
+    availability: Extract<CandidateAvailabilityDecision, { status: 'adjust' }> | null,
     logger?: Pick<Console, 'info' | 'warn' | 'error'>,
   ): Promise<boolean> {
     if (!this.repos.experimentLedger || !marketFamily) return false;
@@ -342,6 +467,13 @@ export class CandidateScoringService {
         championTier,
         shadowScore: null, // no shadow model scored yet — placeholder for future shadow runner
         comparisonType: 'champion_only',
+        availabilityAdjustment: availability
+          ? {
+              confidenceMultiplier: availability.confidenceMultiplier,
+              recommendationAdjustment: availability.recommendationAdjustment,
+              reason: availability.reason,
+            }
+          : null,
       });
 
       return true;
@@ -364,10 +496,71 @@ export async function runCandidateScoring(
     marketFamilyTrust?: IMarketFamilyTrustRepository;
     modelRegistry?: ModelRegistryRepository;
     experimentLedger?: ExperimentLedgerRepository;
+    participants?: ParticipantRepository;
   },
   options: ScoringOptions = {},
 ): Promise<ScoringResult> {
   return new CandidateScoringService(repos).run(options);
+}
+
+type CandidateAvailabilityDecision =
+  | { status: 'not_applicable' }
+  | { status: 'ok'; reason: string }
+  | { status: 'missing'; reason: string }
+  | {
+      status: 'adjust';
+      reason: string;
+      confidenceMultiplier: number;
+      recommendationAdjustment: 'none' | 'reduce_stake' | 'hold' | 'suppress';
+    }
+  | {
+      status: 'suppress';
+      reason: string;
+      confidenceMultiplier: number;
+      recommendationAdjustment: 'hold' | 'suppress';
+    };
+
+function isPlayerPropMarket(marketTypeId: string | null): boolean {
+  return marketTypeId?.startsWith('player_') === true;
+}
+
+function readAvailabilityFromParticipant(participant: ParticipantRow | null): PlayerAvailability | null {
+  if (!participant) return null;
+  const metadata = asRecord(participant.metadata);
+  const rawAvailability = asRecord(metadata['availability']);
+  const status = readAvailabilityStatus(rawAvailability['status']);
+  const lastUpdatedAt = readString(rawAvailability['lastUpdatedAt']);
+
+  if (!status || !lastUpdatedAt) {
+    return null;
+  }
+
+  const result: PlayerAvailability = {
+    participantId: participant.id,
+    status,
+    lastUpdatedAt,
+  };
+  const injuryNote = readString(rawAvailability['injuryNote']);
+  if (injuryNote) result.injuryNote = injuryNote;
+  const source = readString(rawAvailability['source']);
+  if (source) result.source = source;
+  return result;
+}
+
+function readAvailabilityStatus(value: unknown): PlayerAvailability['status'] | null {
+  if (typeof value !== 'string') return null;
+  const normalized = value.trim().toLowerCase();
+  if (
+    normalized === 'confirmed' ||
+    normalized === 'probable' ||
+    normalized === 'questionable' ||
+    normalized === 'doubtful' ||
+    normalized === 'out' ||
+    normalized === 'unknown'
+  ) {
+    return normalized;
+  }
+  return null;
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -379,5 +572,27 @@ function asRecord(value: unknown): Record<string, unknown> {
 function readFiniteNumber(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value)) return value;
   return null;
+}
+
+function readString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+}
+
+function makeEmptyResult(overrides: Partial<ScoringResult> = {}): ScoringResult {
+  return {
+    scored: 0,
+    skipped: 0,
+    errors: 0,
+    trustAdjusted: 0,
+    availabilityAdjusted: 0,
+    availabilityNoDataSkipped: 0,
+    availabilitySuppressed: 0,
+    championResolved: 0,
+    noChampionSkipped: 0,
+    shadowRecorded: 0,
+    calibration: null,
+    durationMs: 0,
+    ...overrides,
+  };
 }
 
