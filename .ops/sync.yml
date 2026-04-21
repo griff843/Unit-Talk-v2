@@ -1,9 +1,9 @@
 version: 1
 approval:
-  allow_multiple_issues: false
+  allow_multiple_issues: true
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-700
+    - UTV2-704
   proofs:
-    - UTV2-700
+    - UTV2-704

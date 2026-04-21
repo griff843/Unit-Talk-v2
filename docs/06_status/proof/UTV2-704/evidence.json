@@ -1,0 +1,25 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-704",
+  "title": "MLB 1st inning market types + SGO provider aliases",
+  "tier": "T3",
+  "generated_at": "2026-04-21T00:45:00.000Z",
+  "branch": "claude/utv2-704-mlb-1st-inning-market-types",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green",
+    "migration_validated": true
+  },
+  "live_db_evidence": {
+    "market_types_added": 3,
+    "sport_market_type_availability_added": 3,
+    "provider_market_aliases_added": 4,
+    "description": "Migration applied via Supabase MCP. 3 new market_type rows (1i_moneyline, 1i_spread, 1i_total_ou), 3 MLB availability rows, 4 SGO aliases covering points-all-1i-ml, points-all-1i-ml3way, points-all-1i-sp, points-all-1i-ou."
+  },
+  "runtime_change_classification": "catalog-data-only",
+  "runtime_change_note": "Pure data migration — no code changed. Adds catalog rows so 1st inning MLB markets appear in the smart-form market-family picker. Resolves 254+ unaliased SGO offer rows per live provider_offers audit.",
+  "artifacts": [
+    "supabase/migrations/202604210001_utv2_704_mlb_1st_inning_market_types.sql"
+  ]
+}
