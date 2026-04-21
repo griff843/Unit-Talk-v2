@@ -110,8 +110,9 @@ As of 2026-04-11 (UTV2-531 initial backfill). Sorted by impact, then area.
 | DEBT-011 | operational | No lint rule yet enforcing the "TODO must reference UTV2-NNN" convention defined in this dashboard. Currently enforced by convention and review only | Low | none — open when the convention has been in place for one merge cycle and is ready to mechanize | this file, `## Code TODO / debt marker convention` section | open |
 
 | DEBT-012 | operational | Stale lane manifests with no heartbeat activity — UTV2-575, UTV2-580, UTV2-622, UTV2-624, UTV2-625 show `status: started` but heartbeat >8h stale as of 2026-04-15. These represent lanes that were opened but not actively worked or formally closed. Each needs a decision: close or restart. | Medium | UTV2-585 | `pnpm proof:check` output 2026-04-15; `docs/06_status/lanes/*.json` heartbeat_at fields | open |
+| DEBT-013 | cross-app | Smart-form UI only supports 5 market types (player-prop, moneyline, spread, total, team-total). Period/half/quarter/inning market types added to catalog in UTV2-700 (2026-04-20) are NOT accessible from smart-form — `form-schema.ts` MARKET_TYPE_IDS must be extended and offer-loading validated per period market. No false completion claims found in git history. | Medium | none — no Linear issue yet; extend smart-form UI when period markets have confirmed offer coverage for target sports | `apps/smart-form/lib/form-schema.ts` MARKET_TYPE_IDS; UTV2-700 (#398); UTV2-699 audit 2026-04-21 | open |
 
-Current max ID: `DEBT-012`. Next insertion uses `DEBT-013`.
+Current max ID: `DEBT-013`. Next insertion uses `DEBT-014`.
 
 ## Closed Debt (audit trail)
 
