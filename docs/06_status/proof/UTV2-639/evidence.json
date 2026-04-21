@@ -1,0 +1,42 @@
+{
+  "schema_version": "evidence-bundle/v1",
+  "issue_id": "UTV2-639",
+  "tier": "T1",
+  "branch": "claude/utv2-639-three-lane-workflow",
+  "merge_sha": null,
+  "generated_at": "2026-04-21T14:45:00.000Z",
+  "verification": {
+    "type_check": "pass",
+    "tests": "pass",
+    "governance": {
+      "workflow_spec_created": "docs/05_operations/WORKFLOW_SPEC.md",
+      "states_ratified": 13,
+      "all_states_confirmed_in_linear": true,
+      "states": [
+        "PM Triage", "Needs PM Decision", "Needs Standard",
+        "Ready for Codex", "Ready for Claude",
+        "In Codex", "In Claude", "In PM Review",
+        "Blocked Internal", "Blocked External",
+        "In Proof", "Ready to Close", "Done"
+      ],
+      "lane_labels_audited": [
+        {"issue": "UTV2-621", "label": "lane:codex", "status": "confirmed"},
+        {"issue": "UTV2-576", "label": "lane:claude", "status": "confirmed"},
+        {"issue": "UTV2-581", "label": "lane:claude", "status": "confirmed"},
+        {"issue": "UTV2-590", "label": "lane:claude", "status": "confirmed"},
+        {"issue": "UTV2-431", "label": "lane:claude", "status": "confirmed"},
+        {"issue": "UTV2-637", "label": "lane:claude", "status": "confirmed"},
+        {"issue": "UTV2-638", "label": "lane:claude", "status": "confirmed"},
+        {"issue": "UTV2-652", "label": "lane:codex", "status": "applied"}
+      ],
+      "done_criteria_defined": true,
+      "claude_md_updated": true
+    }
+  },
+  "files_changed": [
+    "docs/05_operations/WORKFLOW_SPEC.md",
+    "CLAUDE.md",
+    "docs/06_status/lanes/UTV2-639.json",
+    "docs/06_status/proof/UTV2-639/evidence.json"
+  ]
+}

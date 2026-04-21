@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-639",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-639-three-lane-workflow",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/05_operations/WORKFLOW_SPEC.md",
+    "docs/06_status/lanes/UTV2-639.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-639/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-04-21T14:20:00.000Z",
+  "heartbeat_at": "2026-04-21T14:20:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
