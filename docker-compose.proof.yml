@@ -1,0 +1,4 @@
+services:
+  api:
+    ports:
+      - "4001:4000"

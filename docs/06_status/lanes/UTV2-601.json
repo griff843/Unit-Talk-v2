@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-601-containerization",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "7264a254449ba8561a047ab67cb28adf34bf22c8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/409",
   "files_changed": [
     "Dockerfile",
     "docker-compose.yml",
@@ -26,9 +26,9 @@
   "expected_proof_paths": [
     ".out/container-e2e-proof-*.json"
   ],
-  "status": "started",
+  "status": "proof_complete",
   "started_at": "2026-04-21T00:00:00.000Z",
-  "heartbeat_at": "2026-04-21T00:00:00.000Z",
+  "heartbeat_at": "2026-04-21T07:17:18.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",

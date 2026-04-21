@@ -5,7 +5,7 @@ services:
       target: api
     image: unit-talk/api:local
     ports:
-      - "4000:4000"
+      - "4001:4000"
     env_file:
       - .env.container
     restart: unless-stopped

@@ -24,16 +24,16 @@ COPY apps/api/package.json                   apps/api/
 COPY apps/worker/package.json                apps/worker/
 COPY apps/ingestor/package.json              apps/ingestor/
 COPY apps/discord-bot/package.json           apps/discord-bot/
+COPY apps/alert-agent/package.json           apps/alert-agent/
+COPY apps/command-center/package.json        apps/command-center/
+COPY apps/operator-web/package.json          apps/operator-web/
+COPY apps/smart-form/package.json            apps/smart-form/
 
 RUN pnpm install --frozen-lockfile
 
-# Copy source and build everything
-COPY packages/ packages/
-COPY apps/api/    apps/api/
-COPY apps/worker/ apps/worker/
-COPY apps/ingestor/ apps/ingestor/
-COPY apps/discord-bot/ apps/discord-bot/
-COPY .env.example ./
+# Copy all source — root tsconfig.json references all apps, so tsc -b needs
+# the full workspace present even for apps not being containerized.
+COPY . .
 
 RUN pnpm build
 
@@ -47,8 +47,8 @@ COPY --from=builder /repo/apps/api               ./apps/api
 COPY --from=builder /repo/.env.example           ./.env.example
 COPY --from=builder /repo/package.json           ./package.json
 
-# Workspace symlinks in apps/api/node_modules point into /repo/packages (set
-# by pnpm at install time inside the container), so packages/ must travel with.
+# Packages export from ./src/index.ts (not dist/), so the whole monorepo runs
+# via tsx. tsx is in /repo/node_modules/.bin/tsx (copied from builder).
 
 ENV NODE_ENV=production
 EXPOSE 4000
@@ -56,7 +56,7 @@ EXPOSE 4000
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \
   CMD wget -qO- http://localhost:4000/health || exit 1
 
-CMD ["node", "apps/api/dist/index.js"]
+CMD ["node_modules/.bin/tsx", "apps/api/src/index.ts"]
 
 # ── Stage 3: worker ───────────────────────────────────────────────────────────
 FROM node:22-alpine AS worker
@@ -70,7 +70,7 @@ COPY --from=builder /repo/package.json           ./package.json
 
 ENV NODE_ENV=production
 
-CMD ["node", "apps/worker/dist/index.js"]
+CMD ["node_modules/.bin/tsx", "apps/worker/src/index.ts"]
 
 # ── Stage 4: ingestor ─────────────────────────────────────────────────────────
 FROM node:22-alpine AS ingestor
@@ -84,7 +84,7 @@ COPY --from=builder /repo/package.json           ./package.json
 
 ENV NODE_ENV=production
 
-CMD ["node", "apps/ingestor/dist/index.js"]
+CMD ["node_modules/.bin/tsx", "apps/ingestor/src/index.ts"]
 
 # ── Stage 5: discord-bot ──────────────────────────────────────────────────────
 FROM node:22-alpine AS discord-bot
@@ -98,4 +98,4 @@ COPY --from=builder /repo/package.json           ./package.json
 
 ENV NODE_ENV=production
 
-CMD ["node", "apps/discord-bot/dist/index.js"]
+CMD ["node_modules/.bin/tsx", "apps/discord-bot/src/main.ts"]
