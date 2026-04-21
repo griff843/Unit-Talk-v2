@@ -1,7 +1,9 @@
 version: 1
 approval:
-  allow_multiple_issues: true
-  skip_sync_required: true
+  allow_multiple_issues: false
+  skip_sync_required: false
 entities:
-  issues: []
-  proofs: []
+  issues:
+    - UTV2-628
+  proofs:
+    - UTV2-628

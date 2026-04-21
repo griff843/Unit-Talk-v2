@@ -35,6 +35,7 @@ export * from './clv-weight-tuner.js';
 export * from './member-lifecycle.js';
 export * from './correlation-detection.js';
 export * from './execution-quality.js';
+export * from './provider-quality.js';
 export * from './shadow-mode.js';
 export * from './portfolio/index.js';
 // strategy/ not re-exported here (name collision: americanToDecimal with risk/kelly-sizer)
