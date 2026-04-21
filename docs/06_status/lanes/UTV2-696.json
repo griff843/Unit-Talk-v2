@@ -16,10 +16,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-696/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-04-21T00:38:00.000Z",
-  "heartbeat_at": "2026-04-21T00:38:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-20T17:57:32.000Z",
+  "closed_at": "2026-04-20T17:57:32.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
