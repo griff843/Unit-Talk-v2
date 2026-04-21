@@ -36,7 +36,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           LINEAR_TEAM_KEY: UTV2
-          FIBERY_API_URL: ${{ secrets.FIBERY_API_URL }}
+          FIBERY_API_URL: ${{ vars.FIBERY_API_URL }}
           FIBERY_API_TOKEN: ${{ secrets.FIBERY_API_TOKEN }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
 
