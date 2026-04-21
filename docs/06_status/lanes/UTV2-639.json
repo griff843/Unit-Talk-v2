@@ -16,13 +16,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-639/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-21T14:20:00.000Z",
-  "heartbeat_at": "2026-04-21T14:20:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-21T16:26:28.420Z",
+  "closed_at": "2026-04-21T16:26:28.420Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-04-21T16:26:28.420Z",
+      "runner": "manual-backfill",
+      "merge_sha": "pre-fix-backfill",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
+    }
+  ],
   "reopen_history": []
 }
