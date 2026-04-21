@@ -17,10 +17,10 @@
     "apps/ingestor/src/"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-21T18:08:00.000Z",
-  "heartbeat_at": "2026-04-21T18:26:09.351Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-21T19:17:38.399Z",
+  "closed_at": "2026-04-21T19:17:38.399Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
