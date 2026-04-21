@@ -88,3 +88,16 @@ test('codex-dispatch rejects the removed --allowed flag', () => {
   assert.strictEqual(result.status, 1);
   assert.match(result.stderr, /--allowed flag is removed/i);
 });
+
+test('dispatch skill documents the Codex lane workflow', () => {
+  const skill = fs.readFileSync(
+    path.join(ROOT, '.agents', 'skills', 'dispatch', 'SKILL.md'),
+    'utf8',
+  );
+
+  assert.match(skill, /name: dispatch/);
+  assert.match(skill, /pnpm codex:dispatch -- --issue UTV2-###/);
+  assert.match(skill, /pnpm codex:status/);
+  assert.match(skill, /pnpm codex:receive -- --issue UTV2-###/);
+  assert.match(skill, /Do not use the removed `--allowed` flag/);
+});
