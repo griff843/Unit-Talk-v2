@@ -1,0 +1,56 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-665",
+  "title": "Append correction records for Feb 6 ghost settlements",
+  "tier": "T2",
+  "generated_at": "2026-04-21T14:30:00.000Z",
+  "branch": "codex/utv2-665-settlement-corrections",
+  "merge_sha": "f214eae078f70441f2dca66a12aa38154cc73d47",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/416",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green",
+    "lint": "green"
+  },
+  "test_evidence": {
+    "file": "scripts/ops/fix-settlement-utv2-665.test.ts",
+    "tests_run": 1,
+    "tests_passed": 1,
+    "tests_failed": 0,
+    "cases": [
+      "appendUtv2SettlementCorrections inserts additive correction rows and is idempotent"
+    ]
+  },
+  "acceptance_criteria": {
+    "additive_correction_rows": "appendUtv2SettlementCorrections() inserts new settlement_records rows with corrects_id pointing to original",
+    "no_mutation_of_originals": "Original rows never updated — corrects_id FK pattern enforced",
+    "idempotent": "Second run detects existing corrects_id rows and skips both picks",
+    "schema_invariant": "settlement_records.corrects_id = correction FK; original row never mutated"
+  },
+  "affected_picks": [
+    {
+      "pick_id": "2a8fe3df-96e0-4b0e-9606-59514d2a3fe6",
+      "selection": "Gui Santos Points O 12.5",
+      "wrong_result": "win",
+      "correct_result": "loss",
+      "wrong_event_id": "b16263e3-8f1c-437c-9a20-a10ffe9481d1",
+      "correct_event_id": "9eab4725-ff45-4955-a1e6-273b4285aeb3"
+    },
+    {
+      "pick_id": "f7478c8f-0896-48bc-9082-adc14b47fcfd",
+      "selection": "Jalen Green Points O 20.5",
+      "wrong_result": "loss",
+      "correct_result": "win",
+      "wrong_event_id": "b16263e3-8f1c-437c-9a20-a10ffe9481d1",
+      "correct_event_id": "9eab4725-ff45-4955-a1e6-273b4285aeb3"
+    }
+  ],
+  "runtime_change_classification": "one-shot-correction-script",
+  "runtime_change_note": "Script is not deployed; run once manually against live DB after merge. Idempotent — safe to re-run.",
+  "artifacts": [
+    "scripts/ops/fix-settlement-utv2-665.ts",
+    "scripts/ops/fix-settlement-utv2-665.test.ts",
+    "package.json"
+  ]
+}
