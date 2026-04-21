@@ -549,6 +549,47 @@ test('processSubmission matches moneyline provider offers by canonical market ke
   assert.equal(realEdgeSource, 'pinnacle');
 });
 
+test('processSubmission uses single non-SGO book before confidence-delta fallback', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'odds-api:draftkings',
+      providerEventId: 'evt-single-book',
+      providerMarketKey: 'assists-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 7.5,
+      overOdds: -105,
+      underOdds: -115,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-03-27T16:00:00.000Z',
+      idempotencyKey: 'offer-dk-single',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await processSubmission(
+    {
+      source: 'api',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+      odds: 150,
+      confidence: 0.60,
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  const domainAnalysis = metadata.domainAnalysis as Record<string, unknown> | undefined;
+
+  assert.equal(metadata.realEdgeSource, 'single-book');
+  assert.equal(metadata.realEdgeBookCount, 1);
+  assert.equal(domainAnalysis?.realEdgeSource, 'single-book');
+  assert.equal(domainAnalysis?.realEdgeBookCount, 1);
+});
+
 test('processSubmission attaches kellySizing when deviggingResult exists and odds are finite', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await repositories.providerOffers.upsertBatch([
