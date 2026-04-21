@@ -599,6 +599,16 @@ Chronological record of capabilities discovered. Each entry = something that cha
 
 ---
 
+### 2026-04-21: NRFI/YRFI — SGO gap documented (UTV2-706)
+
+**Source:** `provider_offers` audit across all MLB `provider_market_key` values (2026-04-21).
+**Finding:** SGO does not provide a dedicated NRFI (No Run First Inning) / YRFI boolean market key. No `*nrfi*`, `*yrfi*`, `*-yn*`, or first-inning yes/no variants exist in the MLB offer set.
+**Closest proxy:** `points-all-1i-ou` (1st inning total O/U, covered by `1i_total_ou` in UTV2-704). An NRFI bet is equivalent to taking the Under at line 0.5 — but SGO serves this as a continuous O/U line, not a yes/no boolean.
+**Action required:** Either (a) request a dedicated NRFI key from SGO support, or (b) derive NRFI from `points-all-1i-ou` with line constraint `≤ 0.5` in the smart-form / catalog layer. No implementation until SGO confirms availability or derivation approach is ratified.
+**Affected issues:** UTV2-706 (closed as gap-documented).
+
+---
+
 ### Future unlocks to investigate
 
 | Item | Where to look | Why it matters |
@@ -608,6 +618,7 @@ Chronological record of capabilities discovered. Each entry = something that cha
 | SGO results `expandResults=true` shape | SGO docs explorer | Understand full raw results for display use (box scores) |
 | SGO historical `finalized` event access | Live trial test | Confirm we can fetch past finalized events for backfill grading |
 | Odds API player prop structure | Docs | Understand description matching for prop canonicalization |
+| SGO NRFI dedicated key | SGO support / changelog | Unlock boolean 1st-inning market without line constraint workaround |
 
 ---
 
