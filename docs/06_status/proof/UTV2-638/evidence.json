@@ -1,0 +1,26 @@
+{
+  "schema_version": "evidence-bundle/v1",
+  "issue_id": "UTV2-638",
+  "tier": "T1",
+  "branch": "claude/utv2-638-modeling-sequence",
+  "merge_sha": null,
+  "generated_at": "2026-04-21T15:35:00.000Z",
+  "verification": {
+    "type_check": "pass",
+    "tests": "pass",
+    "governance": {
+      "modeling_sequence_created": "docs/05_operations/MODELING_SEQUENCE.md",
+      "elite_core_items": 10,
+      "human_like_core_items": 4,
+      "hard_rules_encoded": true,
+      "shared_issue_standards_defined": ["UTV2-622", "UTV2-624", "UTV2-625", "UTV2-631", "UTV2-635"],
+      "claude_md_updated": true
+    }
+  },
+  "files_changed": [
+    "docs/05_operations/MODELING_SEQUENCE.md",
+    "CLAUDE.md",
+    "docs/06_status/lanes/UTV2-638.json",
+    "docs/06_status/proof/UTV2-638/evidence.json"
+  ]
+}
