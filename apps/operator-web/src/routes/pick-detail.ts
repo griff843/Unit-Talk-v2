@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
 import { enrichPickRowsWithIdentity } from './pick-identity-enrichment.js';
+import { buildRoutingExplanation, type RoutingExplanation } from './routing-explanation.js';
 
 export interface PickDetailView {
   pick: {
@@ -124,6 +125,7 @@ export interface PickDetailView {
     payload: Record<string, unknown>;
     createdAt: string;
   } | null;
+  routingExplanation: RoutingExplanation;
 }
 
 // Static fixture used by in-memory / demo providers
@@ -240,6 +242,19 @@ export const PICK_DETAIL_FIXTURE: PickDetailView = {
     id: 'sub-fixture-1',
     payload: { market: 'player-props', selection: 'LeBron James Over 25.5 pts' },
     createdAt: '2026-03-20T09:59:00.000Z',
+  },
+  routingExplanation: {
+    verdict: 'promoted',
+    target: 'best-bets',
+    score: 82.5,
+    scoreInputs: { edge: 85, trust: 80, readiness: 90, uniqueness: 75, boardFit: 82 },
+    edgeSource: 'explicit',
+    edgeSourceLabel: 'Explicit component',
+    reliabilityTone: 'medium',
+    suppressionReasons: [],
+    gateFailures: [],
+    reason: null,
+    decidedAt: '2026-03-20T10:00:30.000Z',
   },
 };
 
@@ -554,6 +569,11 @@ export async function handlePickDetailRequest(
           createdAt: submission['created_at'] as string,
         }
       : null,
+    routingExplanation: buildRoutingExplanation(
+      pick['promotion_status'] as string | null,
+      promotionHistory,
+      metadata,
+    ),
   };
 
   writeJson(response, 200, { ok: true, data: view });

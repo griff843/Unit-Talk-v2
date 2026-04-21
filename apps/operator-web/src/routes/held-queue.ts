@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
 import { enrichPickRowsWithIdentity, isFixtureLikePick } from './pick-identity-enrichment.js';
+import { buildRoutingExplanationFromPick } from './routing-explanation.js';
 
 /**
  * GET /api/operator/held-queue
@@ -105,6 +106,7 @@ export async function handleHeldQueueRequest(
         reviewDecision: p['review_decision'] ?? null,
         governanceQueueState:
           p['status'] === 'awaiting_approval' ? 'awaiting_approval' : 'pending_review',
+        routingExplanation: buildRoutingExplanationFromPick(p),
       };
     });
 
