@@ -14,7 +14,7 @@ import {
   type ExposureGateConfig,
   resolveExposureGateConfig,
 } from '@unit-talk/contracts';
-import { evaluatePromotionEligibility, computeBoardFitScore } from '@unit-talk/domain';
+import { evaluatePromotionEligibility, computeBoardFitScore, generatePickNarrative } from '@unit-talk/domain';
 import type { PortfolioSlot } from '@unit-talk/domain';
 import type {
   AuditLogRecord,
@@ -269,6 +269,18 @@ export async function evaluateAllPoliciesEagerAndPersist(
       ...winnerSnapshot,
       explanation: winnerDecision.explanation,
       policy: winnerPolicy,
+      narrative: generatePickNarrative({
+        qualified: winnerDecision.qualified,
+        target: winnerDecision.target,
+        score: winnerDecision.score,
+        breakdown: winnerDecision.breakdown,
+        edgeSourceQuality: scoreInputs.edgeSourceQuality,
+        edgeSource: scoreInputs.edgeSource,
+        market: canonicalPick.market ?? undefined,
+        sport: readMetadataString(canonicalPick.metadata, 'sport') ?? undefined,
+        suppressionReasons: winnerDecision.explanation.suppressionReasons,
+        minimumScore: winnerPolicy.minimumScore,
+      }),
     },
   });
 

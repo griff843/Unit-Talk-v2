@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-635",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-635-pick-explanation",
+  "base_branch": "main",
+  "commit_sha": "5667850",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/415",
+  "files_changed": [
+    "packages/domain/src/pick-narrative.ts",
+    "packages/domain/src/pick-narrative.test.ts",
+    "packages/domain/src/index.ts",
+    "apps/api/src/promotion-service.ts"
+  ],
+  "file_scope_lock": [
+    "packages/domain/src/pick-narrative.ts",
+    "packages/domain/src/pick-narrative.test.ts",
+    "packages/domain/src/index.ts",
+    "apps/api/src/promotion-service.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "pr_open",
+  "started_at": "2026-04-21T13:00:00.000Z",
+  "heartbeat_at": "2026-04-21T14:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
