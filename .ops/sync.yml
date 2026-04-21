@@ -5,4 +5,5 @@ approval:
 entities:
   issues:
     - UTV2-635
-  proofs: []
+  proofs:
+    - UTV2-635
