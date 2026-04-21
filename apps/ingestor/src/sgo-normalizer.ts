@@ -31,7 +31,7 @@ export function normalizeSGOPairedProp(
     providerEventId: prop.providerEventId,
     providerMarketKey,
     providerParticipantId,
-    sportKey: prop.sportKey,
+    sportKey: overrideSportKeyFromMarketKey(prop.marketKey, prop.sportKey),
     line,
     overOdds: toAmericanOdds(prop.overOdds),
     underOdds: toAmericanOdds(prop.underOdds),
@@ -79,6 +79,21 @@ export function buildProviderOfferIdempotencyKey(input: {
     parts.push(input.bookmakerKey);
   }
   return parts.join(':');
+}
+
+// MLB-exclusive market key prefixes. SGO occasionally sends the wrong sportKey
+// for events that contain these markets; market key is the ground truth.
+const MLB_MARKET_PREFIXES = ['batting_', 'pitching_'];
+
+function overrideSportKeyFromMarketKey(
+  marketKey: string,
+  sportKey: string | null,
+): string | null {
+  const lower = marketKey.toLowerCase();
+  if (MLB_MARKET_PREFIXES.some((prefix) => lower.startsWith(prefix))) {
+    return 'MLB';
+  }
+  return sportKey;
 }
 
 function normalizeProviderMarketKey(marketKey: string) {
