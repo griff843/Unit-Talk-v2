@@ -4,6 +4,7 @@ const SGO_EVENTS_ENDPOINT = 'https://api.sportsgameodds.com/v2/events';
 const SGO_USAGE_ENDPOINT = 'https://api.sportsgameodds.com/v2/account/usage';
 const SGO_EVENTS_PAGE_LIMIT = '100';
 const MAX_SGO_PAGINATION_PAGES = 100;
+const LIVE_ODDS_LOOKBACK_HOURS = 12;
 
 export interface SGOFetchOptions {
   apiKey: string;
@@ -154,7 +155,10 @@ export async function fetchAndPairSGOProps(
   } else {
     url.searchParams.set('oddsAvailable', 'true');
   }
-  url.searchParams.set('startsAfter', options.startsAfter ?? options.snapshotAt);
+  url.searchParams.set(
+    'startsAfter',
+    options.startsAfter ?? subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
+  );
   url.searchParams.set(
     'startsBefore',
     options.startsBefore ?? addDaysToIso(options.snapshotAt, 7),
