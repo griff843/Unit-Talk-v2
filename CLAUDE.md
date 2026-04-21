@@ -98,6 +98,8 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 
 | Topic | Document |
 |---|---|
+| Master execution map (phases 1–8) | `docs/05_operations/EXECUTION_MAP.md` |
+| Master modeling sequence | `docs/05_operations/MODELING_SEQUENCE.md` |
 | Three-lane workflow spec | `docs/05_operations/WORKFLOW_SPEC.md` |
 | Execution truth model | `docs/05_operations/EXECUTION_TRUTH_MODEL.md` |
 | Done-gate (`ops:truth-check`) | `docs/05_operations/TRUTH_CHECK_SPEC.md` |

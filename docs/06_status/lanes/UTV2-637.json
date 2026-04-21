@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-637",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-637-execution-map",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/05_operations/EXECUTION_MAP.md",
+    "CLAUDE.md"
+  ],
+  "file_scope_lock": [
+    "docs/05_operations/EXECUTION_MAP.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-637/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-04-21T15:25:00.000Z",
+  "heartbeat_at": "2026-04-21T15:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
