@@ -19,7 +19,13 @@ import {
   type NormalizedOddsOffer,
   type OddsApiEvent,
 } from './odds-api-fetcher.js';
-import { fetchSGOResults, type SGOEventResult, type SGOMarketScore, type SGOResolvedEvent } from './sgo-fetcher.js';
+import {
+  fetchAndPairSGOProps,
+  fetchSGOResults,
+  type SGOEventResult,
+  type SGOMarketScore,
+  type SGOResolvedEvent,
+} from './sgo-fetcher.js';
 import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 import {
   resolveAndInsertResults,
@@ -106,6 +112,32 @@ test('resolveActiveSgoApiKey selects the first working subscription and records 
   assert.equal(selection.active?.source, 'SGO_API_KEY_FALLBACK');
   assert.equal(selection.probes[0]?.status, 'invalid');
   assert.equal(selection.probes[1]?.status, 'active');
+});
+
+test('fetchAndPairSGOProps includes recently started live games by default', async () => {
+  let capturedUrl: URL | null = null;
+
+  await fetchAndPairSGOProps({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-20T02:00:00.000Z',
+    fetchImpl: async (input) => {
+      capturedUrl = new URL(String(input));
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const requestedUrl = capturedUrl as URL | null;
+  assert.ok(requestedUrl);
+  assert.equal(requestedUrl.searchParams.get('leagueID'), 'NBA');
+  assert.equal(requestedUrl.searchParams.get('oddsAvailable'), 'true');
+  assert.equal(
+    requestedUrl.searchParams.get('startsAfter'),
+    '2026-04-19T14:00:00.000Z',
+  );
 });
 
 test('normalizeSGOPairedProp returns FALLBACK_SINGLE_SIDED when only one side is present', () => {

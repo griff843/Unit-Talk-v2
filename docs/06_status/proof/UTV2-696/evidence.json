@@ -1,0 +1,24 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-696",
+  "title": "fix(ingestor): NBA and NHL offer ingest zero rows — startsAfter window excludes live games",
+  "tier": "T2",
+  "generated_at": "2026-04-21T00:48:00.000Z",
+  "branch": "codex/utv2-696-fix-ingestor-nba-nhl-offer-ingest",
+  "verification": {
+    "pnpm_verify": "green",
+    "type_check": "green",
+    "tests": "green (62 pass, 0 fail)"
+  },
+  "root_cause": "SGO league IDs for NBA/NHL were correct and the default ingestor league list includes both sports. The bug was in fetchAndPairSGOProps: the default startsAfter was set to the current snapshotAt, which excluded playoff games that had already started — even though SGO serves live odds (oddsAvailable=true) for in-progress games. Active playoff games with start times before the snapshot were silently filtered out.",
+  "fix": {
+    "file": "apps/ingestor/src/sgo-fetcher.ts",
+    "change": "Changed default startsAfter from snapshotAt to subtractHoursFromIso(snapshotAt, 12), adding a 12-hour lookback window for live games. Explicit startsAfter overrides are preserved."
+  },
+  "runtime_change_classification": "ingestor-fetch-window",
+  "runtime_change_note": "Single-line change to the SGO event query default window. No DB schema changes. Effect: NBA/NHL playoff games in progress will now appear in provider_offers on the next ingestor run.",
+  "artifacts": [
+    "apps/ingestor/src/sgo-fetcher.ts",
+    "apps/ingestor/src/ingestor.test.ts"
+  ]
+}
