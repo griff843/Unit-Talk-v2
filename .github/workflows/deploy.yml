@@ -1,0 +1,154 @@
+name: Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Container image tag to deploy. Defaults to the workflow SHA.'
+        required: false
+        type: string
+      rollback_tag:
+        description: 'Optional previous image tag to restore if deployment fails.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: production-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ghcr.io/griff843/unit-talk-v2
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+  DEPLOY_HEALTH_URL: ${{ secrets.UNIT_TALK_DEPLOY_HEALTH_URL }}
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write deploy gate env
+        run: |
+          cat <<'EOF' > local.env
+          NODE_ENV=production
+          UNIT_TALK_APP_ENV=production
+          SUPABASE_URL=${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_API_RUNTIME_MODE=fail_closed
+          UNIT_TALK_INGESTOR_AUTORUN=true
+          UNIT_TALK_WORKER_AUTORUN=true
+          UNIT_TALK_WORKER_ADAPTER=discord
+          DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+          EOF
+
+      - name: Deploy check
+        run: pnpm deploy:check
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker, ingestor, discord-bot]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          docker build --target "${{ matrix.service }}" \
+            --tag "$IMAGE_NAMESPACE/${{ matrix.service }}:$IMAGE_TAG" \
+            --tag "$IMAGE_NAMESPACE/${{ matrix.service }}:${{ github.sha }}" \
+            .
+          docker push "$IMAGE_NAMESPACE/${{ matrix.service }}:$IMAGE_TAG"
+          docker push "$IMAGE_NAMESPACE/${{ matrix.service }}:${{ github.sha }}"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deploy secrets
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_HEALTH_URL"
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload compose manifest
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp deploy/production/docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.yml"
+
+      - name: Release containers
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -eu
+            cd '$DEPLOY_PATH'
+            if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.previous; fi
+            printf '%s\n' '$IMAGE_TAG' > .unit-talk-release
+            export UNIT_TALK_IMAGE_TAG='$IMAGE_TAG'
+            docker compose pull
+            docker compose up -d --remove-orphans
+          "
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$DEPLOY_HEALTH_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          if [ -n "$ROLLBACK_TAG" ]; then
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+              set -eu
+              cd '$DEPLOY_PATH'
+              printf '%s\n' '$ROLLBACK_TAG' > .unit-talk-release
+              export UNIT_TALK_IMAGE_TAG='$ROLLBACK_TAG'
+              docker compose pull
+              docker compose up -d --remove-orphans
+            "
+          fi
+          exit 1
