@@ -13,10 +13,10 @@
     "apps/api/src"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-04-21T09:20:00.000Z",
-  "heartbeat_at": "2026-04-21T09:20:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-21T12:28:09.000Z",
+  "closed_at": "2026-04-21T12:28:09.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

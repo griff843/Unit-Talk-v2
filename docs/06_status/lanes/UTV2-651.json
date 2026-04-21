@@ -16,10 +16,10 @@
     "package.json"
   ],
   "expected_proof_paths": [],
-  "status": "in_progress",
+  "status": "merged",
   "started_at": "2026-04-19T23:20:00.000Z",
-  "heartbeat_at": "2026-04-19T23:25:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-19T23:25:41.000Z",
+  "closed_at": "2026-04-19T23:25:41.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
