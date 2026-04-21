@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
-import { loadEnvironment } from '@unit-talk/config';
+import { pathToFileURL } from 'node:url';
+import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 
 interface AlertFinding {
   level: 'OK' | 'CRITICAL';
@@ -8,22 +9,36 @@ interface AlertFinding {
   message: string;
 }
 
-const OFFER_THRESHOLD_MINUTES = parseThreshold('INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES', 30);
-const RESULTS_THRESHOLD_MINUTES = parseThreshold('INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES', 60);
-const CYCLE_THRESHOLD_MINUTES = parseThreshold('INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES', 30);
-
 const env = loadEnvironment();
 
-function parseThreshold(name: string, fallback: number) {
-  const parsed = Number.parseInt(process.env[name] ?? '', 10);
+export function parseThreshold(value: string | undefined, fallback: number) {
+  const parsed = Number.parseInt(value ?? '', 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
 }
 
-function evaluateAgeFinding(
+export function resolveIngestorAlertThresholds(environment: Pick<
+  AppEnv,
+  | 'UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES'
+  | 'INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES'
+  | 'INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES'
+  | 'INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES'
+>) {
+  return {
+    offers: parseThreshold(
+      environment.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES ?? environment.INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES,
+      30,
+    ),
+    results: parseThreshold(environment.INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES, 60),
+    cycle: parseThreshold(environment.INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES, 30),
+  };
+}
+
+export function evaluateAgeFinding(
   check: AlertFinding['check'],
   isoTimestamp: string | null,
   thresholdMinutes: number,
   status: string | null,
+  now = new Date(),
 ): AlertFinding {
   if (!isoTimestamp) {
     return {
@@ -34,7 +49,7 @@ function evaluateAgeFinding(
     };
   }
 
-  const ageMinutes = Math.round((Date.now() - new Date(isoTimestamp).getTime()) / 60_000);
+  const ageMinutes = Math.round((now.getTime() - new Date(isoTimestamp).getTime()) / 60_000);
   const suffix = status ? ` Last status: ${status}.` : '';
 
   if (ageMinutes > thresholdMinutes) {
@@ -68,6 +83,19 @@ function emit(level: AlertFinding['level'], message: string, check: AlertFinding
 }
 
 async function postDiscordAlert(message: string) {
+  if (env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL) {
+    try {
+      await fetch(env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: `Ingestor alert\n${message}` }),
+      });
+    } catch (error) {
+      console.error('[ingestor-alert] Failed to post Discord webhook:', error instanceof Error ? error.message : String(error));
+    }
+    return;
+  }
+
   const channelId = env.UNIT_TALK_DISCORD_TARGET_MAP
     ? (() => {
         try {
@@ -116,8 +144,8 @@ async function main() {
       .limit(1),
     db
       .from('provider_offers')
-      .select('created_at')
-      .order('created_at', { ascending: false })
+      .select('snapshot_at')
+      .order('snapshot_at', { ascending: false })
       .limit(1),
     db
       .from('game_results')
@@ -129,11 +157,12 @@ async function main() {
   const lastCycle = cycleRows?.[0] ?? null;
   const lastOffer = offerRows?.[0] ?? null;
   const lastResult = resultRows?.[0] ?? null;
+  const thresholds = resolveIngestorAlertThresholds(env);
 
   const findings = [
-    evaluateAgeFinding('cycle', lastCycle?.started_at ?? null, CYCLE_THRESHOLD_MINUTES, lastCycle?.status ?? null),
-    evaluateAgeFinding('offers', lastOffer?.created_at ?? null, OFFER_THRESHOLD_MINUTES, null),
-    evaluateAgeFinding('results', lastResult?.created_at ?? null, RESULTS_THRESHOLD_MINUTES, null),
+    evaluateAgeFinding('cycle', lastCycle?.started_at ?? null, thresholds.cycle, lastCycle?.status ?? null),
+    evaluateAgeFinding('offers', lastOffer?.snapshot_at ?? null, thresholds.offers, null),
+    evaluateAgeFinding('results', lastResult?.created_at ?? null, thresholds.results, null),
   ];
 
   for (const finding of findings) {
@@ -149,7 +178,9 @@ async function main() {
   process.exit(0);
 }
 
-main().catch((error) => {
-  console.error('[ingestor-alert] Unhandled error:', error instanceof Error ? error.message : String(error));
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error('[ingestor-alert] Unhandled error:', error instanceof Error ? error.message : String(error));
+    process.exit(1);
+  });
+}
