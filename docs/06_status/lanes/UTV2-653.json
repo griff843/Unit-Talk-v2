@@ -15,10 +15,10 @@
     "apps/api/src/e2e-lifecycle.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-04-21T12:50:00.000Z",
-  "heartbeat_at": "2026-04-21T12:50:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-21T13:00:40.000Z",
+  "closed_at": "2026-04-21T13:00:40.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
