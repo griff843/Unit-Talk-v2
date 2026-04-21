@@ -47,11 +47,11 @@ export interface DomainAnalysis {
   kellyFraction?: number | undefined;
   /**
    * Real edge: model probability vs devigged market consensus.
-   * Available when Pinnacle or multi-book data exists.
+   * Available when Pinnacle, multi-book, SGO, or single-book data exists.
    * This IS market edge — use for promotion scoring when present.
    */
   realEdge?: number | undefined;
-  /** Source of the real edge (pinnacle, consensus, sgo, confidence-delta) */
+  /** Source of the real edge (pinnacle, consensus, sgo, single-book, confidence-delta) */
   realEdgeSource?: string | undefined;
   /** Market probability used for real edge computation */
   marketProbability?: number | undefined;

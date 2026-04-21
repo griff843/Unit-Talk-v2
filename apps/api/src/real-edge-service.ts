@@ -29,7 +29,7 @@ export interface RealEdgeResult {
   /** Market's devigged probability for this side */
   marketProbability: number;
   /** Source of market probability */
-  marketSource: 'pinnacle' | 'consensus' | 'sgo' | 'confidence-delta';
+  marketSource: 'pinnacle' | 'consensus' | 'sgo' | 'single-book' | 'confidence-delta';
   /** Number of books in consensus (1 for single-book) */
   bookCount: number;
   /** Whether the model has positive edge vs market */
@@ -58,7 +58,8 @@ export interface RealEdgeOptions {
  * 1. Pinnacle devigged line (sharpest available)
  * 2. Multi-book devigged consensus (DK + FD + MGM average)
  * 3. SGO devigged line (existing single-provider)
- * 4. Confidence delta fallback (confidence - implied from submitted odds)
+ * 4. Single non-SGO book devigged line
+ * 5. Confidence delta fallback (confidence - implied from submitted odds)
  */
 export async function computeRealEdge(
   options: RealEdgeOptions,
@@ -94,6 +95,19 @@ export async function computeRealEdge(
     return { ...sgoEdge, marketSource, contrarySignal };
   }
 
+  // Root cause UTV2-571: a single fresh non-SGO book used to miss every
+  // market-backed branch because consensus requires two books and provider
+  // lookup only checked Pinnacle/SGO directly. Use that book before falling
+  // back to self-reported confidence delta.
+  const singleBookEdge = await tryProviderEdge(
+    confidence, marketKey, selection, undefined, providerOffers,
+  );
+  if (singleBookEdge) {
+    const marketSource = 'single-book' as const;
+    const contrarySignal = classifyContrarianism(singleBookEdge.modelProbability, singleBookEdge.marketProbability, marketSource);
+    return { ...singleBookEdge, marketSource, contrarySignal };
+  }
+
   // Fallback: confidence delta (not real edge, but better than nothing)
   const impliedFromOdds = americanToImplied(submittedOdds);
   const confidenceDelta = roundTo(confidence - impliedFromOdds, 6);
@@ -117,7 +131,7 @@ async function tryProviderEdge(
   confidence: number,
   marketKey: string,
   selection: string,
-  providerKey: string,
+  providerKey: string | undefined,
   providerOffers: ProviderOfferRepository,
 ): Promise<Omit<RealEdgeResult, 'marketSource'> | null> {
   const participantKey = resolveSelectionParticipantKey(marketKey, selection);

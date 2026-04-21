@@ -38,6 +38,7 @@ export type PromotionOverrideAction = (typeof promotionOverrideActions)[number];
  * - 'real-edge': model probability vs Pinnacle devigged line (authoritative)
  * - 'consensus-edge': model probability vs multi-book devigged consensus
  * - 'sgo-edge': model probability vs SGO devigged line
+ * - 'single-book-edge': model probability vs one non-SGO book when stronger sources are absent
  * - 'confidence-delta': confidence minus implied probability from submitted odds (self-reported)
  * - 'explicit': edge provided directly in pick.metadata.promotionScores.edge
  */
@@ -45,10 +46,15 @@ export const edgeSources = [
   'real-edge',
   'consensus-edge',
   'sgo-edge',
+  'single-book-edge',
   'confidence-delta',
   'explicit',
 ] as const;
 export type EdgeSource = (typeof edgeSources)[number];
+export type EdgeSourceQuality = 'market-backed' | 'explicit' | 'confidence-fallback';
+export type EdgeFallbackReason =
+  | 'missing-explicit-edge-and-market-edge'
+  | 'not-applicable';
 
 export interface PromotionScoreWeights {
   edge: number;
@@ -322,6 +328,16 @@ export interface PromotionDecisionSnapshot {
      * Absent on snapshots written before UTV2-222/223.
      */
     edgeSource?: EdgeSource | undefined;
+    /**
+     * Coarse source bucket used to measure fallback coverage without parsing
+     * every source label.
+     */
+    edgeSourceQuality?: EdgeSourceQuality | undefined;
+    /**
+     * Set when edgeSourceQuality is confidence-fallback. Kept intentionally
+     * small so operators can group root causes by stable labels.
+     */
+    edgeFallbackReason?: EdgeFallbackReason | undefined;
   };
 
   /** Gate boolean/value inputs at the moment of decision. */
@@ -601,6 +617,8 @@ export interface PromotionScoreComponents {
   uniqueness: number;
   boardFit: number;
   edgeSource?: EdgeSource | undefined;
+  edgeSourceQuality?: EdgeSourceQuality | undefined;
+  edgeFallbackReason?: EdgeFallbackReason | undefined;
 }
 
 /**

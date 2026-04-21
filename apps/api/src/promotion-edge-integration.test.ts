@@ -505,12 +505,34 @@ test('readDomainAnalysisEdgeSource returns sgo-edge for sgo source', () => {
   assert.equal(readDomainAnalysisEdgeSource(metadata), 'sgo-edge');
 });
 
+test('readDomainAnalysisEdgeSource returns single-book-edge for one non-SGO book', () => {
+  const metadata = {
+    domainAnalysis: {
+      realEdge: 0.015,
+      realEdgeSource: 'single-book',
+    },
+  };
+  assert.equal(readDomainAnalysisEdgeSource(metadata), 'single-book-edge');
+});
+
 test('readDomainAnalysisEdgeSource falls back to top-level realEdge when domainAnalysis lacks it', () => {
   const metadata = {
     realEdge: 0.03,
     realEdgeSource: 'pinnacle',
   };
   assert.equal(readDomainAnalysisEdgeSource(metadata), 'real-edge');
+});
+
+test('readDomainAnalysisEdgeScore uses top-level market-backed realEdge before confidence delta', () => {
+  const metadata = {
+    realEdge: 0.04,
+    realEdgeSource: 'single-book',
+    domainAnalysis: {
+      edge: -0.10,
+      confidenceDelta: -0.10,
+    },
+  };
+  assert.equal(readDomainAnalysisEdgeScore(metadata), 66);
 });
 
 test('readDomainAnalysisTrustSignal reads confidenceDelta when edge is absent', () => {
@@ -561,6 +583,17 @@ test('promotion snapshot records edgeSource=confidence-delta when no market data
     result.pick.promotionStatus === 'qualified' || result.pick.promotionStatus === 'suppressed',
     'promotion decision must have run',
   );
+
+  const history = await evaluateAndPersistBestBetsPromotion(
+    result.pick.id,
+    'test:utv2-571',
+    repositories.picks,
+    repositories.audit,
+  );
+  const scoreInputs = history.snapshot.scoreInputs;
+  assert.equal(scoreInputs.edgeSource, 'confidence-delta');
+  assert.equal(scoreInputs.edgeSourceQuality, 'confidence-fallback');
+  assert.equal(scoreInputs.edgeFallbackReason, 'missing-explicit-edge-and-market-edge');
 });
 
 test('promotion snapshot records edgeSource=explicit when promotionScores.edge is set', async () => {
@@ -585,6 +618,17 @@ test('promotion snapshot records edgeSource=explicit when promotionScores.edge i
     result.pick.promotionStatus === 'qualified' || result.pick.promotionStatus === 'suppressed',
     'promotion decision must have run',
   );
+
+  const history = await evaluateAndPersistBestBetsPromotion(
+    result.pick.id,
+    'test:utv2-571',
+    repositories.picks,
+    repositories.audit,
+  );
+  const scoreInputs = history.snapshot.scoreInputs;
+  assert.equal(scoreInputs.edgeSource, 'explicit');
+  assert.equal(scoreInputs.edgeSourceQuality, 'explicit');
+  assert.equal(scoreInputs.edgeFallbackReason, undefined);
 });
 
 // ── Smart Form capper attribution and confidence floor bypass ─────────────────

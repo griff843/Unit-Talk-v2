@@ -3,6 +3,8 @@ import {
   type BoardPromotionEvaluationInput,
   type CanonicalPick,
   type EdgeSource,
+  type EdgeFallbackReason,
+  type EdgeSourceQuality,
   type PickLifecycleState,
   type PromotionDecisionSnapshot,
   type PromotionPolicy,
@@ -218,6 +220,10 @@ export async function evaluateAllPoliciesEagerAndPersist(
       uniqueness: scoreInputs.uniqueness,
       boardFit: scoreInputs.boardFit,
       edgeSource: scoreInputs.edgeSource,
+      edgeSourceQuality: scoreInputs.edgeSourceQuality,
+      ...(scoreInputs.edgeFallbackReason
+        ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
+        : {}),
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -466,6 +472,10 @@ async function buildSmartFormQualifiedResult(
       uniqueness: scoreInputs.uniqueness,
       boardFit: scoreInputs.boardFit,
       edgeSource: scoreInputs.edgeSource,
+      edgeSourceQuality: scoreInputs.edgeSourceQuality,
+      ...(scoreInputs.edgeFallbackReason
+        ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
+        : {}),
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -682,6 +692,10 @@ async function persistPromotionDecisionForPick(
       uniqueness: scoreInputs.uniqueness,
       boardFit: scoreInputs.boardFit,
       edgeSource: scoreInputs.edgeSource,
+      edgeSourceQuality: scoreInputs.edgeSourceQuality,
+      ...(scoreInputs.edgeFallbackReason
+        ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
+        : {}),
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -793,7 +807,10 @@ async function readPromotionScoreInputs(
   const configured = readNestedRecord(pick.metadata, 'promotionScores');
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
 
-  // Edge fallback priority: explicit promotionScores.edge > domain analysis edge > confidence
+  // Edge fallback priority: explicit promotionScores.edge > market-backed/domain analysis edge > confidence.
+  // Root causes UTV2-571 tracks: missing promotionScores.edge plus no matching
+  // paired provider offer, or market-backed realEdge stored only at top-level on
+  // older rows. Keep these labels stable so fallback rate is measurable.
   const domainEdgeScore = readDomainAnalysisEdgeScore(pick.metadata);
   const edgeFallback = domainEdgeScore ?? confidenceScore;
 
@@ -804,6 +821,11 @@ async function readPromotionScoreInputs(
     : domainEdgeScore !== null
       ? readDomainAnalysisEdgeSource(pick.metadata)
       : 'confidence-delta';
+  const edgeSourceQuality = resolveEdgeSourceQuality(edgeSource);
+  const edgeFallbackReason: EdgeFallbackReason | undefined =
+    edgeSourceQuality === 'confidence-fallback'
+      ? 'missing-explicit-edge-and-market-edge'
+      : undefined;
 
   // Trust fallback priority: explicit promotionScores.trust > domain trust signal > confidence
   const trustFallback = readDomainAnalysisTrustSignal(pick.metadata) ?? confidenceScore;
@@ -859,6 +881,9 @@ async function readPromotionScoreInputs(
     boardFit,
     /** Source of the edge component — used in decision snapshot for auditability. */
     edgeSource,
+    /** Coarse bucket for measuring market-backed vs confidence-fallback routing. */
+    edgeSourceQuality,
+    ...(edgeFallbackReason ? { edgeFallbackReason } : {}),
   };
 }
 
@@ -879,11 +904,10 @@ export function readDomainAnalysisEdgeScore(
   metadata: Record<string, unknown>,
 ): number | null {
   const domainAnalysis = metadata['domainAnalysis'];
+  const topLevelMarketEdge = readTopLevelMarketBackedRealEdge(metadata);
   if (!isRecord(domainAnalysis)) {
-    // Check if real edge is in top-level metadata (from submission enrichment)
-    const topLevelRealEdge = metadata['realEdge'];
-    if (typeof topLevelRealEdge === 'number' && Number.isFinite(topLevelRealEdge)) {
-      return Math.max(0, Math.min(100, 50 + topLevelRealEdge * 400));
+    if (topLevelMarketEdge !== null) {
+      return scoreRawEdge(topLevelMarketEdge);
     }
     return null;
   }
@@ -891,7 +915,11 @@ export function readDomainAnalysisEdgeScore(
   // Prefer real edge (vs Pinnacle/consensus) when available
   const realEdge = domainAnalysis['realEdge'];
   if (typeof realEdge === 'number' && Number.isFinite(realEdge)) {
-    return Math.max(0, Math.min(100, 50 + realEdge * 400));
+    return scoreRawEdge(realEdge);
+  }
+
+  if (topLevelMarketEdge !== null) {
+    return scoreRawEdge(topLevelMarketEdge);
   }
 
   // Fall back to confidence delta
@@ -900,7 +928,7 @@ export function readDomainAnalysisEdgeScore(
     return null;
   }
 
-  return Math.max(0, Math.min(100, 50 + rawEdge * 400));
+  return scoreRawEdge(rawEdge);
 }
 
 /**
@@ -908,7 +936,7 @@ export function readDomainAnalysisEdgeScore(
  *
  * Returns 'real-edge' when Pinnacle data drove the edge,
  * 'consensus-edge' for multi-book, 'sgo-edge' for SGO-only,
- * 'confidence-delta' when no market data was available.
+ * 'single-book-edge' for one non-SGO book, 'confidence-delta' when no market data was available.
  *
  * This is used to label the snapshot so operators can see whether
  * the edge score reflects a true market comparison or a self-reported
@@ -938,7 +966,31 @@ function mapRealEdgeSource(source: unknown): EdgeSource {
   if (source === 'pinnacle') return 'real-edge';
   if (source === 'consensus') return 'consensus-edge';
   if (source === 'sgo') return 'sgo-edge';
+  if (source === 'single-book') return 'single-book-edge';
   return 'confidence-delta';
+}
+
+function resolveEdgeSourceQuality(edgeSource: EdgeSource): EdgeSourceQuality {
+  if (edgeSource === 'confidence-delta') return 'confidence-fallback';
+  if (edgeSource === 'explicit') return 'explicit';
+  return 'market-backed';
+}
+
+function readTopLevelMarketBackedRealEdge(metadata: Record<string, unknown>): number | null {
+  if (metadata['realEdgeSource'] === 'confidence-delta') {
+    return null;
+  }
+
+  const topLevelRealEdge = metadata['realEdge'];
+  if (typeof topLevelRealEdge === 'number' && Number.isFinite(topLevelRealEdge)) {
+    return topLevelRealEdge;
+  }
+
+  return null;
+}
+
+function scoreRawEdge(rawEdge: number): number {
+  return Math.max(0, Math.min(100, 50 + rawEdge * 400));
 }
 
 /**
