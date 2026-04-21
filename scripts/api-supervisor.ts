@@ -2,12 +2,12 @@ import { spawn, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
 
-type Command = 'start' | 'run' | 'status' | 'stop' | 'restart';
+export type Command = 'start' | 'run' | 'status' | 'stop' | 'restart';
 
-interface ApiSupervisorState {
+export interface ApiSupervisorState {
   supervisorPid: number | null;
   childPid: number | null;
   status: 'init' | 'running' | 'restarting' | 'stopping' | 'stopped';
@@ -25,7 +25,7 @@ interface ProcessRef {
   commandLine: string;
 }
 
-interface ApiHealthCheck {
+export interface ApiHealthCheck {
   status: 'healthy' | 'degraded' | 'down';
   detail: string;
   httpStatus: number | null;
@@ -80,20 +80,21 @@ async function main() {
   }
 }
 
-function normalizeCommand(value: string | undefined): Command {
-  switch ((value ?? 'status').toLowerCase()) {
+export function normalizeCommand(value: string | undefined): Command {
+  const normalized = (value ?? 'status').toLowerCase();
+  switch (normalized) {
     case 'start':
     case 'run':
     case 'status':
     case 'stop':
     case 'restart':
-      return value.toLowerCase() as Command;
+      return normalized as Command;
     default:
       return 'status';
   }
 }
 
-function createInitialState(now: Date, supervisorPid: number | null): ApiSupervisorState {
+export function createInitialState(now: Date, supervisorPid: number | null): ApiSupervisorState {
   return {
     supervisorPid,
     childPid: null,
@@ -108,7 +109,7 @@ function createInitialState(now: Date, supervisorPid: number | null): ApiSupervi
   };
 }
 
-function calculateRestartDelayMs(restartCount: number) {
+export function calculateRestartDelayMs(restartCount: number) {
   const minMs = 5_000;
   const maxMs = 30_000;
   const delay = minMs * Math.pow(1.5, Math.min(Math.max(restartCount, 0), 10));
@@ -278,7 +279,7 @@ async function printStatus() {
 function printHumanStatus(status: RuntimeStatus) {
   console.log(`Supervisor:  ${status.supervisorRunning ? 'RUNNING' : 'DOWN'}`);
   console.log(`Child:       ${status.childRunning ? 'RUNNING' : 'DOWN'}`);
-  console.log(`Health:      ${status.health.status.toUpperCase()} — ${status.health.detail}`);
+  console.log(`Health:      ${status.health.status.toUpperCase()} - ${status.health.detail}`);
   console.log(`HTTP:        ${status.health.httpStatus ?? 'n/a'}`);
   console.log(`Restarts:    ${status.supervisorState.restartCount}`);
   console.log(`Port:        ${status.port}`);
@@ -350,7 +351,7 @@ async function readApiHealth(port: number, childRunning: boolean): Promise<ApiHe
   }
 }
 
-function buildHealthDetail(payload: Record<string, unknown>, statusCode: number) {
+export function buildHealthDetail(payload: Record<string, unknown>, statusCode: number) {
   const persistenceMode = typeof payload['persistenceMode'] === 'string' ? payload['persistenceMode'] : 'unknown';
   const runtimeMode = typeof payload['runtimeMode'] === 'string' ? payload['runtimeMode'] : 'unknown';
   const dbReachable = typeof payload['dbReachable'] === 'boolean' ? payload['dbReachable'] : null;
@@ -468,7 +469,9 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-main().catch((error) => {
-  console.error(`[api-supervisor] ${error instanceof Error ? error.message : String(error)}`);
-  process.exit(1);
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    console.error(`[api-supervisor] ${error instanceof Error ? error.message : String(error)}`);
+    process.exit(1);
+  });
+}
