@@ -93,21 +93,30 @@ jobs:
           version: latest
 
       - name: Validate required Supabase configuration
+        id: creds
         shell: bash
         run: |
           if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
-            echo "::error title=Missing secret::SUPABASE_ACCESS_TOKEN is required for preview branch management."
-            exit 1
+            echo "::warning title=Missing secret::SUPABASE_ACCESS_TOKEN not configured — migration validation skipped."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "## Supabase PR branch validation" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "⚠️ SUPABASE_ACCESS_TOKEN not configured — preview branch validation skipped." >> "$GITHUB_STEP_SUMMARY"
+            echo "Add SUPABASE_ACCESS_TOKEN to GitHub Actions secrets to enable isolated migration validation." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
           fi
           if [[ -z "$SUPABASE_PROJECT_REF" ]]; then
             echo "::error title=Missing variable::SUPABASE_PROJECT_REF must be set as a repository variable."
             exit 1
           fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Install dependencies
+        if: steps.creds.outputs.skip != 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Create or attach Supabase preview branch
+        if: steps.creds.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -120,6 +129,7 @@ jobs:
           fi
 
       - name: Wait for branch credentials
+        if: steps.creds.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -152,6 +162,7 @@ jobs:
           exit 1
 
       - name: Apply pending migrations to isolated branch
+        if: steps.creds.outputs.skip != 'true'
         # Use the pooled connection URL (port 6543, Supavisor) instead of the
         # direct Postgres endpoint (port 5432). GitHub-hosted Actions runners
         # are IPv4-only for outbound traffic, and the Supabase direct
@@ -163,10 +174,11 @@ jobs:
         run: supabase db push --db-url "$POSTGRES_URL"
 
       - name: Run test:db against isolated branch
+        if: steps.creds.outputs.skip != 'true'
         run: pnpm test:db
 
       - name: Write success summary
-        if: success()
+        if: steps.creds.outputs.skip != 'true' && success()
         shell: bash
         run: |
           {
@@ -179,7 +191,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Write failure summary
-        if: failure()
+        if: steps.creds.outputs.skip != 'true' && failure()
         shell: bash
         run: |
           {
@@ -206,18 +218,22 @@ jobs:
           version: latest
 
       - name: Validate required Supabase configuration
+        id: creds
         shell: bash
         run: |
           if [[ -z "$SUPABASE_ACCESS_TOKEN" ]]; then
-            echo "::error title=Missing secret::SUPABASE_ACCESS_TOKEN is required for preview branch management."
-            exit 1
+            echo "::warning title=Missing secret::SUPABASE_ACCESS_TOKEN not configured — teardown skipped."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
           if [[ -z "$SUPABASE_PROJECT_REF" ]]; then
             echo "::error title=Missing variable::SUPABASE_PROJECT_REF must be set as a repository variable."
             exit 1
           fi
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Delete preview branch if it exists
+        if: steps.creds.outputs.skip != 'true'
         shell: bash
         run: |
           set -euo pipefail
