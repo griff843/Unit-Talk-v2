@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-573",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main-utv2-573",
+  "branch": "codex/utv2-573-runtime-foundation",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "scripts/api-supervisor.ts",
+    "scripts/api-supervisor.test.ts",
+    "scripts/deploy-check.ts",
+    "scripts/deploy-check.test.ts",
+    ".env.example",
+    "package.json"
+  ],
+  "file_scope_lock": [
+    "scripts/api-supervisor.ts",
+    "scripts/deploy-check.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-04-21T14:50:00.000Z",
+  "heartbeat_at": "2026-04-21T15:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex",
+  "truth_check_history": [],
+  "reopen_history": []
+}

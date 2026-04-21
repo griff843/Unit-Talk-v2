@@ -4,6 +4,6 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-708
+    - UTV2-573
   proofs:
-    - UTV2-708
+    - UTV2-573
