@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-581",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main/.out/worktrees/utv2-581-settlement-clv-proof",
+  "branch": "codex/utv2-581-settlement-clv-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-581/evidence.json",
+    "docs/06_status/lanes/UTV2-581.json"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-581/evidence.json",
+    "docs/06_status/lanes/UTV2-581.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-581/evidence.json"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-04-22T13:00:00.000Z",
+  "heartbeat_at": "2026-04-22T13:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
