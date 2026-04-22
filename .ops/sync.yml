@@ -5,3 +5,5 @@ approval:
 entities:
   issues:
     - UTV2-627
+  proofs:
+    - UTV2-627
