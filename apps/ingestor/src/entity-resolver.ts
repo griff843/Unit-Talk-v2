@@ -7,6 +7,10 @@ import type {
 } from './sgo-fetcher.js';
 import { deriveDisplayNameFromProviderId } from './sgo-fetcher.js';
 
+function toEasternDate(utcIso: string): string {
+  return new Date(utcIso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
 export interface ResolveEntityOptions {
   logger?: Pick<Console, 'warn'>;
   providerKey?: string;
@@ -46,7 +50,7 @@ export async function resolveSgoEntities(
       externalId: event.providerEventId,
       sportId,
       eventName: event.eventName,
-      eventDate: startsAt.slice(0, 10),
+      eventDate: toEasternDate(startsAt),
       status: mapSGOStatus(event.status),
       metadata: {
         source: options.providerKey ?? 'sgo',
