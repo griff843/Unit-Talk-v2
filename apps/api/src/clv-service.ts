@@ -48,6 +48,8 @@ export interface CLVPreResolvedContext {
   providerEventId: string;
   eventStartTime: string;
   participantExternalId: string | null;
+  /** Optional: participant home/away role for moneyline CLV side selection. */
+  participantSide?: 'home' | 'away' | null;
 }
 
 export interface ComputeAndAttachClvOptions {
@@ -60,6 +62,8 @@ interface PickEventContext {
   providerEventId: string;
   eventStartTime: string;
   participantExternalId: string | null;
+  /** home/away role for the resolved participant. Used for moneyline CLV side selection. */
+  participantSide: 'home' | 'away' | null;
 }
 
 export async function computeAndAttachCLV(
@@ -106,18 +110,26 @@ export async function computeCLVOutcome(
     };
   }
 
-  const selectionSide = inferSelectionSide(pick.selection);
-  if (!selectionSide) {
-    return {
-      result: null,
-      status: 'missing_selection_side',
-      resolvedMarketKey: null,
-      availableMarkets: [],
-    };
+  const isMoneyline = pick.market === 'moneyline';
+
+  // For O/U markets, infer side before event resolution (cheap check).
+  // For moneyline, defer side inference until after event context so we can
+  // use the participant's home/away role from event_participants.
+  if (!isMoneyline) {
+    const selectionSide = inferSelectionSide(pick.selection);
+    if (!selectionSide) {
+      return {
+        result: null,
+        status: 'missing_selection_side',
+        resolvedMarketKey: null,
+        availableMarkets: [],
+      };
+    }
   }
 
   const eventContext: PickEventContext | null = options.preResolvedContext
-    ?? await resolvePickEventContext(pick, repositories);
+    ? { ...options.preResolvedContext, participantSide: options.preResolvedContext.participantSide ?? null }
+    : await resolvePickEventContext(pick, repositories);
   if (!eventContext) {
     return {
       result: null,
@@ -138,7 +150,9 @@ export async function computeCLVOutcome(
   const baseLineCriteria = {
     providerEventId: eventContext.providerEventId,
     providerMarketKey: resolvedMarketKey,
-    providerParticipantId: eventContext.participantExternalId,
+    // Moneyline offers are event-level (no participant), so query with null.
+    // O/U player-prop offers are participant-scoped.
+    providerParticipantId: isMoneyline ? null : eventContext.participantExternalId,
     before: eventContext.eventStartTime,
   };
 
@@ -177,7 +191,26 @@ export async function computeCLVOutcome(
     };
   }
 
-  const pricedSide = readClosingSideOdds(closingLine, selectionSide);
+  // Resolve final selection side for odds column mapping:
+  // - O/U picks: 'over' or 'under' from selection string (already validated above)
+  // - Moneyline: 'home' role → 'over' column, 'away' role → 'under' column
+  let resolvedSide: 'over' | 'under';
+  if (isMoneyline) {
+    const participantSide = eventContext.participantSide;
+    if (!participantSide) {
+      return {
+        result: null,
+        status: 'missing_selection_side',
+        resolvedMarketKey,
+        availableMarkets: [],
+      };
+    }
+    resolvedSide = participantSide === 'home' ? 'over' : 'under';
+  } else {
+    resolvedSide = inferSelectionSide(pick.selection)!;
+  }
+
+  const pricedSide = readClosingSideOdds(closingLine, resolvedSide);
   if (!pricedSide) {
     return {
       result: null,
@@ -201,7 +234,7 @@ export async function computeCLVOutcome(
   }
 
   const closingImpliedProb =
-    selectionSide === 'over' ? devigged.overFair : devigged.underFair;
+    resolvedSide === 'over' ? devigged.overFair : devigged.underFair;
   const clvRaw = roundTo(pickImpliedProb - closingImpliedProb, 6);
 
   const result = {
@@ -263,16 +296,23 @@ async function resolvePickEventContext(
     return null;
   }
 
+  const matchedLink = links.find((link) => link.event_id === matchedEvent.id);
+  const participantSide = matchedLink?.role === 'home' || matchedLink?.role === 'away'
+    ? matchedLink.role
+    : null;
+
   return {
     providerEventId: matchedEvent.external_id,
     eventStartTime: readEventStartTime(matchedEvent),
     participantExternalId: participant.external_id,
+    participantSide,
   };
 }
 
 function chooseEventForPick(
   pick: PickRecord,
   events: Array<{
+    id: string;
     event_name: string;
     event_date: string;
     external_id: string | null;
