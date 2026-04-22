@@ -58,7 +58,6 @@ export interface ModelHealthScanResult {
 
 // Default sports to scan when no explicit slices are provided.
 const DEFAULT_SPORTS = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
-const DEFAULT_MARKET_FAMILIES = ['spread', 'moneyline', 'total', 'player_prop'] as const;
 
 export async function runModelHealthScan(
   deps: ModelHealthScannerDeps,
