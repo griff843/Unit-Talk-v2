@@ -1,0 +1,41 @@
+services:
+  api:
+    image: ghcr.io/griff843/unit-talk-v2/api:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    env_file:
+      - .env.production
+    ports:
+      - "${UNIT_TALK_API_HOST_PORT:-4000}:4000"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4000/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+
+  worker:
+    image: ghcr.io/griff843/unit-talk-v2/worker:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    env_file:
+      - .env.production
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  ingestor:
+    image: ghcr.io/griff843/unit-talk-v2/ingestor:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    env_file:
+      - .env.production
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+  discord-bot:
+    image: ghcr.io/griff843/unit-talk-v2/discord-bot:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
+    env_file:
+      - .env.production
+    restart: on-failure
+    depends_on:
+      api:
+        condition: service_healthy

@@ -255,6 +255,37 @@ test('summarizeObservability activates critical alert conditions from runtime ro
   );
 });
 
+test('createSnapshotFromRows marks ingestor degraded when provider offer snapshots are stale', () => {
+  const snapshot = createSnapshotFromRows({
+    persistenceMode: 'database',
+    recentOutbox: [],
+    recentReceipts: [],
+    recentRuns: [
+      {
+        id: 'run-ingestor-fresh',
+        run_type: 'ingestor.cycle',
+        status: 'succeeded',
+        started_at: '2026-04-21T15:55:00.000Z',
+        finished_at: '2026-04-21T15:55:05.000Z',
+        actor: 'ingestor',
+        details: {},
+        created_at: '2026-04-21T15:55:00.000Z',
+        idempotency_key: null,
+      },
+    ],
+    recentPicks: [],
+    recentAudit: [],
+    latestProviderOfferSnapshotAt: '2026-04-21T15:20:00.000Z',
+    ingestorOfferStaleThresholdMinutes: 30,
+    now: new Date('2026-04-21T16:00:00.000Z'),
+  });
+
+  const ingestorSignal = snapshot.health.find((signal) => signal.component === 'ingestor');
+  assert.ok(ingestorSignal);
+  assert.equal(ingestorSignal.status, 'degraded');
+  assert.match(ingestorSignal.detail, /provider offer snapshot 40m ago/);
+});
+
 test('GET /api/operator/participants returns participant list', async () => {
   const provider = createStaticProvider();
   const server = createOperatorServer({ provider });
@@ -4711,6 +4742,7 @@ test('GET /api/operator/provider-health returns provider freshness and quota tru
         sgo: { creditsUsed: number; creditsRemaining: number | null } | null;
         oddsApi: { creditsUsed: number; creditsRemaining: number | null } | null;
       };
+      staleThresholdMinutes: number;
       distinctEventsLast24h: number;
     };
   };
@@ -4725,6 +4757,7 @@ test('GET /api/operator/provider-health returns provider freshness and quota tru
   assert.ok(oddsRow);
   assert.equal(oddsRow?.status, 'stale');
   assert.equal(body.data.distinctEventsLast24h, 2);
+  assert.equal(body.data.staleThresholdMinutes, 30);
   assert.equal(typeof body.data.ingestorHealth.status, 'string');
   assert.ok(body.data.quotaSummary.sgo === null || typeof body.data.quotaSummary.sgo.creditsUsed === 'number');
 });

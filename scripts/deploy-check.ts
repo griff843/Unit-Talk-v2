@@ -32,6 +32,14 @@ const REQUIRED_PACKAGE_SCRIPTS = [
 ] as const;
 
 const REQUIRED_COMPOSE_SERVICES = ['api', 'worker', 'ingestor'] as const;
+const REQUIRED_DEPLOY_SERVICES = ['api', 'worker', 'ingestor', 'discord-bot'] as const;
+const REQUIRED_DEPLOY_SECRETS = [
+  'UNIT_TALK_DEPLOY_HOST',
+  'UNIT_TALK_DEPLOY_USER',
+  'UNIT_TALK_DEPLOY_PATH',
+  'UNIT_TALK_DEPLOY_HEALTH_URL',
+  'UNIT_TALK_DEPLOY_SSH_KEY',
+] as const;
 
 export function collectDeployStaticChecks(
   repoRoot = process.cwd(),
@@ -102,6 +110,85 @@ export function collectDeployStaticChecks(
             passed: false,
             detail: 'service must depend on api health before starting',
           },
+    );
+  }
+
+  const deployComposePath = path.join(repoRoot, 'deploy', 'production', 'docker-compose.yml');
+  const deployWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'deploy.yml');
+  const deployCompose = YAML.parse(readTextFile(deployComposePath)) as {
+    services?: Record<string, { image?: string; restart?: string; depends_on?: unknown; healthcheck?: unknown }>;
+  };
+  const deployWorkflow = readTextFile(deployWorkflowPath);
+
+  for (const serviceName of REQUIRED_DEPLOY_SERVICES) {
+    const service = deployCompose.services?.[serviceName];
+    if (!service) {
+      results.push({
+        name: `production compose service ${serviceName}`,
+        passed: false,
+        detail: 'missing production compose service',
+      });
+      continue;
+    }
+
+    const image = service.image ?? '';
+    results.push(
+      image.includes(`unit-talk-v2/${serviceName}:`) && image.includes('UNIT_TALK_IMAGE_TAG')
+        ? { name: `production image ${serviceName}`, passed: true }
+        : {
+            name: `production image ${serviceName}`,
+            passed: false,
+            detail: 'image must use GHCR service image and UNIT_TALK_IMAGE_TAG',
+          },
+    );
+
+    results.push(
+      service.restart
+        ? { name: `production restart ${serviceName}`, passed: true }
+        : { name: `production restart ${serviceName}`, passed: false, detail: 'missing restart policy' },
+    );
+  }
+
+  results.push(
+    deployCompose.services?.api?.healthcheck
+      ? { name: 'production api healthcheck', passed: true }
+      : { name: 'production api healthcheck', passed: false, detail: 'api healthcheck is required' },
+  );
+
+  for (const dependent of ['worker', 'ingestor', 'discord-bot'] as const) {
+    const dependsOn = deployCompose.services?.[dependent]?.depends_on;
+    const dependsOnApi = JSON.stringify(dependsOn ?? {}).includes('api');
+    results.push(
+      dependsOnApi
+        ? { name: `production ${dependent} waits for api`, passed: true }
+        : {
+            name: `production ${dependent} waits for api`,
+            passed: false,
+            detail: 'service must depend on api health before starting',
+          },
+    );
+  }
+
+  for (const secretName of REQUIRED_DEPLOY_SECRETS) {
+    results.push(
+      deployWorkflow.includes(secretName)
+        ? { name: `deploy secret ${secretName}`, passed: true }
+        : { name: `deploy secret ${secretName}`, passed: false, detail: 'deploy workflow must require secret' },
+    );
+  }
+
+  const workflowChecks = [
+    ['deploy workflow dispatch', /workflow_dispatch:/],
+    ['deploy workflow builds api', /service:\s+\[api,\s*worker,\s*ingestor,\s*discord-bot\]/],
+    ['deploy workflow pushes ghcr', /docker push "\$IMAGE_NAMESPACE\/\$\{\{ matrix\.service \}\}:\$IMAGE_TAG"/],
+    ['deploy workflow runs health check', /curl -fsS "\$DEPLOY_HEALTH_URL"/],
+    ['deploy workflow rollback path', /ROLLBACK_TAG/],
+  ] as const;
+  for (const [name, pattern] of workflowChecks) {
+    results.push(
+      pattern.test(deployWorkflow)
+        ? { name, passed: true }
+        : { name, passed: false, detail: 'deploy workflow release/rollback contract is missing' },
     );
   }
 

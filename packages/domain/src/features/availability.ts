@@ -1,15 +1,10 @@
 /**
- * Availability / Injury Confidence Extractor — UTV2-634
+ * Availability / injury confidence extractor.
  *
- * Adjusts pick confidence based on:
- *   - Player availability status (confirmed → out scale)
- *   - Key teammate availability (game-script risk)
- *   - Data staleness (< 4h = fresh)
- *
- * Pure — no I/O, no DB, no env reads.
+ * Pure domain logic only: callers must provide real availability records from
+ * an ingestor or analysis feed. Missing records should be handled by the app
+ * layer so no-data and low-impact availability are not collapsed together.
  */
-
-// ── Types ────────────────────────────────────────────────────────────────────
 
 export type AvailabilityStatus =
   | 'confirmed'
@@ -22,46 +17,41 @@ export type AvailabilityStatus =
 export interface PlayerAvailability {
   participantId: string;
   status: AvailabilityStatus;
-  /** Free text from injury report */
+  /** Free text from a provider injury or lineup report. */
   injuryNote?: string;
-  /** ISO timestamp */
+  /** Provider/source name for explainability. */
+  source?: string;
+  /** ISO timestamp from the provider signal. */
   lastUpdatedAt?: string;
 }
 
 export interface AvailabilityConfidenceResult {
-  /** 1.0 = no change; 0.5 = major uncertainty */
+  /** 1.0 = no change; 0.5 = major uncertainty. */
   confidenceMultiplier: number;
   recommendationAdjustment: 'none' | 'reduce_stake' | 'hold' | 'suppress';
   reason: string;
-  /** fresh = < 4h old */
+  /** Fresh means the provider signal is less than 4 hours old. */
   staleness: 'fresh' | 'stale' | 'unknown';
 }
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
 /** Confidence multipliers by availability status. */
-export const AVAILABILITY_CONFIDENCE_MAP: Record<AvailabilityStatus, number> =
-  {
-    confirmed: 1.0,
-    probable: 0.92,
-    questionable: 0.70,
-    doubtful: 0.40,
-    /** Pick should be suppressed if key player is out. */
-    out: 0.0,
-    /** Some uncertainty but do not hard-suppress. */
-    unknown: 0.80,
-  };
+export const AVAILABILITY_CONFIDENCE_MAP: Record<AvailabilityStatus, number> = {
+  confirmed: 1.0,
+  probable: 0.92,
+  questionable: 0.70,
+  doubtful: 0.40,
+  out: 0.0,
+  unknown: 0.80,
+};
 
 export const STALENESS_THRESHOLD_HOURS = 4;
-
-// ── Core Computation ─────────────────────────────────────────────────────────
 
 /**
  * Evaluate availability confidence for a pick candidate.
  *
- * @param targetPlayer      - The player being picked.
- * @param keyTeammateAvailability - Stars whose absence changes game script.
- * @param now               - ISO timestamp for staleness reference (defaults to Date.now()).
+ * @param targetPlayer Availability for the player being picked.
+ * @param keyTeammateAvailability Stars whose absence changes game script.
+ * @param now ISO timestamp for staleness reference. Defaults to Date.now().
  */
 export function evaluateAvailabilityConfidence(
   targetPlayer: PlayerAvailability,
@@ -70,8 +60,7 @@ export function evaluateAvailabilityConfidence(
 ): AvailabilityConfidenceResult {
   const nowMs = now ? new Date(now).getTime() : Date.now();
 
-  // ── Staleness check ──────────────────────────────────────────────────────
-  let staleness: 'fresh' | 'stale' | 'unknown' = 'unknown';
+  let staleness: AvailabilityConfidenceResult['staleness'] = 'unknown';
   if (targetPlayer.lastUpdatedAt) {
     const ageHours =
       (nowMs - new Date(targetPlayer.lastUpdatedAt).getTime()) / 3600000;
@@ -79,10 +68,9 @@ export function evaluateAvailabilityConfidence(
   }
 
   const baseMultiplier = AVAILABILITY_CONFIDENCE_MAP[targetPlayer.status];
-
-  // ── Key teammate impact ──────────────────────────────────────────────────
   let teammateImpact = 1.0;
   let teammateReason = '';
+
   if (keyTeammateAvailability?.length) {
     const outTeammates = keyTeammateAvailability.filter(
       (p) => p.status === 'out',
@@ -90,8 +78,8 @@ export function evaluateAvailabilityConfidence(
     const questionableTeammates = keyTeammateAvailability.filter(
       (p) => p.status === 'questionable' || p.status === 'doubtful',
     );
+
     if (outTeammates.length > 0) {
-      // Star out changes game script → less certainty on stat projections
       teammateImpact = 0.85;
       teammateReason = 'key_teammate_out';
     } else if (questionableTeammates.length > 0) {
@@ -102,7 +90,6 @@ export function evaluateAvailabilityConfidence(
 
   const confidenceMultiplier = Math.max(0, baseMultiplier * teammateImpact);
 
-  // ── Recommendation adjustment ────────────────────────────────────────────
   let recommendationAdjustment: AvailabilityConfidenceResult['recommendationAdjustment'];
   if (targetPlayer.status === 'out') {
     recommendationAdjustment = 'suppress';
@@ -122,6 +109,7 @@ export function evaluateAvailabilityConfidence(
 
   const reasons = [
     `status_${targetPlayer.status}`,
+    targetPlayer.source ? `source_${targetPlayer.source}` : null,
     staleness !== 'unknown' ? `data_${staleness}` : null,
     teammateReason || null,
   ]

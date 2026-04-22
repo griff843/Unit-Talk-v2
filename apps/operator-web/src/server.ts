@@ -46,7 +46,10 @@ import { handleReviewHistoryRequest } from './routes/review-history.js';
 import { handlePerformanceRequest } from './routes/performance.js';
 import { handleIntelligenceRequest } from './routes/intelligence.js';
 import { handleIntelligenceCoverageRequest } from './routes/intelligence-coverage.js';
-import { handleProviderHealthRequest } from './routes/provider-health.js';
+import {
+  handleProviderHealthRequest,
+  resolveProviderOfferFreshnessThresholdMinutes,
+} from './routes/provider-health.js';
 import { handleExceptionQueuesRequest } from './routes/exception-queues.js';
 import { handleObservabilityRequest } from './routes/observability.js';
 import { handleBoardStateRequest } from './routes/board-state.js';
@@ -616,6 +619,7 @@ export function createOperatorSnapshotProvider(
           totalTeamsCountResult,
           upcomingEventsResult,
           memberTiersResult,
+          latestProviderOfferResult,
         ] = await Promise.all([
           (() => {
             let q = client.from('distribution_outbox').select('*');
@@ -684,6 +688,11 @@ export function createOperatorSnapshotProvider(
             .from('member_tiers')
             .select('tier')
             .is('effective_until', null),
+          client
+            .from('provider_offers')
+            .select('snapshot_at')
+            .order('snapshot_at', { ascending: false })
+            .limit(1),
         ]);
 
         if (outboxResult.error) {
@@ -721,6 +730,9 @@ export function createOperatorSnapshotProvider(
         }
         if (upcomingEventsResult.error) {
           throw upcomingEventsResult.error;
+        }
+        if (latestProviderOfferResult.error) {
+          throw latestProviderOfferResult.error;
         }
         // member_tiers query is best-effort — table may not exist in older environments
         const memberTierRows =
@@ -781,6 +793,8 @@ export function createOperatorSnapshotProvider(
               (settledCountResult.count ?? 0),
           },
           memberTierRows,
+          latestProviderOfferSnapshotAt: latestProviderOfferResult.data?.[0]?.snapshot_at ?? null,
+          ingestorOfferStaleThresholdMinutes: resolveProviderOfferFreshnessThresholdMinutes(environment),
         });
       },
       async getParticipants(filter?: OperatorParticipantsFilter) {
@@ -1105,6 +1119,8 @@ export function createSnapshotFromRows(input: {
   upcomingEvents?: OperatorUpcomingEventSummary[];
   picksPipelineCounts?: PicksPipelineSummary['counts'];
   memberTierRows?: Array<{ tier: string }>;
+  latestProviderOfferSnapshotAt?: string | null;
+  ingestorOfferStaleThresholdMinutes?: number;
   now?: Date;
 }): OperatorSnapshot {
   const simulatedDeliveries = input.recentReceipts.filter(
@@ -1185,6 +1201,13 @@ export function createSnapshotFromRows(input: {
 
   const ingestorStale = !ingestorHealth.lastRunAt ||
     (nowMs - new Date(ingestorHealth.lastRunAt).getTime()) > STALE_THRESHOLD_MS;
+  const ingestorOfferStaleThresholdMinutes = input.ingestorOfferStaleThresholdMinutes ?? 30;
+  const latestProviderOfferSnapshotAt = input.latestProviderOfferSnapshotAt ?? null;
+  const latestProviderOfferAgeMinutes = latestProviderOfferSnapshotAt
+    ? Math.max(0, Math.floor((nowMs - new Date(latestProviderOfferSnapshotAt).getTime()) / 60_000))
+    : null;
+  const providerOffersStale = latestProviderOfferAgeMinutes == null ||
+    latestProviderOfferAgeMinutes > ingestorOfferStaleThresholdMinutes;
 
   const gradingRuns = input.recentRuns.filter((r) => r.run_type === 'grading.run');
   const latestGradingAt = gradingRuns[0]?.started_at;
@@ -1213,6 +1236,16 @@ export function createSnapshotFromRows(input: {
       detail: ingestorHealth.lastRunAt
         ? `Last ingestor run ${ingestorHealth.lastRunAt} — over 2h ago`
         : 'No ingestor runs detected — feed may be down',
+    });
+  }
+
+  if (!ingestorStale && providerOffersStale) {
+    healthSignals.push({
+      component: 'ingestor',
+      status: 'degraded',
+      detail: latestProviderOfferAgeMinutes == null
+        ? 'No provider offer snapshots detected - feed may be down'
+        : `Latest provider offer snapshot ${latestProviderOfferAgeMinutes}m ago exceeds ${ingestorOfferStaleThresholdMinutes}m threshold`,
     });
   }
 

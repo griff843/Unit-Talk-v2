@@ -16,6 +16,9 @@ test('deploy static checks require durable runtime env and hosted topology', () 
   assert.equal(checks.filter((check) => !check.passed).length, 0);
   assert.ok(checks.some((check) => check.name === 'compose restart api'));
   assert.ok(checks.some((check) => check.name === 'compose worker waits for api'));
+  assert.ok(checks.some((check) => check.name === 'production image api'));
+  assert.ok(checks.some((check) => check.name === 'production discord-bot waits for api'));
+  assert.ok(checks.some((check) => check.name === 'deploy workflow rollback path'));
   assert.ok(checks.some((check) => check.name === 'package script api:start'));
 });
 

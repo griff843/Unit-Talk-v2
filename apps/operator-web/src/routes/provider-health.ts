@@ -1,6 +1,14 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import type { OperatorQuotaProviderSummary, OperatorRouteDependencies } from '../server.js';
 import { writeJson } from '../http-utils.js';
+
+export function resolveProviderOfferFreshnessThresholdMinutes(
+  environment: Pick<AppEnv, 'UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES'> = loadEnvironment(),
+) {
+  const parsed = Number.parseInt(environment.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES ?? '', 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
+}
 
 function asString(value: unknown): string | null {
   return typeof value === 'string' ? value : null;
@@ -20,6 +28,7 @@ function createEmptyProviderHealth(snapshot: Awaited<ReturnType<OperatorRouteDep
       status: snapshot.ingestorHealth.status,
       lastRunAt: snapshot.ingestorHealth.lastRunAt,
     },
+    staleThresholdMinutes: resolveProviderOfferFreshnessThresholdMinutes(),
     quotaSummary: {
       sgo: null as { creditsUsed: number; creditsRemaining: number | null } | null,
       oddsApi: null as { creditsUsed: number; creditsRemaining: number | null } | null,
@@ -52,6 +61,7 @@ export async function handleProviderHealthRequest(
   const provider = deps.provider as unknown as { _supabaseClient?: unknown };
   const sgoQuota = snapshot.quotaSummary.providers.find((item) => item.provider.toLowerCase() === 'sgo') ?? null;
   const oddsQuota = snapshot.quotaSummary.providers.find((item) => item.provider.toLowerCase().startsWith('odds-api')) ?? null;
+  const staleThresholdMinutes = resolveProviderOfferFreshnessThresholdMinutes();
 
   if (!provider._supabaseClient) {
     const empty = createEmptyProviderHealth(snapshot);
@@ -130,9 +140,9 @@ export async function handleProviderHealthRequest(
       const status: 'active' | 'stale' | 'absent' =
         aggregate.latestSnapshotMs == null || aggregate.totalRows === 0
           ? 'absent'
-          : minutesSinceLastSnapshot != null && minutesSinceLastSnapshot <= 30
+          : minutesSinceLastSnapshot != null && minutesSinceLastSnapshot <= staleThresholdMinutes
             ? 'active'
-            : minutesSinceLastSnapshot != null && minutesSinceLastSnapshot <= 360
+            : minutesSinceLastSnapshot != null && minutesSinceLastSnapshot <= staleThresholdMinutes * 12
               ? 'stale'
               : 'absent';
 
@@ -156,6 +166,7 @@ export async function handleProviderHealthRequest(
         status: snapshot.ingestorHealth.status,
         lastRunAt: snapshot.ingestorHealth.lastRunAt,
       },
+      staleThresholdMinutes,
       quotaSummary: {
         sgo: toQuotaSummary(sgoQuota),
         oddsApi: toQuotaSummary(oddsQuota),
