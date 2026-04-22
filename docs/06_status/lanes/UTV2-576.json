@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-576",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-576-closing-line-truth",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/ingestor/src/",
+    "packages/db/src/runtime-repositories.ts",
+    "scripts/proof/utv2-576-closing-line-proof.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-576-closing-line-truth.md"
+  ],
+  "status": "started",
+  "started_at": "2026-04-22T04:15:00.000Z",
+  "heartbeat_at": "2026-04-22T04:15:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
