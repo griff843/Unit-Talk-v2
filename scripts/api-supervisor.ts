@@ -421,7 +421,10 @@ function listProcessRefs(): ProcessRef[] {
 
     if (result.status !== 0 || !result.stdout.trim()) return [];
 
-    const payload = JSON.parse(result.stdout) as
+    // Strip unescaped control characters that PowerShell ConvertTo-Json emits in CommandLine strings
+    // eslint-disable-next-line no-control-regex
+    const sanitized = result.stdout.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, ' ');
+    const payload = JSON.parse(sanitized) as
       | { ProcessId?: number; CommandLine?: string | null }
       | Array<{ ProcessId?: number; CommandLine?: string | null }>;
     const rows = Array.isArray(payload) ? payload : [payload];
