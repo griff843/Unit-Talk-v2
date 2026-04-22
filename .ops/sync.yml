@@ -4,6 +4,4 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-716
-  proofs:
-    - UTV2-716
+    - UTV2-718
