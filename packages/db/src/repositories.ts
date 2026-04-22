@@ -750,6 +750,8 @@ export interface ModelHealthSnapshotCreateInput {
   driftScore?: number;
   calibrationScore?: number;
   alertLevel?: AlertLevel;
+  /** ISO timestamp of the last real state transition. Stored in metadata.transitionAt. */
+  transitionAt?: string;
   metadata?: Record<string, unknown>;
 }
 
