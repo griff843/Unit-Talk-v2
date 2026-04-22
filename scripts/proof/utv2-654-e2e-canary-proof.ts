@@ -74,6 +74,7 @@ async function main(): Promise<void> {
     eventName: `UTV2-654 E2E Canary ${new Date().toISOString()}`,
     metadata: {
       sport: 'NBA',
+      player: 'Aaron Gordon',
       canaryProofId: canaryId,
       // Inject scores so promotion reliably hits ≥ 70 regardless of DB offers.
       // Same override path as golden regression suite (promotion-service.ts:819).
