@@ -17,8 +17,6 @@ import {
 import { processSubmission } from '../../apps/api/src/submission-service.js';
 import { enqueueDistributionWithRunTracking } from '../../apps/api/src/run-audit-service.js';
 import { recordPickSettlement } from '../../apps/api/src/settlement-service.js';
-import { runWorkerCycles } from '../../apps/worker/src/runner.js';
-import { createDiscordDeliveryAdapter } from '../../apps/worker/src/delivery-adapters.js';
 
 function banner(label: string) {
   console.log(`\n${'─'.repeat(60)}\n${label}\n${'─'.repeat(60)}`);
