@@ -1009,3 +1009,300 @@ test('computeCLVOutcome computes CLV for smart-form abbreviated O/U selections',
     assert.equal(typeof outcome.result.clvRaw, 'number');
   }
 });
+
+// ── UTV2-715: moneyline CLV ────────────────────────────────────────────────
+
+test('computeAndAttachCLV computes CLV for home-team moneyline pick using over_odds column', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_LAL',
+    displayName: 'Lakers',
+    participantType: 'team',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-ml-1',
+    sportId: 'NBA',
+    eventName: 'Lakers vs. Heat',
+    eventDate: '2026-04-21',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-21T23:30:00.000Z' },
+  });
+  // Lakers are home team — role: 'home'
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'home',
+  });
+  // Moneyline offer: over_odds = home (Lakers), under_odds = away (Heat)
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-ml-1',
+      providerMarketKey: 'moneyline',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: null,
+      overOdds: -150,
+      underOdds: 130,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-21T23:20:00.000Z',
+      idempotencyKey: 'ml-offer-home',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-ml-home',
+      submission_id: 'sub-ml-home',
+      participant_id: team.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'moneyline',
+      selection: 'Lakers',
+      line: null,
+      odds: -130,
+      stake_units: 1,
+      confidence: 0.6,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 80,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-21T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-21T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Lakers vs. Heat' },
+      created_at: '2026-04-21T20:00:00.000Z',
+      updated_at: '2026-04-21T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'moneyline pick should produce a CLV result');
+  // pick at -130 vs closing -150: closing overFair ~58% > pickImplied ~56.5% → negative CLV
+  assert.equal(result.closingOdds, -150);
+  assert.equal(result.beatsClosingLine, false);
+  assert.ok(result.clvRaw < 0);
+});
+
+test('computeAndAttachCLV computes CLV for away-team moneyline pick using under_odds column', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_MIA',
+    displayName: 'Heat',
+    participantType: 'team',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-ml-2',
+    sportId: 'NBA',
+    eventName: 'Lakers vs. Heat',
+    eventDate: '2026-04-21',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-21T23:30:00.000Z' },
+  });
+  // Heat are away team — role: 'away'
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'away',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-ml-2',
+      providerMarketKey: 'moneyline',
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: null,
+      overOdds: -150,
+      underOdds: 130,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-21T23:20:00.000Z',
+      idempotencyKey: 'ml-offer-away',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-ml-away',
+      submission_id: 'sub-ml-away',
+      participant_id: team.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'moneyline',
+      selection: 'Heat',
+      line: null,
+      odds: 115,
+      stake_units: 1,
+      confidence: 0.55,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 78,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-21T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-21T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Lakers vs. Heat' },
+      created_at: '2026-04-21T20:00:00.000Z',
+      updated_at: '2026-04-21T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'away moneyline pick should produce a CLV result');
+  // pick at +115 vs closing +130: pickImplied ~46.5% > underFair ~42% → positive CLV
+  assert.equal(result.closingOdds, 130);
+  assert.equal(result.beatsClosingLine, true);
+  assert.ok(result.clvRaw > 0);
+});
+
+test('computeCLVOutcome returns missing_selection_side for moneyline pick without participant context', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  // No participant seeded — event context will fail to resolve → missing_selection_side
+  const outcome = await computeCLVOutcome(
+    {
+      id: 'pick-ml-no-ctx',
+      submission_id: 'sub-ml-no-ctx',
+      participant_id: null,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'moneyline',
+      selection: 'Lakers',
+      line: null,
+      odds: -130,
+      stake_units: 1,
+      confidence: 0.6,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 80,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-21T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-21T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: {},
+      created_at: '2026-04-21T20:00:00.000Z',
+      updated_at: '2026-04-21T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.result, null);
+  // No participant → event context unresolvable → missing_event_context
+  assert.equal(outcome.status, 'missing_event_context');
+});
+
+test('existing O/U CLV behavior is unchanged by moneyline path (regression)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_REG',
+    displayName: 'Regression Player',
+    participantType: 'player',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-reg',
+    sportId: 'NBA',
+    eventName: 'Regression Game',
+    eventDate: '2026-04-22',
+    status: 'scheduled',
+    metadata: { starts_at: '2026-04-22T20:00:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-reg',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'PLAYER_REG',
+      sportKey: 'NBA',
+      line: 20.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-22T19:50:00.000Z',
+      idempotencyKey: 'reg-offer',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-reg-ou',
+      submission_id: 'sub-reg-ou',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'points-all-game-ou',
+      selection: 'Over 20.5',
+      line: 20.5,
+      odds: -110,
+      stake_units: 1,
+      confidence: 0.6,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 80,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-22T18:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-22T18:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Regression Game' },
+      created_at: '2026-04-22T18:00:00.000Z',
+      updated_at: '2026-04-22T18:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'O/U pick should still compute CLV after moneyline path added');
+  assert.equal(result.closingOdds, -110);
+});

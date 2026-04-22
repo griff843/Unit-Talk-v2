@@ -1,9 +1,7 @@
 version: 1
 approval:
-  allow_multiple_issues: false
+  allow_multiple_issues: true
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-714
-  proofs:
-    - UTV2-714
+    - UTV2-715
