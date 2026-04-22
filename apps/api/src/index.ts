@@ -12,9 +12,11 @@ import { runCandidateScoring } from './candidate-scoring-service.js';
 import { runRankedSelection } from './ranked-selection-service.js';
 import { runBoardConstruction } from './board-construction-service.js';
 import { runModelHealthScan } from './model-health-scanner.js';
+import { runClosingLineRecovery } from './closing-line-recovery-service.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MODEL_HEALTH_SCANNER_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
+const CLOSING_LINE_RECOVERY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — runs before materializer
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -31,6 +33,7 @@ let stopRecapScheduler: (() => void) | null = null;
 let stopTrialExpiryScheduler: (() => void) | null = null;
 let enrichmentTimer: ReturnType<typeof setInterval> | null = null;
 let systemPickScannerTimer: ReturnType<typeof setInterval> | null = null;
+let closingLineRecoveryTimer: ReturnType<typeof setInterval> | null = null;
 let marketUniverseMaterializerTimer: ReturnType<typeof setInterval> | null = null;
 let lineMovementDetectorTimer: ReturnType<typeof setInterval> | null = null;
 let boardScanTimer: ReturnType<typeof setInterval> | null = null;
@@ -74,6 +77,17 @@ server.listen(port, () => {
       runSystemPickScan(scannerDeps, { ...scannerConfig, logger: console }).catch(() => {});
     }, SYSTEM_PICK_SCANNER_INTERVAL_MS);
   }
+
+  // Closing-line recovery: marks is_closing=true for started events, independent of ingestor
+  // UTV2-576 — runs before the materializer so closing values are available to materialize
+  const closingLineRecoveryDeps = {
+    events: runtime.repositories.events,
+    providerOffers: runtime.repositories.providerOffers,
+  };
+  runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
+  closingLineRecoveryTimer = setInterval(() => {
+    runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
+  }, CLOSING_LINE_RECOVERY_INTERVAL_MS);
 
   // Market universe materializer: keep market_universe current from provider_offers
   // Phase 2 UTV2-461 — always runs (no feature flag; shadow_mode is enforced at candidate layer)
@@ -219,6 +233,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   stopTrialExpiryScheduler = null;
   if (enrichmentTimer) { clearInterval(enrichmentTimer); enrichmentTimer = null; }
   if (systemPickScannerTimer) { clearInterval(systemPickScannerTimer); systemPickScannerTimer = null; }
+  if (closingLineRecoveryTimer) { clearInterval(closingLineRecoveryTimer); closingLineRecoveryTimer = null; }
   if (marketUniverseMaterializerTimer) { clearInterval(marketUniverseMaterializerTimer); marketUniverseMaterializerTimer = null; }
   if (lineMovementDetectorTimer) { clearInterval(lineMovementDetectorTimer); lineMovementDetectorTimer = null; }
   if (boardScanTimer) { clearInterval(boardScanTimer); boardScanTimer = null; }
