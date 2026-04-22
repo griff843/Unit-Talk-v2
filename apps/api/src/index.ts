@@ -11,8 +11,10 @@ import { runBoardScan } from './board-scan-service.js';
 import { runCandidateScoring } from './candidate-scoring-service.js';
 import { runRankedSelection } from './ranked-selection-service.js';
 import { runBoardConstruction } from './board-construction-service.js';
+import { runModelHealthScan } from './model-health-scanner.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const MODEL_HEALTH_SCANNER_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const LINE_MOVEMENT_DETECTOR_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -35,6 +37,7 @@ let boardScanTimer: ReturnType<typeof setInterval> | null = null;
 let candidateScoringTimer: ReturnType<typeof setInterval> | null = null;
 let rankedSelectionTimer: ReturnType<typeof setInterval> | null = null;
 let boardConstructionTimer: ReturnType<typeof setInterval> | null = null;
+let modelHealthScannerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
 server.listen(port, () => {
@@ -145,6 +148,19 @@ server.listen(port, () => {
     runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
   }, BOARD_CONSTRUCTION_INTERVAL_MS);
 
+  // Model health scanner: evaluate champion model health every 4 hours
+  // UTV2-627 — writes snapshots to model_health_snapshots, alerts on warning/critical transitions
+  if (runtime.repositories.modelRegistry && runtime.repositories.modelHealthSnapshots) {
+    const healthScannerDeps = {
+      modelRegistry: runtime.repositories.modelRegistry,
+      modelHealthSnapshots: runtime.repositories.modelHealthSnapshots,
+    };
+    runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
+    modelHealthScannerTimer = setInterval(() => {
+      runModelHealthScan(healthScannerDeps, { logger: console }).catch(() => {});
+    }, MODEL_HEALTH_SCANNER_INTERVAL_MS);
+  }
+
   console.log(
     JSON.stringify(
       {
@@ -209,6 +225,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (candidateScoringTimer) { clearInterval(candidateScoringTimer); candidateScoringTimer = null; }
   if (rankedSelectionTimer) { clearInterval(rankedSelectionTimer); rankedSelectionTimer = null; }
   if (boardConstructionTimer) { clearInterval(boardConstructionTimer); boardConstructionTimer = null; }
+  if (modelHealthScannerTimer) { clearInterval(modelHealthScannerTimer); modelHealthScannerTimer = null; }
 
   server.close(() => {
     process.exit(0);
