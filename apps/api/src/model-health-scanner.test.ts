@@ -153,8 +153,10 @@ describe('runModelHealthScan', () => {
       status: 'champion',
     });
 
-    // Snapshot from 48 hours ago with critical state
-    const oldTimestamp = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+    // The InMemory repo always sets snapshot_at = now(), so we can't control it.
+    // Instead, we set `transitionAt` in metadata to 48h ago — this is what the
+    // scanner reads as lastTransitionAt, which drives the criticalWindowHours check.
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     await deps.modelHealthSnapshots.create({
       modelId: champion.id,
       sport: 'NBA',
@@ -164,10 +166,9 @@ describe('runModelHealthScan', () => {
       driftScore: 0.4,
       sampleSize: 400,
       alertLevel: 'critical',
-      metadata: { newState: 'critical', snapshotAt: oldTimestamp },
+      metadata: { newState: 'critical', transitionAt: fortyEightHoursAgo },
     });
 
-    // Force the snapshot_at to be old by reading and noting we need to handle this via lastTransitionAt
     const fired: ModelHealthAlert[] = [];
     await runModelHealthScan(deps, {
       criticalWindowHours: 24,
@@ -175,10 +176,10 @@ describe('runModelHealthScan', () => {
       onAlert: async (a) => { fired.push(a); },
     });
 
-    // Should still fire (critical state)
-    assert.ok(fired.length > 0, 'expected alert for critical model');
+    assert.ok(fired.length > 0, 'expected alert for model stuck in critical');
     const alert = fired[0]!;
     assert.equal(alert.alertLevel, 'critical');
+    assert.equal(alert.requiresOperatorDecision, true, 'expected requiresOperatorDecision after 48h in critical');
   });
 
   test('explicit slices override default sport scanning', async () => {

@@ -82,7 +82,9 @@ export async function runModelHealthScan(
     try {
       const latestSnapshot = await deps.modelHealthSnapshots.findLatestByModel(champion.id);
       const currentState = snapshotToHealthState(latestSnapshot);
-      const lastTransitionAt = latestSnapshot?.snapshot_at;
+      // Use the stored transitionAt (when state last changed), not snapshot_at (when last scanned).
+      // This is what drives the criticalWindowHours enforcement correctly.
+      const lastTransitionAt = readTransitionAt(latestSnapshot);
 
       const proxyReport = buildProxyReport(latestSnapshot);
       const { newState, trigger } = evaluateModelHealthState(
@@ -95,6 +97,13 @@ export async function runModelHealthScan(
       const alertLevel = healthStateToAlertLevel(newState);
       const now = new Date().toISOString();
 
+      // When a real transition occurs, record the transition timestamp.
+      // When state is unchanged, carry forward the previous transitionAt so the
+      // criticalWindowHours clock keeps ticking from the original entry point.
+      const nextTransitionAt = trigger !== null && newState !== currentState
+        ? now
+        : (lastTransitionAt ?? now);
+
       const snapshotInput: Parameters<typeof deps.modelHealthSnapshots.create>[0] = {
         modelId: champion.id,
         sport: champion.sport,
@@ -106,6 +115,7 @@ export async function runModelHealthScan(
           newState,
           trigger: trigger ?? null,
           scannedAt: now,
+          transitionAt: nextTransitionAt,
         },
       };
       if (latestSnapshot?.roi != null) snapshotInput.roi = latestSnapshot.roi;
@@ -204,6 +214,17 @@ async function resolveChampions(
     }
   }
   return champions;
+}
+
+/**
+ * Read the timestamp of the last real state transition from snapshot metadata.
+ * Falls back to null when no transition has been recorded (new model, first scan).
+ */
+function readTransitionAt(snapshot: ModelHealthSnapshotRecord | null): string | undefined {
+  if (!snapshot) return undefined;
+  const meta = snapshot.metadata as Record<string, unknown> | null;
+  if (meta && typeof meta['transitionAt'] === 'string') return meta['transitionAt'];
+  return undefined;
 }
 
 function snapshotToHealthState(snapshot: ModelHealthSnapshotRecord | null): ModelHealthState {
