@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { signIn } from 'next-auth/react';
 import { decodeCapperToken, setStoredToken } from '@/lib/auth-token';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -46,8 +47,22 @@ export default function LoginPage() {
         <div>
           <h1 className="text-2xl font-bold text-foreground">Capper Login</h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            Paste your capper token to access the submission form.
+            Sign in with your approved Google account or paste your capper token.
           </p>
+        </div>
+
+        <Button
+          type="button"
+          className="w-full bg-primary hover:bg-primary/90 text-white font-semibold py-5"
+          onClick={() => void signIn('google', { callbackUrl: '/submit' })}
+        >
+          Sign in with Google
+        </Button>
+
+        <div className="flex items-center gap-3">
+          <div className="h-px flex-1 bg-border" />
+          <span className="text-xs font-semibold uppercase text-muted-foreground">Fallback token</span>
+          <div className="h-px flex-1 bg-border" />
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4">
