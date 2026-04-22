@@ -5,6 +5,23 @@
 **Tier:** T1  
 **Run at:** 2026-04-22T04:16:39Z  
 **Branch:** claude/utv2-576-closing-line-truth  
+**Merge SHA:** a37569aa5451653031b3b1b674e97bd0966f7d6b  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/437  
+
+## static_proof
+
+- `pnpm verify` gate: PASS (99/99 tests, lint, type-check, build, verify:commands)
+- 5 new unit tests for closing-line-recovery-service: PASS
+- Pre-push hook ran full verify: PASS
+- CI on branch: verify=SUCCESS, Merge Gate=SUCCESS, Proof Coverage Guard=SUCCESS
+- t1-approved label: PRESENT on PR #437
+
+## runtime_proof
+
+- Closing-line recovery run: 16,460 rows marked `is_closing=true`
+- market_universe.closing_line coverage: 0/429 (0%) → 403/780 (51.7%)
+- Materializer 72h lookback: 427 markets upserted
+- Live DB evidence: non-trivial closing coverage confirmed on production Supabase
 
 ---
 

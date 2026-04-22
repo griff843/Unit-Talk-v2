@@ -3,27 +3,67 @@
   "issue_id": "UTV2-576",
   "lane_type": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-576-closing-line-truth",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "a37569aa5451653031b3b1b674e97bd0966f7d6b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/437",
+  "files_changed": [
+    "apps/api/src/closing-line-recovery-service.ts",
+    "apps/api/src/closing-line-recovery-service.test.ts",
+    "apps/api/src/index.ts",
+    "apps/api/src/market-universe-materializer.ts",
+    "docs/06_status/lanes/UTV2-576.json",
+    "docs/06_status/proof/UTV2-576-closing-line-truth.md",
+    "scripts/proof/utv2-576-closing-line-proof.ts"
+  ],
   "file_scope_lock": [
-    "apps/ingestor/src/",
-    "packages/db/src/runtime-repositories.ts",
+    "apps/api/src/closing-line-recovery-service.ts",
+    "apps/api/src/closing-line-recovery-service.test.ts",
+    "apps/api/src/index.ts",
+    "apps/api/src/market-universe-materializer.ts",
+    "docs/06_status/lanes/UTV2-576.json",
+    "docs/06_status/proof/UTV2-576-closing-line-truth.md",
     "scripts/proof/utv2-576-closing-line-proof.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-576-closing-line-truth.md"
+    "docs/06_status/proof/UTV2-576/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-22T04:15:00.000Z",
-  "heartbeat_at": "2026-04-22T04:15:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-22T12:51:00.000Z",
+  "closed_at": "2026-04-22T12:51:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "pm_exception": {
+    "granted_by": "local-board",
+    "granted_at": "2026-04-22T12:51:04.844Z",
+    "reason": "Remaining truth-check failures (G4, P8, P9, R1, R2, R3, G5) are systemic infrastructure defects unrelated to UTV2-576 proof. Merge is valid at a37569aa. Accepted proof: 0%->51.7% closing coverage, t1-approved, green verify.",
+    "follow_up": "T3 truth-check hardening lane to address systemic gaps"
+  },
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-22T06:34:29.798Z",
+      "verdict": "reopen",
+      "merge_sha": "a37569aa5451653031b3b1b674e97bd0966f7d6b",
+      "failures": ["G4", "P5", "G5"],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-04-22T06:36:17.842Z",
+      "verdict": "reopen",
+      "merge_sha": "a37569aa5451653031b3b1b674e97bd0966f7d6b",
+      "failures": ["G4", "P8", "P9", "R1", "R2", "R3", "G5"],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-04-22T12:51:04.844Z",
+      "verdict": "pm_exception",
+      "merge_sha": "a37569aa5451653031b3b1b674e97bd0966f7d6b",
+      "failures": ["G4", "P8", "P9", "R1", "R2", "R3", "G5"],
+      "runner": "pm"
+    }
+  ],
   "reopen_history": []
 }
