@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-654",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-654-e2e-live-canary",
+  "base_branch": "main",
+  "commit_sha": "ebf405e73507848e140ec3fe8e4502298bf8aff3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/438",
+  "files_changed": [
+    "scripts/proof/utv2-654-e2e-canary-proof.ts",
+    "docs/06_status/proof/UTV2-654-e2e-canary.md",
+    "docs/06_status/lanes/UTV2-654.json"
+  ],
+  "file_scope_lock": [
+    "scripts/proof/utv2-654-e2e-canary-proof.ts",
+    "docs/06_status/proof/UTV2-654-e2e-canary.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-654-e2e-canary.md"
+  ],
+  "status": "closed",
+  "started_at": "2026-04-22T04:42:28Z",
+  "heartbeat_at": "2026-04-22T05:36:40Z",
+  "closed_at": "2026-04-22T05:36:40Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-22T05:36:40Z",
+      "result": "pass",
+      "merge_sha": "ebf405e73507848e140ec3fe8e4502298bf8aff3"
+    }
+  ],
+  "reopen_history": []
+}
