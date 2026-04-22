@@ -6,9 +6,13 @@
   "worktree_path": ".",
   "branch": "claude/utv2-588-smart-form-api-convergence",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "ebf405e73507848e140ec3fe8e4502298bf8aff3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/439",
+  "files_changed": [
+    "scripts/proof/utv2-588-smart-form-api-convergence-proof.ts",
+    "docs/06_status/proof/UTV2-588-smart-form-api-convergence.md",
+    "docs/06_status/lanes/UTV2-588.json"
+  ],
   "file_scope_lock": [
     "scripts/proof/utv2-588-smart-form-api-convergence-proof.ts",
     "docs/06_status/proof/UTV2-588-smart-form-api-convergence.md"
@@ -16,13 +20,19 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-588-smart-form-api-convergence.md"
   ],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-22T04:42:28Z",
-  "heartbeat_at": "2026-04-22T04:42:28Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-22T05:42:02Z",
+  "closed_at": "2026-04-22T05:42:02Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-22T05:42:02Z",
+      "result": "pass",
+      "merge_sha": "ebf405e73507848e140ec3fe8e4502298bf8aff3"
+    }
+  ],
   "reopen_history": []
 }
