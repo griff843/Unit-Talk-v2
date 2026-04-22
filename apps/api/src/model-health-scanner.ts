@@ -110,12 +110,12 @@ export async function runModelHealthScan(
         marketFamily: champion.market_family,
         sampleSize: latestSnapshot?.sample_size ?? 0,
         alertLevel,
+        transitionAt: nextTransitionAt,
         metadata: {
           previousState: currentState,
           newState,
           trigger: trigger ?? null,
           scannedAt: now,
-          transitionAt: nextTransitionAt,
         },
       };
       if (latestSnapshot?.roi != null) snapshotInput.roi = latestSnapshot.roi;

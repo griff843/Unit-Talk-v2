@@ -4,6 +4,7 @@ import {
   InMemoryModelRegistryRepository,
   InMemoryModelHealthSnapshotRepository,
 } from '@unit-talk/db';
+import { evaluateModelHealthState } from '@unit-talk/domain';
 import { runModelHealthScan } from './model-health-scanner.js';
 import type { ModelHealthAlert } from './model-health-scanner.js';
 
@@ -153,9 +154,9 @@ describe('runModelHealthScan', () => {
       status: 'champion',
     });
 
-    // The InMemory repo always sets snapshot_at = now(), so we can't control it.
-    // Instead, we set `transitionAt` in metadata to 48h ago — this is what the
-    // scanner reads as lastTransitionAt, which drives the criticalWindowHours check.
+    // transitionAt is a first-class typed field on ModelHealthSnapshotCreateInput.
+    // The InMemory repo merges it into metadata.transitionAt, which readTransitionAt()
+    // reads back. snapshot_at is always now() and is irrelevant to the window check.
     const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
     await deps.modelHealthSnapshots.create({
       modelId: champion.id,
@@ -166,7 +167,8 @@ describe('runModelHealthScan', () => {
       driftScore: 0.4,
       sampleSize: 400,
       alertLevel: 'critical',
-      metadata: { newState: 'critical', transitionAt: fortyEightHoursAgo },
+      transitionAt: fortyEightHoursAgo,
+      metadata: { newState: 'critical' },
     });
 
     const fired: ModelHealthAlert[] = [];
@@ -236,6 +238,64 @@ describe('runModelHealthScan', () => {
     assert.equal(result.scanned, 2);
   });
 });
+
+describe('evaluateModelHealthState — critical window (domain proof)', () => {
+  test('requiresOperatorDecision is true when critical state exceeds window threshold', () => {
+    // Build a minimal proxy report with negative ROI so recovery never fires.
+    // Calibration and drift are healthy so no other transition applies.
+    // The ONLY path that should match is the critical-window re-alert at lines 556-572.
+    const report = buildCriticalProxyReport(-20, 0.2, 0);
+
+    const fortyEightHoursAgo = new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString();
+
+    const { newState, trigger } = evaluateModelHealthState(
+      report,
+      'critical',
+      24,
+      fortyEightHoursAgo,
+    );
+
+    assert.equal(newState, 'critical');
+    assert.ok(trigger !== null, 'expected a trigger to fire');
+    assert.equal(trigger!.requiresOperatorDecision, true);
+  });
+
+  test('requiresOperatorDecision is false when critical state is within window threshold', () => {
+    const report = buildCriticalProxyReport(-20, 0.2, 0);
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+
+    const { newState, trigger } = evaluateModelHealthState(
+      report,
+      'critical',
+      24,
+      twoHoursAgo,
+    );
+
+    // Should not fire requiresOperatorDecision — still within window
+    assert.equal(newState, 'critical');
+    assert.ok(trigger === null, 'expected no trigger within window');
+  });
+});
+
+function buildCriticalProxyReport(roi: number, brierScore: number, driftWarnings: number) {
+  return {
+    report_version: 'system-health-v1.0',
+    generated_at: new Date().toISOString(),
+    total_records: 100,
+    clvByBand: [{ band: 'A+' as const, avg_clv_pct: null, positive_clv_rate: 0, negative_clv_rate: 0, sample_size: 100 }],
+    roiByBand: [{ band: 'A+' as const, roi_pct: roi, sample_size: 100 }],
+    calibrationMetrics: { brier_score: brierScore, log_loss: 0, ece: 0, reliability_buckets: [], sample_size: 100 },
+    bandDistribution: { distribution: [], total_picks: 100, suppression_rate_pct: 0, downgrade_rate_pct: 0, collapsed_warning: false },
+    downgradeEffectiveness: { loss_prevention_rate: 0, estimated_savings: 0, downgrade_reason_counts: [], downgrade_effective: true },
+    suppressionEffectiveness: { suppressed_hypothetical_roi_pct: 0, suppressed_hypothetical_clv_pct: null, suppression_effective: true, suppressed_count: 0 },
+    driftStatus: { drift_warnings: driftWarnings, drift_critical_flags: 0, regime_stability: 'stable' as const, flags: [] },
+    calibrationImpact: {
+      pre_calibration: { brierScore, logLoss: 0, ece: 0, reliabilityCurve: [], sampleSize: 100 },
+      post_calibration: { brierScore, logLoss: 0, ece: 0, reliabilityCurve: [], sampleSize: 100 },
+      brier_improvement: 0, log_loss_delta: 0, monotonicity_preserved: true, calibration_helped: false,
+    },
+  };
+}
 
 function silentLogger() {
   return {
