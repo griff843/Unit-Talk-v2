@@ -38,6 +38,23 @@ interface MarketUniverseRow {
   last_offer_snapshot_at: string;
 }
 
+interface ProviderOfferEvidenceRow {
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  is_opening: boolean;
+  is_closing: boolean;
+}
+
+interface MarketEvidence {
+  opening: boolean;
+  closing: boolean;
+}
+
 interface ReplayReadinessReport {
   generatedAt: string;
   totals: {
@@ -50,6 +67,8 @@ interface ReplayReadinessReport {
     scoredWithClosing: number;
     scoredOpenCloseReady: number;
     replayEligible: number;
+    providerOfferOpeningEvidence: number;
+    providerOfferClosingEvidence: number;
   };
   bySportTier: Array<{
     sport: string;
@@ -109,12 +128,26 @@ async function buildReplayReadinessReport(
   const universeById = new Map(universeRows.map((row) => [row.id, row]));
   const scored = candidates.filter((row) => row.model_score !== null);
   const scoredSgo = scored.filter((row) => universeById.get(row.universe_id)?.provider_key === 'sgo');
-  const scoredWithOpening = scoredSgo.filter((row) => hasOpening(universeById.get(row.universe_id)));
-  const scoredWithClosing = scoredSgo.filter((row) => hasClosing(universeById.get(row.universe_id)));
+  const scoredSgoUniverseRows = scoredSgo
+    .map((row) => universeById.get(row.universe_id))
+    .filter((row): row is MarketUniverseRow => row !== undefined);
+  const providerOfferEvidence = await fetchProviderOfferEvidence(client, scoredSgoUniverseRows);
+  const scoredWithOpening = scoredSgo.filter((row) =>
+    hasOpening(universeById.get(row.universe_id), providerOfferEvidence),
+  );
+  const scoredWithClosing = scoredSgo.filter((row) =>
+    hasClosing(universeById.get(row.universe_id), providerOfferEvidence),
+  );
   const replayEligible = scoredSgo.filter((row) => {
     const universe = universeById.get(row.universe_id);
-    return hasOpening(universe) && hasClosing(universe);
+    return hasOpening(universe, providerOfferEvidence) && hasClosing(universe, providerOfferEvidence);
   });
+  const scoredUniverseKeys = new Set(
+    scoredSgo
+      .map((row) => universeById.get(row.universe_id))
+      .filter((row): row is MarketUniverseRow => row !== undefined)
+      .map(naturalKey),
+  );
 
   return {
     generatedAt: new Date().toISOString(),
@@ -128,8 +161,14 @@ async function buildReplayReadinessReport(
       scoredWithClosing: scoredWithClosing.length,
       scoredOpenCloseReady: replayEligible.length,
       replayEligible: replayEligible.length,
+      providerOfferOpeningEvidence: Array.from(providerOfferEvidence.entries()).filter(
+        ([key, evidence]) => scoredUniverseKeys.has(key) && evidence.opening,
+      ).length,
+      providerOfferClosingEvidence: Array.from(providerOfferEvidence.entries()).filter(
+        ([key, evidence]) => scoredUniverseKeys.has(key) && evidence.closing,
+      ).length,
     },
-    bySportTier: summarizeBySportTier(scoredSgo, universeById),
+    bySportTier: summarizeBySportTier(scoredSgo, universeById, providerOfferEvidence),
     verdict:
       replayEligible.length >= options.minSamples
         ? {
@@ -144,7 +183,13 @@ async function buildReplayReadinessReport(
               `need at least ${options.minSamples} before R5 CLV/ROI replay is meaningful.`,
             minimumSamples: options.minSamples,
           },
-    sampleBlockedCandidates: scoredSgo.slice(0, 20).map((row) => {
+    sampleBlockedCandidates: scoredSgo.filter((row) => {
+      const universe = universeById.get(row.universe_id);
+      return (
+        !hasOpening(universe, providerOfferEvidence) ||
+        !hasClosing(universe, providerOfferEvidence)
+      );
+    }).slice(0, 20).map((row) => {
       const universe = universeById.get(row.universe_id);
       return {
         candidateId: row.id,
@@ -152,8 +197,8 @@ async function buildReplayReadinessReport(
         market: universe?.provider_market_key ?? null,
         modelScore: row.model_score,
         modelTier: row.model_tier,
-        hasOpening: hasOpening(universe),
-        hasClosing: hasClosing(universe),
+        hasOpening: hasOpening(universe, providerOfferEvidence),
+        hasClosing: hasClosing(universe, providerOfferEvidence),
         pickId: row.pick_id,
       };
     }),
@@ -163,6 +208,7 @@ async function buildReplayReadinessReport(
 function summarizeBySportTier(
   candidates: CandidateRow[],
   universeById: Map<string, MarketUniverseRow>,
+  providerOfferEvidence: Map<string, MarketEvidence>,
 ) {
   const summaries = new Map<string, {
     sport: string;
@@ -186,9 +232,12 @@ function summarizeBySportTier(
       openCloseReady: 0,
     };
     summary.scored += 1;
-    summary.opening += hasOpening(universe) ? 1 : 0;
-    summary.closing += hasClosing(universe) ? 1 : 0;
-    summary.openCloseReady += hasOpening(universe) && hasClosing(universe) ? 1 : 0;
+    summary.opening += hasOpening(universe, providerOfferEvidence) ? 1 : 0;
+    summary.closing += hasClosing(universe, providerOfferEvidence) ? 1 : 0;
+    summary.openCloseReady +=
+      hasOpening(universe, providerOfferEvidence) && hasClosing(universe, providerOfferEvidence)
+        ? 1
+        : 0;
     summaries.set(key, summary);
   }
 
@@ -197,6 +246,47 @@ function summarizeBySportTier(
     if (right.scored !== left.scored) return right.scored - left.scored;
     return `${left.sport}:${left.tier}`.localeCompare(`${right.sport}:${right.tier}`);
   });
+}
+
+async function fetchProviderOfferEvidence(
+  client: Client,
+  universeRows: MarketUniverseRow[],
+): Promise<Map<string, MarketEvidence>> {
+  const evidence = new Map<string, MarketEvidence>();
+  const eventIds = unique(
+    universeRows
+      .filter((row) => row.provider_key === 'sgo')
+      .map((row) => row.provider_event_id),
+  );
+
+  for (const eventIdChunk of chunk(eventIds, 100)) {
+    for (const isOpening of [true, false]) {
+      const rows = await fetchPaged<ProviderOfferEvidenceRow>(async (from, to) => {
+        const { data, error } = await client
+          .from('provider_offers')
+          .select('provider_key,provider_event_id,provider_market_key,provider_participant_id,line,over_odds,under_odds,is_opening,is_closing')
+          .eq('provider_key', 'sgo')
+          .in('provider_event_id', eventIdChunk)
+          .eq(isOpening ? 'is_opening' : 'is_closing', true)
+          .range(from, to);
+        if (error) throw error;
+        return (data ?? []) as ProviderOfferEvidenceRow[];
+      });
+
+      for (const row of rows) {
+        if (!hasPairedLine(row)) {
+          continue;
+        }
+        const key = naturalKey(row);
+        const state = evidence.get(key) ?? { opening: false, closing: false };
+        state.opening = state.opening || row.is_opening;
+        state.closing = state.closing || row.is_closing;
+        evidence.set(key, state);
+      }
+    }
+  }
+
+  return evidence;
 }
 
 async function fetchCandidates(client: Client) {
@@ -238,22 +328,46 @@ async function fetchPaged<T>(fetchPage: (from: number, to: number) => Promise<T[
   return rows;
 }
 
-function hasOpening(row: MarketUniverseRow | undefined) {
+function hasOpening(
+  row: MarketUniverseRow | undefined,
+  providerOfferEvidence: Map<string, MarketEvidence>,
+) {
   return Boolean(
     row &&
-      row.opening_line !== null &&
-      row.opening_over_odds !== null &&
-      row.opening_under_odds !== null,
+      ((row.opening_line !== null &&
+        row.opening_over_odds !== null &&
+        row.opening_under_odds !== null) ||
+        providerOfferEvidence.get(naturalKey(row))?.opening),
   );
 }
 
-function hasClosing(row: MarketUniverseRow | undefined) {
+function hasClosing(
+  row: MarketUniverseRow | undefined,
+  providerOfferEvidence: Map<string, MarketEvidence>,
+) {
   return Boolean(
     row &&
-      row.closing_line !== null &&
-      row.closing_over_odds !== null &&
-      row.closing_under_odds !== null,
+      ((row.closing_line !== null &&
+        row.closing_over_odds !== null &&
+        row.closing_under_odds !== null) ||
+        providerOfferEvidence.get(naturalKey(row))?.closing),
   );
+}
+
+function hasPairedLine(row: ProviderOfferEvidenceRow) {
+  return row.line !== null && row.over_odds !== null && row.under_odds !== null;
+}
+
+function naturalKey(row: Pick<
+  MarketUniverseRow | ProviderOfferEvidenceRow,
+  'provider_key' | 'provider_event_id' | 'provider_participant_id' | 'provider_market_key'
+>) {
+  return [
+    row.provider_key,
+    row.provider_event_id,
+    row.provider_participant_id ?? '',
+    row.provider_market_key,
+  ].join('|');
 }
 
 function parseCliOptions(args: string[]): CliOptions {
@@ -289,6 +403,8 @@ function printReport(report: ReplayReadinessReport, outPath: string) {
   console.log(`Scored with opening data: ${report.totals.scoredWithOpening}`);
   console.log(`Scored with closing data: ${report.totals.scoredWithClosing}`);
   console.log(`Replay eligible: ${report.totals.replayEligible}`);
+  console.log(`Provider-offer opening evidence: ${report.totals.providerOfferOpeningEvidence}`);
+  console.log(`Provider-offer closing evidence: ${report.totals.providerOfferClosingEvidence}`);
   console.log(`Verdict: ${report.verdict.status.toUpperCase()} - ${report.verdict.reason}`);
   console.log('');
   console.log('By sport/tier:');
