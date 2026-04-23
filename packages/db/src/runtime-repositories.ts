@@ -4326,18 +4326,34 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await this.client
-      .from('provider_offers')
-      .select('*')
-      .eq('is_closing', true)
-      .gte('snapshot_at', since);
+    // Paginate in 1 000-row pages — Supabase PostgREST defaults to a 1 000-row
+    // cap unless explicitly overridden. Closing rows can number in the hundreds
+    // of thousands so pagination is required to fetch them all.
+    const PAGE = 1000;
+    const all: ProviderOfferRecord[] = [];
+    let from = 0;
 
-    if (error) {
-      throw new Error(`Failed to list closing offers: ${error.message}`);
+    for (;;) {
+      const { data, error } = await this.client
+        .from('provider_offers')
+        .select('*')
+        .eq('is_closing', true)
+        .gte('snapshot_at', since)
+        .range(from, from + PAGE - 1);
+
+      if (error) {
+        throw new Error(`Failed to list closing offers: ${error.message}`);
+      }
+
+      const page = data ?? [];
+      all.push(...page);
+      if (page.length < PAGE) break;
+      from += PAGE;
     }
 
-    return data ?? [];
+    return all;
   }
+
 
   async findClosingLine(
     criteria: ClosingLineLookupCriteria,
