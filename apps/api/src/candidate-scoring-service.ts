@@ -59,6 +59,12 @@ export interface ScoringResult {
 export interface ScoringOptions {
   batchSize?: number;
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
+  /**
+   * Candidate statuses to score. Defaults to qualified only for live safety.
+   * Proof/shadow runs can explicitly include rejected rows without changing
+   * promotion, ranking, pick creation, or distribution behavior.
+   */
+  statuses?: string[];
 }
 
 /** Minimum sample size for a trust row to influence scoring. */
@@ -101,7 +107,11 @@ export class CandidateScoringService {
 
     let candidates;
     try {
-      const all = await this.repos.pickCandidates.findByStatus('qualified');
+      const statuses = normalizeCandidateStatuses(options.statuses);
+      const rowsByStatus = await Promise.all(
+        statuses.map((status) => this.repos.pickCandidates.findByStatus(status)),
+      );
+      const all = rowsByStatus.flat();
       candidates = all.filter(c => c.model_score === null);
     } catch (err) {
       logger?.error?.(JSON.stringify({
@@ -487,6 +497,11 @@ export class CandidateScoringService {
       return false;
     }
   }
+}
+
+function normalizeCandidateStatuses(statuses: string[] | undefined) {
+  const requested = statuses && statuses.length > 0 ? statuses : ['qualified'];
+  return Array.from(new Set(requested.map((status) => status.trim()).filter(Boolean)));
 }
 
 export async function runCandidateScoring(
