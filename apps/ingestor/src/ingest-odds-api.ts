@@ -17,6 +17,10 @@ import {
   type OddsApiTelemetry,
 } from './odds-api-fetcher.js';
 
+function toEasternDate(utcIso: string): string {
+  return new Date(utcIso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
+}
+
 const DEFAULT_ODDS_API_MARKETS = [
   'h2h',
   'spreads',
@@ -229,7 +233,7 @@ async function resolveOddsApiEvents(
       externalId: event.id,
       sportId,
       eventName: `${event.away_team} @ ${event.home_team}`,
-      eventDate: event.commence_time.slice(0, 10),
+      eventDate: toEasternDate(event.commence_time),
       status: 'scheduled',
       metadata: {
         provider: 'odds-api',
