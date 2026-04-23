@@ -4,10 +4,7 @@ import { resolveSgoEntities } from './entity-resolver.js';
 import { fetchSGOResultsWithTelemetry, type SGORequestTelemetry } from './sgo-fetcher.js';
 import { resolveAndInsertResults } from './results-resolver.js';
 import { fetchAndPairSGOProps, type SGOFetchOptions, type SGOFetchResult } from './sgo-fetcher.js';
-import {
-  buildProviderOfferIdempotencyKey,
-  normalizeSGOPairedProp,
-} from './sgo-normalizer.js';
+import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 
 export interface IngestLeagueOptions {
   fetchImpl?: SGOFetchOptions['fetchImpl'];
@@ -28,7 +25,8 @@ export interface IngestLeagueOptions {
     results?: CircuitBreaker<Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>>;
   };
   /**
-   * When true, fetches in historical mode: finalized=true + includeAltLine=true.
+   * When true, fetches in historical mode with finalized events plus SGO
+   * alt-line and open/close bookmaker fields.
    * Use for backfill of completed events. Live ingest should leave this unset.
    */
   historical?: boolean;
@@ -155,20 +153,11 @@ export async function ingestLeague(
           providerParticipantId: offer.providerParticipantId,
           bookmakerKey: offer.bookmakerKey,
         });
-        const isOpening = !seenCombinations.has(combinationKey);
+        const isOpening = offer.isOpening || !seenCombinations.has(combinationKey);
         seenCombinations.add(combinationKey);
         return {
           ...offer,
           isOpening,
-          idempotencyKey: buildProviderOfferIdempotencyKey({
-            providerKey: offer.providerKey,
-          providerEventId: offer.providerEventId,
-          providerMarketKey: offer.providerMarketKey,
-          providerParticipantId: offer.providerParticipantId,
-          line: offer.line,
-          snapshotAt: offer.snapshotAt,
-          bookmakerKey: offer.bookmakerKey,
-        }),
       };
       });
 

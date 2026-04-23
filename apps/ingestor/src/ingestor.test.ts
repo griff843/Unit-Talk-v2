@@ -140,6 +140,128 @@ test('fetchAndPairSGOProps includes recently started live games by default', asy
   );
 });
 
+test('fetchAndPairSGOProps requests SGO historical open/close odds fields', async () => {
+  let capturedUrl: URL | null = null;
+
+  await fetchAndPairSGOProps({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-20T02:00:00.000Z',
+    historical: true,
+    fetchImpl: async (input) => {
+      capturedUrl = new URL(String(input));
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const requestedUrl = capturedUrl as URL | null;
+  assert.ok(requestedUrl);
+  assert.equal(requestedUrl.searchParams.get('finalized'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeOpposingOdds'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeAltLines'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeOpenCloseOdds'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeAltLine'), null);
+  assert.equal(requestedUrl.searchParams.get('oddsAvailable'), null);
+});
+
+test('fetchAndPairSGOProps extracts bookmaker open and close prices from historical byBookmaker data', async () => {
+  const result = await fetchAndPairSGOProps({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-20T02:00:00.000Z',
+    historical: true,
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              eventID: 'evt-historical-open-close',
+              leagueID: 'NBA',
+              status: {
+                finalized: true,
+                oddsAvailable: false,
+                startsAt: '2026-04-19T23:00:00.000Z',
+              },
+              odds: {
+                'points-player-123-game-ou-over': {
+                  oddID: 'points-player-123-game-ou-over',
+                  playerID: 'player-123',
+                  bookOverUnder: '22.5',
+                  bookOdds: '-110',
+                  byBookmaker: {
+                    pinnacle: {
+                      odds: '-112',
+                      openOdds: '-105',
+                      closeOdds: '-118',
+                      openOverUnder: '21.5',
+                      closeOverUnder: '22.5',
+                    },
+                  },
+                },
+                'points-player-123-game-ou-under': {
+                  oddID: 'points-player-123-game-ou-under',
+                  playerID: 'player-123',
+                  bookOverUnder: '22.5',
+                  bookOdds: '-110',
+                  byBookmaker: {
+                    pinnacle: {
+                      odds: '-108',
+                      openOdds: '-115',
+                      closeOdds: '-102',
+                      openOverUnder: '21.5',
+                      closeOverUnder: '22.5',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+  });
+
+  const bookmakerProps = result.pairedProps.filter((prop) => prop.bookmakerKey === 'pinnacle');
+  const current = bookmakerProps.find((prop) => prop.priceSource === 'current');
+  const open = bookmakerProps.find((prop) => prop.priceSource === 'open');
+  const close = bookmakerProps.find((prop) => prop.priceSource === 'close');
+
+  assert.ok(current);
+  assert.equal(current.overOdds, -112);
+  assert.equal(current.underOdds, -108);
+  assert.equal(current.isOpening, false);
+  assert.equal(current.isClosing, false);
+
+  assert.ok(open);
+  assert.equal(open.line, 21.5);
+  assert.equal(open.overOdds, -105);
+  assert.equal(open.underOdds, -115);
+  assert.equal(open.isOpening, true);
+  assert.equal(open.isClosing, false);
+
+  assert.ok(close);
+  assert.equal(close.line, 22.5);
+  assert.equal(close.overOdds, -118);
+  assert.equal(close.underOdds, -102);
+  assert.equal(close.isOpening, false);
+  assert.equal(close.isClosing, true);
+
+  const normalizedOpen = normalizeSGOPairedProp(open);
+  const normalizedClose = normalizeSGOPairedProp(close);
+  assert.ok(normalizedOpen);
+  assert.ok(normalizedClose);
+  assert.equal(normalizedOpen.isOpening, true);
+  assert.equal(normalizedClose.isClosing, true);
+  assert.ok(normalizedOpen.idempotencyKey.endsWith(':pinnacle:open'));
+  assert.ok(normalizedClose.idempotencyKey.endsWith(':pinnacle:close'));
+});
+
 test('normalizeSGOPairedProp returns FALLBACK_SINGLE_SIDED when only one side is present', () => {
   const normalized = normalizeSGOPairedProp({
     providerEventId: 'evt-2',

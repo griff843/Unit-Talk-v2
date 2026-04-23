@@ -16,7 +16,8 @@ export interface SGOFetchOptions {
   sleep?: (ms: number) => Promise<void>;
   /**
    * When true, switches from live-odds mode (oddsAvailable=true) to historical
-   * mode (finalized=true + includeAltLine=true). Use for backfill of completed events.
+   * mode (finalized=true + includeAltLines=true + includeOpenCloseOdds=true).
+   * Use for backfill of completed events.
    * Historical events have oddsAvailable=false so they are excluded by the live filter.
    */
   historical?: boolean;
@@ -151,7 +152,8 @@ export async function fetchAndPairSGOProps(
     // Historical mode: target finalized/completed events with scores.
     // oddsAvailable=false on historical events, so the live filter excludes them.
     url.searchParams.set('finalized', 'true');
-    url.searchParams.set('includeAltLine', 'true');
+    url.searchParams.set('includeAltLines', 'true');
+    url.searchParams.set('includeOpenCloseOdds', 'true');
   } else {
     url.searchParams.set('oddsAvailable', 'true');
   }
@@ -530,8 +532,8 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
 
   // Top-level paired props (consensus SGO odds)
   const grouped = new Map<string, SGOPairedProp>();
-  // Per-bookmaker: groupKey → bookId → { overOdds, underOdds }
-  const bookmakerGrouped = new Map<string, Map<string, { overOdds: number | null; underOdds: number | null }>>();
+  // Per-bookmaker paired props, including explicit historical open/close prices.
+  const bookmakerProps = new Map<string, SGOPairedProp>();
 
   for (const row of rows) {
     const baseMarketKey = stripSideSuffix(row.marketKey);
@@ -557,44 +559,121 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
 
     grouped.set(groupKey, existing);
 
-    // Extract per-bookmaker odds from byBookmaker
+    // Extract per-bookmaker current/open/close prices from byBookmaker.
     if (row.byBookmaker) {
-      const bookMap = bookmakerGrouped.get(groupKey) ?? new Map();
       for (const bookId of PRIORITY_BOOKMAKERS) {
         const bookData = row.byBookmaker[bookId];
         if (!isRecord(bookData)) continue;
         const bookOdds = firstNumber(bookData.odds as unknown);
-        if (bookOdds === null) continue;
-        const existing2 = bookMap.get(bookId) ?? { overOdds: null, underOdds: null };
-        if (row.side === 'over') {
-          existing2.overOdds = bookOdds;
-        } else {
-          existing2.underOdds = bookOdds;
+        if (bookOdds !== null) {
+          addBookmakerPairedProp(bookmakerProps, {
+            providerEventId,
+            marketKey: baseMarketKey,
+            providerParticipantId: row.providerParticipantId,
+            sportKey,
+            line: row.line,
+            side: row.side,
+            odds: bookOdds,
+            snapshotAt,
+            bookmakerKey: bookId,
+            priceSource: 'current',
+          });
         }
-        bookMap.set(bookId, existing2);
+
+        const openOdds = firstNumber(bookData.openOdds, bookData.openBookOdds, bookData.openFairOdds);
+        if (openOdds !== null) {
+          addBookmakerPairedProp(bookmakerProps, {
+            providerEventId,
+            marketKey: baseMarketKey,
+            providerParticipantId: row.providerParticipantId,
+            sportKey,
+            line: firstNumber(bookData.openOverUnder, bookData.openSpread, row.line),
+            side: row.side,
+            odds: openOdds,
+            snapshotAt,
+            bookmakerKey: bookId,
+            priceSource: 'open',
+            isOpening: true,
+          });
+        }
+
+        const closeOdds = firstNumber(bookData.closeOdds, bookData.closeBookOdds, bookData.closeFairOdds);
+        if (closeOdds !== null) {
+          addBookmakerPairedProp(bookmakerProps, {
+            providerEventId,
+            marketKey: baseMarketKey,
+            providerParticipantId: row.providerParticipantId,
+            sportKey,
+            line: firstNumber(bookData.closeOverUnder, bookData.closeSpread, row.line),
+            side: row.side,
+            odds: closeOdds,
+            snapshotAt,
+            bookmakerKey: bookId,
+            priceSource: 'close',
+            isClosing: true,
+          });
+        }
       }
-      bookmakerGrouped.set(groupKey, bookMap);
     }
   }
 
   const result: SGOPairedProp[] = Array.from(grouped.values());
 
-  // Append bookmaker-specific props
-  for (const [groupKey, bookMap] of bookmakerGrouped) {
-    const baseProp = grouped.get(groupKey);
-    if (!baseProp) continue;
-    for (const [bookId, bookOdds] of bookMap) {
-      if (bookOdds.overOdds === null && bookOdds.underOdds === null) continue;
-      result.push({
-        ...baseProp,
-        overOdds: bookOdds.overOdds,
-        underOdds: bookOdds.underOdds,
-        bookmakerKey: bookId,
-      });
-    }
-  }
+  result.push(...bookmakerProps.values());
 
   return result;
+}
+
+function addBookmakerPairedProp(
+  props: Map<string, SGOPairedProp>,
+  input: {
+    providerEventId: string;
+    marketKey: string;
+    providerParticipantId: string | null;
+    sportKey: string | null;
+    line: number | string | null;
+    side: 'over' | 'under';
+    odds: number;
+    snapshotAt: string;
+    bookmakerKey: string;
+    priceSource: 'current' | 'open' | 'close';
+    isOpening?: boolean;
+    isClosing?: boolean;
+  },
+) {
+  const lineStr = formatLine(input.line);
+  const participantKey = input.providerParticipantId ?? '_';
+  const key = [
+    input.providerEventId,
+    participantKey,
+    input.marketKey,
+    lineStr,
+    input.bookmakerKey,
+    input.priceSource,
+  ].join(':');
+  const existing = props.get(key) ?? {
+    providerEventId: input.providerEventId,
+    marketKey: input.marketKey,
+    providerParticipantId: input.providerParticipantId,
+    sportKey: input.sportKey,
+    line: input.line,
+    overOdds: null,
+    underOdds: null,
+    snapshotAt: input.snapshotAt,
+    bookmakerKey: input.bookmakerKey,
+    priceSource: input.priceSource,
+    isOpening: input.isOpening ?? false,
+    isClosing: input.isClosing ?? false,
+  };
+
+  if (input.side === 'over') {
+    existing.overOdds = input.odds;
+  } else {
+    existing.underOdds = input.odds;
+  }
+  existing.isOpening = existing.isOpening || (input.isOpening ?? false);
+  existing.isClosing = existing.isClosing || (input.isClosing ?? false);
+  props.set(key, existing);
 }
 
 function collectOddsRows(
