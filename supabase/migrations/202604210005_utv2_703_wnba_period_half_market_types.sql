@@ -2,6 +2,7 @@
 -- Cross-sport (sport_id=NULL) aliases from UTV2-700 already cover the SGO keys;
 -- only availability rows are needed here.
 
+
 INSERT INTO public.sport_market_type_availability (sport_id, market_type_id)
 VALUES
   ('WNBA', '1h_moneyline'),

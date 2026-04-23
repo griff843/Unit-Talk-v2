@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-719",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "claude/utv2-719-team-external-id-fix",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "supabase/migrations/202604230001_utv2_719_fix_team_external_ids_and_league.sql"
+  ],
+  "file_scope_lock": [
+    "supabase/migrations/202604230001_utv2_719_fix_team_external_ids_and_league.sql"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-04-23T02:05:00Z",
+  "heartbeat_at": "2026-04-23T02:05:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
