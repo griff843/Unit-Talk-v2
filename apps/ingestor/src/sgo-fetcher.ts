@@ -12,6 +12,7 @@ export interface SGOFetchOptions {
   snapshotAt: string;
   startsAfter?: string;
   startsBefore?: string;
+  providerEventIds?: string[];
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   /**
@@ -36,6 +37,7 @@ export interface SGOResultsFetchOptions {
   snapshotAt: string;
   startsAfter?: string;
   startsBefore?: string;
+  providerEventIds?: string[];
   lookbackHours?: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
@@ -138,7 +140,15 @@ interface FlatSGOOddsRow {
 }
 
 /** Priority bookmakers to extract from byBookmaker (in preference order for CLV). */
-const PRIORITY_BOOKMAKERS = ['pinnacle', 'draftkings', 'fanduel', 'betmgm', 'fanatics', 'bet365', 'bovada'] as const;
+const PRIORITY_BOOKMAKERS = [
+  'pinnacle',
+  'draftkings',
+  'fanduel',
+  'betmgm',
+  'fanatics',
+  'bet365',
+  'bovada',
+] as const;
 
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
@@ -148,6 +158,9 @@ export async function fetchAndPairSGOProps(
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('includeOpposingOdds', 'true');
+  if (options.providerEventIds && options.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', options.providerEventIds.join(','));
+  }
   if (options.historical) {
     // Historical mode: target finalized/completed events with scores.
     // oddsAvailable=false on historical events, so the live filter excludes them.
@@ -159,7 +172,8 @@ export async function fetchAndPairSGOProps(
   }
   url.searchParams.set(
     'startsAfter',
-    options.startsAfter ?? subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
+    options.startsAfter ??
+      subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
   );
   url.searchParams.set(
     'startsBefore',
@@ -190,7 +204,9 @@ export async function fetchAndPairSGOProps(
   };
 }
 
-function extractResolvedEvent(event: Record<string, unknown>): SGOResolvedEvent | null {
+function extractResolvedEvent(
+  event: Record<string, unknown>,
+): SGOResolvedEvent | null {
   const providerEventId = firstString(event.eventID, event.eventId, event.id);
   if (!providerEventId) {
     return null;
@@ -203,7 +219,9 @@ function extractResolvedEvent(event: Record<string, unknown>): SGOResolvedEvent 
     awayName && homeName ? `${awayName} vs. ${homeName}` : providerEventId;
 
   const players = extractPlayers(event.players);
-  const providerParticipantIds = new Set<string>(players.map((player) => player.playerId));
+  const providerParticipantIds = new Set<string>(
+    players.map((player) => player.playerId),
+  );
   const pairedProps = pairEventOdds(event, new Date().toISOString());
   for (const prop of pairedProps) {
     if (prop.providerParticipantId) {
@@ -234,7 +252,13 @@ export async function fetchSGOResults(
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('finalized', 'true');
-  url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
+  if (options.providerEventIds && options.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', options.providerEventIds.join(','));
+  }
+  url.searchParams.set(
+    'startsBefore',
+    options.startsBefore ?? options.snapshotAt,
+  );
   url.searchParams.set(
     'startsAfter',
     options.startsAfter ??
@@ -256,13 +280,22 @@ export async function fetchSGOResults(
 
 export async function fetchSGOResultsWithTelemetry(
   options: SGOResultsFetchOptions,
-): Promise<{ results: SGOEventResult[]; requestTelemetry: SGORequestTelemetry }> {
+): Promise<{
+  results: SGOEventResult[];
+  requestTelemetry: SGORequestTelemetry;
+}> {
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('finalized', 'true');
-  url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
+  if (options.providerEventIds && options.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', options.providerEventIds.join(','));
+  }
+  url.searchParams.set(
+    'startsBefore',
+    options.startsBefore ?? options.snapshotAt,
+  );
   url.searchParams.set(
     'startsAfter',
     options.startsAfter ??
@@ -317,12 +350,16 @@ async function fetchSgoPages(input: {
       return { payloads, telemetry };
     }
     if (seenCursors.has(nextCursor)) {
-      throw new Error(`SGO ${input.endpoint} pagination repeated cursor: ${nextCursor}`);
+      throw new Error(
+        `SGO ${input.endpoint} pagination repeated cursor: ${nextCursor}`,
+      );
     }
     seenCursors.add(nextCursor);
   }
 
-  throw new Error(`SGO ${input.endpoint} pagination exceeded ${MAX_SGO_PAGINATION_PAGES} pages`);
+  throw new Error(
+    `SGO ${input.endpoint} pagination exceeded ${MAX_SGO_PAGINATION_PAGES} pages`,
+  );
 }
 
 async function fetchSgoJson(input: {
@@ -356,7 +393,8 @@ async function fetchSgoJson(input: {
     }
 
     if (response.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
-      const backoffMs = resolveRetryAfterMs(response.headers) ?? DEFAULT_BACKOFF_MS;
+      const backoffMs =
+        resolveRetryAfterMs(response.headers) ?? DEFAULT_BACKOFF_MS;
       telemetry.rateLimitHitCount += 1;
       telemetry.backoffCount += 1;
       telemetry.backoffMs += backoffMs;
@@ -366,13 +404,20 @@ async function fetchSgoJson(input: {
       continue;
     }
 
-    throw new Error(`SGO ${input.endpoint} fetch failed: ${response.status} ${lastStatusText}`);
+    throw new Error(
+      `SGO ${input.endpoint} fetch failed: ${response.status} ${lastStatusText}`,
+    );
   }
 
-  throw new Error(`SGO ${input.endpoint} fetch failed: ${telemetry.lastStatus ?? 0} ${lastStatusText}`);
+  throw new Error(
+    `SGO ${input.endpoint} fetch failed: ${telemetry.lastStatus ?? 0} ${lastStatusText}`,
+  );
 }
 
-function mergeTelemetry(target: SGORequestTelemetry, source: SGORequestTelemetry) {
+function mergeTelemetry(
+  target: SGORequestTelemetry,
+  source: SGORequestTelemetry,
+) {
   target.requestCount += source.requestCount;
   target.successfulRequests += source.successfulRequests;
   target.creditsUsed += source.creditsUsed;
@@ -403,7 +448,9 @@ function extractNextCursor(payload: unknown) {
   );
 }
 
-function createEmptyTelemetry(endpoint: 'odds' | 'results'): SGORequestTelemetry {
+function createEmptyTelemetry(
+  endpoint: 'odds' | 'results',
+): SGORequestTelemetry {
   return {
     provider: 'sgo',
     endpoint,
@@ -427,8 +474,14 @@ function applyTelemetryHeaders(
   telemetry: SGORequestTelemetry,
   headers: Headers,
 ) {
-  const limit = readHeaderNumber(headers, ['x-ratelimit-limit', 'ratelimit-limit']);
-  const remaining = readHeaderNumber(headers, ['x-ratelimit-remaining', 'ratelimit-remaining']);
+  const limit = readHeaderNumber(headers, [
+    'x-ratelimit-limit',
+    'ratelimit-limit',
+  ]);
+  const remaining = readHeaderNumber(headers, [
+    'x-ratelimit-remaining',
+    'ratelimit-remaining',
+  ]);
   const retryAfterMs = resolveRetryAfterMs(headers);
   const creditsUsed = readHeaderNumber(headers, [
     'x-api-credits-used',
@@ -528,7 +581,8 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
     return [];
   }
 
-  const sportKey = firstString(event.leagueID, event.leagueId, event.sportKey) ?? null;
+  const sportKey =
+    firstString(event.leagueID, event.leagueId, event.sportKey) ?? null;
   const rows: FlatSGOOddsRow[] = [];
   collectOddsRows(event.odds, providerEventId, sportKey, rows);
 
@@ -541,7 +595,12 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
     const baseMarketKey = stripSideSuffix(row.marketKey);
     const lineStr = formatLine(row.line);
     const participantKey = row.providerParticipantId ?? '_';
-    const groupKey = [providerEventId, participantKey, baseMarketKey, lineStr].join(':');
+    const groupKey = [
+      providerEventId,
+      participantKey,
+      baseMarketKey,
+      lineStr,
+    ].join(':');
     const existing = grouped.get(groupKey) ?? {
       providerEventId,
       marketKey: baseMarketKey,
@@ -582,14 +641,22 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
           });
         }
 
-        const openOdds = firstNumber(bookData.openOdds, bookData.openBookOdds, bookData.openFairOdds);
+        const openOdds = firstNumber(
+          bookData.openOdds,
+          bookData.openBookOdds,
+          bookData.openFairOdds,
+        );
         if (openOdds !== null) {
           addBookmakerPairedProp(bookmakerProps, {
             providerEventId,
             marketKey: baseMarketKey,
             providerParticipantId: row.providerParticipantId,
             sportKey,
-            line: firstNumber(bookData.openOverUnder, bookData.openSpread, row.line),
+            line: firstNumber(
+              bookData.openOverUnder,
+              bookData.openSpread,
+              row.line,
+            ),
             side: row.side,
             odds: openOdds,
             snapshotAt,
@@ -599,14 +666,22 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
           });
         }
 
-        const closeOdds = firstNumber(bookData.closeOdds, bookData.closeBookOdds, bookData.closeFairOdds);
+        const closeOdds = firstNumber(
+          bookData.closeOdds,
+          bookData.closeBookOdds,
+          bookData.closeFairOdds,
+        );
         if (closeOdds !== null) {
           addBookmakerPairedProp(bookmakerProps, {
             providerEventId,
             marketKey: baseMarketKey,
             providerParticipantId: row.providerParticipantId,
             sportKey,
-            line: firstNumber(bookData.closeOverUnder, bookData.closeSpread, row.line),
+            line: firstNumber(
+              bookData.closeOverUnder,
+              bookData.closeSpread,
+              row.line,
+            ),
             side: row.side,
             odds: closeOdds,
             snapshotAt,
@@ -687,7 +762,13 @@ function collectOddsRows(
 ): void {
   if (Array.isArray(node)) {
     for (const item of node) {
-      collectOddsRows(item, providerEventId, sportKey, rows, inheritedMarketKey);
+      collectOddsRows(
+        item,
+        providerEventId,
+        sportKey,
+        rows,
+        inheritedMarketKey,
+      );
     }
     return;
   }
@@ -719,10 +800,26 @@ function collectOddsRows(
           node.entityId,
         ) ?? inferParticipantId(marketKey),
       sportKey,
-      line: firstNumber(node.bookOverUnder, node.fairOverUnder, node.line, node.points, node.total, node.handicap),
-      odds: firstNumber(node.bookOdds, node.fairOdds, node.americanOdds, node.oddsAmerican, node.odds, node.price),
+      line: firstNumber(
+        node.bookOverUnder,
+        node.fairOverUnder,
+        node.line,
+        node.points,
+        node.total,
+        node.handicap,
+      ),
+      odds: firstNumber(
+        node.bookOdds,
+        node.fairOdds,
+        node.americanOdds,
+        node.oddsAmerican,
+        node.odds,
+        node.price,
+      ),
       side,
-      ...(isRecord(node.byBookmaker) ? { byBookmaker: node.byBookmaker as Record<string, unknown> } : {}),
+      ...(isRecord(node.byBookmaker)
+        ? { byBookmaker: node.byBookmaker as Record<string, unknown> }
+        : {}),
     });
     return;
   }
@@ -783,7 +880,8 @@ function extractPlayers(value: unknown): SGOResolvedPlayer[] {
     }
 
     const resolvedPlayerId =
-      firstString(playerValue.playerID, playerValue.playerId, playerId) ?? playerId;
+      firstString(playerValue.playerID, playerValue.playerId, playerId) ??
+      playerId;
     const firstName = firstString(playerValue.firstName) ?? null;
     const lastName = firstString(playerValue.lastName) ?? null;
     const displayName =
@@ -799,10 +897,14 @@ function extractPlayers(value: unknown): SGOResolvedPlayer[] {
     });
   }
 
-  return players.sort((left, right) => left.displayName.localeCompare(right.displayName));
+  return players.sort((left, right) =>
+    left.displayName.localeCompare(right.displayName),
+  );
 }
 
-function extractEventResult(event: Record<string, unknown>): SGOEventResult | null {
+function extractEventResult(
+  event: Record<string, unknown>,
+): SGOEventResult | null {
   const providerEventId = firstString(event.eventID, event.eventId, event.id);
   if (!providerEventId) {
     return null;
@@ -838,8 +940,17 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
     return markets;
   }
 
-  const selfOddId = firstString(odds.oddID, odds.oddId, odds.marketKey, odds.marketID);
-  if ('scoringSupported' in odds && odds.scoringSupported === true && selfOddId) {
+  const selfOddId = firstString(
+    odds.oddID,
+    odds.oddId,
+    odds.marketKey,
+    odds.marketID,
+  );
+  if (
+    'scoringSupported' in odds &&
+    odds.scoringSupported === true &&
+    selfOddId
+  ) {
     const score = firstNumber(odds.score);
     if (score !== null) {
       markets.push({
@@ -958,8 +1069,13 @@ function extractPlayerStatRows(results: unknown): SGOPlayerStatRow[] {
   }
 
   const rows: SGOPlayerStatRow[] = [];
-  for (const [providerParticipantId, statsValue] of Object.entries(results.game)) {
-    if (!isRecord(statsValue) || isReservedSidePlaceholder(providerParticipantId.toLowerCase())) {
+  for (const [providerParticipantId, statsValue] of Object.entries(
+    results.game,
+  )) {
+    if (
+      !isRecord(statsValue) ||
+      isReservedSidePlaceholder(providerParticipantId.toLowerCase())
+    ) {
       continue;
     }
 
@@ -990,7 +1106,9 @@ function getNestedString(value: Record<string, unknown>, path: string[]) {
     }
     current = current[segment];
   }
-  return typeof current === 'string' && current.length > 0 ? current : undefined;
+  return typeof current === 'string' && current.length > 0
+    ? current
+    : undefined;
 }
 
 function buildDisplayName(firstName: string | null, lastName: string | null) {
@@ -1021,7 +1139,9 @@ export async function fetchSGOAccountUsage(
   });
 
   if (!response.ok) {
-    throw new Error(`SGO account/usage fetch failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `SGO account/usage fetch failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   const raw = (await response.json()) as unknown;
@@ -1029,11 +1149,19 @@ export async function fetchSGOAccountUsage(
 
   return {
     plan: firstString(data.plan, data.planName, data.tier) ?? null,
-    objectsUsed: firstNumber(data.objectsUsed, data.objects_used, data.used) ?? null,
-    objectsLimit: firstNumber(data.objectsLimit, data.objects_limit, data.limit) ?? null,
+    objectsUsed:
+      firstNumber(data.objectsUsed, data.objects_used, data.used) ?? null,
+    objectsLimit:
+      firstNumber(data.objectsLimit, data.objects_limit, data.limit) ?? null,
     creditsUsed: firstNumber(data.creditsUsed, data.credits_used) ?? null,
     creditsLimit: firstNumber(data.creditsLimit, data.credits_limit) ?? null,
-    resetAt: firstString(data.resetAt, data.reset_at, data.periodEnd, data.period_end) ?? null,
+    resetAt:
+      firstString(
+        data.resetAt,
+        data.reset_at,
+        data.periodEnd,
+        data.period_end,
+      ) ?? null,
     raw,
   };
 }
@@ -1047,7 +1175,10 @@ export function deriveDisplayNameFromProviderId(providerParticipantId: string) {
   }
 
   const trimmed = [...segments];
-  if (trimmed.length > 0 && /^[A-Z]{2,5}$/.test(trimmed[trimmed.length - 1] ?? '')) {
+  if (
+    trimmed.length > 0 &&
+    /^[A-Z]{2,5}$/.test(trimmed[trimmed.length - 1] ?? '')
+  ) {
     trimmed.pop();
   }
   if (trimmed.length > 0 && /^\d+$/.test(trimmed[trimmed.length - 1] ?? '')) {
