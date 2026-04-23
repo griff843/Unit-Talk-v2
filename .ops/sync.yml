@@ -4,4 +4,4 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-717
+    - UTV2-712

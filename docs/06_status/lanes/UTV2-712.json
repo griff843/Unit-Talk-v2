@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-712",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-712-model-health-command-center-ui",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/routes/model-health.ts",
+    "apps/api/src/server.ts",
+    "apps/command-center/app/model-health/page.tsx"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-04-22T19:00:00Z",
+  "heartbeat_at": "2026-04-22T19:00:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
