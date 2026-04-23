@@ -6,22 +6,28 @@
   "worktree_path": ".",
   "branch": "claude/utv2-719-team-external-id-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a3da1d6fd0bb576938ac54dd2ca5df0d48a1a967",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/446",
   "files_changed": [
-    "supabase/migrations/202604230001_utv2_719_fix_team_external_ids_and_league.sql"
+    "supabase/migrations/202604210005_utv2_703_wnba_period_half_market_types.sql",
+    "supabase/migrations/202604230001_utv2_719_fix_team_external_ids_and_league.sql",
+    "docs/06_status/proof/UTV2-719-team-id-fix.md"
   ],
   "file_scope_lock": [
     "supabase/migrations/202604230001_utv2_719_fix_team_external_ids_and_league.sql"
   ],
-  "expected_proof_paths": [],
-  "status": "started",
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-719-team-id-fix.md"
+  ],
+  "status": "closed",
   "started_at": "2026-04-23T02:05:00Z",
-  "heartbeat_at": "2026-04-23T02:05:00Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-23T02:37:00Z",
+  "closed_at": "2026-04-23T02:37:16Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {"timestamp": "2026-04-23T02:37:00Z", "result": "PASS", "notes": "124/124 teams fixed, 200/200 player→team joins, 100/100 event→team joins, CI green, PR #446 merged SHA a3da1d6"}
+  ],
   "reopen_history": []
 }
