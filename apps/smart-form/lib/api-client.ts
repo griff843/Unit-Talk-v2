@@ -1,3 +1,4 @@
+import { getSession } from 'next-auth/react';
 import type { CatalogData } from './catalog';
 
 const API = process.env.NEXT_PUBLIC_API_BASE_URL ?? 'http://127.0.0.1:4000';
@@ -215,11 +216,16 @@ export async function searchBrowse(sportId: string, date: string, query: string)
 
 export async function submitPick(payload: SubmitPickPayload): Promise<SubmitPickResult> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  // Attach capper JWT if present in localStorage (UTV2-658).
-  // The API validates the token and derives capperId from the claim.
+  // Attach the legacy capper JWT if present, otherwise use the Auth.js session bearer.
+  // The API validates the bearer and derives capperId from the claim.
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('ut_capper_token') : null;
-    if (token) headers['Authorization'] = `Bearer ${token}`;
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    } else if (typeof window !== 'undefined') {
+      const session = await getSession();
+      if (session?.authToken) headers['Authorization'] = `Bearer ${session.authToken}`;
+    }
   } catch {
     // Ignore storage errors — request proceeds without auth header (API may 401)
   }
