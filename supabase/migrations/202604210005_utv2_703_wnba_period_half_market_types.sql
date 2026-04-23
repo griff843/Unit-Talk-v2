@@ -2,6 +2,10 @@
 -- Cross-sport (sport_id=NULL) aliases from UTV2-700 already cover the SGO keys;
 -- only availability rows are needed here.
 
+-- Ensure WNBA exists in sports reference table before inserting FK-constrained rows
+INSERT INTO public.sports (id, display_name, sort_order)
+VALUES ('WNBA', 'WNBA', 6)
+ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO public.sport_market_type_availability (sport_id, market_type_id)
 VALUES

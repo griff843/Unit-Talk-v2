@@ -5,3 +5,5 @@ approval:
 entities:
   issues:
     - UTV2-719
+  proofs:
+    - PROOF-UTV2-719
