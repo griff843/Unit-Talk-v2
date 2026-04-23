@@ -57,6 +57,7 @@ import { handleBoardQueueRequest } from './routes/board-queue.js';
 import { handleBoardPerformanceRequest } from './routes/board-performance.js';
 import { handleRoutingPreviewRequest } from './routes/routing-preview.js';
 import { handlePromotionPreviewRequest } from './routes/promotion-preview.js';
+import { handlePropOffersRequest } from './routes/prop-offers.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
@@ -323,9 +324,43 @@ export interface PicksPipelineSummary {
   recentPicks: PickPipelineRow[];
 }
 
+export interface PropOffersFilter {
+  sport?: string;
+  market?: string;
+  bookmaker?: string;
+  participant?: string;
+  since?: string;
+  until?: string;
+  limit?: number;
+  offset?: number;
+}
+
+export interface PropOfferRow {
+  id: string;
+  sportKey: string | null;
+  providerMarketKey: string;
+  bookmakerKey: string | null;
+  line: number | null;
+  overOdds: number | null;
+  underOdds: number | null;
+  providerParticipantId: string | null;
+  providerEventId: string;
+  isOpening: boolean;
+  isClosing: boolean;
+  snapshotAt: string;
+}
+
+export interface PropOffersResponse {
+  offers: PropOfferRow[];
+  total: number;
+  hasMore: boolean;
+  observedAt: string;
+}
+
 export interface OperatorSnapshotProvider {
   getSnapshot(filter?: OutboxFilter): Promise<OperatorSnapshot>;
   getParticipants?(filter?: OperatorParticipantsFilter): Promise<OperatorParticipantsResponse>;
+  getPropOffers?(filter?: PropOffersFilter): Promise<PropOffersResponse>;
   /** Supabase client exposed for pick detail route queries. Only present on database providers. */
   _supabaseClient?: unknown;
 }
@@ -501,6 +536,10 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/participants') {
     return handleParticipantsRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/prop-offers') {
+    return handlePropOffersRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/pick-search') {
@@ -833,6 +872,51 @@ export function createOperatorSnapshotProvider(
             metadata: readJsonObject(row.metadata) ?? {},
           })),
           total: count ?? data?.length ?? 0,
+          observedAt: new Date().toISOString(),
+        };
+      },
+      async getPropOffers(filter?: PropOffersFilter) {
+        const limit = Math.min(filter?.limit ?? 50, 200);
+        const offset = filter?.offset ?? 0;
+
+        let query = client
+          .from('provider_offers')
+          .select('*', { count: 'exact' });
+
+        if (filter?.sport) query = query.eq('sport_key', filter.sport);
+        if (filter?.market) query = query.eq('provider_market_key', filter.market);
+        if (filter?.bookmaker) query = query.eq('bookmaker_key', filter.bookmaker);
+        if (filter?.participant) query = query.ilike('provider_participant_id', `%${filter.participant}%`);
+        if (filter?.since) query = query.gte('snapshot_at', filter.since);
+        if (filter?.until) query = query.lte('snapshot_at', filter.until);
+
+        const { data, error, count } = await query
+          .order('snapshot_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (error) {
+          throw new Error(`Failed to list prop offers: ${error.message}`);
+        }
+
+        const offers: PropOfferRow[] = (data ?? []).map((row) => ({
+          id: row.id,
+          sportKey: row.sport_key,
+          providerMarketKey: row.provider_market_key,
+          bookmakerKey: row.bookmaker_key,
+          line: row.line,
+          overOdds: row.over_odds,
+          underOdds: row.under_odds,
+          providerParticipantId: row.provider_participant_id,
+          providerEventId: row.provider_event_id,
+          isOpening: row.is_opening,
+          isClosing: row.is_closing,
+          snapshotAt: row.snapshot_at,
+        }));
+
+        return {
+          offers,
+          total: count ?? 0,
+          hasMore: (count ?? 0) > offset + limit,
           observedAt: new Date().toISOString(),
         };
       },
@@ -2459,6 +2543,9 @@ function handleOperatorProviderFailure(
     },
     async getParticipants(_filter?: OperatorParticipantsFilter) {
       return { participants: [], total: 0, observedAt: new Date().toISOString() };
+    },
+    async getPropOffers(_filter?: PropOffersFilter) {
+      return { offers: [], total: 0, hasMore: false, observedAt: new Date().toISOString() };
     },
   };
 }
