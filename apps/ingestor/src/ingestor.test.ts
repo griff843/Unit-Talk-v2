@@ -1458,6 +1458,7 @@ test('fetchSGOResults respects explicit historical window overrides', async () =
   const url = new URL(capturedUrl);
   assert.equal(url.searchParams.get('startsAfter'), '2026-03-20T00:00:00.000Z');
   assert.equal(url.searchParams.get('startsBefore'), '2026-03-21T00:00:00.000Z');
+  assert.equal(url.searchParams.get('finalized'), 'true');
 });
 
 test('fetchSGOResults follows nextCursor pagination and merges events from all pages', async () => {
@@ -1504,6 +1505,70 @@ test('fetchSGOResults follows nextCursor pagination and merges events from all p
   assert.equal(results.length, 2, 'events from both pages should be merged');
   assert.ok(results.some((r) => r.providerEventId === 'evt-page1-1'), 'page 1 event present');
   assert.ok(results.some((r) => r.providerEventId === 'evt-page2-1'), 'page 2 event present');
+});
+
+test('fetchSGOResults extracts scored markets from explicit SGO odd and participant fields', async () => {
+  const results = await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-22T12:00:00.000Z',
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              eventID: 'evt-explicit-scored-markets',
+              leagueID: 'NBA',
+              sportID: 'BASKETBALL',
+              status: {
+                finalized: true,
+                started: true,
+                ended: true,
+                oddsAvailable: false,
+                startsAt: '2026-04-21T23:00:00.000Z',
+              },
+              odds: {
+                marketGroups: [
+                  {
+                    oddID: 'assists-JALEN_BRUNSON_1_NBA-game-ou-over',
+                    playerID: 'JALEN_BRUNSON_1_NBA',
+                    scoringSupported: true,
+                    score: 7,
+                  },
+                  {
+                    oddID: 'points-LEBRON_JAMES_1_NBA-game-ou-over',
+                    scoringSupported: true,
+                    score: 31,
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+  });
+
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0]?.scoredMarkets, [
+    {
+      oddId: 'assists-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'assists-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 7,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'points-LEBRON_JAMES_1_NBA-game-ou-over',
+      baseMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'LEBRON_JAMES_1_NBA',
+      score: 31,
+      scoringSupported: true,
+    },
+  ]);
 });
 
 test('runHistoricalBackfill walks an inclusive date range and passes bounded daily windows', async () => {

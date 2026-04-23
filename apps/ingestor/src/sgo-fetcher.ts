@@ -233,6 +233,7 @@ export async function fetchSGOResults(
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
+  url.searchParams.set('finalized', 'true');
   url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
   url.searchParams.set(
     'startsAfter',
@@ -260,6 +261,7 @@ export async function fetchSGOResultsWithTelemetry(
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
+  url.searchParams.set('finalized', 'true');
   url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
   url.searchParams.set(
     'startsAfter',
@@ -825,14 +827,59 @@ function extractEventResult(event: Record<string, unknown>): SGOEventResult | nu
 function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
   const markets: SGOMarketScore[] = [];
 
+  if (Array.isArray(odds)) {
+    for (const item of odds) {
+      markets.push(...extractScoredMarkets(item));
+    }
+    return markets;
+  }
+
   if (!isRecord(odds)) {
     return markets;
   }
 
+  const selfOddId = firstString(odds.oddID, odds.oddId, odds.marketKey, odds.marketID);
+  if ('scoringSupported' in odds && odds.scoringSupported === true && selfOddId) {
+    const score = firstNumber(odds.score);
+    if (score !== null) {
+      markets.push({
+        oddId: selfOddId,
+        baseMarketKey: normalizeMarketKey(selfOddId),
+        providerParticipantId:
+          firstString(
+            odds.playerID,
+            odds.playerId,
+            odds.participantID,
+            odds.participantId,
+            odds.entityID,
+            odds.entityId,
+            odds.statEntityID,
+            odds.statEntityId,
+          ) ?? inferParticipantId(selfOddId),
+        score,
+        scoringSupported: true,
+      });
+    }
+    return markets;
+  }
+
   for (const [oddId, oddValue] of Object.entries(odds)) {
+    if (Array.isArray(oddValue)) {
+      markets.push(...extractScoredMarkets(oddValue));
+      continue;
+    }
+
     if (!isRecord(oddValue)) {
       continue;
     }
+
+    const explicitOddId = firstString(
+      oddValue.oddID,
+      oddValue.oddId,
+      oddValue.marketKey,
+      oddValue.marketID,
+      oddId,
+    );
 
     // Recursively handle nested market groups (e.g. odds.market.{oddId: ...})
     // If the value doesn't have scoringSupported, it may be a group — recurse into it
@@ -845,17 +892,30 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
     if (oddValue.scoringSupported !== true) {
       continue;
     }
+    if (!explicitOddId) {
+      continue;
+    }
 
     const score = firstNumber(oddValue.score);
     if (score === null) {
       continue;
     }
 
-    const baseMarketKey = normalizeMarketKey(oddId);
-    const providerParticipantId = inferParticipantId(oddId);
+    const baseMarketKey = normalizeMarketKey(explicitOddId);
+    const providerParticipantId =
+      firstString(
+        oddValue.playerID,
+        oddValue.playerId,
+        oddValue.participantID,
+        oddValue.participantId,
+        oddValue.entityID,
+        oddValue.entityId,
+        oddValue.statEntityID,
+        oddValue.statEntityId,
+      ) ?? inferParticipantId(explicitOddId);
 
     markets.push({
-      oddId,
+      oddId: explicitOddId,
       baseMarketKey,
       providerParticipantId,
       score,
