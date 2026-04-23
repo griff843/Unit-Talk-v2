@@ -153,32 +153,15 @@ const PRIORITY_BOOKMAKERS = [
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
 ): Promise<SGOFetchResult> {
-  const url = new URL(SGO_EVENTS_ENDPOINT);
-  url.searchParams.set('apiKey', options.apiKey);
-  url.searchParams.set('leagueID', options.league);
-  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
-  url.searchParams.set('includeOpposingOdds', 'true');
-  if (options.providerEventIds && options.providerEventIds.length > 0) {
-    url.searchParams.set('eventID', options.providerEventIds.join(','));
-  }
-  if (options.historical) {
-    // Historical mode: target finalized/completed events with scores.
-    // oddsAvailable=false on historical events, so the live filter excludes them.
-    url.searchParams.set('finalized', 'true');
-    url.searchParams.set('includeAltLines', 'true');
-    url.searchParams.set('includeOpenCloseOdds', 'true');
-  } else {
-    url.searchParams.set('oddsAvailable', 'true');
-  }
-  url.searchParams.set(
-    'startsAfter',
-    options.startsAfter ??
-      subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
-  );
-  url.searchParams.set(
-    'startsBefore',
-    options.startsBefore ?? addDaysToIso(options.snapshotAt, 7),
-  );
+  const url = buildSgoEventsUrl({
+    apiKey: options.apiKey,
+    league: options.league,
+    snapshotAt: options.snapshotAt,
+    mode: options.historical ? 'historical-odds' : 'live-odds',
+    ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+    ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
+    ...(options.providerEventIds ? { providerEventIds: options.providerEventIds } : {}),
+  });
 
   const { payloads, telemetry } = await fetchSgoPages({
     endpoint: 'odds',
@@ -247,23 +230,18 @@ function extractResolvedEvent(
 export async function fetchSGOResults(
   options: SGOResultsFetchOptions,
 ): Promise<SGOEventResult[]> {
-  const url = new URL(SGO_EVENTS_ENDPOINT);
-  url.searchParams.set('apiKey', options.apiKey);
-  url.searchParams.set('leagueID', options.league);
-  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
-  url.searchParams.set('finalized', 'true');
-  if (options.providerEventIds && options.providerEventIds.length > 0) {
-    url.searchParams.set('eventID', options.providerEventIds.join(','));
-  }
-  url.searchParams.set(
-    'startsBefore',
-    options.startsBefore ?? options.snapshotAt,
-  );
-  url.searchParams.set(
-    'startsAfter',
-    options.startsAfter ??
-      subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
-  );
+  const url = buildSgoEventsUrl({
+    apiKey: options.apiKey,
+    league: options.league,
+    snapshotAt: options.snapshotAt,
+    mode: 'results',
+    ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+    ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
+    ...(options.providerEventIds ? { providerEventIds: options.providerEventIds } : {}),
+    ...(options.lookbackHours !== undefined
+      ? { lookbackHours: options.lookbackHours }
+      : {}),
+  });
 
   const { payloads } = await fetchSgoPages({
     endpoint: 'results',
@@ -284,23 +262,18 @@ export async function fetchSGOResultsWithTelemetry(
   results: SGOEventResult[];
   requestTelemetry: SGORequestTelemetry;
 }> {
-  const url = new URL(SGO_EVENTS_ENDPOINT);
-  url.searchParams.set('apiKey', options.apiKey);
-  url.searchParams.set('leagueID', options.league);
-  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
-  url.searchParams.set('finalized', 'true');
-  if (options.providerEventIds && options.providerEventIds.length > 0) {
-    url.searchParams.set('eventID', options.providerEventIds.join(','));
-  }
-  url.searchParams.set(
-    'startsBefore',
-    options.startsBefore ?? options.snapshotAt,
-  );
-  url.searchParams.set(
-    'startsAfter',
-    options.startsAfter ??
-      subtractHoursFromIso(options.snapshotAt, options.lookbackHours ?? 48),
-  );
+  const url = buildSgoEventsUrl({
+    apiKey: options.apiKey,
+    league: options.league,
+    snapshotAt: options.snapshotAt,
+    mode: 'results',
+    ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+    ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
+    ...(options.providerEventIds ? { providerEventIds: options.providerEventIds } : {}),
+    ...(options.lookbackHours !== undefined
+      ? { lookbackHours: options.lookbackHours }
+      : {}),
+  });
 
   const { payloads, telemetry } = await fetchSgoPages({
     endpoint: 'results',
@@ -316,6 +289,72 @@ export async function fetchSGOResultsWithTelemetry(
       .filter((event): event is SGOEventResult => event !== null),
     requestTelemetry: telemetry,
   };
+}
+
+type SGOEventsRequestMode = 'live-odds' | 'historical-odds' | 'results';
+
+function buildSgoEventsUrl(input: {
+  apiKey: string;
+  league: string;
+  snapshotAt: string;
+  mode: SGOEventsRequestMode;
+  startsAfter?: string;
+  startsBefore?: string;
+  providerEventIds?: string[];
+  lookbackHours?: number;
+}) {
+  const url = new URL(SGO_EVENTS_ENDPOINT);
+  url.searchParams.set('apiKey', input.apiKey);
+  url.searchParams.set('leagueID', input.league);
+  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
+  if (input.providerEventIds && input.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', input.providerEventIds.join(','));
+  }
+
+  switch (input.mode) {
+    case 'live-odds':
+      url.searchParams.set('includeOpposingOdds', 'true');
+      url.searchParams.set('oddsAvailable', 'true');
+      url.searchParams.set(
+        'startsAfter',
+        input.startsAfter ??
+          subtractHoursFromIso(input.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
+      );
+      url.searchParams.set(
+        'startsBefore',
+        input.startsBefore ?? addDaysToIso(input.snapshotAt, 7),
+      );
+      return url;
+    case 'historical-odds':
+      // Historical mode: target finalized/completed events with scores.
+      // oddsAvailable=false on historical events, so the live filter excludes them.
+      url.searchParams.set('includeOpposingOdds', 'true');
+      url.searchParams.set('finalized', 'true');
+      url.searchParams.set('includeAltLines', 'true');
+      url.searchParams.set('includeOpenCloseOdds', 'true');
+      url.searchParams.set(
+        'startsAfter',
+        input.startsAfter ??
+          subtractHoursFromIso(input.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
+      );
+      url.searchParams.set(
+        'startsBefore',
+        input.startsBefore ?? addDaysToIso(input.snapshotAt, 7),
+      );
+      return url;
+    case 'results':
+      url.searchParams.set('finalized', 'true');
+      url.searchParams.set(
+        'startsBefore',
+        input.startsBefore ?? input.snapshotAt,
+      );
+      url.searchParams.set(
+        'startsAfter',
+        input.startsAfter ??
+          subtractHoursFromIso(input.snapshotAt, input.lookbackHours ?? 48),
+      );
+      return url;
+  }
 }
 
 const MAX_RATE_LIMIT_RETRIES = 1;

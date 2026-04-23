@@ -22,6 +22,7 @@ import {
 import {
   fetchAndPairSGOProps,
   fetchSGOResults,
+  fetchSGOResultsWithTelemetry,
   type SGOEventResult,
   type SGOMarketScore,
   type SGOResolvedEvent,
@@ -1646,6 +1647,34 @@ test('fetchSGOResults can target provider event IDs for bounded repair', async (
     'evt-finalized-1,evt-finalized-2',
   );
   assert.equal(url.searchParams.get('finalized'), 'true');
+});
+
+test('fetchSGOResultsWithTelemetry uses the same finalized request contract as fetchSGOResults', async () => {
+  let capturedUrl = '';
+
+  await fetchSGOResultsWithTelemetry({
+    apiKey: 'test-key',
+    league: 'NHL',
+    snapshotAt: '2026-04-23T04:00:00.000Z',
+    startsAfter: '2026-04-22T04:00:00.000Z',
+    startsBefore: '2026-04-23T04:00:00.000Z',
+    providerEventIds: ['evt-finalized-1', 'evt-finalized-2'],
+    fetchImpl: async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const url = new URL(capturedUrl);
+  assert.equal(url.searchParams.get('eventID'), 'evt-finalized-1,evt-finalized-2');
+  assert.equal(url.searchParams.get('finalized'), 'true');
+  assert.equal(url.searchParams.get('startsAfter'), '2026-04-22T04:00:00.000Z');
+  assert.equal(url.searchParams.get('startsBefore'), '2026-04-23T04:00:00.000Z');
+  assert.equal(url.searchParams.get('oddsAvailable'), null);
+  assert.equal(url.searchParams.get('includeOpenCloseOdds'), null);
 });
 
 test('fetchSGOResults follows nextCursor pagination and merges events from all pages', async () => {
