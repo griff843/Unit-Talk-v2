@@ -177,6 +177,7 @@ const ALTERNATE_MARKET_TYPE_IDS: Record<string, string> = {
   spread: 'spread',
   game_spread: 'spread',
   total: 'game_total_ou',
+  totals: 'game_total_ou',
   game_total: 'game_total_ou',
   'game-total': 'game_total_ou',
   game_total_ou: 'game_total_ou',

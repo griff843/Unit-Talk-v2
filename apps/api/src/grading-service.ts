@@ -1,4 +1,4 @@
-import { resolveOutcome, buildRecapEmbedData } from '@unit-talk/domain';
+import { resolveOutcome, buildRecapEmbedData, normalizeMarketKey } from '@unit-talk/domain';
 import type {
   EventRow,
   PickRecord,
@@ -72,7 +72,8 @@ export async function runGradingPass(
         continue;
       }
 
-      const gameLineMarket = isGameLineMarket(pick.market);
+      const normalizedMarketKey = normalizeMarketKey(pick.market);
+      const gameLineMarket = isGameLineMarket(normalizedMarketKey);
       const resolvedParticipantId = gameLineMarket
         ? null
         : await resolvePickParticipantId(pick, repositories);
@@ -131,8 +132,11 @@ export async function runGradingPass(
       }
 
       // Normalize SGO raw provider key → canonical market_type_id if needed
-      let marketKey = pick.market;
-      const canonicalKey = await repositories.providerOffers.resolveCanonicalMarketKey(pick.market, 'sgo');
+      let marketKey = normalizedMarketKey;
+      const canonicalKey = await repositories.providerOffers.resolveCanonicalMarketKey(
+        normalizedMarketKey,
+        'sgo',
+      );
       if (canonicalKey) {
         marketKey = canonicalKey;
       }
@@ -558,8 +562,7 @@ async function resolvePickEventByName(
   pick: PickRecord,
   repositories: Pick<RepositoryBundle, 'events'>,
 ): Promise<EventRow | null> {
-  const metadata = asRecord(pick.metadata);
-  const eventName = typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : '';
+  const eventName = readPickEventName(pick);
   if (!eventName) {
     return null;
   }
@@ -570,6 +573,23 @@ async function resolvePickEventByName(
   }
 
   return chooseEventForPick(pick, candidates);
+}
+
+function readPickEventName(pick: PickRecord): string {
+  const metadata = asRecord(pick.metadata);
+  if (typeof metadata?.eventName === 'string' && metadata.eventName.trim().length > 0) {
+    return metadata.eventName.trim();
+  }
+
+  const thesis = typeof metadata?.thesis === 'string' ? metadata.thesis.trim() : '';
+  if (!thesis) {
+    return '';
+  }
+
+  const thesisMatch = thesis.match(
+    /^(.*?)\s+(?:totals?|moneyline|spread|team total|team-total)\b/i,
+  );
+  return thesisMatch?.[1]?.trim() ?? '';
 }
 
 function inferSelectionSide(selection: string) {
