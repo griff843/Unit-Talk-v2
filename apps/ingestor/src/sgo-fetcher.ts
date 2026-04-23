@@ -12,11 +12,13 @@ export interface SGOFetchOptions {
   snapshotAt: string;
   startsAfter?: string;
   startsBefore?: string;
+  providerEventIds?: string[];
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   /**
    * When true, switches from live-odds mode (oddsAvailable=true) to historical
-   * mode (finalized=true + includeAltLine=true). Use for backfill of completed events.
+   * mode (finalized=true + includeAltLines=true + includeOpenCloseOdds=true).
+   * Use for backfill of completed events.
    * Historical events have oddsAvailable=false so they are excluded by the live filter.
    */
   historical?: boolean;
@@ -35,6 +37,7 @@ export interface SGOResultsFetchOptions {
   snapshotAt: string;
   startsAfter?: string;
   startsBefore?: string;
+  providerEventIds?: string[];
   lookbackHours?: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
@@ -137,7 +140,15 @@ interface FlatSGOOddsRow {
 }
 
 /** Priority bookmakers to extract from byBookmaker (in preference order for CLV). */
-const PRIORITY_BOOKMAKERS = ['pinnacle', 'draftkings', 'fanduel', 'betmgm', 'fanatics', 'bet365', 'bovada'] as const;
+const PRIORITY_BOOKMAKERS = [
+  'pinnacle',
+  'draftkings',
+  'fanduel',
+  'betmgm',
+  'fanatics',
+  'bet365',
+  'bovada',
+] as const;
 
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
@@ -147,17 +158,22 @@ export async function fetchAndPairSGOProps(
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
   url.searchParams.set('includeOpposingOdds', 'true');
+  if (options.providerEventIds && options.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', options.providerEventIds.join(','));
+  }
   if (options.historical) {
     // Historical mode: target finalized/completed events with scores.
     // oddsAvailable=false on historical events, so the live filter excludes them.
     url.searchParams.set('finalized', 'true');
-    url.searchParams.set('includeAltLine', 'true');
+    url.searchParams.set('includeAltLines', 'true');
+    url.searchParams.set('includeOpenCloseOdds', 'true');
   } else {
     url.searchParams.set('oddsAvailable', 'true');
   }
   url.searchParams.set(
     'startsAfter',
-    options.startsAfter ?? subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
+    options.startsAfter ??
+      subtractHoursFromIso(options.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
   );
   url.searchParams.set(
     'startsBefore',
@@ -188,7 +204,9 @@ export async function fetchAndPairSGOProps(
   };
 }
 
-function extractResolvedEvent(event: Record<string, unknown>): SGOResolvedEvent | null {
+function extractResolvedEvent(
+  event: Record<string, unknown>,
+): SGOResolvedEvent | null {
   const providerEventId = firstString(event.eventID, event.eventId, event.id);
   if (!providerEventId) {
     return null;
@@ -201,7 +219,9 @@ function extractResolvedEvent(event: Record<string, unknown>): SGOResolvedEvent 
     awayName && homeName ? `${awayName} vs. ${homeName}` : providerEventId;
 
   const players = extractPlayers(event.players);
-  const providerParticipantIds = new Set<string>(players.map((player) => player.playerId));
+  const providerParticipantIds = new Set<string>(
+    players.map((player) => player.playerId),
+  );
   const pairedProps = pairEventOdds(event, new Date().toISOString());
   for (const prop of pairedProps) {
     if (prop.providerParticipantId) {
@@ -231,7 +251,14 @@ export async function fetchSGOResults(
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
-  url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
+  url.searchParams.set('finalized', 'true');
+  if (options.providerEventIds && options.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', options.providerEventIds.join(','));
+  }
+  url.searchParams.set(
+    'startsBefore',
+    options.startsBefore ?? options.snapshotAt,
+  );
   url.searchParams.set(
     'startsAfter',
     options.startsAfter ??
@@ -253,12 +280,22 @@ export async function fetchSGOResults(
 
 export async function fetchSGOResultsWithTelemetry(
   options: SGOResultsFetchOptions,
-): Promise<{ results: SGOEventResult[]; requestTelemetry: SGORequestTelemetry }> {
+): Promise<{
+  results: SGOEventResult[];
+  requestTelemetry: SGORequestTelemetry;
+}> {
   const url = new URL(SGO_EVENTS_ENDPOINT);
   url.searchParams.set('apiKey', options.apiKey);
   url.searchParams.set('leagueID', options.league);
   url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
-  url.searchParams.set('startsBefore', options.startsBefore ?? options.snapshotAt);
+  url.searchParams.set('finalized', 'true');
+  if (options.providerEventIds && options.providerEventIds.length > 0) {
+    url.searchParams.set('eventID', options.providerEventIds.join(','));
+  }
+  url.searchParams.set(
+    'startsBefore',
+    options.startsBefore ?? options.snapshotAt,
+  );
   url.searchParams.set(
     'startsAfter',
     options.startsAfter ??
@@ -313,12 +350,16 @@ async function fetchSgoPages(input: {
       return { payloads, telemetry };
     }
     if (seenCursors.has(nextCursor)) {
-      throw new Error(`SGO ${input.endpoint} pagination repeated cursor: ${nextCursor}`);
+      throw new Error(
+        `SGO ${input.endpoint} pagination repeated cursor: ${nextCursor}`,
+      );
     }
     seenCursors.add(nextCursor);
   }
 
-  throw new Error(`SGO ${input.endpoint} pagination exceeded ${MAX_SGO_PAGINATION_PAGES} pages`);
+  throw new Error(
+    `SGO ${input.endpoint} pagination exceeded ${MAX_SGO_PAGINATION_PAGES} pages`,
+  );
 }
 
 async function fetchSgoJson(input: {
@@ -352,7 +393,8 @@ async function fetchSgoJson(input: {
     }
 
     if (response.status === 429 && attempt < MAX_RATE_LIMIT_RETRIES) {
-      const backoffMs = resolveRetryAfterMs(response.headers) ?? DEFAULT_BACKOFF_MS;
+      const backoffMs =
+        resolveRetryAfterMs(response.headers) ?? DEFAULT_BACKOFF_MS;
       telemetry.rateLimitHitCount += 1;
       telemetry.backoffCount += 1;
       telemetry.backoffMs += backoffMs;
@@ -362,13 +404,20 @@ async function fetchSgoJson(input: {
       continue;
     }
 
-    throw new Error(`SGO ${input.endpoint} fetch failed: ${response.status} ${lastStatusText}`);
+    throw new Error(
+      `SGO ${input.endpoint} fetch failed: ${response.status} ${lastStatusText}`,
+    );
   }
 
-  throw new Error(`SGO ${input.endpoint} fetch failed: ${telemetry.lastStatus ?? 0} ${lastStatusText}`);
+  throw new Error(
+    `SGO ${input.endpoint} fetch failed: ${telemetry.lastStatus ?? 0} ${lastStatusText}`,
+  );
 }
 
-function mergeTelemetry(target: SGORequestTelemetry, source: SGORequestTelemetry) {
+function mergeTelemetry(
+  target: SGORequestTelemetry,
+  source: SGORequestTelemetry,
+) {
   target.requestCount += source.requestCount;
   target.successfulRequests += source.successfulRequests;
   target.creditsUsed += source.creditsUsed;
@@ -399,7 +448,9 @@ function extractNextCursor(payload: unknown) {
   );
 }
 
-function createEmptyTelemetry(endpoint: 'odds' | 'results'): SGORequestTelemetry {
+function createEmptyTelemetry(
+  endpoint: 'odds' | 'results',
+): SGORequestTelemetry {
   return {
     provider: 'sgo',
     endpoint,
@@ -423,8 +474,14 @@ function applyTelemetryHeaders(
   telemetry: SGORequestTelemetry,
   headers: Headers,
 ) {
-  const limit = readHeaderNumber(headers, ['x-ratelimit-limit', 'ratelimit-limit']);
-  const remaining = readHeaderNumber(headers, ['x-ratelimit-remaining', 'ratelimit-remaining']);
+  const limit = readHeaderNumber(headers, [
+    'x-ratelimit-limit',
+    'ratelimit-limit',
+  ]);
+  const remaining = readHeaderNumber(headers, [
+    'x-ratelimit-remaining',
+    'ratelimit-remaining',
+  ]);
   const retryAfterMs = resolveRetryAfterMs(headers);
   const creditsUsed = readHeaderNumber(headers, [
     'x-api-credits-used',
@@ -524,20 +581,26 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
     return [];
   }
 
-  const sportKey = firstString(event.leagueID, event.leagueId, event.sportKey) ?? null;
+  const sportKey =
+    firstString(event.leagueID, event.leagueId, event.sportKey) ?? null;
   const rows: FlatSGOOddsRow[] = [];
   collectOddsRows(event.odds, providerEventId, sportKey, rows);
 
   // Top-level paired props (consensus SGO odds)
   const grouped = new Map<string, SGOPairedProp>();
-  // Per-bookmaker: groupKey → bookId → { overOdds, underOdds }
-  const bookmakerGrouped = new Map<string, Map<string, { overOdds: number | null; underOdds: number | null }>>();
+  // Per-bookmaker paired props, including explicit historical open/close prices.
+  const bookmakerProps = new Map<string, SGOPairedProp>();
 
   for (const row of rows) {
     const baseMarketKey = stripSideSuffix(row.marketKey);
     const lineStr = formatLine(row.line);
     const participantKey = row.providerParticipantId ?? '_';
-    const groupKey = [providerEventId, participantKey, baseMarketKey, lineStr].join(':');
+    const groupKey = [
+      providerEventId,
+      participantKey,
+      baseMarketKey,
+      lineStr,
+    ].join(':');
     const existing = grouped.get(groupKey) ?? {
       providerEventId,
       marketKey: baseMarketKey,
@@ -557,44 +620,137 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
 
     grouped.set(groupKey, existing);
 
-    // Extract per-bookmaker odds from byBookmaker
+    // Extract per-bookmaker current/open/close prices from byBookmaker.
     if (row.byBookmaker) {
-      const bookMap = bookmakerGrouped.get(groupKey) ?? new Map();
       for (const bookId of PRIORITY_BOOKMAKERS) {
         const bookData = row.byBookmaker[bookId];
         if (!isRecord(bookData)) continue;
         const bookOdds = firstNumber(bookData.odds as unknown);
-        if (bookOdds === null) continue;
-        const existing2 = bookMap.get(bookId) ?? { overOdds: null, underOdds: null };
-        if (row.side === 'over') {
-          existing2.overOdds = bookOdds;
-        } else {
-          existing2.underOdds = bookOdds;
+        if (bookOdds !== null) {
+          addBookmakerPairedProp(bookmakerProps, {
+            providerEventId,
+            marketKey: baseMarketKey,
+            providerParticipantId: row.providerParticipantId,
+            sportKey,
+            line: row.line,
+            side: row.side,
+            odds: bookOdds,
+            snapshotAt,
+            bookmakerKey: bookId,
+            priceSource: 'current',
+          });
         }
-        bookMap.set(bookId, existing2);
+
+        const openOdds = firstNumber(
+          bookData.openOdds,
+          bookData.openBookOdds,
+          bookData.openFairOdds,
+        );
+        if (openOdds !== null) {
+          addBookmakerPairedProp(bookmakerProps, {
+            providerEventId,
+            marketKey: baseMarketKey,
+            providerParticipantId: row.providerParticipantId,
+            sportKey,
+            line: firstNumber(
+              bookData.openOverUnder,
+              bookData.openSpread,
+              row.line,
+            ),
+            side: row.side,
+            odds: openOdds,
+            snapshotAt,
+            bookmakerKey: bookId,
+            priceSource: 'open',
+            isOpening: true,
+          });
+        }
+
+        const closeOdds = firstNumber(
+          bookData.closeOdds,
+          bookData.closeBookOdds,
+          bookData.closeFairOdds,
+        );
+        if (closeOdds !== null) {
+          addBookmakerPairedProp(bookmakerProps, {
+            providerEventId,
+            marketKey: baseMarketKey,
+            providerParticipantId: row.providerParticipantId,
+            sportKey,
+            line: firstNumber(
+              bookData.closeOverUnder,
+              bookData.closeSpread,
+              row.line,
+            ),
+            side: row.side,
+            odds: closeOdds,
+            snapshotAt,
+            bookmakerKey: bookId,
+            priceSource: 'close',
+            isClosing: true,
+          });
+        }
       }
-      bookmakerGrouped.set(groupKey, bookMap);
     }
   }
 
   const result: SGOPairedProp[] = Array.from(grouped.values());
 
-  // Append bookmaker-specific props
-  for (const [groupKey, bookMap] of bookmakerGrouped) {
-    const baseProp = grouped.get(groupKey);
-    if (!baseProp) continue;
-    for (const [bookId, bookOdds] of bookMap) {
-      if (bookOdds.overOdds === null && bookOdds.underOdds === null) continue;
-      result.push({
-        ...baseProp,
-        overOdds: bookOdds.overOdds,
-        underOdds: bookOdds.underOdds,
-        bookmakerKey: bookId,
-      });
-    }
-  }
+  result.push(...bookmakerProps.values());
 
   return result;
+}
+
+function addBookmakerPairedProp(
+  props: Map<string, SGOPairedProp>,
+  input: {
+    providerEventId: string;
+    marketKey: string;
+    providerParticipantId: string | null;
+    sportKey: string | null;
+    line: number | string | null;
+    side: 'over' | 'under';
+    odds: number;
+    snapshotAt: string;
+    bookmakerKey: string;
+    priceSource: 'current' | 'open' | 'close';
+    isOpening?: boolean;
+    isClosing?: boolean;
+  },
+) {
+  const lineStr = formatLine(input.line);
+  const participantKey = input.providerParticipantId ?? '_';
+  const key = [
+    input.providerEventId,
+    participantKey,
+    input.marketKey,
+    lineStr,
+    input.bookmakerKey,
+    input.priceSource,
+  ].join(':');
+  const existing = props.get(key) ?? {
+    providerEventId: input.providerEventId,
+    marketKey: input.marketKey,
+    providerParticipantId: input.providerParticipantId,
+    sportKey: input.sportKey,
+    line: input.line,
+    overOdds: null,
+    underOdds: null,
+    snapshotAt: input.snapshotAt,
+    bookmakerKey: input.bookmakerKey,
+    priceSource: input.priceSource,
+    isOpening: input.isOpening ?? false,
+    isClosing: input.isClosing ?? false,
+  };
+
+  if (input.side === 'over') {
+    existing.overOdds = input.odds;
+  } else {
+    existing.underOdds = input.odds;
+  }
+  existing.isOpening = existing.isOpening || (input.isOpening ?? false);
+  existing.isClosing = existing.isClosing || (input.isClosing ?? false);
+  props.set(key, existing);
 }
 
 function collectOddsRows(
@@ -606,7 +762,13 @@ function collectOddsRows(
 ): void {
   if (Array.isArray(node)) {
     for (const item of node) {
-      collectOddsRows(item, providerEventId, sportKey, rows, inheritedMarketKey);
+      collectOddsRows(
+        item,
+        providerEventId,
+        sportKey,
+        rows,
+        inheritedMarketKey,
+      );
     }
     return;
   }
@@ -638,10 +800,26 @@ function collectOddsRows(
           node.entityId,
         ) ?? inferParticipantId(marketKey),
       sportKey,
-      line: firstNumber(node.bookOverUnder, node.fairOverUnder, node.line, node.points, node.total, node.handicap),
-      odds: firstNumber(node.bookOdds, node.fairOdds, node.americanOdds, node.oddsAmerican, node.odds, node.price),
+      line: firstNumber(
+        node.bookOverUnder,
+        node.fairOverUnder,
+        node.line,
+        node.points,
+        node.total,
+        node.handicap,
+      ),
+      odds: firstNumber(
+        node.bookOdds,
+        node.fairOdds,
+        node.americanOdds,
+        node.oddsAmerican,
+        node.odds,
+        node.price,
+      ),
       side,
-      ...(isRecord(node.byBookmaker) ? { byBookmaker: node.byBookmaker as Record<string, unknown> } : {}),
+      ...(isRecord(node.byBookmaker)
+        ? { byBookmaker: node.byBookmaker as Record<string, unknown> }
+        : {}),
     });
     return;
   }
@@ -702,7 +880,8 @@ function extractPlayers(value: unknown): SGOResolvedPlayer[] {
     }
 
     const resolvedPlayerId =
-      firstString(playerValue.playerID, playerValue.playerId, playerId) ?? playerId;
+      firstString(playerValue.playerID, playerValue.playerId, playerId) ??
+      playerId;
     const firstName = firstString(playerValue.firstName) ?? null;
     const lastName = firstString(playerValue.lastName) ?? null;
     const displayName =
@@ -718,10 +897,14 @@ function extractPlayers(value: unknown): SGOResolvedPlayer[] {
     });
   }
 
-  return players.sort((left, right) => left.displayName.localeCompare(right.displayName));
+  return players.sort((left, right) =>
+    left.displayName.localeCompare(right.displayName),
+  );
 }
 
-function extractEventResult(event: Record<string, unknown>): SGOEventResult | null {
+function extractEventResult(
+  event: Record<string, unknown>,
+): SGOEventResult | null {
   const providerEventId = firstString(event.eventID, event.eventId, event.id);
   if (!providerEventId) {
     return null;
@@ -746,14 +929,68 @@ function extractEventResult(event: Record<string, unknown>): SGOEventResult | nu
 function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
   const markets: SGOMarketScore[] = [];
 
+  if (Array.isArray(odds)) {
+    for (const item of odds) {
+      markets.push(...extractScoredMarkets(item));
+    }
+    return markets;
+  }
+
   if (!isRecord(odds)) {
     return markets;
   }
 
+  const selfOddId = firstString(
+    odds.oddID,
+    odds.oddId,
+    odds.marketKey,
+    odds.marketID,
+  );
+  if (
+    'scoringSupported' in odds &&
+    odds.scoringSupported === true &&
+    selfOddId
+  ) {
+    const score = firstNumber(odds.score);
+    if (score !== null) {
+      markets.push({
+        oddId: selfOddId,
+        baseMarketKey: normalizeMarketKey(selfOddId),
+        providerParticipantId:
+          firstString(
+            odds.playerID,
+            odds.playerId,
+            odds.participantID,
+            odds.participantId,
+            odds.entityID,
+            odds.entityId,
+            odds.statEntityID,
+            odds.statEntityId,
+          ) ?? inferParticipantId(selfOddId),
+        score,
+        scoringSupported: true,
+      });
+    }
+    return markets;
+  }
+
   for (const [oddId, oddValue] of Object.entries(odds)) {
+    if (Array.isArray(oddValue)) {
+      markets.push(...extractScoredMarkets(oddValue));
+      continue;
+    }
+
     if (!isRecord(oddValue)) {
       continue;
     }
+
+    const explicitOddId = firstString(
+      oddValue.oddID,
+      oddValue.oddId,
+      oddValue.marketKey,
+      oddValue.marketID,
+      oddId,
+    );
 
     // Recursively handle nested market groups (e.g. odds.market.{oddId: ...})
     // If the value doesn't have scoringSupported, it may be a group — recurse into it
@@ -766,17 +1003,30 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
     if (oddValue.scoringSupported !== true) {
       continue;
     }
+    if (!explicitOddId) {
+      continue;
+    }
 
     const score = firstNumber(oddValue.score);
     if (score === null) {
       continue;
     }
 
-    const baseMarketKey = normalizeMarketKey(oddId);
-    const providerParticipantId = inferParticipantId(oddId);
+    const baseMarketKey = normalizeMarketKey(explicitOddId);
+    const providerParticipantId =
+      firstString(
+        oddValue.playerID,
+        oddValue.playerId,
+        oddValue.participantID,
+        oddValue.participantId,
+        oddValue.entityID,
+        oddValue.entityId,
+        oddValue.statEntityID,
+        oddValue.statEntityId,
+      ) ?? inferParticipantId(explicitOddId);
 
     markets.push({
-      oddId,
+      oddId: explicitOddId,
       baseMarketKey,
       providerParticipantId,
       score,
@@ -819,8 +1069,13 @@ function extractPlayerStatRows(results: unknown): SGOPlayerStatRow[] {
   }
 
   const rows: SGOPlayerStatRow[] = [];
-  for (const [providerParticipantId, statsValue] of Object.entries(results.game)) {
-    if (!isRecord(statsValue) || isReservedSidePlaceholder(providerParticipantId.toLowerCase())) {
+  for (const [providerParticipantId, statsValue] of Object.entries(
+    results.game,
+  )) {
+    if (
+      !isRecord(statsValue) ||
+      isReservedSidePlaceholder(providerParticipantId.toLowerCase())
+    ) {
       continue;
     }
 
@@ -851,7 +1106,9 @@ function getNestedString(value: Record<string, unknown>, path: string[]) {
     }
     current = current[segment];
   }
-  return typeof current === 'string' && current.length > 0 ? current : undefined;
+  return typeof current === 'string' && current.length > 0
+    ? current
+    : undefined;
 }
 
 function buildDisplayName(firstName: string | null, lastName: string | null) {
@@ -882,7 +1139,9 @@ export async function fetchSGOAccountUsage(
   });
 
   if (!response.ok) {
-    throw new Error(`SGO account/usage fetch failed: ${response.status} ${response.statusText}`);
+    throw new Error(
+      `SGO account/usage fetch failed: ${response.status} ${response.statusText}`,
+    );
   }
 
   const raw = (await response.json()) as unknown;
@@ -890,11 +1149,19 @@ export async function fetchSGOAccountUsage(
 
   return {
     plan: firstString(data.plan, data.planName, data.tier) ?? null,
-    objectsUsed: firstNumber(data.objectsUsed, data.objects_used, data.used) ?? null,
-    objectsLimit: firstNumber(data.objectsLimit, data.objects_limit, data.limit) ?? null,
+    objectsUsed:
+      firstNumber(data.objectsUsed, data.objects_used, data.used) ?? null,
+    objectsLimit:
+      firstNumber(data.objectsLimit, data.objects_limit, data.limit) ?? null,
     creditsUsed: firstNumber(data.creditsUsed, data.credits_used) ?? null,
     creditsLimit: firstNumber(data.creditsLimit, data.credits_limit) ?? null,
-    resetAt: firstString(data.resetAt, data.reset_at, data.periodEnd, data.period_end) ?? null,
+    resetAt:
+      firstString(
+        data.resetAt,
+        data.reset_at,
+        data.periodEnd,
+        data.period_end,
+      ) ?? null,
     raw,
   };
 }
@@ -908,7 +1175,10 @@ export function deriveDisplayNameFromProviderId(providerParticipantId: string) {
   }
 
   const trimmed = [...segments];
-  if (trimmed.length > 0 && /^[A-Z]{2,5}$/.test(trimmed[trimmed.length - 1] ?? '')) {
+  if (
+    trimmed.length > 0 &&
+    /^[A-Z]{2,5}$/.test(trimmed[trimmed.length - 1] ?? '')
+  ) {
     trimmed.pop();
   }
   if (trimmed.length > 0 && /^\d+$/.test(trimmed[trimmed.length - 1] ?? '')) {

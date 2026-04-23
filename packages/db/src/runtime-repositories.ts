@@ -102,6 +102,7 @@ import type {
 import type {
   AlertDetectionRecord,
   AuditLogRow,
+  EventStatus,
   EventParticipantRow,
   ExperimentLedgerRecord,
   ExecutionQualityReport,
@@ -160,10 +161,15 @@ function extractParticipantId(pick: CanonicalPick): string | null {
   }
 
   const legacyPlayerId = pick.metadata?.['playerId'];
-  return typeof legacyPlayerId === 'string' && legacyPlayerId.length > 0 ? legacyPlayerId : null;
+  return typeof legacyPlayerId === 'string' && legacyPlayerId.length > 0
+    ? legacyPlayerId
+    : null;
 }
 
-function mapPickToRecord(pick: CanonicalPick, idempotencyKey?: string | null): PickRecord {
+function mapPickToRecord(
+  pick: CanonicalPick,
+  idempotencyKey?: string | null,
+): PickRecord {
   const foreignKeyCandidates = derivePickForeignKeyCandidates(pick);
   return {
     id: pick.id,
@@ -250,7 +256,9 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
   private readonly submissions = new Map<string, SubmissionRecord>();
   private readonly submissionEvents: SubmissionEventRecord[] = [];
 
-  async saveSubmission(input: SubmissionCreateInput): Promise<SubmissionRecord> {
+  async saveSubmission(
+    input: SubmissionCreateInput,
+  ): Promise<SubmissionRecord> {
     const submission: SubmissionRecord = {
       id: input.id,
       external_id: null,
@@ -291,7 +299,9 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
     return event;
   }
 
-  async processSubmissionAtomic(_input: SubmissionAtomicInput): Promise<SubmissionAtomicResult> {
+  async processSubmissionAtomic(
+    _input: SubmissionAtomicInput,
+  ): Promise<SubmissionAtomicResult> {
     throw new Error(
       'processSubmissionAtomic is not supported in InMemory mode. Use the sequential path.',
     );
@@ -303,13 +313,18 @@ export class InMemoryPickRepository implements PickRepository {
   private readonly lifecycleEvents: PickLifecycleRecord[] = [];
   private readonly promotionHistory: PromotionHistoryRecord[] = [];
 
-  async savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord> {
+  async savePick(
+    pick: CanonicalPick,
+    idempotencyKey?: string | null,
+  ): Promise<PickRecord> {
     const record = mapPickToRecord(pick, idempotencyKey);
     this.picks.set(record.id, record);
     return record;
   }
 
-  async saveLifecycleEvent(event: LifecycleEvent): Promise<PickLifecycleRecord> {
+  async saveLifecycleEvent(
+    event: LifecycleEvent,
+  ): Promise<PickLifecycleRecord> {
     const record = mapLifecycleEventToRecord(event);
     this.lifecycleEvents.push(record);
     return record;
@@ -334,7 +349,10 @@ export class InMemoryPickRepository implements PickRepository {
     return updated;
   }
 
-  async updateApprovalStatus(pickId: string, approvalStatus: string): Promise<PickRecord> {
+  async updateApprovalStatus(
+    pickId: string,
+    approvalStatus: string,
+  ): Promise<PickRecord> {
     const existing = this.picks.get(pickId);
     if (!existing) {
       throw new Error(`Pick not found: ${pickId}`);
@@ -380,7 +398,9 @@ export class InMemoryPickRepository implements PickRepository {
   ): Promise<PickRecord[]> {
     const stateSet = new Set(lifecycleStates);
     const matches = Array.from(this.picks.values())
-      .filter((pick) => stateSet.has(pick.status as CanonicalPick['lifecycleState']))
+      .filter((pick) =>
+        stateSet.has(pick.status as CanonicalPick['lifecycleState']),
+      )
       .sort((left, right) => left.created_at.localeCompare(right.created_at));
     return limit === undefined ? matches : matches.slice(0, limit);
   }
@@ -467,11 +487,14 @@ export class InMemoryPickRepository implements PickRepository {
     // Only count picks that are currently active on the board.
     // Settled and voided picks no longer occupy board capacity.
     // 7-day window prevents stale picks from permanently blocking.
-    const boardWindowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const boardWindowStart = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000,
+    ).toISOString();
     const promoted = Array.from(this.picks.values()).filter(
       (pick) =>
         pick.promotion_target === input.target &&
-        (pick.promotion_status === 'qualified' || pick.promotion_status === 'promoted') &&
+        (pick.promotion_status === 'qualified' ||
+          pick.promotion_status === 'promoted') &&
         pick.status !== 'settled' &&
         pick.status !== 'voided' &&
         pick.created_at >= boardWindowStart &&
@@ -483,7 +506,8 @@ export class InMemoryPickRepository implements PickRepository {
       sameSportCount: countMatchingSport(promoted, input.sport),
       sameGameCount: countMatchingEvent(promoted, input.eventName),
       duplicateCount: promoted.filter(
-        (pick) => pick.market === input.market && pick.selection === input.selection,
+        (pick) =>
+          pick.market === input.market && pick.selection === input.selection,
       ).length,
     };
   }
@@ -564,24 +588,41 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     return record;
   }
 
-  async enqueueDistributionAtomic(_input: EnqueueDistributionAtomicInput): Promise<EnqueueDistributionAtomicResult | null> {
-    throw new Error('enqueueDistributionAtomic is not supported in InMemory mode. Use the sequential path.');
-  }
-
-  async findByIdempotencyKey(idempotencyKey: string): Promise<OutboxRecord | null> {
-    return (
-      [...this.entries]
-        .filter((entry) => entry.idempotency_key === idempotencyKey)
-        .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null
+  async enqueueDistributionAtomic(
+    _input: EnqueueDistributionAtomicInput,
+  ): Promise<EnqueueDistributionAtomicResult | null> {
+    throw new Error(
+      'enqueueDistributionAtomic is not supported in InMemory mode. Use the sequential path.',
     );
   }
 
-  async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
-    throw new Error('claimNextAtomic is not supported in InMemory mode. Use claimNext.');
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<OutboxRecord | null> {
+    return (
+      [...this.entries]
+        .filter((entry) => entry.idempotency_key === idempotencyKey)
+        .sort((left, right) =>
+          right.created_at.localeCompare(left.created_at),
+        )[0] ?? null
+    );
   }
 
-  async confirmDeliveryAtomic(_input: ConfirmDeliveryAtomicInput): Promise<ConfirmDeliveryAtomicResult> {
-    throw new Error('confirmDeliveryAtomic is not supported in InMemory mode. Use the sequential path.');
+  async claimNextAtomic(
+    _target: string,
+    _workerId: string,
+  ): Promise<OutboxRecord | null> {
+    throw new Error(
+      'claimNextAtomic is not supported in InMemory mode. Use claimNext.',
+    );
+  }
+
+  async confirmDeliveryAtomic(
+    _input: ConfirmDeliveryAtomicInput,
+  ): Promise<ConfirmDeliveryAtomicResult> {
+    throw new Error(
+      'confirmDeliveryAtomic is not supported in InMemory mode. Use the sequential path.',
+    );
   }
 
   async findByPickAndTarget(
@@ -605,12 +646,20 @@ export class InMemoryOutboxRepository implements OutboxRepository {
   ): Promise<OutboxRecord | null> {
     return (
       [...this.entries]
-        .filter((entry) => entry.pick_id === pickId && statuses.includes(entry.status))
-        .sort((left, right) => right.created_at.localeCompare(left.created_at))[0] ?? null
+        .filter(
+          (entry) =>
+            entry.pick_id === pickId && statuses.includes(entry.status),
+        )
+        .sort((left, right) =>
+          right.created_at.localeCompare(left.created_at),
+        )[0] ?? null
     );
   }
 
-  async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
+  async claimNext(
+    target: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const now = new Date().toISOString();
     const next = this.entries.find(
       (entry) =>
@@ -632,7 +681,10 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     return next;
   }
 
-  async touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null> {
+  async touchClaim(
+    outboxId: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const existing = this.entries.find((entry) => entry.id === outboxId);
     if (!existing) {
       return null;
@@ -748,7 +800,9 @@ export class InMemoryOutboxRepository implements OutboxRepository {
 export class InMemoryAlertDetectionRepository implements AlertDetectionRepository {
   private readonly records = new Map<string, AlertDetectionRecord>();
 
-  async saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null> {
+  async saveDetection(
+    input: AlertDetectionCreateInput,
+  ): Promise<AlertDetectionRecord | null> {
     const existing = this.records.get(input.idempotencyKey);
     if (existing) {
       return null;
@@ -786,7 +840,9 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
     return record;
   }
 
-  async findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null> {
+  async findActiveCooldown(
+    input: AlertCooldownQuery,
+  ): Promise<AlertDetectionRecord | null> {
     return (
       Array.from(this.records.values())
         .filter(
@@ -833,7 +889,9 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
             record.current_snapshot_at >= since,
         )
         .sort((left, right) => {
-          const detectedOrder = left.current_snapshot_at.localeCompare(right.current_snapshot_at);
+          const detectedOrder = left.current_snapshot_at.localeCompare(
+            right.current_snapshot_at,
+          );
           if (detectedOrder !== 0) {
             return detectedOrder;
           }
@@ -857,7 +915,9 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
           record.direction === direction &&
           record.current_snapshot_at >= since,
       )
-      .sort((left, right) => right.current_snapshot_at.localeCompare(left.current_snapshot_at));
+      .sort((left, right) =>
+        right.current_snapshot_at.localeCompare(left.current_snapshot_at),
+      );
   }
 
   async markSteamDetected(
@@ -904,13 +964,19 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
 
         return record.tier === options.minTier;
       })
-      .sort((left, right) => right.current_snapshot_at.localeCompare(left.current_snapshot_at))
+      .sort((left, right) =>
+        right.current_snapshot_at.localeCompare(left.current_snapshot_at),
+      )
       .slice(0, limit);
   }
 
-  async getStatusSummary(windowStart: string): Promise<AlertDetectionStatusSummary> {
+  async getStatusSummary(
+    windowStart: string,
+  ): Promise<AlertDetectionStatusSummary> {
     const records = Array.from(this.records.values());
-    const inWindow = records.filter((record) => record.current_snapshot_at > windowStart);
+    const inWindow = records.filter(
+      (record) => record.current_snapshot_at > windowStart,
+    );
 
     const lastDetectedAt =
       records
@@ -921,9 +987,11 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
       lastDetectedAt,
       counts: {
         notable: inWindow.filter((record) => record.tier === 'notable').length,
-        alertWorthy: inWindow.filter((record) => record.tier === 'alert-worthy').length,
+        alertWorthy: inWindow.filter((record) => record.tier === 'alert-worthy')
+          .length,
         notified: inWindow.filter((record) => record.notified === true).length,
-        steamEvents: inWindow.filter((record) => record.steam_detected === true).length,
+        steamEvents: inWindow.filter((record) => record.steam_detected === true)
+          .length,
       },
     };
   }
@@ -944,9 +1012,7 @@ export class InMemoryAlertDetectionRepository implements AlertDetectionRepositor
   }
 }
 
-export class InMemoryHedgeOpportunityRepository
-  implements HedgeOpportunityRepository
-{
+export class InMemoryHedgeOpportunityRepository implements HedgeOpportunityRepository {
   private readonly records = new Map<string, HedgeOpportunityRecord>();
 
   async saveOpportunity(
@@ -1019,7 +1085,9 @@ export class InMemoryHedgeOpportunityRepository
       .slice(0, limit);
   }
 
-  async updateNotified(input: HedgeOpportunityNotificationUpdateInput): Promise<void> {
+  async updateNotified(
+    input: HedgeOpportunityNotificationUpdateInput,
+  ): Promise<void> {
     for (const [key, record] of this.records.entries()) {
       if (record.id === input.id) {
         this.records.set(key, {
@@ -1145,8 +1213,12 @@ export class InMemorySettlementRepository implements SettlementRepository {
     return record;
   }
 
-  async settlePickAtomic(_input: SettlePickAtomicInput): Promise<SettlePickAtomicResult> {
-    throw new Error('settlePickAtomic is not supported in InMemory mode. Use the sequential path.');
+  async settlePickAtomic(
+    _input: SettlePickAtomicInput,
+  ): Promise<SettlePickAtomicResult> {
+    throw new Error(
+      'settlePickAtomic is not supported in InMemory mode. Use the sequential path.',
+    );
   }
 
   async findLatestForPick(pickId: string): Promise<SettlementRecord | null> {
@@ -1173,7 +1245,9 @@ export class InMemorySettlementRepository implements SettlementRepository {
     settlementId: string,
     payload: Record<string, unknown>,
   ): Promise<SettlementRecord> {
-    const existing = this.settlements.find((record) => record.id === settlementId);
+    const existing = this.settlements.find(
+      (record) => record.id === settlementId,
+    );
     if (!existing) {
       throw new Error(`Settlement record not found: ${settlementId}`);
     }
@@ -1186,7 +1260,9 @@ export class InMemorySettlementRepository implements SettlementRepository {
 export class InMemoryProviderOfferRepository implements ProviderOfferRepository {
   private readonly offers = new Map<string, ProviderOfferRecord>();
 
-  async upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult> {
+  async upsertBatch(
+    offers: ProviderOfferUpsertInput[],
+  ): Promise<ProviderOfferUpsertResult> {
     let insertedCount = 0;
     let updatedCount = 0;
 
@@ -1195,11 +1271,18 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       if (existing) {
         this.offers.set(
           offer.idempotencyKey,
-          mapProviderOfferInsertToRecord(offer, existing.id, existing.created_at),
+          mapProviderOfferInsertToRecord(
+            offer,
+            existing.id,
+            existing.created_at,
+          ),
         );
         updatedCount += 1;
       } else {
-        this.offers.set(offer.idempotencyKey, mapProviderOfferInsertToRecord(offer));
+        this.offers.set(
+          offer.idempotencyKey,
+          mapProviderOfferInsertToRecord(offer),
+        );
         insertedCount += 1;
       }
     }
@@ -1236,12 +1319,15 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listAll(): Promise<ProviderOfferRecord[]> {
-    return Array.from(this.offers.values()).sort(
-      (left, right) => right.snapshot_at.localeCompare(left.snapshot_at),
+    return Array.from(this.offers.values()).sort((left, right) =>
+      right.snapshot_at.localeCompare(left.snapshot_at),
     );
   }
 
-  async listRecentOffers(since: string, limit = 10_000): Promise<ProviderOfferRecord[]> {
+  async listRecentOffers(
+    since: string,
+    limit = 10_000,
+  ): Promise<ProviderOfferRecord[]> {
     return Array.from(this.offers.values())
       .filter((offer) => offer.snapshot_at >= since)
       .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))
@@ -1252,7 +1338,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     criteria: ClosingLineLookupCriteria,
   ): Promise<ProviderOfferRecord | null> {
     const providerParticipantId =
-      criteria.providerParticipantId === undefined ? null : criteria.providerParticipantId;
+      criteria.providerParticipantId === undefined
+        ? null
+        : criteria.providerParticipantId;
 
     return (
       Array.from(this.offers.values())
@@ -1265,7 +1353,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             (criteria.bookmakerKey === undefined ||
               offer.bookmaker_key === criteria.bookmakerKey),
         )
-        .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null
+        .sort((left, right) =>
+          right.snapshot_at.localeCompare(left.snapshot_at),
+        )[0] ?? null
     );
   }
 
@@ -1273,7 +1363,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     criteria: ClosingLineLookupCriteria,
   ): Promise<ProviderOfferRecord | null> {
     const providerParticipantId =
-      criteria.providerParticipantId === undefined ? null : criteria.providerParticipantId;
+      criteria.providerParticipantId === undefined
+        ? null
+        : criteria.providerParticipantId;
 
     return (
       Array.from(this.offers.values())
@@ -1286,7 +1378,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             (criteria.bookmakerKey === undefined ||
               offer.bookmaker_key === criteria.bookmakerKey),
         )
-        .sort((left, right) => left.snapshot_at.localeCompare(right.snapshot_at))[0] ?? null
+        .sort((left, right) =>
+          left.snapshot_at.localeCompare(right.snapshot_at),
+        )[0] ?? null
     );
   }
 
@@ -1299,10 +1393,13 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     for (const offer of this.offers.values()) {
       if (
         eventIdSet.has(offer.provider_event_id) &&
-        (options?.beforeSnapshotAt === undefined || offer.snapshot_at < options.beforeSnapshotAt)
+        (options?.beforeSnapshotAt === undefined ||
+          offer.snapshot_at < options.beforeSnapshotAt)
       ) {
         const participantKey = offer.provider_participant_id ?? '';
-        const bookmakerKey = options?.includeBookmakerKey ? (offer.bookmaker_key ?? '') : null;
+        const bookmakerKey = options?.includeBookmakerKey
+          ? (offer.bookmaker_key ?? '')
+          : null;
         result.add(
           options?.includeBookmakerKey
             ? `${offer.provider_key}:${offer.provider_event_id}:${offer.provider_market_key}:${participantKey}:${bookmakerKey}`
@@ -1325,14 +1422,18 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
       // Find all pre-commence offers for this event
       const candidates = Array.from(this.offers.values()).filter(
-        (o) => o.provider_event_id === providerEventId && o.snapshot_at < commenceTime,
+        (o) =>
+          o.provider_event_id === providerEventId &&
+          o.snapshot_at < commenceTime,
       );
 
       // Group by combination key, keep latest per group
       const latestByKey = new Map<string, ProviderOfferRecord>();
       for (const offer of candidates) {
         const participantKey = offer.provider_participant_id ?? '';
-        const bookmakerKey = options?.includeBookmakerKey ? (offer.bookmaker_key ?? '') : null;
+        const bookmakerKey = options?.includeBookmakerKey
+          ? (offer.bookmaker_key ?? '')
+          : null;
         const key = options?.includeBookmakerKey
           ? `${offer.provider_key}:${offer.provider_market_key}:${participantKey}:${bookmakerKey}`
           : `${offer.provider_key}:${offer.provider_market_key}:${participantKey}`;
@@ -1344,7 +1445,10 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
       for (const offer of latestByKey.values()) {
         if (!offer.is_closing) {
-          this.offers.set(offer.idempotency_key, { ...offer, is_closing: true });
+          this.offers.set(offer.idempotency_key, {
+            ...offer,
+            is_closing: true,
+          });
           updated += 1;
         }
       }
@@ -1352,12 +1456,18 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     return updated;
   }
 
-  async resolveProviderMarketKey(_canonicalKey: string, _provider: string): Promise<string | null> {
+  async resolveProviderMarketKey(
+    _canonicalKey: string,
+    _provider: string,
+  ): Promise<string | null> {
     // InMemory implementation has no alias table — alias resolution not supported in tests.
     return null;
   }
 
-  async resolveCanonicalMarketKey(_providerMarketKey: string, _provider: string): Promise<string | null> {
+  async resolveCanonicalMarketKey(
+    _providerMarketKey: string,
+    _provider: string,
+  ): Promise<string | null> {
     // InMemory implementation has no alias table — reverse alias resolution not supported in tests.
     return null;
   }
@@ -1367,12 +1477,18 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     return [] as unknown as ProviderMarketAliasRow[];
   }
 
-  async listParticipantAliasLookup(_provider: string): Promise<ProviderEntityAliasRow[]> {
+  async listParticipantAliasLookup(
+    _provider: string,
+  ): Promise<ProviderEntityAliasRow[]> {
     // InMemory implementation has no alias table — returns empty array in test mode.
     return [] as unknown as ProviderEntityAliasRow[];
   }
 
-  async listOpeningOffers(since: string, _provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
+  async listOpeningOffers(
+    since: string,
+    _provider: string,
+    limit = 500,
+  ): Promise<ProviderOfferRecord[]> {
     const sinceMs = new Date(since).getTime();
     return Array.from(this.offers.values())
       .filter(
@@ -1397,7 +1513,9 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
     }
   }
 
-  async upsertByExternalId(input: ParticipantUpsertInput): Promise<ParticipantRow> {
+  async upsertByExternalId(
+    input: ParticipantUpsertInput,
+  ): Promise<ParticipantRow> {
     const existing = Array.from(this.participants.values()).find(
       (row) => row.external_id === input.externalId,
     );
@@ -1433,8 +1551,9 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
 
   async findByExternalId(externalId: string): Promise<ParticipantRow | null> {
     return (
-      Array.from(this.participants.values()).find((row) => row.external_id === externalId) ??
-      null
+      Array.from(this.participants.values()).find(
+        (row) => row.external_id === externalId,
+      ) ?? null
     );
   }
 
@@ -1449,17 +1568,26 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
     return Array.from(this.participants.values())
       .filter(
         (row) =>
-          row.participant_type === participantType && (sport ? row.sport === sport : true),
+          row.participant_type === participantType &&
+          (sport ? row.sport === sport : true),
       )
-      .sort((left, right) => left.display_name.localeCompare(right.display_name));
+      .sort((left, right) =>
+        left.display_name.localeCompare(right.display_name),
+      );
   }
 
-  async updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<ParticipantRow> {
+  async updateMetadata(
+    participantId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<ParticipantRow> {
     const existing = this.participants.get(participantId);
     if (!existing) {
       throw new Error(`Participant not found: ${participantId}`);
     }
-    const merged = { ...(existing.metadata as Record<string, unknown> ?? {}), ...metadata };
+    const merged = {
+      ...((existing.metadata as Record<string, unknown>) ?? {}),
+      ...metadata,
+    };
     const updated: ParticipantRow = {
       ...existing,
       metadata: toJsonObject(merged),
@@ -1468,6 +1596,33 @@ export class InMemoryParticipantRepository implements ParticipantRepository {
     this.participants.set(participantId, updated);
     return updated;
   }
+}
+
+function resolveEventUpsertStatus(
+  existingStatus: EventStatus | undefined,
+  incomingStatus: EventStatus,
+): EventStatus {
+  if (!existingStatus || existingStatus === incomingStatus) {
+    return incomingStatus;
+  }
+
+  if (incomingStatus === 'completed' || existingStatus === 'completed') {
+    return 'completed';
+  }
+
+  if (incomingStatus === 'cancelled' || existingStatus === 'cancelled') {
+    return 'cancelled';
+  }
+
+  if (incomingStatus === 'postponed' || existingStatus === 'postponed') {
+    return 'postponed';
+  }
+
+  if (incomingStatus === 'in_progress' || existingStatus === 'in_progress') {
+    return 'in_progress';
+  }
+
+  return incomingStatus;
 }
 
 export class InMemoryEventRepository implements EventRepository {
@@ -1490,8 +1645,11 @@ export class InMemoryEventRepository implements EventRepository {
       event_name: input.eventName,
       event_date: input.eventDate,
       external_id: input.externalId,
-      status: existing && existing.status !== 'scheduled' ? existing.status : input.status,
-      metadata: JSON.parse(JSON.stringify(input.metadata)) as Record<string, unknown>,
+      status: resolveEventUpsertStatus(existing?.status, input.status),
+      metadata: JSON.parse(JSON.stringify(input.metadata)) as Record<
+        string,
+        unknown
+      >,
       created_at: existing?.created_at ?? now,
       updated_at: now,
     };
@@ -1501,7 +1659,11 @@ export class InMemoryEventRepository implements EventRepository {
   }
 
   async findByExternalId(externalId: string): Promise<EventRow | null> {
-    return Array.from(this.events.values()).find((row) => row.external_id === externalId) ?? null;
+    return (
+      Array.from(this.events.values()).find(
+        (row) => row.external_id === externalId,
+      ) ?? null
+    );
   }
 
   async findById(eventId: string): Promise<EventRow | null> {
@@ -1546,7 +1708,9 @@ export class InMemoryEventParticipantRepository implements EventParticipantRepos
     }
   }
 
-  async upsert(input: EventParticipantUpsertInput): Promise<EventParticipantRow> {
+  async upsert(
+    input: EventParticipantUpsertInput,
+  ): Promise<EventParticipantRow> {
     const key = eventParticipantKey(input.eventId, input.participantId);
     const existing = this.rows.get(key);
     if (existing) {
@@ -1566,11 +1730,17 @@ export class InMemoryEventParticipantRepository implements EventParticipantRepos
   }
 
   async listByEvent(eventId: string): Promise<EventParticipantRow[]> {
-    return Array.from(this.rows.values()).filter((row) => row.event_id === eventId);
+    return Array.from(this.rows.values()).filter(
+      (row) => row.event_id === eventId,
+    );
   }
 
-  async listByParticipant(participantId: string): Promise<EventParticipantRow[]> {
-    return Array.from(this.rows.values()).filter((row) => row.participant_id === participantId);
+  async listByParticipant(
+    participantId: string,
+  ): Promise<EventParticipantRow[]> {
+    return Array.from(this.rows.values()).filter(
+      (row) => row.participant_id === participantId,
+    );
   }
 }
 
@@ -1684,7 +1854,9 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
         displayName: sport.name,
       }));
     this.matchups = options.matchups ?? [];
-    this.eventBrowses = new Map((options.eventBrowses ?? []).map((row) => [row.eventId, row]));
+    this.eventBrowses = new Map(
+      (options.eventBrowses ?? []).map((row) => [row.eventId, row]),
+    );
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
@@ -1695,25 +1867,42 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
     return this.leagues.filter((league) => league.sportId === sportId);
   }
 
-  async listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
-    return this.matchups.filter((matchup) => matchup.sportId === sportId && matchup.eventDate === date);
+  async listMatchups(
+    sportId: string,
+    date: string,
+  ): Promise<MatchupBrowseResult[]> {
+    return this.matchups.filter(
+      (matchup) => matchup.sportId === sportId && matchup.eventDate === date,
+    );
   }
 
   async getEventBrowse(eventId: string): Promise<EventBrowseResult | null> {
     return this.eventBrowses.get(eventId) ?? null;
   }
 
-  async searchTeams(sportId: string, query: string, limit = 20): Promise<TeamSearchResult[]> {
+  async searchTeams(
+    sportId: string,
+    query: string,
+    limit = 20,
+  ): Promise<TeamSearchResult[]> {
     const sport = this.catalog.sports.find((s) => s.id === sportId);
     if (!sport) return [];
     const lowerQuery = query.toLowerCase();
     return sport.teams
       .filter((t) => t.toLowerCase().includes(lowerQuery))
       .slice(0, limit)
-      .map((t) => ({ participantId: `team:${sportId}:${t}`, displayName: t, sport: sportId }));
+      .map((t) => ({
+        participantId: `team:${sportId}:${t}`,
+        displayName: t,
+        sport: sportId,
+      }));
   }
 
-  async searchPlayers(sportId: string, query: string, limit = 20): Promise<PlayerSearchResult[]> {
+  async searchPlayers(
+    sportId: string,
+    query: string,
+    limit = 20,
+  ): Promise<PlayerSearchResult[]> {
     const lowerQuery = query.toLowerCase();
     return this.participants
       .filter(
@@ -1730,7 +1919,10 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       }));
   }
 
-  async listEvents(sportId: string, date: string): Promise<EventSearchResult[]> {
+  async listEvents(
+    sportId: string,
+    date: string,
+  ): Promise<EventSearchResult[]> {
     return this.events
       .filter((row) => row.sport_id === sportId && row.event_date === date)
       .sort((left, right) => left.event_name.localeCompare(right.event_name))
@@ -1743,7 +1935,12 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       }));
   }
 
-  async searchBrowse(sportId: string, date: string, query: string, limit = 20): Promise<BrowseSearchResult[]> {
+  async searchBrowse(
+    sportId: string,
+    date: string,
+    query: string,
+    limit = 20,
+  ): Promise<BrowseSearchResult[]> {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
       return [];
@@ -1757,7 +1954,14 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       const matchupLabel = formatBrowseMatchup(matchup);
       const matchupContext = buildMatchupContext(matchup);
 
-      if (matchesBrowseQuery(normalizedQuery, matchup.eventName, matchupLabel, matchup.teams.map((team) => team.displayName))) {
+      if (
+        matchesBrowseQuery(
+          normalizedQuery,
+          matchup.eventName,
+          matchupLabel,
+          matchup.teams.map((team) => team.displayName),
+        )
+      ) {
         pushBrowseSearchResult(results, seen, {
           resultType: 'matchup',
           participantId: null,
@@ -1774,7 +1978,9 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
           continue;
         }
 
-        const opponent = matchup.teams.find((candidate) => candidate.participantId !== team.participantId);
+        const opponent = matchup.teams.find(
+          (candidate) => candidate.participantId !== team.participantId,
+        );
         pushBrowseSearchResult(results, seen, {
           resultType: 'team',
           participantId: team.teamId ?? team.participantId,
@@ -1792,7 +1998,10 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       }
 
       for (const participant of eventBrowse.participants) {
-        if (participant.participantType !== 'player' || !matchesBrowseQuery(normalizedQuery, participant.displayName)) {
+        if (
+          participant.participantType !== 'player' ||
+          !matchesBrowseQuery(normalizedQuery, participant.displayName)
+        ) {
           continue;
         }
 
@@ -1808,7 +2017,7 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
       }
     }
 
-  return results.slice(0, limit);
+    return results.slice(0, limit);
   }
 }
 
@@ -1831,7 +2040,12 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
     };
 
     if (record.status === 'champion') {
-      this.archiveChampionForSlot(record.sport, record.market_family, record.id, now);
+      this.archiveChampionForSlot(
+        record.sport,
+        record.market_family,
+        record.id,
+        now,
+      );
     }
 
     this.models.set(record.id, record);
@@ -1842,7 +2056,10 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
     return this.models.get(id) ?? null;
   }
 
-  async findChampion(sport: string, marketFamily: string): Promise<ModelRegistryRecord | null> {
+  async findChampion(
+    sport: string,
+    marketFamily: string,
+  ): Promise<ModelRegistryRecord | null> {
     for (const record of this.models.values()) {
       if (
         record.sport === sport &&
@@ -1877,7 +2094,12 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
       status === 'champion' ? (championSince ?? now) : null;
 
     if (status === 'champion') {
-      this.archiveChampionForSlot(existing.sport, existing.market_family, existing.id, now);
+      this.archiveChampionForSlot(
+        existing.sport,
+        existing.market_family,
+        existing.id,
+        now,
+      );
     }
 
     const updated: ModelRegistryRecord = {
@@ -1918,7 +2140,9 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
 export class InMemoryExperimentLedgerRepository implements ExperimentLedgerRepository {
   private readonly runs = new Map<string, ExperimentLedgerRecord>();
 
-  async create(input: ExperimentLedgerCreateInput): Promise<ExperimentLedgerRecord> {
+  async create(
+    input: ExperimentLedgerCreateInput,
+  ): Promise<ExperimentLedgerRecord> {
     const now = new Date().toISOString();
     const record: ExperimentLedgerRecord = {
       id: crypto.randomUUID(),
@@ -1994,7 +2218,8 @@ export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapsho
   ): Promise<ModelHealthSnapshotRecord> {
     const now = new Date().toISOString();
     const mergedMeta: Record<string, unknown> = { ...(input.metadata ?? {}) };
-    if (input.transitionAt !== undefined) mergedMeta['transitionAt'] = input.transitionAt;
+    if (input.transitionAt !== undefined)
+      mergedMeta['transitionAt'] = input.transitionAt;
 
     const record: ModelHealthSnapshotRecord = {
       id: crypto.randomUUID(),
@@ -2016,7 +2241,9 @@ export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapsho
     return record;
   }
 
-  async findLatestByModel(modelId: string): Promise<ModelHealthSnapshotRecord | null> {
+  async findLatestByModel(
+    modelId: string,
+  ): Promise<ModelHealthSnapshotRecord | null> {
     return (
       Array.from(this.snapshots.values())
         .filter((record) => record.model_id === modelId)
@@ -2024,7 +2251,10 @@ export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapsho
     );
   }
 
-  async listByModel(modelId: string, limit?: number): Promise<ModelHealthSnapshotRecord[]> {
+  async listByModel(
+    modelId: string,
+    limit?: number,
+  ): Promise<ModelHealthSnapshotRecord[]> {
     const records = Array.from(this.snapshots.values())
       .filter((record) => record.model_id === modelId)
       .sort(compareModelHealthSnapshotsDescending);
@@ -2032,9 +2262,13 @@ export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapsho
     return limit === undefined ? records : records.slice(0, limit);
   }
 
-  async listAlerted(level?: 'warning' | 'critical'): Promise<ModelHealthSnapshotRecord[]> {
+  async listAlerted(
+    level?: 'warning' | 'critical',
+  ): Promise<ModelHealthSnapshotRecord[]> {
     return Array.from(this.snapshots.values())
-      .filter((record) => (level ? record.alert_level === level : record.alert_level !== 'none'))
+      .filter((record) =>
+        level ? record.alert_level === level : record.alert_level !== 'none',
+      )
       .sort(compareModelHealthSnapshotsDescending);
   }
 }
@@ -2043,11 +2277,17 @@ export class InMemoryExecutionQualityRepository implements ExecutionQualityRepos
   constructor(private readonly seedReports: ExecutionQualityReport[] = []) {}
 
   async summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]> {
-    return this.seedReports.filter((report) => sport === undefined || report.sportKey === sport);
+    return this.seedReports.filter(
+      (report) => sport === undefined || report.sportKey === sport,
+    );
   }
 
-  async summarizeByMarketFamily(providerKey: string): Promise<ExecutionQualityReport[]> {
-    return this.seedReports.filter((report) => report.providerKey === providerKey);
+  async summarizeByMarketFamily(
+    providerKey: string,
+  ): Promise<ExecutionQualityReport[]> {
+    return this.seedReports.filter(
+      (report) => report.providerKey === providerKey,
+    );
   }
 }
 
@@ -2062,7 +2302,9 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
     return fromUntyped(this.client, table);
   }
 
-  async saveSubmission(input: SubmissionCreateInput): Promise<SubmissionRecord> {
+  async saveSubmission(
+    input: SubmissionCreateInput,
+  ): Promise<SubmissionRecord> {
     const { data, error } = await this.client
       .from('submissions')
       .insert({
@@ -2086,7 +2328,9 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to save submission: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to save submission: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -2103,7 +2347,9 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
       .in('id', ids);
 
     if (error) {
-      throw new Error(`Failed to load alert detections by id: ${error.message}`);
+      throw new Error(
+        `Failed to load alert detections by id: ${error.message}`,
+      );
     }
 
     return new Map((data ?? []).map((record) => [record.id, record]));
@@ -2132,7 +2378,9 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
     return data;
   }
 
-  async processSubmissionAtomic(input: SubmissionAtomicInput): Promise<SubmissionAtomicResult> {
+  async processSubmissionAtomic(
+    input: SubmissionAtomicInput,
+  ): Promise<SubmissionAtomicResult> {
     const pick = input.pick;
     const sub = input.submission;
     const evt = input.event;
@@ -2223,7 +2471,9 @@ export class DatabaseSubmissionRepository implements SubmissionRepository {
       .maybeSingle();
 
     if (eventError) {
-      throw new Error(`Failed to load submission event after atomic insert: ${eventError.message}`);
+      throw new Error(
+        `Failed to load submission event after atomic insert: ${eventError.message}`,
+      );
     }
 
     const result = data as {
@@ -2252,7 +2502,10 @@ export class DatabasePickRepository implements PickRepository {
     return fromUntyped(this.client, table);
   }
 
-  async savePick(pick: CanonicalPick, idempotencyKey?: string | null): Promise<PickRecord> {
+  async savePick(
+    pick: CanonicalPick,
+    idempotencyKey?: string | null,
+  ): Promise<PickRecord> {
     const foreignKeys = await resolvePickForeignKeys(this.client, pick);
     const { data, error } = await this.fromUntyped('picks')
       .insert({
@@ -2290,13 +2543,17 @@ export class DatabasePickRepository implements PickRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to save pick: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to save pick: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as PickRecord;
   }
 
-  async saveLifecycleEvent(event: LifecycleEvent): Promise<PickLifecycleRecord> {
+  async saveLifecycleEvent(
+    event: LifecycleEvent,
+  ): Promise<PickLifecycleRecord> {
     const { data, error } = await this.client
       .from('pick_lifecycle')
       .insert({
@@ -2349,22 +2606,32 @@ export class DatabasePickRepository implements PickRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to update pick lifecycle: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to update pick lifecycle: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
   }
 
-  async updateApprovalStatus(pickId: string, approvalStatus: string): Promise<PickRecord> {
+  async updateApprovalStatus(
+    pickId: string,
+    approvalStatus: string,
+  ): Promise<PickRecord> {
     const { data, error } = await this.client
       .from('picks')
-      .update({ approval_status: approvalStatus, updated_at: new Date().toISOString() })
+      .update({
+        approval_status: approvalStatus,
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', pickId)
       .select()
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to update approval status: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to update approval status: ${error?.message ?? 'unknown error'}`,
+      );
     }
     return data;
   }
@@ -2422,7 +2689,9 @@ export class DatabasePickRepository implements PickRepository {
     const { data, error } = await query;
 
     if (error) {
-      throw new Error(`Failed to list picks by lifecycle state: ${error.message}`);
+      throw new Error(
+        `Failed to list picks by lifecycle state: ${error.message}`,
+      );
     }
 
     return data ?? [];
@@ -2445,7 +2714,9 @@ export class DatabasePickRepository implements PickRepository {
     const { data, error } = await query;
 
     if (error) {
-      throw new Error(`Failed to list picks by lifecycle states: ${error.message}`);
+      throw new Error(
+        `Failed to list picks by lifecycle states: ${error.message}`,
+      );
     }
 
     return data ?? [];
@@ -2564,11 +2835,15 @@ export class DatabasePickRepository implements PickRepository {
     // Settled and voided picks no longer occupy board capacity.
     // Only picks created within the last 7 days count — stale picks
     // from old test/proof runs must not permanently block the board.
-    const boardWindowStart = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+    const boardWindowStart = new Date(
+      Date.now() - 7 * 24 * 60 * 60 * 1000,
+    ).toISOString();
 
     const { data, error } = await this.client
       .from('picks')
-      .select('market,selection,metadata,promotion_target,promotion_status,source')
+      .select(
+        'market,selection,metadata,promotion_target,promotion_status,source',
+      )
       .eq('promotion_target', input.target)
       .in('promotion_status', ['qualified', 'promoted'])
       .not('source', 'is', null)
@@ -2577,16 +2852,23 @@ export class DatabasePickRepository implements PickRepository {
       .gte('created_at', boardWindowStart);
 
     if (error) {
-      throw new Error(`Failed to query promotion board state: ${error.message}`);
+      throw new Error(
+        `Failed to query promotion board state: ${error.message}`,
+      );
     }
 
     const promoted = data ?? [];
     return {
       currentBoardCount: promoted.length,
-      sameSportCount: promoted.filter((pick) => metadataSport(pick.metadata) === input.sport).length,
-      sameGameCount: promoted.filter((pick) => metadataEventName(pick.metadata) === input.eventName).length,
+      sameSportCount: promoted.filter(
+        (pick) => metadataSport(pick.metadata) === input.sport,
+      ).length,
+      sameGameCount: promoted.filter(
+        (pick) => metadataEventName(pick.metadata) === input.eventName,
+      ).length,
       duplicateCount: promoted.filter(
-        (pick) => pick.market === input.market && pick.selection === input.selection,
+        (pick) =>
+          pick.market === input.market && pick.selection === input.selection,
       ).length,
     };
   }
@@ -2644,8 +2926,12 @@ export class DatabasePickRepository implements PickRepository {
         // value (parsed from the error message) when constructing the typed
         // FSM error so the thrown error reflects live DB truth.
         const observedMatch = message.match(/got ([a-z_]+)/);
-        const observed = (observedMatch?.[1] ?? input.fromState) as PickLifecycleState;
-        throw new InvalidTransitionError(observed, input.toState as PickLifecycleState);
+        const observed = (observedMatch?.[1] ??
+          input.fromState) as PickLifecycleState;
+        throw new InvalidTransitionError(
+          observed,
+          input.toState as PickLifecycleState,
+        );
       }
       throw new Error(`transition_pick_lifecycle failed: ${error.message}`);
     }
@@ -2677,7 +2963,9 @@ export class DatabasePickRepository implements PickRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find pick by idempotency key: ${error.message}`);
+      throw new Error(
+        `Failed to find pick by idempotency key: ${error.message}`,
+      );
     }
 
     return data;
@@ -2706,24 +2994,31 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to enqueue outbox work: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to enqueue outbox work: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as OutboxRecord;
   }
 
-  async enqueueDistributionAtomic(input: EnqueueDistributionAtomicInput): Promise<EnqueueDistributionAtomicResult | null> {
-    const { data, error } = await this.client.rpc('enqueue_distribution_atomic', {
-      p_pick_id: input.pickId,
-      p_from_state: input.fromState,
-      p_to_state: input.toState,
-      p_writer_role: input.writerRole,
-      p_reason: input.reason,
-      p_lifecycle_created_at: input.lifecycleCreatedAt,
-      p_outbox_target: input.outboxTarget,
-      p_outbox_payload: input.outboxPayload,
-      p_outbox_idempotency_key: input.outboxIdempotencyKey,
-    });
+  async enqueueDistributionAtomic(
+    input: EnqueueDistributionAtomicInput,
+  ): Promise<EnqueueDistributionAtomicResult | null> {
+    const { data, error } = await this.client.rpc(
+      'enqueue_distribution_atomic',
+      {
+        p_pick_id: input.pickId,
+        p_from_state: input.fromState,
+        p_to_state: input.toState,
+        p_writer_role: input.writerRole,
+        p_reason: input.reason,
+        p_lifecycle_created_at: input.lifecycleCreatedAt,
+        p_outbox_target: input.outboxTarget,
+        p_outbox_payload: input.outboxPayload,
+        p_outbox_idempotency_key: input.outboxIdempotencyKey,
+      },
+    );
 
     if (error) {
       throw new Error(`enqueue_distribution_atomic failed: ${error.message}`);
@@ -2740,7 +3035,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return result;
   }
 
-  async findByIdempotencyKey(idempotencyKey: string): Promise<OutboxRecord | null> {
+  async findByIdempotencyKey(
+    idempotencyKey: string,
+  ): Promise<OutboxRecord | null> {
     const { data, error } = await this.client
       .from('distribution_outbox')
       .select('*')
@@ -2750,13 +3047,18 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find outbox row by idempotency key: ${error.message}`);
+      throw new Error(
+        `Failed to find outbox row by idempotency key: ${error.message}`,
+      );
     }
 
     return (data as OutboxRecord | null) ?? null;
   }
 
-  async claimNextAtomic(target: string, workerId: string): Promise<OutboxRecord | null> {
+  async claimNextAtomic(
+    target: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const { data, error } = await this.client.rpc('claim_next_outbox', {
       p_target: target,
       p_worker_id: workerId,
@@ -2770,7 +3072,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return data as OutboxRecord;
   }
 
-  async confirmDeliveryAtomic(input: ConfirmDeliveryAtomicInput): Promise<ConfirmDeliveryAtomicResult> {
+  async confirmDeliveryAtomic(
+    input: ConfirmDeliveryAtomicInput,
+  ): Promise<ConfirmDeliveryAtomicResult> {
     const { data, error } = await this.client.rpc('confirm_delivery_atomic', {
       p_outbox_id: input.outboxId,
       p_pick_id: input.pickId,
@@ -2824,7 +3128,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find outbox row by pick and target: ${error.message}`);
+      throw new Error(
+        `Failed to find outbox row by pick and target: ${error.message}`,
+      );
     }
 
     return (data as OutboxRecord | null) ?? null;
@@ -2844,13 +3150,18 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find latest outbox row by pick: ${error.message}`);
+      throw new Error(
+        `Failed to find latest outbox row by pick: ${error.message}`,
+      );
     }
 
     return (data as OutboxRecord | null) ?? null;
   }
 
-  async claimNext(target: string, workerId: string): Promise<OutboxRecord | null> {
+  async claimNext(
+    target: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const now = new Date().toISOString();
     const { data: pending, error: selectError } = await this.client
       .from('distribution_outbox')
@@ -2892,7 +3203,10 @@ export class DatabaseOutboxRepository implements OutboxRepository {
     return (data as OutboxRecord | null) ?? null;
   }
 
-  async touchClaim(outboxId: string, workerId: string): Promise<OutboxRecord | null> {
+  async touchClaim(
+    outboxId: string,
+    workerId: string,
+  ): Promise<OutboxRecord | null> {
     const now = new Date().toISOString();
     const { data, error } = await this.client
       .from('distribution_outbox')
@@ -2925,7 +3239,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .lt('claimed_at', staleBefore);
 
     if (staleError) {
-      throw new Error(`Failed to query stale outbox claims: ${staleError.message}`);
+      throw new Error(
+        `Failed to query stale outbox claims: ${staleError.message}`,
+      );
     }
 
     const reaped: OutboxRecord[] = [];
@@ -2968,7 +3284,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to mark outbox sent: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to mark outbox sent: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as OutboxRecord;
@@ -3006,7 +3324,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to mark outbox failed: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to mark outbox failed: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as OutboxRecord;
@@ -3042,7 +3362,9 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to mark outbox dead_letter: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to mark outbox dead_letter: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as OutboxRecord;
@@ -3054,7 +3376,8 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .select('*')
       .eq('pick_id', pickId)
       .order('created_at', { ascending: false });
-    if (error) throw new Error(`Failed to list outbox by pick: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to list outbox by pick: ${error.message}`);
     return (data ?? []) as OutboxRecord[];
   }
 
@@ -3072,7 +3395,10 @@ export class DatabaseOutboxRepository implements OutboxRepository {
       .eq('id', outboxId)
       .select()
       .single();
-    if (error || !data) throw new Error(`Failed to reset outbox for retry: ${error?.message ?? 'unknown'}`);
+    if (error || !data)
+      throw new Error(
+        `Failed to reset outbox for retry: ${error?.message ?? 'unknown'}`,
+      );
     return data as OutboxRecord;
   }
 }
@@ -3084,7 +3410,9 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async saveDetection(input: AlertDetectionCreateInput): Promise<AlertDetectionRecord | null> {
+  async saveDetection(
+    input: AlertDetectionCreateInput,
+  ): Promise<AlertDetectionRecord | null> {
     const { data, error } = await this.client
       .from('alert_detections')
       .insert({
@@ -3126,7 +3454,9 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     return data;
   }
 
-  async findActiveCooldown(input: AlertCooldownQuery): Promise<AlertDetectionRecord | null> {
+  async findActiveCooldown(
+    input: AlertCooldownQuery,
+  ): Promise<AlertDetectionRecord | null> {
     const { data, error } = await this.client
       .from('alert_detections')
       .select('*')
@@ -3159,7 +3489,9 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
       .in('id', ids);
 
     if (error) {
-      throw new Error(`Failed to load alert detections by id: ${error.message}`);
+      throw new Error(
+        `Failed to load alert detections by id: ${error.message}`,
+      );
     }
 
     return new Map((data ?? []).map((record) => [record.id, record]));
@@ -3273,42 +3605,43 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
     return data ?? [];
   }
 
-  async getStatusSummary(windowStart: string): Promise<AlertDetectionStatusSummary> {
+  async getStatusSummary(
+    windowStart: string,
+  ): Promise<AlertDetectionStatusSummary> {
     const [
       lastDetectedResponse,
       notableResponse,
       alertWorthyResponse,
       notifiedResponse,
       steamResponse,
-    ] =
-      await Promise.all([
-        this.client
-          .from('alert_detections')
-          .select('current_snapshot_at')
-          .order('current_snapshot_at', { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        this.client
-          .from('alert_detections')
-          .select('*', { count: 'exact', head: true })
-          .eq('tier', 'notable')
-          .gt('current_snapshot_at', windowStart),
-        this.client
-          .from('alert_detections')
-          .select('*', { count: 'exact', head: true })
-          .eq('tier', 'alert-worthy')
-          .gt('current_snapshot_at', windowStart),
-        this.client
-          .from('alert_detections')
-          .select('*', { count: 'exact', head: true })
-          .eq('notified', true)
-          .gt('current_snapshot_at', windowStart),
-        this.client
-          .from('alert_detections')
-          .select('*', { count: 'exact', head: true })
-          .eq('steam_detected', true)
-          .gt('current_snapshot_at', windowStart),
-      ]);
+    ] = await Promise.all([
+      this.client
+        .from('alert_detections')
+        .select('current_snapshot_at')
+        .order('current_snapshot_at', { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      this.client
+        .from('alert_detections')
+        .select('*', { count: 'exact', head: true })
+        .eq('tier', 'notable')
+        .gt('current_snapshot_at', windowStart),
+      this.client
+        .from('alert_detections')
+        .select('*', { count: 'exact', head: true })
+        .eq('tier', 'alert-worthy')
+        .gt('current_snapshot_at', windowStart),
+      this.client
+        .from('alert_detections')
+        .select('*', { count: 'exact', head: true })
+        .eq('notified', true)
+        .gt('current_snapshot_at', windowStart),
+      this.client
+        .from('alert_detections')
+        .select('*', { count: 'exact', head: true })
+        .eq('steam_detected', true)
+        .gt('current_snapshot_at', windowStart),
+    ]);
 
     if (lastDetectedResponse.error) {
       throw new Error(
@@ -3316,7 +3649,9 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
       );
     }
     if (notableResponse.error) {
-      throw new Error(`Failed to count notable alert detections: ${notableResponse.error.message}`);
+      throw new Error(
+        `Failed to count notable alert detections: ${notableResponse.error.message}`,
+      );
     }
     if (alertWorthyResponse.error) {
       throw new Error(
@@ -3324,10 +3659,14 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
       );
     }
     if (notifiedResponse.error) {
-      throw new Error(`Failed to count notified alert detections: ${notifiedResponse.error.message}`);
+      throw new Error(
+        `Failed to count notified alert detections: ${notifiedResponse.error.message}`,
+      );
     }
     if (steamResponse.error) {
-      throw new Error(`Failed to count steam alert detections: ${steamResponse.error.message}`);
+      throw new Error(
+        `Failed to count steam alert detections: ${steamResponse.error.message}`,
+      );
     }
 
     return {
@@ -3353,14 +3692,14 @@ export class DatabaseAlertDetectionRepository implements AlertDetectionRepositor
       .eq('id', input.id);
 
     if (error) {
-      throw new Error(`Failed to update alert notification state: ${error.message}`);
+      throw new Error(
+        `Failed to update alert notification state: ${error.message}`,
+      );
     }
   }
 }
 
-export class DatabaseHedgeOpportunityRepository
-  implements HedgeOpportunityRepository
-{
+export class DatabaseHedgeOpportunityRepository implements HedgeOpportunityRepository {
   private readonly client: UnitTalkSupabaseClient;
 
   constructor(connection: DatabaseConnectionConfig) {
@@ -3457,7 +3796,9 @@ export class DatabaseHedgeOpportunityRepository
     return data ?? [];
   }
 
-  async updateNotified(input: HedgeOpportunityNotificationUpdateInput): Promise<void> {
+  async updateNotified(
+    input: HedgeOpportunityNotificationUpdateInput,
+  ): Promise<void> {
     const { error } = await this.client
       .from('hedge_opportunities')
       .update({
@@ -3469,7 +3810,9 @@ export class DatabaseHedgeOpportunityRepository
       .eq('id', input.id);
 
     if (error) {
-      throw new Error(`Failed to update hedge notification state: ${error.message}`);
+      throw new Error(
+        `Failed to update hedge notification state: ${error.message}`,
+      );
     }
   }
 }
@@ -3497,7 +3840,9 @@ export class DatabaseReceiptRepository implements ReceiptRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to record receipt: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to record receipt: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ReceiptRecord;
@@ -3521,7 +3866,9 @@ export class DatabaseReceiptRepository implements ReceiptRepository {
     const { data, error } = await query.maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find latest receipt by outbox id: ${error.message}`);
+      throw new Error(
+        `Failed to find latest receipt by outbox id: ${error.message}`,
+      );
     }
 
     return (data as ReceiptRecord | null) ?? null;
@@ -3564,7 +3911,9 @@ export class DatabaseSettlementRepository implements SettlementRepository {
     return data;
   }
 
-  async settlePickAtomic(input: SettlePickAtomicInput): Promise<SettlePickAtomicResult> {
+  async settlePickAtomic(
+    input: SettlePickAtomicInput,
+  ): Promise<SettlePickAtomicResult> {
     const s = input.settlement;
     const { data, error } = await this.client.rpc('settle_pick_atomic', {
       p_pick_id: input.pickId,
@@ -3708,7 +4057,9 @@ export class DatabaseGradeResultRepository implements GradeResultRepository {
     }
 
     if (error || !data) {
-      throw new Error(`Failed to insert game result: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to insert game result: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -3778,7 +4129,9 @@ export class DatabaseSystemRunRepository implements SystemRunRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to start system run: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to start system run: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -3798,7 +4151,9 @@ export class DatabaseSystemRunRepository implements SystemRunRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to complete system run: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to complete system run: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -3827,7 +4182,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult> {
+  async upsertBatch(
+    offers: ProviderOfferUpsertInput[],
+  ): Promise<ProviderOfferUpsertResult> {
     if (offers.length === 0) {
       return {
         insertedCount: 0,
@@ -3836,7 +4193,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       };
     }
 
-    const idempotencyKeys = [...new Set(offers.map((offer) => offer.idempotencyKey))];
+    const idempotencyKeys = [
+      ...new Set(offers.map((offer) => offer.idempotencyKey)),
+    ];
     const existingKeys = new Set<string>();
     for (let i = 0; i < idempotencyKeys.length; i += 100) {
       const chunk = idempotencyKeys.slice(i, i + 100);
@@ -3845,7 +4204,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .select('idempotency_key')
         .in('idempotency_key', chunk);
       if (existingError) {
-        throw new Error(`Failed to load existing provider offers: ${existingError.message}`);
+        throw new Error(
+          `Failed to load existing provider offers: ${existingError.message}`,
+        );
       }
       for (const row of chunkRows ?? []) {
         existingKeys.add(row.idempotency_key);
@@ -3853,7 +4214,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     }
     // Deduplicate by idempotency_key before upsert — includeAltLine=true can produce
     // multiple entries with the same key in one batch, which Postgres rejects.
-    const deduped = [...new Map(offers.map((o) => [o.idempotencyKey, o])).values()];
+    const deduped = [
+      ...new Map(offers.map((o) => [o.idempotencyKey, o])).values(),
+    ];
     const rows = deduped.map(mapProviderOfferInsertToRow);
 
     // Chunk upsert to avoid Supabase statement timeout on large MLB/NHL batches.
@@ -3862,7 +4225,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
       const { error } = await this.client
         .from('provider_offers')
-        .upsert(chunk, { onConflict: 'idempotency_key', ignoreDuplicates: true });
+        .upsert(chunk, {
+          onConflict: 'idempotency_key',
+          ignoreDuplicates: true,
+        });
       if (error) {
         throw new Error(`Failed to upsert provider offers: ${error.message}`);
       }
@@ -3912,7 +4278,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const { data, error } = await query.maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find latest offer by market key: ${error.message}`);
+      throw new Error(
+        `Failed to find latest offer by market key: ${error.message}`,
+      );
     }
 
     return data;
@@ -3931,7 +4299,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return data ?? [];
   }
 
-  async listRecentOffers(since: string, limit = 10_000): Promise<ProviderOfferRecord[]> {
+  async listRecentOffers(
+    since: string,
+    limit = 10_000,
+  ): Promise<ProviderOfferRecord[]> {
     const { data, error } = await this.client
       .from('provider_offers')
       .select('*')
@@ -3940,7 +4311,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .limit(limit);
 
     if (error) {
-      throw new Error(`Failed to list recent provider offers: ${error.message}`);
+      throw new Error(
+        `Failed to list recent provider offers: ${error.message}`,
+      );
     }
 
     return data ?? [];
@@ -3956,10 +4329,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .eq('provider_market_key', criteria.providerMarketKey)
       .lte('snapshot_at', criteria.before);
 
-    if (criteria.providerParticipantId === undefined || criteria.providerParticipantId === null) {
+    if (
+      criteria.providerParticipantId === undefined ||
+      criteria.providerParticipantId === null
+    ) {
       query = query.is('provider_participant_id', null);
     } else {
-      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+      query = query.eq(
+        'provider_participant_id',
+        criteria.providerParticipantId,
+      );
     }
 
     if (criteria.bookmakerKey !== undefined) {
@@ -3992,10 +4371,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .eq('provider_market_key', criteria.providerMarketKey)
       .eq('is_opening', true);
 
-    if (criteria.providerParticipantId === undefined || criteria.providerParticipantId === null) {
+    if (
+      criteria.providerParticipantId === undefined ||
+      criteria.providerParticipantId === null
+    ) {
       query = query.is('provider_participant_id', null);
     } else {
-      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+      query = query.eq(
+        'provider_participant_id',
+        criteria.providerParticipantId,
+      );
     }
 
     if (criteria.bookmakerKey !== undefined) {
@@ -4030,7 +4415,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const chunk = providerEventIds.slice(i, i + 100);
       let query = this.client
         .from('provider_offers')
-        .select('provider_key, provider_event_id, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at')
+        .select(
+          'provider_key, provider_event_id, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at',
+        )
         .in('provider_event_id', chunk);
       if (options?.beforeSnapshotAt !== undefined) {
         query = query.lt('snapshot_at', options.beforeSnapshotAt);
@@ -4038,12 +4425,16 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const { data, error } = await query;
 
       if (error) {
-        throw new Error(`Failed to find existing combinations: ${error.message}`);
+        throw new Error(
+          `Failed to find existing combinations: ${error.message}`,
+        );
       }
 
       for (const row of data ?? []) {
         const participantKey = row.provider_participant_id ?? '';
-        const bookmakerKey = options?.includeBookmakerKey ? (row.bookmaker_key ?? '') : null;
+        const bookmakerKey = options?.includeBookmakerKey
+          ? (row.bookmaker_key ?? '')
+          : null;
         result.add(
           options?.includeBookmakerKey
             ? `${row.provider_key}:${row.provider_event_id}:${row.provider_market_key}:${participantKey}:${bookmakerKey}`
@@ -4064,11 +4455,17 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     if (startedEvents.length === 0) return 0;
 
     // Scope to events that commenced within 48 hours of snapshotAt to avoid scanning stale data.
-    const windowStart = new Date(new Date(snapshotAt).getTime() - 48 * 60 * 60 * 1000).toISOString();
-    const recentEvents = startedEvents.filter((e) => e.commenceTime >= windowStart);
+    const windowStart = new Date(
+      new Date(snapshotAt).getTime() - 48 * 60 * 60 * 1000,
+    ).toISOString();
+    const recentEvents = startedEvents.filter(
+      (e) => e.commenceTime >= windowStart,
+    );
     const skipped = startedEvents.length - recentEvents.length;
     if (skipped > 0) {
-      console.warn(`[markClosingLines] skipping ${skipped} event(s) outside the 48h window`);
+      console.warn(
+        `[markClosingLines] skipping ${skipped} event(s) outside the 48h window`,
+      );
     }
     if (recentEvents.length === 0) return 0;
 
@@ -4078,7 +4475,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // Fetch pre-commence offers for this event. Limit 5000 rows as a safety cap.
       const { data, error } = await this.client
         .from('provider_offers')
-        .select('id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing')
+        .select(
+          'id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing',
+        )
         .eq('provider_event_id', providerEventId)
         .lt('snapshot_at', commenceTime)
         .eq('is_closing', false)
@@ -4086,7 +4485,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .limit(5000);
 
       if (error) {
-        throw new Error(`Failed to fetch offers for closing line marking: ${error.message}`);
+        throw new Error(
+          `Failed to fetch offers for closing line marking: ${error.message}`,
+        );
       }
 
       const rows = data ?? [];
@@ -4096,7 +4497,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       const latestIdByKey = new Map<string, string>();
       for (const row of rows) {
         const participantKey = row.provider_participant_id ?? '';
-        const bookmakerKey = options?.includeBookmakerKey ? (row.bookmaker_key ?? '') : null;
+        const bookmakerKey = options?.includeBookmakerKey
+          ? (row.bookmaker_key ?? '')
+          : null;
         const key = options?.includeBookmakerKey
           ? `${row.provider_key}:${row.provider_market_key}:${participantKey}:${bookmakerKey}`
           : `${row.provider_key}:${row.provider_market_key}:${participantKey}`;
@@ -4118,7 +4521,9 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
           .in('id', chunk);
 
         if (updateError) {
-          throw new Error(`Failed to mark closing lines: ${updateError.message}`);
+          throw new Error(
+            `Failed to mark closing lines: ${updateError.message}`,
+          );
         }
 
         totalUpdated += count ?? chunk.length;
@@ -4128,30 +4533,46 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return totalUpdated;
   }
 
-  async resolveProviderMarketKey(canonicalKey: string, provider: string): Promise<string | null> {
-    const { data, error } = await fromUntyped(this.client, 'provider_market_aliases')
+  async resolveProviderMarketKey(
+    canonicalKey: string,
+    provider: string,
+  ): Promise<string | null> {
+    const { data, error } = await fromUntyped(
+      this.client,
+      'provider_market_aliases',
+    )
       .select('provider_market_key')
       .eq('market_type_id', canonicalKey)
       .eq('provider', provider)
       .limit(1);
 
     if (error) {
-      throw new Error(`Failed to resolve provider market key: ${error.message}`);
+      throw new Error(
+        `Failed to resolve provider market key: ${error.message}`,
+      );
     }
 
     const rows = (data ?? []) as Array<{ provider_market_key: string }>;
     return rows[0]?.provider_market_key ?? null;
   }
 
-  async resolveCanonicalMarketKey(providerMarketKey: string, provider: string): Promise<string | null> {
-    const { data, error } = await fromUntyped(this.client, 'provider_market_aliases')
+  async resolveCanonicalMarketKey(
+    providerMarketKey: string,
+    provider: string,
+  ): Promise<string | null> {
+    const { data, error } = await fromUntyped(
+      this.client,
+      'provider_market_aliases',
+    )
       .select('market_type_id')
       .eq('provider_market_key', providerMarketKey)
       .eq('provider', provider)
       .limit(1);
 
     if (error) {
-      throw new Error(`Failed to resolve canonical market key: ${error.message}`);
+      throw new Error(
+        `Failed to resolve canonical market key: ${error.message}`,
+      );
     }
 
     const rows = (data ?? []) as Array<{ market_type_id: string }>;
@@ -4159,7 +4580,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listAliasLookup(provider: string): Promise<ProviderMarketAliasRow[]> {
-    const { data, error } = await fromUntyped(this.client, 'provider_market_aliases')
+    const { data, error } = await fromUntyped(
+      this.client,
+      'provider_market_aliases',
+    )
       .select('*')
       .eq('provider', provider);
 
@@ -4170,20 +4594,31 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     return (data ?? []) as ProviderMarketAliasRow[];
   }
 
-  async listParticipantAliasLookup(provider: string): Promise<ProviderEntityAliasRow[]> {
-    const { data, error } = await fromUntyped(this.client, 'provider_entity_aliases')
+  async listParticipantAliasLookup(
+    provider: string,
+  ): Promise<ProviderEntityAliasRow[]> {
+    const { data, error } = await fromUntyped(
+      this.client,
+      'provider_entity_aliases',
+    )
       .select('*')
       .eq('provider', provider)
       .eq('entity_kind', 'player');
 
     if (error) {
-      throw new Error(`Failed to load participant alias lookup: ${error.message}`);
+      throw new Error(
+        `Failed to load participant alias lookup: ${error.message}`,
+      );
     }
 
     return (data ?? []) as unknown as ProviderEntityAliasRow[];
   }
 
-  async listOpeningOffers(since: string, provider: string, limit = 500): Promise<ProviderOfferRecord[]> {
+  async listOpeningOffers(
+    since: string,
+    provider: string,
+    limit = 500,
+  ): Promise<ProviderOfferRecord[]> {
     const { data, error } = await this.client
       .from('provider_offers')
       .select('*')
@@ -4227,7 +4662,9 @@ export class DatabaseAuditLogRepository implements AuditLogRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to record audit log: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to record audit log: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -4266,7 +4703,9 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async upsertByExternalId(input: ParticipantUpsertInput): Promise<ParticipantRow> {
+  async upsertByExternalId(
+    input: ParticipantUpsertInput,
+  ): Promise<ParticipantRow> {
     // Preserve enrichment-only fields (headshot_url, logo_url) managed by the
     // enrichment service. The ingestor passes null for these — do not overwrite
     // a previously enriched value with null.
@@ -4297,7 +4736,9 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to upsert participant: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to upsert participant: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -4311,7 +4752,9 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to load participant by external_id: ${error.message}`);
+      throw new Error(
+        `Failed to load participant by external_id: ${error.message}`,
+      );
     }
 
     return data;
@@ -4331,7 +4774,10 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
     return data;
   }
 
-  async listByType(participantType: ParticipantUpsertInput['participantType'], sport?: string) {
+  async listByType(
+    participantType: ParticipantUpsertInput['participantType'],
+    sport?: string,
+  ) {
     // Supabase PostgREST enforces a server-side max-rows of 1000. Paginate to fetch all rows.
     const PAGE_SIZE = 1000;
     const allRows: ParticipantRow[] = [];
@@ -4350,7 +4796,9 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
         .range(offset, offset + PAGE_SIZE - 1);
 
       if (error) {
-        throw new Error(`Failed to list participants by type: ${error.message}`);
+        throw new Error(
+          `Failed to list participants by type: ${error.message}`,
+        );
       }
 
       const page = data ?? [];
@@ -4363,20 +4811,31 @@ export class DatabaseParticipantRepository implements ParticipantRepository {
     return allRows;
   }
 
-  async updateMetadata(participantId: string, metadata: Record<string, unknown>): Promise<ParticipantRow> {
+  async updateMetadata(
+    participantId: string,
+    metadata: Record<string, unknown>,
+  ): Promise<ParticipantRow> {
     const existing = await this.findById(participantId);
     if (!existing) {
       throw new Error(`Participant not found: ${participantId}`);
     }
-    const merged = { ...(existing.metadata as Record<string, unknown> ?? {}), ...metadata };
+    const merged = {
+      ...((existing.metadata as Record<string, unknown>) ?? {}),
+      ...metadata,
+    };
     const { data, error } = await this.client
       .from('participants')
-      .update({ metadata: toJsonObject(merged), updated_at: new Date().toISOString() })
+      .update({
+        metadata: toJsonObject(merged),
+        updated_at: new Date().toISOString(),
+      })
       .eq('id', participantId)
       .select()
       .single();
     if (error || !data) {
-      throw new Error(`Failed to update participant metadata: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to update participant metadata: ${error?.message ?? 'unknown error'}`,
+      );
     }
     return data;
   }
@@ -4399,7 +4858,7 @@ export class DatabaseEventRepository implements EventRepository {
           event_name: input.eventName,
           event_date: input.eventDate,
           metadata: toJsonObject(input.metadata),
-          status: existing.status === 'scheduled' ? input.status : existing.status,
+          status: resolveEventUpsertStatus(existing.status, input.status),
           updated_at: new Date().toISOString(),
         })
         .eq('id', existing.id)
@@ -4407,7 +4866,9 @@ export class DatabaseEventRepository implements EventRepository {
         .single();
 
       if (error || !data) {
-        throw new Error(`Failed to update event: ${error?.message ?? 'unknown error'}`);
+        throw new Error(
+          `Failed to update event: ${error?.message ?? 'unknown error'}`,
+        );
       }
 
       return data;
@@ -4427,7 +4888,9 @@ export class DatabaseEventRepository implements EventRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to insert event: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to insert event: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data;
@@ -4474,7 +4937,9 @@ export class DatabaseEventRepository implements EventRepository {
       query = query.eq('sport_id', sportId);
     }
 
-    const { data, error } = await query.order('event_date', { ascending: true });
+    const { data, error } = await query.order('event_date', {
+      ascending: true,
+    });
     if (error) {
       throw new Error(`Failed to list upcoming events: ${error.message}`);
     }
@@ -4517,7 +4982,9 @@ export class DatabaseEventParticipantRepository implements EventParticipantRepos
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async upsert(input: EventParticipantUpsertInput): Promise<EventParticipantRow> {
+  async upsert(
+    input: EventParticipantUpsertInput,
+  ): Promise<EventParticipantRow> {
     const { data, error } = await this.client
       .from('event_participants')
       .upsert(
@@ -4553,14 +5020,18 @@ export class DatabaseEventParticipantRepository implements EventParticipantRepos
     return data ?? [];
   }
 
-  async listByParticipant(participantId: string): Promise<EventParticipantRow[]> {
+  async listByParticipant(
+    participantId: string,
+  ): Promise<EventParticipantRow[]> {
     const { data, error } = await this.client
       .from('event_participants')
       .select('*')
       .eq('participant_id', participantId);
 
     if (error) {
-      throw new Error(`Failed to list participant event links: ${error.message}`);
+      throw new Error(
+        `Failed to list participant event links: ${error.message}`,
+      );
     }
 
     return data ?? [];
@@ -4589,9 +5060,16 @@ function marketTypeIdToCategory(id: string): string | null {
 
 function deriveCatalogMarketCategories(marketTypeIds: string[]): string[] {
   const categories = Array.from(
-    new Set(marketTypeIds.map(marketTypeIdToCategory).filter((c): c is string => c !== null)),
+    new Set(
+      marketTypeIds
+        .map(marketTypeIdToCategory)
+        .filter((c): c is string => c !== null),
+    ),
   );
-  return categories.sort((a, b) => (MARKET_CATEGORY_PRIORITY[a] ?? 99) - (MARKET_CATEGORY_PRIORITY[b] ?? 99));
+  return categories.sort(
+    (a, b) =>
+      (MARKET_CATEGORY_PRIORITY[a] ?? 99) - (MARKET_CATEGORY_PRIORITY[b] ?? 99),
+  );
 }
 
 export class DatabaseReferenceDataRepository implements ReferenceDataRepository {
@@ -4602,37 +5080,83 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
   }
 
   async getCatalog(): Promise<ReferenceDataCatalog> {
-    const [sportsRes, marketAvailRes, statTypesRes, comboStatTypesRes, sportsbooksRes, cappersRes, teamsRes] =
-      await Promise.all([
-        this.client.from('sports').select('*').eq('active', true).order('sort_order'),
-        // UTV2-397: sport_market_types deprecated — query sport_market_type_availability instead
-        this.client.from('sport_market_type_availability').select('sport_id,market_type_id,sort_order').eq('active', true).order('sort_order'),
-        this.client.from('stat_types').select('*').eq('active', true).order('sort_order'),
-        this.client.from('combo_stat_types').select('*').eq('active', true).order('sort_order'),
-        this.client.from('sportsbooks').select('*').eq('active', true).order('sort_order'),
-        this.client.from('cappers').select('*').eq('active', true),
-        this.client
-          .from('participants')
-          .select('external_id,display_name,sport')
-          .eq('participant_type', 'team'),
-      ]);
+    const [
+      sportsRes,
+      marketAvailRes,
+      statTypesRes,
+      comboStatTypesRes,
+      sportsbooksRes,
+      cappersRes,
+      teamsRes,
+    ] = await Promise.all([
+      this.client
+        .from('sports')
+        .select('*')
+        .eq('active', true)
+        .order('sort_order'),
+      // UTV2-397: sport_market_types deprecated — query sport_market_type_availability instead
+      this.client
+        .from('sport_market_type_availability')
+        .select('sport_id,market_type_id,sort_order')
+        .eq('active', true)
+        .order('sort_order'),
+      this.client
+        .from('stat_types')
+        .select('*')
+        .eq('active', true)
+        .order('sort_order'),
+      this.client
+        .from('combo_stat_types')
+        .select('*')
+        .eq('active', true)
+        .order('sort_order'),
+      this.client
+        .from('sportsbooks')
+        .select('*')
+        .eq('active', true)
+        .order('sort_order'),
+      this.client.from('cappers').select('*').eq('active', true),
+      this.client
+        .from('participants')
+        .select('external_id,display_name,sport')
+        .eq('participant_type', 'team'),
+    ]);
 
-    if (sportsRes.error) throw new Error(`Failed to load sports: ${sportsRes.error.message}`);
-    if (marketAvailRes.error) throw new Error(`Failed to load market type availability: ${marketAvailRes.error.message}`);
-    if (statTypesRes.error) throw new Error(`Failed to load stat types: ${statTypesRes.error.message}`);
-    if (comboStatTypesRes.error) throw new Error(`Failed to load combo stat types: ${comboStatTypesRes.error.message}`);
-    if (sportsbooksRes.error) throw new Error(`Failed to load sportsbooks: ${sportsbooksRes.error.message}`);
-    if (cappersRes.error) throw new Error(`Failed to load cappers: ${cappersRes.error.message}`);
-    if (teamsRes.error) throw new Error(`Failed to load teams: ${teamsRes.error.message}`);
+    if (sportsRes.error)
+      throw new Error(`Failed to load sports: ${sportsRes.error.message}`);
+    if (marketAvailRes.error)
+      throw new Error(
+        `Failed to load market type availability: ${marketAvailRes.error.message}`,
+      );
+    if (statTypesRes.error)
+      throw new Error(
+        `Failed to load stat types: ${statTypesRes.error.message}`,
+      );
+    if (comboStatTypesRes.error)
+      throw new Error(
+        `Failed to load combo stat types: ${comboStatTypesRes.error.message}`,
+      );
+    if (sportsbooksRes.error)
+      throw new Error(
+        `Failed to load sportsbooks: ${sportsbooksRes.error.message}`,
+      );
+    if (cappersRes.error)
+      throw new Error(`Failed to load cappers: ${cappersRes.error.message}`);
+    if (teamsRes.error)
+      throw new Error(`Failed to load teams: ${teamsRes.error.message}`);
 
     const sports = (sportsRes.data ?? []).map((sport) => {
-      const fallbackSport = V1_REFERENCE_DATA.sports.find((entry) => entry.id === sport.id);
+      const fallbackSport = V1_REFERENCE_DATA.sports.find(
+        (entry) => entry.id === sport.id,
+      );
 
       return {
         id: sport.id as string,
         name: sport.display_name as string,
         marketTypes: deriveCatalogMarketCategories(
-          (marketAvailRes.data ?? []).filter((row) => row.sport_id === sport.id).map((row) => row.market_type_id as string),
+          (marketAvailRes.data ?? [])
+            .filter((row) => row.sport_id === sport.id)
+            .map((row) => row.market_type_id as string),
         ) as ReferenceDataCatalog['sports'][number]['marketTypes'],
         statTypes: Array.from(
           new Set([
@@ -4656,13 +5180,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       name: sb.display_name as string,
     }));
 
-      const cappers = (cappersRes.data ?? []).map((capper) => ({
-        id: capper.id as string,
-        displayName:
-          typeof capper.display_name === 'string' && capper.display_name.trim().length > 0
-            ? capper.display_name
-            : (capper.id as string),
-      }));
+    const cappers = (cappersRes.data ?? []).map((capper) => ({
+      id: capper.id as string,
+      displayName:
+        typeof capper.display_name === 'string' &&
+        capper.display_name.trim().length > 0
+          ? capper.display_name
+          : (capper.id as string),
+    }));
 
     // ticketTypes are a UI concept — not stored in DB
     const ticketTypes: ReferenceDataCatalog['ticketTypes'] = [
@@ -4698,7 +5223,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }));
   }
 
-  async listMatchups(sportId: string, date: string): Promise<MatchupBrowseResult[]> {
+  async listMatchups(
+    sportId: string,
+    date: string,
+  ): Promise<MatchupBrowseResult[]> {
     const { data: events, error: eventsError } = await this.client
       .from('events')
       .select('id,event_name,event_date,status,sport_id,external_id,metadata')
@@ -4706,25 +5234,32 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       .eq('event_date', date)
       .order('event_name');
 
-    if (eventsError) throw new Error(`Failed to list matchups: ${eventsError.message}`);
+    if (eventsError)
+      throw new Error(`Failed to list matchups: ${eventsError.message}`);
     if (!events || events.length === 0) {
       return [];
     }
 
     const eventIds = events.map((row) => row.id as string);
-    const { data: eventParticipants, error: eventParticipantsError } = await this.client
-      .from('event_participants')
-      .select('event_id,participant_id,role')
-      .in('event_id', eventIds);
+    const { data: eventParticipants, error: eventParticipantsError } =
+      await this.client
+        .from('event_participants')
+        .select('event_id,participant_id,role')
+        .in('event_id', eventIds);
     if (eventParticipantsError) {
-      throw new Error(`Failed to load matchup participants: ${eventParticipantsError.message}`);
+      throw new Error(
+        `Failed to load matchup participants: ${eventParticipantsError.message}`,
+      );
     }
 
     const participantIds = Array.from(
-      new Set((eventParticipants ?? []).map((row) => row.participant_id as string)),
+      new Set(
+        (eventParticipants ?? []).map((row) => row.participant_id as string),
+      ),
     );
     const participantMap = await this.loadParticipantsMap(participantIds);
-    const teamMap = await this.loadCanonicalTeamsByParticipantIds(participantIds);
+    const teamMap =
+      await this.loadCanonicalTeamsByParticipantIds(participantIds);
     const eventParticipantRows = eventParticipants ?? [];
 
     // Detect doubleheaders: group events by event_name to find duplicates
@@ -4740,7 +5275,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     for (const [, group] of eventsByName) {
       if (group.length >= 2) {
         const sorted = [...group].sort((a, b) =>
-          ((a.external_id as string) ?? '').localeCompare((b.external_id as string) ?? ''),
+          ((a.external_id as string) ?? '').localeCompare(
+            (b.external_id as string) ?? '',
+          ),
         );
         sorted.forEach((event, index) => {
           gameLabelMap.set(event.id as string, ` · Game ${index + 1}`);
@@ -4765,11 +5302,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
             role: row.role as 'home' | 'away',
           };
         })
-        .sort((left, right) => roleSortOrder(left.role) - roleSortOrder(right.role));
+        .sort(
+          (left, right) => roleSortOrder(left.role) - roleSortOrder(right.role),
+        );
 
-      const leagueId = teams
-        .map((team) => teamMap.get(team.participantId)?.league_id ?? null)
-        .find((value) => value !== null) ?? null;
+      const leagueId =
+        teams
+          .map((team) => teamMap.get(team.participantId)?.league_id ?? null)
+          .find((value) => value !== null) ?? null;
 
       const eventId = event.id as string;
       const baseEventName = event.event_name as string;
@@ -4796,17 +5336,21 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       .eq('id', eventId)
       .maybeSingle();
 
-    if (eventError) throw new Error(`Failed to load event browse: ${eventError.message}`);
+    if (eventError)
+      throw new Error(`Failed to load event browse: ${eventError.message}`);
     if (!event) {
       return null;
     }
 
-    const { data: eventParticipants, error: eventParticipantsError } = await this.client
-      .from('event_participants')
-      .select('event_id,participant_id,role')
-      .eq('event_id', eventId);
+    const { data: eventParticipants, error: eventParticipantsError } =
+      await this.client
+        .from('event_participants')
+        .select('event_id,participant_id,role')
+        .eq('event_id', eventId);
     if (eventParticipantsError) {
-      throw new Error(`Failed to load event browse participants: ${eventParticipantsError.message}`);
+      throw new Error(
+        `Failed to load event browse participants: ${eventParticipantsError.message}`,
+      );
     }
 
     const eventParticipantRows = eventParticipants ?? [];
@@ -4814,8 +5358,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       new Set(eventParticipantRows.map((row) => row.participant_id as string)),
     );
     const participantMap = await this.loadParticipantsMap(participantIds);
-    const teamMap = await this.loadCanonicalTeamsByParticipantIds(participantIds);
-    const currentAssignments = await this.loadCurrentAssignments(participantIds);
+    const teamMap =
+      await this.loadCanonicalTeamsByParticipantIds(participantIds);
+    const currentAssignments =
+      await this.loadCurrentAssignments(participantIds);
     const teamNameMap = new Map<string, string>(
       Array.from(teamMap.values()).map((team) => [team.id, team.display_name]),
     );
@@ -4849,7 +5395,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         displayName: participant.display_name,
         role: row.role as string,
         teamId: assignment?.teamId ?? null,
-        teamName: assignment?.teamId ? teamNameMap.get(assignment.teamId) ?? null : null,
+        teamName: assignment?.teamId
+          ? (teamNameMap.get(assignment.teamId) ?? null)
+          : null,
       });
     }
 
@@ -4861,13 +5409,15 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       buildEventOfferRecentSince(startTime, event.status as string),
     );
 
-    const leagueId = participants
-      .map((participant) =>
-        participant.participantType === 'team'
-          ? teamMap.get(participant.participantId)?.league_id ?? null
-          : currentAssignments.get(participant.participantId)?.leagueId ?? null,
-      )
-      .find((value) => value !== null) ?? null;
+    const leagueId =
+      participants
+        .map((participant) =>
+          participant.participantType === 'team'
+            ? (teamMap.get(participant.participantId)?.league_id ?? null)
+            : (currentAssignments.get(participant.participantId)?.leagueId ??
+              null),
+        )
+        .find((value) => value !== null) ?? null;
 
     return {
       eventId: event.id as string,
@@ -4883,7 +5433,11 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     };
   }
 
-  async searchTeams(sportId: string, query: string, limit = 20): Promise<TeamSearchResult[]> {
+  async searchTeams(
+    sportId: string,
+    query: string,
+    limit = 20,
+  ): Promise<TeamSearchResult[]> {
     const leagues = await this.listLeagues(sportId);
     const leagueIds = leagues.map((league) => league.id);
     if (leagueIds.length === 0) {
@@ -4907,7 +5461,11 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }));
   }
 
-  async searchPlayers(sportId: string, query: string, limit = 20): Promise<PlayerSearchResult[]> {
+  async searchPlayers(
+    sportId: string,
+    query: string,
+    limit = 20,
+  ): Promise<PlayerSearchResult[]> {
     const { data, error } = await this.fromUntyped('players')
       .select('id,display_name')
       .ilike('display_name', `%${query}%`)
@@ -4920,7 +5478,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     const currentAssignments = await this.loadCurrentAssignments(candidateIds);
 
     return playerRows
-      .filter((row) => currentAssignments.get(row.id as string)?.sportId === sportId)
+      .filter(
+        (row) => currentAssignments.get(row.id as string)?.sportId === sportId,
+      )
       .slice(0, limit)
       .map((row) => ({
         participantId: row.id as string,
@@ -4929,7 +5489,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       }));
   }
 
-  async listEvents(sportId: string, date: string): Promise<EventSearchResult[]> {
+  async listEvents(
+    sportId: string,
+    date: string,
+  ): Promise<EventSearchResult[]> {
     const { data, error } = await this.client
       .from('events')
       .select('id,event_name,event_date,status,sport_id')
@@ -4948,7 +5511,12 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }));
   }
 
-  async searchBrowse(sportId: string, date: string, query: string, limit = 20): Promise<BrowseSearchResult[]> {
+  async searchBrowse(
+    sportId: string,
+    date: string,
+    query: string,
+    limit = 20,
+  ): Promise<BrowseSearchResult[]> {
     const normalizedQuery = query.trim().toLowerCase();
     if (!normalizedQuery) {
       return [];
@@ -4961,7 +5529,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
 
     const results: BrowseSearchResult[] = [];
     const seen = new Set<string>();
-    const matchupByEventId = new Map(matchups.map((matchup) => [matchup.eventId, matchup]));
+    const matchupByEventId = new Map(
+      matchups.map((matchup) => [matchup.eventId, matchup]),
+    );
     const eventIds = matchups.map((matchup) => matchup.eventId);
 
     for (const matchup of matchups) {
@@ -4990,7 +5560,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           continue;
         }
 
-        const opponent = matchup.teams.find((candidate) => candidate.participantId !== team.participantId);
+        const opponent = matchup.teams.find(
+          (candidate) => candidate.participantId !== team.participantId,
+        );
         pushBrowseSearchResult(results, seen, {
           resultType: 'team',
           participantId: team.teamId ?? team.participantId,
@@ -5003,23 +5575,31 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       }
     }
 
-    const { data: eventParticipants, error: eventParticipantsError } = await this.client
-      .from('event_participants')
-      .select('event_id,participant_id')
-      .in('event_id', eventIds);
+    const { data: eventParticipants, error: eventParticipantsError } =
+      await this.client
+        .from('event_participants')
+        .select('event_id,participant_id')
+        .in('event_id', eventIds);
     if (eventParticipantsError) {
-      throw new Error(`Failed to load search event participants: ${eventParticipantsError.message}`);
+      throw new Error(
+        `Failed to load search event participants: ${eventParticipantsError.message}`,
+      );
     }
 
     const playerParticipantRows = (eventParticipants ?? []).filter((row) => {
       const matchup = matchupByEventId.get(row.event_id as string);
       return Boolean(matchup);
     });
-    const participantIds = Array.from(new Set(playerParticipantRows.map((row) => row.participant_id as string)));
+    const participantIds = Array.from(
+      new Set(playerParticipantRows.map((row) => row.participant_id as string)),
+    );
     const participantMap = await this.loadParticipantsMap(participantIds);
     const playerIds = Array.from(
       new Set(
-        participantIds.filter((participantId) => participantMap.get(participantId)?.participant_type === 'player'),
+        participantIds.filter(
+          (participantId) =>
+            participantMap.get(participantId)?.participant_type === 'player',
+        ),
       ),
     );
     const assignments = await this.loadCurrentAssignments(playerIds);
@@ -5027,7 +5607,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       new Set(
         Array.from(assignments.values())
           .map((assignment) => assignment.teamId)
-          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+          .filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0,
+          ),
       ),
     );
     const teamNameMap = new Map<string, string>();
@@ -5064,9 +5647,11 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         resultType: 'player',
         participantId: participant.id,
         displayName: participant.display_name,
-        contextLabel: `${assignment?.teamId ? teamNameMap.get(assignment.teamId) ?? 'Unassigned' : 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
+        contextLabel: `${assignment?.teamId ? (teamNameMap.get(assignment.teamId) ?? 'Unassigned') : 'Unassigned'} · ${matchupLabel} · ${buildMatchupContext(matchup)}`,
         teamId: assignment?.teamId ?? null,
-        teamName: assignment?.teamId ? teamNameMap.get(assignment.teamId) ?? null : null,
+        teamName: assignment?.teamId
+          ? (teamNameMap.get(assignment.teamId) ?? null)
+          : null,
         matchup,
       });
     }
@@ -5084,7 +5669,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       .select('*')
       .in('id', participantIds);
     if (error) throw new Error(`Failed to load participants: ${error.message}`);
-    return new Map((data ?? []).map((row) => [row.id as string, row as ParticipantRow]));
+    return new Map(
+      (data ?? []).map((row) => [row.id as string, row as ParticipantRow]),
+    );
   }
 
   private async loadCanonicalTeamsByParticipantIds(participantIds: string[]) {
@@ -5092,12 +5679,16 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return new Map<string, CanonicalTeamRow>();
     }
 
-    const { data: aliasData, error: aliasError } = await this.fromUntyped('provider_entity_aliases')
+    const { data: aliasData, error: aliasError } = await this.fromUntyped(
+      'provider_entity_aliases',
+    )
       .select('participant_id,team_id')
       .eq('entity_kind', 'team')
       .in('participant_id', participantIds);
     if (aliasError) {
-      throw new Error(`Failed to load canonical team aliases: ${aliasError.message}`);
+      throw new Error(
+        `Failed to load canonical team aliases: ${aliasError.message}`,
+      );
     }
 
     const aliasRows = (aliasData ?? []) as ProviderEntityAliasRow[];
@@ -5105,7 +5696,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       new Set(
         aliasRows
           .map((row) => row.team_id)
-          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+          .filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0,
+          ),
       ),
     );
     if (teamIds.length === 0) {
@@ -5129,38 +5723,55 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           return [];
         }
         const team = teamMap.get(row.team_id);
-        return team ? [[row.participant_id, team] as [string, CanonicalTeamRow]] : [];
+        return team
+          ? [[row.participant_id, team] as [string, CanonicalTeamRow]]
+          : [];
       }),
     );
   }
 
   private async loadCurrentAssignments(playerIds: string[]) {
     if (playerIds.length === 0) {
-      return new Map<string, { teamId: string; leagueId: string; sportId: string | null }>();
+      return new Map<
+        string,
+        { teamId: string; leagueId: string; sportId: string | null }
+      >();
     }
 
-    const { data: assignments, error: assignmentsError } = await this.fromUntyped('player_team_assignments')
-      .select('player_id,team_id,league_id,effective_until')
-      .in('player_id', playerIds)
-      .is('effective_until', null);
+    const { data: assignments, error: assignmentsError } =
+      await this.fromUntyped('player_team_assignments')
+        .select('player_id,team_id,league_id,effective_until')
+        .in('player_id', playerIds)
+        .is('effective_until', null);
     if (assignmentsError) {
-      throw new Error(`Failed to load player assignments: ${assignmentsError.message}`);
+      throw new Error(
+        `Failed to load player assignments: ${assignmentsError.message}`,
+      );
     }
 
     const assignmentRows = (assignments ?? []) as PlayerTeamAssignmentRow[];
-    const leagueIds = Array.from(new Set(assignmentRows.map((row) => row.league_id as string)));
-    const { data: leagues, error: leaguesError } = await this.fromUntyped('leagues')
+    const leagueIds = Array.from(
+      new Set(assignmentRows.map((row) => row.league_id as string)),
+    );
+    const { data: leagues, error: leaguesError } = await this.fromUntyped(
+      'leagues',
+    )
       .select('id,sport_id')
       .in('id', leagueIds);
     if (leaguesError) {
-      throw new Error(`Failed to load assignment leagues: ${leaguesError.message}`);
+      throw new Error(
+        `Failed to load assignment leagues: ${leaguesError.message}`,
+      );
     }
 
     const leagueRows = (leagues ?? []) as CanonicalLeagueRow[];
     const leagueSportMap = new Map<string, string>(
       leagueRows.map((row) => [row.id as string, row.sport_id as string]),
     );
-    return new Map<string, { teamId: string; leagueId: string; sportId: string | null }>(
+    return new Map<
+      string,
+      { teamId: string; leagueId: string; sportId: string | null }
+    >(
       assignmentRows.map((row) => [
         row.player_id as string,
         {
@@ -5209,10 +5820,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     ]);
 
     if (gameLevelResult.error) {
-      throw new Error(`Failed to load game-level offers: ${gameLevelResult.error.message}`);
+      throw new Error(
+        `Failed to load game-level offers: ${gameLevelResult.error.message}`,
+      );
     }
     if (playerPropResult.error) {
-      throw new Error(`Failed to load player-prop offers: ${playerPropResult.error.message}`);
+      throw new Error(
+        `Failed to load player-prop offers: ${playerPropResult.error.message}`,
+      );
     }
 
     const offers = [
@@ -5224,12 +5839,19 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       return [];
     }
 
-    const providerMarketKeys = Array.from(new Set(offers.map((row) => row.provider_market_key as string)));
-    const { data: marketAliases, error: marketAliasesError } = await this.fromUntyped('provider_market_aliases')
-      .select('provider,provider_market_key,provider_display_name,market_type_id,sport_id')
-      .in('provider_market_key', providerMarketKeys);
+    const providerMarketKeys = Array.from(
+      new Set(offers.map((row) => row.provider_market_key as string)),
+    );
+    const { data: marketAliases, error: marketAliasesError } =
+      await this.fromUntyped('provider_market_aliases')
+        .select(
+          'provider,provider_market_key,provider_display_name,market_type_id,sport_id',
+        )
+        .in('provider_market_key', providerMarketKeys);
     if (marketAliasesError) {
-      throw new Error(`Failed to load market aliases: ${marketAliasesError.message}`);
+      throw new Error(
+        `Failed to load market aliases: ${marketAliasesError.message}`,
+      );
     }
 
     const marketAliasRows = (marketAliases ?? []) as ProviderMarketAliasRow[];
@@ -5237,14 +5859,20 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       new Set(
         marketAliasRows
           .map((row) => row.market_type_id)
-          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+          .filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0,
+          ),
       ),
     );
-    const { data: marketTypes, error: marketTypesError } = await this.fromUntyped('market_types')
-      .select('id,display_name')
-      .in('id', marketTypeIds);
+    const { data: marketTypes, error: marketTypesError } =
+      await this.fromUntyped('market_types')
+        .select('id,display_name')
+        .in('id', marketTypeIds);
     if (marketTypesError) {
-      throw new Error(`Failed to load market types: ${marketTypesError.message}`);
+      throw new Error(
+        `Failed to load market types: ${marketTypesError.message}`,
+      );
     }
     const marketTypeRows = (marketTypes ?? []) as MarketTypeRow[];
 
@@ -5255,11 +5883,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           .filter((value): value is string => Boolean(value)),
       ),
     );
-    const { data: entityAliases, error: entityAliasesError } = await this.fromUntyped('provider_entity_aliases')
-      .select('provider,entity_kind,provider_entity_key,team_id,player_id')
-      .in('provider_entity_key', providerParticipantIds);
+    const { data: entityAliases, error: entityAliasesError } =
+      await this.fromUntyped('provider_entity_aliases')
+        .select('provider,entity_kind,provider_entity_key,team_id,player_id')
+        .in('provider_entity_key', providerParticipantIds);
     if (entityAliasesError) {
-      throw new Error(`Failed to load entity aliases: ${entityAliasesError.message}`);
+      throw new Error(
+        `Failed to load entity aliases: ${entityAliasesError.message}`,
+      );
     }
     const entityAliasRows = (entityAliases ?? []) as ProviderEntityAliasRow[];
 
@@ -5267,9 +5898,8 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       new Set(
         offers
           .map((row) => {
-            const explicitBookmakerKey = typeof row.bookmaker_key === 'string'
-              ? row.bookmaker_key
-              : null;
+            const explicitBookmakerKey =
+              typeof row.bookmaker_key === 'string' ? row.bookmaker_key : null;
             if (explicitBookmakerKey && explicitBookmakerKey.length > 0) {
               return explicitBookmakerKey;
             }
@@ -5279,11 +5909,14 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           .filter((value): value is string => value.length > 0),
       ),
     );
-    const { data: bookAliases, error: bookAliasesError } = await this.fromUntyped('provider_book_aliases')
-      .select('provider,provider_book_key,sportsbook_id')
-      .in('provider_book_key', bookAliasKeys);
+    const { data: bookAliases, error: bookAliasesError } =
+      await this.fromUntyped('provider_book_aliases')
+        .select('provider,provider_book_key,sportsbook_id')
+        .in('provider_book_key', bookAliasKeys);
     if (bookAliasesError) {
-      throw new Error(`Failed to load book aliases: ${bookAliasesError.message}`);
+      throw new Error(
+        `Failed to load book aliases: ${bookAliasesError.message}`,
+      );
     }
     const bookAliasRows = (bookAliases ?? []) as ProviderBookAliasRow[];
 
@@ -5291,7 +5924,10 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       new Set(
         bookAliasRows
           .map((row) => row.sportsbook_id)
-          .filter((value): value is string => typeof value === 'string' && value.length > 0),
+          .filter(
+            (value): value is string =>
+              typeof value === 'string' && value.length > 0,
+          ),
       ),
     );
     const { data: sportsbooks, error: sportsbooksError } = await this.client
@@ -5299,18 +5935,21 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
       .select('id,display_name')
       .in('id', sportsbookIds);
     if (sportsbooksError) {
-      throw new Error(`Failed to load sportsbooks: ${sportsbooksError.message}`);
+      throw new Error(
+        `Failed to load sportsbooks: ${sportsbooksError.message}`,
+      );
     }
 
     const participantNameMap = new Map(
-      participants
-        .flatMap((participant) => {
-          const pairs: Array<[string, string]> = [[participant.participantId, participant.displayName]];
-          if (participant.canonicalId) {
-            pairs.push([participant.canonicalId, participant.displayName]);
-          }
-          return pairs;
-        }),
+      participants.flatMap((participant) => {
+        const pairs: Array<[string, string]> = [
+          [participant.participantId, participant.displayName],
+        ];
+        if (participant.canonicalId) {
+          pairs.push([participant.canonicalId, participant.displayName]);
+        }
+        return pairs;
+      }),
     );
 
     const marketAliasMap = new Map(
@@ -5319,29 +5958,47 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         .map((row) => [`${row.provider}:${row.provider_market_key}`, row]),
     );
     const marketTypeMap = new Map<string, string>(
-      marketTypeRows.map((row) => [row.id as string, row.display_name as string]),
+      marketTypeRows.map((row) => [
+        row.id as string,
+        row.display_name as string,
+      ]),
     );
     const entityAliasMap = new Map(
-      entityAliasRows.map((row) => [`${row.provider}:${row.provider_entity_key}`, row]),
+      entityAliasRows.map((row) => [
+        `${row.provider}:${row.provider_entity_key}`,
+        row,
+      ]),
     );
     const bookAliasMap = new Map<string, string | null>(
-      bookAliasRows.map((row) => [`${row.provider}:${row.provider_book_key}`, row.sportsbook_id]),
+      bookAliasRows.map((row) => [
+        `${row.provider}:${row.provider_book_key}`,
+        row.sportsbook_id,
+      ]),
     );
-    const sportsbookMap = new Map((sportsbooks ?? []).map((row) => [row.id as string, row.display_name as string]));
+    const sportsbookMap = new Map(
+      (sportsbooks ?? []).map((row) => [
+        row.id as string,
+        row.display_name as string,
+      ]),
+    );
 
     const grouped = new Map<string, EventOfferBrowseResult>();
     for (const offer of offers) {
       const providerKey = offer.provider_key as string;
-      const { provider, bookKey: providerFallbackBookKey } = splitProviderBookKey(providerKey);
-      const explicitBookmakerKey = typeof offer.bookmaker_key === 'string'
-        ? offer.bookmaker_key
-        : null;
-      const resolvedBookKey = explicitBookmakerKey && explicitBookmakerKey.length > 0
-        ? explicitBookmakerKey
-        : providerFallbackBookKey;
+      const { provider, bookKey: providerFallbackBookKey } =
+        splitProviderBookKey(providerKey);
+      const explicitBookmakerKey =
+        typeof offer.bookmaker_key === 'string' ? offer.bookmaker_key : null;
+      const resolvedBookKey =
+        explicitBookmakerKey && explicitBookmakerKey.length > 0
+          ? explicitBookmakerKey
+          : providerFallbackBookKey;
       const providerMarketKey = offer.provider_market_key as string;
-      const providerParticipantId = (offer.provider_participant_id as string | null) ?? null;
-      const marketAlias = marketAliasMap.get(`${provider}:${providerMarketKey}`);
+      const providerParticipantId =
+        (offer.provider_participant_id as string | null) ?? null;
+      const marketAlias = marketAliasMap.get(
+        `${provider}:${providerMarketKey}`,
+      );
       const entityAlias = providerParticipantId
         ? entityAliasMap.get(`${provider}:${providerParticipantId}`)
         : null;
@@ -5349,9 +6006,7 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         bookAliasMap.get(`${provider}:${resolvedBookKey}`) ??
         (resolvedBookKey && resolvedBookKey !== 'sgo' ? resolvedBookKey : null);
       const participantId =
-        entityAlias?.player_id ??
-        entityAlias?.team_id ??
-        null;
+        entityAlias?.player_id ?? entityAlias?.team_id ?? null;
       const key = [
         sportsbookId ?? providerKey,
         marketAlias?.market_type_id ?? providerMarketKey,
@@ -5369,7 +6024,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
         // Display as "Consensus" rather than the raw provider key.
         sportsbookName: sportsbookId
           ? (sportsbookMap.get(sportsbookId) ?? sportsbookId)
-          : (providerKey === 'sgo' || providerKey.startsWith('sgo:') ? 'Consensus' : providerKey),
+          : providerKey === 'sgo' || providerKey.startsWith('sgo:')
+            ? 'Consensus'
+            : providerKey,
         marketTypeId: (marketAlias?.market_type_id as string | null) ?? null,
         marketDisplayName:
           (marketAlias?.market_type_id
@@ -5378,7 +6035,9 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
           (marketAlias?.provider_display_name as string | null) ??
           providerMarketKey,
         participantId,
-        participantName: participantId ? participantNameMap.get(participantId) ?? null : null,
+        participantName: participantId
+          ? (participantNameMap.get(participantId) ?? null)
+          : null,
         line: (offer.line as number | null) ?? null,
         overOdds: (offer.over_odds as number | null) ?? null,
         underOdds: (offer.under_odds as number | null) ?? null,
@@ -5390,11 +6049,17 @@ export class DatabaseReferenceDataRepository implements ReferenceDataRepository 
     }
 
     return Array.from(grouped.values()).sort((left, right) => {
-      const sportsbookCompare = (left.sportsbookName ?? '').localeCompare(right.sportsbookName ?? '');
+      const sportsbookCompare = (left.sportsbookName ?? '').localeCompare(
+        right.sportsbookName ?? '',
+      );
       if (sportsbookCompare !== 0) return sportsbookCompare;
-      const marketCompare = left.marketDisplayName.localeCompare(right.marketDisplayName);
+      const marketCompare = left.marketDisplayName.localeCompare(
+        right.marketDisplayName,
+      );
       if (marketCompare !== 0) return marketCompare;
-      const participantCompare = (left.participantName ?? '').localeCompare(right.participantName ?? '');
+      const participantCompare = (left.participantName ?? '').localeCompare(
+        right.participantName ?? '',
+      );
       if (participantCompare !== 0) return participantCompare;
       return (left.line ?? 0) - (right.line ?? 0);
     });
@@ -5464,7 +6129,9 @@ function buildMatchupContext(matchup: MatchupBrowseResult) {
         minute: '2-digit',
       });
 
-  return matchup.leagueId ? `${matchup.leagueId.toUpperCase()} · ${timeLabel}` : timeLabel;
+  return matchup.leagueId
+    ? `${matchup.leagueId.toUpperCase()} · ${timeLabel}`
+    : timeLabel;
 }
 
 function pushBrowseSearchResult(
@@ -5517,7 +6184,10 @@ export class InMemoryPickReviewRepository implements PickReviewRepository {
       .sort((a, b) => b.decided_at.localeCompare(a.decided_at));
   }
 
-  async listByDecision(decision: PickReviewRecord['decision'], limit = 50): Promise<PickReviewRecord[]> {
+  async listByDecision(
+    decision: PickReviewRecord['decision'],
+    limit = 50,
+  ): Promise<PickReviewRecord[]> {
     return this.reviews
       .filter((r) => r.decision === decision)
       .sort((a, b) => b.decided_at.localeCompare(a.decided_at))
@@ -5550,7 +6220,8 @@ export class DatabasePickReviewRepository implements PickReviewRepository {
       .select('*')
       .single();
 
-    if (error) throw new Error(`Failed to create pick review: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to create pick review: ${error.message}`);
     return data as unknown as PickReviewRecord;
   }
 
@@ -5561,11 +6232,15 @@ export class DatabasePickReviewRepository implements PickReviewRepository {
       .eq('pick_id', pickId)
       .order('decided_at', { ascending: false });
 
-    if (error) throw new Error(`Failed to list reviews for pick: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to list reviews for pick: ${error.message}`);
     return (data ?? []) as unknown as PickReviewRecord[];
   }
 
-  async listByDecision(decision: PickReviewRecord['decision'], limit = 50): Promise<PickReviewRecord[]> {
+  async listByDecision(
+    decision: PickReviewRecord['decision'],
+    limit = 50,
+  ): Promise<PickReviewRecord[]> {
     const { data, error } = await this.client
       .from('pick_reviews')
       .select('*')
@@ -5573,7 +6248,8 @@ export class DatabasePickReviewRepository implements PickReviewRepository {
       .order('decided_at', { ascending: false })
       .limit(limit);
 
-    if (error) throw new Error(`Failed to list reviews by decision: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to list reviews by decision: ${error.message}`);
     return (data ?? []) as unknown as PickReviewRecord[];
   }
 
@@ -5584,7 +6260,8 @@ export class DatabasePickReviewRepository implements PickReviewRepository {
       .order('decided_at', { ascending: false })
       .limit(limit);
 
-    if (error) throw new Error(`Failed to list recent reviews: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to list recent reviews: ${error.message}`);
     return (data ?? []) as unknown as PickReviewRecord[];
   }
 }
@@ -5596,7 +6273,12 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
     const now = new Date().toISOString();
     const status = input.status ?? 'staged';
     if (status === 'champion') {
-      await this.archiveChampionForSlot(input.sport, input.marketFamily, null, now);
+      await this.archiveChampionForSlot(
+        input.sport,
+        input.marketFamily,
+        null,
+        now,
+      );
     }
 
     const { data, error } = await this.client
@@ -5615,7 +6297,9 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to create model registry record: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to create model registry record: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ModelRegistryRecord;
@@ -5635,7 +6319,10 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
     return (data as ModelRegistryRecord | null) ?? null;
   }
 
-  async findChampion(sport: string, marketFamily: string): Promise<ModelRegistryRecord | null> {
+  async findChampion(
+    sport: string,
+    marketFamily: string,
+  ): Promise<ModelRegistryRecord | null> {
     const { data, error } = await this.client
       .from('model_registry')
       .select('*')
@@ -5659,7 +6346,9 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
       .order('created_at', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to list model registry records by sport: ${error.message}`);
+      throw new Error(
+        `Failed to list model registry records by sport: ${error.message}`,
+      );
     }
 
     return (data ?? []) as ModelRegistryRecord[];
@@ -5677,7 +6366,12 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
 
     const now = new Date().toISOString();
     if (status === 'champion') {
-      await this.archiveChampionForSlot(existing.sport, existing.market_family, id, now);
+      await this.archiveChampionForSlot(
+        existing.sport,
+        existing.market_family,
+        id,
+        now,
+      );
     }
 
     const { data, error } = await this.client
@@ -5692,7 +6386,9 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to update model registry status: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to update model registry status: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ModelRegistryRecord;
@@ -5729,7 +6425,9 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
 export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepository {
   constructor(private readonly client: UnitTalkSupabaseClient) {}
 
-  async create(input: ExperimentLedgerCreateInput): Promise<ExperimentLedgerRecord> {
+  async create(
+    input: ExperimentLedgerCreateInput,
+  ): Promise<ExperimentLedgerRecord> {
     const { data, error } = await this.client
       .from('experiment_ledger')
       .insert({
@@ -5745,7 +6443,9 @@ export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepos
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to create experiment ledger record: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to create experiment ledger record: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ExperimentLedgerRecord;
@@ -5759,7 +6459,9 @@ export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepos
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find experiment ledger record: ${error.message}`);
+      throw new Error(
+        `Failed to find experiment ledger record: ${error.message}`,
+      );
     }
 
     return (data as ExperimentLedgerRecord | null) ?? null;
@@ -5773,7 +6475,9 @@ export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepos
       .order('started_at', { ascending: true });
 
     if (error) {
-      throw new Error(`Failed to list experiment ledger records by model: ${error.message}`);
+      throw new Error(
+        `Failed to list experiment ledger records by model: ${error.message}`,
+      );
     }
 
     return (data ?? []) as ExperimentLedgerRecord[];
@@ -5795,7 +6499,9 @@ export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepos
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to complete experiment ledger record: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to complete experiment ledger record: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ExperimentLedgerRecord;
@@ -5823,7 +6529,9 @@ export class DatabaseExperimentLedgerRepository implements ExperimentLedgerRepos
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to fail experiment ledger record: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to fail experiment ledger record: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ExperimentLedgerRecord;
@@ -5854,13 +6562,17 @@ export class DatabaseModelHealthSnapshotRepository implements ModelHealthSnapsho
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to create model health snapshot: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to create model health snapshot: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as ModelHealthSnapshotRecord;
   }
 
-  async findLatestByModel(modelId: string): Promise<ModelHealthSnapshotRecord | null> {
+  async findLatestByModel(
+    modelId: string,
+  ): Promise<ModelHealthSnapshotRecord | null> {
     const { data, error } = await this.client
       .from('model_health_snapshots')
       .select('*')
@@ -5870,13 +6582,18 @@ export class DatabaseModelHealthSnapshotRepository implements ModelHealthSnapsho
       .maybeSingle();
 
     if (error) {
-      throw new Error(`Failed to find latest model health snapshot: ${error.message}`);
+      throw new Error(
+        `Failed to find latest model health snapshot: ${error.message}`,
+      );
     }
 
     return (data as ModelHealthSnapshotRecord | null) ?? null;
   }
 
-  async listByModel(modelId: string, limit?: number): Promise<ModelHealthSnapshotRecord[]> {
+  async listByModel(
+    modelId: string,
+    limit?: number,
+  ): Promise<ModelHealthSnapshotRecord[]> {
     let query = this.client
       .from('model_health_snapshots')
       .select('*')
@@ -5889,23 +6606,31 @@ export class DatabaseModelHealthSnapshotRepository implements ModelHealthSnapsho
 
     const { data, error } = await query;
     if (error) {
-      throw new Error(`Failed to list model health snapshots: ${error.message}`);
+      throw new Error(
+        `Failed to list model health snapshots: ${error.message}`,
+      );
     }
 
     return (data ?? []) as ModelHealthSnapshotRecord[];
   }
 
-  async listAlerted(level?: 'warning' | 'critical'): Promise<ModelHealthSnapshotRecord[]> {
+  async listAlerted(
+    level?: 'warning' | 'critical',
+  ): Promise<ModelHealthSnapshotRecord[]> {
     let query = this.client
       .from('model_health_snapshots')
       .select('*')
       .order('snapshot_at', { ascending: false });
 
-    query = level ? query.eq('alert_level', level) : query.neq('alert_level', 'none');
+    query = level
+      ? query.eq('alert_level', level)
+      : query.neq('alert_level', 'none');
 
     const { data, error } = await query;
     if (error) {
-      throw new Error(`Failed to list alerted model health snapshots: ${error.message}`);
+      throw new Error(
+        `Failed to list alerted model health snapshots: ${error.message}`,
+      );
     }
 
     return (data ?? []) as ModelHealthSnapshotRecord[];
@@ -5918,7 +6643,9 @@ export class DatabaseExecutionQualityRepository implements ExecutionQualityRepos
   async summarizeByProvider(sport?: string): Promise<ExecutionQualityReport[]> {
     let query = this.client
       .from('provider_offers')
-      .select('provider_key, sport_key, provider_market_key, line, is_opening, is_closing');
+      .select(
+        'provider_key, sport_key, provider_market_key, line, is_opening, is_closing',
+      );
 
     if (sport !== undefined) {
       query = query.eq('sport_key', sport);
@@ -5926,29 +6653,38 @@ export class DatabaseExecutionQualityRepository implements ExecutionQualityRepos
 
     const { data, error } = await query;
     if (error) {
-      throw new Error(`Failed to summarize execution quality by provider: ${error.message}`);
+      throw new Error(
+        `Failed to summarize execution quality by provider: ${error.message}`,
+      );
     }
 
     return buildExecutionQualityReports(data ?? []);
   }
 
-  async summarizeByMarketFamily(providerKey: string): Promise<ExecutionQualityReport[]> {
+  async summarizeByMarketFamily(
+    providerKey: string,
+  ): Promise<ExecutionQualityReport[]> {
     const { data, error } = await this.client
       .from('provider_offers')
-      .select('provider_key, sport_key, provider_market_key, line, is_opening, is_closing')
+      .select(
+        'provider_key, sport_key, provider_market_key, line, is_opening, is_closing',
+      )
       .eq('provider_key', providerKey);
 
     if (error) {
-      throw new Error(`Failed to summarize execution quality by market family: ${error.message}`);
+      throw new Error(
+        `Failed to summarize execution quality by market family: ${error.message}`,
+      );
     }
 
     return buildExecutionQualityReports(data ?? []);
   }
 }
 
-export function createModelRegistryRepositories(
-  client?: SupabaseClient,
-): { modelRegistry: ModelRegistryRepository; experimentLedger: ExperimentLedgerRepository } {
+export function createModelRegistryRepositories(client?: SupabaseClient): {
+  modelRegistry: ModelRegistryRepository;
+  experimentLedger: ExperimentLedgerRepository;
+} {
   if (!client) {
     return {
       modelRegistry: new InMemoryModelRegistryRepository(),
@@ -5963,9 +6699,7 @@ export function createModelRegistryRepositories(
   };
 }
 
-export function createModelOpsRepositories(
-  client?: SupabaseClient,
-): {
+export function createModelOpsRepositories(client?: SupabaseClient): {
   modelRegistry: ModelRegistryRepository;
   experimentLedger: ExperimentLedgerRepository;
   modelHealthSnapshots: ModelHealthSnapshotRepository;
@@ -5984,7 +6718,9 @@ export function createModelOpsRepositories(
   return {
     modelRegistry: new DatabaseModelRegistryRepository(typedClient),
     experimentLedger: new DatabaseExperimentLedgerRepository(typedClient),
-    modelHealthSnapshots: new DatabaseModelHealthSnapshotRepository(typedClient),
+    modelHealthSnapshots: new DatabaseModelHealthSnapshotRepository(
+      typedClient,
+    ),
     executionQuality: new DatabaseExecutionQualityRepository(typedClient),
   };
 }
@@ -6021,19 +6757,37 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
       const existing = this.rows.get(key);
       if (existing) {
         // Opening immutability: do not overwrite once set
-        const opening_line = existing.opening_line !== null ? existing.opening_line : row.opening_line;
-        const opening_over_odds = existing.opening_over_odds !== null ? existing.opening_over_odds : row.opening_over_odds;
-        const opening_under_odds = existing.opening_under_odds !== null ? existing.opening_under_odds : row.opening_under_odds;
+        const opening_line =
+          existing.opening_line !== null
+            ? existing.opening_line
+            : row.opening_line;
+        const opening_over_odds =
+          existing.opening_over_odds !== null
+            ? existing.opening_over_odds
+            : row.opening_over_odds;
+        const opening_under_odds =
+          existing.opening_under_odds !== null
+            ? existing.opening_under_odds
+            : row.opening_under_odds;
         // Closing immutability: do not overwrite once set
-        const closing_line = existing.closing_line !== null ? existing.closing_line : row.closing_line;
-        const closing_over_odds = existing.closing_over_odds !== null ? existing.closing_over_odds : row.closing_over_odds;
-        const closing_under_odds = existing.closing_under_odds !== null ? existing.closing_under_odds : row.closing_under_odds;
+        const closing_line =
+          existing.closing_line !== null
+            ? existing.closing_line
+            : row.closing_line;
+        const closing_over_odds =
+          existing.closing_over_odds !== null
+            ? existing.closing_over_odds
+            : row.closing_over_odds;
+        const closing_under_odds =
+          existing.closing_under_odds !== null
+            ? existing.closing_under_odds
+            : row.closing_under_odds;
 
         this.rows.set(key, {
           ...existing,
           ...row,
-          id: existing.id,         // preserve generated id
-          created_at: existing.created_at,  // preserve created_at
+          id: existing.id, // preserve generated id
+          created_at: existing.created_at, // preserve created_at
           updated_at: now,
           opening_line,
           opening_over_odds,
@@ -6061,7 +6815,7 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
 
   async findByIds(ids: string[]): Promise<MarketUniverseRow[]> {
     const idSet = new Set(ids);
-    return Array.from(this.rows.values()).filter(r => idSet.has(r.id));
+    return Array.from(this.rows.values()).filter((r) => idSet.has(r.id));
   }
 
   /** Test helper: return all rows. */
@@ -6077,7 +6831,12 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
     providerMarketKey: string,
   ): MarketUniverseRow | undefined {
     return this.rows.get(
-      [providerKey, providerEventId, providerParticipantId ?? '', providerMarketKey].join(':'),
+      [
+        providerKey,
+        providerEventId,
+        providerParticipantId ?? '',
+        providerMarketKey,
+      ].join(':'),
     );
   }
 }
@@ -6108,24 +6867,31 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     const providerEventIds = [...new Set(rows.map((r) => r.provider_event_id))];
     const { data: existingRows, error: fetchError } = await this.client
       .from('market_universe')
-      .select('provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds')
+      .select(
+        'provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds',
+      )
       .in('provider_event_id', providerEventIds);
 
     if (fetchError) {
-      throw new Error(`market_universe fetch for immutability check failed: ${fetchError.message}`);
+      throw new Error(
+        `market_universe fetch for immutability check failed: ${fetchError.message}`,
+      );
     }
 
     // Build a lookup keyed by natural key string
-    const existingMap = new Map<string, {
-      opening_line: number | null;
-      opening_over_odds: number | null;
-      opening_under_odds: number | null;
-      closing_line: number | null;
-      closing_over_odds: number | null;
-      closing_under_odds: number | null;
-    }>();
+    const existingMap = new Map<
+      string,
+      {
+        opening_line: number | null;
+        opening_over_odds: number | null;
+        opening_under_odds: number | null;
+        closing_line: number | null;
+        closing_over_odds: number | null;
+        closing_under_odds: number | null;
+      }
+    >();
 
-    for (const existing of (existingRows ?? [])) {
+    for (const existing of existingRows ?? []) {
       const k = [
         existing.provider_key,
         existing.provider_event_id,
@@ -6153,13 +6919,27 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
       const ex = existingMap.get(k);
 
       // Apply opening immutability: keep existing non-null values
-      const opening_line = (ex && ex.opening_line !== null) ? ex.opening_line : row.opening_line;
-      const opening_over_odds = (ex && ex.opening_over_odds !== null) ? ex.opening_over_odds : row.opening_over_odds;
-      const opening_under_odds = (ex && ex.opening_under_odds !== null) ? ex.opening_under_odds : row.opening_under_odds;
+      const opening_line =
+        ex && ex.opening_line !== null ? ex.opening_line : row.opening_line;
+      const opening_over_odds =
+        ex && ex.opening_over_odds !== null
+          ? ex.opening_over_odds
+          : row.opening_over_odds;
+      const opening_under_odds =
+        ex && ex.opening_under_odds !== null
+          ? ex.opening_under_odds
+          : row.opening_under_odds;
       // Apply closing immutability: keep existing non-null values
-      const closing_line = (ex && ex.closing_line !== null) ? ex.closing_line : row.closing_line;
-      const closing_over_odds = (ex && ex.closing_over_odds !== null) ? ex.closing_over_odds : row.closing_over_odds;
-      const closing_under_odds = (ex && ex.closing_under_odds !== null) ? ex.closing_under_odds : row.closing_under_odds;
+      const closing_line =
+        ex && ex.closing_line !== null ? ex.closing_line : row.closing_line;
+      const closing_over_odds =
+        ex && ex.closing_over_odds !== null
+          ? ex.closing_over_odds
+          : row.closing_over_odds;
+      const closing_under_odds =
+        ex && ex.closing_under_odds !== null
+          ? ex.closing_under_odds
+          : row.closing_under_odds;
 
       return {
         sport_key: row.sport_key,
@@ -6196,7 +6976,8 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     const { error } = await this.client
       .from('market_universe')
       .upsert(upsertRows, {
-        onConflict: 'provider_key,provider_event_id,provider_participant_id,provider_market_key',
+        onConflict:
+          'provider_key,provider_event_id,provider_participant_id,provider_market_key',
         ignoreDuplicates: false,
       });
 
@@ -6229,7 +7010,10 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
       const { data, error } = await fromUntyped(this.client, 'market_universe')
         .select('*')
         .in('id', chunk);
-      if (error) throw new Error(`Failed to find market universe by ids: ${error.message}`);
+      if (error)
+        throw new Error(
+          `Failed to find market universe by ids: ${error.message}`,
+        );
       results.push(...((data ?? []) as MarketUniverseRow[]));
     }
     return results;
@@ -6283,13 +7067,13 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
           status: input.status,
           rejection_reason: input.rejection_reason,
           filter_details: input.filter_details,
-          model_score: null,           // Phase 3 placeholder — never set in Phase 2
-          model_tier: null,            // Phase 3 placeholder — never set in Phase 2
-          model_confidence: null,      // Phase 3 placeholder — never set in Phase 2
-          selection_rank: null,        // Phase 4 placeholder — set by ranked selection service
-          is_board_candidate: false,   // Phase 4 placeholder — set by ranked selection service
-          shadow_mode: true,           // must remain true in Phase 2
-          pick_id: null,               // must remain null in Phase 2
+          model_score: null, // Phase 3 placeholder — never set in Phase 2
+          model_tier: null, // Phase 3 placeholder — never set in Phase 2
+          model_confidence: null, // Phase 3 placeholder — never set in Phase 2
+          selection_rank: null, // Phase 4 placeholder — set by ranked selection service
+          is_board_candidate: false, // Phase 4 placeholder — set by ranked selection service
+          shadow_mode: true, // must remain true in Phase 2
+          pick_id: null, // must remain null in Phase 2
           scan_run_id: input.scan_run_id,
           provenance: input.provenance,
           expires_at: input.expires_at,
@@ -6321,12 +7105,18 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
     }
   }
 
-  async updateSelectionRankBatch(updates: SelectionRankUpdate[]): Promise<void> {
+  async updateSelectionRankBatch(
+    updates: SelectionRankUpdate[],
+  ): Promise<void> {
     for (const u of updates) {
       // InMemory stores candidates keyed by universe_id — find by id field
       for (const [key, row] of this.rows.entries()) {
         if (row.id === u.id) {
-          this.rows.set(key, { ...row, selection_rank: u.selection_rank, is_board_candidate: u.is_board_candidate });
+          this.rows.set(key, {
+            ...row,
+            selection_rank: u.selection_rank,
+            is_board_candidate: u.is_board_candidate,
+          });
           break;
         }
       }
@@ -6335,7 +7125,11 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
 
   async resetSelectionRanks(): Promise<void> {
     for (const [key, row] of this.rows.entries()) {
-      this.rows.set(key, { ...row, selection_rank: null, is_board_candidate: false });
+      this.rows.set(key, {
+        ...row,
+        selection_rank: null,
+        is_board_candidate: false,
+      });
     }
   }
 
@@ -6349,7 +7143,12 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
     for (const u of updates) {
       for (const [key, row] of this.rows.entries()) {
         if (row.id === u.id) {
-          this.rows.set(key, { ...row, pick_id: u.pick_id, shadow_mode: false, updated_at: now });
+          this.rows.set(key, {
+            ...row,
+            pick_id: u.pick_id,
+            shadow_mode: false,
+            updated_at: now,
+          });
           break;
         }
       }
@@ -6387,7 +7186,10 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       universe_id: input.universe_id,
       status: input.status,
       rejection_reason: input.rejection_reason,
-      filter_details: input.filter_details as unknown as Record<string, unknown>,
+      filter_details: input.filter_details as unknown as Record<
+        string,
+        unknown
+      >,
       scan_run_id: input.scan_run_id,
       provenance: input.provenance,
       expires_at: input.expires_at,
@@ -6400,12 +7202,10 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       // model_confidence → remains NULL  (Phase 3 placeholder)
     }));
 
-    const { error } = await this.client
-      .from('pick_candidates')
-      .upsert(rows, {
-        onConflict: 'universe_id',
-        ignoreDuplicates: false,
-      });
+    const { error } = await this.client.from('pick_candidates').upsert(rows, {
+      onConflict: 'universe_id',
+      ignoreDuplicates: false,
+    });
 
     if (error) {
       throw new Error(`pick_candidates upsert failed: ${error.message}`);
@@ -6436,11 +7236,16 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
           updated_at: new Date().toISOString(),
         })
         .eq('id', u.id);
-      if (error) throw new Error(`Failed to update model score for ${u.id}: ${error.message}`);
+      if (error)
+        throw new Error(
+          `Failed to update model score for ${u.id}: ${error.message}`,
+        );
     }
   }
 
-  async updateSelectionRankBatch(updates: SelectionRankUpdate[]): Promise<void> {
+  async updateSelectionRankBatch(
+    updates: SelectionRankUpdate[],
+  ): Promise<void> {
     if (updates.length === 0) return;
     for (const u of updates) {
       const { error } = await fromUntyped(this.client, 'pick_candidates')
@@ -6450,7 +7255,10 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
           updated_at: new Date().toISOString(),
         })
         .eq('id', u.id);
-      if (error) throw new Error(`Failed to update selection rank for ${u.id}: ${error.message}`);
+      if (error)
+        throw new Error(
+          `Failed to update selection rank for ${u.id}: ${error.message}`,
+        );
     }
   }
 
@@ -6462,7 +7270,8 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
         updated_at: new Date().toISOString(),
       })
       .not('id', 'is', null); // matches all rows
-    if (error) throw new Error(`Failed to reset selection ranks: ${error.message}`);
+    if (error)
+      throw new Error(`Failed to reset selection ranks: ${error.message}`);
   }
 
   async findByIds(ids: string[]): Promise<PickCandidateRow[]> {
@@ -6471,7 +7280,8 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       .from('pick_candidates')
       .select('*')
       .in('id', ids);
-    if (error) throw new Error(`pick_candidates findByIds failed: ${error.message}`);
+    if (error)
+      throw new Error(`pick_candidates findByIds failed: ${error.message}`);
     return (data ?? []) as unknown as PickCandidateRow[];
   }
 
@@ -6482,7 +7292,10 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       const { error } = await fromUntyped(this.client, 'pick_candidates')
         .update({ pick_id: u.pick_id, shadow_mode: false, updated_at: now })
         .eq('id', u.id);
-      if (error) throw new Error(`Failed to link pick_id for candidate ${u.id}: ${error.message}`);
+      if (error)
+        throw new Error(
+          `Failed to link pick_id for candidate ${u.id}: ${error.message}`,
+        );
     }
   }
 }
@@ -6545,8 +7358,12 @@ export function createDatabaseRepositoryBundle(
     pickCandidates: new DatabasePickCandidateRepository(connection),
     syndicateBoard: new DatabaseSyndicateBoardRepository(connection),
     marketFamilyTrust: new DatabaseMarketFamilyTrustRepository(connection),
-    modelRegistry: new DatabaseModelRegistryRepository(createDatabaseClientFromConnection(connection)),
-    experimentLedger: new DatabaseExperimentLedgerRepository(createDatabaseClientFromConnection(connection)),
+    modelRegistry: new DatabaseModelRegistryRepository(
+      createDatabaseClientFromConnection(connection),
+    ),
+    experimentLedger: new DatabaseExperimentLedgerRepository(
+      createDatabaseClientFromConnection(connection),
+    ),
   };
 }
 
@@ -6624,12 +7441,16 @@ function countMatchingSport(picks: PickRecord[], sport: string | undefined) {
   return picks.filter((pick) => metadataSport(pick.metadata) === sport).length;
 }
 
-function countMatchingEvent(picks: PickRecord[], eventName: string | undefined) {
+function countMatchingEvent(
+  picks: PickRecord[],
+  eventName: string | undefined,
+) {
   if (!eventName) {
     return 0;
   }
 
-  return picks.filter((pick) => metadataEventName(pick.metadata) === eventName).length;
+  return picks.filter((pick) => metadataEventName(pick.metadata) === eventName)
+    .length;
 }
 
 function metadataSport(metadata: Json) {
@@ -6695,7 +7516,9 @@ type UntypedQueryResult = {
 
 type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
   select(columns?: string): UntypedQueryBuilder;
-  insert(values: Record<string, unknown> | readonly Record<string, unknown>[]): UntypedQueryBuilder;
+  insert(
+    values: Record<string, unknown> | readonly Record<string, unknown>[],
+  ): UntypedQueryBuilder;
   update(values: Record<string, unknown>): UntypedQueryBuilder;
   eq(column: string, value: unknown): UntypedQueryBuilder;
   neq(column: string, value: unknown): UntypedQueryBuilder;
@@ -6791,7 +7614,12 @@ function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
 
 type ExecutionQualityOfferRow = Pick<
   ProviderOfferRecord,
-  'provider_key' | 'sport_key' | 'provider_market_key' | 'line' | 'is_opening' | 'is_closing'
+  | 'provider_key'
+  | 'sport_key'
+  | 'provider_market_key'
+  | 'line'
+  | 'is_opening'
+  | 'is_closing'
 >;
 
 function buildExecutionQualityReports(
@@ -6840,10 +7668,11 @@ function buildExecutionQualityReports(
         roi: null,
       };
     })
-    .sort((left, right) =>
-      left.providerKey.localeCompare(right.providerKey) ||
-      (left.sportKey ?? '').localeCompare(right.sportKey ?? '') ||
-      left.marketFamily.localeCompare(right.marketFamily),
+    .sort(
+      (left, right) =>
+        left.providerKey.localeCompare(right.providerKey) ||
+        (left.sportKey ?? '').localeCompare(right.sportKey ?? '') ||
+        left.marketFamily.localeCompare(right.marketFamily),
     );
 }
 
@@ -6867,7 +7696,9 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
     return `mem-tier-${this.nextId++}`;
   }
 
-  async activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord> {
+  async activateTier(
+    input: MemberTierActivateInput,
+  ): Promise<MemberTierRecord> {
     // Idempotent: if an active row already exists for (discordId, tier), return it.
     // A row is considered active if effective_until is null or in the future.
     const now = new Date().toISOString();
@@ -6887,7 +7718,9 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
       discord_username: input.discordUsername ?? null,
       tier: input.tier,
       effective_from: now,
-      effective_until: input.effectiveUntil ? input.effectiveUntil.toISOString() : null,
+      effective_until: input.effectiveUntil
+        ? input.effectiveUntil.toISOString()
+        : null,
       source: input.source,
       changed_by: input.changedBy,
       reason: input.reason ?? null,
@@ -6943,7 +7776,10 @@ export class InMemoryMemberTierRepository implements MemberTierRepository {
 
   async getTierCounts(): Promise<Record<MemberTier, number>> {
     const now = new Date().toISOString();
-    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
+    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<
+      MemberTier,
+      number
+    >;
     for (const row of this.rows) {
       if (row.effective_until === null || row.effective_until > now) {
         const t = row.tier as MemberTier;
@@ -6972,7 +7808,9 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
     this.client = createDatabaseClientFromConnection(connection);
   }
 
-  async activateTier(input: MemberTierActivateInput): Promise<MemberTierRecord> {
+  async activateTier(
+    input: MemberTierActivateInput,
+  ): Promise<MemberTierRecord> {
     // Check if an active row already exists (idempotent)
     const { data: existing } = await this.client
       .from('member_tiers')
@@ -7004,7 +7842,9 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
       .single();
 
     if (error || !data) {
-      throw new Error(`Failed to activate member tier: ${error?.message ?? 'unknown error'}`);
+      throw new Error(
+        `Failed to activate member tier: ${error?.message ?? 'unknown error'}`,
+      );
     }
 
     return data as MemberTierRecord;
@@ -7063,7 +7903,9 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
       .is('effective_until', null);
 
     if (error) {
-      throw new Error(`Failed to get active members for tier: ${error.message}`);
+      throw new Error(
+        `Failed to get active members for tier: ${error.message}`,
+      );
     }
 
     return (data ?? []) as MemberTierRecord[];
@@ -7079,7 +7921,10 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
       throw new Error(`Failed to get tier counts: ${error.message}`);
     }
 
-    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<MemberTier, number>;
+    const counts = Object.fromEntries(memberTiers.map((t) => [t, 0])) as Record<
+      MemberTier,
+      number
+    >;
     for (const row of data ?? []) {
       const t = row.tier as MemberTier;
       if (t in counts) {

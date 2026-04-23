@@ -192,6 +192,49 @@ test('scores one qualified candidate with valid fair probs', async () => {
   assert.ok(updated!.model_confidence !== null, 'model_confidence should be set');
 });
 
+test('scores rejected candidates only when explicitly included for shadow proof', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry);
+
+  seedUniverseRows(marketUniverse, [
+    makeUniverseRow({
+      id: 'universe-rejected',
+      fair_over_prob: 0.57,
+      fair_under_prob: 0.43,
+      is_stale: false,
+    }),
+  ]);
+  seedCandidateRows(pickCandidates, [
+    makeCandidate({
+      id: 'candidate-rejected',
+      universe_id: 'universe-rejected',
+      status: 'rejected',
+      rejection_reason: 'shadow_proof_sample',
+      model_score: null,
+    }),
+  ]);
+
+  const defaultResult = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+  assert.equal(defaultResult.scored, 0);
+
+  const allBefore = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  assert.equal(allBefore.get('universe-rejected')?.model_score, null);
+
+  const shadowResult = await runCandidateScoring(
+    { pickCandidates, marketUniverse, modelRegistry },
+    { statuses: ['qualified', 'rejected'] },
+  );
+
+  assert.equal(shadowResult.scored, 1);
+  const allAfter = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const updated = allAfter.get('universe-rejected');
+  assert.ok(updated?.model_score !== null);
+  assert.equal(updated?.shadow_mode, true);
+  assert.equal(updated?.pick_id, null);
+});
+
 test('skips candidate with stale market universe row', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const pickCandidates = new InMemoryPickCandidateRepository();

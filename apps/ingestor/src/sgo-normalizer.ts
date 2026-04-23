@@ -9,6 +9,10 @@ export interface SGOPairedProp {
   overOdds: number | null;
   underOdds: number | null;
   snapshotAt: string;
+  /** Distinguishes explicit SGO historical open/close prices sharing the same snapshot. */
+  priceSource?: 'current' | 'open' | 'close';
+  isOpening?: boolean;
+  isClosing?: boolean;
   /** Per-bookmaker source from byBookmaker (e.g. 'pinnacle'). Null = consensus SGO row. */
   bookmakerKey?: string | null;
 }
@@ -39,8 +43,8 @@ export function normalizeSGOPairedProp(
       prop.overOdds !== null && prop.underOdds !== null
         ? 'PAIRED'
         : 'FALLBACK_SINGLE_SIDED',
-    isOpening: false,
-    isClosing: false,
+    isOpening: prop.isOpening ?? false,
+    isClosing: prop.isClosing ?? false,
     snapshotAt: prop.snapshotAt,
     bookmakerKey,
     idempotencyKey: buildProviderOfferIdempotencyKey({
@@ -51,6 +55,7 @@ export function normalizeSGOPairedProp(
       line,
       snapshotAt: prop.snapshotAt,
       bookmakerKey,
+      ...(prop.priceSource ? { priceSource: prop.priceSource } : {}),
     }),
   };
 
@@ -65,6 +70,7 @@ export function buildProviderOfferIdempotencyKey(input: {
   line: number | null;
   snapshotAt: string;
   bookmakerKey?: string | null;
+  priceSource?: 'current' | 'open' | 'close';
 }) {
   const lineStr = input.line !== null ? input.line.toFixed(1) : 'null';
   const parts = [
@@ -77,6 +83,9 @@ export function buildProviderOfferIdempotencyKey(input: {
   ];
   if (input.bookmakerKey) {
     parts.push(input.bookmakerKey);
+  }
+  if (input.priceSource && input.priceSource !== 'current') {
+    parts.push(input.priceSource);
   }
   return parts.join(':');
 }

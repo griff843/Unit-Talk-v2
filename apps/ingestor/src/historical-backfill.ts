@@ -1,5 +1,9 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
-import { ingestLeague, type IngestLeagueOptions, type IngestLeagueSummary } from './ingest-league.js';
+import {
+  ingestLeague,
+  type IngestLeagueOptions,
+  type IngestLeagueSummary,
+} from './ingest-league.js';
 
 export interface HistoricalBackfillOptions {
   repositories: IngestorRepositoryBundle;
@@ -8,6 +12,8 @@ export interface HistoricalBackfillOptions {
   startDate: string;
   endDate: string;
   skipResults?: boolean;
+  resultsOnly?: boolean;
+  providerEventIds?: string[];
   fetchImpl?: IngestLeagueOptions['fetchImpl'];
   logger?: Pick<Console, 'warn' | 'info'>;
   ingestLeagueImpl?: typeof ingestLeague;
@@ -47,18 +53,31 @@ export async function runHistoricalBackfill(
     const nextDate = toNextDate(date);
 
     for (const league of options.leagues) {
-      const summary = await ingest(league, options.apiKey, options.repositories, {
-        snapshotAt: nextDate,
-        startsAfter,
-        startsBefore: nextDate,
-        resultsStartsAfter: startsAfter,
-        resultsStartsBefore: nextDate,
-        resultsLookbackHours: 24,
-        historical: true,
-        ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
-        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-        ...(options.logger ? { logger: options.logger } : {}),
-      });
+      const summary = await ingest(
+        league,
+        options.apiKey,
+        options.repositories,
+        {
+          snapshotAt: nextDate,
+          startsAfter,
+          startsBefore: nextDate,
+          resultsStartsAfter: startsAfter,
+          resultsStartsBefore: nextDate,
+          resultsLookbackHours: 24,
+          historical: true,
+          ...(options.providerEventIds !== undefined
+            ? { providerEventIds: options.providerEventIds }
+            : {}),
+          ...(options.resultsOnly !== undefined
+            ? { resultsOnly: options.resultsOnly }
+            : {}),
+          ...(options.skipResults !== undefined
+            ? { skipResults: options.skipResults }
+            : {}),
+          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+          ...(options.logger ? { logger: options.logger } : {}),
+        },
+      );
 
       runs.push({
         date,

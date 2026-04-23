@@ -69,7 +69,10 @@ test('collectConfiguredSgoApiKeyCandidates preserves both configured subscriptio
   });
 
   assert.deepEqual(
-    candidates.map((candidate) => ({ source: candidate.source, tag: candidate.tag })),
+    candidates.map((candidate) => ({
+      source: candidate.source,
+      tag: candidate.tag,
+    })),
     [
       { source: 'SGO_API_KEYS[0]', tag: 'acti...tion' },
       { source: 'SGO_API_KEYS[1]', tag: 'inac...tion' },
@@ -82,15 +85,26 @@ test('resolveActiveSgoApiKey selects the first working subscription and records 
   let usageFetches = 0;
   const selection = await resolveActiveSgoApiKey(
     [
-      { apiKey: 'inactive-subscription', source: 'SGO_API_KEY', tag: 'inac...tion' },
-      { apiKey: 'active-subscription', source: 'SGO_API_KEY_FALLBACK', tag: 'acti...tion' },
+      {
+        apiKey: 'inactive-subscription',
+        source: 'SGO_API_KEY',
+        tag: 'inac...tion',
+      },
+      {
+        apiKey: 'active-subscription',
+        source: 'SGO_API_KEY_FALLBACK',
+        tag: 'acti...tion',
+      },
     ],
     {
       fetchImpl: async (input) => {
         usageFetches += 1;
         const url = String(input);
         if (url.includes('inactive-subscription')) {
-          return new Response('forbidden', { status: 403, statusText: 'Forbidden' });
+          return new Response('forbidden', {
+            status: 403,
+            statusText: 'Forbidden',
+          });
         }
 
         return new Response(
@@ -138,6 +152,130 @@ test('fetchAndPairSGOProps includes recently started live games by default', asy
     requestedUrl.searchParams.get('startsAfter'),
     '2026-04-19T14:00:00.000Z',
   );
+});
+
+test('fetchAndPairSGOProps requests SGO historical open/close odds fields', async () => {
+  let capturedUrl: URL | null = null;
+
+  await fetchAndPairSGOProps({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-20T02:00:00.000Z',
+    historical: true,
+    fetchImpl: async (input) => {
+      capturedUrl = new URL(String(input));
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const requestedUrl = capturedUrl as URL | null;
+  assert.ok(requestedUrl);
+  assert.equal(requestedUrl.searchParams.get('finalized'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeOpposingOdds'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeAltLines'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeOpenCloseOdds'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeAltLine'), null);
+  assert.equal(requestedUrl.searchParams.get('oddsAvailable'), null);
+});
+
+test('fetchAndPairSGOProps extracts bookmaker open and close prices from historical byBookmaker data', async () => {
+  const result = await fetchAndPairSGOProps({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-20T02:00:00.000Z',
+    historical: true,
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              eventID: 'evt-historical-open-close',
+              leagueID: 'NBA',
+              status: {
+                finalized: true,
+                oddsAvailable: false,
+                startsAt: '2026-04-19T23:00:00.000Z',
+              },
+              odds: {
+                'points-player-123-game-ou-over': {
+                  oddID: 'points-player-123-game-ou-over',
+                  playerID: 'player-123',
+                  bookOverUnder: '22.5',
+                  bookOdds: '-110',
+                  byBookmaker: {
+                    pinnacle: {
+                      odds: '-112',
+                      openOdds: '-105',
+                      closeOdds: '-118',
+                      openOverUnder: '21.5',
+                      closeOverUnder: '22.5',
+                    },
+                  },
+                },
+                'points-player-123-game-ou-under': {
+                  oddID: 'points-player-123-game-ou-under',
+                  playerID: 'player-123',
+                  bookOverUnder: '22.5',
+                  bookOdds: '-110',
+                  byBookmaker: {
+                    pinnacle: {
+                      odds: '-108',
+                      openOdds: '-115',
+                      closeOdds: '-102',
+                      openOverUnder: '21.5',
+                      closeOverUnder: '22.5',
+                    },
+                  },
+                },
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+  });
+
+  const bookmakerProps = result.pairedProps.filter(
+    (prop) => prop.bookmakerKey === 'pinnacle',
+  );
+  const current = bookmakerProps.find((prop) => prop.priceSource === 'current');
+  const open = bookmakerProps.find((prop) => prop.priceSource === 'open');
+  const close = bookmakerProps.find((prop) => prop.priceSource === 'close');
+
+  assert.ok(current);
+  assert.equal(current.overOdds, -112);
+  assert.equal(current.underOdds, -108);
+  assert.equal(current.isOpening, false);
+  assert.equal(current.isClosing, false);
+
+  assert.ok(open);
+  assert.equal(open.line, 21.5);
+  assert.equal(open.overOdds, -105);
+  assert.equal(open.underOdds, -115);
+  assert.equal(open.isOpening, true);
+  assert.equal(open.isClosing, false);
+
+  assert.ok(close);
+  assert.equal(close.line, 22.5);
+  assert.equal(close.overOdds, -118);
+  assert.equal(close.underOdds, -102);
+  assert.equal(close.isOpening, false);
+  assert.equal(close.isClosing, true);
+
+  const normalizedOpen = normalizeSGOPairedProp(open);
+  const normalizedClose = normalizeSGOPairedProp(close);
+  assert.ok(normalizedOpen);
+  assert.ok(normalizedClose);
+  assert.equal(normalizedOpen.isOpening, true);
+  assert.equal(normalizedClose.isClosing, true);
+  assert.ok(normalizedOpen.idempotencyKey.endsWith(':pinnacle:open'));
+  assert.ok(normalizedClose.idempotencyKey.endsWith(':pinnacle:close'));
 });
 
 test('normalizeSGOPairedProp returns FALLBACK_SINGLE_SIDED when only one side is present', () => {
@@ -189,11 +327,21 @@ test('InMemoryProviderOfferRepository.upsertBatch is idempotent on idempotency_k
 
   assert.ok(offer);
   const first = await repository.upsertBatch([offer]);
-  const second = await repository.upsertBatch([{ ...offer, snapshotAt: '2026-03-25T12:05:00.000Z' }]);
+  const second = await repository.upsertBatch([
+    { ...offer, snapshotAt: '2026-03-25T12:05:00.000Z' },
+  ]);
   const rows = await repository.listByProvider('sgo');
 
-  assert.deepEqual(first, { insertedCount: 1, updatedCount: 0, totalProcessed: 1 });
-  assert.deepEqual(second, { insertedCount: 0, updatedCount: 1, totalProcessed: 1 });
+  assert.deepEqual(first, {
+    insertedCount: 1,
+    updatedCount: 0,
+    totalProcessed: 1,
+  });
+  assert.deepEqual(second, {
+    insertedCount: 0,
+    updatedCount: 1,
+    totalProcessed: 1,
+  });
   assert.equal(rows.length, 1);
   assert.equal(rows[0]?.snapshot_at, '2026-03-25T12:05:00.000Z');
 });
@@ -243,7 +391,9 @@ test('normalizeOddsApiToOffers preserves unique bookmaker provider keys', () => 
   ];
 
   const offers = normalizeOddsApiToOffers(events, '2026-03-25T12:05:00.000Z');
-  const providerKeys = Array.from(new Set(offers.map((offer) => offer.providerKey))).sort();
+  const providerKeys = Array.from(
+    new Set(offers.map((offer) => offer.providerKey)),
+  ).sort();
 
   assert.equal(offers.length, 2);
   assert.deepEqual(providerKeys, ['odds-api:betmgm', 'odds-api:pinnacle']);
@@ -301,7 +451,9 @@ test('InMemoryProviderOfferRepository.listByProvider can query a third odds-api 
 
   await repository.upsertBatch(upsertInputs);
   const rows = await repository.listByProvider('odds-api:fanduel');
-  const knicksRow = rows.find((row) => row.provider_participant_id === 'Knicks');
+  const knicksRow = rows.find(
+    (row) => row.provider_participant_id === 'Knicks',
+  );
 
   assert.equal(rows.length, 2);
   assert.ok(knicksRow);
@@ -360,7 +512,8 @@ test('ingestOddsApiLeague persists Odds API offers using canonical provider-offe
       ),
   });
 
-  const rows = await repositories.providerOffers.listByProvider('odds-api:betmgm');
+  const rows =
+    await repositories.providerOffers.listByProvider('odds-api:betmgm');
 
   assert.equal(summary.status, 'succeeded');
   assert.equal(summary.insertedCount, 1);
@@ -423,10 +576,31 @@ test('ingestOddsApiLeague records an ingestor.cycle run with odds-api quota deta
   });
 
   const storedRuns = Array.from(
-    ((repositories.runs as unknown as { runs: Map<string, { details: unknown; status: string; run_type: string }> }).runs
-      ?? new Map()).values(),
+    (
+      (
+        repositories.runs as unknown as {
+          runs: Map<
+            string,
+            { details: unknown; status: string; run_type: string }
+          >;
+        }
+      ).runs ?? new Map()
+    ).values(),
   );
-  const run = storedRuns[0] as { details: { provider?: string; quota?: { provider?: string; requestCount?: number; remaining?: number | null } }; status: string; run_type: string } | undefined;
+  const run = storedRuns[0] as
+    | {
+        details: {
+          provider?: string;
+          quota?: {
+            provider?: string;
+            requestCount?: number;
+            remaining?: number | null;
+          };
+        };
+        status: string;
+        run_type: string;
+      }
+    | undefined;
 
   assert.equal(summary.status, 'succeeded');
   assert.equal(storedRuns.length, 1);
@@ -487,8 +661,11 @@ test('ingestOddsApiLeague persists moneyline rows as participant-specific paired
       ),
   });
 
-  const rows = await repositories.providerOffers.listByProvider('odds-api:pinnacle');
-  const celticsRow = rows.find((row) => row.provider_participant_id === 'Celtics');
+  const rows =
+    await repositories.providerOffers.listByProvider('odds-api:pinnacle');
+  const celticsRow = rows.find(
+    (row) => row.provider_participant_id === 'Celtics',
+  );
   const bullsRow = rows.find((row) => row.provider_participant_id === 'Bulls');
 
   assert.equal(summary.status, 'succeeded');
@@ -508,8 +685,12 @@ test('ingestOddsApiLeague hydrates team events for browse when canonical teams e
   const home = seededTeams.find((row) => row.display_name === 'Celtics');
   const away = seededTeams.find((row) => row.display_name === 'Bulls');
   // Use a relative date so this test stays within the listUpcoming ±7-day window
-  const recentEventTime = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString();
-  const recentUpdateTime = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000).toISOString();
+  const recentEventTime = new Date(
+    Date.now() - 2 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const recentUpdateTime = new Date(
+    Date.now() - 2 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000,
+  ).toISOString();
 
   const summary = await ingestOddsApiLeague({
     apiKey: 'test-key',
@@ -565,10 +746,20 @@ test('ingestOddsApiLeague hydrates team events for browse when canonical teams e
   assert.ok(home);
   assert.ok(away);
 
-  const eventParticipants = await repositories.eventParticipants.listByEvent(events[0]!.id);
+  const eventParticipants = await repositories.eventParticipants.listByEvent(
+    events[0]!.id,
+  );
   assert.equal(eventParticipants.length, 2);
-  assert.ok(eventParticipants.some((row) => row.participant_id === home.id && row.role === 'home'));
-  assert.ok(eventParticipants.some((row) => row.participant_id === away.id && row.role === 'away'));
+  assert.ok(
+    eventParticipants.some(
+      (row) => row.participant_id === home.id && row.role === 'home',
+    ),
+  );
+  assert.ok(
+    eventParticipants.some(
+      (row) => row.participant_id === away.id && row.role === 'away',
+    ),
+  );
 });
 
 test('ingestOddsApiLeague fetches default player prop markets and links matched player participants to events', async () => {
@@ -585,8 +776,12 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
   const warnings: string[] = [];
   let capturedUrl = '';
 
-  const recentEventTime2 = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-  const recentUpdateTime2 = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000).toISOString();
+  const recentEventTime2 = new Date(
+    Date.now() - 3 * 24 * 60 * 60 * 1000,
+  ).toISOString();
+  const recentUpdateTime2 = new Date(
+    Date.now() - 3 * 24 * 60 * 60 * 1000 - 3 * 60 * 60 * 1000,
+  ).toISOString();
   const summary = await ingestOddsApiLeague({
     apiKey: 'test-key',
     league: 'NBA',
@@ -625,16 +820,36 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
                     key: 'player_points',
                     last_update: recentUpdateTime2,
                     outcomes: [
-                      { name: 'Over', description: 'Jalen Brunson', price: -120, point: 27.5 },
-                      { name: 'Under', description: 'Jalen Brunson', price: 100, point: 27.5 },
+                      {
+                        name: 'Over',
+                        description: 'Jalen Brunson',
+                        price: -120,
+                        point: 27.5,
+                      },
+                      {
+                        name: 'Under',
+                        description: 'Jalen Brunson',
+                        price: 100,
+                        point: 27.5,
+                      },
                     ],
                   },
                   {
                     key: 'player_assists',
                     last_update: recentUpdateTime2,
                     outcomes: [
-                      { name: 'Over', description: 'Mystery Player', price: -110, point: 6.5 },
-                      { name: 'Under', description: 'Mystery Player', price: -110, point: 6.5 },
+                      {
+                        name: 'Over',
+                        description: 'Mystery Player',
+                        price: -110,
+                        point: 6.5,
+                      },
+                      {
+                        name: 'Under',
+                        description: 'Mystery Player',
+                        price: -110,
+                        point: 6.5,
+                      },
                     ],
                   },
                 ],
@@ -656,18 +871,41 @@ test('ingestOddsApiLeague fetches default player prop markets and links matched 
 
   const url = new URL(capturedUrl);
   const events = await repositories.events.listUpcoming('NBA', 7);
-  const rows = await repositories.providerOffers.listByProvider('odds-api:pinnacle');
+  const rows =
+    await repositories.providerOffers.listByProvider('odds-api:pinnacle');
 
   assert.equal(summary.status, 'succeeded');
-  assert.equal(url.searchParams.get('markets'), 'h2h,spreads,totals,player_points,player_rebounds,player_assists,player_threes');
+  assert.equal(
+    url.searchParams.get('markets'),
+    'h2h,spreads,totals,player_points,player_rebounds,player_assists,player_threes',
+  );
   assert.equal(rows.length, 4);
-  assert.ok(rows.some((row) => row.provider_market_key === 'player_points:Jalen Brunson' && row.provider_participant_id === 'Jalen Brunson'));
-  assert.ok(rows.some((row) => row.provider_market_key === 'player_assists:Mystery Player' && row.provider_participant_id === 'Mystery Player'));
+  assert.ok(
+    rows.some(
+      (row) =>
+        row.provider_market_key === 'player_points:Jalen Brunson' &&
+        row.provider_participant_id === 'Jalen Brunson',
+    ),
+  );
+  assert.ok(
+    rows.some(
+      (row) =>
+        row.provider_market_key === 'player_assists:Mystery Player' &&
+        row.provider_participant_id === 'Mystery Player',
+    ),
+  );
   assert.equal(events.length, 1);
 
-  const eventParticipants = await repositories.eventParticipants.listByEvent(events[0]!.id);
+  const eventParticipants = await repositories.eventParticipants.listByEvent(
+    events[0]!.id,
+  );
   assert.equal(eventParticipants.length, 3);
-  assert.ok(eventParticipants.some((row) => row.participant_id === jalenBrunson.id && row.role === 'competitor'));
+  assert.ok(
+    eventParticipants.some(
+      (row) =>
+        row.participant_id === jalenBrunson.id && row.role === 'competitor',
+    ),
+  );
   assert.ok(warnings.some((warning) => warning.includes('Mystery Player')));
 });
 
@@ -838,10 +1076,13 @@ test('runIngestorCycles triggers grading once per cycle when completed results a
       }
 
       if (url.includes('/v2/events?')) {
-        return new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
       }
 
       throw new Error(`Unexpected fetch URL: ${url}`);
@@ -881,10 +1122,13 @@ test('runIngestorCycles records a failed grading trigger without failing ingest 
       }
 
       if (url.includes('/v2/events?')) {
-        return new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
-          status: 200,
-          headers: { 'content-type': 'application/json' },
-        });
+        return new Response(
+          JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
       }
 
       throw new Error(`Unexpected fetch URL: ${url}`);
@@ -894,7 +1138,10 @@ test('runIngestorCycles records a failed grading trigger without failing ingest 
   assert.equal(cycles[0]?.results[0]?.status, 'succeeded');
   assert.equal(cycles[0]?.gradingTrigger.status, 'failed');
   assert.equal(cycles[0]?.gradingTrigger.reason, 'api unavailable');
-  assert.equal(warnings.some((warning) => warning.includes('api unavailable')), true);
+  assert.equal(
+    warnings.some((warning) => warning.includes('api unavailable')),
+    true,
+  );
 });
 
 test('runIngestorCycles triggers grading even when resultsEventsCount is zero', async () => {
@@ -971,10 +1218,13 @@ test('runIngestorCycles records rate limit backoff telemetry in quota summary', 
         });
       }
 
-      return new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
+      return new Response(
+        JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
     },
   });
 
@@ -985,10 +1235,18 @@ test('runIngestorCycles records rate limit backoff telemetry in quota summary', 
   assert.equal(cycles[0]?.results[0]?.quota.requestCount, 3);
 
   const storedRuns = Array.from(
-    ((repositories.runs as unknown as { runs: Map<string, { details: unknown }> }).runs ?? new Map()).values(),
+    (
+      (
+        repositories.runs as unknown as {
+          runs: Map<string, { details: unknown }>;
+        }
+      ).runs ?? new Map()
+    ).values(),
   );
   const storedQuota = (
-    (storedRuns[0]?.details ?? {}) as { quota?: { rateLimitHitCount?: number; backoffMs?: number } }
+    (storedRuns[0]?.details ?? {}) as {
+      quota?: { rateLimitHitCount?: number; backoffMs?: number };
+    }
   ).quota;
   assert.equal(storedQuota?.rateLimitHitCount, 1);
   assert.equal(storedQuota?.backoffMs, 2000);
@@ -1047,7 +1305,10 @@ test('resolveSgoEntities upserts events and players idempotently', async () => {
   const first = await resolveSgoEntities(events, repositories);
   const second = await resolveSgoEntities(events, repositories);
   const resolvedEvents = await repositories.events.listUpcoming('NBA', 30);
-  const resolvedPlayers = await repositories.participants.listByType('player', 'NBA');
+  const resolvedPlayers = await repositories.participants.listByType(
+    'player',
+    'NBA',
+  );
 
   assert.equal(first.resolvedEventsCount, 1);
   assert.equal(first.resolvedParticipantsCount, 4);
@@ -1065,7 +1326,10 @@ test('resolveSgoEntities creates fallback player participants from provider offe
   });
 
   const summary = await resolveSgoEntities([event], repositories);
-  const resolvedPlayers = await repositories.participants.listByType('player', 'NBA');
+  const resolvedPlayers = await repositories.participants.listByType(
+    'player',
+    'NBA',
+  );
 
   assert.equal(summary.resolvedParticipantsCount, 3);
   assert.equal(resolvedPlayers.length, 1);
@@ -1080,7 +1344,10 @@ test('resolveSgoEntities ignores reserved home away fallback participant ids', a
   });
 
   const summary = await resolveSgoEntities([event], repositories);
-  const resolvedPlayers = await repositories.participants.listByType('player', 'NBA');
+  const resolvedPlayers = await repositories.participants.listByType(
+    'player',
+    'NBA',
+  );
 
   assert.equal(summary.resolvedParticipantsCount, 3);
   assert.equal(resolvedPlayers.length, 1);
@@ -1092,13 +1359,23 @@ test('resolveSgoEntities links home away and competitor participants to events',
   const event = createResolvedEvent();
 
   await resolveSgoEntities([event], repositories);
-  const resolvedEvent = await repositories.events.findByExternalId(event.providerEventId);
+  const resolvedEvent = await repositories.events.findByExternalId(
+    event.providerEventId,
+  );
   assert.ok(resolvedEvent);
 
-  const rows = await repositories.eventParticipants.listByEvent(resolvedEvent.id);
+  const rows = await repositories.eventParticipants.listByEvent(
+    resolvedEvent.id,
+  );
   assert.equal(rows.length, 4);
-  assert.equal(rows.some((row) => row.role === 'home'), true);
-  assert.equal(rows.some((row) => row.role === 'away'), true);
+  assert.equal(
+    rows.some((row) => row.role === 'home'),
+    true,
+  );
+  assert.equal(
+    rows.some((row) => row.role === 'away'),
+    true,
+  );
   assert.equal(rows.filter((row) => row.role === 'competitor').length, 2);
 });
 
@@ -1107,7 +1384,9 @@ test('resolveSgoEntities stores starts_at in event metadata', async () => {
   const event = createResolvedEvent();
 
   await resolveSgoEntities([event], repositories);
-  const resolvedEvent = await repositories.events.findByExternalId(event.providerEventId);
+  const resolvedEvent = await repositories.events.findByExternalId(
+    event.providerEventId,
+  );
 
   assert.equal(
     (resolvedEvent?.metadata as Record<string, unknown>).starts_at,
@@ -1296,10 +1575,7 @@ test('fetchSGOResults returns player stat rows for completed events only', async
     fetchImpl: async () =>
       new Response(
         JSON.stringify({
-          data: [
-            createCompletedSgoResultsEvent(),
-            createSgoApiEvent(),
-          ],
+          data: [createCompletedSgoResultsEvent(), createSgoApiEvent()],
         }),
         {
           status: 200,
@@ -1311,7 +1587,10 @@ test('fetchSGOResults returns player stat rows for completed events only', async
   assert.equal(results.length, 1);
   assert.equal(results[0]?.providerEventId, 'evt-entity-1');
   assert.equal(results[0]?.playerStats.length, 2);
-  assert.equal(results[0]?.playerStats[0]?.providerParticipantId, 'JALEN_BRUNSON_1_NBA');
+  assert.equal(
+    results[0]?.playerStats[0]?.providerParticipantId,
+    'JALEN_BRUNSON_1_NBA',
+  );
   assert.equal(results[0]?.playerStats[0]?.stats.points, 31);
 });
 
@@ -1335,7 +1614,38 @@ test('fetchSGOResults respects explicit historical window overrides', async () =
 
   const url = new URL(capturedUrl);
   assert.equal(url.searchParams.get('startsAfter'), '2026-03-20T00:00:00.000Z');
-  assert.equal(url.searchParams.get('startsBefore'), '2026-03-21T00:00:00.000Z');
+  assert.equal(
+    url.searchParams.get('startsBefore'),
+    '2026-03-21T00:00:00.000Z',
+  );
+  assert.equal(url.searchParams.get('finalized'), 'true');
+});
+
+test('fetchSGOResults can target provider event IDs for bounded repair', async () => {
+  let capturedUrl = '';
+
+  await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NHL',
+    snapshotAt: '2026-04-23T04:00:00.000Z',
+    startsAfter: '2026-04-22T04:00:00.000Z',
+    startsBefore: '2026-04-23T04:00:00.000Z',
+    providerEventIds: ['evt-finalized-1', 'evt-finalized-2'],
+    fetchImpl: async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const url = new URL(capturedUrl);
+  assert.equal(
+    url.searchParams.get('eventID'),
+    'evt-finalized-1,evt-finalized-2',
+  );
+  assert.equal(url.searchParams.get('finalized'), 'true');
 });
 
 test('fetchSGOResults follows nextCursor pagination and merges events from all pages', async () => {
@@ -1362,10 +1672,10 @@ test('fetchSGOResults follows nextCursor pagination and merges events from all p
 
       if (cursor === 'page-2-token') {
         // Second page: no nextCursor — end of pagination
-        return new Response(
-          JSON.stringify({ data: [page2Event] }),
-          { status: 200, headers: { 'content-type': 'application/json' } },
-        );
+        return new Response(JSON.stringify({ data: [page2Event] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
       }
 
       // First page: return nextCursor
@@ -1376,12 +1686,93 @@ test('fetchSGOResults follows nextCursor pagination and merges events from all p
     },
   });
 
-  assert.equal(capturedUrls.length, 2, 'should make exactly 2 requests (page 1 + page 2)');
-  assert.ok(!new URL(capturedUrls[0]!).searchParams.has('cursor'), 'first request should have no cursor param');
-  assert.equal(new URL(capturedUrls[1]!).searchParams.get('cursor'), 'page-2-token', 'second request should carry the cursor');
+  assert.equal(
+    capturedUrls.length,
+    2,
+    'should make exactly 2 requests (page 1 + page 2)',
+  );
+  assert.ok(
+    !new URL(capturedUrls[0]!).searchParams.has('cursor'),
+    'first request should have no cursor param',
+  );
+  assert.equal(
+    new URL(capturedUrls[1]!).searchParams.get('cursor'),
+    'page-2-token',
+    'second request should carry the cursor',
+  );
   assert.equal(results.length, 2, 'events from both pages should be merged');
-  assert.ok(results.some((r) => r.providerEventId === 'evt-page1-1'), 'page 1 event present');
-  assert.ok(results.some((r) => r.providerEventId === 'evt-page2-1'), 'page 2 event present');
+  assert.ok(
+    results.some((r) => r.providerEventId === 'evt-page1-1'),
+    'page 1 event present',
+  );
+  assert.ok(
+    results.some((r) => r.providerEventId === 'evt-page2-1'),
+    'page 2 event present',
+  );
+});
+
+test('fetchSGOResults extracts scored markets from explicit SGO odd and participant fields', async () => {
+  const results = await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-04-22T12:00:00.000Z',
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              eventID: 'evt-explicit-scored-markets',
+              leagueID: 'NBA',
+              sportID: 'BASKETBALL',
+              status: {
+                finalized: true,
+                started: true,
+                ended: true,
+                oddsAvailable: false,
+                startsAt: '2026-04-21T23:00:00.000Z',
+              },
+              odds: {
+                marketGroups: [
+                  {
+                    oddID: 'assists-JALEN_BRUNSON_1_NBA-game-ou-over',
+                    playerID: 'JALEN_BRUNSON_1_NBA',
+                    scoringSupported: true,
+                    score: 7,
+                  },
+                  {
+                    oddID: 'points-LEBRON_JAMES_1_NBA-game-ou-over',
+                    scoringSupported: true,
+                    score: 31,
+                  },
+                ],
+              },
+            },
+          ],
+        }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
+  });
+
+  assert.equal(results.length, 1);
+  assert.deepEqual(results[0]?.scoredMarkets, [
+    {
+      oddId: 'assists-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'assists-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 7,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'points-LEBRON_JAMES_1_NBA-game-ou-over',
+      baseMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'LEBRON_JAMES_1_NBA',
+      score: 31,
+      scoringSupported: true,
+    },
+  ]);
 });
 
 test('runHistoricalBackfill walks an inclusive date range and passes bounded daily windows', async () => {
@@ -1410,9 +1801,12 @@ test('runHistoricalBackfill walks an inclusive date range and passes bounded dai
         apiKey,
       };
 
-      if (options.snapshotAt !== undefined) call.snapshotAt = options.snapshotAt;
-      if (options.startsAfter !== undefined) call.startsAfter = options.startsAfter;
-      if (options.startsBefore !== undefined) call.startsBefore = options.startsBefore;
+      if (options.snapshotAt !== undefined)
+        call.snapshotAt = options.snapshotAt;
+      if (options.startsAfter !== undefined)
+        call.startsAfter = options.startsAfter;
+      if (options.startsBefore !== undefined)
+        call.startsBefore = options.startsBefore;
       if (options.resultsStartsAfter !== undefined) {
         call.resultsStartsAfter = options.resultsStartsAfter;
       }
@@ -1422,7 +1816,8 @@ test('runHistoricalBackfill walks an inclusive date range and passes bounded dai
       if (options.resultsLookbackHours !== undefined) {
         call.resultsLookbackHours = options.resultsLookbackHours;
       }
-      if (options.skipResults !== undefined) call.skipResults = options.skipResults;
+      if (options.skipResults !== undefined)
+        call.skipResults = options.skipResults;
 
       calls.push(call);
 
@@ -1525,13 +1920,25 @@ test('resolveAndInsertResults inserts game results and remains idempotent', asyn
   });
   await resolveSgoEntities([event], repositories);
 
-  const first = await resolveAndInsertResults([createCompletedEventResult()], repositories);
-  const resolvedEvent = await repositories.events.findByExternalId(event.providerEventId);
+  const first = await resolveAndInsertResults(
+    [createCompletedEventResult()],
+    repositories,
+  );
+  const resolvedEvent = await repositories.events.findByExternalId(
+    event.providerEventId,
+  );
   assert.ok(resolvedEvent);
 
-  const afterFirst = await repositories.gradeResults.listByEvent(resolvedEvent.id);
-  const second = await resolveAndInsertResults([createCompletedEventResult()], repositories);
-  const afterSecond = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+  const afterFirst = await repositories.gradeResults.listByEvent(
+    resolvedEvent.id,
+  );
+  const second = await resolveAndInsertResults(
+    [createCompletedEventResult()],
+    repositories,
+  );
+  const afterSecond = await repositories.gradeResults.listByEvent(
+    resolvedEvent.id,
+  );
 
   assert.equal(first.completedEvents, 1);
   assert.equal(first.insertedResults, 7);
@@ -1660,7 +2067,8 @@ test('resolveAndInsertResults inserts game-line result with null participant_id'
   assert.equal(summary.insertedResults, 1);
   assert.equal(summary.skippedResults, 0);
 
-  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
   assert.ok(resolvedEvent);
   const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
   assert.equal(results.length, 1);
@@ -1712,7 +2120,8 @@ test('resolveAndInsertResults deduplicates game-line results (idempotent for nul
   await resolveAndInsertResults([eventResult], repositories);
   await resolveAndInsertResults([eventResult], repositories);
 
-  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
   assert.ok(resolvedEvent);
   const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
   // Should still be exactly 1 row — deduplication by (event, null, market_key)
@@ -1725,10 +2134,13 @@ test('ingestLeague can skip results phase without breaking offer/entity ingest',
     snapshotAt: '2026-03-25T12:00:00.000Z',
     skipResults: true,
     fetchImpl: async () =>
-      new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
   });
 
   assert.equal(summary.status, 'succeeded');
@@ -1744,13 +2156,17 @@ test('ingestLeague resolves completed result events before inserting game result
   const summary = await ingestLeague('NBA', 'test-key', repositories, {
     snapshotAt: '2026-03-25T12:00:00.000Z',
     fetchImpl: async () =>
-      new Response(JSON.stringify({ data: [createCompletedSgoResultsEvent()] }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
+      new Response(
+        JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      ),
   });
 
-  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
   assert.ok(resolvedEvent);
 
   const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
@@ -1758,6 +2174,128 @@ test('ingestLeague resolves completed result events before inserting game result
   assert.ok(summary.insertedResultsCount > 0);
   assert.equal(summary.quota.requestCount, 2);
   assert.ok(results.length > 0);
+});
+
+test('resolveSgoEntities promotes in-progress SGO events when finalized results arrive', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  await resolveSgoEntities(
+    [
+      createResolvedEvent({
+        status: {
+          started: true,
+          completed: false,
+          cancelled: false,
+          ended: false,
+          live: true,
+          delayed: false,
+          finalized: false,
+          oddsAvailable: true,
+        },
+      }),
+    ],
+    repositories,
+  );
+
+  const inProgress = await repositories.events.findByExternalId('evt-entity-1');
+  assert.equal(inProgress?.status, 'in_progress');
+
+  await resolveSgoEntities(
+    [
+      createResolvedEvent({
+        status: {
+          started: true,
+          completed: false,
+          cancelled: false,
+          ended: true,
+          live: false,
+          delayed: false,
+          finalized: true,
+          oddsAvailable: false,
+        },
+      }),
+    ],
+    repositories,
+  );
+
+  const completed = await repositories.events.findByExternalId('evt-entity-1');
+  assert.equal(completed?.status, 'completed');
+});
+
+test('ingestLeague inserts SGO results for events that were already in progress locally', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  await resolveSgoEntities(
+    [
+      createResolvedEvent({
+        status: {
+          started: true,
+          completed: false,
+          cancelled: false,
+          ended: false,
+          live: true,
+          delayed: false,
+          finalized: false,
+          oddsAvailable: true,
+        },
+      }),
+    ],
+    repositories,
+  );
+
+  let fetchCall = 0;
+  const summary = await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    fetchImpl: async () => {
+      fetchCall += 1;
+      const data = fetchCall === 1 ? [] : [createCompletedSgoResultsEvent()];
+      return new Response(JSON.stringify({ data }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
+  assert.equal(resolvedEvent?.status, 'completed');
+
+  const results = resolvedEvent
+    ? await repositories.gradeResults.listByEvent(resolvedEvent.id)
+    : [];
+  assert.equal(summary.resultsEventsCount, 1);
+  assert.ok(results.some((row) => row.market_key === 'player_points_ou'));
+});
+
+test('ingestLeague resultsOnly skips offer ingest while resolving finalized SGO results', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  let fetchCall = 0;
+
+  const summary = await ingestLeague('NBA', 'test-key', repositories, {
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    resultsOnly: true,
+    fetchImpl: async () => {
+      fetchCall += 1;
+      return new Response(
+        JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+        {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        },
+      );
+    },
+  });
+
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
+  assert.ok(resolvedEvent);
+  const offers = await repositories.providerOffers.listByProvider('sgo');
+  const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
+
+  assert.equal(fetchCall, 1);
+  assert.equal(summary.eventsCount, 0);
+  assert.equal(summary.insertedCount, 0);
+  assert.equal(summary.resolvedEventsCount, 1);
+  assert.equal(offers.length, 0);
+  assert.ok(results.some((row) => row.market_key === 'player_points_ou'));
 });
 
 test('ingestLeague does not create player participants for home away market keys', async () => {
@@ -1809,7 +2347,10 @@ test('ingestLeague does not create player participants for home away market keys
       ),
   });
 
-  const resolvedPlayers = await repositories.participants.listByType('player', 'NBA');
+  const resolvedPlayers = await repositories.participants.listByType(
+    'player',
+    'NBA',
+  );
 
   assert.equal(resolvedPlayers.length, 1);
   assert.equal(resolvedPlayers[0]?.display_name, 'Jalen Brunson');
@@ -1952,7 +2493,8 @@ test('ingestLeague extracts scored markets from finalized event odds', async () 
       }),
   });
 
-  const resolvedEvent = await repositories.events.findByExternalId('evt-entity-1');
+  const resolvedEvent =
+    await repositories.events.findByExternalId('evt-entity-1');
   assert.ok(resolvedEvent, 'event should be stored');
 
   const results = await repositories.gradeResults.listByEvent(resolvedEvent.id);
@@ -1962,7 +2504,10 @@ test('ingestLeague extracts scored markets from finalized event odds', async () 
 
   // results-resolver now stores canonical market_type_id (matches pick.market) not raw SGO key
   const pointsRow = results.find((r) => r.market_key === 'player_points_ou');
-  assert.ok(pointsRow, 'grade result for player_points_ou should exist (canonical ID, not SGO key)');
+  assert.ok(
+    pointsRow,
+    'grade result for player_points_ou should exist (canonical ID, not SGO key)',
+  );
   assert.equal(pointsRow.actual_value, 28);
 });
 
@@ -2003,7 +2548,9 @@ test('results-resolver canonical alias maps include expanded player props and ga
     'receiving_receptions-all-game-ou': 'player_receptions_ou',
   };
 
-  for (const [marketKey, canonicalId] of Object.entries(expectedPlayerAliases)) {
+  for (const [marketKey, canonicalId] of Object.entries(
+    expectedPlayerAliases,
+  )) {
     assert.equal(SGO_MARKET_KEY_TO_CANONICAL_ID[marketKey], canonicalId);
   }
 
@@ -2025,7 +2572,9 @@ test('results-resolver canonical alias maps include expanded player props and ga
     'nhl-total-all-game': 'game_total_nhl',
   };
 
-  for (const [marketKey, canonicalId] of Object.entries(expectedGameLineAliases)) {
+  for (const [marketKey, canonicalId] of Object.entries(
+    expectedGameLineAliases,
+  )) {
     assert.equal(SGO_GAME_LINE_CANONICAL_ID[marketKey], canonicalId);
   }
 });
@@ -2207,13 +2756,55 @@ function createCompletedSgoResultsEvent() {
 
 function createCompletedEventResult(): SGOEventResult {
   const scoredMarkets: SGOMarketScore[] = [
-    { oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'points-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 31, scoringSupported: true },
-    { oddId: 'assists-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'assists-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 7, scoringSupported: true },
-    { oddId: 'rebounds-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'rebounds-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 4, scoringSupported: true },
-    { oddId: 'pra-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'pra-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 42, scoringSupported: true },
-    { oddId: 'pts-rebs-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'pts-rebs-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 35, scoringSupported: true },
-    { oddId: 'pts-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'pts-asts-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 38, scoringSupported: true },
-    { oddId: 'rebs-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over', baseMarketKey: 'rebs-asts-all-game-ou', providerParticipantId: 'JALEN_BRUNSON_1_NBA', score: 11, scoringSupported: true },
+    {
+      oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'points-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 31,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'assists-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'assists-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 7,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'rebounds-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'rebounds-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 4,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'pra-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'pra-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 42,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'pts-rebs-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'pts-rebs-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 35,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'pts-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'pts-asts-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 38,
+      scoringSupported: true,
+    },
+    {
+      oddId: 'rebs-asts-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+      baseMarketKey: 'rebs-asts-all-game-ou',
+      providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+      score: 11,
+      scoringSupported: true,
+    },
   ];
   return {
     providerEventId: 'evt-entity-1',
@@ -2342,7 +2933,11 @@ test('ingestOddsApiLeague: first ingest marks offers as is_opening=true', async 
   const rows = await repositories.providerOffers.listAll();
   assert.ok(rows.length > 0, 'expected offers to be inserted');
   for (const row of rows) {
-    assert.equal(row.is_opening, true, `expected is_opening=true on first ingest for ${row.idempotency_key}`);
+    assert.equal(
+      row.is_opening,
+      true,
+      `expected is_opening=true on first ingest for ${row.idempotency_key}`,
+    );
     assert.equal(row.is_closing, false);
   }
 });
@@ -2394,8 +2989,14 @@ test('ingestOddsApiLeague: second ingest of same combination marks is_opening=fa
   const openingRows = rows.filter((r) => r.is_opening);
   const nonOpeningRows = rows.filter((r) => !r.is_opening);
 
-  assert.ok(openingRows.length >= 1, 'expected at least one opening row from first ingest');
-  assert.ok(nonOpeningRows.length >= 1, 'expected at least one non-opening row from second ingest');
+  assert.ok(
+    openingRows.length >= 1,
+    'expected at least one opening row from first ingest',
+  );
+  assert.ok(
+    nonOpeningRows.length >= 1,
+    'expected at least one non-opening row from second ingest',
+  );
 });
 
 test('ingestOddsApiLeague: each book is tracked independently for is_opening', async () => {
@@ -2410,8 +3011,11 @@ test('ingestOddsApiLeague: each book is tracked independently for is_opening', a
     fetchImpl: makeMlbFetchResponse(),
   });
 
-  const pinnacleRows = await repositories.providerOffers.listByProvider('odds-api:pinnacle');
-  const dkRows = await repositories.providerOffers.listByProvider('odds-api:draftkings');
+  const pinnacleRows =
+    await repositories.providerOffers.listByProvider('odds-api:pinnacle');
+  const dkRows = await repositories.providerOffers.listByProvider(
+    'odds-api:draftkings',
+  );
 
   assert.ok(pinnacleRows.length > 0);
   assert.ok(dkRows.length > 0);
@@ -2433,7 +3037,11 @@ test('ingestOddsApiLeague: event that has not started has no is_closing rows', a
 
   const rows = await repositories.providerOffers.listAll();
   for (const row of rows) {
-    assert.equal(row.is_closing, false, `expected no closing rows for future event: ${row.idempotency_key}`);
+    assert.equal(
+      row.is_closing,
+      false,
+      `expected no closing rows for future event: ${row.idempotency_key}`,
+    );
   }
 });
 
@@ -2464,7 +3072,11 @@ test('ingestOddsApiLeague: started event marks latest pre-commence snapshot as i
   // so they are post-game — markClosingLines looks for rows < commenceTime.
   // There are none yet, so closing count = 0. This verifies the guard works.
   const closingRows = preGameOffers.filter((r) => r.is_closing);
-  assert.equal(closingRows.length, 0, 'no pre-game rows exist yet, so no closing marks expected');
+  assert.equal(
+    closingRows.length,
+    0,
+    'no pre-game rows exist yet, so no closing marks expected',
+  );
 });
 
 test('ingestOddsApiLeague: market last_update is used for closing tags when bookmaker update is later', async () => {
@@ -2503,7 +3115,11 @@ test('ingestOddsApiLeague: market last_update is used for closing tags when book
   assert.ok(rows.length > 0, 'expected started-event offers to be inserted');
   for (const row of rows) {
     assert.equal(row.snapshot_at, '2026-04-04T12:20:00.000Z');
-    assert.equal(row.is_closing, true, `expected closing row for ${row.idempotency_key}`);
+    assert.equal(
+      row.is_closing,
+      true,
+      `expected closing row for ${row.idempotency_key}`,
+    );
   }
 });
 
@@ -2540,7 +3156,9 @@ test('mapOddsApiOfferToProviderOfferInsert: is_opening=false when combination al
     snapshotAt: '2026-04-04T13:00:00.000Z',
   };
 
-  const existing = new Set(['odds-api:pinnacle:mlb-test-event:moneyline:Yankees']);
+  const existing = new Set([
+    'odds-api:pinnacle:mlb-test-event:moneyline:Yankees',
+  ]);
   const result = mapOddsApiOfferToProviderOfferInsert(offer, existing);
   assert.equal(result.isOpening, false);
   assert.equal(result.isClosing, false);
@@ -2584,12 +3202,18 @@ test('normalizeSGOPairedProp passes bookmakerKey through to NormalizedProviderOf
   const withKey = normalizeSGOPairedProp({ ...base, bookmakerKey: 'pinnacle' });
   assert.ok(withKey);
   assert.equal(withKey.bookmakerKey, 'pinnacle');
-  assert.ok(withKey.idempotencyKey.includes('pinnacle'), 'idempotencyKey should include bookmakerKey');
+  assert.ok(
+    withKey.idempotencyKey.includes('pinnacle'),
+    'idempotencyKey should include bookmakerKey',
+  );
 
   const noKey = normalizeSGOPairedProp({ ...base });
   assert.ok(noKey);
   assert.equal(noKey.bookmakerKey, null);
-  assert.ok(!noKey.idempotencyKey.includes('pinnacle'), 'consensus idempotencyKey should not include bookmakerKey');
+  assert.ok(
+    !noKey.idempotencyKey.includes('pinnacle'),
+    'consensus idempotencyKey should not include bookmakerKey',
+  );
 
   // Consensus and Pinnacle rows must have different idempotency keys
   assert.notEqual(withKey.idempotencyKey, noKey.idempotencyKey);
@@ -2613,8 +3237,20 @@ test('findClosingLine filters by bookmakerKey when specified', async () => {
   };
 
   await repository.upsertBatch([
-    { ...base, providerKey: 'sgo', idempotencyKey: 'bk-consensus', bookmakerKey: null },
-    { ...base, providerKey: 'sgo', idempotencyKey: 'bk-pinnacle', bookmakerKey: 'pinnacle', overOdds: -115, underOdds: 105 },
+    {
+      ...base,
+      providerKey: 'sgo',
+      idempotencyKey: 'bk-consensus',
+      bookmakerKey: null,
+    },
+    {
+      ...base,
+      providerKey: 'sgo',
+      idempotencyKey: 'bk-pinnacle',
+      bookmakerKey: 'pinnacle',
+      overOdds: -115,
+      underOdds: 105,
+    },
   ]);
 
   const before = '2026-03-26T00:00:00.000Z';

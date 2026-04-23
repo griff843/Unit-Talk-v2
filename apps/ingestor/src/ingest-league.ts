@@ -1,13 +1,20 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
-import { CircuitBreaker, type CircuitBreakerOptions } from './circuit-breaker.js';
-import { resolveSgoEntities } from './entity-resolver.js';
-import { fetchSGOResultsWithTelemetry, type SGORequestTelemetry } from './sgo-fetcher.js';
-import { resolveAndInsertResults } from './results-resolver.js';
-import { fetchAndPairSGOProps, type SGOFetchOptions, type SGOFetchResult } from './sgo-fetcher.js';
 import {
-  buildProviderOfferIdempotencyKey,
-  normalizeSGOPairedProp,
-} from './sgo-normalizer.js';
+  CircuitBreaker,
+  type CircuitBreakerOptions,
+} from './circuit-breaker.js';
+import { resolveSgoEntities } from './entity-resolver.js';
+import {
+  fetchSGOResultsWithTelemetry,
+  type SGORequestTelemetry,
+} from './sgo-fetcher.js';
+import { resolveAndInsertResults } from './results-resolver.js';
+import {
+  fetchAndPairSGOProps,
+  type SGOFetchOptions,
+  type SGOFetchResult,
+} from './sgo-fetcher.js';
+import { normalizeSGOPairedProp } from './sgo-normalizer.js';
 
 export interface IngestLeagueOptions {
   fetchImpl?: SGOFetchOptions['fetchImpl'];
@@ -16,8 +23,10 @@ export interface IngestLeagueOptions {
   startsBefore?: string;
   resultsStartsAfter?: string;
   resultsStartsBefore?: string;
+  providerEventIds?: string[];
   resultsLookbackHours?: number;
   skipResults?: boolean;
+  resultsOnly?: boolean;
   sleep?: (ms: number) => Promise<void>;
   logger?: Pick<Console, 'warn' | 'info'>;
   /** Circuit breaker options for odds API calls. */
@@ -25,10 +34,13 @@ export interface IngestLeagueOptions {
   /** Pre-built circuit breakers per league (managed by the runner for cross-cycle persistence). */
   circuitBreakers?: {
     odds?: CircuitBreaker<SGOFetchResult>;
-    results?: CircuitBreaker<Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>>;
+    results?: CircuitBreaker<
+      Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>
+    >;
   };
   /**
-   * When true, fetches in historical mode: finalized=true + includeAltLine=true.
+   * When true, fetches in historical mode with finalized events plus SGO
+   * alt-line and open/close bookmaker fields.
    * Use for backfill of completed events. Live ingest should leave this unset.
    */
   historical?: boolean;
@@ -76,7 +88,9 @@ export async function ingestLeague(
   options: IngestLeagueOptions = {},
 ): Promise<IngestLeagueSummary> {
   if (!apiKey) {
-    options.logger?.warn?.(`SGO_API_KEY missing; skipping ingest for ${league}`);
+    options.logger?.warn?.(
+      `SGO_API_KEY missing; skipping ingest for ${league}`,
+    );
     return {
       league,
       status: 'skipped',
@@ -108,102 +122,125 @@ export async function ingestLeague(
   });
 
   try {
-    const oddsFetchFn = () =>
-      fetchAndPairSGOProps({
-        apiKey,
-        league,
+    let fetched: SGOFetchResult;
+    let resolved = { resolvedEventsCount: 0, resolvedParticipantsCount: 0 };
+    let upsert = { insertedCount: 0, updatedCount: 0 };
+    let normalizedCount = 0;
+    let skippedCount = 0;
+
+    if (options.resultsOnly) {
+      fetched = createEmptyFetchResult(snapshotAt);
+    } else {
+      const oddsFetchFn = () =>
+        fetchAndPairSGOProps({
+          apiKey,
+          league,
+          snapshotAt,
+          ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+          ...(options.startsBefore
+            ? { startsBefore: options.startsBefore }
+            : {}),
+          ...(options.providerEventIds
+            ? { providerEventIds: options.providerEventIds }
+            : {}),
+          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+          ...(options.sleep ? { sleep: options.sleep } : {}),
+          ...(options.historical ? { historical: true } : {}),
+        });
+
+      const oddsCb =
+        options.circuitBreakers?.odds ??
+        new CircuitBreaker(
+          oddsFetchFn,
+          createEmptyFetchResult(snapshotAt),
+          options.circuitBreaker,
+        );
+      fetched = await oddsCb.call();
+
+      resolved = await resolveSgoEntities(fetched.events, repositories, {
+        ...(options.logger ? { logger: options.logger } : {}),
+        providerKey: 'sgo',
+        ingestionCycleRunId: run.id,
         snapshotAt,
-        ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
-        ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
-        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-        ...(options.sleep ? { sleep: options.sleep } : {}),
-        ...(options.historical ? { historical: true } : {}),
+        historical: options.historical ?? false,
       });
 
-    const oddsCb = options.circuitBreakers?.odds ??
-      new CircuitBreaker(oddsFetchFn, createEmptyFetchResult(snapshotAt), options.circuitBreaker);
-    const fetched = await oddsCb.call();
+      const providerEventIds = fetched.events
+        .map((event) => event.providerEventId)
+        .filter((providerEventId) => providerEventId.length > 0);
+      const existingCombinations =
+        await repositories.providerOffers.findExistingCombinations(
+          providerEventIds,
+          {
+            includeBookmakerKey: true,
+            beforeSnapshotAt: snapshotAt,
+          },
+        );
+      const seenCombinations = new Set(existingCombinations);
 
-    const resolved = await resolveSgoEntities(fetched.events, repositories, {
-      ...(options.logger ? { logger: options.logger } : {}),
-      providerKey: 'sgo',
-      ingestionCycleRunId: run.id,
-      snapshotAt,
-      historical: options.historical ?? false,
-    });
-
-    const providerEventIds = fetched.events
-      .map((event) => event.providerEventId)
-      .filter((providerEventId) => providerEventId.length > 0);
-    const existingCombinations = await repositories.providerOffers.findExistingCombinations(
-      providerEventIds,
-      {
-        includeBookmakerKey: true,
-        beforeSnapshotAt: snapshotAt,
-      },
-    );
-    const seenCombinations = new Set(existingCombinations);
-
-    const normalized = fetched.pairedProps
-      .map((prop) => normalizeSGOPairedProp(prop))
-      .filter((offer) => offer !== null)
-      .map((offer) => {
-        const combinationKey = buildSgoCombinationKey({
-          providerKey: offer.providerKey,
-          providerEventId: offer.providerEventId,
-          providerMarketKey: offer.providerMarketKey,
-          providerParticipantId: offer.providerParticipantId,
-          bookmakerKey: offer.bookmakerKey,
-        });
-        const isOpening = !seenCombinations.has(combinationKey);
-        seenCombinations.add(combinationKey);
-        return {
-          ...offer,
-          isOpening,
-          idempotencyKey: buildProviderOfferIdempotencyKey({
+      const normalized = fetched.pairedProps
+        .map((prop) => normalizeSGOPairedProp(prop))
+        .filter((offer) => offer !== null)
+        .map((offer) => {
+          const combinationKey = buildSgoCombinationKey({
             providerKey: offer.providerKey,
-          providerEventId: offer.providerEventId,
-          providerMarketKey: offer.providerMarketKey,
-          providerParticipantId: offer.providerParticipantId,
-          line: offer.line,
-          snapshotAt: offer.snapshotAt,
-          bookmakerKey: offer.bookmakerKey,
-        }),
-      };
-      });
+            providerEventId: offer.providerEventId,
+            providerMarketKey: offer.providerMarketKey,
+            providerParticipantId: offer.providerParticipantId,
+            bookmakerKey: offer.bookmakerKey,
+          });
+          const isOpening =
+            offer.isOpening || !seenCombinations.has(combinationKey);
+          seenCombinations.add(combinationKey);
+          return {
+            ...offer,
+            isOpening,
+          };
+        });
 
-    const upsert = await repositories.providerOffers.upsertBatch(normalized);
-    const startedEvents = await repositories.events.listStartedBySnapshot(snapshotAt);
-    const closingCandidates = new Map<string, { providerEventId: string; commenceTime: string }>();
-    for (const event of fetched.events) {
-      if (typeof event.startsAt === 'string' && event.startsAt.length > 0) {
-        closingCandidates.set(event.providerEventId, {
-          providerEventId: event.providerEventId,
-          commenceTime: event.startsAt,
+      upsert = await repositories.providerOffers.upsertBatch(normalized);
+      normalizedCount = normalized.length;
+      const startedEvents =
+        await repositories.events.listStartedBySnapshot(snapshotAt);
+      const closingCandidates = new Map<
+        string,
+        { providerEventId: string; commenceTime: string }
+      >();
+      for (const event of fetched.events) {
+        if (typeof event.startsAt === 'string' && event.startsAt.length > 0) {
+          closingCandidates.set(event.providerEventId, {
+            providerEventId: event.providerEventId,
+            commenceTime: event.startsAt,
+          });
+        }
+      }
+      for (const event of startedEvents) {
+        if (!event.external_id) {
+          continue;
+        }
+        const commenceTime = event.metadata?.starts_at;
+        if (typeof commenceTime !== 'string' || commenceTime.length === 0) {
+          continue;
+        }
+        closingCandidates.set(event.external_id, {
+          providerEventId: event.external_id,
+          commenceTime,
         });
       }
+      await repositories.providerOffers.markClosingLines(
+        [...closingCandidates.values()],
+        snapshotAt,
+        { includeBookmakerKey: true },
+      );
+      skippedCount = fetched.pairedProps.length - normalized.length;
     }
-    for (const event of startedEvents) {
-      if (!event.external_id) {
-        continue;
-      }
-      const commenceTime = event.metadata?.starts_at;
-      if (typeof commenceTime !== 'string' || commenceTime.length === 0) {
-        continue;
-      }
-      closingCandidates.set(event.external_id, {
-        providerEventId: event.external_id,
-        commenceTime,
-      });
-    }
-    await repositories.providerOffers.markClosingLines(
-      [...closingCandidates.values()],
-      snapshotAt,
-      { includeBookmakerKey: true },
-    );
-    const skippedCount = fetched.pairedProps.length - normalized.length;
-    const emptyResults = { results: [], requestTelemetry: createEmptyRequestTelemetry('results') };
-    let fetchedResults: Awaited<ReturnType<typeof fetchSGOResultsWithTelemetry>>;
+    const emptyResults = {
+      results: [],
+      requestTelemetry: createEmptyRequestTelemetry('results'),
+    };
+    let fetchedResults: Awaited<
+      ReturnType<typeof fetchSGOResultsWithTelemetry>
+    >;
     if (options.skipResults) {
       fetchedResults = emptyResults;
     } else {
@@ -212,8 +249,15 @@ export async function ingestLeague(
           apiKey,
           league,
           snapshotAt,
-          ...(options.resultsStartsAfter ? { startsAfter: options.resultsStartsAfter } : {}),
-          ...(options.resultsStartsBefore ? { startsBefore: options.resultsStartsBefore } : {}),
+          ...(options.resultsStartsAfter
+            ? { startsAfter: options.resultsStartsAfter }
+            : {}),
+          ...(options.resultsStartsBefore
+            ? { startsBefore: options.resultsStartsBefore }
+            : {}),
+          ...(options.providerEventIds
+            ? { providerEventIds: options.providerEventIds }
+            : {}),
           ...(options.resultsLookbackHours !== undefined
             ? { lookbackHours: options.resultsLookbackHours }
             : {}),
@@ -221,26 +265,42 @@ export async function ingestLeague(
           ...(options.sleep ? { sleep: options.sleep } : {}),
         });
 
-      const resultsCb = options.circuitBreakers?.results ??
-        new CircuitBreaker(resultsFetchFn, emptyResults, options.circuitBreaker);
+      const resultsCb =
+        options.circuitBreakers?.results ??
+        new CircuitBreaker(
+          resultsFetchFn,
+          emptyResults,
+          options.circuitBreaker,
+        );
       fetchedResults = await resultsCb.call();
     }
 
     const completedResultEvents = fetchedResults.results
       .map((result) => result.resolvedEvent)
-      .filter((event): event is NonNullable<(typeof fetchedResults.results)[number]['resolvedEvent']> =>
-        event !== null,
+      .filter(
+        (
+          event,
+        ): event is NonNullable<
+          (typeof fetchedResults.results)[number]['resolvedEvent']
+        > => event !== null,
       );
 
-    if (completedResultEvents.length > 0) {
-      await resolveSgoEntities(completedResultEvents, repositories, {
-        ...(options.logger ? { logger: options.logger } : {}),
-        providerKey: 'sgo',
-        ingestionCycleRunId: run.id,
-        snapshotAt,
-        historical: options.historical ?? false,
-      });
-    }
+    const resultResolved =
+      completedResultEvents.length > 0
+        ? await resolveSgoEntities(completedResultEvents, repositories, {
+            ...(options.logger ? { logger: options.logger } : {}),
+            providerKey: 'sgo',
+            ingestionCycleRunId: run.id,
+            snapshotAt,
+            historical: options.historical ?? false,
+          })
+        : { resolvedEventsCount: 0, resolvedParticipantsCount: 0 };
+
+    const resolvedEventsCount =
+      resolved.resolvedEventsCount + resultResolved.resolvedEventsCount;
+    const resolvedParticipantsCount =
+      resolved.resolvedParticipantsCount +
+      resultResolved.resolvedParticipantsCount;
 
     const resolvedResults = options.skipResults
       ? {
@@ -250,7 +310,11 @@ export async function ingestLeague(
           skippedResults: 0,
           errors: 0,
         }
-      : await resolveAndInsertResults(fetchedResults.results, repositories, options.logger);
+      : await resolveAndInsertResults(
+          fetchedResults.results,
+          repositories,
+          options.logger,
+        );
 
     const quota = summarizeQuotaTelemetry([
       fetched.requestTelemetry,
@@ -266,12 +330,12 @@ export async function ingestLeague(
         snapshotAt,
         eventsCount: fetched.eventsCount,
         pairedCount: fetched.pairedProps.length,
-        normalizedCount: normalized.length,
+        normalizedCount,
         insertedCount: upsert.insertedCount,
         updatedCount: upsert.updatedCount,
         skippedCount,
-        resolvedEventsCount: resolved.resolvedEventsCount,
-        resolvedParticipantsCount: resolved.resolvedParticipantsCount,
+        resolvedEventsCount,
+        resolvedParticipantsCount,
         resultsEventsCount: resolvedResults.completedEvents,
         insertedResultsCount: resolvedResults.insertedResults,
         skippedResultsCount: resolvedResults.skippedResults,
@@ -285,12 +349,12 @@ export async function ingestLeague(
       status: 'succeeded',
       eventsCount: fetched.eventsCount,
       pairedCount: fetched.pairedProps.length,
-      normalizedCount: normalized.length,
+      normalizedCount,
       insertedCount: upsert.insertedCount,
       updatedCount: upsert.updatedCount,
       skippedCount,
-      resolvedEventsCount: resolved.resolvedEventsCount,
-      resolvedParticipantsCount: resolved.resolvedParticipantsCount,
+      resolvedEventsCount,
+      resolvedParticipantsCount,
       resultsEventsCount: resolvedResults.completedEvents,
       insertedResultsCount: resolvedResults.insertedResults,
       skippedResultsCount: resolvedResults.skippedResults,
@@ -312,28 +376,33 @@ export async function ingestLeague(
   }
 }
 
-function summarizeQuotaTelemetry(telemetry: SGORequestTelemetry[]): IngestQuotaSummary {
+function summarizeQuotaTelemetry(
+  telemetry: SGORequestTelemetry[],
+): IngestQuotaSummary {
   const meaningful = telemetry.filter((entry) => entry.requestCount > 0);
   if (meaningful.length === 0) {
     return createEmptyQuotaSummary();
   }
 
-  return meaningful.reduce<IngestQuotaSummary>((summary, entry) => ({
-    provider: 'sgo',
-    requestCount: summary.requestCount + entry.requestCount,
-    successfulRequests: summary.successfulRequests + entry.successfulRequests,
-    creditsUsed: summary.creditsUsed + entry.creditsUsed,
-    limit: entry.limit ?? summary.limit,
-    remaining: entry.remaining ?? summary.remaining,
-    resetAt: entry.resetAt ?? summary.resetAt,
-    lastStatus: entry.lastStatus ?? summary.lastStatus,
-    rateLimitHitCount: summary.rateLimitHitCount + entry.rateLimitHitCount,
-    backoffCount: summary.backoffCount + entry.backoffCount,
-    backoffMs: summary.backoffMs + entry.backoffMs,
-    retryAfterMs: entry.retryAfterMs ?? summary.retryAfterMs,
-    throttled: summary.throttled || entry.throttled,
-    headersSeen: summary.headersSeen || entry.headersSeen,
-  }), createEmptyQuotaSummary());
+  return meaningful.reduce<IngestQuotaSummary>(
+    (summary, entry) => ({
+      provider: 'sgo',
+      requestCount: summary.requestCount + entry.requestCount,
+      successfulRequests: summary.successfulRequests + entry.successfulRequests,
+      creditsUsed: summary.creditsUsed + entry.creditsUsed,
+      limit: entry.limit ?? summary.limit,
+      remaining: entry.remaining ?? summary.remaining,
+      resetAt: entry.resetAt ?? summary.resetAt,
+      lastStatus: entry.lastStatus ?? summary.lastStatus,
+      rateLimitHitCount: summary.rateLimitHitCount + entry.rateLimitHitCount,
+      backoffCount: summary.backoffCount + entry.backoffCount,
+      backoffMs: summary.backoffMs + entry.backoffMs,
+      retryAfterMs: entry.retryAfterMs ?? summary.retryAfterMs,
+      throttled: summary.throttled || entry.throttled,
+      headersSeen: summary.headersSeen || entry.headersSeen,
+    }),
+    createEmptyQuotaSummary(),
+  );
 }
 
 function createEmptyQuotaSummary(): IngestQuotaSummary {

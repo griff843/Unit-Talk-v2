@@ -105,7 +105,10 @@ export interface ResultsResolutionSummary {
 
 export async function resolveAndInsertResults(
   eventResults: SGOEventResult[],
-  repositories: Pick<IngestorRepositoryBundle, 'events' | 'participants' | 'gradeResults'>,
+  repositories: Pick<
+    IngestorRepositoryBundle,
+    'events' | 'participants' | 'gradeResults'
+  >,
   logger?: Pick<Console, 'warn' | 'info'>,
 ): Promise<ResultsResolutionSummary> {
   const summary: ResultsResolutionSummary = {
@@ -116,9 +119,16 @@ export async function resolveAndInsertResults(
     errors: 0,
   };
 
+  const participantByProviderId = new Map<
+    string,
+    Awaited<ReturnType<typeof repositories.participants.findByExternalId>>
+  >();
+
   for (const eventResult of eventResults) {
     try {
-      const event = await repositories.events.findByExternalId(eventResult.providerEventId);
+      const event = await repositories.events.findByExternalId(
+        eventResult.providerEventId,
+      );
       if (!event || event.status !== 'completed') {
         summary.skippedResults += eventResult.scoredMarkets.length;
         continue;
@@ -130,7 +140,8 @@ export async function resolveAndInsertResults(
       for (const scoredMarket of eventResult.scoredMarkets) {
         if (scoredMarket.providerParticipantId === null) {
           const canonicalMarketKey =
-            SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ?? scoredMarket.baseMarketKey;
+            SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ??
+            scoredMarket.baseMarketKey;
 
           await repositories.gradeResults.insert({
             eventId: event.id,
@@ -144,16 +155,26 @@ export async function resolveAndInsertResults(
           continue;
         }
 
-        const participant = await repositories.participants.findByExternalId(
+        let participant = participantByProviderId.get(
           scoredMarket.providerParticipantId,
         );
+        if (participant === undefined) {
+          participant = await repositories.participants.findByExternalId(
+            scoredMarket.providerParticipantId,
+          );
+          participantByProviderId.set(
+            scoredMarket.providerParticipantId,
+            participant,
+          );
+        }
         if (!participant) {
           summary.skippedResults += 1;
           continue;
         }
 
         const canonicalMarketKey =
-          SGO_MARKET_KEY_TO_CANONICAL_ID[scoredMarket.baseMarketKey] ?? scoredMarket.baseMarketKey;
+          SGO_MARKET_KEY_TO_CANONICAL_ID[scoredMarket.baseMarketKey] ??
+          scoredMarket.baseMarketKey;
 
         await repositories.gradeResults.insert({
           eventId: event.id,
