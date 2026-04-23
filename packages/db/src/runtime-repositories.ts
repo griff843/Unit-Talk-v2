@@ -1334,6 +1334,12 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       .slice(0, limit);
   }
 
+  async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
+    return Array.from(this.offers.values()).filter(
+      (offer) => offer.is_closing && offer.snapshot_at >= since,
+    );
+  }
+
   async findClosingLine(
     criteria: ClosingLineLookupCriteria,
   ): Promise<ProviderOfferRecord | null> {
@@ -4314,6 +4320,20 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       throw new Error(
         `Failed to list recent provider offers: ${error.message}`,
       );
+    }
+
+    return data ?? [];
+  }
+
+  async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
+    const { data, error } = await this.client
+      .from('provider_offers')
+      .select('*')
+      .eq('is_closing', true)
+      .gte('snapshot_at', since);
+
+    if (error) {
+      throw new Error(`Failed to list closing offers: ${error.message}`);
     }
 
     return data ?? [];

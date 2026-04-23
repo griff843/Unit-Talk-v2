@@ -564,6 +564,14 @@ export interface ProviderOfferRepository {
    */
   listRecentOffers(since: string, limit?: number): Promise<ProviderOfferRecord[]>;
   /**
+   * Returns all offers with is_closing=true and snapshot_at >= since.
+   * No row limit — ensures closing-line offers are always included in
+   * materializer runs regardless of total offer volume. The recent-offer
+   * cap can exclude closing rows because they carry earlier timestamps
+   * (pre-commence snapshots) that get sorted behind live offers.
+   */
+  listClosingOffers(since: string): Promise<ProviderOfferRecord[]>;
+  /**
    * Returns a Set of combination keys in the format
    * "providerKey:providerEventId:marketKey:participantId" for which at least
    * one row already exists in provider_offers for the given event IDs.
