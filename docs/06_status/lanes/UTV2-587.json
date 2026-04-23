@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-587",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-587-pipeline-freshness-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-587/evidence.json",
+    "docs/06_status/lanes/UTV2-587.json"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-587/evidence.json",
+    "docs/06_status/lanes/UTV2-587.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-587/evidence.json"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-04-22T13:00:00.000Z",
+  "heartbeat_at": "2026-04-22T13:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

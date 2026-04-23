@@ -1993,6 +1993,9 @@ export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapsho
     input: ModelHealthSnapshotCreateInput,
   ): Promise<ModelHealthSnapshotRecord> {
     const now = new Date().toISOString();
+    const mergedMeta: Record<string, unknown> = { ...(input.metadata ?? {}) };
+    if (input.transitionAt !== undefined) mergedMeta['transitionAt'] = input.transitionAt;
+
     const record: ModelHealthSnapshotRecord = {
       id: crypto.randomUUID(),
       model_id: input.modelId,
@@ -2005,7 +2008,7 @@ export class InMemoryModelHealthSnapshotRepository implements ModelHealthSnapsho
       drift_score: input.driftScore ?? null,
       calibration_score: input.calibrationScore ?? null,
       alert_level: input.alertLevel ?? 'none',
-      metadata: toJsonObject(input.metadata ?? {}),
+      metadata: toJsonObject(mergedMeta),
       created_at: now,
     };
 

@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-715",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "claude/utv2-715-clv-moneyline-inferselectionside",
+  "base_branch": "main",
+  "commit_sha": "46d10197c4ef407bee1019b7c33f3781bba94702",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/442",
+  "files_changed": [
+    "apps/api/src/clv-service.ts",
+    "apps/api/src/clv-service.test.ts"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/clv-service.ts",
+    "apps/api/src/clv-service.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "closed",
+  "started_at": "2026-04-22T17:32:18Z",
+  "heartbeat_at": "2026-04-22T18:00:00Z",
+  "closed_at": "2026-04-22T17:58:44Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

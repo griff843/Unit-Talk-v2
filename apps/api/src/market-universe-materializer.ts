@@ -25,9 +25,10 @@ import type { IMarketUniverseRepository, MarketUniverseUpsertInput, ProviderOffe
 // Phase 2: staleness threshold is hardcoded at 2 hours (see contract §4)
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 
-// How far back to look for provider_offers rows per run. Default: 24 hours.
-// This is a safety net for batch size — all offers within the window are materialised.
-const DEFAULT_LOOKBACK_HOURS = 24;
+// How far back to look for provider_offers rows per run.
+// 72h ensures closing-line offers (marked after game start) are picked up even when
+// there is a multi-day gap between the ingest cycle and the materializer run.
+const DEFAULT_LOOKBACK_HOURS = 72;
 
 // Max rows to process per run as a safety cap
 const DEFAULT_MAX_ROWS = 5_000;

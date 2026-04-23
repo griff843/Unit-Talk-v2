@@ -19,6 +19,8 @@ export interface CLVResult {
   providerKey: string;
   /** True when opening line was used as CLV proxy (no closing line available). */
   isOpeningLineFallback?: boolean;
+  /** True when only one side of the closing line was available — devig skipped, raw implied used. */
+  isSingleSideDevig?: boolean;
 }
 
 export type CLVComputationStatus =
@@ -48,6 +50,8 @@ export interface CLVPreResolvedContext {
   providerEventId: string;
   eventStartTime: string;
   participantExternalId: string | null;
+  /** Optional: participant home/away role for moneyline CLV side selection. */
+  participantSide?: 'home' | 'away' | null;
 }
 
 export interface ComputeAndAttachClvOptions {
@@ -60,6 +64,8 @@ interface PickEventContext {
   providerEventId: string;
   eventStartTime: string;
   participantExternalId: string | null;
+  /** home/away role for the resolved participant. Used for moneyline CLV side selection. */
+  participantSide: 'home' | 'away' | null;
 }
 
 export async function computeAndAttachCLV(
@@ -106,18 +112,26 @@ export async function computeCLVOutcome(
     };
   }
 
-  const selectionSide = inferSelectionSide(pick.selection);
-  if (!selectionSide) {
-    return {
-      result: null,
-      status: 'missing_selection_side',
-      resolvedMarketKey: null,
-      availableMarkets: [],
-    };
+  const isMoneyline = pick.market === 'moneyline';
+
+  // For O/U markets, infer side before event resolution (cheap check).
+  // For moneyline, defer side inference until after event context so we can
+  // use the participant's home/away role from event_participants.
+  if (!isMoneyline) {
+    const selectionSide = inferSelectionSide(pick.selection);
+    if (!selectionSide) {
+      return {
+        result: null,
+        status: 'missing_selection_side',
+        resolvedMarketKey: null,
+        availableMarkets: [],
+      };
+    }
   }
 
   const eventContext: PickEventContext | null = options.preResolvedContext
-    ?? await resolvePickEventContext(pick, repositories);
+    ? { ...options.preResolvedContext, participantSide: options.preResolvedContext.participantSide ?? null }
+    : await resolvePickEventContext(pick, repositories);
   if (!eventContext) {
     return {
       result: null,
@@ -138,7 +152,9 @@ export async function computeCLVOutcome(
   const baseLineCriteria = {
     providerEventId: eventContext.providerEventId,
     providerMarketKey: resolvedMarketKey,
-    providerParticipantId: eventContext.participantExternalId,
+    // Moneyline offers are event-level (no participant), so query with null.
+    // O/U player-prop offers are participant-scoped.
+    providerParticipantId: isMoneyline ? null : eventContext.participantExternalId,
     before: eventContext.eventStartTime,
   };
 
@@ -177,7 +193,26 @@ export async function computeCLVOutcome(
     };
   }
 
-  const pricedSide = readClosingSideOdds(closingLine, selectionSide);
+  // Resolve final selection side for odds column mapping:
+  // - O/U picks: 'over' or 'under' from selection string (already validated above)
+  // - Moneyline: 'home' role → 'over' column, 'away' role → 'under' column
+  let resolvedSide: 'over' | 'under';
+  if (isMoneyline) {
+    const participantSide = eventContext.participantSide;
+    if (!participantSide) {
+      return {
+        result: null,
+        status: 'missing_selection_side',
+        resolvedMarketKey,
+        availableMarkets: [],
+      };
+    }
+    resolvedSide = participantSide === 'home' ? 'over' : 'under';
+  } else {
+    resolvedSide = inferSelectionSide(pick.selection)!;
+  }
+
+  const pricedSide = readClosingSideOdds(closingLine, resolvedSide);
   if (!pricedSide) {
     return {
       result: null,
@@ -190,18 +225,32 @@ export async function computeCLVOutcome(
   const pickImpliedProb = americanToImplied(pick.odds as number);
   const overImplied = americanToImplied(closingLine.over_odds as number);
   const underImplied = americanToImplied(closingLine.under_odds as number);
-  const devigged = applyDevig(overImplied, underImplied, 'proportional');
-  if (!devigged) {
-    return {
-      result: null,
-      status: 'devig_failed',
-      resolvedMarketKey,
-      availableMarkets: [],
-    };
+  const bothSidesAvailable = Number.isFinite(overImplied) && Number.isFinite(underImplied);
+  const devigged = bothSidesAvailable
+    ? applyDevig(overImplied, underImplied, 'proportional')
+    : null;
+
+  let closingImpliedProb: number;
+  let isSingleSideDevig = false;
+
+  if (devigged) {
+    closingImpliedProb = resolvedSide === 'over' ? devigged.overFair : devigged.underFair;
+  } else {
+    // Only one closing side available — skip devig and use raw implied probability.
+    // This occurs when the ingestor captured only one side of the moneyline market.
+    const rawImplied = resolvedSide === 'over' ? overImplied : underImplied;
+    if (!Number.isFinite(rawImplied)) {
+      return {
+        result: null,
+        status: 'devig_failed',
+        resolvedMarketKey,
+        availableMarkets: [],
+      };
+    }
+    closingImpliedProb = rawImplied;
+    isSingleSideDevig = true;
   }
 
-  const closingImpliedProb =
-    selectionSide === 'over' ? devigged.overFair : devigged.underFair;
   const clvRaw = roundTo(pickImpliedProb - closingImpliedProb, 6);
 
   const result = {
@@ -214,6 +263,7 @@ export async function computeCLVOutcome(
     beatsClosingLine: clvRaw > 0,
     providerKey: closingLine.provider_key,
     ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
+    ...(isSingleSideDevig ? { isSingleSideDevig: true } : {}),
   };
 
   return {
@@ -232,6 +282,32 @@ async function resolvePickEventContext(
     eventParticipants: EventParticipantRepository;
   },
 ): Promise<PickEventContext | null> {
+  // Team moneyline picks carry metadata.teamId + metadata.eventId instead of
+  // participant_id or metadata.player. Resolve via event ID directly, bypassing
+  // the participant chain which only handles player names.
+  if (pick.market === 'moneyline') {
+    const metadata = asRecord(pick.metadata);
+    const metaEventId = typeof metadata['eventId'] === 'string' ? metadata['eventId'] : null;
+    if (metaEventId) {
+      const event = await repositories.events.findById(metaEventId);
+      if (event?.external_id) {
+        const teamId = typeof metadata['teamId'] === 'string' ? metadata['teamId'] : null;
+        const links = teamId
+          ? await repositories.eventParticipants.listByParticipant(teamId)
+          : [];
+        const link = links.find((l) => l.event_id === event.id);
+        const participantSide =
+          link?.role === 'home' || link?.role === 'away' ? link.role : null;
+        return {
+          providerEventId: event.external_id,
+          eventStartTime: readEventStartTime(event),
+          participantExternalId: null,
+          participantSide,
+        };
+      }
+    }
+  }
+
   // Resolve participant: use direct FK if set; otherwise fuzzy-match from metadata.player
   const resolvedParticipantId = await resolveParticipantId(pick, repositories.participants);
   if (!resolvedParticipantId) {
@@ -263,16 +339,23 @@ async function resolvePickEventContext(
     return null;
   }
 
+  const matchedLink = links.find((link) => link.event_id === matchedEvent.id);
+  const participantSide = matchedLink?.role === 'home' || matchedLink?.role === 'away'
+    ? matchedLink.role
+    : null;
+
   return {
     providerEventId: matchedEvent.external_id,
     eventStartTime: readEventStartTime(matchedEvent),
     participantExternalId: participant.external_id,
+    participantSide,
   };
 }
 
 function chooseEventForPick(
   pick: PickRecord,
   events: Array<{
+    id: string;
     event_name: string;
     event_date: string;
     external_id: string | null;
@@ -389,13 +472,9 @@ function readClosingSideOdds(
   offer: ProviderOfferRecord,
   selectionSide: 'over' | 'under',
 ) {
-  const overOdds = offer.over_odds;
-  const underOdds = offer.under_odds;
-  if (!Number.isFinite(overOdds) || !Number.isFinite(underOdds)) {
-    return null;
-  }
-
-  return selectionSide === 'over' ? (overOdds as number) : (underOdds as number);
+  const requested = selectionSide === 'over' ? offer.over_odds : offer.under_odds;
+  if (!Number.isFinite(requested)) return null;
+  return requested as number;
 }
 
 function asRecord(value: unknown) {

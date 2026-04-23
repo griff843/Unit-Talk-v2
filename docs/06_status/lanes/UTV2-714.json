@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-714",
+  "lane_type": "codex",
+  "tier": "T3",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "codex/utv2-714-truth-check-hardening",
+  "base_branch": "main",
+  "commit_sha": "703285396581660203a63a25ab67bff7c6cbea79",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/440",
+  "files_changed": [
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    ".ops/sync.yml",
+    "docs/06_status/lanes/UTV2-714.json"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/truth-check-lib.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-04-22T13:10:00.000Z",
+  "heartbeat_at": "2026-04-22T14:30:00.000Z",
+  "closed_at": "2026-04-22T14:30:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-709",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-ci-fibery-url-fix",
+  "base_branch": "main",
+  "commit_sha": "4a6aac71ed20fa539de5aef8921377983ffcb09d",
+  "pr_url": null,
+  "files_changed": [
+    ".github/workflows/fibery-sync-on-pr.yml",
+    ".github/workflows/fibery-sync-on-merge.yml",
+    ".github/workflows/ops-daily-digest.yml",
+    ".ops/sync.yml",
+    "scripts/ops/fibery-client.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/fibery-sync-on-pr.yml",
+    ".github/workflows/fibery-sync-on-merge.yml",
+    ".github/workflows/ops-daily-digest.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-04-21T21:50:00Z",
+  "heartbeat_at": "2026-04-22T12:55:00.000Z",
+  "closed_at": "2026-04-22T12:55:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

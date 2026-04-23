@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-576",
+  "title": "T1 Proof Bundle — Closing-Line Truth Recovery",
+  "generated_at": "2026-04-22T06:31:00.000Z",
+  "merge_sha": "a37569aa5451653031b3b1b674e97bd0966f7d6b",
+  "verifier": {
+    "identity": "claude-sonnet-4-6",
+    "role": "orchestrator"
+  },
+  "assertions": [
+    {
+      "id": "UTV2-576-A1",
+      "claim": "Closing-line recovery service marks is_closing=true for started events at 5-minute cadence",
+      "status": "PASS",
+      "evidence": {
+        "code_path": "apps/api/src/closing-line-recovery-service.ts",
+        "mechanism": "runClosingLineRecovery() calls events.listStartedBySnapshot(now), filters by metadata.starts_at <= now, calls providerOffers.markClosingLines(). Wired into API server at CLOSING_LINE_RECOVERY_INTERVAL_MS=5min.",
+        "runtime_result": "16,460 rows marked is_closing=true in live proof run"
+      }
+    },
+    {
+      "id": "UTV2-576-A2",
+      "claim": "Materializer 72h lookback recovers closing offers from ingest gaps",
+      "status": "PASS",
+      "evidence": {
+        "code_path": "apps/api/src/market-universe-materializer.ts",
+        "change": "DEFAULT_LOOKBACK_HOURS changed from 24 → 72",
+        "runtime_result": "427 market_universe rows upserted in proof run after extending window"
+      }
+    },
+    {
+      "id": "UTV2-576-A3",
+      "claim": "Non-trivial live closing-line coverage achieved",
+      "status": "PASS",
+      "evidence": {
+        "before": "market_universe.closing_line non-null: 0/429 (0%)",
+        "after": "market_universe.closing_line non-null: 403/780 (51.7%)",
+        "live_db": "production Supabase project zfzdnfwdarxucxtaojxm"
+      }
+    },
+    {
+      "id": "UTV2-576-A4",
+      "claim": "Recovery service is idempotent and handles edge cases safely",
+      "status": "PASS",
+      "evidence": {
+        "tests": [
+          "marks is_closing=true for pre-commence offer",
+          "does not mark post-commence offers",
+          "skips future events",
+          "is idempotent on second run",
+          "handles empty offer set gracefully"
+        ],
+        "test_file": "apps/api/src/closing-line-recovery-service.test.ts"
+      }
+    }
+  ],
+  "static_proof": {
+    "pnpm_verify": "PASS — exit 0",
+    "test_counts": {
+      "total": 99,
+      "failures": 0
+    },
+    "lint": "PASS — 0 errors",
+    "type_check": "PASS — 0 errors",
+    "build": "PASS",
+    "verify_commands": "PASS — 13 Discord commands, 76 migrations"
+  },
+  "runtime_proof": {
+    "closing_line_recovery_rows_marked": 16460,
+    "market_universe_rows_upserted": 427,
+    "closing_line_coverage_before": "0/429 (0%)",
+    "closing_line_coverage_after": "403/780 (51.7%)",
+    "proof_run_at": "2026-04-22T04:16:39Z",
+    "live_db_project": "zfzdnfwdarxucxtaojxm"
+  },
+  "verdict": "PASS — all 4 assertions hold. Closing-line truth established at 51.7% coverage on live production DB."
+}

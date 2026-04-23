@@ -56,6 +56,7 @@ import {
   handlePromotionScores,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
+import { handleModelHealthAlerts, handleModelHealthDecision } from './routes/model-health.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -381,6 +382,10 @@ export async function routeRequest(
     return handleShadowModelSummaries(request, response, runtime);
   }
 
+  if (method === 'GET' && url.pathname === '/api/model-health/alerts') {
+    return handleModelHealthAlerts(request, response, runtime);
+  }
+
   // Phase 7D UTV2-506: governed shadow comparison read surface
   if (method === 'GET' && url.pathname === '/api/shadow-models/comparison') {
     return handleShadowComparison(request, response, runtime);
@@ -481,6 +486,10 @@ export async function routeRequest(
 
   if (method === 'POST' && url.pathname === '/api/grading/run') {
     return handleGradingRun(request, response, runtime);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/model-health/decision') {
+    return handleModelHealthDecision(request, response, runtime);
   }
 
   if (method === 'POST' && url.pathname === '/api/recap/post') {

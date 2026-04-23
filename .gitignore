@@ -57,3 +57,6 @@ apps/smart-form/test-results/
 .out/ops/preflight/
 .out/ops/ci-doctor/
 .out/worktrees/
+.out/
+_tmp_*
+.claude/scheduled_tasks.lock

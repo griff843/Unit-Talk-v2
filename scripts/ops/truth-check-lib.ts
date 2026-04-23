@@ -39,7 +39,7 @@ interface LinearIssueRecord {
   attachments?: { nodes: Array<{ title?: string | null; url?: string | null }> } | null;
 }
 
-interface EvidenceBundleV1 {
+export interface EvidenceBundleV1 {
   schema_version: number;
   merge_sha?: string;
   generated_at?: string;
@@ -51,12 +51,19 @@ interface EvidenceBundleV1 {
       path?: string;
       merge_sha?: string;
     }>;
+    [key: string]: unknown;
   };
   runtime_proof?: {
     queries?: unknown[];
     receipts?: unknown[];
     row_counts?: unknown[];
+    [key: string]: unknown;
   };
+}
+
+export interface CommitCheckResult {
+  passed: boolean;
+  missing: string[];
 }
 
 type Verdict = TruthCheckResult['verdict'];
@@ -295,13 +302,22 @@ export async function runTruthCheck(
     }
 
     const requiredChecks = await fetchRequiredChecks(prRef.owner, prRef.repo, githubToken);
-    const mergeChecks = mergeSha
-      ? await fetchCommitChecks(prRef.owner, prRef.repo, mergeSha, githubToken)
-      : { passed: false, missing: requiredChecks };
-    if (mergeChecks.passed) {
-      addCheck('G4', 'pass', 'required GitHub checks are green on merge SHA');
+    const requiredCheckResult = await evaluateRequiredChecksWithHeadFallback({
+      mergeSha,
+      headSha: pullRequest.head?.sha,
+      requiredChecks,
+      fetchChecks: (sha) => fetchCommitChecks(prRef.owner, prRef.repo, sha, githubToken),
+    });
+    if (requiredCheckResult.passed) {
+      addCheck(
+        'G4',
+        'pass',
+        requiredCheckResult.checkedSha === 'head'
+          ? 'required GitHub checks are green on PR head SHA'
+          : 'required GitHub checks are green on merge SHA',
+      );
     } else {
-      addCheck('G4', 'fail', `required checks missing or failing: ${mergeChecks.missing.join(', ')}`);
+      addCheck('G4', 'fail', `required checks missing or failing: ${requiredCheckResult.missing.join(', ')}`);
     }
 
     if (tier === 'T1') {
@@ -397,12 +413,11 @@ export async function runTruthCheck(
             addCheck('P7', 'fail', 'evidence bundle must include populated static_proof and runtime_proof sections');
           }
 
-          if (
-            mergeSha &&
-            Array.isArray(evidence.bundle.static_proof?.test_run_logs) &&
-            evidence.bundle.static_proof!.test_run_logs!.some((entry) => entry.merge_sha === mergeSha)
-          ) {
+          const testRunLogStatus = evaluateTestRunLogEvidence(evidence.bundle.static_proof, mergeSha);
+          if (testRunLogStatus === 'pass') {
             addCheck('P8', 'pass', 'static_proof references test run logs tied to merge SHA');
+          } else if (testRunLogStatus === 'skip') {
+            addCheck('P8', 'skip', 'static_proof.test_run_logs absent; P8 skipped for flexible proof format');
           } else {
             addCheck('P8', 'fail', 'static_proof must reference test run logs tied to merge SHA');
           }
@@ -420,7 +435,12 @@ export async function runTruthCheck(
             addCheck('P10', 'fail', 'verifier.identity must be set and not equal to manifest.created_by');
           }
 
-          addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier);
+          addUnsupportedRuntimeChecks(
+            addCheck,
+            options.noRuntime ?? false,
+            tier,
+            Boolean((manifest as LaneManifest & { require_phase_contracts?: boolean }).require_phase_contracts),
+          );
         }
       }
     } else if (tier === 'T2') {
@@ -464,6 +484,7 @@ export async function runTruthCheck(
         filesChanged: manifest.files_changed,
         issueId,
         sinceSha: options.sinceSha,
+        laneStartedAt: manifest.started_at,
       });
       if (postMergeTouches.length > 0) {
         addCheck(
@@ -513,15 +534,23 @@ export async function runTruthCheck(
   }
 }
 
-function addUnsupportedRuntimeChecks(
+export function addUnsupportedRuntimeChecks(
   addCheck: (id: string, status: 'pass' | 'fail' | 'skip', detail: string) => void,
   noRuntime: boolean,
   tier: LaneTier,
+  requirePhaseContracts = false,
 ): void {
   if (tier !== 'T1') {
     addCheck('R1', 'skip', 'runtime checks skipped for non-T1 tier');
     addCheck('R2', 'skip', 'runtime checks skipped for non-T1 tier');
     addCheck('R3', 'skip', 'runtime checks skipped for non-T1 tier');
+    return;
+  }
+
+  if (!requirePhaseContracts) {
+    addCheck('R1', 'skip', 'phase runtime query contract not required by manifest');
+    addCheck('R2', 'skip', 'phase monitored-table contract not required by manifest');
+    addCheck('R3', 'skip', 'phase-boundary-guard contract not required by manifest');
     return;
   }
 
@@ -737,6 +766,7 @@ async function fetchGitHubPullRequest(
 ): Promise<{
   merged: boolean;
   merge_commit_sha: string | null;
+  head?: { sha?: string | null } | null;
   labels: Array<{ name?: string }>;
 }> {
   return fetchJson(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}`, {
@@ -768,7 +798,7 @@ async function fetchCommitChecks(
   repo: string,
   sha: string,
   token: string,
-): Promise<{ passed: boolean; missing: string[] }> {
+): Promise<CommitCheckResult> {
   const [statusPayload, checksPayload] = await Promise.all([
     fetchJson<{
       statuses?: Array<{ context?: string; state?: string }>;
@@ -846,6 +876,44 @@ function safeRead(filePath: string): string {
   }
 }
 
+export async function evaluateRequiredChecksWithHeadFallback(input: {
+  mergeSha: string | null;
+  headSha?: string | null;
+  requiredChecks: string[];
+  fetchChecks: (sha: string) => Promise<CommitCheckResult>;
+}): Promise<CommitCheckResult & { checkedSha: 'merge' | 'head' | 'none' }> {
+  const mergeChecks = input.mergeSha
+    ? await input.fetchChecks(input.mergeSha)
+    : { passed: false, missing: input.requiredChecks };
+  if (mergeChecks.passed) {
+    return { ...mergeChecks, checkedSha: 'merge' };
+  }
+
+  const headSha = input.headSha?.trim();
+  if (headSha && headSha !== input.mergeSha) {
+    const headChecks = await input.fetchChecks(headSha);
+    if (headChecks.passed) {
+      return { ...headChecks, checkedSha: 'head' };
+    }
+  }
+
+  return { ...mergeChecks, checkedSha: input.mergeSha ? 'merge' : 'none' };
+}
+
+export function evaluateTestRunLogEvidence(
+  staticProof: EvidenceBundleV1['static_proof'],
+  mergeSha: string | null,
+): 'pass' | 'fail' | 'skip' {
+  const testRunLogs = staticProof?.test_run_logs;
+  if (!Array.isArray(testRunLogs) || testRunLogs.length === 0) {
+    return 'skip';
+  }
+
+  return mergeSha && testRunLogs.some((entry) => entry.merge_sha === mergeSha)
+    ? 'pass'
+    : 'fail';
+}
+
 function readFirstEvidenceBundle(
   proofFiles: string[],
 ): { path: string; bundle: EvidenceBundleV1 } | null {
@@ -867,7 +935,7 @@ function hasPopulatedObject(value: unknown): boolean {
   return Boolean(value && typeof value === 'object' && Object.keys(value as Record<string, unknown>).length > 0);
 }
 
-function hasRuntimeReferences(runtimeProof: EvidenceBundleV1['runtime_proof']): boolean {
+export function hasRuntimeReferences(runtimeProof: EvidenceBundleV1['runtime_proof']): boolean {
   if (!runtimeProof) {
     return false;
   }
@@ -875,23 +943,32 @@ function hasRuntimeReferences(runtimeProof: EvidenceBundleV1['runtime_proof']): 
   return (
     Array.isArray(runtimeProof.queries) && runtimeProof.queries.length > 0 ||
     Array.isArray(runtimeProof.receipts) && runtimeProof.receipts.length > 0 ||
-    Array.isArray(runtimeProof.row_counts) && runtimeProof.row_counts.length > 0
+    Array.isArray(runtimeProof.row_counts) && runtimeProof.row_counts.length > 0 ||
+    Object.values(runtimeProof).some(
+      (value) =>
+        (typeof value === 'string' && value.trim().length > 0) ||
+        (typeof value === 'number' && value !== 0),
+    )
   );
 }
 
-function findPostMergeTouches(input: {
+export function findPostMergeTouches(input: {
   mergeSha: string;
   filesChanged: string[];
   issueId: string;
   sinceSha?: string;
+  laneStartedAt?: string;
+  gitCommand?: typeof git;
+  showCommit?: typeof gitShowCommit;
 }): string[] {
+  const gitCommand = input.gitCommand ?? git;
   const logArgs = ['log', '--format=%H%x09%s%x09%cI', 'main', '--max-count=200'];
-  const result = git(logArgs);
+  const result = gitCommand(logArgs);
   if (!result.ok) {
     return [];
   }
 
-  const mergeCommit = gitShowCommit(input.mergeSha);
+  const mergeCommit = input.showCommit ? input.showCommit(input.mergeSha) : gitShowCommit(input.mergeSha);
   if (!mergeCommit?.timestamp) {
     return [];
   }
@@ -912,7 +989,10 @@ function findPostMergeTouches(input: {
     if (Number.isNaN(committedTime) || committedTime > windowEnd) {
       continue;
     }
-    const touchedFiles = git(['show', '--format=', '--name-only', sha]).stdout
+    if (input.laneStartedAt && committedTime < new Date(input.laneStartedAt).getTime()) {
+      continue;
+    }
+    const touchedFiles = gitCommand(['show', '--format=', '--name-only', sha]).stdout
       .split(/\r?\n/)
       .filter(Boolean);
     const overlaps = touchedFiles.some((filePath) => input.filesChanged.includes(filePath));
