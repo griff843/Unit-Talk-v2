@@ -4,6 +4,7 @@ export const MARKET_KEY_MAP: Record<string, string> = {
   game_spread: 'spread',
   'game-spread': 'spread',
   total: 'game_total_ou',
+  totals: 'game_total_ou',
   game_total: 'game_total_ou',
   'game-total': 'game_total_ou',
   team_total: 'team_total_ou',

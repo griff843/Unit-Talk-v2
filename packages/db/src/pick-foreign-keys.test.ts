@@ -71,6 +71,20 @@ test('derives game markets from compact smart form market metadata', () => {
   assert.equal(deriveMarketTypeId(pick), 'spread');
 });
 
+test('derives game total market type from legacy smart-form totals alias', () => {
+  const pick = buildPick(
+    {
+      market: 'totals',
+    },
+    {
+      sport: 'MLB',
+    },
+  );
+
+  assert.equal(deriveSportId(pick), 'MLB');
+  assert.equal(deriveMarketTypeId(pick), 'game_total_ou');
+});
+
 test('derives MLB stat market ids from stat type fallback', () => {
   const pick = buildPick(
     {

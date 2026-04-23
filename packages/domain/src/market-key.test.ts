@@ -12,6 +12,7 @@ test('normalizeMarketKey maps smart-form market ids onto grading-compatible keys
   assert.equal(normalizeMarketKey('player.points'), 'points-all-game-ou');
   assert.equal(normalizeMarketKey('player.points_assists'), 'pa-all-game-ou');
   assert.equal(normalizeMarketKey('game_total'), 'game_total_ou');
+  assert.equal(normalizeMarketKey('totals'), 'game_total_ou');
   assert.equal(normalizeMarketKey('team_total'), 'team_total_ou');
 });
 
@@ -45,6 +46,7 @@ test('MARKET_KEY_MAP includes legacy labels plus smart-form market ids', () => {
   assert.equal(MARKET_KEY_MAP['player.points'], 'points-all-game-ou');
   assert.equal(MARKET_KEY_MAP['player.points_assists'], 'pa-all-game-ou');
   assert.equal(MARKET_KEY_MAP['game_total'], 'game_total_ou');
+  assert.equal(MARKET_KEY_MAP['totals'], 'game_total_ou');
 });
 
 // ── UTV2-615: NHL + MLB strikeout entries ─────────────────────────────────────

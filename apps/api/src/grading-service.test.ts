@@ -1449,6 +1449,72 @@ test('runGradingPass grades a game_total_ou pick as win when actual > line', asy
   assert.equal(detail.result, 'win');
 });
 
+test('runGradingPass grades a legacy totals pick as a game-line market', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    selection: 'Over 224.5',
+    line: 224.5,
+  });
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    market: 'totals',
+  }));
+
+  const event = await attachGameLineEventContext(repositories, eventName);
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 227,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('runGradingPass resolves a game-line event from thesis when eventName metadata is missing', async () => {
+  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
+    selection: 'Over 224.5',
+    line: 224.5,
+  });
+
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      eventName: undefined,
+      thesis: `${eventName} totals over 224.5 - game play`,
+    },
+  }));
+
+  const event = await attachGameLineEventContext(repositories, eventName);
+
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: null,
+    marketKey: 'game_total_ou',
+    actualValue: 227,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
 test('runGradingPass does not match an earlier-season same-name event when eventTime points to April 18', async () => {
   const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
     eventName: 'Lakers vs Warriors',
