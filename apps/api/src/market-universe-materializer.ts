@@ -75,7 +75,29 @@ export class MarketUniverseMaterializer {
       return { upserted: 0, errors: 1, durationMs: Date.now() - startMs };
     }
 
-    if (offers.length === 0) {
+    // Fetch closing offers separately — they carry pre-commence timestamps so they
+    // sort behind live offers and get cut by the listRecentOffers row cap. Merge by
+    // id to deduplicate rows that appear in both result sets.
+    let closingOffers: typeof offers = [];
+    try {
+      closingOffers = await this.repos.providerOffers.listClosingOffers(since);
+    } catch (err) {
+      logger?.warn?.(
+        JSON.stringify({
+          service: 'market-universe-materializer',
+          event: 'fetch_closing_offers_failed',
+          error: err instanceof Error ? err.message : String(err),
+          note: 'continuing without closing offers — closing_line will not be populated',
+        }),
+      );
+    }
+
+    const offerById = new Map<string, (typeof offers)[0]>();
+    for (const o of offers) offerById.set(o.id, o);
+    for (const o of closingOffers) offerById.set(o.id, o);
+    const allOffers = Array.from(offerById.values());
+
+    if (allOffers.length === 0) {
       logger?.info?.(
         JSON.stringify({
           service: 'market-universe-materializer',
@@ -130,7 +152,7 @@ export class MarketUniverseMaterializer {
 
     const groups = new Map<NaturalKey, GroupedOffers>();
 
-    for (const offer of offers) {
+    for (const offer of allOffers) {
       const k = naturalKeyString(
         offer.provider_key,
         offer.provider_event_id,
@@ -289,7 +311,9 @@ export class MarketUniverseMaterializer {
       JSON.stringify({
         service: 'market-universe-materializer',
         event: 'run.completed',
-        offersRead: offers.length,
+        recentOffersRead: offers.length,
+        closingOffersRead: closingOffers.length,
+        totalOffersProcessed: allOffers.length,
         uniqueMarkets: groups.size,
         upserted: upsertBatch.length,
         errors,

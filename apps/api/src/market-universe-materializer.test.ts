@@ -59,6 +59,7 @@ function makeProviderOffersRepo(offers: ProviderOfferRecord[]) {
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
     listOpeningOffers: async () => [],
+    listClosingOffers: async () => offers.filter((o) => o.is_closing),
   };
 }
 
