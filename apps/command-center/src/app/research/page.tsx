@@ -13,8 +13,8 @@ const modules: ResearchModule[] = [
     name: 'Props Explorer',
     href: '/research/props',
     description: 'Browse individual prop offers from ingested provider data.',
-    status: 'no-data',
-    statusDetail: 'No operator-web endpoint serves individual provider_offers rows.',
+    status: 'live',
+    statusDetail: 'Wired to /api/operator/prop-offers (provider_offers table).',
   },
   {
     name: 'Line-Shopper',

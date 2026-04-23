@@ -13,6 +13,7 @@ export default tseslint.config(
       'coverage/**',
       'artifacts/**',
       '.claude/worktrees/**',
+      '.worktrees/**',
       '.out/**',
       'scripts/debug-*.ts',
       'scripts/live-data-lab-*.ts',
