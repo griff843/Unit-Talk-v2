@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "codex/utv2-712-model-health-command-center-ui",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "4101f919118fd11b429e91a9d3f6f524140a48a4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/444",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/routes/model-health.ts",
@@ -15,10 +15,10 @@
     "apps/command-center/app/model-health/page.tsx"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-22T19:00:00Z",
   "heartbeat_at": "2026-04-22T19:00:00Z",
-  "closed_at": null,
+  "closed_at": "2026-04-23T01:13:08.055Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

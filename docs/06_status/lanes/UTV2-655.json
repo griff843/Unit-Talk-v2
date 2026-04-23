@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-655",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "main",
+  "base_branch": "main",
+  "commit_sha": "06681654dede66efe79d1cab810cabd079733149",
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/E2E-LIFECYCLE-PROOF.md"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/E2E-LIFECYCLE-PROOF.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/E2E-LIFECYCLE-PROOF.md"
+  ],
+  "status": "closed",
+  "started_at": "2026-04-22T15:00:00Z",
+  "heartbeat_at": "2026-04-22T15:16:46Z",
+  "closed_at": "2026-04-23T01:15:00Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-23T01:15:00Z",
+      "verdict": "PASS",
+      "notes": "Evidence bundle committed to main at 0668165. type-check: 0, tests: 73/73. Stage 7 waived with PM approval."
+    }
+  ],
+  "reopen_history": []
+}
