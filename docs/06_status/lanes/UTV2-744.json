@@ -6,16 +6,20 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\claude__utv2-744-historical-clv-fidelity",
   "branch": "claude/utv2-744-historical-clv-fidelity",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "d4b4262069e0469609eafc8082adc31a92c75977",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "apps/api/src/market-universe-materializer.test.ts",
+    "apps/api/src/clv-service.test.ts",
+    "docs/06_status/proof/UTV2-744/evidence.json"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-744/evidence.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-744/evidence.json"
   ],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-24T15:51:21.497Z",
   "heartbeat_at": "2026-04-24T15:51:21.497Z",
   "closed_at": null,
