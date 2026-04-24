@@ -4,6 +4,8 @@ import { Breadcrumb } from '@/components/ui/Breadcrumb';
 import { CorrectionForm } from '@/components/CorrectionForm';
 import { InterventionAction } from '@/components/InterventionAction';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
+import { RoutingExplanationBlock } from '@/components/RoutingExplanationBlock';
+import type { RoutingExplanation } from '@/components/RoutingExplanationBlock';
 import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
@@ -139,6 +141,7 @@ interface PickDetailViewResponse {
   settlements: SettlementRow[];
   auditTrail: AuditRow[];
   submission: { id: string; payload: Record<string, unknown>; createdAt: string } | null;
+  routingExplanation: RoutingExplanation | null;
 }
 
 function KV({ label, value }: { label: string; value: React.ReactNode }) {
@@ -355,6 +358,9 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
               </span>
             </div>
           </div>
+          {detail.routingExplanation != null && (
+            <RoutingExplanationBlock routing={detail.routingExplanation} />
+          )}
         </div>
       </Card>
 

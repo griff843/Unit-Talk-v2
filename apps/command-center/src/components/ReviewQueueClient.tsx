@@ -5,6 +5,8 @@ import { Card } from '@/components/ui/Card';
 import { ReviewActions } from '@/components/ReviewActions';
 import { BulkReviewBar } from '@/components/BulkReviewBar';
 import { PickIdentityPanel } from '@/components/PickIdentityPanel';
+import { RoutingExplanationBlock } from '@/components/RoutingExplanationBlock';
+import type { RoutingExplanation } from '@/components/RoutingExplanationBlock';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 
 interface ReviewPick {
@@ -25,6 +27,7 @@ interface ReviewPick {
   marketTypeDisplayName?: string | null;
   settlementResult?: string | null;
   reviewDecision?: string | null;
+  routingExplanation?: RoutingExplanation | null;
 }
 
 export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total: number }) {
@@ -154,9 +157,14 @@ export function ReviewQueueClient({ picks, total }: { picks: ReviewPick[]; total
                 </div>
               )}
 
-              <p className="text-[11px] text-gray-500">
-                Routing score reflects promotion policy fit, not win probability. Trust: {scoreInsight.reliabilityLabel.toLowerCase()}.
-              </p>
+              {pick.routingExplanation != null
+                ? <RoutingExplanationBlock routing={pick.routingExplanation} compact />
+                : (
+                  <p className="text-[11px] text-gray-500">
+                    Routing score reflects promotion policy fit, not win probability. Trust: {scoreInsight.reliabilityLabel.toLowerCase()}.
+                  </p>
+                )
+              }
 
               {!isSelected && (
                 <ReviewActions pickId={pick.id} decisions={['approve', 'deny', 'hold']} />
