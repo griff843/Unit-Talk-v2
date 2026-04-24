@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-589",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-589-settlement-clv-pnl-proof",
+  "base_branch": "main",
+  "commit_sha": "4df5779",
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-589/evidence.json",
+    "docs/06_status/proof/UTV2-589-settlement-clv-pnl.md",
+    "docs/06_status/lanes/UTV2-589.json"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-589/evidence.json",
+    "docs/06_status/proof/UTV2-589-settlement-clv-pnl.md",
+    "docs/06_status/lanes/UTV2-589.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-589/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-04-15T05:21:16.387Z",
+  "heartbeat_at": "2026-04-24T05:10:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

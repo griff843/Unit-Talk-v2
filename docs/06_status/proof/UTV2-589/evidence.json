@@ -1,0 +1,109 @@
+{
+  "issue": "UTV2-589",
+  "title": "Production proof gate: validate settlement, CLV, P&L, and correction analytics",
+  "merge_sha": "4df5779",
+  "supabase_project": "zfzdnfwdarxucxtaojxm",
+  "proof_timestamp": "2026-04-24T05:10:00.000Z",
+  "verdict": "PARTIAL_ACCEPTABLE",
+  "tier": "T1",
+
+  "settlement_validation": {
+    "verdict": "PASS",
+    "total_records": 91,
+    "active_records": 90,
+    "correction_records": 1,
+    "unique_picks_settled": 90,
+    "all_with_result": true,
+    "all_with_confidence": true,
+    "settler": "grading-service",
+    "source": "grading",
+    "date_range": {
+      "earliest": "2026-04-21T03:12:10Z",
+      "latest": "2026-04-24T04:53:31Z"
+    },
+    "source_breakdown": {
+      "smart-form": 87,
+      "canary-proof": 2,
+      "api": 1,
+      "board-construction": 0
+    },
+    "sample_records": [
+      { "pick_id": "2f2db1c7", "result": "win", "market": "player_rebounds_ou", "entry_odds": 122, "selection": "over", "confidence": "confirmed" },
+      { "pick_id": "7d8eb58c", "result": "win", "market": "player_points_ou", "entry_odds": -110, "selection": "over", "confidence": "confirmed" },
+      { "pick_id": "a604d241", "result": "loss", "market": "player_assists_ou", "entry_odds": -147, "selection": "over", "confidence": "confirmed" },
+      { "pick_id": "7e04490c", "result": "loss", "market": "player_rebounds_ou", "entry_odds": -135, "selection": "over", "confidence": "confirmed" },
+      { "pick_id": "0f7f7b46", "result": "win", "market": "player_assists_ou", "entry_odds": -113, "selection": "over", "confidence": "confirmed" }
+    ]
+  },
+
+  "correction_chain_validation": {
+    "verdict": "PASS",
+    "total_corrections": 1,
+    "original_row_immutable": true,
+    "correction_row_references_original": true,
+    "correction": {
+      "original_id": "e92437d7-2b6f-4d7a-84e1-c5ffc924659b",
+      "original_result": "loss",
+      "original_settled_at": "2026-04-22T19:37:33Z",
+      "correction_id": "0996bc0d-3187-4fe6-a458-80eba98cddb8",
+      "corrected_result": "win",
+      "correction_settled_at": "2026-04-22T19:37:42Z",
+      "notes": "correction: actual Panarin powerPlay_goals+assists = 1 > 0.5 line — OVER wins",
+      "seconds_to_correct": 9
+    },
+    "invariant_verified": "corrects_id FK to original; original row unmodified; correction is additive"
+  },
+
+  "clv_validation": {
+    "verdict": "BLOCKED",
+    "blocker": "DEBT-003",
+    "clv_coverage_pct": 0.0,
+    "settled_picks_with_candidates": 0,
+    "market_universe_closing_coverage_pct": 76.3,
+    "market_universe_total_rows": 18869,
+    "market_universe_with_closing_line": 14401,
+    "root_cause": "All 90 settled picks are smart-form/canary-proof/api source. CLV join path (picks → pick_candidates → market_universe) only resolves for board-construction picks. Scanner quiesced (DEBT-003) means zero board-construction picks have entered settlement.",
+    "data_readiness": "Closing line data exists in market_universe (76.3%). CLV proof is unblocked the moment scanner re-enable produces board-construction picks through settlement."
+  },
+
+  "pnl_validation": {
+    "verdict": "BLOCKED",
+    "blocker": "stake_units_null",
+    "stake_units_populated": 0,
+    "total_settled": 90,
+    "root_cause": "stake_units is NULL on all settled picks (smart-form and canary-proof submissions do not carry a stake value). P&L computation requires stake_units × result multiplier. This will resolve when board-construction picks (which carry model-driven stake) enter settlement.",
+    "note": "ROI calculation also blocked for same reason."
+  },
+
+  "market_universe_health": {
+    "total_rows": 18869,
+    "with_closing_line": 14401,
+    "with_closing_odds": 15586,
+    "closing_coverage_pct": 76.3,
+    "verdict": "HEALTHY — closing line data is populated and available for CLV once board-construction picks settle"
+  },
+
+  "known_blockers": {
+    "DEBT-003": {
+      "description": "system-pick-scanner intentionally quiesced; PM decision required to re-enable",
+      "affected_validations": ["clv", "pnl"],
+      "preconditions_met": [
+        "DEBT-002 resolved (UTV2-539 Done 2026-04-12)",
+        "Brake proven (UTV2-494 Done 2026-04-11)"
+      ],
+      "action_required": "PM decision to re-enable scanner. Once board-construction picks flow through settlement, CLV + P&L proof completes with no further code changes."
+    }
+  },
+
+  "acceptance_criteria_check": {
+    "settlement_records_match_source_truth": "PASS — 91 records, all result+confidence populated, grading-service settler",
+    "clv_reconciles_to_closing_data": "BLOCKED — DEBT-003 (no board-construction picks in settlement)",
+    "pnl_roi_reconciles_to_settlement_and_stake": "BLOCKED — stake_units null on smart-form picks",
+    "correction_chains_preserve_immutable_history": "PASS — 1 correction proven, original row immutable"
+  },
+
+  "open_actions": [
+    "PM decision to re-enable system-pick-scanner (DEBT-003) — all preconditions met",
+    "Once board-construction picks settle: re-run CLV and P&L proof queries (no code changes needed)"
+  ]
+}
