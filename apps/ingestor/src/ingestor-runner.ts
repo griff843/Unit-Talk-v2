@@ -1,4 +1,4 @@
-import type { IngestorRepositoryBundle } from '@unit-talk/db';
+import type { EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
 import { fetchSGOAccountUsage, type SGOAccountUsage } from './sgo-fetcher.js';
@@ -25,6 +25,7 @@ export interface IngestorRunnerOptions {
   schedulerConfig?: SchedulerConfig;
   fetchImpl?: typeof fetch;
   skipResults?: boolean;
+  resultsLookbackHours?: number;
   logger?: Pick<Console, 'warn' | 'info'>;
   triggerGradingRun?: typeof triggerGradingRun;
   /** Called with the staleness message when cycle gap > CYCLE_GAP_WARN_MS. Wire to Discord in production. */
@@ -40,6 +41,7 @@ export interface IngestorGradingTriggerSummary {
 export interface IngestorCycleSummary {
   cycle: number;
   results: IngestLeagueSummary[];
+  finalizedRepolls: IngestLeagueSummary[];
   oddsApiResults: OddsApiIngestSummary[];
   gradingTrigger: IngestorGradingTriggerSummary;
   sgoUsage: SGOAccountUsage | null;
@@ -47,6 +49,8 @@ export interface IngestorCycleSummary {
 
 /** Warn when a cycle gap exceeds this threshold (10 minutes). */
 const CYCLE_GAP_WARN_MS = 10 * 60 * 1000;
+const DEFAULT_RESULTS_LOOKBACK_HOURS = 48;
+const FINALIZED_REPOLL_BATCH_SIZE = 25;
 
 export async function runIngestorCycles(
   options: IngestorRunnerOptions,
@@ -72,17 +76,27 @@ export async function runIngestorCycles(
     }
 
     const results: IngestLeagueSummary[] = [];
+    const cycleSnapshotAt = new Date().toISOString();
 
     for (const league of options.leagues) {
       results.push(
         await ingestLeague(league, options.apiKey, options.repositories, {
+          snapshotAt: cycleSnapshotAt,
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
+          ...(options.resultsLookbackHours !== undefined
+            ? { resultsLookbackHours: options.resultsLookbackHours }
+            : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),
           ...(options.logger ? { logger: options.logger } : {}),
         }),
       );
     }
+
+    const finalizedRepolls = await runFinalizedRepollsForCycle(
+      cycleSnapshotAt,
+      options,
+    );
 
     // Odds API ingest (Pinnacle + multi-book consensus) — runs alongside SGO
     const oddsApiResults: OddsApiIngestSummary[] = [];
@@ -120,7 +134,14 @@ export async function runIngestorCycles(
       }
     }
 
-    summaries.push({ cycle, results, oddsApiResults, gradingTrigger, sgoUsage });
+    summaries.push({
+      cycle,
+      results,
+      finalizedRepolls,
+      oddsApiResults,
+      gradingTrigger,
+      sgoUsage,
+    });
     lastCycleEndMs = Date.now();
 
     const isLastCycle = cycle >= maxCycles;
@@ -135,6 +156,89 @@ export async function runIngestorCycles(
   }
 
   return summaries;
+}
+
+async function runFinalizedRepollsForCycle(
+  snapshotAt: string,
+  options: IngestorRunnerOptions,
+): Promise<IngestLeagueSummary[]> {
+  if (!options.apiKey || options.skipResults) {
+    return [];
+  }
+
+  const lookbackHours =
+    options.resultsLookbackHours ?? DEFAULT_RESULTS_LOOKBACK_HOURS;
+  const resultsStartsAfter = new Date(
+    Date.parse(snapshotAt) - lookbackHours * 60 * 60 * 1000,
+  ).toISOString();
+  const startedEvents = await options.repositories.events.listStartedBySnapshot(
+    snapshotAt,
+  );
+  const candidateIdsByLeague = new Map<string, string[]>();
+
+  for (const event of startedEvents) {
+    if (
+      (event.status !== 'scheduled' && event.status !== 'in_progress') ||
+      !event.external_id ||
+      !options.leagues.includes(event.sport_id)
+    ) {
+      continue;
+    }
+
+    const startsAt = readEventStartsAt(event);
+    if (!startsAt || startsAt > snapshotAt || startsAt < resultsStartsAfter) {
+      continue;
+    }
+
+    const ids = candidateIdsByLeague.get(event.sport_id) ?? [];
+    ids.push(event.external_id);
+    candidateIdsByLeague.set(event.sport_id, ids);
+  }
+
+  const repolls: IngestLeagueSummary[] = [];
+  for (const league of options.leagues) {
+    const providerEventIds = candidateIdsByLeague.get(league) ?? [];
+    for (const batch of chunk(providerEventIds, FINALIZED_REPOLL_BATCH_SIZE)) {
+      if (batch.length === 0) {
+        continue;
+      }
+
+      options.logger?.info?.(
+        `[ingestor] finalized-repoll league=${league} candidates=${batch.length}`,
+      );
+      repolls.push(
+        await ingestLeague(league, options.apiKey, options.repositories, {
+          snapshotAt,
+          resultsOnly: true,
+          providerEventIds: batch,
+          resultsStartsAfter,
+          resultsStartsBefore: snapshotAt,
+          resultsLookbackHours: lookbackHours,
+          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+          ...(options.sleep ? { sleep: options.sleep } : {}),
+          ...(options.logger ? { logger: options.logger } : {}),
+        }),
+      );
+    }
+  }
+
+  return repolls;
+}
+
+function readEventStartsAt(event: EventRow) {
+  const metadataStartsAt = event.metadata?.starts_at;
+  if (typeof metadataStartsAt === 'string' && metadataStartsAt.length > 0) {
+    return metadataStartsAt;
+  }
+  return `${event.event_date}T00:00:00.000Z`;
+}
+
+function chunk<T>(items: T[], size: number) {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
 }
 
 async function triggerGradingForCycle(

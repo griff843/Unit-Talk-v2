@@ -36,6 +36,10 @@ function createIngestorRuntimeDependencies() {
   const maxCycles = configuredMaxCycles === 0 ? undefined : configuredMaxCycles;
   const autorun = env.UNIT_TALK_INGESTOR_AUTORUN === 'true';
   const skipResults = env.UNIT_TALK_INGESTOR_SKIP_RESULTS === 'true';
+  const resultsLookbackHours = parsePositiveInt(
+    env.UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS,
+    48,
+  );
   const apiUrl = env.UNIT_TALK_API_URL;
   const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
@@ -53,6 +57,7 @@ function createIngestorRuntimeDependencies() {
       maxCycles,
       autorun,
       skipResults,
+      resultsLookbackHours,
       schedulerConfig,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
@@ -81,6 +86,7 @@ function createIngestorRuntimeDependencies() {
       maxCycles,
       autorun,
       skipResults,
+      resultsLookbackHours,
       schedulerConfig,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
@@ -105,6 +111,7 @@ export function createIngestorRuntimeSummary() {
     maxCyclesPerRun: runtime.maxCycles ?? 0,
     autorun: runtime.autorun,
     skipResults: runtime.skipResults,
+    resultsLookbackHours: runtime.resultsLookbackHours,
     scheduler: {
       enabled: runtime.schedulerConfig.enabled,
       peakPollMs: runtime.schedulerConfig.peakPollMs,
@@ -151,6 +158,7 @@ if (runtime.autorun) {
         ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
         maxCycles: runtime.maxCycles ?? Number.POSITIVE_INFINITY,
         skipResults: runtime.skipResults,
+        resultsLookbackHours: runtime.resultsLookbackHours,
         pollIntervalMs: runtime.pollIntervalMs,
         schedulerConfig: runtime.schedulerConfig,
         logger: console,
