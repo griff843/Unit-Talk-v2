@@ -33,7 +33,7 @@ function makeDailyCounts(overrides: Partial<DailyCounts> = {}): DailyCounts {
   };
 }
 
-function makeProofOutput(overrides: { dailyCounts?: Partial<DailyCounts>; guardrails?: Partial<Guardrails> } = {}): ProofOutput {
+function _makeProofOutput(overrides: { dailyCounts?: Partial<DailyCounts>; guardrails?: Partial<Guardrails> } = {}): ProofOutput {
   return {
     timestamp: new Date().toISOString(),
     runId: 'test-run-id',
@@ -54,7 +54,7 @@ async function mockRun(
     candidatesToScore?: number;
   } = {},
 ): Promise<ProofOutput> {
-  const { dryRun = false, batchSize = 100, statuses = ['qualified', 'rejected'], candidatesToScore = 5 } = options;
+  const { dryRun = false, batchSize: _batchSize = 100, statuses: _statuses = ['qualified', 'rejected'], candidatesToScore = 5 } = options;
 
   // Simulate the counts query (no real DB)
   const dailyCounts: DailyCounts = makeDailyCounts({
