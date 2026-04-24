@@ -1,4 +1,8 @@
 import type { NormalizedProviderOffer } from '@unit-talk/contracts';
+import {
+  inferSgoParticipantId,
+  normalizeSgoProviderMarketKey,
+} from './sgo-request-contract.js';
 
 export interface SGOPairedProp {
   providerEventId: string;
@@ -25,9 +29,15 @@ export function normalizeSGOPairedProp(
   }
 
   const line = parseLineValue(prop.line);
-  const providerMarketKey = normalizeProviderMarketKey(prop.marketKey);
   const providerParticipantId =
-    prop.providerParticipantId ?? inferParticipantId(prop.marketKey);
+    normalizeSgoParticipantId(prop.providerParticipantId) ??
+    inferSgoParticipantId(prop.marketKey);
+  const providerMarketKey = normalizeSgoProviderMarketKey(prop.marketKey, {
+    statEntityId: providerParticipantId,
+  });
+  if (providerMarketKey === null) {
+    return null;
+  }
 
   const bookmakerKey = prop.bookmakerKey ?? null;
   const normalized: NormalizedProviderOffer = {
@@ -105,32 +115,6 @@ function overrideSportKeyFromMarketKey(
   return sportKey;
 }
 
-function normalizeProviderMarketKey(marketKey: string) {
-  const baseKey = stripSideSuffix(marketKey);
-  const segments = baseKey.split('-');
-  if (segments.length >= 4) {
-    return [segments[0], 'all', ...segments.slice(-2)].join('-');
-  }
-  return baseKey;
-}
-
-function inferParticipantId(marketKey: string) {
-  const segments = stripSideSuffix(marketKey).split('-');
-  if (segments.length < 4) {
-    return null;
-  }
-
-  const candidate = segments.slice(1, -2).join('-');
-  if (!candidate || candidate === 'all' || /^(player[-_])?(home|away)$/i.test(candidate)) {
-    return null;
-  }
-  return candidate;
-}
-
-function stripSideSuffix(marketKey: string) {
-  return marketKey.replace(/-(over|under|home|away)$/i, '');
-}
-
 function parseLineValue(value: number | string | null) {
   if (typeof value === 'number') {
     return Number.isFinite(value) ? value : null;
@@ -140,6 +124,17 @@ function parseLineValue(value: number | string | null) {
     return Number.isFinite(parsed) ? parsed : null;
   }
   return null;
+}
+
+function normalizeSgoParticipantId(value: string | null) {
+  if (
+    !value ||
+    /^(player[-_])?(home|away)$/i.test(value) ||
+    value.toLowerCase() === 'all'
+  ) {
+    return null;
+  }
+  return value;
 }
 
 function toAmericanOdds(value: number | null) {

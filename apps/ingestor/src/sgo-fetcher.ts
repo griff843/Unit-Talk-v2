@@ -2,6 +2,8 @@ import type { SGOPairedProp } from './sgo-normalizer.js';
 import {
   buildSgoOddsRequestUrl,
   buildSgoResultsRequestUrl,
+  inferSgoParticipantId,
+  normalizeSgoProviderMarketKey,
 } from './sgo-request-contract.js';
 
 const SGO_USAGE_ENDPOINT = 'https://api.sportsgameodds.com/v2/account/usage';
@@ -537,7 +539,12 @@ function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {
   const bookmakerProps = new Map<string, SGOPairedProp>();
 
   for (const row of rows) {
-    const baseMarketKey = stripSideSuffix(row.marketKey);
+    const baseMarketKey = normalizeSgoProviderMarketKey(row.marketKey, {
+      statEntityId: row.providerParticipantId,
+    });
+    if (baseMarketKey === null) {
+      continue;
+    }
     const lineStr = formatLine(row.line);
     const participantKey = row.providerParticipantId ?? '_';
     const groupKey = [
@@ -736,14 +743,18 @@ function collectOddsRows(
       providerEventId,
       marketKey,
       providerParticipantId:
-        firstString(
-          node.playerID,
-          node.playerId,
-          node.participantID,
-          node.participantId,
-          node.entityID,
-          node.entityId,
-        ) ?? inferParticipantId(marketKey),
+        normalizeExplicitParticipantId(
+          firstString(
+            node.playerID,
+            node.playerId,
+            node.participantID,
+            node.participantId,
+            node.entityID,
+            node.entityId,
+            node.statEntityID,
+            node.statEntityId,
+          ),
+        ) ?? inferSgoParticipantId(marketKey),
       sportKey,
       line: firstNumber(
         node.bookOverUnder,
@@ -897,21 +908,25 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
     selfOddId
   ) {
     const score = firstNumber(odds.score);
-    if (score !== null) {
+    const providerParticipantId =
+      normalizeExplicitParticipantId(
+        firstString(
+          odds.playerID,
+          odds.playerId,
+          odds.participantID,
+          odds.participantId,
+          odds.entityID,
+          odds.entityId,
+          odds.statEntityID,
+          odds.statEntityId,
+        ),
+      ) ?? inferSgoParticipantId(selfOddId);
+    const baseMarketKey = normalizeMarketKey(selfOddId, providerParticipantId);
+    if (score !== null && baseMarketKey !== null) {
       markets.push({
         oddId: selfOddId,
-        baseMarketKey: normalizeMarketKey(selfOddId),
-        providerParticipantId:
-          firstString(
-            odds.playerID,
-            odds.playerId,
-            odds.participantID,
-            odds.participantId,
-            odds.entityID,
-            odds.entityId,
-            odds.statEntityID,
-            odds.statEntityId,
-          ) ?? inferParticipantId(selfOddId),
+        baseMarketKey,
+        providerParticipantId,
         score,
         scoringSupported: true,
       });
@@ -957,18 +972,26 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
       continue;
     }
 
-    const baseMarketKey = normalizeMarketKey(explicitOddId);
     const providerParticipantId =
-      firstString(
-        oddValue.playerID,
-        oddValue.playerId,
-        oddValue.participantID,
-        oddValue.participantId,
-        oddValue.entityID,
-        oddValue.entityId,
-        oddValue.statEntityID,
-        oddValue.statEntityId,
-      ) ?? inferParticipantId(explicitOddId);
+      normalizeExplicitParticipantId(
+        firstString(
+          oddValue.playerID,
+          oddValue.playerId,
+          oddValue.participantID,
+          oddValue.participantId,
+          oddValue.entityID,
+          oddValue.entityId,
+          oddValue.statEntityID,
+          oddValue.statEntityId,
+        ),
+      ) ?? inferSgoParticipantId(explicitOddId);
+    const baseMarketKey = normalizeMarketKey(
+      explicitOddId,
+      providerParticipantId,
+    );
+    if (baseMarketKey === null) {
+      continue;
+    }
 
     markets.push({
       oddId: explicitOddId,
@@ -982,13 +1005,13 @@ function extractScoredMarkets(odds: unknown): SGOMarketScore[] {
   return markets;
 }
 
-function normalizeMarketKey(oddId: string): string {
-  const base = stripSideSuffix(oddId);
-  const segments = base.split('-');
-  if (segments.length >= 4) {
-    return [segments[0], 'all', ...segments.slice(-2)].join('-');
-  }
-  return base;
+function normalizeMarketKey(
+  oddId: string,
+  providerParticipantId: string | null,
+): string | null {
+  return normalizeSgoProviderMarketKey(oddId, {
+    statEntityId: providerParticipantId,
+  });
 }
 
 function extractStatus(value: unknown): SGOEventStatus | null {
@@ -1149,27 +1172,15 @@ function inferSide(marketKey: string | undefined) {
   return null;
 }
 
-function inferParticipantId(marketKey: string) {
-  const segments = stripSideSuffix(marketKey).split('-');
-  if (segments.length < 4) {
+function normalizeExplicitParticipantId(value: string | undefined) {
+  if (
+    !value ||
+    /^(player[-_])?(home|away)$/i.test(value) ||
+    value.toLowerCase() === 'all'
+  ) {
     return null;
   }
-  const candidate = segments.slice(1, -2).join('-');
-  if (!candidate || candidate === 'all') {
-    return null;
-  }
-
-  const normalizedCandidate = candidate.replace(/^player[-_]/i, '');
-  const normalized = normalizedCandidate.toLowerCase();
-  if (isReservedSidePlaceholder(normalized)) {
-    return null;
-  }
-
-  return normalizedCandidate;
-}
-
-function stripSideSuffix(marketKey: string) {
-  return marketKey.replace(/-(over|under|home|away)$/i, '');
+  return value;
 }
 
 function formatLine(line: number | string | null) {
