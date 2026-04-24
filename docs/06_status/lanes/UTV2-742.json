@@ -24,7 +24,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-742/evidence.json"
   ],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-24T13:57:36.636Z",
   "heartbeat_at": "2026-04-24T14:11:01.287Z",
   "closed_at": null,
