@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-744",
+  "title": "SGO contract hardening: historical CLV persistence and materialization — provider-faithful across all sports",
+  "tier": "T1",
+  "status": "in_progress",
+  "produced_at": "2026-04-24",
+  "head_sha": "placeholder"
+}
