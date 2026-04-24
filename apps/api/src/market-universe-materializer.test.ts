@@ -12,7 +12,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MarketUniverseMaterializer } from './market-universe-materializer.js';
 import { InMemoryMarketUniverseRepository } from '@unit-talk/db';
-import type { ProviderMarketAliasRow, ProviderOfferRecord } from '@unit-talk/db';
+import type {
+  ProviderEntityAliasRow,
+  ProviderMarketAliasRow,
+  ProviderOfferRecord,
+} from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Minimal stub for ProviderOfferRepository (only listRecentOffers is needed)
@@ -43,6 +47,7 @@ function makeOffer(overrides: Partial<ProviderOfferRecord> = {}): ProviderOfferR
 function makeProviderOffersRepo(
   offers: ProviderOfferRecord[],
   aliasRows: ProviderMarketAliasRow[] = [],
+  participantAliasRows: ProviderEntityAliasRow[] = [],
 ) {
   return {
     async listRecentOffers(_since: string, _limit?: number) {
@@ -60,7 +65,7 @@ function makeProviderOffersRepo(
     resolveProviderMarketKey: async () => null,
     resolveCanonicalMarketKey: async () => null,
     listAliasLookup: async () => aliasRows,
-    listParticipantAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => participantAliasRows,
     listOpeningOffers: async () => [],
     listClosingOffers: async () => offers.filter((o) => o.is_closing),
   };
@@ -79,6 +84,27 @@ function makeAliasRow(
     sport_id: null,
     stat_type_id: null,
     combo_stat_type_id: null,
+    metadata: {},
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+function makeParticipantAliasRow(
+  overrides: Partial<ProviderEntityAliasRow> = {},
+): ProviderEntityAliasRow {
+  const now = new Date().toISOString();
+  return {
+    id: 'participant-alias-1',
+    provider: 'sgo',
+    entity_kind: 'player',
+    provider_entity_key: 'LEBRON_JAMES_2544_NBA',
+    provider_entity_id: 'LEBRON_JAMES_2544_NBA',
+    provider_display_name: 'LeBron James',
+    participant_id: 'participant-lebron',
+    team_id: null,
+    player_id: null,
     metadata: {},
     created_at: now,
     updated_at: now,
@@ -363,4 +389,80 @@ test('materializer: SGO participant rows fail closed for participant-forbidden g
   assert.equal(row.provider_market_key, 'points-all-1h-ou');
   assert.equal(row.market_type_id, null);
   assert.equal(row.canonical_market_key, 'points-all-1h-ou');
+});
+
+test('materializer: SGO participant contract covers required, forbidden, and optional market families', async () => {
+  const playerProp = makeOffer({
+    id: 'player-prop',
+    idempotency_key: 'player-prop',
+    provider_market_key: 'rebounds-all-game-ou',
+    provider_participant_id: 'LEBRON_JAMES_2544_NBA',
+  });
+  const gameTotalWithParticipant = makeOffer({
+    id: 'game-total',
+    idempotency_key: 'game-total',
+    provider_market_key: 'points-all-game-ou',
+    provider_participant_id: 'LEBRON_JAMES_2544_NBA',
+    line: 224.5,
+  });
+  const optionalSpread = makeOffer({
+    id: 'spread',
+    idempotency_key: 'spread',
+    provider_market_key: 'points-all-game-spread',
+    provider_participant_id: 'home',
+    line: -4.5,
+  });
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepo(
+    [playerProp, gameTotalWithParticipant, optionalSpread],
+    [
+      makeAliasRow({
+        provider_market_key: 'rebounds-all-game-ou',
+        market_type_id: 'player_rebounds_ou',
+      }),
+      makeAliasRow({
+        id: 'alias-game-total',
+        provider_market_key: 'points-all-game-ou',
+        market_type_id: 'game_total_ou',
+        sport_id: 'NBA',
+      }),
+      makeAliasRow({
+        id: 'alias-spread',
+        provider_market_key: 'points-all-game-spread',
+        market_type_id: 'game_spread',
+      }),
+    ],
+    [makeParticipantAliasRow()],
+  );
+
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+  });
+  await materializer.run();
+
+  const rows = marketUniverse.listAll();
+  const playerRow = rows.find(
+    (row) => row.provider_market_key === 'rebounds-all-game-ou',
+  );
+  const gameTotalRow = rows.find(
+    (row) =>
+      row.provider_market_key === 'points-all-game-ou' &&
+      row.provider_participant_id === 'LEBRON_JAMES_2544_NBA',
+  );
+  const spreadRow = rows.find(
+    (row) => row.provider_market_key === 'points-all-game-spread',
+  );
+
+  assert.ok(playerRow);
+  assert.equal(playerRow.market_type_id, 'player_rebounds_ou');
+  assert.equal(playerRow.participant_id, 'participant-lebron');
+
+  assert.ok(gameTotalRow);
+  assert.equal(gameTotalRow.market_type_id, null);
+  assert.equal(gameTotalRow.canonical_market_key, 'points-all-game-ou');
+
+  assert.ok(spreadRow);
+  assert.equal(spreadRow.market_type_id, 'game_spread');
+  assert.equal(spreadRow.canonical_market_key, 'game_spread');
 });
