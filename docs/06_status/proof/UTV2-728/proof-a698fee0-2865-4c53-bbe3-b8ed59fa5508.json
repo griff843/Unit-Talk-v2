@@ -1,0 +1,25 @@
+{
+  "timestamp": "2026-04-24T19:54:13.880Z",
+  "runId": "a698fee0-2865-4c53-bbe3-b8ed59fa5508",
+  "dailyCounts": {
+    "rawPropsIngested": 318817,
+    "marketUniverseRows": 3541,
+    "candidatesScanned": 11107,
+    "candidatesAlreadyScored": 598,
+    "candidatesScoredThisRun": 62,
+    "skippedByReason": {
+      "no_model_score": 10516
+    },
+    "ranked": 103,
+    "posted": 7,
+    "shadowOnly": 11107,
+    "settledResultBacked": 0,
+    "clvReady": 15002
+  },
+  "guardrails": {
+    "picksCreated": 0,
+    "shadowModeFalseSet": 0,
+    "distributionEnqueued": 0,
+    "promotionWidened": 0
+  }
+}
