@@ -6,22 +6,24 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-587-pipeline-freshness-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "10ccd95",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/455",
   "files_changed": [
     "docs/06_status/proof/UTV2-587/evidence.json",
+    "docs/06_status/proof/UTV2-587-pipeline-freshness.md",
     "docs/06_status/lanes/UTV2-587.json"
   ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-587/evidence.json",
+    "docs/06_status/proof/UTV2-587-pipeline-freshness.md",
     "docs/06_status/lanes/UTV2-587.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-587/evidence.json"
   ],
-  "status": "in_progress",
+  "status": "in_review",
   "started_at": "2026-04-22T13:00:00.000Z",
-  "heartbeat_at": "2026-04-22T13:00:00.000Z",
+  "heartbeat_at": "2026-04-24T04:45:05.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
