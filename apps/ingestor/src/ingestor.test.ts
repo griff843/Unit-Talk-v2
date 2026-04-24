@@ -1212,6 +1212,118 @@ test('runIngestorCycles triggers grading even when resultsEventsCount is zero', 
   assert.equal(cycles[0]?.gradingTrigger.status, 'triggered');
 });
 
+test('runIngestorCycles repolls local in-progress events for finalized SGO results', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  await resolveSgoEntities(
+    [
+      createResolvedEvent({
+        startsAt: '2026-04-23T10:00:00.000Z',
+        status: {
+          started: true,
+          completed: false,
+          cancelled: false,
+          ended: false,
+          live: true,
+          delayed: false,
+          finalized: false,
+          oddsAvailable: true,
+        },
+      }),
+    ],
+    repositories,
+  );
+
+  const fetchUrls: string[] = [];
+  const cycles = await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    resultsLookbackHours: 48,
+    logger: { warn() {}, info() {} },
+    fetchImpl: async (input) => {
+      const url = String(input);
+      fetchUrls.push(url);
+
+      if (url.includes('oddsAvailable=true')) {
+        return new Response(JSON.stringify({ data: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+
+      if (url.includes('eventID=evt-entity-1')) {
+        return new Response(
+          JSON.stringify({ data: [createCompletedSgoResultsEvent()] }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
+      }
+
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const event = await repositories.events.findByExternalId('evt-entity-1');
+  assert.equal(event?.status, 'completed');
+  assert.equal(cycles[0]?.finalizedRepolls.length, 1);
+  assert.equal(
+    fetchUrls.some((url) => url.includes('eventID=evt-entity-1')),
+    true,
+  );
+});
+
+test('runIngestorCycles skips finalized repoll for stale events outside the lookback window', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  await resolveSgoEntities(
+    [
+      createResolvedEvent({
+        startsAt: '2026-03-20T01:00:00.000Z',
+        status: {
+          started: true,
+          completed: false,
+          cancelled: false,
+          ended: false,
+          live: true,
+          delayed: false,
+          finalized: false,
+          oddsAvailable: true,
+        },
+      }),
+    ],
+    repositories,
+  );
+
+  const fetchUrls: string[] = [];
+  const cycles = await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    resultsLookbackHours: 24,
+    logger: { warn() {}, info() {} },
+    fetchImpl: async (input) => {
+      const url = String(input);
+      fetchUrls.push(url);
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const event = await repositories.events.findByExternalId('evt-entity-1');
+  assert.equal(event?.status, 'in_progress');
+  assert.equal(cycles[0]?.finalizedRepolls.length, 0);
+  assert.equal(
+    fetchUrls.some((url) => url.includes('eventID=evt-entity-1')),
+    false,
+  );
+});
+
 test('runIngestorCycles records rate limit backoff telemetry in quota summary', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const sleepCalls: number[] = [];
@@ -1769,6 +1881,40 @@ test('fetchSGOResults follows nextCursor pagination and merges events from all p
     results.some((r) => r.providerEventId === 'evt-page2-1'),
     'page 2 event present',
   );
+});
+
+test('fetchSGOResults treats a 404 page as end-of-results instead of failing', async () => {
+  let fetchCount = 0;
+
+  const results = await fetchSGOResults({
+    apiKey: 'test-key',
+    league: 'NBA',
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+    fetchImpl: async () => {
+      fetchCount += 1;
+      if (fetchCount === 1) {
+        return new Response(
+          JSON.stringify({
+            data: [createCompletedSgoResultsEvent()],
+            nextCursor: 'page-2',
+          }),
+          {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          },
+        );
+      }
+
+      return new Response('not found', {
+        status: 404,
+        statusText: 'Not Found',
+      });
+    },
+  });
+
+  assert.equal(fetchCount, 2);
+  assert.equal(results.length, 1);
+  assert.equal(results[0]?.providerEventId, 'evt-entity-1');
 });
 
 test('fetchSGOResults extracts scored markets from explicit SGO odd and participant fields', async () => {

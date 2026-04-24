@@ -1,10 +1,11 @@
 import type { SGOPairedProp } from './sgo-normalizer.js';
+import {
+  buildSgoOddsRequestUrl,
+  buildSgoResultsRequestUrl,
+} from './sgo-request-contract.js';
 
-const SGO_EVENTS_ENDPOINT = 'https://api.sportsgameodds.com/v2/events';
 const SGO_USAGE_ENDPOINT = 'https://api.sportsgameodds.com/v2/account/usage';
-const SGO_EVENTS_PAGE_LIMIT = '100';
 const MAX_SGO_PAGINATION_PAGES = 100;
-const LIVE_ODDS_LOOKBACK_HOURS = 12;
 
 export interface SGOFetchOptions {
   apiKey: string;
@@ -153,15 +154,7 @@ const PRIORITY_BOOKMAKERS = [
 export async function fetchAndPairSGOProps(
   options: SGOFetchOptions,
 ): Promise<SGOFetchResult> {
-  const url = buildSgoEventsUrl({
-    apiKey: options.apiKey,
-    league: options.league,
-    snapshotAt: options.snapshotAt,
-    mode: options.historical ? 'historical-odds' : 'live-odds',
-    ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
-    ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
-    ...(options.providerEventIds ? { providerEventIds: options.providerEventIds } : {}),
-  });
+  const url = buildSgoOddsRequestUrl(options);
 
   const { payloads, telemetry } = await fetchSgoPages({
     endpoint: 'odds',
@@ -240,18 +233,7 @@ export async function fetchSGOResultsWithTelemetry(
   results: SGOEventResult[];
   requestTelemetry: SGORequestTelemetry;
 }> {
-  const url = buildSgoEventsUrl({
-    apiKey: options.apiKey,
-    league: options.league,
-    snapshotAt: options.snapshotAt,
-    mode: 'results',
-    ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
-    ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
-    ...(options.providerEventIds ? { providerEventIds: options.providerEventIds } : {}),
-    ...(options.lookbackHours !== undefined
-      ? { lookbackHours: options.lookbackHours }
-      : {}),
-  });
+  const url = buildSgoResultsRequestUrl(options);
 
   const { payloads, telemetry } = await fetchSgoPages({
     endpoint: 'results',
@@ -267,72 +249,6 @@ export async function fetchSGOResultsWithTelemetry(
       .filter((event): event is SGOEventResult => event !== null),
     requestTelemetry: telemetry,
   };
-}
-
-type SGOEventsRequestMode = 'live-odds' | 'historical-odds' | 'results';
-
-function buildSgoEventsUrl(input: {
-  apiKey: string;
-  league: string;
-  snapshotAt: string;
-  mode: SGOEventsRequestMode;
-  startsAfter?: string;
-  startsBefore?: string;
-  providerEventIds?: string[];
-  lookbackHours?: number;
-}) {
-  const url = new URL(SGO_EVENTS_ENDPOINT);
-  url.searchParams.set('apiKey', input.apiKey);
-  url.searchParams.set('leagueID', input.league);
-  url.searchParams.set('limit', SGO_EVENTS_PAGE_LIMIT);
-  if (input.providerEventIds && input.providerEventIds.length > 0) {
-    url.searchParams.set('eventID', input.providerEventIds.join(','));
-  }
-
-  switch (input.mode) {
-    case 'live-odds':
-      url.searchParams.set('includeOpposingOdds', 'true');
-      url.searchParams.set('oddsAvailable', 'true');
-      url.searchParams.set(
-        'startsAfter',
-        input.startsAfter ??
-          subtractHoursFromIso(input.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
-      );
-      url.searchParams.set(
-        'startsBefore',
-        input.startsBefore ?? addDaysToIso(input.snapshotAt, 7),
-      );
-      return url;
-    case 'historical-odds':
-      // Historical mode: target finalized/completed events with scores.
-      // oddsAvailable=false on historical events, so the live filter excludes them.
-      url.searchParams.set('includeOpposingOdds', 'true');
-      url.searchParams.set('finalized', 'true');
-      url.searchParams.set('includeAltLines', 'true');
-      url.searchParams.set('includeOpenCloseOdds', 'true');
-      url.searchParams.set(
-        'startsAfter',
-        input.startsAfter ??
-          subtractHoursFromIso(input.snapshotAt, LIVE_ODDS_LOOKBACK_HOURS),
-      );
-      url.searchParams.set(
-        'startsBefore',
-        input.startsBefore ?? addDaysToIso(input.snapshotAt, 7),
-      );
-      return url;
-    case 'results':
-      url.searchParams.set('finalized', 'true');
-      url.searchParams.set(
-        'startsBefore',
-        input.startsBefore ?? input.snapshotAt,
-      );
-      url.searchParams.set(
-        'startsAfter',
-        input.startsAfter ??
-          subtractHoursFromIso(input.snapshotAt, input.lookbackHours ?? 48),
-      );
-      return url;
-  }
 }
 
 const MAX_RATE_LIMIT_RETRIES = 1;
@@ -360,6 +276,9 @@ async function fetchSgoPages(input: {
       url: pageUrl,
     });
     mergeTelemetry(telemetry, result.telemetry);
+    if (result.endOfResults) {
+      return { payloads, telemetry };
+    }
     payloads.push(result.payload);
 
     nextCursor = extractNextCursor(result.payload);
@@ -406,6 +325,15 @@ async function fetchSgoJson(input: {
       return {
         payload: (await response.json()) as unknown,
         telemetry,
+        endOfResults: false,
+      };
+    }
+
+    if (response.status === 404) {
+      return {
+        payload: { data: [] },
+        telemetry,
+        endOfResults: true,
       };
     }
 
@@ -1253,18 +1181,6 @@ function formatLine(line: number | string | null) {
     return Number.isFinite(parsed) ? parsed.toFixed(1) : 'null';
   }
   return 'null';
-}
-
-function addDaysToIso(iso: string, days: number) {
-  const date = new Date(iso);
-  date.setUTCDate(date.getUTCDate() + days);
-  return date.toISOString();
-}
-
-function subtractHoursFromIso(iso: string, hours: number) {
-  const date = new Date(iso);
-  date.setUTCHours(date.getUTCHours() - hours);
-  return date.toISOString();
 }
 
 function firstString(...values: unknown[]) {
