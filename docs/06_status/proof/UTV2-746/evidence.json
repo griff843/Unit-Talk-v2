@@ -1,0 +1,66 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-746",
+  "title": "SGO contract hardening: replay audit and trust scorecard",
+  "tier": "T2",
+  "status": "complete",
+  "produced_at": "2026-04-24",
+  "head_sha": "c4b26b673412ef64fd9e7675f200261686466d44",
+
+  "scorecard_docs": [
+    "docs/05_operations/SGO_REPLAY_SCORECARD.md",
+    "docs/05_operations/SGO_CONTRACT_HARDENING.md"
+  ],
+
+  "hardening_issues_done": [
+    { "issue": "UTV2-664", "title": "SGO raw market key format mismatch", "pr": "#408", "status": "Done" },
+    { "issue": "UTV2-715", "title": "Moneyline CLV side inference broken", "pr": "#442", "status": "Done" },
+    { "issue": "UTV2-716", "title": "Player prop CLV missing participant_id", "pr": null, "status": "Done" },
+    { "issue": "UTV2-719", "title": "Team external_id standardization", "pr": null, "status": "Done" },
+    { "issue": "UTV2-721", "title": "Historical ingest missing includeOpenCloseOdds", "sha": "924c9f2", "status": "Done" },
+    { "issue": "UTV2-726", "title": "Grading used results.game instead of odds.<oddID>.score", "sha": "c9a58a0", "status": "Done" },
+    { "issue": "UTV2-731", "title": "Participant identity matrix — statEntityID preservation rule", "status": "Done" },
+    { "issue": "UTV2-733", "title": "Legacy totals picks grading skip — market key join", "pr": "#452", "status": "Done" },
+    { "issue": "UTV2-734", "title": "Finalized results ingest — mapSGOStatus status.finalized gate", "pr": "#448", "status": "Done" },
+    { "issue": "UTV2-738", "title": "Closing line materializer DESC cap + PostgREST 1000-row cap", "prs": ["#449", "#451"], "status": "Done" },
+    { "issue": "UTV2-743", "title": "Centralized SGO request contract module", "pr": "#453", "status": "Done" },
+    { "issue": "UTV2-745", "title": "Finalized results repoll for in_progress events", "pr": "#454", "status": "Done" }
+  ],
+
+  "grading_snapshot": {
+    "run_at": "~2026-04-23T21:22Z",
+    "attempted": 326,
+    "graded": 0,
+    "skipped": 326,
+    "skip_buckets": {
+      "event_not_completed": { "count": 286, "pct": 87.7, "fix": "UTV2-745 Done PR #454" },
+      "missing_participant_id": { "count": 40, "pct": 12.3, "fix": "UTV2-740 Ready for Codex" }
+    },
+    "note": "0 graded reflects pre-repoll state. UTV2-745 (Done) adds periodic finalized-results repoll — next grading pass expected to clear Bucket A substantially."
+  },
+
+  "clv_coverage": {
+    "snapshot_at": "2026-04-23T13:52Z",
+    "post_issues": ["UTV2-738"],
+    "by_sport": {
+      "MLB": { "rows_72h": 783, "with_closing_line": 690, "coverage_pct": 88.1 },
+      "NBA": { "rows_72h": 192, "with_closing_line": 159, "coverage_pct": 82.8 },
+      "NHL": { "rows_72h": 25, "with_closing_line": 4, "coverage_pct": 16.0, "note": "Low playoff volume — not a methodology gap" }
+    }
+  },
+
+  "remaining_gaps": [
+    { "gap": "missing_participant_id — 40 player alias rows unresolved", "issue": "UTV2-740", "state": "Ready for Codex", "priority": "T1" },
+    { "gap": "Participant-aware market aliasing in materializer (statEntityID must not collapse to all)", "issue": "UTV2-732", "state": "In Progress (Codex lane active)", "priority": "T1" },
+    { "gap": "scoringSupported=true hard gate before using odds score", "issue": "UTV2-742", "state": "Ready for Codex", "priority": "T1" },
+    { "gap": "includeOpenCloseOdds=true always in historical ingest", "issue": "UTV2-744", "state": "Ready for Codex", "priority": "T1" },
+    { "gap": "R5 replay CLV ROI proof with full eligible universe", "issue": "UTV2-736", "state": "Blocked Internal (needs UTV2-732+UTV2-745 data)", "priority": "T2" },
+    { "gap": "event_id FK in market_universe for replay joins", "issue": "deferred", "state": "Phase 3 materializer", "priority": "low" }
+  ],
+
+  "acceptance_criteria_check": {
+    "maintained_scorecard": "PASS — SGO_REPLAY_SCORECARD.md + SGO_CONTRACT_HARDENING.md both live in docs/05_operations",
+    "proof_linked_to_narrative": "PASS — all 12 Done issues linked with PR/SHA in SGO_CONTRACT_HARDENING.md §5",
+    "gaps_bucketed": "PASS — 6 open gaps with issue handle, state, and priority in remaining_gaps above"
+  }
+}

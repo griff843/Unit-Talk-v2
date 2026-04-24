@@ -3,7 +3,7 @@
 **Status:** Living document. Update whenever a hardening fix lands or a new contract rule is ratified.
 **Owner:** Claude lane (UTV2-741). Implementation changes stay with Codex; this doc owns the rules.
 **Cross-reference:** `PROVIDER_KNOWLEDGE_BASE.md` (request semantics), `SPORTSGAMEODDS_API_REFERENCE.md` (endpoint reference)
-**Last updated:** 2026-04-23 / main SHA `aefa48a`
+**Last updated:** 2026-04-24 / main SHA `c4b26b6`
 
 ---
 
@@ -213,8 +213,8 @@ Not invented. These are documented edges where current implementation does not y
 |---|---|---|
 | Participant-required vs. participant-forbidden rule table (exhaustive, per market family) | 40 `missing_participant_id` skips remain after UTV2-733 | UTV2-740 (Ready for Codex) |
 | Participant-aware market aliasing in materializer — player `statEntityID` must not collapse to `all` | materializer `canonical_market_key` resolution can misroute player props to game-total type | UTV2-732 (Ready for Codex) |
-| Centralized SGO request contract module — single source for param shapes | Live ingest, historical ingest, finalized results, and repair all construct params independently | UTV2-743 (Ready for Codex) |
+| Centralized SGO request contract module — single source for param shapes | Live ingest, historical ingest, finalized results, and repair all construct params independently | ✅ UTV2-743 Done PR #453 |
+| Settlement admissibility policy — when to repoll, when to definitively skip | Events still showing `in_progress` after finalization window are not being repolled | ✅ UTV2-745 Done PR #454 |
 | `scoringSupported=true` as a hard gate before using `score` | Documented but not enforced in code path | UTV2-742 (Ready for Codex) |
 | `includeOpenCloseOdds=true` always present in historical ingest (currently conditional) | Per-bookmaker open/close may be absent from some historical rows | UTV2-744 (Ready for Codex) |
-| Settlement admissibility policy — when to repoll, when to definitively skip | Events still showing `in_progress` after finalization window are not being repolled | UTV2-745 (Ready for Codex) |
 | `event_id` FK resolution in `market_universe` (currently `null`) | Replay joins cannot use event FK | Deferred — Phase 3 materializer contract |

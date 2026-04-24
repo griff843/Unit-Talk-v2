@@ -3,7 +3,7 @@
 **Status:** Living document. Update after each hardening sprint or proof run.
 **Owner:** Claude lane (UTV2-746). Codex delivers proof artifacts; Claude maintains this scorecard.
 **Cross-reference:** `SGO_CONTRACT_HARDENING.md` (contract rules), `PROVIDER_KNOWLEDGE_BASE.md` (request semantics)
-**Last updated:** 2026-04-23 / main SHA `aefa48a`
+**Last updated:** 2026-04-24 / main SHA `c4b26b6`
 
 ---
 
@@ -163,10 +163,10 @@ Known provider-level facts that must be respected by all implementation. Mark ea
 
 | Gap | Blocker | Issue | Priority |
 |---|---|---|---|
-| Events finalized upstream but still `in_progress` locally — no repoll | UTV2-745 | Ready for Codex | T1 |
+| Events finalized upstream but still `in_progress` locally — no repoll | UTV2-745 | ✅ Done PR #454 | T1 |
+| Centralized SGO request contract module | UTV2-743 | ✅ Done PR #453 | T1 |
 | Remaining 40 `missing_participant_id` skips — player alias gap | UTV2-740 | Ready for Codex | T1 |
-| Participant-aware market aliasing in materializer | UTV2-732 | Ready for Codex | T1 |
-| Centralized SGO request contract module | UTV2-743 | Ready for Codex | T1 |
+| Participant-aware market aliasing in materializer | UTV2-732 | Codex lane active | T1 |
 | `scoringSupported` enforcement as hard gate | UTV2-742 | Ready for Codex | T1 |
 | `includeOpenCloseOdds=true` always in historical ingest | UTV2-744 | Ready for Codex | T1 |
 | R5 replay CLV ROI proof with unsupported-market accounting | UTV2-736 | Blocked Internal (needs Codex data) | T2 |
