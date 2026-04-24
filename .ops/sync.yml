@@ -5,5 +5,7 @@ approval:
 entities:
   issues:
     - UTV2-732
+    - UTV2-740
   proofs:
     - PROOF-UTV2-732
+    - PROOF-UTV2-740

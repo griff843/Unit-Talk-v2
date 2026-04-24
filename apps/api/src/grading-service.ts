@@ -1,4 +1,8 @@
-import { resolveOutcome, buildRecapEmbedData, normalizeMarketKey } from '@unit-talk/domain';
+import {
+  resolveOutcome,
+  buildRecapEmbedData,
+  normalizeMarketKey,
+} from '@unit-talk/domain';
 import type {
   EventRow,
   PickRecord,
@@ -13,6 +17,8 @@ export interface GradingPickResult {
   outcome: 'graded' | 'skipped' | 'error';
   result?: 'win' | 'loss' | 'push';
   reason?: string;
+  marketFamily?: GradeableMarketFamily | 'unsupported';
+  participantRequirement?: ParticipantRequirement;
 }
 
 export interface GradingPassResult {
@@ -39,6 +45,16 @@ export type GradingRetryState = Map<
 const TRUSTED_GRADING_EVENT_PROVIDERS = new Set(['sgo']);
 const MAX_EXPLICIT_EVENT_TIME_MISMATCH_MS = 36 * 60 * 60 * 1000;
 
+type ParticipantRequirement = 'required' | 'forbidden';
+type GradeableMarketFamily = 'player_prop' | 'team_total' | 'game_total';
+
+interface MarketFamilyRule {
+  family: GradeableMarketFamily | 'unsupported';
+  participantRequirement: ParticipantRequirement;
+  gradeable: boolean;
+  participantType?: 'player' | 'team' | undefined;
+}
+
 export async function runGradingPass(
   repositories: Pick<
     RepositoryBundle,
@@ -62,7 +78,8 @@ export async function runGradingPass(
 
   for (const pick of picks) {
     try {
-      const existingSettlement = await repositories.settlements.findLatestForPick(pick.id);
+      const existingSettlement =
+        await repositories.settlements.findLatestForPick(pick.id);
       if (existingSettlement) {
         details.push({
           pickId: pick.id,
@@ -73,16 +90,37 @@ export async function runGradingPass(
       }
 
       const normalizedMarketKey = normalizeMarketKey(pick.market);
-      const gameLineMarket = isGameLineMarket(normalizedMarketKey);
-      const resolvedParticipantId = gameLineMarket
-        ? null
-        : await resolvePickParticipantId(pick, repositories);
+      const marketRule = classifyMarketFamilyForGrading(normalizedMarketKey);
+      if (!marketRule.gradeable) {
+        details.push({
+          pickId: pick.id,
+          outcome: 'skipped',
+          reason: 'unsupported_market_family',
+          marketFamily: marketRule.family,
+          participantRequirement: marketRule.participantRequirement,
+        });
+        continue;
+      }
 
-      if (!gameLineMarket && !resolvedParticipantId) {
+      const resolvedParticipantId =
+        marketRule.participantRequirement === 'forbidden'
+          ? null
+          : await resolvePickParticipantId(
+              pick,
+              repositories,
+              marketRule.participantType,
+            );
+
+      if (
+        marketRule.participantRequirement === 'required' &&
+        !resolvedParticipantId
+      ) {
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
           reason: 'missing_participant_id',
+          marketFamily: marketRule.family,
+          participantRequirement: marketRule.participantRequirement,
         });
         continue;
       }
@@ -96,9 +134,14 @@ export async function runGradingPass(
         continue;
       }
 
-      const event = gameLineMarket
-        ? await resolvePickEventByName(pick, repositories)
-        : await resolvePickEvent(pick, resolvedParticipantId as string, repositories);
+      const event =
+        marketRule.participantRequirement === 'forbidden'
+          ? await resolvePickEventByName(pick, repositories)
+          : await resolvePickEvent(
+              pick,
+              resolvedParticipantId as string,
+              repositories,
+            );
 
       if (!event) {
         details.push({
@@ -132,19 +175,14 @@ export async function runGradingPass(
       }
 
       // Normalize SGO raw provider key → canonical market_type_id if needed
-      let marketKey = normalizedMarketKey;
-      const canonicalKey = await repositories.providerOffers.resolveCanonicalMarketKey(
+      const marketKeys = await resolveGradingMarketKeyCandidates(
         normalizedMarketKey,
-        'sgo',
+        repositories,
       );
-      if (canonicalKey) {
-        marketKey = canonicalKey;
-      }
-
-      const gameResult = await repositories.gradeResults.findResult({
+      const gameResult = await findFirstGradeResult(repositories, {
         eventId: event.id,
         participantId: resolvedParticipantId,
-        marketKey,
+        marketKeys,
       });
 
       if (!gameResult) {
@@ -182,7 +220,9 @@ export async function runGradingPass(
         details.push({
           pickId: pick.id,
           outcome: 'skipped',
-          reason: retryEntry ? 'game_result_retry_scheduled' : 'game_result_not_found',
+          reason: retryEntry
+            ? 'game_result_retry_scheduled'
+            : 'game_result_not_found',
         });
         continue;
       }
@@ -202,7 +242,9 @@ export async function runGradingPass(
       const gradedResult = mapOutcomeToSettlementResult(
         selectionSide === 'over'
           ? resolveOutcome(gameResult.actual_value, pick.line as number)
-          : invertOutcome(resolveOutcome(gameResult.actual_value, pick.line as number)),
+          : invertOutcome(
+              resolveOutcome(gameResult.actual_value, pick.line as number),
+            ),
       );
 
       const claim = await atomicClaimForTransition(
@@ -235,7 +277,11 @@ export async function runGradingPass(
       await postSettlementRecapIfPossible(
         pick,
         settlementResult.settlementRecord,
-        { outbox: repositories.outbox, receipts: repositories.receipts, runs: repositories.runs },
+        {
+          outbox: repositories.outbox,
+          receipts: repositories.receipts,
+          runs: repositories.runs,
+        },
         options,
       );
 
@@ -255,8 +301,12 @@ export async function runGradingPass(
     }
   }
 
-  const gradedCount = details.filter((detail) => detail.outcome === 'graded').length;
-  const errorCount = details.filter((detail) => detail.outcome === 'error').length;
+  const gradedCount = details.filter(
+    (detail) => detail.outcome === 'graded',
+  ).length;
+  const errorCount = details.filter(
+    (detail) => detail.outcome === 'error',
+  ).length;
 
   const runRecord = await repositories.runs.startRun({
     runType: 'grading.run',
@@ -277,6 +327,109 @@ export async function runGradingPass(
     details,
   };
 }
+
+function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
+  if (marketKey === 'game_total_ou') {
+    return {
+      family: 'game_total',
+      participantRequirement: 'forbidden',
+      gradeable: true,
+    };
+  }
+
+  if (marketKey === 'team_total_ou') {
+    return {
+      family: 'team_total',
+      participantRequirement: 'required',
+      participantType: 'team',
+      gradeable: true,
+    };
+  }
+
+  if (isPlayerPropMarket(marketKey)) {
+    return {
+      family: 'player_prop',
+      participantRequirement: 'required',
+      participantType: 'player',
+      gradeable: true,
+    };
+  }
+
+  return {
+    family: 'unsupported',
+    participantRequirement: 'forbidden',
+    gradeable: false,
+  };
+}
+
+function isPlayerPropMarket(marketKey: string): boolean {
+  return (
+    marketKey.endsWith('-all-game-ou') ||
+    /^player_[a-z0-9_]+_ou$/.test(marketKey)
+  );
+}
+
+async function resolveGradingMarketKeyCandidates(
+  normalizedMarketKey: string,
+  repositories: Pick<RepositoryBundle, 'providerOffers'>,
+): Promise<string[]> {
+  const candidates = new Set<string>([normalizedMarketKey]);
+  const staticAlias = COMMON_GRADING_MARKET_ALIASES[normalizedMarketKey];
+  if (staticAlias) {
+    candidates.add(staticAlias);
+  }
+
+  const canonicalKey =
+    await repositories.providerOffers.resolveCanonicalMarketKey(
+      normalizedMarketKey,
+      'sgo',
+    );
+  if (canonicalKey) {
+    candidates.add(canonicalKey);
+  }
+
+  const providerKey =
+    await repositories.providerOffers.resolveProviderMarketKey(
+      normalizedMarketKey,
+      'sgo',
+    );
+  if (providerKey) {
+    candidates.add(providerKey);
+  }
+
+  return [...candidates];
+}
+
+async function findFirstGradeResult(
+  repositories: Pick<RepositoryBundle, 'gradeResults'>,
+  criteria: {
+    eventId: string;
+    participantId: string | null;
+    marketKeys: string[];
+  },
+) {
+  for (const marketKey of criteria.marketKeys) {
+    const result = await repositories.gradeResults.findResult({
+      eventId: criteria.eventId,
+      participantId: criteria.participantId,
+      marketKey,
+    });
+    if (result) {
+      return result;
+    }
+  }
+
+  return null;
+}
+
+const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
+  'points-all-game-ou': 'player_points_ou',
+  player_points_ou: 'points-all-game-ou',
+  'rebounds-all-game-ou': 'player_rebounds_ou',
+  player_rebounds_ou: 'rebounds-all-game-ou',
+  'assists-all-game-ou': 'player_assists_ou',
+  player_assists_ou: 'assists-all-game-ou',
+};
 
 function validateEventProvenanceForGrading(
   pick: PickRecord,
@@ -324,12 +477,18 @@ function normalizeProviderKey(value: string | null) {
 }
 
 function readNonEmptyString(value: unknown) {
-  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
+  return typeof value === 'string' && value.trim().length > 0
+    ? value.trim()
+    : null;
 }
 
 function hasExplicitEventReferenceTime(pick: PickRecord) {
   const metadata = asRecord(pick.metadata);
-  return [metadata?.eventStartTime, metadata?.eventTime, metadata?.starts_at].some(
+  return [
+    metadata?.eventStartTime,
+    metadata?.eventTime,
+    metadata?.starts_at,
+  ].some(
     (candidate) => typeof candidate === 'string' && candidate.trim().length > 0,
   );
 }
@@ -359,7 +518,9 @@ export async function postSettlementRecapIfPossible(
 
   const resolution = await resolveRecapChannel(pick.id, repositories);
   if (!resolution.ok) {
-    options.logger?.warn?.(`Skipping recap for pick ${pick.id}: ${resolution.reason}`);
+    options.logger?.warn?.(
+      `Skipping recap for pick ${pick.id}: ${resolution.reason}`,
+    );
     return;
   }
 
@@ -419,7 +580,9 @@ async function resolveRecapChannel(
   pickId: string,
   repositories: Pick<RepositoryBundle, 'outbox' | 'receipts'>,
 ): Promise<{ ok: true; channelId: string } | { ok: false; reason: string }> {
-  const outboxRecord = await repositories.outbox.findLatestByPick(pickId, ['sent']);
+  const outboxRecord = await repositories.outbox.findLatestByPick(pickId, [
+    'sent',
+  ]);
   if (!outboxRecord) {
     return { ok: false, reason: 'no_sent_distribution_outbox' };
   }
@@ -440,7 +603,10 @@ async function resolveRecapChannel(
     return { ok: true, channelId: fallbackChannelId };
   }
 
-  return { ok: false, reason: 'no_receipt_channel_or_resolvable_outbox_target' };
+  return {
+    ok: false,
+    reason: 'no_receipt_channel_or_resolvable_outbox_target',
+  };
 }
 
 async function resolvePickEvent(
@@ -448,13 +614,16 @@ async function resolvePickEvent(
   participantId: string,
   repositories: Pick<RepositoryBundle, 'events' | 'eventParticipants'>,
 ): Promise<EventRow | null> {
-  const links = await repositories.eventParticipants.listByParticipant(participantId);
+  const links =
+    await repositories.eventParticipants.listByParticipant(participantId);
   if (links.length === 0) {
     return null;
   }
 
   const candidateEvents = (
-    await Promise.all(links.map((link) => repositories.events.findById(link.event_id)))
+    await Promise.all(
+      links.map((link) => repositories.events.findById(link.event_id)),
+    )
   ).filter((event): event is EventRow => event !== null);
 
   if (candidateEvents.length === 0) {
@@ -467,6 +636,7 @@ async function resolvePickEvent(
 async function resolvePickParticipantId(
   pick: PickRecord,
   repositories: Pick<RepositoryBundle, 'participants'>,
+  participantType: 'player' | 'team' = 'player',
 ): Promise<string | null> {
   if (pick.participant_id) {
     return pick.participant_id;
@@ -476,35 +646,68 @@ async function resolvePickParticipantId(
   const metadataParticipantId =
     typeof metadata?.participantId === 'string'
       ? metadata.participantId.trim()
-      : typeof metadata?.playerId === 'string'
-        ? metadata.playerId.trim()
-        : '';
+      : participantType === 'team' && typeof metadata?.teamId === 'string'
+        ? metadata.teamId.trim()
+        : typeof metadata?.playerId === 'string'
+          ? metadata.playerId.trim()
+          : '';
   if (metadataParticipantId) {
-    const participant = await repositories.participants.findById(metadataParticipantId);
-    if (participant) {
+    const participant = await repositories.participants.findById(
+      metadataParticipantId,
+    );
+    if (participant && participant.participant_type === participantType) {
       return participant.id;
     }
   }
 
-  const playerName = typeof metadata?.player === 'string' ? metadata.player.trim() : '';
-  if (!playerName) {
+  const participantName =
+    participantType === 'team'
+      ? readFirstString(metadata, ['team', 'teamName', 'participantName'])
+      : readFirstString(metadata, ['player', 'playerName', 'participantName']);
+  if (!participantName) {
     return null;
   }
 
-  const sport = typeof metadata?.sport === 'string' ? metadata.sport.trim() : undefined;
-  const candidates = await repositories.participants.listByType('player', sport);
+  const sport =
+    typeof metadata?.sport === 'string' ? metadata.sport.trim() : undefined;
+  const candidates = await repositories.participants.listByType(
+    participantType,
+    sport,
+  );
   const matches = candidates.filter(
-    (candidate) => normalizeName(candidate.display_name) === normalizeName(playerName),
+    (candidate) =>
+      normalizeName(candidate.display_name) === normalizeName(participantName),
   );
 
   return matches.length === 1 ? (matches[0]?.id ?? null) : null;
 }
 
-function chooseEventForPick(pick: PickRecord, events: EventRow[]): EventRow | null {
+function readFirstString(
+  record: Record<string, unknown> | null,
+  keys: string[],
+): string {
+  for (const key of keys) {
+    const value = record?.[key];
+    if (typeof value === 'string' && value.trim().length > 0) {
+      return value.trim();
+    }
+  }
+
+  return '';
+}
+
+function chooseEventForPick(
+  pick: PickRecord,
+  events: EventRow[],
+): EventRow | null {
   const metadata = asRecord(pick.metadata);
-  const eventName = typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
+  const eventName =
+    typeof metadata?.eventName === 'string' ? metadata.eventName.trim() : null;
   const namedCandidates = eventName
-    ? events.filter((event) => event.event_name.trim().toLowerCase() === eventName.toLowerCase())
+    ? events.filter(
+        (event) =>
+          event.event_name.trim().toLowerCase() === eventName.toLowerCase(),
+      )
     : [];
   const eventCandidates = namedCandidates.length > 0 ? namedCandidates : events;
 
@@ -512,10 +715,13 @@ function chooseEventForPick(pick: PickRecord, events: EventRow[]): EventRow | nu
     return null;
   }
 
-  const referenceTime = readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
+  const referenceTime =
+    readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
   return (
     [...eventCandidates].sort((left, right) => {
-      const leftDistance = Math.abs(new Date(readEventStartTime(left)).getTime() - referenceTime);
+      const leftDistance = Math.abs(
+        new Date(readEventStartTime(left)).getTime() - referenceTime,
+      );
       const rightDistance = Math.abs(
         new Date(readEventStartTime(right)).getTime() - referenceTime,
       );
@@ -526,7 +732,11 @@ function chooseEventForPick(pick: PickRecord, events: EventRow[]): EventRow | nu
 
 function readPickEventReferenceTime(pick: PickRecord): number | null {
   const metadata = asRecord(pick.metadata);
-  const candidates = [metadata?.eventStartTime, metadata?.eventTime, metadata?.starts_at];
+  const candidates = [
+    metadata?.eventStartTime,
+    metadata?.eventTime,
+    metadata?.starts_at,
+  ];
   for (const candidate of candidates) {
     if (typeof candidate !== 'string' || candidate.trim().length === 0) {
       continue;
@@ -545,17 +755,6 @@ function readEventStartTime(event: EventRow) {
   return typeof startsAt === 'string' && startsAt.trim().length > 0
     ? startsAt
     : `${event.event_date}T23:59:59Z`;
-}
-
-/**
- * Game-line market keys (participant_id = null in game_results).
- * Score format for ML/spread is pending confirmation from SGO (see PROVIDER_KNOWLEDGE_BASE.md §4).
- * For now only game totals (O/U) are supported for grading; ML/spread are stored but not graded.
- */
-const GAME_LINE_MARKET_KEYS = new Set(['game_total_ou']);
-
-function isGameLineMarket(market: string): boolean {
-  return GAME_LINE_MARKET_KEYS.has(market);
 }
 
 async function resolvePickEventByName(
@@ -577,11 +776,15 @@ async function resolvePickEventByName(
 
 function readPickEventName(pick: PickRecord): string {
   const metadata = asRecord(pick.metadata);
-  if (typeof metadata?.eventName === 'string' && metadata.eventName.trim().length > 0) {
+  if (
+    typeof metadata?.eventName === 'string' &&
+    metadata.eventName.trim().length > 0
+  ) {
     return metadata.eventName.trim();
   }
 
-  const thesis = typeof metadata?.thesis === 'string' ? metadata.thesis.trim() : '';
+  const thesis =
+    typeof metadata?.thesis === 'string' ? metadata.thesis.trim() : '';
   if (!thesis) {
     return '';
   }
@@ -669,7 +872,9 @@ function readDiscordTargetMap() {
 function readClvPercent(payload: unknown) {
   const record = asRecord(payload);
   const clvPercent = record?.['clvPercent'];
-  return typeof clvPercent === 'number' && Number.isFinite(clvPercent) ? clvPercent : null;
+  return typeof clvPercent === 'number' && Number.isFinite(clvPercent)
+    ? clvPercent
+    : null;
 }
 
 function readSubmittedBy(pick: PickRecord) {
@@ -685,7 +890,8 @@ function readSubmittedBy(pick: PickRecord) {
 }
 
 function readStakeUnits(pick: PickRecord) {
-  return typeof pick.stake_units === 'number' && Number.isFinite(pick.stake_units)
+  return typeof pick.stake_units === 'number' &&
+    Number.isFinite(pick.stake_units)
     ? pick.stake_units
     : null;
 }
@@ -719,5 +925,8 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 }
 
 function normalizeName(value: string) {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
 }
