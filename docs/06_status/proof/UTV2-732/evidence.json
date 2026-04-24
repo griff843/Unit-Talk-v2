@@ -1,0 +1,43 @@
+{
+  "issue_id": "UTV2-732",
+  "title": "SGO proof gap: fix participant-aware market aliasing for replay-gradeable props",
+  "generated_at": "2026-04-24T19:15:00.000Z",
+  "commit_sha": "3d31359",
+  "merge_commit_sha": "3d31359959c54251fc58951f2bedd23e05231076",
+  "typecheck": {
+    "command": "npx tsc --noEmit -p apps/ingestor/tsconfig.json",
+    "exit_code": 0,
+    "result": "PASS"
+  },
+  "tests": {
+    "command": "node --import tsx/esm --test apps/ingestor/src/ingestor.test.ts apps/api/src/market-universe-materializer.test.ts",
+    "total": 95,
+    "pass": 95,
+    "fail": 0,
+    "skipped": 0,
+    "duration_ms": 570,
+    "result": "PASS"
+  },
+  "key_tests": [
+    "ingestLeague does not create player participants for home away market keys",
+    "normalizeSGOPairedProp skips unsupported player statEntity periods instead of emitting game totals",
+    "normalizeSGOPairedProp preserves supported player statEntity period props",
+    "materializer: SGO participant rows fail closed for participant-forbidden game-total aliases",
+    "materializer: SGO participant contract covers required, forbidden, and optional market families",
+    "results-resolver canonical alias maps include expanded player props and game lines"
+  ],
+  "files_changed": [
+    "apps/ingestor/src/sgo-request-contract.ts",
+    "apps/ingestor/src/sgo-fetcher.ts",
+    "apps/ingestor/src/sgo-normalizer.ts",
+    "apps/api/src/market-universe-materializer.ts",
+    "apps/api/src/market-universe-materializer.test.ts",
+    "apps/ingestor/src/ingestor.test.ts"
+  ],
+  "aliasing_proof": {
+    "bug_example": "provider_participant=AARON_GORDON_1_NBA with provider_market_key=points-all-1h-ou previously resolved to canonical 1h_total_ou (game total) with null local participant",
+    "fix": "parseOddId classifies statEntityKind=player, participant-forbidden game-total aliases now fail closed — canonical_market_key stays points-all-1h-ou (player prop), not 1h_total_ou",
+    "test_ref": "apps/api/src/market-universe-materializer.test.ts:368 — materializer: SGO participant rows fail closed for participant-forbidden game-total aliases"
+  },
+  "overall_result": "PASS"
+}
