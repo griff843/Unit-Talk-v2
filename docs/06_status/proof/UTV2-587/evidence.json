@@ -1,0 +1,55 @@
+{
+  "issue": "UTV2-587",
+  "title": "Production proof gate: E2E governed pipeline freshness and continuity",
+  "merge_sha": "10ccd95",
+  "supabase_project": "zfzdnfwdarxucxtaojxm",
+  "proof_timestamp": "2026-04-24T04:45:05.343Z",
+  "verdict": "DEGRADED_ACCEPTABLE",
+  "tier": "T1",
+  "stage_results": {
+    "offers": { "status": "FRESH", "age_min": 1, "rows_in_window": 7950, "threshold_min": 60 },
+    "market_universe": { "status": "FRESH", "age_min": 1, "rows_in_window": 1233, "threshold_min": 120 },
+    "candidates": { "status": "FRESH", "age_min": 74, "rows_in_window": 2305, "threshold_min": 240 },
+    "scoring": { "status": "FRESH", "age_min": 104, "scored_in_window": 55, "threshold_min": 240 },
+    "board": { "status": "FRESH", "age_min": 104, "board_candidates_in_window": 55, "threshold_min": 240 },
+    "picks": { "status": "STALE", "age_min": 1664, "rows_in_window": 0, "threshold_min": 240, "known_blocker": "DEBT-003" },
+    "outbox": { "status": "STALE", "age_min": 765, "pending": 0, "threshold_min": 240, "known_blocker": "DEBT-003" },
+    "receipts": { "status": "STALE", "age_min": 765, "rows_in_window": 0, "threshold_min": 240, "known_blocker": "DEBT-003" }
+  },
+  "fresh_stages": 5,
+  "stale_stages": 3,
+  "known_blockers": {
+    "DEBT-003": {
+      "description": "system-pick-scanner intentionally quiesced; PM decision required to re-enable",
+      "affected_stages": ["picks", "outbox", "receipts"],
+      "preconditions_met": [
+        "DEBT-002 resolved (UTV2-539 Done 2026-04-12)",
+        "Brake proven (UTV2-494 Done 2026-04-11)"
+      ],
+      "action_required": "PM decision to re-enable scanner"
+    }
+  },
+  "ingestor_recovery_notes": [
+    "SGO key rotation: 2026-04-22T15:39Z",
+    "Supervisor restart required 2026-04-24T04:43Z due to stale child process (env cached at startup)",
+    "Post-restart: 2000+ offers in first 10 minutes, pipeline confirmed healthy"
+  ],
+  "assertions": [
+    { "stage": "offers", "result": "PASS", "evidence": "7950 rows in 60-min window, age=1m" },
+    { "stage": "market_universe", "result": "PASS", "evidence": "1233 rows in 120-min window, age=1m" },
+    { "stage": "candidates", "result": "PASS", "evidence": "2305 candidates in 240-min window, age=74m" },
+    { "stage": "scoring", "result": "PASS", "evidence": "55 scored candidates in window, age=104m" },
+    { "stage": "board", "result": "PASS", "evidence": "55 board candidates in window, age=104m" },
+    { "stage": "picks", "result": "BLOCKED", "evidence": "Scanner quiesced (DEBT-003), PM decision required" },
+    { "stage": "outbox", "result": "BLOCKED", "evidence": "Downstream of picks — no new picks = no outbox rows" },
+    { "stage": "receipts", "result": "BLOCKED", "evidence": "Downstream of outbox — no new outbox = no receipts" }
+  ],
+  "acceptance_criteria_check": {
+    "every_governed_stage_fresh": "PARTIAL — 5/8 fresh; 3/8 blocked by DEBT-003 (PM-gated)",
+    "no_unexplained_stale_stages": "PASS — all 3 stale stages have documented reason",
+    "candidate_pick_outbox_receipt_linkage": "BLOCKED — requires scanner re-enable (DEBT-003)"
+  },
+  "open_actions": [
+    "PM decision to re-enable system-pick-scanner (DEBT-003) — all preconditions met"
+  ]
+}

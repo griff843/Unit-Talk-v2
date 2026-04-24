@@ -1,51 +1,43 @@
 # PROOF: UTV2-587
-MERGE_SHA: bced11c
+MERGE_SHA: 10ccd95
 
 ASSERTIONS:
-- [x] Offers stage FRESH — 30,247 rows in window (ingestor healthy after SGO key rotation)
-- [x] Market Universe stage FRESH — 722 rows in window (materializer running)
-- [x] Candidates stage FRESH — 721 rows in window (board scan running)
-- [x] Scoring stage FRESH — 13 scored candidates in window (baseline champions registered for MLB + NBA)
-- [x] Board stage FRESH — 9 board candidates in window (board construction running)
-- [x] Outbox stage FRESH — activity within window (worker healthy)
-- [x] Receipts stage FRESH — 1 receipt in window (delivery confirmed)
-- [ ] Picks stage PASS — STALE (655m): scanner intentionally quiesced (DEBT-003); PM decision required to re-enable
+- [x] Offers stage FRESH — 7,950 rows in window, age=1m (ingestor healthy post restart 2026-04-24)
+- [x] Market Universe stage FRESH — 1,233 rows in window, age=1m (materializer running)
+- [x] Candidates stage FRESH — 2,305 rows in window, age=74m (board scan running)
+- [x] Scoring stage FRESH — 55 scored candidates in window, age=104m
+- [x] Board stage FRESH — 55 board candidates in window, age=104m
+- [ ] Picks stage PASS — STALE (1664m): scanner intentionally quiesced (DEBT-003); PM decision required to re-enable
+- [ ] Outbox stage PASS — STALE (765m): downstream of picks; no new picks = no outbox rows (DEBT-003)
+- [ ] Receipts stage PASS — STALE (765m): downstream of outbox (DEBT-003)
 
 EVIDENCE:
 ```text
-=== UTV2-587: Stage Freshness Report — 2026-04-22T16:24:27Z ===
-Run SHA: bced11c  |  Supabase: zfzdnfwdarxucxtaojxm
+=== UTV2-587: Stage Freshness Report — 2026-04-24T04:45:05Z ===
+Run SHA: 10ccd95  |  Supabase: zfzdnfwdarxucxtaojxm
 
-[✓] Offers             FRESH  age=20m   30,247 rows in window (threshold 60m)
-[✓] Market Universe    FRESH  age= 0m   722 rows in window    (threshold 120m)
-[✓] Candidates         FRESH  age=14m   721 rows in window    (threshold 240m)
-[✓] Scoring            FRESH  age=14m   13 scored candidates  (threshold 240m)
-[✓] Board              FRESH  age=14m   9 board candidates    (threshold 240m)
-[!] Picks              STALE  age=659m  0 rows in window      (threshold 240m)
-[✓] Outbox             FRESH  age=24m   pending=0
-[✓] Receipts           FRESH  age=24m   1 row in window       (threshold 240m)
+[✓] Offers             FRESH  age= 1m   7,950 rows in window (threshold 60m)
+[✓] Market Universe    FRESH  age= 1m   1,233 rows in window (threshold 120m)
+[✓] Candidates         FRESH  age=74m   2,305 rows in window (threshold 240m)
+[✓] Scoring            FRESH  age=104m  55 scored candidates  (threshold 240m)
+[✓] Board              FRESH  age=104m  55 board candidates   (threshold 240m)
+[!] Picks              STALE  age=1664m 0 rows in window      (threshold 240m) — DEBT-003
+[!] Outbox             STALE  age=765m  pending=0             — downstream of DEBT-003
+[!] Receipts           STALE  age=765m  0 rows in window      — downstream of DEBT-003
 
-Verdict: DEGRADED (7 FRESH, 1 STALE, 0 EMPTY)
+Verdict: DEGRADED (5 FRESH, 3 STALE — all 3 stale from same root cause: DEBT-003)
+```
 
-=== Recovery Actions Taken This Session ===
+INGESTOR RECOVERY (2026-04-24):
+- Supervisor child process had stale env (startup-cached, key missing in child env)
+- Restarted supervisor 2026-04-24T04:43Z
+- 2,000+ offers confirmed in DB within 10 minutes of restart
+- Ingestor confirmed HEALTHY post-restart
 
-1. SGO ingestor restarted (key rotation by operator 2026-04-22T15:39Z)
-   - New key active; first fresh offer: 2026-04-22T15:41:59Z
-   - Confirmed via: pnpm ingestor:status → HEALTHY
-
-2. Baseline champion models registered in model_registry (bced11c)
-   - MLB/player_prop: e103d9c4 (v0.1-baseline-2026-04-22, provisional)
-   - MLB/game_line:  3ff55621 (v0.1-baseline-2026-04-22, provisional)
-   - NBA/game_line:  e1a4f218 (v0.1-baseline-2026-04-22, provisional)
-   - NBA/player_prop: 7f31e8bf (v0.1-baseline-2026-04-22, provisional)
-   - Parameters: sharp_weight=0, movement_weight=0, confidence=0.7
-   - Unblocked candidate-scoring-service fail-closed gate (UTV2-553)
-
-=== Remaining Blocker ===
-
-Picks STALE — system-pick-scanner intentionally quiesced (DEBT-003).
+REMAINING BLOCKER:
+Picks/Outbox/Receipts STALE — system-pick-scanner intentionally quiesced (DEBT-003).
 Preconditions for re-enablement are met:
   - DEBT-002 resolved (UTV2-539 Done 2026-04-12)
   - Brake proven (UTV2-494 Done 2026-04-11)
-Action: PM decision to re-enable scanner → full HEALTHY verdict achievable.
-```
+Action required: PM decision to re-enable scanner.
+Once scanner re-enabled, full HEALTHY verdict achievable with no code changes.
