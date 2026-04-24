@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-742",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-742-sgo-provider-contract-regression",
+  "branch": "codex/utv2-742-sgo-provider-contract-regression",
+  "base_branch": "main",
+  "commit_sha": "0653bdc206ff6e59216447381bc2ea6dc7adec9e",
+  "pr_url": null,
+  "files_changed": [
+    ".ops/sync.yml",
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/market-universe-materializer.test.ts",
+    "apps/ingestor/src/sgo-request-contract.test.ts",
+    "package.json"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/market-universe-materializer.test.ts",
+    "apps/ingestor/src/sgo-request-contract.ts",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-742/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-04-24T13:57:36.636Z",
+  "heartbeat_at": "2026-04-24T14:11:01.287Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-742-sgo-provider-contract-regression.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
