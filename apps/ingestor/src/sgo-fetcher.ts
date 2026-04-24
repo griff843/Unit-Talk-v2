@@ -230,30 +230,8 @@ function extractResolvedEvent(
 export async function fetchSGOResults(
   options: SGOResultsFetchOptions,
 ): Promise<SGOEventResult[]> {
-  const url = buildSgoEventsUrl({
-    apiKey: options.apiKey,
-    league: options.league,
-    snapshotAt: options.snapshotAt,
-    mode: 'results',
-    ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
-    ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
-    ...(options.providerEventIds ? { providerEventIds: options.providerEventIds } : {}),
-    ...(options.lookbackHours !== undefined
-      ? { lookbackHours: options.lookbackHours }
-      : {}),
-  });
-
-  const { payloads } = await fetchSgoPages({
-    endpoint: 'results',
-    url,
-    fetchImpl: options.fetchImpl ?? fetch,
-    ...(options.sleep ? { sleep: options.sleep } : {}),
-  });
-  const rawEvents = payloads.flatMap(extractEvents);
-
-  return rawEvents
-    .map(extractEventResult)
-    .filter((event): event is SGOEventResult => event !== null);
+  const { results } = await fetchSGOResultsWithTelemetry(options);
+  return results;
 }
 
 export async function fetchSGOResultsWithTelemetry(
