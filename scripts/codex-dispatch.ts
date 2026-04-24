@@ -142,8 +142,12 @@ async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIss
 }
 
 function parseJsonObject(input: string): Record<string, unknown> {
+  // On Windows via cmd.exe, pnpm prepends a banner to stdout before the JSON.
+  // Strip everything before the first '{'.
+  const jsonStart = input.indexOf('{');
+  const trimmed = jsonStart >= 0 ? input.slice(jsonStart) : input;
   try {
-    return JSON.parse(input) as Record<string, unknown>;
+    return JSON.parse(trimmed) as Record<string, unknown>;
   } catch (error) {
     throw new Error(`Expected JSON output but received invalid payload: ${error instanceof Error ? error.message : String(error)}`);
   }
