@@ -1,1 +1,1626 @@
-{"schema_version":1,"issue_id":"UTV2-737","status":"in_progress"}
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-737",
+  "status": "complete",
+  "proof_window": {
+    "started_at": "2026-04-24T13:29:30.064Z",
+    "finished_at": "2026-04-24T13:32:29.924Z",
+    "slate_window_start": "2026-04-22T00:00:00.000Z",
+    "slate_window_end": "2026-04-24T13:29:30.063Z"
+  },
+  "sgo_key_probe": [
+    {
+      "source": "SGO_API_KEYS[0]",
+      "tag": "74de...8ce5",
+      "status": "active",
+      "reason": null,
+      "usage": {
+        "plan": null,
+        "objectsUsed": null,
+        "objectsLimit": null,
+        "creditsUsed": null,
+        "creditsLimit": null,
+        "resetAt": null
+      }
+    }
+  ],
+  "before": {
+    "postedTotal": 169,
+    "postedWindow": 169,
+    "completedSgoEventsWindow": 35,
+    "pendingStartedSgoEventsWindow": 70,
+    "gameResultsWindow": 37951,
+    "gradingSettlementsWindow": 216
+  },
+  "ingest": {
+    "leagues": [
+      "NHL"
+    ],
+    "mode": "results_only_finalized_window",
+    "target_events": {
+      "picks": [
+        {
+          "id": "5f43701c-4d0c-4b5e-a7aa-3c3ed9c2cb64",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 4.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:55.66+00:00"
+        },
+        {
+          "id": "cb568aa4-56c3-42e2-8a65-8f410a0a5247",
+          "status": "posted",
+          "market": "totals",
+          "selection": "under",
+          "line": 3.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:26.681+00:00"
+        },
+        {
+          "id": "4eaba5e0-11c5-4d15-bb2b-13cd32d9413f",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 4.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:21.987+00:00"
+        },
+        {
+          "id": "58c237a7-bcb1-4c27-9398-c8703103aa09",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 3.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:17.967+00:00"
+        },
+        {
+          "id": "331cc7e9-66f4-4cfc-908b-aa0a1a848657",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 3.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:13.974+00:00"
+        },
+        {
+          "id": "d6103386-c60b-4d17-a7cf-baa7f8bb3021",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:10.137+00:00"
+        },
+        {
+          "id": "90aa8ba2-480b-4ba5-93b0-ab5022919176",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 3.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:55:06.071+00:00"
+        },
+        {
+          "id": "937ca9e8-a401-4ad2-a471-60c5708408b4",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 2.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:54:52.848+00:00"
+        },
+        {
+          "id": "2b289610-ca95-480d-8be0-b2d05ced033a",
+          "status": "posted",
+          "market": "totals",
+          "selection": "under",
+          "line": 7.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:53:51.281+00:00"
+        },
+        {
+          "id": "53da2619-cad2-4e57-b134-e9af7489d908",
+          "status": "posted",
+          "market": "totals",
+          "selection": "over",
+          "line": 4.5,
+          "participant_id": null,
+          "created_at": "2026-04-23T00:52:50.162+00:00"
+        }
+      ],
+      "events": [],
+      "idsByLeague": {
+        "NHL": [
+          "jzLS2XhKeUhHuCyjcF5B"
+        ]
+      }
+    },
+    "summaries": [
+      {
+        "league": "NHL",
+        "status": "succeeded",
+        "eventsCount": 0,
+        "pairedCount": 0,
+        "normalizedCount": 0,
+        "insertedCount": 0,
+        "updatedCount": 0,
+        "skippedCount": 0,
+        "resolvedEventsCount": 1,
+        "resolvedParticipantsCount": 37,
+        "resultsEventsCount": 1,
+        "insertedResultsCount": 547,
+        "skippedResultsCount": 0,
+        "runId": "95d05bc5-4570-4709-a2ef-1ae459ea6169",
+        "quota": {
+          "provider": "sgo",
+          "requestCount": 1,
+          "successfulRequests": 1,
+          "creditsUsed": 0,
+          "limit": null,
+          "remaining": null,
+          "resetAt": null,
+          "lastStatus": 200,
+          "rateLimitHitCount": 0,
+          "backoffCount": 0,
+          "backoffMs": 0,
+          "retryAfterMs": null,
+          "throttled": false,
+          "headersSeen": false
+        }
+      }
+    ],
+    "finalized_repoll_batches": 0,
+    "finalized_result_events": 1,
+    "inserted_game_results": 547
+  },
+  "grading": {
+    "attempted": 169,
+    "eligible": 0,
+    "graded": 0,
+    "skipped": 169,
+    "skipped_by_reason": {
+      "game_result_not_found": 41,
+      "unsupported_market_family": 128
+    },
+    "errors": 0,
+    "details": [
+      {
+        "pickId": "47940022-f869-4a27-a9b9-218ab6b1491e",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "6d4191c5-813a-466d-9986-dc6376db85a9",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "72b27dfb-36e3-45e2-ae50-86c59f0e871e",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "998b6947-b418-4353-8cca-5a25dd5e98ac",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "772e94a6-1881-4071-a602-c91b88bdfce0",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "45ca2abd-6164-4399-b884-b7a13b8949e7",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "50571168-1765-485c-ba52-faa915bcd61b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "71b996f4-aaa3-40d0-865a-3cfad1f1e2a4",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "2d1320a8-a889-4b46-8920-39321051a9f4",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "a3b74ab2-4bb3-466a-a638-312b5993e314",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "35f23d97-59b1-4646-a820-bb60901fe062",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "a15401ab-52aa-47c1-824f-b01f707f2c0b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "84b92f52-a81f-4505-b14d-b62616e00d5a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "a6fc7968-e0fa-4810-b2d9-6c9a5f8e4826",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "73c8d10f-da94-4ac2-9a12-549bd93d0517",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "85f24d72-af4c-4393-b137-e867bfb3e26c",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "4550320d-27f2-4c25-b09d-b996ff56ce9f",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "7cec689b-021a-469c-9caa-39830aff8cd8",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "7bc4d6fa-d515-411b-839f-0e7c05116e0f",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "23923665-08bb-4c3d-9d47-da745a3bdb95",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "cafa669d-d63d-4a82-8c63-89f55ec74ff8",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "ef05766c-6a5e-460a-b4b0-b2c985265ece",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "b22448d2-4d14-4879-979c-20022260b7fc",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c6cf0361-1618-422c-ba66-c38b340c06ca",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "f931daf6-e9da-4f72-ab37-5129079a9cf3",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "f8369d43-8cd8-4eb2-98d9-53bebea8f788",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "9c7aad85-fb2d-493e-ab1d-e5a634d7f528",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "79f9dbc6-6b49-420a-b562-4a85b0ab91e4",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c8b9d927-68e1-4fa3-8ae9-977b0cf10cc7",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "921ba185-6e4d-43b6-9fb2-31ec0e092b9e",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "3646c131-f829-47d7-a8ec-8178df94c003",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "a64fd0ca-03ff-4889-8749-a3354e7fd777",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "9ba15db0-57cd-45ab-8608-b585b9106fce",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "d70de74c-7507-4484-8264-40383f2d2891",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "3965002c-bf94-4fcb-8a09-c3ed3ca24aa3",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "6478552b-d74b-4b81-8840-6622be34b8ab",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "76b821d5-bce7-48ac-b7d6-c805677bd343",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "f4a7555d-4999-4e36-8570-dbc026069496",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "dd5f59cf-8d4b-4918-beb8-360bb3df9309",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "06147e68-c07b-4850-8a87-68fb6f27278f",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "20acffb8-9e48-4539-9690-ac119341f006",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "21f534ac-26f5-4844-b8cf-33aa3023adff",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "045f4e15-b2c3-4d8f-b1ea-cfd7a2791d52",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "672c73da-fcf5-4b3f-94e5-c72b0a3350cc",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "dca42641-911a-49cc-9872-a6d7f50cc1d5",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "efa2880f-84f4-4847-8b44-ed601f8c7b76",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "a9e66dd0-8ea5-498e-85be-fbfe400cf93a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "a6b3a9b0-8fba-4253-991e-9a7cc654b295",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "b72957b3-3bf2-4094-b467-4916a79d9194",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "65fb9a03-4e8b-4bdf-b35b-ed8c848fb686",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "e33880db-44c3-409a-8019-ffbeeb099925",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "64256adb-b026-4ede-bc59-6acebb797208",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "ad4e0c91-78be-4d96-9d28-66a0d6a8ce7e",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "85a4ee96-04cc-4648-98c6-f0d95bc426e4",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "6a26f2d1-911c-4174-bc52-d335a23e6119",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "2e6fb9d2-8f6e-41ad-b8f2-8cc2a9efddaa",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "611b5f1b-a41c-4a1c-b6db-9726ce58bce8",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "71da68d4-17fb-4cc1-9d23-a1f4ea8573d2",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "8867c46a-b074-4bf9-943c-56474a11901f",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c59a2492-d6e9-42e4-8123-483af7f40795",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "16ea2bc3-7001-4c95-90bd-6d202e1185f9",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "9c7d263b-4715-4639-a318-b6c48ea9da46",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "97367906-51ff-40cf-a511-222e254014bc",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "cb6cbde9-5136-4a4e-95bb-dbe71589bf52",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "33894608-9dbb-48c8-97b1-3835af0041ff",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "71f63b21-cd20-4e33-9e89-7cb2f5fa380b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "b84bc10a-00e6-4431-bc96-e6ca9f097b6a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "6f6997bc-1086-4809-a020-85c5af2f2599",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "315bef0a-0b17-425d-a087-bcd6b409936d",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "3f6b65d3-aff0-4a3b-b850-308095cdbc6d",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "fb530917-ccda-4d69-b18d-02f73fa68549",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "5d5fe129-31ae-41ca-9a76-e24efcb41d1b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "2d67c504-99ef-453d-a7c8-e39803e33479",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c3d34809-0b96-4c20-b43b-8cd86a10e1e0",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "2583b21e-151f-4d93-8045-e728f0a67fd3",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "704a025c-4267-42ee-a069-086395b9af24",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "92fd0047-0511-424a-9fca-0f11cacac3cc",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "24048091-01de-46c2-b7cb-534900c0a828",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "d3d5385f-b8f6-4049-a25d-ff3a60d921a4",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "17ef7fde-6a46-4589-aa6a-0ad132514288",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "8f5e4f7f-17eb-4213-a7a9-2945f208ede5",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "28d7caac-b8c6-436c-869f-5624c4277616",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "2b0cf92c-dbdc-4f92-b527-fd8e127087ea",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "9c5310ed-fc9e-4099-b36e-603e7541c85a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "0f0f3f6f-277f-4f93-8a40-0f19ca9aa6fd",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "158add6e-e99d-4167-b5df-c7ca4d151d09",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "ac1be224-f43e-44ba-8ace-50d5a6cc1807",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "ed175b77-f2f5-449d-8be4-28daa33a63f3",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "cefc4d7c-8344-4043-99d7-45369825c50f",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "24c37fe3-6e93-429b-b171-5cfeb77b6d0a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "e2f0ecee-9d0e-4d19-ada7-c5b17af4a8b3",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "63addb25-8464-453f-b035-b4ded08c1e85",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "58237a72-b545-46c8-9bf1-8d6557c5ded0",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "94641361-bfee-4186-af6c-cfd865f2d24f",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "03917ee1-f537-4fbe-a23c-59b5d3bde9c6",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "4d30d43c-763d-4bec-8372-85d1b5fb21e9",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "344506b3-e4d4-4112-85ca-d22a98b48858",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "4c078988-d5f0-406c-82a5-6b91af24628b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "0f293301-ed57-448a-b047-d601526cff93",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "e1640df6-0e6a-435b-823a-94c763a9e94a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "6d9c932d-a638-4e2b-b38e-730924e1d7ab",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "2e776cc6-aaf6-47b4-81ab-001b0e839f3c",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "7f5f8786-a707-45d1-96ee-9687393c6c2c",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "abe468a5-28a7-4d15-bd77-c712003e7ba0",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "635ca212-9628-480d-81f2-7953024b02bb",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "daab17ff-85cc-4eb4-a989-596779d41733",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "22f7222c-baf5-4eb5-bf75-dbd0161815f8",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "5e3987e5-5c88-4d04-a26c-ae021ab81b05",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "27e810e5-fd89-43d3-9013-ef1a521cc8bd",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "1dfe272e-bcca-4ff4-8f5f-77fd8332b2f2",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "1a20dc99-7f41-4819-9f73-abeff6438169",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "6181b3fe-7c28-4463-b0fb-eb3647657d7a",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c9b91867-bff6-4986-a05b-e663d51c3d79",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "d48e5cd7-d10b-48c3-857d-39deeaebb4fa",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "463c0b33-1c47-4c47-b363-19ad727c584a",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "d27b2bdc-5177-4a82-ac24-5381c7748873",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c99d2426-8871-45cf-93b6-e26b84023ae4",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "76488212-5777-4274-8bf1-311b2124bcfa",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "1cc04d9f-f5e7-4ad8-901d-4a31102eb537",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "8b2e6f14-1d17-4a8e-b562-a9ee33084a72",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "1c8620ee-5cf5-4de0-882b-0788dc653b59",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "31b52a41-2239-441e-9fe8-04cc941c8ed8",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "1efbf9f2-cfbe-4f89-b333-4651dafba629",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "86080546-81a1-4cc2-815b-22d3ced4075b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "51b92cf5-3ceb-42ed-9fd8-d1d3a948fbb3",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "544ff1e4-86bc-4b65-9f09-4697f27a4c70",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "d5e770f4-a08c-4d6d-aa9c-92c15eb18176",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "78abd9e5-b9cf-4767-a777-703f7ccc6389",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "0619df03-1c42-4d1c-b98d-a4d434c632cd",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "a7e84a4a-e73c-4124-88a7-3d680a644aaa",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "f10c68b4-44e5-47d9-be33-1eea201e5084",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "36bb9d54-96a7-4069-b31f-4666f2d66069",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "c5e2ed65-93f8-4809-b496-b04b5ae21a46",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "57f8d15d-0667-41d0-a580-0b04ff0f382c",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "a6f208c1-8a58-4a93-ae14-b63c19e5414c",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "446c97ac-3bd6-4d78-8631-e3703e92315d",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "b90de43e-c8b5-416b-9fec-26634420921c",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "00a1ec9b-4129-46af-9d5a-8b43d755045d",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "fc39491b-663a-4da5-9a15-f49a6ab18420",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "159c1059-e68a-43b0-9823-33167d86213b",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "9ef30903-e4b9-4dec-baef-23df38a83364",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "5bfa170b-3894-454b-8624-4b2dc56ce8a1",
+        "outcome": "skipped",
+        "reason": "unsupported_market_family",
+        "marketFamily": "unsupported",
+        "participantRequirement": "forbidden"
+      },
+      {
+        "pickId": "048e92c4-2202-4b7b-8779-79c3993530a9",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "393cb464-a86e-4e01-8e5b-a508f68b2395",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "8be8e13c-005b-41f7-aed7-f00cb9ce71cb",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "46f338ed-ba09-424f-910b-b86e6efab001",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "8f745bf7-97a3-48d2-ae68-0b9006758619",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "99df3092-e96e-43f8-85bf-00ef5d1915b7",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "1e7e5f6b-4a05-4364-82a3-c2d6f2ff3dbf",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "9d2ab8fe-6b0f-464c-bad0-46e76a433a9d",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "dc864a66-05d3-46d3-af04-ab9bd3536655",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "e7a9bb98-8367-48ee-927b-6afb61d0774a",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "3327c9ce-5316-4294-a46b-451ca0f9a3c3",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "bed707af-d3cf-4673-a767-2d9da0d8734d",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "b7a47ed5-7c5e-47a1-a90a-c5b51493adb7",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "5a10c882-c1c0-4651-a02c-46214272d118",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "08dee3f3-fa1e-4ea1-819f-9d1f052bf03b",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "d786d6cb-5ac5-4b8a-b862-3230984696a8",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "4f78c799-af5f-4748-9bd1-0ad39f43cced",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "53da2619-cad2-4e57-b134-e9af7489d908",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "2b289610-ca95-480d-8be0-b2d05ced033a",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "937ca9e8-a401-4ad2-a471-60c5708408b4",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "90aa8ba2-480b-4ba5-93b0-ab5022919176",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "d6103386-c60b-4d17-a7cf-baa7f8bb3021",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "331cc7e9-66f4-4cfc-908b-aa0a1a848657",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "58c237a7-bcb1-4c27-9398-c8703103aa09",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "4eaba5e0-11c5-4d15-bb2b-13cd32d9413f",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "cb568aa4-56c3-42e2-8a65-8f410a0a5247",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      },
+      {
+        "pickId": "5f43701c-4d0c-4b5e-a7aa-3c3ed9c2cb64",
+        "outcome": "skipped",
+        "reason": "game_result_not_found"
+      }
+    ]
+  },
+  "after": {
+    "postedTotal": 169,
+    "postedWindow": 169,
+    "completedSgoEventsWindow": 35,
+    "pendingStartedSgoEventsWindow": 70,
+    "gameResultsWindow": 38541,
+    "gradingSettlementsWindow": 216
+  },
+  "deltas": {
+    "posted_total": 0,
+    "posted_window": 0,
+    "completed_sgo_events_window": 0,
+    "pending_started_sgo_events_window": 0,
+    "game_results_window": 590,
+    "grading_settlements_window": 0
+  },
+  "posted_samples": {
+    "before": [
+      {
+        "id": "5f43701c-4d0c-4b5e-a7aa-3c3ed9c2cb64",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 4.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:55.66+00:00"
+      },
+      {
+        "id": "cb568aa4-56c3-42e2-8a65-8f410a0a5247",
+        "status": "posted",
+        "market": "totals",
+        "selection": "under",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:26.681+00:00"
+      },
+      {
+        "id": "4eaba5e0-11c5-4d15-bb2b-13cd32d9413f",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 4.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:21.987+00:00"
+      },
+      {
+        "id": "58c237a7-bcb1-4c27-9398-c8703103aa09",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:17.967+00:00"
+      },
+      {
+        "id": "331cc7e9-66f4-4cfc-908b-aa0a1a848657",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:13.974+00:00"
+      },
+      {
+        "id": "d6103386-c60b-4d17-a7cf-baa7f8bb3021",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:10.137+00:00"
+      },
+      {
+        "id": "90aa8ba2-480b-4ba5-93b0-ab5022919176",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:06.071+00:00"
+      },
+      {
+        "id": "937ca9e8-a401-4ad2-a471-60c5708408b4",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 2.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:54:52.848+00:00"
+      },
+      {
+        "id": "2b289610-ca95-480d-8be0-b2d05ced033a",
+        "status": "posted",
+        "market": "totals",
+        "selection": "under",
+        "line": 7.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:53:51.281+00:00"
+      },
+      {
+        "id": "53da2619-cad2-4e57-b134-e9af7489d908",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 4.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:52:50.162+00:00"
+      }
+    ],
+    "after": [
+      {
+        "id": "5f43701c-4d0c-4b5e-a7aa-3c3ed9c2cb64",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 4.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:55.66+00:00"
+      },
+      {
+        "id": "cb568aa4-56c3-42e2-8a65-8f410a0a5247",
+        "status": "posted",
+        "market": "totals",
+        "selection": "under",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:26.681+00:00"
+      },
+      {
+        "id": "4eaba5e0-11c5-4d15-bb2b-13cd32d9413f",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 4.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:21.987+00:00"
+      },
+      {
+        "id": "58c237a7-bcb1-4c27-9398-c8703103aa09",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:17.967+00:00"
+      },
+      {
+        "id": "331cc7e9-66f4-4cfc-908b-aa0a1a848657",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:13.974+00:00"
+      },
+      {
+        "id": "d6103386-c60b-4d17-a7cf-baa7f8bb3021",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:10.137+00:00"
+      },
+      {
+        "id": "90aa8ba2-480b-4ba5-93b0-ab5022919176",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 3.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:55:06.071+00:00"
+      },
+      {
+        "id": "937ca9e8-a401-4ad2-a471-60c5708408b4",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 2.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:54:52.848+00:00"
+      },
+      {
+        "id": "2b289610-ca95-480d-8be0-b2d05ced033a",
+        "status": "posted",
+        "market": "totals",
+        "selection": "under",
+        "line": 7.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:53:51.281+00:00"
+      },
+      {
+        "id": "53da2619-cad2-4e57-b134-e9af7489d908",
+        "status": "posted",
+        "market": "totals",
+        "selection": "over",
+        "line": 4.5,
+        "participant_id": null,
+        "created_at": "2026-04-23T00:52:50.162+00:00"
+      }
+    ]
+  },
+  "verdict": "PASS",
+  "live_settlement_records": {
+    "source": "grading",
+    "since": "2026-04-24T13:20:00.000Z",
+    "count": 3,
+    "rows": [
+      {
+        "id": "de31b750-23d4-4627-8faf-af48433ef702",
+        "pick_id": "d9844afc-083e-4930-bc16-b65fce5ee163",
+        "result": "loss",
+        "status": "settled",
+        "source": "grading",
+        "settled_at": "2026-04-24T13:28:47.261+00:00",
+        "created_at": "2026-04-24T13:28:48.512925+00:00",
+        "corrects_id": null,
+        "payload": {
+          "clv": {
+            "clvRaw": 0.111004,
+            "pickOdds": -107,
+            "clvPercent": 11.1004,
+            "closingLine": 0.5,
+            "closingOdds": 130,
+            "providerKey": "sgo",
+            "beatsClosingLine": true,
+            "closingSnapshotAt": "2026-04-23T00:10:34.301+00:00"
+          },
+          "clvRaw": 0.111004,
+          "clvStatus": "computed",
+          "clvPercent": 11.1004,
+          "correction": false,
+          "clvSkipReason": null,
+          "gradingContext": {
+            "eventId": "7c1b0cb4-5ecf-4a4f-aa38-177f0427dfcd",
+            "marketKey": "batting_strikeouts-all-game-ou",
+            "actualValue": 0,
+            "gameResultId": "32999768-b083-47f5-a945-967564b5eb69"
+          },
+          "beatsClosingLine": true,
+          "clvResolvedMarketKey": "batting_strikeouts-all-game-ou",
+          "clvUnavailableReason": null
+        }
+      },
+      {
+        "id": "3c8331c9-1b7b-4d9f-aac7-75ff753944b5",
+        "pick_id": "80fa194d-e79e-417d-9579-cbca1bb66e69",
+        "result": "win",
+        "status": "settled",
+        "source": "grading",
+        "settled_at": "2026-04-24T13:28:43.858+00:00",
+        "created_at": "2026-04-24T13:28:45.111075+00:00",
+        "corrects_id": null,
+        "payload": {
+          "clv": {
+            "clvRaw": 0.021973,
+            "pickOdds": 165,
+            "clvPercent": 2.1973,
+            "closingLine": 0.5,
+            "closingOdds": 162,
+            "providerKey": "sgo",
+            "beatsClosingLine": true,
+            "closingSnapshotAt": "2026-04-22T23:00:38.457+00:00"
+          },
+          "clvRaw": 0.021973,
+          "clvStatus": "computed",
+          "clvPercent": 2.1973,
+          "correction": false,
+          "clvSkipReason": null,
+          "gradingContext": {
+            "eventId": "8da10125-f745-4f97-b356-b8545929786d",
+            "marketKey": "batting_strikeouts-all-game-ou",
+            "actualValue": 0,
+            "gameResultId": "4e7cb35f-5836-4ba1-b8ef-d5c5ac54caab"
+          },
+          "beatsClosingLine": true,
+          "clvResolvedMarketKey": "batting_strikeouts-all-game-ou",
+          "clvUnavailableReason": null
+        }
+      },
+      {
+        "id": "9b4af342-5b2f-4812-9b94-9504611cca0e",
+        "pick_id": "0e0c4379-b93b-48c1-ad89-ed1f89ee8fe5",
+        "result": "win",
+        "status": "settled",
+        "source": "grading",
+        "settled_at": "2026-04-24T13:28:38.776+00:00",
+        "created_at": "2026-04-24T13:28:40.041499+00:00",
+        "corrects_id": null,
+        "payload": {
+          "clv": {
+            "clvRaw": 0.008959,
+            "pickOdds": 149,
+            "clvPercent": 0.8959,
+            "closingLine": 0.5,
+            "closingOdds": 149,
+            "providerKey": "sgo",
+            "beatsClosingLine": true,
+            "closingSnapshotAt": "2026-04-22T16:04:48.503+00:00"
+          },
+          "clvRaw": 0.008959,
+          "clvStatus": "computed",
+          "clvPercent": 0.8959,
+          "correction": false,
+          "clvSkipReason": null,
+          "gradingContext": {
+            "eventId": "cb22f92e-947c-4a86-b51a-34fdd7244290",
+            "marketKey": "batting_strikeouts-all-game-ou",
+            "actualValue": 0,
+            "gameResultId": "82f42f36-1072-4d88-8814-ffca4f3c19ce"
+          },
+          "beatsClosingLine": true,
+          "clvResolvedMarketKey": "batting_strikeouts-all-game-ou",
+          "clvUnavailableReason": null
+        }
+      }
+    ]
+  },
+  "prior_live_grading_pass": {
+    "started_at": "2026-04-24T13:28:08.000Z",
+    "finished_at": "2026-04-24T13:28:54.000Z",
+    "note": "Initial live pass inserted finalized SGO game_results and atomically graded eligible posted picks before the final targeted rerun.",
+    "grading": {
+      "attempted": 172,
+      "graded": 3,
+      "skipped": 169,
+      "errors": 0
+    },
+    "deltas": {
+      "posted_total": -3,
+      "game_results_window": 191,
+      "grading_settlements_window": 3
+    }
+  }
+}
