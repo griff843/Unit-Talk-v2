@@ -13,6 +13,7 @@ import { runRankedSelection } from './ranked-selection-service.js';
 import { runBoardConstruction } from './board-construction-service.js';
 import { runModelHealthScan } from './model-health-scanner.js';
 import { runClosingLineRecovery } from './closing-line-recovery-service.js';
+import { runBoardPickWriter } from './board-pick-writer.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const MODEL_HEALTH_SCANNER_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
@@ -23,6 +24,7 @@ const BOARD_SCAN_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const CANDIDATE_SCORING_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const RANKED_SELECTION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const BOARD_CONSTRUCTION_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const BOARD_PICK_WRITER_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes — after board-construction cycle
 
 const defaultPort = 4000;
 const port = normalizePort(process.env.PORT);
@@ -40,6 +42,7 @@ let boardScanTimer: ReturnType<typeof setInterval> | null = null;
 let candidateScoringTimer: ReturnType<typeof setInterval> | null = null;
 let rankedSelectionTimer: ReturnType<typeof setInterval> | null = null;
 let boardConstructionTimer: ReturnType<typeof setInterval> | null = null;
+let boardPickWriterTimer: ReturnType<typeof setInterval> | null = null;
 let modelHealthScannerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
@@ -162,6 +165,28 @@ server.listen(port, () => {
     runBoardConstruction(boardConstructionDeps, { logger: console }).catch(() => {});
   }, BOARD_CONSTRUCTION_INTERVAL_MS);
 
+  // Board pick writer: promotes syndicate_board entries to picks (10-min cadence, after board-construction)
+  // UTV2-749 — gated by BOARD_PICK_WRITER_ENABLED=true (default: false)
+  if (environment.BOARD_PICK_WRITER_ENABLED === 'true') {
+    const boardPickWriterDeps = {
+      syndicateBoard: runtime.repositories.syndicateBoard,
+      pickCandidates: runtime.repositories.pickCandidates,
+      marketUniverse: runtime.repositories.marketUniverse,
+      participants: runtime.repositories.participants,
+      events: runtime.repositories.events,
+      submissions: runtime.repositories.submissions,
+      picks: runtime.repositories.picks,
+      audit: runtime.repositories.audit,
+      providerOffers: runtime.repositories.providerOffers,
+      settlements: runtime.repositories.settlements,
+    };
+    const boardPickWriterOpts = { logger: console, actor: 'scheduler:board-pick-writer' };
+    runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
+    boardPickWriterTimer = setInterval(() => {
+      runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
+    }, BOARD_PICK_WRITER_INTERVAL_MS);
+  }
+
   // Model health scanner: evaluate champion model health every 4 hours
   // UTV2-627 — writes snapshots to model_health_snapshots, alerts on warning/critical transitions
   if (runtime.repositories.modelRegistry && runtime.repositories.modelHealthSnapshots) {
@@ -240,6 +265,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (candidateScoringTimer) { clearInterval(candidateScoringTimer); candidateScoringTimer = null; }
   if (rankedSelectionTimer) { clearInterval(rankedSelectionTimer); rankedSelectionTimer = null; }
   if (boardConstructionTimer) { clearInterval(boardConstructionTimer); boardConstructionTimer = null; }
+  if (boardPickWriterTimer) { clearInterval(boardPickWriterTimer); boardPickWriterTimer = null; }
   if (modelHealthScannerTimer) { clearInterval(modelHealthScannerTimer); modelHealthScannerTimer = null; }
 
   server.close(() => {
