@@ -22,6 +22,7 @@ import {
 import {
   fetchAndPairSGOProps,
   fetchSGOResults,
+  fetchSGOResultsWithTelemetry,
   type SGOEventResult,
   type SGOMarketScore,
   type SGOResolvedEvent,
@@ -148,6 +149,8 @@ test('fetchAndPairSGOProps includes recently started live games by default', asy
   assert.ok(requestedUrl);
   assert.equal(requestedUrl.searchParams.get('leagueID'), 'NBA');
   assert.equal(requestedUrl.searchParams.get('oddsAvailable'), 'true');
+  assert.equal(requestedUrl.searchParams.get('finalized'), null);
+  assert.equal(requestedUrl.searchParams.get('includeOpenCloseOdds'), null);
   assert.equal(
     requestedUrl.searchParams.get('startsAfter'),
     '2026-04-19T14:00:00.000Z',
@@ -179,6 +182,35 @@ test('fetchAndPairSGOProps requests SGO historical open/close odds fields', asyn
   assert.equal(requestedUrl.searchParams.get('includeOpenCloseOdds'), 'true');
   assert.equal(requestedUrl.searchParams.get('includeAltLine'), null);
   assert.equal(requestedUrl.searchParams.get('oddsAvailable'), null);
+});
+
+test('fetchAndPairSGOProps historical mode can target provider event IDs for bounded CLV repair', async () => {
+  let capturedUrl: URL | null = null;
+
+  await fetchAndPairSGOProps({
+    apiKey: 'test-key',
+    league: 'MLB',
+    snapshotAt: '2026-04-23T04:00:00.000Z',
+    historical: true,
+    startsAfter: '2026-04-22T04:00:00.000Z',
+    startsBefore: '2026-04-23T04:00:00.000Z',
+    providerEventIds: ['evt-close-1', 'evt-close-2'],
+    fetchImpl: async (input) => {
+      capturedUrl = new URL(String(input));
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const requestedUrl = capturedUrl as URL | null;
+  assert.ok(requestedUrl);
+  assert.equal(requestedUrl.searchParams.get('eventID'), 'evt-close-1,evt-close-2');
+  assert.equal(requestedUrl.searchParams.get('finalized'), 'true');
+  assert.equal(requestedUrl.searchParams.get('includeOpenCloseOdds'), 'true');
+  assert.equal(requestedUrl.searchParams.get('startsAfter'), '2026-04-22T04:00:00.000Z');
+  assert.equal(requestedUrl.searchParams.get('startsBefore'), '2026-04-23T04:00:00.000Z');
 });
 
 test('fetchAndPairSGOProps extracts bookmaker open and close prices from historical byBookmaker data', async () => {
@@ -1646,6 +1678,34 @@ test('fetchSGOResults can target provider event IDs for bounded repair', async (
     'evt-finalized-1,evt-finalized-2',
   );
   assert.equal(url.searchParams.get('finalized'), 'true');
+});
+
+test('fetchSGOResultsWithTelemetry uses the same finalized request contract as fetchSGOResults', async () => {
+  let capturedUrl = '';
+
+  await fetchSGOResultsWithTelemetry({
+    apiKey: 'test-key',
+    league: 'NHL',
+    snapshotAt: '2026-04-23T04:00:00.000Z',
+    startsAfter: '2026-04-22T04:00:00.000Z',
+    startsBefore: '2026-04-23T04:00:00.000Z',
+    providerEventIds: ['evt-finalized-1', 'evt-finalized-2'],
+    fetchImpl: async (input) => {
+      capturedUrl = String(input);
+      return new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    },
+  });
+
+  const url = new URL(capturedUrl);
+  assert.equal(url.searchParams.get('eventID'), 'evt-finalized-1,evt-finalized-2');
+  assert.equal(url.searchParams.get('finalized'), 'true');
+  assert.equal(url.searchParams.get('startsAfter'), '2026-04-22T04:00:00.000Z');
+  assert.equal(url.searchParams.get('startsBefore'), '2026-04-23T04:00:00.000Z');
+  assert.equal(url.searchParams.get('oddsAvailable'), null);
+  assert.equal(url.searchParams.get('includeOpenCloseOdds'), null);
 });
 
 test('fetchSGOResults follows nextCursor pagination and merges events from all pages', async () => {
