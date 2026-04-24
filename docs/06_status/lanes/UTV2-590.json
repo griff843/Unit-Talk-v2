@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-590",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\claude__utv2-590-production-readiness-closeout",
+  "branch": "claude/utv2-590-production-readiness-closeout",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-590/evidence.json",
+    "docs/06_status/proof/UTV2-590/gate-results.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-590/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-04-24T15:21:26.407Z",
+  "heartbeat_at": "2026-04-24T15:21:26.407Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-590-production-readiness-closeout.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
