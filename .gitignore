@@ -60,3 +60,13 @@ apps/smart-form/test-results/
 .out/
 _tmp_*
 .claude/scheduled_tasks.lock
+
+# Ad-hoc diagnostic / proof scripts (never committed)
+.worktrees/
+scripts/check-*.ts
+scripts/check-*.js
+scripts/clv-*.ts
+scripts/fix-*.ts
+scripts/pick-count.ts
+scripts/submit-slate.ts
+scripts/apply-migration-*.ts
