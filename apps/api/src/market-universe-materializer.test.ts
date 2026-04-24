@@ -466,3 +466,256 @@ test('materializer: SGO participant contract covers required, forbidden, and opt
   assert.equal(spreadRow.market_type_id, 'game_spread');
   assert.equal(spreadRow.canonical_market_key, 'game_spread');
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-744: Historical CLV fidelity — provider-faithful closing line selection
+// ---------------------------------------------------------------------------
+
+function makeProviderOffersRepoSplit(
+  recentOffers: ProviderOfferRecord[],
+  closingOffers: ProviderOfferRecord[],
+  aliasRows: ProviderMarketAliasRow[] = [],
+  participantAliasRows: ProviderEntityAliasRow[] = [],
+) {
+  return {
+    async listRecentOffers(_since: string, _limit?: number) {
+      return recentOffers;
+    },
+    async listClosingOffers(_since: string) {
+      return closingOffers;
+    },
+    upsertBatch: async () => ({ insertedCount: 0, updatedCount: 0, totalProcessed: 0 }),
+    findClosingLine: async () => null,
+    findOpeningLine: async () => null,
+    findLatestByMarketKey: async () => null,
+    listAll: async () => [],
+    listByProvider: async () => [],
+    findExistingCombinations: async () => new Set<string>(),
+    markClosingLines: async () => 0,
+    resolveProviderMarketKey: async () => null,
+    resolveCanonicalMarketKey: async () => null,
+    listAliasLookup: async () => aliasRows,
+    listParticipantAliasLookup: async () => participantAliasRows,
+    listOpeningOffers: async () => [],
+  };
+}
+
+test('materializer: pre-commence closing offer absent from listRecentOffers is fetched via listClosingOffers and sets closing_line', async () => {
+  // Key regression: SGO closing offers carry pre-commence timestamps — they sort
+  // behind live offers and get cut by the row cap in listRecentOffers.
+  // The materializer fetches them separately and must still set closing_line.
+  const liveOffer = makeOffer({
+    id: 'live-1',
+    idempotency_key: 'live-1',
+    is_opening: false,
+    is_closing: false,
+    line: 26.5,
+    over_odds: -120,
+    under_odds: 100,
+    snapshot_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(), // 5 min ago (recent)
+  });
+  // Closing offer has an OLD timestamp (pre-commence) — NOT in listRecentOffers
+  const closingOffer = makeOffer({
+    id: 'closing-precommence-1',
+    idempotency_key: 'closing-precommence-1',
+    is_opening: false,
+    is_closing: true,
+    line: 25.5,
+    over_odds: -108,
+    under_odds: -112,
+    snapshot_at: new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(), // 6h ago (pre-commence)
+  });
+
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  // listRecentOffers returns only the live offer — closing offer excluded by row cap
+  const providerOffers = makeProviderOffersRepoSplit([liveOffer], [closingOffer]);
+
+  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.current_line, 26.5, 'current_line from the live (recent) offer');
+  assert.equal(row.closing_line, 25.5, 'closing_line must be set from the separate closing-offers fetch');
+  assert.equal(row.closing_over_odds, -108);
+  assert.equal(row.closing_under_odds, -112);
+});
+
+test('materializer: closing offer appearing in both result sets is deduplicated by id', async () => {
+  const closingOffer = makeOffer({
+    id: 'closing-dup-1',
+    idempotency_key: 'closing-dup-1',
+    is_opening: false,
+    is_closing: true,
+    line: 23.5,
+    over_odds: -115,
+    under_odds: -105,
+    snapshot_at: new Date(Date.now() - 30 * 60 * 1000).toISOString(),
+  });
+
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  // Same offer in both result sets — merged via offerById Map, so only one row
+  const providerOffers = makeProviderOffersRepoSplit([closingOffer], [closingOffer]);
+
+  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const result = await materializer.run();
+
+  assert.equal(result.upserted, 1, 'duplicate closing offer must not produce two market_universe rows');
+  assert.equal(marketUniverse.listAll().length, 1);
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.closing_line, 23.5);
+});
+
+test('materializer: multiple is_closing offers for same natural key — earliest snapshot_at wins', async () => {
+  const baseFields = {
+    provider_key: 'sgo',
+    provider_event_id: 'event-abc',
+    provider_market_key: 'points-all-game-ou',
+    provider_participant_id: 'player-1',
+    is_opening: false,
+    is_closing: true,
+  };
+  const earlierClosing = makeOffer({
+    ...baseFields,
+    id: 'closing-a',
+    idempotency_key: 'closing-a',
+    line: 24.5,
+    over_odds: -110,
+    under_odds: -110,
+    snapshot_at: new Date(Date.now() - 120 * 60 * 1000).toISOString(), // 2h ago — earliest
+  });
+  const laterClosing = makeOffer({
+    ...baseFields,
+    id: 'closing-b',
+    idempotency_key: 'closing-b',
+    line: 25.5,
+    over_odds: -115,
+    under_odds: -105,
+    snapshot_at: new Date(Date.now() - 60 * 60 * 1000).toISOString(), // 1h ago — later
+  });
+
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepoSplit([earlierClosing, laterClosing], []);
+
+  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.closing_line, 24.5, 'earliest is_closing offer wins for closing_line');
+  assert.equal(row.closing_over_odds, -110);
+});
+
+test('materializer: MLB sport_key — closing_line set correctly from separate closing fetch', async () => {
+  const mlbLive = makeOffer({
+    id: 'mlb-live-1',
+    idempotency_key: 'mlb-live-1',
+    provider_event_id: 'mlb-event-1',
+    provider_market_key: 'hits-all-game-ou',
+    provider_participant_id: 'MLB_PLAYER_1',
+    sport_key: 'mlb',
+    is_opening: false,
+    is_closing: false,
+    line: 1.5,
+    over_odds: -130,
+    under_odds: 110,
+    snapshot_at: new Date(Date.now() - 10 * 60 * 1000).toISOString(),
+  });
+  const mlbClosing = makeOffer({
+    id: 'mlb-closing-1',
+    idempotency_key: 'mlb-closing-1',
+    provider_event_id: 'mlb-event-1',
+    provider_market_key: 'hits-all-game-ou',
+    provider_participant_id: 'MLB_PLAYER_1',
+    sport_key: 'mlb',
+    is_opening: false,
+    is_closing: true,
+    line: 1.5,
+    over_odds: -140,
+    under_odds: 120,
+    snapshot_at: new Date(Date.now() - 8 * 60 * 60 * 1000).toISOString(), // pre-commence
+  });
+
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepoSplit([mlbLive], [mlbClosing]);
+
+  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.sport_key, 'mlb');
+  assert.equal(row.closing_line, 1.5);
+  assert.equal(row.closing_over_odds, -140, 'MLB closing_over_odds from is_closing=true row');
+  assert.equal(row.closing_under_odds, 120);
+  assert.equal(row.current_over_odds, -130, 'current odds from live (most recent) row');
+});
+
+test('materializer: NHL sport_key — closing_line set correctly from separate closing fetch', async () => {
+  const nhlLive = makeOffer({
+    id: 'nhl-live-1',
+    idempotency_key: 'nhl-live-1',
+    provider_event_id: 'nhl-event-1',
+    provider_market_key: 'shots-all-game-ou',
+    provider_participant_id: 'NHL_PLAYER_1',
+    sport_key: 'nhl',
+    is_opening: false,
+    is_closing: false,
+    line: 2.5,
+    over_odds: -120,
+    under_odds: 100,
+    snapshot_at: new Date(Date.now() - 8 * 60 * 1000).toISOString(),
+  });
+  const nhlClosing = makeOffer({
+    id: 'nhl-closing-1',
+    idempotency_key: 'nhl-closing-1',
+    provider_event_id: 'nhl-event-1',
+    provider_market_key: 'shots-all-game-ou',
+    provider_participant_id: 'NHL_PLAYER_1',
+    sport_key: 'nhl',
+    is_opening: false,
+    is_closing: true,
+    line: 2.5,
+    over_odds: -125,
+    under_odds: 105,
+    snapshot_at: new Date(Date.now() - 7 * 60 * 60 * 1000).toISOString(), // pre-commence
+  });
+
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepoSplit([nhlLive], [nhlClosing]);
+
+  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.sport_key, 'nhl');
+  assert.equal(row.closing_line, 2.5);
+  assert.equal(row.closing_over_odds, -125, 'NHL closing_over_odds from is_closing=true row');
+});
+
+test('materializer: listClosingOffers failure is non-fatal — materializer continues and sets current_line without closing_line', async () => {
+  const offer = makeOffer({
+    id: 'ok-1',
+    idempotency_key: 'ok-1',
+    is_opening: true,
+    is_closing: false,
+    line: 20.5,
+    over_odds: -110,
+    under_odds: -110,
+    snapshot_at: new Date(Date.now() - 15 * 60 * 1000).toISOString(),
+  });
+
+  const faultyRepo = {
+    ...makeProviderOffersRepo([offer]),
+    async listClosingOffers(): Promise<ProviderOfferRecord[]> {
+      throw new Error('closing offers fetch timeout');
+    },
+  };
+
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const materializer = new MarketUniverseMaterializer({ providerOffers: faultyRepo, marketUniverse });
+  const result = await materializer.run();
+
+  assert.equal(result.errors, 0, 'closing fetch failure must not increment error count');
+  assert.equal(result.upserted, 1, 'materializer must still upsert from listRecentOffers');
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.current_line, 20.5);
+  assert.equal(row.closing_line, null, 'closing_line null when closing fetch failed');
+});

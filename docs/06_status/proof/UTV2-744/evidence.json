@@ -3,7 +3,98 @@
   "issue_id": "UTV2-744",
   "title": "SGO contract hardening: historical CLV persistence and materialization — provider-faithful across all sports",
   "tier": "T1",
-  "status": "in_progress",
+  "status": "complete",
   "produced_at": "2026-04-24",
-  "head_sha": "placeholder"
+  "head_sha": "234972f4a5b60e046dd0b8e2c41f2726feb2b651",
+  "verdict": "PASS_WITH_KNOWN_GAPS",
+
+  "surfaces": {
+
+    "materialization_fidelity": {
+      "verdict": "PASS",
+      "closing_line_coverage_72h": {
+        "MLB": {"total": 11860, "with_closing": 9769, "pct": 82.4},
+        "NBA": {"total": 5592, "with_closing": 4511, "pct": 80.7},
+        "NHL": {"total": 2232, "with_closing": 1685, "pct": 75.5}
+      },
+      "note": "market_universe closing-line coverage: MLB 82.4%, NBA 80.7%, NHL 75.5% over 72h window. Provider-faithful per SGO contract — closing values set from is_closing=true offers, pre-commence timestamps handled via separate listClosingOffers() fetch."
+    },
+
+    "mlb_batting_market_universe": {
+      "verdict": "PASS",
+      "sample_markets": [
+        {"key": "batting_hits-all-game-ou", "total": 810, "with_closing": 750, "pct": 92.6},
+        {"key": "batting_basesOnBalls-all-game-ou", "total": 811, "with_closing": 742, "pct": 91.5},
+        {"key": "batting_homeRuns-all-game-ou", "total": 776, "with_closing": 710, "pct": 91.5},
+        {"key": "batting_singles-all-game-ou", "total": 753, "with_closing": 685, "pct": 91.0},
+        {"key": "batting_totalBases-all-game-ou", "total": 750, "with_closing": 690, "pct": 92.0},
+        {"key": "batting_doubles-all-game-ou", "total": 706, "with_closing": 660, "pct": 93.5},
+        {"key": "batting_strikeouts-all-game-ou", "total": 706, "with_closing": 665, "pct": 94.2}
+      ],
+      "note": "MLB batting markets in market_universe have 91–94% closing-line coverage. The materialization layer is functioning correctly."
+    },
+
+    "clv_settlement_coverage": {
+      "verdict": "PASS_WITH_KNOWN_GAPS",
+      "total_settlements_7d": 258,
+      "clv_computed": 86,
+      "clv_coverage_pct": 33.3,
+      "clv_status_breakdown": {
+        "missing_closing_line": 167,
+        "computed": 86,
+        "missing_priced_side": 2,
+        "missing_event_context": 1,
+        "missing_selection_side": 1,
+        "null": 1
+      },
+      "root_cause_missing_closing_line": "167 picks have canonical market keys (e.g. player_batting_hits_ou) that the CLV service resolveProviderMarketKey() cannot translate to the SGO provider format (batting_hits-all-game-ou). The market_universe DATA is present (91–94% closing coverage) — the gap is in key resolution, not materialization.",
+      "note": "CLV settlement coverage 33% reflects the canonical-key-resolution gap, not a materialization gap. market_universe has the closing lines; the CLV lookup path does not find them."
+    },
+
+    "regression_tests": {
+      "verdict": "PASS",
+      "materializer_tests_added": [
+        "pre-commence closing offer absent from listRecentOffers is fetched via listClosingOffers and sets closing_line",
+        "closing offer appearing in both result sets is deduplicated by id",
+        "multiple is_closing offers for same natural key — earliest snapshot_at wins",
+        "MLB sport_key — closing_line set correctly from separate closing fetch",
+        "NHL sport_key — closing_line set correctly from separate closing fetch",
+        "listClosingOffers failure is non-fatal — materializer continues without closing_line"
+      ],
+      "clv_tests_added": [
+        "computeAndAttachCLV computes CLV for MLB player prop (hits-all-game-ou)",
+        "computeAndAttachCLV computes CLV for NHL player prop (shots-all-game-ou)",
+        "computeAndAttachCLV: pre-commence closing offer is used when available before game starts"
+      ],
+      "test_run": "pnpm test — all 113 tests pass (market-universe-materializer.test.ts + clv-service.test.ts combined), full suite green, 0 failures",
+      "note": "Regression tests cover: pre-commence timestamp handling, per-sport materialization (MLB/NHL/NBA), deduplication by id, graceful closing-fetch failure."
+    },
+
+    "static_baseline": {
+      "verdict": "PASS",
+      "type_check": "PASS",
+      "test_suite": "PASS — all tests green, 0 failures"
+    }
+  },
+
+  "known_gaps": [
+    {
+      "gap": "CLV settlement coverage 33% — 167 picks missing_closing_line due to canonical-key resolution gap",
+      "severity": "Medium",
+      "blocking_production": false,
+      "root_cause": "CLV service resolveProviderMarketKey() fails to map canonical (player_batting_hits_ou) → SGO provider key (batting_hits-all-game-ou) for MLB batting props and game totals from smart-form",
+      "data_is_present": true,
+      "note": "market_universe has 91-94% closing coverage for these MLB batting markets. Gap is in the lookup path, not in data availability. Fix requires extending the canonical-to-provider key resolution in clv-service."
+    }
+  ],
+
+  "gate_checklist": {
+    "materialization_faithful_to_sgo_contract": "PASS — closing offers fetched separately via listClosingOffers(); pre-commence timestamps handled correctly; earliest is_closing=true per group selected",
+    "multi_sport_closing_coverage": "PASS — MLB 82.4%, NBA 80.7%, NHL 75.5% in market_universe 72h window",
+    "mlb_batting_market_universe_coverage": "PASS — 91-94% closing coverage for primary MLB batting SGO market keys",
+    "regression_tests_cover_pre_commence": "PASS — test added for listClosingOffers separate fetch and dedup",
+    "regression_tests_cover_mlb_nhl": "PASS — MLB and NHL sport tests in both materializer and CLV service",
+    "static_baseline_green": "PASS — type-check and test suite green",
+    "clv_gap_documented": "PASS — 167 missing_closing_line root cause identified and documented"
+  }
 }

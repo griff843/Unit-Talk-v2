@@ -1306,3 +1306,280 @@ test('existing O/U CLV behavior is unchanged by moneyline path (regression)', as
   assert.ok(result, 'O/U pick should still compute CLV after moneyline path added');
   assert.equal(result.closingOdds, -110);
 });
+
+// ── UTV2-744: Multi-sport CLV fidelity ────────────────────────────────────
+
+test('computeAndAttachCLV computes CLV for MLB player prop (hits-all-game-ou)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'MLB_PLAYER_1',
+    displayName: 'MLB Player One',
+    participantType: 'player',
+    sport: 'MLB',
+    league: 'MLB',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'mlb-evt-1',
+    sportId: 'MLB',
+    eventName: 'Cubs vs. Cardinals',
+    eventDate: '2026-04-20',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-20T17:10:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'mlb-evt-1',
+      providerMarketKey: 'hits-all-game-ou',
+      providerParticipantId: 'MLB_PLAYER_1',
+      sportKey: 'MLB',
+      line: 1.5,
+      overOdds: -130,
+      underOdds: 110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-20T17:00:00.000Z',
+      idempotencyKey: 'mlb-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-mlb-1',
+      submission_id: 'sub-mlb-1',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'hits-all-game-ou',
+      selection: 'Over 1.5',
+      line: 1.5,
+      odds: -120,
+      stake_units: 1,
+      confidence: 0.65,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 82,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-20T14:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-20T14:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Cubs vs. Cardinals' },
+      created_at: '2026-04-20T14:00:00.000Z',
+      updated_at: '2026-04-20T14:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'MLB player prop must produce a CLV result');
+  assert.equal(result.providerKey, 'sgo');
+  // pick at -120 vs closing -130: pick is better odds → positive CLV
+  assert.equal(result.closingOdds, -130);
+  assert.equal(result.beatsClosingLine, true);
+  assert.ok(result.clvRaw > 0);
+});
+
+test('computeAndAttachCLV computes CLV for NHL player prop (shots-all-game-ou)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'NHL_PLAYER_1',
+    displayName: 'NHL Player One',
+    participantType: 'player',
+    sport: 'NHL',
+    league: 'NHL',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'nhl-evt-1',
+    sportId: 'NHL',
+    eventName: 'Oilers vs. Flames',
+    eventDate: '2026-04-21',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-21T19:00:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'nhl-evt-1',
+      providerMarketKey: 'shots-all-game-ou',
+      providerParticipantId: 'NHL_PLAYER_1',
+      sportKey: 'NHL',
+      line: 2.5,
+      overOdds: -115,
+      underOdds: -105,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-21T18:50:00.000Z',
+      idempotencyKey: 'nhl-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-nhl-1',
+      submission_id: 'sub-nhl-1',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'shots-all-game-ou',
+      selection: 'Under 2.5',
+      line: 2.5,
+      odds: -110,
+      stake_units: 1,
+      confidence: 0.6,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 76,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-21T15:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-21T15:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Oilers vs. Flames' },
+      created_at: '2026-04-21T15:00:00.000Z',
+      updated_at: '2026-04-21T15:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'NHL player prop must produce a CLV result');
+  assert.equal(result.providerKey, 'sgo');
+  // Under pick at -110 (implied ~52.4%) vs closing fair under (~48.9% after devig from -115/-105)
+  // pickImplied > closingFair → clvRaw > 0 → beatsClosingLine = true
+  assert.equal(result.closingOdds, -105);
+  assert.equal(result.beatsClosingLine, true);
+  assert.ok(result.clvRaw > 0);
+});
+
+test('computeAndAttachCLV: pre-commence closing offer is used when available before game starts', async () => {
+  // Validates that findClosingLine correctly selects an offer whose snapshot_at
+  // is BEFORE the game start time — the canonical "closing line" in SGO.
+  const repositories = createInMemoryRepositoryBundle();
+  const participant = await repositories.participants.upsertByExternalId({
+    externalId: 'PLAYER_PRECOMMENCE',
+    displayName: 'Pre-Commence Player',
+    participantType: 'player',
+    sport: 'MLB',
+    league: 'MLB',
+    metadata: {},
+  });
+  const event = await repositories.events.upsertByExternalId({
+    externalId: 'evt-precommence',
+    sportId: 'MLB',
+    eventName: 'Red Sox vs. Yankees',
+    eventDate: '2026-04-22',
+    status: 'completed',
+    metadata: { starts_at: '2026-04-22T19:05:00.000Z' },
+  });
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: participant.id,
+    role: 'competitor',
+  });
+
+  // Snapshot at 18:55 — 10 min before game start (pre-commence, within cutoff window)
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-precommence',
+      providerMarketKey: 'strikeouts-all-game-ou',
+      providerParticipantId: 'PLAYER_PRECOMMENCE',
+      sportKey: 'MLB',
+      line: 5.5,
+      overOdds: -140,
+      underOdds: 120,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-22T18:55:00.000Z',
+      idempotencyKey: 'precommence-offer-1',
+      bookmakerKey: null,
+    },
+    // Post-game snapshot — should NOT be selected (after cutoff)
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-precommence',
+      providerMarketKey: 'strikeouts-all-game-ou',
+      providerParticipantId: 'PLAYER_PRECOMMENCE',
+      sportKey: 'MLB',
+      line: 5.5,
+      overOdds: -160,
+      underOdds: 140,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-22T22:30:00.000Z',
+      idempotencyKey: 'postgame-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await computeAndAttachCLV(
+    {
+      id: 'pick-precommence',
+      submission_id: 'sub-precommence',
+      participant_id: participant.id,
+      player_id: null,
+      capper_id: null,
+      market_type_id: null,
+      sport_id: null,
+      market: 'strikeouts-all-game-ou',
+      selection: 'Over 5.5',
+      line: 5.5,
+      odds: -130,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 84,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-22T16:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-22T16:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { eventName: 'Red Sox vs. Yankees' },
+      created_at: '2026-04-22T16:00:00.000Z',
+      updated_at: '2026-04-22T16:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.ok(result, 'pre-commence closing line must produce a CLV result');
+  // findClosingLine uses before: game_starts_at — must select the 18:55 snapshot, not the 22:30 one
+  assert.equal(result.closingSnapshotAt, '2026-04-22T18:55:00.000Z');
+  assert.equal(result.closingOdds, -140); // over side from 18:55 snapshot
+});
