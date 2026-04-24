@@ -6,9 +6,13 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\claude__utv2-749-board-pick-writer-scheduler",
   "branch": "claude/utv2-749-board-pick-writer-scheduler",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c4b26b673412ef64fd9e7675f200261686466d44",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "apps/api/src/index.ts",
+    "packages/config/src/env.ts",
+    ".env.example"
+  ],
   "file_scope_lock": [
     "apps/api/src/index.ts",
     "apps/api/src/routes/board.ts"
@@ -17,13 +21,25 @@
     "docs/06_status/proof/UTV2-749/diff-summary.md",
     "docs/06_status/proof/UTV2-749/verification.log"
   ],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-24T06:30:40.654Z",
-  "heartbeat_at": "2026-04-24T06:30:40.654Z",
+  "heartbeat_at": "2026-04-24T06:50:46.722Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-749-board-pick-writer-scheduler.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-24T06:50:46.722Z",
+      "verdict": "fail",
+      "merge_sha": "c4b26b673412ef64fd9e7675f200261686466d44",
+      "failures": [
+        "M5",
+        "L3",
+        "L4"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": []
 }

@@ -6,9 +6,14 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\claude__utv2-746-replay-audit-scorecard",
   "branch": "claude/utv2-746-replay-audit-scorecard",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "0cff59b",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/proof/UTV2-746/evidence.json",
+    "docs/06_status/proof/UTV2-746/scorecard.md",
+    "docs/05_operations/SGO_REPLAY_SCORECARD.md",
+    "docs/05_operations/SGO_CONTRACT_HARDENING.md"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-746/evidence.json",
     "docs/06_status/proof/UTV2-746/scorecard.md"
@@ -17,7 +22,7 @@
     "docs/06_status/proof/UTV2-746/diff-summary.md",
     "docs/06_status/proof/UTV2-746/verification.log"
   ],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-24T06:44:26.116Z",
   "heartbeat_at": "2026-04-24T06:44:26.116Z",
   "closed_at": null,
