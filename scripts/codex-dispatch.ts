@@ -168,7 +168,7 @@ function runPreflight(
   dryRun: boolean,
   explain: boolean,
 ): ChildResult {
-  const args = ['ops:preflight', '--', issueId, '--tier', tier, '--branch', branch, '--json'];
+  const args = ['ops:preflight', issueId, '--tier', tier, '--branch', branch, '--json'];
   for (const filePath of files) {
     args.push('--files', filePath);
   }
@@ -187,7 +187,7 @@ function runLaneStart(
   branch: string,
   files: string[],
 ): ChildResult {
-  const args = ['ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli'];
+  const args = ['ops:lane-start', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli'];
   for (const filePath of files) {
     args.push('--files', filePath);
   }

@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-24 — **UTV2-587 + UTV2-589 Done. DEBT-003 resolved. UTV2-590 blocked on UTV2-737 → UTV2-732.**
+UTV2-587 (E2E pipeline freshness proof, PR #455) merged and Done. UTV2-589 (Settlement/CLV/P&L validation, PR #456) merged and Done — settlement integrity PASS, correction chain PASS, CLV/P&L PARTIAL_ACCEPTABLE (DEBT-003 resolved). DEBT-003 closed: system-pick-scanner re-enabled, board-construction picks flowing, CLV join proven on 3/7 picks. UTV2-749 created for board-pick-writer scheduling gap. UTV2-590 now blocked only by UTV2-737 (auto-settle proof), which awaits UTV2-732 (Ready for Codex).
+
 2026-04-22 — **M1 Runtime Foundation complete. M4 gate partially unblocked.**
 UTV2-602 (cloud deploy path) and UTV2-621 (ingestion staleness alerting) both merged and marked Done in Linear. M1 milestone is closed. UTV2-588 (Smart Form convergence proof) unblocked and moved to Ready. UTV2-654 (E2E Live Canary) moved to Ready — deploy path prerequisite satisfied. UTV2-587/589/590 remain Blocked Internal on UTV2-576 (closing-line truth). Phase 7A brake source set ratified (UTV2-628, PR #429). CI Fibery sync fixed (UTV2-709, PR #433).
 
