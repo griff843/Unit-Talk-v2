@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-737",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-737-auto-settle-proof",
+  "branch": "codex/utv2-737-auto-settle-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/routes/grading.ts",
+    "apps/api/src/settlement-service.ts",
+    "apps/ingestor/src/entity-resolver.ts",
+    "apps/ingestor/src/ingestor-runner.ts",
+    "apps/ingestor/src/sgo-fetcher.ts",
+    "docs/06_status/proof/UTV2-737/evidence.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-737/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-04-24T12:21:30.793Z",
+  "heartbeat_at": "2026-04-24T12:21:30.793Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-737-auto-settle-proof.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
