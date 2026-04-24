@@ -62,6 +62,38 @@ test('normalizeSGOPairedProp returns a PAIRED normalized offer with stripped mar
   );
 });
 
+test('normalizeSGOPairedProp skips unsupported player statEntity periods instead of emitting game totals', () => {
+  const normalized = normalizeSGOPairedProp({
+    providerEventId: 'evt-1',
+    marketKey: 'points-all-1h-ou',
+    providerParticipantId: 'AARON_GORDON_1_NBA',
+    sportKey: 'NBA',
+    line: '10.5',
+    overOdds: -110,
+    underOdds: -110,
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+  });
+
+  assert.equal(normalized, null);
+});
+
+test('normalizeSGOPairedProp preserves supported player statEntity period props', () => {
+  const normalized = normalizeSGOPairedProp({
+    providerEventId: 'evt-1',
+    marketKey: 'threePointersMade-all-1h-ou',
+    providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+    sportKey: 'NBA',
+    line: '1.5',
+    overOdds: -115,
+    underOdds: -105,
+    snapshotAt: '2026-03-25T12:00:00.000Z',
+  });
+
+  assert.ok(normalized);
+  assert.equal(normalized.providerMarketKey, 'threePointersMade-all-1h-ou');
+  assert.equal(normalized.providerParticipantId, 'JALEN_BRUNSON_1_NBA');
+});
+
 test('collectConfiguredSgoApiKeyCandidates preserves both configured subscriptions without duplicating the active key', () => {
   const candidates = collectConfiguredSgoApiKeyCandidates({
     SGO_API_KEYS: ['active-subscription', 'inactive-subscription'],

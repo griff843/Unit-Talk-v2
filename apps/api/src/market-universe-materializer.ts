@@ -32,6 +32,11 @@ const DEFAULT_LOOKBACK_HOURS = 72;
 
 // Max rows to process per run as a safety cap
 const DEFAULT_MAX_ROWS = 5_000;
+const PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS = new Set([
+  'game_total_ou',
+  '1h_total_ou',
+  '2h_total_ou',
+]);
 
 export interface MaterializerResult {
   upserted: number;
@@ -226,9 +231,15 @@ export class MarketUniverseMaterializer {
 
         // Alias resolution: try sport-specific key first, then sport-agnostic fallback
         const sportKey = latest.sport_key ?? '';
-        const alias =
+        const aliasCandidate =
           aliasMap.get(`${latest.provider_market_key}:${sportKey}`) ??
           aliasMap.get(`${latest.provider_market_key}:`);
+        const alias = isParticipantForbiddenAlias(
+          latest.provider_participant_id ?? null,
+          aliasCandidate?.market_type_id ?? null,
+        )
+          ? undefined
+          : aliasCandidate;
 
         const row: MarketUniverseUpsertInput = {
           // Natural key
@@ -341,6 +352,17 @@ export async function runMarketUniverseMaterializer(
   options: MaterializerOptions = {},
 ): Promise<MaterializerResult> {
   return new MarketUniverseMaterializer(repos).run(options);
+}
+
+function isParticipantForbiddenAlias(
+  providerParticipantId: string | null,
+  marketTypeId: string | null,
+) {
+  return Boolean(
+    providerParticipantId &&
+      marketTypeId &&
+      PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(marketTypeId),
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -12,7 +12,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MarketUniverseMaterializer } from './market-universe-materializer.js';
 import { InMemoryMarketUniverseRepository } from '@unit-talk/db';
-import type { ProviderOfferRecord } from '@unit-talk/db';
+import type { ProviderMarketAliasRow, ProviderOfferRecord } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Minimal stub for ProviderOfferRepository (only listRecentOffers is needed)
@@ -40,7 +40,10 @@ function makeOffer(overrides: Partial<ProviderOfferRecord> = {}): ProviderOfferR
   };
 }
 
-function makeProviderOffersRepo(offers: ProviderOfferRecord[]) {
+function makeProviderOffersRepo(
+  offers: ProviderOfferRecord[],
+  aliasRows: ProviderMarketAliasRow[] = [],
+) {
   return {
     async listRecentOffers(_since: string, _limit?: number) {
       return offers;
@@ -56,10 +59,30 @@ function makeProviderOffersRepo(offers: ProviderOfferRecord[]) {
     markClosingLines: async () => 0,
     resolveProviderMarketKey: async () => null,
     resolveCanonicalMarketKey: async () => null,
-    listAliasLookup: async () => [],
+    listAliasLookup: async () => aliasRows,
     listParticipantAliasLookup: async () => [],
     listOpeningOffers: async () => [],
     listClosingOffers: async () => offers.filter((o) => o.is_closing),
+  };
+}
+
+function makeAliasRow(
+  overrides: Partial<ProviderMarketAliasRow> = {},
+): ProviderMarketAliasRow {
+  const now = new Date().toISOString();
+  return {
+    id: 'alias-1',
+    provider: 'sgo',
+    provider_market_key: 'points-all-game-ou',
+    provider_display_name: 'Points',
+    market_type_id: 'player_points_ou',
+    sport_id: null,
+    stat_type_id: null,
+    combo_stat_type_id: null,
+    metadata: {},
+    created_at: now,
+    updated_at: now,
+    ...overrides,
   };
 }
 
@@ -314,4 +337,30 @@ test('materializer: current line reflects the latest snapshot among multiple off
   const row = marketUniverse.listAll()[0]!;
   assert.equal(row.current_line, 25.5, 'current_line should reflect the latest snapshot');
   assert.equal(row.opening_line, 24.5, 'opening_line should come from is_opening=true snapshot');
+});
+
+test('materializer: SGO participant rows fail closed for participant-forbidden game-total aliases', async () => {
+  const offer = makeOffer({
+    provider_market_key: 'points-all-1h-ou',
+    provider_participant_id: 'AARON_GORDON_1_NBA',
+  });
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepo([offer], [
+    makeAliasRow({
+      provider_market_key: 'points-all-1h-ou',
+      market_type_id: '1h_total_ou',
+    }),
+  ]);
+
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+  });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.provider_participant_id, 'AARON_GORDON_1_NBA');
+  assert.equal(row.provider_market_key, 'points-all-1h-ou');
+  assert.equal(row.market_type_id, null);
+  assert.equal(row.canonical_market_key, 'points-all-1h-ou');
 });
