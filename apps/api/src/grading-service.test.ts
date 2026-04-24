@@ -31,7 +31,12 @@ async function createPostedPickFixture(
     repositories,
   );
 
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
   await transitionPickLifecycle(
     repositories.picks,
     created.pick.id,
@@ -63,7 +68,12 @@ async function attachPlayerEventContext(
     eventExternalId?: string;
     eventName?: string;
     eventDate?: string;
-    eventStatus?: 'scheduled' | 'in_progress' | 'completed' | 'postponed' | 'cancelled';
+    eventStatus?:
+      | 'scheduled'
+      | 'in_progress'
+      | 'completed'
+      | 'postponed'
+      | 'cancelled';
     startsAt?: string;
     providerKey?: string | null;
     ingestionCycleRunId?: string | null;
@@ -132,14 +142,13 @@ async function seedGameResult(
   });
 }
 
-function trustedEventMetadata(
-  input: {
-    startsAt: string;
-    providerKey?: string | null;
-    ingestionCycleRunId?: string | null;
-  },
-) {
-  const providerKey = input.providerKey === undefined ? 'sgo' : input.providerKey;
+function trustedEventMetadata(input: {
+  startsAt: string;
+  providerKey?: string | null;
+  ingestionCycleRunId?: string | null;
+}) {
+  const providerKey =
+    input.providerKey === undefined ? 'sgo' : input.providerKey;
   const ingestionCycleRunId =
     input.ingestionCycleRunId === undefined
       ? 'run-ingestor-cycle-fixture'
@@ -207,10 +216,14 @@ async function seedDistributionReceipt(
 
 test('runGradingPass grades a posted over pick and records grading settlement', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventStatus: 'completed',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventStatus: 'completed',
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -241,11 +254,15 @@ test('runGradingPass posts a settlement recap embed for a graded pick with CLV',
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-recap-1',
-    participantExternalId: 'PLAYER_RECAP_1',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-recap-1',
+      participantExternalId: 'PLAYER_RECAP_1',
+    },
+  );
   mutatePick(repositories, pickId, (existing) => ({
     ...existing,
     metadata: {
@@ -264,7 +281,11 @@ test('runGradingPass posts a settlement recap embed for a graded pick with CLV',
     providerParticipantId: 'PLAYER_RECAP_1',
     marketKey: 'points-all-game-ou',
   });
-  await seedDistributionReceipt(repositories, pickId, 'discord:1296531122234327100');
+  await seedDistributionReceipt(
+    repositories,
+    pickId,
+    'discord:1296531122234327100',
+  );
 
   const previousToken = process.env.DISCORD_BOT_TOKEN;
   const previousFetch = globalThis.fetch;
@@ -318,9 +339,13 @@ test('runGradingPass posts a settlement recap embed for a graded pick with CLV',
 
 test('runGradingPass skips recap posting and logs a warning when no delivery target exists', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -344,7 +369,10 @@ test('runGradingPass skips recap posting and logs a warning when no delivery tar
 
     assert.equal(result.graded, 1);
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0] ?? '', /Skipping recap for pick .*no_sent_distribution_outbox/);
+    assert.match(
+      warnings[0] ?? '',
+      /Skipping recap for pick .*no_sent_distribution_outbox/,
+    );
   } finally {
     if (previousToken === undefined) {
       delete process.env.DISCORD_BOT_TOKEN;
@@ -358,9 +386,13 @@ test('runGradingPass grades under selections by inverting the over-side result',
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     selection: 'Under 24.5',
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -381,9 +413,13 @@ test('runGradingPass grades picks with abbreviated O/U selection format from sma
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     selection: 'Jalen Brunson O 28.5',
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -403,9 +439,13 @@ test('runGradingPass grades picks with abbreviated U/X selection format from sma
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     selection: 'Donovan Mitchell U 28.5',
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -423,10 +463,14 @@ test('runGradingPass grades picks with abbreviated U/X selection format from sma
 
 test('runGradingPass skips picks whose linked event is not completed', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventStatus: 'scheduled',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventStatus: 'scheduled',
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -446,10 +490,14 @@ test('runGradingPass skips picks whose linked event is not completed', async () 
 
 test('runGradingPass grades completed events with trusted provider provenance', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    providerKey: 'sgo',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      providerKey: 'sgo',
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -466,10 +514,14 @@ test('runGradingPass grades completed events with trusted provider provenance', 
 
 test('runGradingPass skips completed events with missing provider provenance', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    providerKey: null,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      providerKey: null,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -487,16 +539,23 @@ test('runGradingPass skips completed events with missing provider provenance', a
 
   assert.equal(result.graded, 0);
   assert.equal(result.skipped, 1);
-  assert.equal(result.details[0]?.reason, 'event_provenance_untrusted_provider');
+  assert.equal(
+    result.details[0]?.reason,
+    'event_provenance_untrusted_provider',
+  );
   assert.match(warnings[0] ?? '', /event_provenance_untrusted_provider/);
 });
 
 test('runGradingPass skips completed events without an ingestion cycle marker', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    ingestionCycleRunId: null,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      ingestionCycleRunId: null,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -508,7 +567,10 @@ test('runGradingPass skips completed events without an ingestion cycle marker', 
 
   assert.equal(result.graded, 0);
   assert.equal(result.skipped, 1);
-  assert.equal(result.details[0]?.reason, 'event_provenance_missing_ingestion_cycle');
+  assert.equal(
+    result.details[0]?.reason,
+    'event_provenance_missing_ingestion_cycle',
+  );
 });
 
 test('runGradingPass skips picks when no matching game result exists', async () => {
@@ -545,9 +607,13 @@ test('runGradingPass skips retry-pending pick without incrementing attempts', as
 
 test('runGradingPass re-attempts and grades pick when retryAfter has elapsed', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   const retryState: GradingRetryState = new Map([
     [
       pickId,
@@ -593,9 +659,13 @@ test('runGradingPass marks pick as grade_skipped_final after 3 failed attempts',
 
 test('runGradingPass is idempotent across repeated executions', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -621,17 +691,23 @@ test('runGradingPass skips picks with no participant link', async () => {
   assert.equal(result.skipped, 1);
   assert.equal(result.details[0]?.pickId, pickId);
   assert.equal(result.details[0]?.reason, 'missing_participant_id');
+  assert.equal(result.details[0]?.marketFamily, 'player_prop');
+  assert.equal(result.details[0]?.participantRequirement, 'required');
 });
 
 test('runGradingPass resolves participant linkage from pick metadata when participant_id is missing', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     selection: 'Jalen Brunson Over 24.5',
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    participantExternalId: 'JALEN_BRUNSON_1_NBA',
-    participantName: 'Jalen Brunson',
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      participantExternalId: 'JALEN_BRUNSON_1_NBA',
+      participantName: 'Jalen Brunson',
+      eventName,
+    },
+  );
   mutatePick(repositories, pickId, (existing) => ({
     ...existing,
     participant_id: null,
@@ -656,15 +732,46 @@ test('runGradingPass resolves participant linkage from pick metadata when partic
   assert.equal(result.details[0]?.result, 'win');
 });
 
+test('runGradingPass grades player props when game_results uses canonical market key', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    market: 'points-all-game-ou',
+    selection: 'Jalen Brunson Over 24.5',
+  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      participantExternalId: 'JALEN_BRUNSON_CANONICAL',
+      participantName: 'Jalen Brunson',
+      eventName,
+    },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'player_points_ou',
+    actualValue: 29,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  assert.equal(result.details[0]?.result, 'win');
+});
+
 test('runGradingPass resolves participant linkage from metadata playerId before fuzzy name matching', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     selection: 'Jalen Brunson Over 24.5',
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    participantExternalId: 'JALEN_BRUNSON_1_NBA',
-    participantName: 'Jalen Brunson',
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      participantExternalId: 'JALEN_BRUNSON_1_NBA',
+      participantName: 'Jalen Brunson',
+      eventName,
+    },
+  );
   mutatePick(repositories, pickId, (existing) => ({
     ...existing,
     participant_id: null,
@@ -820,8 +927,12 @@ test('runGradingPass uses pick eventStartTime to disambiguate repeat player even
 
   const result = await runGradingPass(repositories);
   const settlements = await repositories.settlements.listByPick(pickId);
-  const payload = settlements[0]?.payload as Record<string, unknown> | undefined;
-  const gradingContext = payload?.gradingContext as Record<string, unknown> | undefined;
+  const payload = settlements[0]?.payload as
+    | Record<string, unknown>
+    | undefined;
+  const gradingContext = payload?.gradingContext as
+    | Record<string, unknown>
+    | undefined;
 
   assert.equal(result.graded, 1);
   assert.equal(result.details[0]?.result, 'win');
@@ -878,7 +989,10 @@ test('runGradingPass skips historical event mismatch when explicit pick time is 
 
   assert.equal(result.graded, 0);
   assert.equal(result.skipped, 1);
-  assert.equal(result.details[0]?.reason, 'event_provenance_historical_mismatch');
+  assert.equal(
+    result.details[0]?.reason,
+    'event_provenance_historical_mismatch',
+  );
   assert.equal((await repositories.settlements.listByPick(pickId)).length, 0);
 });
 
@@ -886,11 +1000,15 @@ test('recordGradedSettlement enriches the grading settlement payload with CLV wh
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-clv-1',
-    participantExternalId: 'PLAYER_CLV_1',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-clv-1',
+      participantExternalId: 'PLAYER_CLV_1',
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -926,11 +1044,15 @@ test('recordGradedSettlement writes clvRaw and clvPercent as top-level payload k
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-clv-top-level',
-    participantExternalId: 'PLAYER_CLV_TOP_LEVEL',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-clv-top-level',
+      participantExternalId: 'PLAYER_CLV_TOP_LEVEL',
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -964,11 +1086,15 @@ test('recordGradedSettlement writes beatsClosingLine true when the pick beats th
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-clv-true',
-    participantExternalId: 'PLAYER_CLV_TRUE',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-clv-true',
+      participantExternalId: 'PLAYER_CLV_TRUE',
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -1001,11 +1127,15 @@ test('recordGradedSettlement writes beatsClosingLine false when the pick misses 
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: 150,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-clv-false',
-    participantExternalId: 'PLAYER_CLV_FALSE',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-clv-false',
+      participantExternalId: 'PLAYER_CLV_FALSE',
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -1038,11 +1168,15 @@ test('recordGradedSettlement omits top-level CLV keys when no closing line exist
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-clv-none',
-    participantExternalId: 'PLAYER_CLV_NONE',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-clv-none',
+      participantExternalId: 'PLAYER_CLV_NONE',
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -1074,11 +1208,15 @@ test('recordGradedSettlement persists opening-line fallback visibility when CLV 
   const { repositories, pickId, eventName } = await createPostedPickFixture({
     odds: -105,
   });
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-    eventExternalId: 'evt-clv-opening-fallback',
-    participantExternalId: 'PLAYER_CLV_OPENING',
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-clv-opening-fallback',
+      participantExternalId: 'PLAYER_CLV_OPENING',
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -1126,18 +1264,24 @@ test('recordGradedSettlement produces non-null CLV when a future sibling event i
   // Reproduces the production bug: pick created 2026-04-04, graded against the April 3 event
   // (completed), but CLV was returning null because the April 6 event (scheduled, closer by 30h)
   // was selected by proximity. The fix: CLV now uses gradingContext.eventId directly.
-  const { repositories, pickId } = await createPostedPickFixture({ odds: -112 });
+  const { repositories, pickId } = await createPostedPickFixture({
+    odds: -112,
+  });
 
   // The event that grading resolved to (completed April 3 game)
-  const { participant, event: gradedEvent } = await attachPlayerEventContext(repositories, pickId, {
-    participantExternalId: 'PLAYER_453_A',
-    participantName: 'Fixture Player 453',
-    eventExternalId: 'evt-453-apr3',
-    eventName: 'Team A vs Team B — Apr 3',
-    eventDate: '2026-04-03',
-    eventStatus: 'completed',
-    startsAt: '2026-04-03T02:30:00.000Z',
-  });
+  const { participant, event: gradedEvent } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      participantExternalId: 'PLAYER_453_A',
+      participantName: 'Fixture Player 453',
+      eventExternalId: 'evt-453-apr3',
+      eventName: 'Team A vs Team B — Apr 3',
+      eventDate: '2026-04-03',
+      eventStatus: 'completed',
+      startsAt: '2026-04-03T02:30:00.000Z',
+    },
+  );
 
   // A FUTURE sibling event that is closer in calendar time to the pick creation date.
   // Without the fix, CLV would pick this event and find no offers → return null.
@@ -1176,7 +1320,7 @@ test('recordGradedSettlement produces non-null CLV when a future sibling event i
     {
       actualValue: gameResult.actual_value,
       marketKey: gameResult.market_key,
-      eventId: gradedEvent.id,     // grading resolved this — CLV must use the same
+      eventId: gradedEvent.id, // grading resolved this — CLV must use the same
       gameResultId: gameResult.id,
     },
     repositories,
@@ -1184,15 +1328,22 @@ test('recordGradedSettlement produces non-null CLV when a future sibling event i
 
   const payload = result.settlementRecord.payload as Record<string, unknown>;
   const clv = payload.clv as Record<string, unknown> | null;
-  assert.ok(clv !== null, 'CLV must not be null when a closing line exists for the graded event');
+  assert.ok(
+    clv !== null,
+    'CLV must not be null when a closing line exists for the graded event',
+  );
   assert.equal(clv?.providerKey, 'sgo');
 });
 
 test('runGradingPass writes settlement.graded audit rows with gradingContext payload', async () => {
   const { repositories, pickId, eventName } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId, {
-    eventName,
-  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+    },
+  );
   const gameResult = await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -1202,12 +1353,18 @@ test('runGradingPass writes settlement.graded audit rows with gradingContext pay
 
   await runGradingPass(repositories);
 
-  const auditRecords = (repositories.audit as unknown as {
-    records: Array<Record<string, unknown>>;
-  }).records;
-  const audit = auditRecords.find((record) => record.action === 'settlement.graded');
+  const auditRecords = (
+    repositories.audit as unknown as {
+      records: Array<Record<string, unknown>>;
+    }
+  ).records;
+  const audit = auditRecords.find(
+    (record) => record.action === 'settlement.graded',
+  );
   const payload = audit?.payload as Record<string, unknown> | undefined;
-  const gradingContext = payload?.gradingContext as Record<string, unknown> | undefined;
+  const gradingContext = payload?.gradingContext as
+    | Record<string, unknown>
+    | undefined;
 
   assert.ok(audit);
   assert.equal(audit?.actor, 'grading-service');
@@ -1216,8 +1373,11 @@ test('runGradingPass writes settlement.graded audit rows with gradingContext pay
 });
 
 test('runGradingPass counts write failures as errors and continues grading later picks', async () => {
-  const { repositories, pickId: firstPickId, eventName: firstEventName } =
-    await createPostedPickFixture({ eventName: 'First Event' });
+  const {
+    repositories,
+    pickId: firstPickId,
+    eventName: firstEventName,
+  } = await createPostedPickFixture({ eventName: 'First Event' });
   const { participant: firstParticipant, event: firstEvent } =
     await attachPlayerEventContext(repositories, firstPickId, {
       eventName: firstEventName,
@@ -1240,7 +1400,12 @@ test('runGradingPass counts write failures as errors and continues grading later
     },
     repositories,
   );
-  await transitionPickLifecycle(repositories.picks, secondCreated.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(
+    repositories.picks,
+    secondCreated.pick.id,
+    'queued',
+    'queued',
+  );
   await transitionPickLifecycle(
     repositories.picks,
     secondCreated.pick.id,
@@ -1259,7 +1424,9 @@ test('runGradingPass counts write failures as errors and continues grading later
     actualValue: 31,
   });
 
-  const originalRecord = repositories.settlements.record.bind(repositories.settlements);
+  const originalRecord = repositories.settlements.record.bind(
+    repositories.settlements,
+  );
   let shouldFailFirstWrite = true;
   repositories.settlements.record = async (input) => {
     if (shouldFailFirstWrite) {
@@ -1276,8 +1443,14 @@ test('runGradingPass counts write failures as errors and continues grading later
   assert.equal(result.errors, 1);
   assert.equal(result.details[0]?.outcome, 'error');
   assert.equal(result.details[1]?.outcome, 'graded');
-  assert.equal((await repositories.settlements.listByPick(firstPickId)).length, 0);
-  assert.equal((await repositories.settlements.listByPick(secondCreated.pick.id)).length, 1);
+  assert.equal(
+    (await repositories.settlements.listByPick(firstPickId)).length,
+    0,
+  );
+  assert.equal(
+    (await repositories.settlements.listByPick(secondCreated.pick.id)).length,
+    1,
+  );
 });
 
 function mutatePick(
@@ -1302,14 +1475,16 @@ function asRecord(value: unknown): Record<string, unknown> | null {
     : null;
 }
 
-
 // ---------------------------------------------------------------------------
 // UTV2-144: system_runs observability for grading.run
 // ---------------------------------------------------------------------------
 
 test('runGradingPass writes a grading.run system_runs row on completion', async () => {
   const { repositories, pickId } = await createPostedPickFixture();
-  const { participant, event } = await attachPlayerEventContext(repositories, pickId);
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+  );
   await seedGameResult(repositories, {
     eventId: event.id,
     participantId: participant.id,
@@ -1326,10 +1501,7 @@ test('runGradingPass writes a grading.run system_runs row on completion', async 
     (runs[0]?.details as Record<string, unknown>)?.['picksGraded'],
     1,
   );
-  assert.equal(
-    (runs[0]?.details as Record<string, unknown>)?.['failed'],
-    0,
-  );
+  assert.equal((runs[0]?.details as Record<string, unknown>)?.['failed'], 0);
 });
 
 test('runGradingPass writes grading.run row with failed count when errors occur', async () => {
@@ -1345,8 +1517,19 @@ test('runGradingPass writes grading.run row with failed count when errors occur'
     },
     repositories,
   );
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'posted',
+    'posted',
+    'poster',
+  );
 
   const brokenRepos = {
     ...repositories,
@@ -1362,10 +1545,7 @@ test('runGradingPass writes grading.run row with failed count when errors occur'
 
   const runs = await repositories.runs.listByType('grading.run');
   assert.equal(runs.length, 1);
-  assert.equal(
-    (runs[0]?.details as Record<string, unknown>)?.['failed'],
-    1,
-  );
+  assert.equal((runs[0]?.details as Record<string, unknown>)?.['failed'], 1);
 });
 // --- Game-line grading tests (UTV2-385) ---
 
@@ -1391,8 +1571,19 @@ async function createPostedGameLinePickFixture(
     repositories,
   );
 
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'posted',
+    'posted',
+    'poster',
+  );
 
   // eventName is a top-level SubmissionPayload field, not stored in pick.metadata by default.
   // Inject it so resolvePickEventByName can find the event.
@@ -1408,7 +1599,12 @@ async function attachGameLineEventContext(
   repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
   eventName: string,
   options: {
-    eventStatus?: 'scheduled' | 'in_progress' | 'completed' | 'postponed' | 'cancelled';
+    eventStatus?:
+      | 'scheduled'
+      | 'in_progress'
+      | 'completed'
+      | 'postponed'
+      | 'cancelled';
     eventDate?: string;
   } = {},
 ) {
@@ -1423,10 +1619,11 @@ async function attachGameLineEventContext(
 }
 
 test('runGradingPass grades a game_total_ou pick as win when actual > line', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    selection: 'Over 224.5',
-    line: 224.5,
-  });
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
 
   const event = await attachGameLineEventContext(repositories, eventName);
 
@@ -1450,10 +1647,11 @@ test('runGradingPass grades a game_total_ou pick as win when actual > line', asy
 });
 
 test('runGradingPass grades a legacy totals pick as a game-line market', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    selection: 'Over 224.5',
-    line: 224.5,
-  });
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
 
   mutatePick(repositories, pickId, (existing) => ({
     ...existing,
@@ -1480,11 +1678,99 @@ test('runGradingPass grades a legacy totals pick as a game-line market', async (
   assert.equal(detail.result, 'win');
 });
 
-test('runGradingPass resolves a game-line event from thesis when eventName metadata is missing', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    selection: 'Over 224.5',
-    line: 224.5,
+test('runGradingPass fails closed for unsupported game-line families', async () => {
+  const { repositories, pickId } = await createPostedGameLinePickFixture({
+    market: 'moneyline',
+    selection: 'LAL moneyline',
+    line: 100,
   });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'skipped');
+  assert.equal(detail.reason, 'unsupported_market_family');
+  assert.equal(detail.marketFamily, 'unsupported');
+  assert.equal(detail.participantRequirement, 'forbidden');
+});
+
+test('runGradingPass declares team totals participant-required and skips without a team', async () => {
+  const { repositories, pickId } = await createPostedGameLinePickFixture({
+    market: 'team_total_ou',
+    selection: 'Lakers Over 112.5',
+    line: 112.5,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 0);
+  assert.equal(result.skipped, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.reason, 'missing_participant_id');
+  assert.equal(detail.marketFamily, 'team_total');
+  assert.equal(detail.participantRequirement, 'required');
+});
+
+test('runGradingPass grades team totals when metadata resolves the team participant', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      market: 'team_total_ou',
+      selection: 'Lakers Over 112.5',
+      line: 112.5,
+    });
+  const team = await repositories.participants.upsertByExternalId({
+    externalId: 'TEAM_LAL',
+    displayName: 'Lakers',
+    participantType: 'team',
+    sport: 'NBA',
+    league: 'NBA',
+    metadata: {},
+  });
+  const event = await attachGameLineEventContext(repositories, eventName);
+  await repositories.eventParticipants.upsert({
+    eventId: event.id,
+    participantId: team.id,
+    role: 'home',
+  });
+  mutatePick(repositories, pickId, (existing) => ({
+    ...existing,
+    participant_id: null,
+    metadata: {
+      ...(asRecord(existing.metadata) ?? {}),
+      sport: 'NBA',
+      teamId: team.id,
+      team: 'Lakers',
+      eventName,
+    },
+  }));
+  await repositories.gradeResults.insert({
+    eventId: event.id,
+    participantId: team.id,
+    marketKey: 'team_total_ou',
+    actualValue: 118,
+    source: 'sgo',
+    sourcedAt: '2026-04-04T22:00:00.000Z',
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.graded, 1);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'graded');
+  assert.equal(detail.result, 'win');
+});
+
+test('runGradingPass resolves a game-line event from thesis when eventName metadata is missing', async () => {
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
 
   mutatePick(repositories, pickId, (existing) => ({
     ...existing,
@@ -1516,11 +1802,12 @@ test('runGradingPass resolves a game-line event from thesis when eventName metad
 });
 
 test('runGradingPass does not match an earlier-season same-name event when eventTime points to April 18', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    eventName: 'Lakers vs Warriors',
-    selection: 'Over 224.5',
-    line: 224.5,
-  });
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      eventName: 'Lakers vs Warriors',
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
   const wrongFebruaryEvent = await repositories.events.upsertByExternalId({
     externalId: 'evt-lal-gsw-feb6',
     sportId: 'NBA',
@@ -1565,8 +1852,12 @@ test('runGradingPass does not match an earlier-season same-name event when event
 
   const result = await runGradingPass(repositories);
   const settlements = await repositories.settlements.listByPick(pickId);
-  const payload = settlements[0]?.payload as Record<string, unknown> | undefined;
-  const gradingContext = payload?.gradingContext as Record<string, unknown> | undefined;
+  const payload = settlements[0]?.payload as
+    | Record<string, unknown>
+    | undefined;
+  const gradingContext = payload?.gradingContext as
+    | Record<string, unknown>
+    | undefined;
 
   assert.equal(result.graded, 1);
   assert.equal(result.details[0]?.result, 'win');
@@ -1576,10 +1867,11 @@ test('runGradingPass does not match an earlier-season same-name event when event
 });
 
 test('runGradingPass grades a game_total_ou under pick as win when actual < line', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    selection: 'Under 224.5',
-    line: 224.5,
-  });
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Under 224.5',
+      line: 224.5,
+    });
 
   const event = await attachGameLineEventContext(repositories, eventName);
 
@@ -1602,9 +1894,12 @@ test('runGradingPass grades a game_total_ou under pick as win when actual < line
 });
 
 test('runGradingPass skips game_total_ou pick when event is not completed', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture();
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
 
-  await attachGameLineEventContext(repositories, eventName, { eventStatus: 'in_progress' });
+  await attachGameLineEventContext(repositories, eventName, {
+    eventStatus: 'in_progress',
+  });
 
   const result = await runGradingPass(repositories);
 
@@ -1616,7 +1911,8 @@ test('runGradingPass skips game_total_ou pick when event is not completed', asyn
 });
 
 test('runGradingPass skips game_total_ou pick when no game result exists', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture();
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture();
 
   await attachGameLineEventContext(repositories, eventName);
   // no game_result seeded
@@ -1632,10 +1928,11 @@ test('runGradingPass skips game_total_ou pick when no game result exists', async
 
 // UTV2-448: score-based grading correctness — push and loss cases
 test('runGradingPass grades a game_total_ou over pick as push when actual equals line', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    selection: 'Over 224.5',
-    line: 224.5,
-  });
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
 
   const event = await attachGameLineEventContext(repositories, eventName);
 
@@ -1658,10 +1955,11 @@ test('runGradingPass grades a game_total_ou over pick as push when actual equals
 });
 
 test('runGradingPass grades a game_total_ou over pick as loss when actual < line', async () => {
-  const { repositories, pickId, eventName } = await createPostedGameLinePickFixture({
-    selection: 'Over 224.5',
-    line: 224.5,
-  });
+  const { repositories, pickId, eventName } =
+    await createPostedGameLinePickFixture({
+      selection: 'Over 224.5',
+      line: 224.5,
+    });
 
   const event = await attachGameLineEventContext(repositories, eventName);
 
