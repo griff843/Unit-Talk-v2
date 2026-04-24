@@ -6,9 +6,15 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-740-participant-family-rules",
   "branch": "codex/utv2-740-participant-family-rules",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "ae4162e",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "apps/api/src/grading-service.test.ts",
+    "apps/api/src/grading-service.ts",
+    "apps/api/src/routes/grading.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
   "file_scope_lock": [
     "apps/api/src/grading-service.test.ts",
     "apps/api/src/grading-service.ts",
@@ -19,7 +25,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-740/evidence.json"
   ],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-04-24T06:29:30.613Z",
   "heartbeat_at": "2026-04-24T06:29:30.613Z",
   "closed_at": null,
