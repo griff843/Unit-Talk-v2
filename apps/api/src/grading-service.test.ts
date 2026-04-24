@@ -1910,6 +1910,88 @@ test('runGradingPass skips game_total_ou pick when event is not completed', asyn
   assert.equal(detail.reason, 'event_not_completed');
 });
 
+test('runGradingPass contract gates grading by finalization and supported market family', async (t) => {
+  await t.test('completed supported game total is admissible', async () => {
+    const { repositories, pickId, eventName } =
+      await createPostedGameLinePickFixture({
+        market: 'game_total_ou',
+        selection: 'Over 224.5',
+        line: 224.5,
+      });
+    const event = await attachGameLineEventContext(repositories, eventName, {
+      eventStatus: 'completed',
+    });
+    await repositories.gradeResults.insert({
+      eventId: event.id,
+      participantId: null,
+      marketKey: 'game_total_ou',
+      actualValue: 230,
+      source: 'sgo',
+      sourcedAt: '2026-04-04T22:00:00.000Z',
+    });
+
+    const result = await runGradingPass(repositories);
+
+    assert.equal(result.graded, 1);
+    assert.equal(result.details.find((d) => d.pickId === pickId)?.outcome, 'graded');
+  });
+
+  await t.test('unfinalized supported game total is not admissible', async () => {
+    const { repositories, pickId, eventName } =
+      await createPostedGameLinePickFixture({
+        market: 'game_total_ou',
+        selection: 'Over 224.5',
+        line: 224.5,
+      });
+    const event = await attachGameLineEventContext(repositories, eventName, {
+      eventStatus: 'in_progress',
+    });
+    await repositories.gradeResults.insert({
+      eventId: event.id,
+      participantId: null,
+      marketKey: 'game_total_ou',
+      actualValue: 230,
+      source: 'sgo',
+      sourcedAt: '2026-04-04T21:30:00.000Z',
+    });
+
+    const result = await runGradingPass(repositories);
+    const detail = result.details.find((d) => d.pickId === pickId);
+
+    assert.equal(result.graded, 0);
+    assert.equal(detail?.outcome, 'skipped');
+    assert.equal(detail?.reason, 'event_not_completed');
+  });
+
+  await t.test('deferred SGO family is not admissible even with completed results', async () => {
+    const { repositories, pickId, eventName } =
+      await createPostedGameLinePickFixture({
+        market: 'steals-all-1h-ou',
+        selection: 'Over 1.5',
+        line: 1.5,
+      });
+    const event = await attachGameLineEventContext(repositories, eventName, {
+      eventStatus: 'completed',
+    });
+    await repositories.gradeResults.insert({
+      eventId: event.id,
+      participantId: null,
+      marketKey: 'steals-all-1h-ou',
+      actualValue: 2,
+      source: 'sgo',
+      sourcedAt: '2026-04-04T22:00:00.000Z',
+    });
+
+    const result = await runGradingPass(repositories);
+    const detail = result.details.find((d) => d.pickId === pickId);
+
+    assert.equal(result.graded, 0);
+    assert.equal(detail?.outcome, 'skipped');
+    assert.equal(detail?.reason, 'unsupported_market_family');
+    assert.equal(detail?.marketFamily, 'unsupported');
+  });
+});
+
 test('runGradingPass skips game_total_ou pick when no game result exists', async () => {
   const { repositories, pickId, eventName } =
     await createPostedGameLinePickFixture();
