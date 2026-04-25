@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-753 Done. Auto-graded settlement P&L gap closed.**
+UTV2-753 (PR #471, T2): `recordGradedSettlement()` now calls `computeProfitLossUnits()`; backfill migration patched 254 existing win/loss/push records — 257/257 verified. Live-DB proof gate passes. smart-form `stake_units` chain confirmed correct at 99.2% non-null.
+
 2026-04-25 — **UTV2-722 Done. SGO historical CLV coverage proven. UTV2-723 unblocked.**
 UTV2-722 (PR #469, T1): SGO historical CLV coverage proof complete — MLB 393/492 candidates replay-eligible (79.9%), NBA 100/168 (59.5%), NHL live-only burn-in (model gap, no scored candidates). Total 493 replay-eligible. UTV2-723 (R5 model-trust replay) now Ready for MLB + NBA slices.
 
