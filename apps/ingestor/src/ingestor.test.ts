@@ -1246,10 +1246,11 @@ test('runIngestorCycles triggers grading even when resultsEventsCount is zero', 
 
 test('runIngestorCycles repolls local in-progress events for finalized SGO results', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
+  const recentStartsAt = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
   await resolveSgoEntities(
     [
       createResolvedEvent({
-        startsAt: '2026-04-23T10:00:00.000Z',
+        startsAt: recentStartsAt,
         status: {
           started: true,
           completed: false,
@@ -1311,10 +1312,11 @@ test('runIngestorCycles repolls local in-progress events for finalized SGO resul
 
 test('runIngestorCycles skips finalized repoll for stale events outside the lookback window', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
+  const staleStartsAt = new Date(Date.now() - 72 * 60 * 60 * 1000).toISOString();
   await resolveSgoEntities(
     [
       createResolvedEvent({
-        startsAt: '2026-03-20T01:00:00.000Z',
+        startsAt: staleStartsAt,
         status: {
           started: true,
           completed: false,

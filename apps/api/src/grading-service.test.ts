@@ -1453,6 +1453,84 @@ test('runGradingPass counts write failures as errors and continues grading later
   );
 });
 
+// ---------------------------------------------------------------------------
+// UTV2-753: recordGradedSettlement must include profitLossUnits
+// ---------------------------------------------------------------------------
+
+test('recordGradedSettlement includes profitLossUnits for a win at negative odds', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -160,
+  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-pnl-win',
+      participantExternalId: 'PLAYER_PNL_WIN',
+    },
+  );
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 29,
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'win',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  // stake=1 (null fallback), odds=-160 → 1 * (100/160) = 0.625 → rounds to 0.63
+  assert.equal(payload.profitLossUnits, 0.63);
+});
+
+test('recordGradedSettlement includes profitLossUnits for a loss', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture({
+    odds: -105,
+  });
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    {
+      eventName,
+      eventExternalId: 'evt-pnl-loss',
+      participantExternalId: 'PLAYER_PNL_LOSS',
+    },
+  );
+  const gameResult = await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: 20,
+  });
+
+  const result = await recordGradedSettlement(
+    pickId,
+    'loss',
+    {
+      actualValue: gameResult.actual_value,
+      marketKey: gameResult.market_key,
+      eventId: gameResult.event_id,
+      gameResultId: gameResult.id,
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  // stake=1 (null fallback), loss → -1
+  assert.equal(payload.profitLossUnits, -1);
+});
+
 function mutatePick(
   repositories: ReturnType<typeof createInMemoryRepositoryBundle>,
   pickId: string,
