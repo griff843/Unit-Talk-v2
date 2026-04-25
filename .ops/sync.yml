@@ -1,10 +1,8 @@
 version: 1
 approval:
-  allow_multiple_issues: true
+  allow_multiple_issues: false
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-757
-    - UTV2-754
-  proofs:
-    - apps/api/src/t1-proof-utv2-757-find-by-provenance.test.ts
+    - UTV2-758
+  proofs: []

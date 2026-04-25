@@ -30,3 +30,4 @@ export { handleShadowModelSummaries, handleShadowComparison } from './shadow-mod
 export { handleHealthConfig } from './config.js';
 export { handleBoardWritePicks, handleBoardRunTuning } from './board.js';
 export { handlePromotionScores } from './promotion-scores.js';
+export { handleBuildCandidates } from './candidates.js';
