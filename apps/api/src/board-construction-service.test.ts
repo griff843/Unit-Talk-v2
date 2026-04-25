@@ -96,6 +96,10 @@ class StubMarketUniverseRepository implements IMarketUniverseRepository {
   async listForScan(): Promise<MarketUniverseRow[]> {
     return this.rows;
   }
+
+  async findClosingLineByProviderKey(): Promise<null> {
+    return null;
+  }
 }
 
 class StubSyndicateBoardRepository implements ISyndicateBoardRepository {

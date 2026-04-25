@@ -2,11 +2,20 @@ import { americanToImplied, applyDevig } from '@unit-talk/domain';
 import type {
   EventParticipantRepository,
   EventRepository,
+  IMarketUniverseRepository,
   ParticipantRepository,
   PickRecord,
-  ProviderOfferRecord,
   ProviderOfferRepository,
 } from '@unit-talk/db';
+
+/** Normalized closing-line shape accepted by CLV computation. */
+interface ClosingLineLike {
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  snapshot_at: string;
+  provider_key: string;
+}
 
 export interface CLVResult {
   pickOdds: number;
@@ -75,6 +84,7 @@ export async function computeAndAttachCLV(
     participants: ParticipantRepository;
     events: EventRepository;
     eventParticipants: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
   },
   options: ComputeAndAttachClvOptions = {},
 ): Promise<CLVResult | null> {
@@ -100,6 +110,7 @@ export async function computeCLVOutcome(
     participants: ParticipantRepository;
     events: EventRepository;
     eventParticipants: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
   },
   options: ComputeAndAttachClvOptions = {},
 ): Promise<CLVComputationOutcome> {
@@ -163,7 +174,7 @@ export async function computeCLVOutcome(
   };
 
   // Prefer Pinnacle closing line for highest-quality CLV; fall back to consensus
-  let closingLine = await repositories.providerOffers.findClosingLine({
+  let closingLine: ClosingLineLike | null = await repositories.providerOffers.findClosingLine({
     ...baseLineCriteria,
     bookmakerKey: 'pinnacle',
   });
@@ -179,6 +190,26 @@ export async function computeCLVOutcome(
     closingLine = await repositories.providerOffers.findOpeningLine(baseLineCriteria);
     if (closingLine) {
       isOpeningFallback = true;
+    }
+  }
+
+  // Fallback: read closing data from market_universe (materializer snapshot).
+  // market_universe stores the closing line written by the ingestor even when
+  // provider_offers has no closing snapshot (alias mismatch, delayed ingest, etc.).
+  if (!closingLine && repositories.marketUniverse) {
+    const muRow = await repositories.marketUniverse.findClosingLineByProviderKey({
+      providerEventId: baseLineCriteria.providerEventId,
+      providerMarketKey: baseLineCriteria.providerMarketKey,
+      providerParticipantId: baseLineCriteria.providerParticipantId,
+    });
+    if (muRow) {
+      closingLine = {
+        line: muRow.closing_line,
+        over_odds: muRow.closing_over_odds,
+        under_odds: muRow.closing_under_odds,
+        snapshot_at: muRow.last_offer_snapshot_at,
+        provider_key: muRow.provider_key,
+      };
     }
   }
 
@@ -473,7 +504,7 @@ function inferSelectionSide(selection: string) {
 }
 
 function readClosingSideOdds(
-  offer: ProviderOfferRecord,
+  offer: ClosingLineLike,
   selectionSide: 'over' | 'under',
 ) {
   const requested = selectionSide === 'over' ? offer.over_odds : offer.under_odds;

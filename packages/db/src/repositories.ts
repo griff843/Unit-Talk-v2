@@ -6,7 +6,7 @@ import type {
   SubmissionPayload,
   ValidatedSubmission,
 } from '@unit-talk/contracts';
-import type { IMarketUniverseRepository, MarketUniverseUpsertInput } from './market-universe-repository.js';
+import type { IMarketUniverseRepository, MarketUniverseClosingLine, MarketUniverseUpsertInput } from './market-universe-repository.js';
 import type { ISyndicateBoardRepository, SyndicateBoardInsertInput, SyndicateBoardRow } from './syndicate-board-repository.js';
 import type { IMarketFamilyTrustRepository } from './market-family-trust-repository.js';
 import type { ReferenceDataCatalog } from '@unit-talk/contracts';
@@ -917,7 +917,7 @@ export interface RepositoryBundle {
   executionQuality?: ExecutionQualityRepository;
 }
 
-export type { IMarketUniverseRepository, MarketUniverseUpsertInput };
+export type { IMarketUniverseRepository, MarketUniverseClosingLine, MarketUniverseUpsertInput };
 export type { ISyndicateBoardRepository, SyndicateBoardInsertInput, SyndicateBoardRow };
 export type { IMarketFamilyTrustRepository, MarketFamilyTrustInsert, MarketFamilyTrustRow, ClvFeedbackInsert } from './market-family-trust-repository.js';
 

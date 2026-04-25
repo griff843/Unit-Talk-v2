@@ -41,6 +41,7 @@ import type {
   HedgeOpportunityRepository,
   IMarketUniverseRepository,
   IPickCandidateRepository,
+  MarketUniverseClosingLine,
   MarketUniverseUpsertInput,
   ModelScoreUpdate,
   SelectionRankUpdate,
@@ -6866,6 +6867,28 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
     return Array.from(this.rows.values()).filter((r) => idSet.has(r.id));
   }
 
+  async findClosingLineByProviderKey(criteria: {
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId: string | null;
+  }): Promise<MarketUniverseClosingLine | null> {
+    const k = [
+      'sgo',
+      criteria.providerEventId,
+      criteria.providerParticipantId ?? '',
+      criteria.providerMarketKey,
+    ].join(':');
+    const row = this.rows.get(k);
+    if (!row || row.closing_line === null) return null;
+    return {
+      closing_line: row.closing_line,
+      closing_over_odds: row.closing_over_odds,
+      closing_under_odds: row.closing_under_odds,
+      provider_key: row.provider_key,
+      last_offer_snapshot_at: row.last_offer_snapshot_at,
+    };
+  }
+
   /** Test helper: return all rows. */
   listAll(): MarketUniverseRow[] {
     return Array.from(this.rows.values());
@@ -7065,6 +7088,30 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
       results.push(...((data ?? []) as MarketUniverseRow[]));
     }
     return results;
+  }
+
+  async findClosingLineByProviderKey(criteria: {
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId: string | null;
+  }): Promise<MarketUniverseClosingLine | null> {
+    let query = fromUntyped(this.client, 'market_universe')
+      .select('closing_line,closing_over_odds,closing_under_odds,provider_key,last_offer_snapshot_at')
+      .eq('provider_event_id', criteria.providerEventId)
+      .eq('provider_market_key', criteria.providerMarketKey)
+      .not('closing_line', 'is', null)
+      .limit(1);
+
+    if (criteria.providerParticipantId === null) {
+      query = query.is('provider_participant_id', null);
+    } else {
+      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`market_universe findClosingLineByProviderKey failed: ${error.message}`);
+    const row = (data as MarketUniverseClosingLine[] | null)?.[0] ?? null;
+    return row;
   }
 }
 
