@@ -25,10 +25,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-740/evidence.json"
   ],
-  "status": "closed",
+  "status": "done",
   "started_at": "2026-04-24T06:29:30.613Z",
-  "heartbeat_at": "2026-04-24T06:29:30.613Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-24T08:13:37-04:00",
+  "closed_at": "2026-04-24T08:13:37-04:00",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-740-participant-family-rules.json",
   "created_by": "codex-cli",
