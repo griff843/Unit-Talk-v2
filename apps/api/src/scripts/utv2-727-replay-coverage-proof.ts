@@ -15,7 +15,6 @@
  * Usage: npx tsx apps/api/src/scripts/utv2-727-replay-coverage-proof.ts
  */
 
-import assert from 'node:assert/strict';
 import { createDatabaseClient } from '@unit-talk/db';
 
 const supabase = createDatabaseClient({ useServiceRole: true });
