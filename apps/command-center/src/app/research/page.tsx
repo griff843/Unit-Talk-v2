@@ -34,8 +34,8 @@ const modules: ResearchModule[] = [
     name: 'Matchup Card',
     href: '/research/matchups',
     description: 'View event and participant context for upcoming matchups.',
-    status: 'no-data',
-    statusDetail: 'No events/matchup endpoint exists in operator-web.',
+    status: 'live',
+    statusDetail: 'Wired to /api/operator/events.',
   },
   {
     name: 'Hit Rate',

@@ -16,6 +16,9 @@ import {
   resolveOperatorWorkspaceRoot,
   summarizeObservability,
   type OperatorCapperRecapProvider,
+  type OperatorEventDetail,
+  type OperatorEventRow,
+  type OperatorEventsResponse,
   type OperatorLeaderboardProvider,
   type OperatorStatsProvider,
   type OperatorSnapshotProvider,
@@ -392,6 +395,83 @@ test('GET /api/operator/participants returns empty results when provider has no 
     observedAt: string;
   };
   assert.deepEqual(body.participants, []);
+  assert.equal(body.total, 0);
+  assert.match(body.observedAt, /^20/);
+});
+
+test('GET /api/operator/events returns filtered matchup cards with selected event detail', async () => {
+  const provider = createStaticProvider();
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(
+    address.port,
+    '/api/operator/events?sport=nba&date=2026-03-22&q=knicks&eventId=event-1',
+  );
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    events: Array<{ eventId: string; matchupLabel: string }>;
+    selectedEvent: {
+      eventId: string;
+      matchupLabel: string;
+      participants: Array<{ participantType: string; displayName: string }>;
+      offers: Array<{ marketDisplayName: string }>;
+    } | null;
+    total: number;
+  };
+
+  assert.equal(body.total, 1);
+  assert.deepEqual(body.events.map((row) => row.eventId), ['event-1']);
+  assert.equal(body.events[0]?.matchupLabel, 'New York Knicks vs Boston Celtics');
+  assert.equal(body.selectedEvent?.eventId, 'event-1');
+  assert.equal(
+    body.selectedEvent?.participants.some((participant) => participant.participantType === 'player'),
+    true,
+  );
+  assert.equal(body.selectedEvent?.offers[0]?.marketDisplayName, 'Player Points');
+});
+
+test('GET /api/operator/events returns empty results when provider has no event browse support', async () => {
+  const provider: OperatorSnapshotProvider = {
+    async getSnapshot() {
+      return createSnapshotFromRows({
+        persistenceMode: 'demo',
+        recentOutbox: [],
+        recentReceipts: [],
+        recentSettlements: [],
+        recentRuns: [],
+        recentPicks: [],
+        recentAudit: [],
+      });
+    },
+  };
+  const server = createOperatorServer({ provider });
+
+  await new Promise<void>((resolve) => server.listen(0, resolve));
+  const address = server.address();
+  if (!address || typeof address === 'string') {
+    throw new Error('Expected server address');
+  }
+
+  const response = await makeRequest(address.port, '/api/operator/events?sport=nba&date=2026-03-22');
+  await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+
+  assert.equal(response.statusCode, 200);
+  const body = JSON.parse(response.body) as {
+    events: unknown[];
+    selectedEvent: unknown;
+    total: number;
+    observedAt: string;
+  };
+  assert.deepEqual(body.events, []);
+  assert.equal(body.selectedEvent, null);
   assert.equal(body.total, 0);
   assert.match(body.observedAt, /^20/);
 });
@@ -2488,6 +2568,58 @@ function createStaticProvider(): OperatorSnapshotProvider {
       metadata: { teamCode: 'NYK' },
     },
   ];
+  const events: OperatorEventRow[] = [
+    {
+      eventId: 'event-1',
+      externalId: 'sgo-event-1',
+      eventName: 'Knicks at Celtics',
+      eventDate: '2026-03-22',
+      startTime: '2026-03-22T23:30:00.000Z',
+      status: 'scheduled',
+      sportId: 'nba',
+      leagueId: 'NBA',
+      matchupLabel: 'New York Knicks vs Boston Celtics',
+      teams: [
+        {
+          participantId: 'participant-team-nyk',
+          teamId: 'team-nyk',
+          displayName: 'New York Knicks',
+          role: 'away' as const,
+        },
+        {
+          participantId: 'participant-team-bos',
+          teamId: 'team-bos',
+          displayName: 'Boston Celtics',
+          role: 'home' as const,
+        },
+      ],
+    },
+    {
+      eventId: 'event-2',
+      externalId: 'sgo-event-2',
+      eventName: 'Lakers at Suns',
+      eventDate: '2026-03-22',
+      startTime: '2026-03-23T02:00:00.000Z',
+      status: 'scheduled',
+      sportId: 'nba',
+      leagueId: 'NBA',
+      matchupLabel: 'Los Angeles Lakers vs Phoenix Suns',
+      teams: [
+        {
+          participantId: 'participant-team-lal',
+          teamId: 'team-lal',
+          displayName: 'Los Angeles Lakers',
+          role: 'away' as const,
+        },
+        {
+          participantId: 'participant-team-phx',
+          teamId: 'team-phx',
+          displayName: 'Phoenix Suns',
+          role: 'home' as const,
+        },
+      ],
+    },
+  ];
 
   return {
     async getSnapshot(_filter?: OutboxFilter) {
@@ -2764,6 +2896,82 @@ function createStaticProvider(): OperatorSnapshotProvider {
 
       return {
         participants: filtered.slice(0, limit),
+        total: filtered.length,
+        observedAt: '2026-03-21T14:03:00.000Z',
+      };
+    },
+    async getEvents(filter): Promise<OperatorEventsResponse> {
+      const filtered = events
+        .filter((event) => (filter?.sport ? event.sportId === filter.sport : true))
+        .filter((event) => (filter?.date ? event.eventDate === filter.date : true))
+        .filter((event) => {
+          if (!filter?.q) {
+            return true;
+          }
+          const query = filter.q.toLowerCase();
+          return (
+            event.matchupLabel.toLowerCase().includes(query) ||
+            event.eventName.toLowerCase().includes(query) ||
+            event.teams.some((team) => team.displayName.toLowerCase().includes(query))
+          );
+        });
+
+      const selectedEvent: OperatorEventDetail | null =
+        filter?.eventId === 'event-1'
+          ? {
+              ...events[0]!,
+              participants: [
+                {
+                  participantId: 'participant-team-nyk',
+                  canonicalId: 'team-nyk',
+                  participantType: 'team',
+                  displayName: 'New York Knicks',
+                  role: 'away',
+                  teamId: 'team-nyk',
+                  teamName: 'New York Knicks',
+                },
+                {
+                  participantId: 'participant-team-bos',
+                  canonicalId: 'team-bos',
+                  participantType: 'team',
+                  displayName: 'Boston Celtics',
+                  role: 'home',
+                  teamId: 'team-bos',
+                  teamName: 'Boston Celtics',
+                },
+                {
+                  participantId: 'participant-player-brunson',
+                  canonicalId: 'participant-player-brunson',
+                  participantType: 'player',
+                  displayName: 'Jalen Brunson',
+                  role: 'starter',
+                  teamId: 'team-nyk',
+                  teamName: 'New York Knicks',
+                },
+              ],
+              offers: [
+                {
+                  sportsbookId: 'book-pinnacle',
+                  sportsbookName: 'Pinnacle',
+                  marketTypeId: 'player_points_ou',
+                  marketDisplayName: 'Player Points',
+                  participantId: 'participant-player-brunson',
+                  participantName: 'Jalen Brunson',
+                  line: 28.5,
+                  overOdds: -115,
+                  underOdds: -105,
+                  snapshotAt: '2026-03-22T18:30:00.000Z',
+                  providerKey: 'sgo',
+                  providerMarketKey: 'player_points',
+                  providerParticipantId: 'sgo-jbrunson',
+                },
+              ],
+            }
+          : null;
+
+      return {
+        events: filtered.slice(0, filter?.limit ?? 20),
+        selectedEvent,
         total: filtered.length,
         observedAt: '2026-03-21T14:03:00.000Z',
       };

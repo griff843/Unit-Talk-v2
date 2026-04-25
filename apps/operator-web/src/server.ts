@@ -11,6 +11,7 @@ export const OUTBOX_HISTORY_CUTOFF = '2026-03-20T00:00:00.000Z';
 import {
   createServiceRoleDatabaseConnectionConfig,
   createDatabaseClientFromConnection,
+  createDatabaseRepositoryBundle,
   type OutboxRecord,
   type ReceiptRecord,
   type SettlementRecord,
@@ -18,6 +19,8 @@ import {
   type SystemRunRecord,
   type PickRecord,
   type AuditLogRow,
+  type EventBrowseResult,
+  type MatchupBrowseResult,
 } from '@unit-talk/db';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
 import { memberTiers, resolveTargetRegistry, type MemberTier, type TargetRegistryEntry } from '@unit-talk/contracts';
@@ -58,6 +61,7 @@ import { handleBoardPerformanceRequest } from './routes/board-performance.js';
 import { handleRoutingPreviewRequest } from './routes/routing-preview.js';
 import { handlePromotionPreviewRequest } from './routes/promotion-preview.js';
 import { handlePropOffersRequest } from './routes/prop-offers.js';
+import { handleEventsRequest } from './routes/events.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
@@ -357,10 +361,75 @@ export interface PropOffersResponse {
   observedAt: string;
 }
 
+export interface OperatorEventsFilter {
+  sport?: string;
+  date?: string;
+  q?: string;
+  eventId?: string;
+  limit?: number;
+}
+
+export interface OperatorEventRow {
+  eventId: string;
+  externalId: string | null;
+  eventName: string;
+  eventDate: string;
+  startTime: string | null;
+  status: string;
+  sportId: string;
+  leagueId: string | null;
+  matchupLabel: string;
+  teams: Array<{
+    participantId: string;
+    teamId: string | null;
+    displayName: string;
+    role: 'home' | 'away';
+  }>;
+}
+
+export interface OperatorEventParticipantRow {
+  participantId: string;
+  canonicalId: string | null;
+  participantType: 'team' | 'player';
+  displayName: string;
+  role: string;
+  teamId: string | null;
+  teamName: string | null;
+}
+
+export interface OperatorEventOfferRow {
+  sportsbookId: string | null;
+  sportsbookName: string | null;
+  marketTypeId: string | null;
+  marketDisplayName: string;
+  participantId: string | null;
+  participantName: string | null;
+  line: number | null;
+  overOdds: number | null;
+  underOdds: number | null;
+  snapshotAt: string;
+  providerKey: string;
+  providerMarketKey: string;
+  providerParticipantId: string | null;
+}
+
+export interface OperatorEventDetail extends OperatorEventRow {
+  participants: OperatorEventParticipantRow[];
+  offers: OperatorEventOfferRow[];
+}
+
+export interface OperatorEventsResponse {
+  events: OperatorEventRow[];
+  selectedEvent: OperatorEventDetail | null;
+  total: number;
+  observedAt: string;
+}
+
 export interface OperatorSnapshotProvider {
   getSnapshot(filter?: OutboxFilter): Promise<OperatorSnapshot>;
   getParticipants?(filter?: OperatorParticipantsFilter): Promise<OperatorParticipantsResponse>;
   getPropOffers?(filter?: PropOffersFilter): Promise<PropOffersResponse>;
+  getEvents?(filter?: OperatorEventsFilter): Promise<OperatorEventsResponse>;
   /** Supabase client exposed for pick detail route queries. Only present on database providers. */
   _supabaseClient?: unknown;
 }
@@ -542,6 +611,10 @@ export async function routeOperatorRequest(
     return handlePropOffersRequest(request, response, deps);
   }
 
+  if (method === 'GET' && url.pathname === '/api/operator/events') {
+    return handleEventsRequest(request, response, deps);
+  }
+
   if (method === 'GET' && url.pathname === '/api/operator/pick-search') {
     return handlePickSearchRequest(request, response, deps);
   }
@@ -631,6 +704,7 @@ export function createOperatorSnapshotProvider(
     environment ??= loadOperatorEnvironment();
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
     const client = createDatabaseClientFromConnection(connection);
+    const repositories = createDatabaseRepositoryBundle(connection);
 
     return {
       _supabaseClient: client,
@@ -917,6 +991,30 @@ export function createOperatorSnapshotProvider(
           offers,
           total: count ?? 0,
           hasMore: (count ?? 0) > offset + limit,
+          observedAt: new Date().toISOString(),
+        };
+      },
+      async getEvents(filter?: OperatorEventsFilter) {
+        const sport = filter?.sport?.trim();
+        const date = filter?.date?.trim();
+        const query = filter?.q?.trim().toLowerCase();
+        const limit = Math.min(filter?.limit ?? 20, 100);
+        const matchups =
+          sport && date
+            ? await repositories.referenceData.listMatchups(sport, date)
+            : [];
+        const filteredMatchups = matchups.filter((matchup) =>
+          matchesEventQuery(matchup, query),
+        );
+
+        return {
+          events: filteredMatchups.slice(0, limit).map(mapMatchupBrowseResult),
+          selectedEvent: filter?.eventId
+            ? mapSelectedEvent(
+                await repositories.referenceData.getEventBrowse(filter.eventId),
+              )
+            : null,
+          total: filteredMatchups.length,
           observedAt: new Date().toISOString(),
         };
       },
@@ -2547,6 +2645,14 @@ function handleOperatorProviderFailure(
     async getPropOffers(_filter?: PropOffersFilter) {
       return { offers: [], total: 0, hasMore: false, observedAt: new Date().toISOString() };
     },
+    async getEvents(_filter?: OperatorEventsFilter) {
+      return {
+        events: [],
+        selectedEvent: null,
+        total: 0,
+        observedAt: new Date().toISOString(),
+      };
+    },
   };
 }
 
@@ -2654,6 +2760,105 @@ function normalizeCapperDisplayName(submittedBy: string | null | undefined) {
   return trimmed.length > 0 ? trimmed : 'Unknown';
 }
 
+function matchesEventQuery(matchup: MatchupBrowseResult, query: string | undefined): boolean {
+  if (!query) {
+    return true;
+  }
+
+  const haystacks = [
+    matchup.eventName,
+    formatMatchupLabel(matchup),
+    ...matchup.teams.map((team) => team.displayName),
+  ];
+  return haystacks.some((value) => value.toLowerCase().includes(query));
+}
+
+function mapMatchupBrowseResult(matchup: MatchupBrowseResult): OperatorEventRow {
+  return {
+    eventId: matchup.eventId,
+    externalId: matchup.externalId,
+    eventName: matchup.eventName,
+    eventDate: matchup.eventDate,
+    startTime: matchup.startTime,
+    status: matchup.status,
+    sportId: matchup.sportId,
+    leagueId: matchup.leagueId,
+    matchupLabel: formatMatchupLabel(matchup),
+    teams: matchup.teams,
+  };
+}
+
+function mapSelectedEvent(event: EventBrowseResult | null): OperatorEventDetail | null {
+  if (!event) {
+    return null;
+  }
+
+  return {
+    eventId: event.eventId,
+    externalId: event.externalId,
+    eventName: event.eventName,
+    eventDate: event.eventDate,
+    startTime: event.startTime,
+    status: event.status,
+    sportId: event.sportId,
+    leagueId: event.leagueId,
+    matchupLabel: formatParticipantsLabel(event.participants, event.eventName),
+    teams: event.participants
+      .filter(
+        (participant) =>
+          participant.participantType === 'team' &&
+          (participant.role === 'home' || participant.role === 'away'),
+      )
+      .map((participant) => ({
+        participantId: participant.participantId,
+        teamId: participant.teamId,
+        displayName: participant.displayName,
+        role: participant.role as 'home' | 'away',
+      }))
+      .sort((left, right) => roleSortOrder(left.role) - roleSortOrder(right.role)),
+    participants: event.participants,
+    offers: event.offers,
+  };
+}
+
+function formatMatchupLabel(matchup: MatchupBrowseResult): string {
+  return formatTeamsLabel(
+    matchup.teams.map((team) => ({
+      displayName: team.displayName,
+      role: team.role,
+    })),
+    matchup.eventName,
+  );
+}
+
+function formatParticipantsLabel(
+  participants: EventBrowseResult['participants'],
+  fallback: string,
+): string {
+  const teams = participants
+    .filter(
+      (participant) =>
+        participant.participantType === 'team' &&
+        (participant.role === 'home' || participant.role === 'away'),
+    )
+    .map((participant) => ({
+      displayName: participant.displayName,
+      role: participant.role as 'home' | 'away',
+    }));
+  return formatTeamsLabel(teams, fallback);
+}
+
+function formatTeamsLabel(
+  teams: Array<{ displayName: string; role: 'home' | 'away' }>,
+  fallback: string,
+): string {
+  const orderedTeams = [...teams].sort((left, right) => roleSortOrder(left.role) - roleSortOrder(right.role));
+  if (orderedTeams.length >= 2) {
+    return `${orderedTeams[0]?.displayName ?? fallback} vs ${orderedTeams[1]?.displayName ?? fallback}`;
+  }
+  return fallback;
+}
+
 function matchesSport(pick: PickRecord, requestedSport: string) {
   const metadata = readJsonObject(pick.metadata);
   const sport = metadata?.['sport'];
@@ -2723,6 +2928,10 @@ function readJsonObject(value: unknown): Record<string, unknown> | null {
 
 function readNumber(value: unknown) {
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+}
+
+function roleSortOrder(role: 'home' | 'away') {
+  return role === 'away' ? 0 : 1;
 }
 
 function readNullableNumber(value: unknown) {
