@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-755 In Review. Ingestor fetch hang root-caused and fixed. MLB + NHL odds now flowing.**
+UTV2-755 (PR #478, T3): Two bugs fixed in ingestor: (1) `fetchSgoJson` had no `AbortSignal` — NFL off-season responses hung indefinitely, blocking MLB/NHL from ever running; (2) per-league error isolation added so one league failure skips to the next. Root cause of MLB/NHL gap (0 fresh rows for 24h) confirmed and resolved. Active workaround: `UNIT_TALK_INGESTOR_SKIP_RESULTS=true` + `RESULTS_LOOKBACK_HOURS=4` (NBA results fetch was hanging on 48h of paginated data); will re-enable when a total-time budget is added. First complete NBA→MLB→NHL cycle confirmed: NBA 9,244 rows, MLB 19,023 rows, NHL in progress.
+
 2026-04-25 — **UTV2-576 Done. Closing-line truth ratified. UTV2-433 MLB gate FAIL diagnosed — pick provenance gap.**
 UTV2-576 (T1): CTO ratified closing-line truth as `provider_offers WHERE is_closing = true`; `market_universe` is canonical persistence. Verification run confirmed: NBA 57/59 PASS, NHL 25/31 PASS, MLB 3/167 FAIL. MLB gap is **pick provenance** — 164/167 settled MLB picks have no `marketUniverseId`/`scoredCandidateId` in payload (not through scored candidate pipeline). `provider_offers` has 310K MLB closing rows; data exists but join path does not. UTV2-433 remains Blocked Internal pending remediation decision (backfill or pipeline routing fix). M2 closing-line blocker (UTV2-576) is now Done.
 
