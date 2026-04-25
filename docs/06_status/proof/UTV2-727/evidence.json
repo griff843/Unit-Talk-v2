@@ -1,0 +1,57 @@
+{
+  "issue_id": "UTV2-727",
+  "title": "Proof gap: carry closing-line evidence into scored candidate replay snapshots",
+  "schema": "evidence-bundle/v1",
+  "generated_at": "2026-04-25T03:30:00.000Z",
+  "branch": "griffadavi/utv2-727-proof-gap-carry-closing-line-evidence-into-scored-candidate",
+  "proof_script": "apps/api/src/scripts/utv2-727-replay-coverage-proof.ts",
+  "static_verification": {
+    "pnpm_verify": "PASS",
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "tests": {
+      "closing_leakage_guard": { "pass": 22, "fail": 0, "result": "PASS" },
+      "market_universe_closing_join": { "pass": 16, "fail": 0, "result": "PASS" }
+    }
+  },
+  "runtime_proof": {
+    "run_at": "2026-04-25T03:30:00.000Z",
+    "migrations_applied": [
+      "202604250001_utv2_727_backfill_market_universe_closing_from_provider_offers",
+      "202604250002_utv2_727_sgo_replay_coverage_view"
+    ],
+    "checks": [
+      {
+        "name": "sgo_replay_coverage view queryable",
+        "result": "PASS",
+        "detail": "10 sample rows returned; 6 replay_eligible, 6 has_closing, 10 has_opening"
+      },
+      {
+        "name": "market_universe rows with closing_line != null",
+        "result": "PASS",
+        "detail": "15965 rows with closing evidence"
+      },
+      {
+        "name": "provider_offers with is_closing=true and line != null",
+        "result": "PASS",
+        "detail": "594119 closing offer rows available"
+      },
+      {
+        "name": "sgo_replay_coverage full aggregate",
+        "result": "PASS",
+        "detail": "660 candidates total, 493 replay_eligible (74.7%)"
+      }
+    ],
+    "pass": 4,
+    "fail": 0,
+    "verdict": "PASS"
+  },
+  "guardrails_confirmed": [
+    "No Discord distribution changes",
+    "No pick_candidates created from shadow candidates",
+    "No scoring approval / promotion approval collapse",
+    "Closing fields NULL at scoring time — migration writes only after events close",
+    "sgo_replay_coverage is evaluation-only — never read by scoring inputs"
+  ]
+}
