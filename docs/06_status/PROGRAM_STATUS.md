@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-748 Done. UTV2-435 Done. Matchup Card wired. NHL production gate closed.**
+UTV2-748 (PR #472, T2): Matchup Card live — `GET /api/operator/events` + detail endpoint + command-center UI wired end-to-end. UTV2-435 (T2, data-only): NHL production-readiness gate PASS — 25/31 CLV-backed outcomes (≥10 threshold PM-confirmed), 1,685 open-close rows, 31/31 P&L populated.
+
 2026-04-25 — **UTV2-753 Done. Auto-graded settlement P&L gap closed.**
 UTV2-753 (PR #471, T2): `recordGradedSettlement()` now calls `computeProfitLossUnits()`; backfill migration patched 254 existing win/loss/push records — 257/257 verified. Live-DB proof gate passes. smart-form `stake_units` chain confirmed correct at 99.2% non-null.
 
