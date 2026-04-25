@@ -149,4 +149,14 @@ export interface IMarketUniverseRepository {
     providerMarketKey: string;
     providerParticipantId: string | null;
   }): Promise<MarketUniverseClosingLine | null>;
+
+  /**
+   * Look up a market_universe row by provenance key.
+   */
+  findByProvenance(criteria: {
+    providerKey: string;
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId?: string | null;
+  }): Promise<MarketUniverseRow | null>;
 }

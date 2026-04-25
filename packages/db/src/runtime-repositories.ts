@@ -6889,6 +6889,21 @@ export class InMemoryMarketUniverseRepository implements IMarketUniverseReposito
     };
   }
 
+  async findByProvenance(criteria: {
+    providerKey: string;
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId?: string | null;
+  }): Promise<MarketUniverseRow | null> {
+    const key = [
+      criteria.providerKey,
+      criteria.providerEventId,
+      criteria.providerParticipantId ?? '',
+      criteria.providerMarketKey,
+    ].join(':');
+    return this.rows.get(key) ?? null;
+  }
+
   /** Test helper: return all rows. */
   listAll(): MarketUniverseRow[] {
     return Array.from(this.rows.values());
@@ -7112,6 +7127,30 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     if (error) throw new Error(`market_universe findClosingLineByProviderKey failed: ${error.message}`);
     const row = (data as MarketUniverseClosingLine[] | null)?.[0] ?? null;
     return row;
+  }
+
+  async findByProvenance(criteria: {
+    providerKey: string;
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId?: string | null;
+  }): Promise<MarketUniverseRow | null> {
+    let query = fromUntyped(this.client, 'market_universe')
+      .select('*')
+      .eq('provider_key', criteria.providerKey)
+      .eq('provider_event_id', criteria.providerEventId)
+      .eq('provider_market_key', criteria.providerMarketKey)
+      .limit(1);
+
+    if (criteria.providerParticipantId == null) {
+      query = query.is('provider_participant_id', null);
+    } else {
+      query = query.eq('provider_participant_id', criteria.providerParticipantId);
+    }
+
+    const { data, error } = await query;
+    if (error) throw new Error(`market_universe findByProvenance failed: ${error.message}`);
+    return ((data as MarketUniverseRow[] | null)?.[0]) ?? null;
   }
 }
 

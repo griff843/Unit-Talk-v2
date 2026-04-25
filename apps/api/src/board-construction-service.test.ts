@@ -100,6 +100,10 @@ class StubMarketUniverseRepository implements IMarketUniverseRepository {
   async findClosingLineByProviderKey(): Promise<null> {
     return null;
   }
+
+  async findByProvenance(): Promise<null> {
+    return null;
+  }
 }
 
 class StubSyndicateBoardRepository implements ISyndicateBoardRepository {
