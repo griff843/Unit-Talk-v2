@@ -7,7 +7,7 @@
   "branch": "claude/utv2-705-alias-underscore-mlb-player-prop-keys",
   "base_branch": "main",
   "commit_sha": "c3590a2",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/403",
   "files_changed": [
     "supabase/migrations/202604210003_utv2_705_mlb_underscore_player_prop_aliases.sql"
   ],
@@ -17,10 +17,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-705/evidence.json"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-04-21T01:05:00.000Z",
-  "heartbeat_at": "2026-04-21T01:20:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-25T01:49:24.000Z",
+  "closed_at": "2026-04-25T01:49:24.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

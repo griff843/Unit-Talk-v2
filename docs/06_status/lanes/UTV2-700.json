@@ -7,7 +7,7 @@
   "branch": "claude/utv2-700-period-half-inning-market-types",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/398",
   "files_changed": [
     "supabase/migrations/202604200002_utv2_700_period_half_inning_market_types.sql"
   ],
@@ -17,10 +17,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-700/evidence.json"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-04-20T22:30:00.000Z",
-  "heartbeat_at": "2026-04-20T23:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-25T01:49:24.000Z",
+  "closed_at": "2026-04-25T01:49:24.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

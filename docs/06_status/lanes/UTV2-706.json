@@ -7,7 +7,7 @@
   "branch": "claude/utv2-706-nrfi-gap-documented",
   "base_branch": "main",
   "commit_sha": "cbf66ae",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/402",
   "files_changed": [
     "docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md"
   ],
@@ -17,10 +17,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-706/evidence.json"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-04-21T01:05:00.000Z",
-  "heartbeat_at": "2026-04-21T01:10:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-25T01:49:24.000Z",
+  "closed_at": "2026-04-25T01:49:24.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
