@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-576 Done. Closing-line truth ratified. UTV2-433 MLB gate FAIL diagnosed — pick provenance gap.**
+UTV2-576 (T1): CTO ratified closing-line truth as `provider_offers WHERE is_closing = true`; `market_universe` is canonical persistence. Verification run confirmed: NBA 57/59 PASS, NHL 25/31 PASS, MLB 3/167 FAIL. MLB gap is **pick provenance** — 164/167 settled MLB picks have no `marketUniverseId`/`scoredCandidateId` in payload (not through scored candidate pipeline). `provider_offers` has 310K MLB closing rows; data exists but join path does not. UTV2-433 remains Blocked Internal pending remediation decision (backfill or pipeline routing fix). M2 closing-line blocker (UTV2-576) is now Done.
+
 2026-04-25 — **UTV2-748 Done. UTV2-435 Done. Matchup Card wired. NHL production gate closed.**
 UTV2-748 (PR #472, T2): Matchup Card live — `GET /api/operator/events` + detail endpoint + command-center UI wired end-to-end. UTV2-435 (T2, data-only): NHL production-readiness gate PASS — 25/31 CLV-backed outcomes (≥10 threshold PM-confirmed), 1,685 open-close rows, 31/31 P&L populated.
 
