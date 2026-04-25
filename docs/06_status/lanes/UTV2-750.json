@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-750",
+  "lane_type": "codex",
+  "tier": "T1",
+  "worktree_path": null,
+  "branch": "griffadavi/utv2-750-fix-mlb-clv-coverage-gaps-null-market_type_id-backfill-alias",
+  "base_branch": "main",
+  "commit_sha": "33551413a94fd274d0726de60016b6ec3f56dce3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/462",
+  "files_changed": [
+    "supabase/migrations/202604250003_utv2_725_pick_candidates_sport_key.sql",
+    "apps/api/src/clv-service.ts"
+  ],
+  "file_scope_lock": [
+    "supabase/migrations/202604250003_utv2_725_pick_candidates_sport_key.sql",
+    "apps/api/src/clv-service.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-04-24T20:11:45.708Z",
+  "heartbeat_at": "2026-04-25T02:08:04.000Z",
+  "closed_at": "2026-04-25T02:08:04.000Z",
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "codex",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-25T02:08:00.000Z",
+      "verdict": "PASS",
+      "merge_sha": "33551413a94fd274d0726de60016b6ec3f56dce3",
+      "notes": "T1: stale MLB CLV hyphen aliases removed, market_type_id backfill migration applied"
+    }
+  ],
+  "reopen_history": []
+}

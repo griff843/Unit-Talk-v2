@@ -6,9 +6,13 @@
   "worktree_path": null,
   "branch": "claude/utv2-592-syndicate-proof-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "b055b9c53024d4c818f235bd65668ff1c60c113a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/464",
+  "files_changed": [
+    "apps/api/src/scripts/utv2-592-syndicate-proof-gate.ts",
+    "docs/06_status/proof/UTV2-592/gate-results.md",
+    "docs/06_status/lanes/UTV2-592.json"
+  ],
   "file_scope_lock": [
     "apps/api/src/scripts/utv2-592-syndicate-proof-gate.ts",
     "docs/06_status/proof/UTV2-592/gate-results.md",
@@ -19,13 +23,20 @@
     "docs/06_status/proof/UTV2-592/gate-results.md",
     "docs/06_status/proof/UTV2-592/verification.log"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-04-25T03:00:00.000Z",
-  "heartbeat_at": "2026-04-25T03:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-25T03:48:56.000Z",
+  "closed_at": "2026-04-25T03:48:56.000Z",
   "blocked_by": [],
   "preflight_token": null,
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-25T03:48:00.000Z",
+      "verdict": "GATE-FAIL-BY-DESIGN",
+      "merge_sha": "b055b9c53024d4c818f235bd65668ff1c60c113a",
+      "notes": "T2: syndicate gate ran against 1000-row live sample. market_backed=0%, high_trust=0%, unknown=0%. Gate FAIL is correct — syndicate readiness blocked until real-edge pipeline delivers provenance. CI green, PM verdict approved."
+    }
+  ],
   "reopen_history": []
 }

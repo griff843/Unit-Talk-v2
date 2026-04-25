@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-727, UTV2-728, UTV2-750, UTV2-592 Done. Closing-line evidence partially restored. Syndicate gate FAIL by design.**
+UTV2-750 (PR #461/#462): stale MLB CLV hyphen aliases removed, market_type_id backfill migration applied — MLBclosing coverage path unblocked. UTV2-727 (PR #459, T1): backfill migration populated 15,965 `market_universe.closing_line` rows; `sgo_replay_coverage` view created — 493/660 scored candidates now replay-eligible (74.7%). UTV2-728 (PR #460, T2): high-volume shadow scoring runner added; guardrail tests confirm no picks created, shadow_mode never false. UTV2-592 (PR #464, T2): syndicate proof gate ran on 1,000-row live sample — 0% market-backed, 97.9% confidence-delta → FAIL by design, syndicate readiness correctly blocked until real-edge pipeline delivers provenance.
+
 2026-04-24 — **UTV2-587 + UTV2-589 Done. DEBT-003 resolved. UTV2-590 blocked on UTV2-737 → UTV2-732.**
 UTV2-587 (E2E pipeline freshness proof, PR #455) merged and Done. UTV2-589 (Settlement/CLV/P&L validation, PR #456) merged and Done — settlement integrity PASS, correction chain PASS, CLV/P&L PARTIAL_ACCEPTABLE (DEBT-003 resolved). DEBT-003 closed: system-pick-scanner re-enabled, board-construction picks flowing, CLV join proven on 3/7 picks. UTV2-749 created for board-pick-writer scheduling gap. UTV2-590 now blocked only by UTV2-737 (auto-settle proof), which awaits UTV2-732 (Ready for Codex).
 
@@ -56,22 +59,21 @@ Worker confirmed DOWN (no runs in 2hr window). Prior claim of worker UP was fals
 
 ## Active PRs (pending review)
 
-| PR | Issue | Tier | Status |
-|----|-------|------|--------|
-| [#434](https://github.com/griff843/Unit-Talk-v2/pull/434) | UTV2-627 model health scanner | T1 | Needs `t1-approved` label |
-| [#435](https://github.com/griff843/Unit-Talk-v2/pull/435) | UTV2-659 Google OAuth Smart Form | T2 | In Review |
+None open as of 2026-04-25.
 
 ---
 
-## Recently Merged (2026-04-15 → 2026-04-22)
+## Recently Merged (2026-04-24 → 2026-04-25)
 
-| PR | Issue | Description |
-|----|-------|-------------|
-| [#423](https://github.com/griff843/Unit-Talk-v2/pull/423) | UTV2-602 | Cloud deploy path — M1 gate ✓ |
-| [#427](https://github.com/griff843/Unit-Talk-v2/pull/427) | UTV2-621 | Ingestion staleness alerting — M1 gate ✓ |
-| [#429](https://github.com/griff843/Unit-Talk-v2/pull/429) | UTV2-628 | Execution quality → model trust feedback |
-| [#430](https://github.com/griff843/Unit-Talk-v2/pull/430) | UTV2-634 | Live availability signals wired |
-| [#433](https://github.com/griff843/Unit-Talk-v2/pull/433) | UTV2-709 | CI: fix Fibery sync (vars vs secrets) |
+| PR | Issue | Tier | Description |
+|----|-------|------|-------------|
+| [#461](https://github.com/griff843/Unit-Talk-v2/pull/461) | UTV2-750 | T1 | Remove stale MLB CLV hyphen aliases + market_type_id backfill migration |
+| [#462](https://github.com/griff843/Unit-Talk-v2/pull/462) | UTV2-750 | T1 | MLB CLV alias resolution fix (alias key format mismatch) |
+| [#459](https://github.com/griff843/Unit-Talk-v2/pull/459) | UTV2-727 | T1 | Carry closing-line evidence into scored candidate replay — 15,965 rows backfilled, 74.7% replay-eligible |
+| [#460](https://github.com/griff843/Unit-Talk-v2/pull/460) | UTV2-728 | T2 | High-volume shadow scoring runner with guardrail tests |
+| [#464](https://github.com/griff843/Unit-Talk-v2/pull/464) | UTV2-592 | T2 | Syndicate proof gate — FAIL by design (0% market-backed; gate working correctly) |
+| [#455](https://github.com/griff843/Unit-Talk-v2/pull/455) | UTV2-587 | T1 | E2E pipeline freshness proof |
+| [#456](https://github.com/griff843/Unit-Talk-v2/pull/456) | UTV2-589 | T1 | Settlement/CLV/P&L validation — DEBT-003 resolved |
 
 ---
 
@@ -105,9 +107,9 @@ Worker confirmed DOWN (no runs in 2hr window). Prior claim of worker UP was fals
 | Risk | Severity | Status |
 |------|----------|--------|
 | **Worker runtime post-deploy unconfirmed** | **Critical** | Deploy path (602) merged but hosted worker health not yet observed. Must confirm before M4. |
-| **Closing-line truth gap** (UTV2-576) | High | Open — blocks UTV2-587/589/590. `market_universe.closing_line` coverage near-zero in last audit. |
+| **Closing-line truth gap** (UTV2-576) | High | Partially mitigated — UTV2-727 backfilled 15,965 `market_universe.closing_line` rows; UTV2-750 fixed MLB alias mismatch. UTV2-576 (closing-line truth source canonicalization) still open. |
 | Settlement sample volume too thin (UTV2-581) | High | Open — only 16 settlement records in last audit sample. Blocks UTV2-589. |
-| Score provenance mostly unknown (UTV2-580) | High | Open — 819/841 picks = `unknown` edge-source. |
+| Score provenance mostly unknown (UTV2-580) | High | Open — 97.9% confidence-delta on 30-day sample (UTV2-592 gate). Syndicate readiness blocked. |
 | Production readiness canary not yet executed | High | UTV2-654 now Ready. Requires worker health confirmation first. |
 | Board cap `perSport: 3` saturates for single-capper NBA | Medium | Open — UTV2-284 awaiting PM decision |
 
