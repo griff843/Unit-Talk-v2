@@ -16,10 +16,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-590/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-24T15:21:26.407Z",
-  "heartbeat_at": "2026-04-24T15:21:26.407Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-25T01:49:24.000Z",
+  "closed_at": "2026-04-25T01:49:24.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-590-production-readiness-closeout.json",
   "created_by": "claude",

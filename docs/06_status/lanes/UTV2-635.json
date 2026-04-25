@@ -21,10 +21,10 @@
     "apps/api/src/promotion-service.ts"
   ],
   "expected_proof_paths": [],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-04-21T13:00:00.000Z",
-  "heartbeat_at": "2026-04-21T14:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-25T01:49:24.000Z",
+  "closed_at": "2026-04-25T01:49:24.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
