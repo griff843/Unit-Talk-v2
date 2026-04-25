@@ -44,6 +44,8 @@ export interface SGOResultsFetchOptions {
   lookbackHours?: number;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  /** Max total time for all paginated fetches (ms). Defaults to 300_000 (5 min). */
+  maxFetchMs?: number;
 }
 
 export interface SGORequestTelemetry {
@@ -242,6 +244,7 @@ export async function fetchSGOResultsWithTelemetry(
     url,
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
+    ...(options.maxFetchMs !== undefined ? { maxFetchMs: options.maxFetchMs } : {}),
   });
   const rawEvents = payloads.flatMap(extractEvents);
 
@@ -256,18 +259,30 @@ export async function fetchSGOResultsWithTelemetry(
 const MAX_RATE_LIMIT_RETRIES = 1;
 const DEFAULT_BACKOFF_MS = 60_000;
 
+const DEFAULT_MAX_FETCH_MS = 300_000;
+
 async function fetchSgoPages(input: {
   endpoint: 'odds' | 'results';
   url: URL;
   fetchImpl: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  maxFetchMs?: number;
 }) {
   const telemetry = createEmptyTelemetry(input.endpoint);
   const payloads: unknown[] = [];
   const seenCursors = new Set<string>();
   let nextCursor: string | null = null;
+  const maxFetchMs = input.maxFetchMs ?? DEFAULT_MAX_FETCH_MS;
+  const startMs = Date.now();
 
   for (let page = 0; page < MAX_SGO_PAGINATION_PAGES; page += 1) {
+    const elapsedMs = Date.now() - startMs;
+    if (elapsedMs >= maxFetchMs) {
+      console.warn(
+        `[sgo-fetcher] ${input.endpoint} fetch budget exhausted after ${Math.round(elapsedMs / 1000)}s — returning ${payloads.length} pages (page ${page}/${MAX_SGO_PAGINATION_PAGES})`,
+      );
+      return { payloads, telemetry };
+    }
     const pageUrl = new URL(input.url.toString());
     if (nextCursor) {
       pageUrl.searchParams.set('cursor', nextCursor);

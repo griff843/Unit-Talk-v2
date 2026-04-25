@@ -26,6 +26,8 @@ export interface IngestorRunnerOptions {
   fetchImpl?: typeof fetch;
   skipResults?: boolean;
   resultsLookbackHours?: number;
+  /** Max total time for the results pagination loop (ms). Defaults to 300_000 in sgo-fetcher. */
+  resultsMaxFetchMs?: number;
   logger?: Pick<Console, 'warn' | 'info'>;
   triggerGradingRun?: typeof triggerGradingRun;
   /** Called with the staleness message when cycle gap > CYCLE_GAP_WARN_MS. Wire to Discord in production. */
@@ -87,6 +89,9 @@ export async function runIngestorCycles(
             ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
             ...(options.resultsLookbackHours !== undefined
               ? { resultsLookbackHours: options.resultsLookbackHours }
+              : {}),
+            ...(options.resultsMaxFetchMs !== undefined
+              ? { resultsMaxFetchMs: options.resultsMaxFetchMs }
               : {}),
             ...(options.sleep ? { sleep: options.sleep } : {}),
             ...(options.logger ? { logger: options.logger } : {}),
