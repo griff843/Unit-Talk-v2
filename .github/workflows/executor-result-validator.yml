@@ -247,8 +247,9 @@ jobs:
                         }
                       }
 
-                      // Reject placeholders
-                      if (/\b(TODO|TBD|FIXME|PLACEHOLDER|<fill-in>)\b/i.test(content)) {
+                      // Reject uppercase placeholders (case-sensitive to avoid false
+                      // positives from test runner output like "ℹ todo 0").
+                      if (/\b(TODO|TBD|FIXME|PLACEHOLDER|<fill-in>)\b/.test(content)) {
                         errors.push(
                           'Proof file contains placeholder text (TODO/TBD/FIXME).'
                         );

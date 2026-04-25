@@ -14,8 +14,10 @@ import { runBoardConstruction } from './board-construction-service.js';
 import { runModelHealthScan } from './model-health-scanner.js';
 import { runClosingLineRecovery } from './closing-line-recovery-service.js';
 import { runBoardPickWriter } from './board-pick-writer.js';
+import { runCandidatePickScan } from './candidate-pick-scanner.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
+const CANDIDATE_PICK_SCANNER_INTERVAL_MS = 60 * 1000; // 60 seconds
 const MODEL_HEALTH_SCANNER_INTERVAL_MS = 4 * 60 * 60 * 1000; // 4 hours
 const CLOSING_LINE_RECOVERY_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes — runs before materializer
 const MARKET_UNIVERSE_MATERIALIZER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -43,6 +45,7 @@ let candidateScoringTimer: ReturnType<typeof setInterval> | null = null;
 let rankedSelectionTimer: ReturnType<typeof setInterval> | null = null;
 let boardConstructionTimer: ReturnType<typeof setInterval> | null = null;
 let boardPickWriterTimer: ReturnType<typeof setInterval> | null = null;
+let candidatePickScannerTimer: ReturnType<typeof setInterval> | null = null;
 let modelHealthScannerTimer: ReturnType<typeof setInterval> | null = null;
 let shuttingDown = false;
 
@@ -187,6 +190,26 @@ server.listen(port, () => {
     }, BOARD_PICK_WRITER_INTERVAL_MS);
   }
 
+  // Candidate pick scanner: converts qualified+scored pick_candidates into awaiting_approval picks
+  // UTV2-757 — gated on SYNDICATE_MACHINE_ENABLED (board pipeline must be producing candidates)
+  // Governance brake: source='system-pick-scanner' is in GOVERNANCE_BRAKE_SOURCES — picks land in awaiting_approval
+  if (environment.SYNDICATE_MACHINE_ENABLED === 'true') {
+    const candidatePickScanDeps = {
+      pickCandidates: runtime.repositories.pickCandidates,
+      marketUniverse: runtime.repositories.marketUniverse,
+      picks: runtime.repositories.picks,
+      submissions: runtime.repositories.submissions,
+      audit: runtime.repositories.audit,
+      participants: runtime.repositories.participants,
+      events: runtime.repositories.events,
+      providerOffers: runtime.repositories.providerOffers,
+    };
+    runCandidatePickScan(candidatePickScanDeps, { logger: console }).catch(() => {});
+    candidatePickScannerTimer = setInterval(() => {
+      runCandidatePickScan(candidatePickScanDeps, { logger: console }).catch(() => {});
+    }, CANDIDATE_PICK_SCANNER_INTERVAL_MS);
+  }
+
   // Model health scanner: evaluate champion model health every 4 hours
   // UTV2-627 — writes snapshots to model_health_snapshots, alerts on warning/critical transitions
   if (runtime.repositories.modelRegistry && runtime.repositories.modelHealthSnapshots) {
@@ -266,6 +289,7 @@ function shutdown(signal: 'SIGINT' | 'SIGTERM') {
   if (rankedSelectionTimer) { clearInterval(rankedSelectionTimer); rankedSelectionTimer = null; }
   if (boardConstructionTimer) { clearInterval(boardConstructionTimer); boardConstructionTimer = null; }
   if (boardPickWriterTimer) { clearInterval(boardPickWriterTimer); boardPickWriterTimer = null; }
+  if (candidatePickScannerTimer) { clearInterval(candidatePickScannerTimer); candidatePickScannerTimer = null; }
   if (modelHealthScannerTimer) { clearInterval(modelHealthScannerTimer); modelHealthScannerTimer = null; }
 
   server.close(() => {
