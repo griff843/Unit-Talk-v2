@@ -96,6 +96,15 @@ export interface MarketUniverseUpsertInput {
   last_offer_snapshot_at: string;
 }
 
+/** Minimal closing-line shape returned by findClosingLineByProviderKey. */
+export interface MarketUniverseClosingLine {
+  closing_line: number | null;
+  closing_over_odds: number | null;
+  closing_under_odds: number | null;
+  provider_key: string;
+  last_offer_snapshot_at: string;
+}
+
 export interface IMarketUniverseRepository {
   /**
    * Upsert a batch of market_universe rows using the natural key conflict target:
@@ -123,4 +132,21 @@ export interface IMarketUniverseRepository {
    * Used by the candidate scoring service to load market data for batch scoring.
    */
   findByIds(ids: string[]): Promise<MarketUniverseRow[]>;
+
+  /**
+   * Looks up the persisted closing-line data from market_universe for a given
+   * provider natural key triple (no alias resolution needed — caller supplies
+   * the already-resolved provider_market_key).
+   *
+   * Used by CLV service as a fallback when provider_offers has no closing line:
+   * market_universe stores the closing snapshot written by the materializer.
+   *
+   * Returns null when no row matches or closing_line is NULL.
+   * InMemory returns null (no closing data in test mode; tests mock at a higher level).
+   */
+  findClosingLineByProviderKey(criteria: {
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId: string | null;
+  }): Promise<MarketUniverseClosingLine | null>;
 }

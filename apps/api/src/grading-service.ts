@@ -66,6 +66,7 @@ export async function runGradingPass(
     | 'participants'
     | 'events'
     | 'eventParticipants'
+    | 'marketUniverse'
     | 'outbox'
     | 'receipts'
     | 'runs'

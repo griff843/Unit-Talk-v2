@@ -24,6 +24,7 @@ export interface GradingCronRunnerOptions {
     | 'participants'
     | 'events'
     | 'eventParticipants'
+    | 'marketUniverse'
     | 'outbox'
     | 'receipts'
     | 'runs'

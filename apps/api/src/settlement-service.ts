@@ -18,6 +18,7 @@ import type {
   AuditLogRepository,
   EventParticipantRepository,
   EventRepository,
+  IMarketUniverseRepository,
   PickLifecycleRecord,
   PickRecord,
   PickRepository,
@@ -122,6 +123,7 @@ export async function recordGradedSettlement(
     participants: ParticipantRepository;
     events: EventRepository;
     eventParticipants: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
   },
 ): Promise<RecordSettlementResult> {
   const pick = await repositories.picks.findPickById(pickId);
