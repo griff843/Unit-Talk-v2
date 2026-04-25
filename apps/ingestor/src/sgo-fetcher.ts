@@ -315,6 +315,7 @@ async function fetchSgoJson(input: {
       headers: {
         accept: 'application/json',
       },
+      signal: AbortSignal.timeout(30_000),
     });
 
     telemetry.requestCount += 1;
