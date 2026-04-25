@@ -54,6 +54,7 @@ import {
   handleBoardWritePicks,
   handleBoardRunTuning,
   handlePromotionScores,
+  handleBuildCandidates,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import { handleModelHealthAlerts, handleModelHealthDecision } from './routes/model-health.js';
@@ -506,6 +507,10 @@ export async function routeRequest(
 
   if (method === 'POST' && url.pathname === '/api/board/run-tuning') {
     return handleBoardRunTuning(request, response, runtime);
+  }
+
+  if (method === 'POST' && url.pathname === '/api/candidates/build') {
+    return handleBuildCandidates(request, response, runtime);
   }
 
   return writeJson(response, 404, {
