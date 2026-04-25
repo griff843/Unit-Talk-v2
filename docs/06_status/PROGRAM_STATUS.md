@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-722 Done. SGO historical CLV coverage proven. UTV2-723 unblocked.**
+UTV2-722 (PR #469, T1): SGO historical CLV coverage proof complete — MLB 393/492 candidates replay-eligible (79.9%), NBA 100/168 (59.5%), NHL live-only burn-in (model gap, no scored candidates). Total 493 replay-eligible. UTV2-723 (R5 model-trust replay) now Ready for MLB + NBA slices.
+
 2026-04-25 — **UTV2-752 Done. Closing-line CLV fallback shipped. UTV2-727, UTV2-728, UTV2-750, UTV2-592 also Done.**
 UTV2-752 (PR #463, T2): `market_universe.closing_*` fallback added to CLV service — when `provider_offers` has no closing snapshot, CLV now reads persisted closing line from `market_universe`. Proof script confirms live fallback path works. Combined with UTV2-727 backfill (15,965 rows), closing-line coverage gap is substantially reduced.
 
