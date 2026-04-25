@@ -24,10 +24,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-742/evidence.json"
   ],
-  "status": "closed",
+  "status": "done",
   "started_at": "2026-04-24T13:57:36.636Z",
-  "heartbeat_at": "2026-04-24T14:11:01.287Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-04-24T11:41:27-04:00",
+  "closed_at": "2026-04-24T11:41:27-04:00",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-742-sgo-provider-contract-regression.json",
   "created_by": "codex-cli",
