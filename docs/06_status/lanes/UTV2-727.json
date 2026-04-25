@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-727",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": null,
+  "branch": "griffadavi/utv2-727-proof-gap-carry-closing-line-evidence-into-scored-candidate",
+  "base_branch": "main",
+  "commit_sha": "cea8ab86763f61f09164e62c3666f51fe79781e3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/459",
+  "files_changed": [
+    "supabase/migrations/202604250001_utv2_727_backfill_market_universe_closing_from_provider_offers.sql",
+    "supabase/migrations/202604250002_utv2_727_sgo_replay_coverage_view.sql",
+    "apps/api/src/scripts/utv2-727-replay-coverage-proof.ts",
+    "apps/api/src/tests/closing-leakage-guard.test.ts",
+    "apps/api/src/tests/market-universe-closing-join.test.ts",
+    "docs/06_status/proof/UTV2-727/evidence.json",
+    "docs/06_status/proof/UTV2-727/verification.log"
+  ],
+  "file_scope_lock": [
+    "supabase/migrations/202604250001_utv2_727_backfill_market_universe_closing_from_provider_offers.sql",
+    "supabase/migrations/202604250002_utv2_727_sgo_replay_coverage_view.sql",
+    "apps/api/src/scripts/utv2-727-replay-coverage-proof.ts",
+    "docs/06_status/proof/UTV2-727/evidence.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-727/evidence.json",
+    "docs/06_status/proof/UTV2-727/verification.log"
+  ],
+  "status": "done",
+  "started_at": "2026-04-24T19:35:36.708Z",
+  "heartbeat_at": "2026-04-25T03:33:23.000Z",
+  "closed_at": "2026-04-25T03:33:23.000Z",
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-04-25T03:30:00.000Z",
+      "verdict": "PASS",
+      "merge_sha": "cea8ab86763f61f09164e62c3666f51fe79781e3",
+      "notes": "T1: pnpm verify PASS, 38/38 tests PASS, 4/4 runtime proof PASS (live Supabase), migrations applied"
+    }
+  ],
+  "reopen_history": []
+}
