@@ -109,6 +109,83 @@ test('ProviderOfferRepository.findClosingLine handles participant-less markets',
   assert.equal(result?.idempotency_key, 'total-1');
 });
 
+test('computeCLVOutcome resolves provider market from market_type_id before legacy pick.market', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const resolvedAliases: string[] = [];
+  repositories.providerOffers.resolveProviderMarketKey = async (canonicalKey, provider) => {
+    resolvedAliases.push(`${provider}:${canonicalKey}`);
+    return canonicalKey === 'game_total_ou' && provider === 'sgo'
+      ? 'points-all-game-ou'
+      : null;
+  };
+
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-mlb-total',
+      providerMarketKey: 'points-all-game-ou',
+      providerParticipantId: null,
+      sportKey: 'MLB',
+      line: 8.5,
+      overOdds: -102,
+      underOdds: -118,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: true,
+      snapshotAt: '2026-04-24T22:00:00.000Z',
+      idempotencyKey: 'mlb-total-closing',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const outcome = await computeCLVOutcome(
+    {
+      id: 'pick-mlb-total',
+      submission_id: 'submission-mlb-total',
+      participant_id: null,
+      player_id: null,
+      capper_id: null,
+      market_type_id: 'game_total_ou',
+      sport_id: 'MLB',
+      market: 'totals',
+      selection: 'Over 8.5',
+      line: 8.5,
+      odds: -110,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'api',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 91,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-24T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-24T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: {},
+      created_at: '2026-04-24T20:00:00.000Z',
+      updated_at: '2026-04-24T20:05:00.000Z',
+    },
+    repositories,
+    {
+      preResolvedContext: {
+        providerEventId: 'evt-mlb-total',
+        eventStartTime: '2026-04-24T23:00:00.000Z',
+        participantExternalId: null,
+      },
+    },
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.equal(outcome.resolvedMarketKey, 'points-all-game-ou');
+  assert.deepEqual(resolvedAliases, ['sgo:game_total_ou']);
+  assert.equal(outcome.result?.providerKey, 'sgo');
+});
+
 test('computeAndAttachCLV returns a positive CLV result when pick beats the closing line', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const participant = await repositories.participants.upsertByExternalId({
