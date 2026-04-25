@@ -149,6 +149,13 @@ export {
   DatabaseMarketFamilyTrustRepository,
 } from './market-family-trust-repository.js';
 
+function providerMarketKeyPriority(providerMarketKey: string): number {
+  if (providerMarketKey.includes('-all-game-')) return 0;
+  if (providerMarketKey.includes('-game-')) return 1;
+  if (providerMarketKey.includes('-all-')) return 2;
+  return 3;
+}
+
 function extractPlayerId(pick: CanonicalPick): string | null {
   const raw = pick.metadata?.['playerId'];
   return typeof raw === 'string' && raw.length > 0 ? raw : null;
@@ -4579,8 +4586,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     )
       .select('provider_market_key')
       .eq('market_type_id', canonicalKey)
-      .eq('provider', provider)
-      .limit(1);
+      .eq('provider', provider);
 
     if (error) {
       throw new Error(
@@ -4589,6 +4595,12 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     }
 
     const rows = (data ?? []) as Array<{ provider_market_key: string }>;
+    rows.sort((left, right) => {
+      const priority =
+        providerMarketKeyPriority(left.provider_market_key) -
+        providerMarketKeyPriority(right.provider_market_key);
+      return priority || left.provider_market_key.localeCompare(right.provider_market_key);
+    });
     return rows[0]?.provider_market_key ?? null;
   }
 
