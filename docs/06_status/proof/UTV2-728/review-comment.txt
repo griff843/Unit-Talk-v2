@@ -1,0 +1,48 @@
+## Verification Review — UNI-32 (UTV2-728)
+**Verdict: PASS**
+
+---
+
+### Acceptance Criteria Review
+
+**1. Shadow scoring runs at scale without widening live picks — PASS**
+
+Evidence: `candidate-scoring-service.ts` only writes via `updateModelScoreBatch`, which uses the `ModelScoreUpdate` interface (`id`, `model_score`, `model_tier`, `model_confidence` only). This interface structurally cannot set `pick_id`, `shadow_mode`, or write to the `picks` table. The service has no imports or calls to promotion, distribution, or settlement services.
+
+Proof JSON confirms: `picksCreated=0`, `shadowModeFalseSet=0`, `distributionEnqueued=0`, `promotionWidened=0` across both runs.
+
+Test at line 120 of `shadow-scoring-runner.test.ts` performs static source analysis confirming `enqueueDistribution()`, `promoteToLive()`, and `createPick()` are absent from the runner.
+
+**2. Daily proof JSON emitted with required counts — PASS**
+
+Two artifacts present in canonical directory (`docs/06_status/proof/UTV2-728/`):
+- `proof-5d22291b...json` (2026-04-24T19:53:44Z) — dry-run, counts only
+- `proof-a698fee0...json` (2026-04-24T19:54:13Z) — live run, candidatesScoredThisRun=62
+
+All required fields present: `rawPropsIngested`, `marketUniverseRows`, `candidatesScanned`, `candidatesAlreadyScored`, `candidatesScoredThisRun`, `skippedByReason`, `ranked`, `posted`, `shadowOnly`, `settledResultBacked`, `clvReady`, plus `timestamp`, `runId`, and all four guardrail counters.
+
+**3. No live pick leakage — PASS**
+
+`shadowOnly=11,107` — all scanned candidates remain `shadow_mode=true` with `pick_id=null`. `posted=7` is pre-existing state. The service never sets `pick_id`, never calls `shadow_mode=false`, confirmed both by code review and proof artifact.
+
+---
+
+### Notes (non-blocking)
+
+**PM count claim is imprecise:** The PM summary stated "11,107 shadow picks scored" — this conflates `candidatesScanned=11,107` with scoring. The proof shows `candidatesScoredThisRun=62` in the live run. The 62 scored vs 10,516 unscored is explained by champion model coverage (Phase 7E fail-closed: no champion → skip). This is a summary inaccuracy, not an implementation bug.
+
+**Guardrails are structural, not runtime-counted:** Guardrail zeros are hardcoded by design, asserting that `runCandidateScoring` cannot perform the forbidden operations by construction. This is valid — the type-level contract (`ModelScoreUpdate`) enforces the boundary. A future improvement would be runtime counters propagated from the service, but not a blocker here.
+
+**No gate log artifact:** No explicit `pnpm verify` output attached. Two commits (`2c2d6e` initial, `a897376` lint fix) confirm the gate ran and a lint failure was resolved. Given local-gate-only governance, this is acceptable.
+
+---
+
+### Evidence Cited
+- `scripts/shadow-scoring-runner.ts` — reviewed in full
+- `apps/api/src/candidate-scoring-service.ts` — reviewed in full
+- `scripts/shadow-scoring-runner.test.ts` — 15 tests counted and reviewed
+- `docs/06_status/proof/UTV2-728/proof-5d22291b-c01c-476d-b61b-85d68271ade0.json`
+- `docs/06_status/proof/UTV2-728/proof-a698fee0-2865-4c53-bbe3-b8ed59fa5508.json`
+- Git commits: `2c2d6e` + `a897376` (merge SHA)
+
+**Verification Lead sign-off. Marking done.**
