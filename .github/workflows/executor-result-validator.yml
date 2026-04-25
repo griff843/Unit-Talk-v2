@@ -70,10 +70,12 @@ jobs:
             // ── 3. Parse executor result comments ──────────────────────
             function parseResult(body) {
               if (!body) return null;
-              const lines = body.split(/\r?\n/).map(l => l.trim());
-              if (lines.length < 3) return null;
-              if (lines[0] !== 'EXECUTOR_RESULT: READY_FOR_REVIEW') return null;
-              if (lines[1] !== 'schema: executor-result/v1') return null;
+              // Strip markdown bold (**key:**) and YAML front-matter fences (---).
+              const lines = body.split(/\r?\n/).map(l =>
+                l.trim().replace(/^\*\*(.+?)\*\*\s*/, '$1 ').replace(/^---$/, '')
+              );
+              if (!lines.some(l => l === 'EXECUTOR_RESULT: READY_FOR_REVIEW')) return null;
+              if (!lines.some(l => l === 'schema: executor-result/v1')) return null;
 
               const field = (name) => {
                 const re = new RegExp('^' + name + ':\\s+(.+)$', 'i');
@@ -189,10 +191,31 @@ jobs:
                         const fileSha = shaMatch
                           ? shaMatch[1].trim()
                           : null;
-                        if (fileSha !== headSha) {
+                        if (!fileSha || !/^[0-9a-f]{7,40}$/i.test(fileSha)) {
                           errors.push(
-                            `Proof MERGE_SHA mismatch: file has "${fileSha}", expected "${headSha}".`
+                            `Proof MERGE_SHA is not a valid git SHA: "${fileSha}".`
                           );
+                        } else {
+                          // MERGE_SHA must be an ancestor of (or equal to) the PR HEAD.
+                          // This allows proof files to reference the implementation commit
+                          // SHA rather than their own commit SHA, avoiding the SHA
+                          // preimage circular dependency.
+                          try {
+                            const cmp = await github.rest.repos.compareCommits({
+                              owner, repo, base: fileSha, head: headSha
+                            });
+                            // status "ahead" means headSha is ahead of fileSha — valid ancestor
+                            // status "identical" means they are the same commit — also valid
+                            if (!['ahead', 'identical'].includes(cmp.data.status)) {
+                              errors.push(
+                                `Proof MERGE_SHA "${fileSha}" is not an ancestor of PR HEAD "${headSha}" (compare status: ${cmp.data.status}).`
+                              );
+                            }
+                          } catch (e) {
+                            errors.push(
+                              `Could not verify MERGE_SHA "${fileSha}": ${e.message}`
+                            );
+                          }
                         }
                       }
                       if (!content.includes('ASSERTIONS:')) {
