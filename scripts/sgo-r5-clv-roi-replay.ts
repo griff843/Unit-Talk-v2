@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
-import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '../packages/db/node_modules/@supabase/supabase-js/dist/index.mjs';
 import { loadEnvironment } from '@unit-talk/config';
 
 type Client = SupabaseClient<Record<string, never>>;
@@ -62,6 +62,11 @@ interface PricePoint {
 }
 
 interface EventRow {
+  id: string;
+  external_id: string | null;
+}
+
+interface ParticipantRow {
   id: string;
   external_id: string | null;
 }
@@ -149,6 +154,19 @@ async function buildReport(client: Client): Promise<ReplayReport> {
   const scoredUniverseRows = scoredSgo
     .map((row) => universeById.get(row.universe_id))
     .filter((row): row is MarketUniverseRow => row !== undefined);
+  const participantRows = await fetchParticipantsByExternalId(
+    client,
+    unique(
+      scoredUniverseRows
+        .map((row) => row.provider_participant_id)
+        .filter((id): id is string => id !== null),
+    ),
+  );
+  const participantIdByExternalId = new Map(
+    participantRows
+      .filter((row): row is ParticipantRow & { external_id: string } => row.external_id !== null)
+      .map((row) => [row.external_id, row.id]),
+  );
   const providerEvidence = await fetchProviderOfferEvidence(client, scoredUniverseRows);
   const openCloseReady = scoredSgo.filter((row) => {
     const universe = universeById.get(row.universe_id);
@@ -176,13 +194,24 @@ async function buildReport(client: Client): Promise<ReplayReport> {
   let missingResultMarket = 0;
   let missingResultParticipant = 0;
 
-  const settlementCompatible = openCloseReady.filter((candidate) =>
-    isSettlementCompatible(universeById.get(candidate.universe_id)),
-  );
+  const settlementCompatible = openCloseReady.filter((candidate) => {
+    const universe = universeById.get(candidate.universe_id);
+    const participantId =
+      universe?.participant_id ??
+      (universe?.provider_participant_id
+        ? participantIdByExternalId.get(universe.provider_participant_id) ?? null
+        : null);
+    return isSettlementCompatible(universe, participantId);
+  });
 
   for (const candidate of settlementCompatible) {
     const universe = universeById.get(candidate.universe_id);
     if (!universe || candidate.model_score === null) continue;
+    const participantId =
+      universe.participant_id ??
+      (universe.provider_participant_id
+        ? participantIdByExternalId.get(universe.provider_participant_id) ?? null
+        : null);
     const eventId = eventIdByExternalId.get(universe.provider_event_id);
     const marketKey = universe.market_type_id ?? universe.canonical_market_key;
     if (!eventId || !marketKey) {
@@ -196,14 +225,14 @@ async function buildReport(client: Client): Promise<ReplayReport> {
     }
     const result = resultByKey.get([
       eventId,
-      universe.participant_id ?? '',
+      participantId ?? '',
       marketKey,
     ].join('|'));
     if (!result) {
       if (!eventMarketKeys.has([eventId, marketKey].join('|'))) {
         missingResultMarket++;
       }
-      if (!eventParticipantKeys.has([eventId, universe.participant_id ?? ''].join('|'))) {
+      if (!eventParticipantKeys.has([eventId, participantId ?? ''].join('|'))) {
         missingResultParticipant++;
       }
       missingResult++;
@@ -321,6 +350,22 @@ async function fetchEvents(client: Client, externalIds: string[]) {
   return rows;
 }
 
+async function fetchParticipantsByExternalId(client: Client, externalIds: string[]) {
+  if (externalIds.length === 0) return [];
+
+  const rows: ParticipantRow[] = [];
+  for (const ids of chunk(externalIds, 200)) {
+    const { data, error } = await client
+      .from('participants')
+      .select('id,external_id')
+      .in('external_id', ids);
+    if (error) throw error;
+    rows.push(...((data ?? []) as ParticipantRow[]));
+  }
+
+  return rows;
+}
+
 async function fetchGameResults(client: Client, eventIds: string[]) {
   const rows: GameResultRow[] = [];
   for (const ids of chunk(eventIds, 200)) {
@@ -367,10 +412,13 @@ function inferSide(row: MarketUniverseRow): Side {
   return (row.fair_over_prob ?? 0) >= (row.fair_under_prob ?? 0) ? 'over' : 'under';
 }
 
-function isSettlementCompatible(row: MarketUniverseRow | undefined) {
+function isSettlementCompatible(
+  row: MarketUniverseRow | undefined,
+  resolvedParticipantId: string | null,
+) {
   if (!row) return false;
   if (!row.provider_market_key.includes('-game-')) return false;
-  if (row.provider_participant_id !== null && row.participant_id === null) return false;
+  if (row.provider_participant_id !== null && resolvedParticipantId === null) return false;
   return true;
 }
 

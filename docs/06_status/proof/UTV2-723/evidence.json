@@ -1,0 +1,24 @@
+{
+  "issue_id": "UTV2-723",
+  "generated_at": "2026-04-25",
+  "status": "PASS",
+  "reason": "PASS: 283 settled candidates with closing-line CLV (>=30)",
+  "summary": {
+    "replay_eligible_candidates": 493,
+    "settled_candidates": 283,
+    "clv_computed": 283,
+    "mean_clv_pct": -2.8,
+    "median_clv_pct": 4.28,
+    "monotonicity_pass": true
+  },
+  "blocker_fix": {
+    "provider_entity_aliases_created": 840,
+    "market_universe_unresolved_before": 16936,
+    "market_universe_unresolved_after": 0,
+    "resolution_source": "participants.external_id"
+  },
+  "notes": [
+    "Replay script verified after adding participant resolution fallback for historical SGO player props.",
+    "Sibling CLV/ROI replay script was patched with the same participant-resolution fallback."
+  ]
+}
