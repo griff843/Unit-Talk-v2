@@ -25,6 +25,8 @@ export interface IngestLeagueOptions {
   resultsStartsBefore?: string;
   providerEventIds?: string[];
   resultsLookbackHours?: number;
+  /** Max total time for the results pagination loop. Passed to fetchSGOResultsWithTelemetry. */
+  resultsMaxFetchMs?: number;
   skipResults?: boolean;
   resultsOnly?: boolean;
   sleep?: (ms: number) => Promise<void>;
@@ -260,6 +262,9 @@ export async function ingestLeague(
             : {}),
           ...(options.resultsLookbackHours !== undefined
             ? { lookbackHours: options.resultsLookbackHours }
+            : {}),
+          ...(options.resultsMaxFetchMs !== undefined
+            ? { maxFetchMs: options.resultsMaxFetchMs }
             : {}),
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),

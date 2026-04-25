@@ -40,6 +40,10 @@ function createIngestorRuntimeDependencies() {
     env.UNIT_TALK_INGESTOR_RESULTS_LOOKBACK_HOURS,
     48,
   );
+  const resultsMaxFetchMs = parsePositiveInt(
+    env.UNIT_TALK_INGESTOR_RESULTS_MAX_FETCH_MS,
+    300_000,
+  );
   const apiUrl = env.UNIT_TALK_API_URL;
   const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
@@ -58,6 +62,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       resultsLookbackHours,
+      resultsMaxFetchMs,
       schedulerConfig,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
@@ -87,6 +92,7 @@ function createIngestorRuntimeDependencies() {
       autorun,
       skipResults,
       resultsLookbackHours,
+      resultsMaxFetchMs,
       schedulerConfig,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
@@ -159,6 +165,7 @@ if (runtime.autorun) {
         maxCycles: runtime.maxCycles ?? Number.POSITIVE_INFINITY,
         skipResults: runtime.skipResults,
         resultsLookbackHours: runtime.resultsLookbackHours,
+        resultsMaxFetchMs: runtime.resultsMaxFetchMs,
         pollIntervalMs: runtime.pollIntervalMs,
         schedulerConfig: runtime.schedulerConfig,
         logger: console,
