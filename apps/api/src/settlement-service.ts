@@ -164,6 +164,11 @@ export async function recordGradedSettlement(
     payload['beatsClosingLine'] = clv.beatsClosingLine;
   }
 
+  const profitLossUnits = computeProfitLossUnits(result, pick.odds, pick.stake_units);
+  if (profitLossUnits !== null) {
+    payload['profitLossUnits'] = profitLossUnits;
+  }
+
   const settledAt = new Date().toISOString();
 
   let settlementRecord: SettlementRecord;
