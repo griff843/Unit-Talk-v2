@@ -79,18 +79,24 @@ export async function runIngestorCycles(
     const cycleSnapshotAt = new Date().toISOString();
 
     for (const league of options.leagues) {
-      results.push(
-        await ingestLeague(league, options.apiKey, options.repositories, {
-          snapshotAt: cycleSnapshotAt,
-          ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
-          ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
-          ...(options.resultsLookbackHours !== undefined
-            ? { resultsLookbackHours: options.resultsLookbackHours }
-            : {}),
-          ...(options.sleep ? { sleep: options.sleep } : {}),
-          ...(options.logger ? { logger: options.logger } : {}),
-        }),
-      );
+      try {
+        results.push(
+          await ingestLeague(league, options.apiKey, options.repositories, {
+            snapshotAt: cycleSnapshotAt,
+            ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
+            ...(options.skipResults !== undefined ? { skipResults: options.skipResults } : {}),
+            ...(options.resultsLookbackHours !== undefined
+              ? { resultsLookbackHours: options.resultsLookbackHours }
+              : {}),
+            ...(options.sleep ? { sleep: options.sleep } : {}),
+            ...(options.logger ? { logger: options.logger } : {}),
+          }),
+        );
+      } catch (leagueError: unknown) {
+        options.logger?.warn?.(
+          `[ingestor] league=${league} failed, skipping to next: ${leagueError instanceof Error ? leagueError.message : String(leagueError)}`,
+        );
+      }
     }
 
     const finalizedRepolls = await runFinalizedRepollsForCycle(
