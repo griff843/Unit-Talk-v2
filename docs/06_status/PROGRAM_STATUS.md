@@ -7,6 +7,9 @@
 
 ## Last Updated
 
+2026-04-25 — **UTV2-752 Done. Closing-line CLV fallback shipped. UTV2-727, UTV2-728, UTV2-750, UTV2-592 also Done.**
+UTV2-752 (PR #463, T2): `market_universe.closing_*` fallback added to CLV service — when `provider_offers` has no closing snapshot, CLV now reads persisted closing line from `market_universe`. Proof script confirms live fallback path works. Combined with UTV2-727 backfill (15,965 rows), closing-line coverage gap is substantially reduced.
+
 2026-04-25 — **UTV2-727, UTV2-728, UTV2-750, UTV2-592 Done. Closing-line evidence partially restored. Syndicate gate FAIL by design.**
 UTV2-750 (PR #461/#462): stale MLB CLV hyphen aliases removed, market_type_id backfill migration applied — MLBclosing coverage path unblocked. UTV2-727 (PR #459, T1): backfill migration populated 15,965 `market_universe.closing_line` rows; `sgo_replay_coverage` view created — 493/660 scored candidates now replay-eligible (74.7%). UTV2-728 (PR #460, T2): high-volume shadow scoring runner added; guardrail tests confirm no picks created, shadow_mode never false. UTV2-592 (PR #464, T2): syndicate proof gate ran on 1,000-row live sample — 0% market-backed, 97.9% confidence-delta → FAIL by design, syndicate readiness correctly blocked until real-edge pipeline delivers provenance.
 

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-752",
+  "lane_type": "claude",
+  "tier": "T2",
+  "branch": "claude/utv2-752-closing-null-clv-gap",
+  "commit_sha": "45dacfde4acc0b2e56bae8ee43eba1d3a23baf49",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/463",
+  "status": "done",
+  "started_at": "2026-04-25T01:00:00.000Z",
+  "closed_at": "2026-04-25T04:42:31.000Z",
+  "truth_check_history": [
+    {
+      "verdict": "PASS",
+      "merge_sha": "45dacfde4acc0b2e56bae8ee43eba1d3a23baf49",
+      "note": "T2: verify green, live-DB proof present, PM verdict APPROVED, Fibery entity seeded"
+    }
+  ]
+}
