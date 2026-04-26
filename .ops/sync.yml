@@ -1,9 +1,9 @@
 version: 1
 approval:
   allow_multiple_issues: true
-  skip_sync_required: false
+  skip_sync_required: true
 entities:
-  issues:
-    - UTV2-736
-  proofs:
-    - docs/06_status/proof/UTV2-736.md
+  issues: []
+  findings: []
+  controls: []
+  proofs: []
