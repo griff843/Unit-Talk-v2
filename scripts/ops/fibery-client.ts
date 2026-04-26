@@ -27,6 +27,12 @@ export type FiberyOperationResult = {
   detail: string;
 };
 
+export type FiberyEntityLookupResult = {
+  entity_id: string;
+  found: boolean;
+  detail: string;
+};
+
 export class FiberyClient {
   private readonly apiUrl: string;
   private readonly token: string;
@@ -106,6 +112,28 @@ export class FiberyClient {
       dry_run: false,
       operation: 'set_state',
       detail: `set ${config.type} ${publicId} to ${state}`,
+    };
+  }
+
+  async verifyEntity(
+    config: FiberyEntityConfig,
+    publicId: string,
+  ): Promise<FiberyEntityLookupResult> {
+    if (this.dryRun) {
+      return {
+        entity_id: publicId,
+        found: true,
+        detail: `would verify ${config.type} ${publicId}`,
+      };
+    }
+
+    const entity = await this.queryEntity(config, publicId, []);
+    return {
+      entity_id: publicId,
+      found: entity !== null,
+      detail: entity
+        ? `verified ${config.type} ${publicId}`
+        : `missing ${config.type} ${publicId}`,
     };
   }
 

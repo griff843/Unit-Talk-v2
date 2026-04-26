@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-762",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main",
+  "branch": "codex/utv2-762-fibery-sync-guardrail",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    ".ops/sync.yml",
+    "docs/05_operations/FIBERY_SYNC.md",
+    "docs/06_status/lanes/UTV2-762.json",
+    "package.json",
+    "scripts/ops/fibery-check.test.ts",
+    "scripts/ops/fibery-check.ts",
+    "scripts/ops/fibery-client.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync.yml",
+    "docs/05_operations/FIBERY_SYNC.md",
+    "docs/06_status/lanes/UTV2-762.json",
+    "package.json",
+    "scripts/ops/fibery-check.test.ts",
+    "scripts/ops/fibery-check.ts",
+    "scripts/ops/fibery-client.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-762/fibery-readiness.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-04-26T00:00:00.000Z",
+  "heartbeat_at": "2026-04-26T00:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
