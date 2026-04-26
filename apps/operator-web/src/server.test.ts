@@ -6236,6 +6236,38 @@ test('GET /api/operator/board-state returns empty board state when no DB client'
   assert.deepEqual(body.data.conflictCards, []);
 });
 
+import { computeBestOver, computeBestUnder } from './routes/line-shopper.js';
+
+test('computeBestOver returns bookmaker with highest over odds', () => {
+  const books = [
+    { bookmakerKey: 'draftkings', line: 5.5, overOdds: -110, underOdds: -110, isOpening: false, isClosing: false, snapshotAt: '' },
+    { bookmakerKey: 'fanduel', line: 5.5, overOdds: -105, underOdds: -115, isOpening: false, isClosing: false, snapshotAt: '' },
+    { bookmakerKey: 'pinnacle', line: 5.5, overOdds: -108, underOdds: -108, isOpening: false, isClosing: false, snapshotAt: '' },
+  ];
+  assert.equal(computeBestOver(books), 'fanduel');
+});
+
+test('computeBestUnder returns bookmaker with least-negative under odds', () => {
+  const books = [
+    { bookmakerKey: 'draftkings', line: 5.5, overOdds: -110, underOdds: -120, isOpening: false, isClosing: false, snapshotAt: '' },
+    { bookmakerKey: 'fanduel', line: 5.5, overOdds: -105, underOdds: -115, isOpening: false, isClosing: false, snapshotAt: '' },
+    { bookmakerKey: 'pinnacle', line: 5.5, overOdds: -108, underOdds: -108, isOpening: false, isClosing: false, snapshotAt: '' },
+  ];
+  assert.equal(computeBestUnder(books), 'pinnacle');
+});
+
+test('computeBestOver returns null for empty books', () => {
+  assert.equal(computeBestOver([]), null);
+});
+
+test('computeBestOver skips books with null overOdds', () => {
+  const books = [
+    { bookmakerKey: 'a', line: 5.5, overOdds: null, underOdds: -110, isOpening: false, isClosing: false, snapshotAt: '' },
+    { bookmakerKey: 'b', line: 5.5, overOdds: -105, underOdds: -110, isOpening: false, isClosing: false, snapshotAt: '' },
+  ];
+  assert.equal(computeBestOver(books), 'b');
+});
+
 function compareSortable(left: unknown, right: unknown) {
   if (typeof left === 'number' && typeof right === 'number') {
     return left - right;

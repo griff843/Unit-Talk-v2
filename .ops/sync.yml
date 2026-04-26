@@ -4,6 +4,6 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-759
+    - UTV2-747
   proofs:
-    - docs/06_status/proof/UTV2-759.md
+    - docs/06_status/proof/UTV2-747.md

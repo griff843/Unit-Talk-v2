@@ -20,8 +20,8 @@ const modules: ResearchModule[] = [
     name: 'Line-Shopper',
     href: '/research/lines',
     description: 'Compare lines across multiple bookmakers for the same market.',
-    status: 'no-data',
-    statusDetail: 'No multi-book line comparison endpoint exists.',
+    status: 'live',
+    statusDetail: 'Wired to /api/operator/line-shopper (provider_offers multi-book).',
   },
   {
     name: 'Player Card',
