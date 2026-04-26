@@ -68,37 +68,39 @@ export const submitPickSkill: QASkill = {
     await ctx.screenshot('01-form-loaded');
 
     await step('Check for sport selector', async () => {
-      const el = await ctx.page
-        .locator('select[name*="sport"], button[aria-label*="sport"], [data-testid*="sport"], text=/NBA|NFL|NHL|MLB|Sport/i')
-        .first();
+      const el = ctx.page.getByRole('button', { name: /NBA|NFL|NHL|MLB|Sport/i }).first();
       if (!(await el.isVisible().catch(() => false))) {
         uxFriction.push('Sport selector not found or not visible — user cannot select sport');
       }
     });
 
     await step('Check for market type control', async () => {
-      const el = await ctx.page
-        .locator('select[name*="market"], button[aria-label*="market"], [data-testid*="market"], text=/Spread|Moneyline|Total|Market/i')
-        .first();
+      const el = ctx.page.getByText(/Market Family|Spread|Moneyline|Total|Market/i).first();
       if (!(await el.isVisible().catch(() => false))) {
         uxFriction.push('Market type control not found — user cannot select bet type');
       }
     });
 
     await step('Check for sportsbook / book selector', async () => {
-      const el = await ctx.page
-        .locator('[data-testid*="book"], select[name*="book"], text=/DraftKings|FanDuel|BetMGM|Book/i')
-        .first();
+      const el = ctx.page.getByText(/Sportsbook|Fanatics|DraftKings|FanDuel|BetMGM|Book/i).first();
       if (!(await el.isVisible().catch(() => false))) {
         uxFriction.push('Book/sportsbook selector not found — user cannot specify where bet is placed');
       }
     });
 
     await step('Check for submit button', async () => {
-      const btn = await ctx.page
-        .locator('button[type="submit"], button:text-matches(/submit|post pick/i)')
-        .first();
-      if (!(await btn.isVisible().catch(() => false))) {
+      // Try semantic role first, then text-content fallback for non-semantic implementations
+      const byRole = ctx.page.getByRole('button', { name: /submit|post pick/i }).first();
+      const byText = ctx.page.locator('button:has-text("Submit"), button:has-text("Post Pick"), [data-testid*="submit"]').first();
+
+      let visible = await byRole.isVisible().catch(() => false);
+      if (!visible) {
+        // scroll to bottom — button may be in sticky sidebar below fold
+        await ctx.page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
+        await ctx.page.waitForTimeout(300);
+        visible = (await byRole.isVisible().catch(() => false)) || (await byText.isVisible().catch(() => false));
+      }
+      if (!visible) {
         throw new Error('Submit button not found — form cannot be completed');
       }
     });
@@ -107,9 +109,7 @@ export const submitPickSkill: QASkill = {
 
     if (ctx.mode === 'observe') {
       await step('Attempt to open sport selector (observe mode interaction)', async () => {
-        const trigger = await ctx.page
-          .locator('text=/NBA|Sport|Select sport/i, select[name*="sport"]')
-          .first();
+        const trigger = ctx.page.getByRole('button', { name: /NBA|Sport|Select sport/i }).first();
         if (await trigger.count() > 0) {
           await trigger.click({ timeout: 3_000 }).catch(() => {
             uxFriction.push('Sport selector click did not respond within 3s');

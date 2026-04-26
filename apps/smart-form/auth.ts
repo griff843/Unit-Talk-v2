@@ -1,12 +1,14 @@
 import NextAuth from 'next-auth';
 import Google from 'next-auth/providers/google';
+import { resolveAuthSecret } from './lib/auth-config';
 import { createCapperSessionToken } from './lib/auth-session-token';
 import { findAllowedCapper, parseAllowedCapperEmails } from './lib/auth-allowlist';
 
 const allowedCappers = parseAllowedCapperEmails(process.env.ALLOWED_CAPPER_EMAILS);
+const authSecret = resolveAuthSecret();
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
-  secret: process.env.NEXTAUTH_SECRET,
+  secret: authSecret,
   providers: [
     Google({
       clientId: process.env.GOOGLE_CLIENT_ID,
@@ -39,7 +41,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
             displayName: typeof token.name === 'string' && token.name ? token.name : capper.capperId,
             email: capper.email,
           },
-          process.env.NEXTAUTH_SECRET ?? '',
+          authSecret,
         );
       }
 
