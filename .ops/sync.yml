@@ -5,4 +5,6 @@ approval:
 entities:
   issues:
     - UTV2-754
-  proofs: []
+  proofs:
+    - apps/api/src/t1-proof-utv2-754-provenance-clv.test.ts
+    - docs/06_status/proof/UTV2-754.md
