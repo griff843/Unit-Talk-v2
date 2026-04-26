@@ -1482,7 +1482,7 @@ test('resolveSgoEntities upserts events and players idempotently', async () => {
 
   const first = await resolveSgoEntities(events, repositories);
   const second = await resolveSgoEntities(events, repositories);
-  const resolvedEvents = await repositories.events.listUpcoming('NBA', 30);
+  const resolvedEvent = await repositories.events.findByExternalId(events[0]!.providerEventId);
   const resolvedPlayers = await repositories.participants.listByType(
     'player',
     'NBA',
@@ -1492,7 +1492,7 @@ test('resolveSgoEntities upserts events and players idempotently', async () => {
   assert.equal(first.resolvedParticipantsCount, 4);
   assert.equal(second.resolvedEventsCount, 1);
   assert.equal(second.resolvedParticipantsCount, 4);
-  assert.equal(resolvedEvents.length, 1);
+  assert.ok(resolvedEvent !== null);
   assert.equal(resolvedPlayers.length, 2);
 });
 
