@@ -1,179 +1,127 @@
 # Program Status
 
 > Canonical high-level status authority for Unit Talk V2.
-> Adopted 2026-03-21. Operating model: `docs/05_operations/SPRINT_MODEL_v2.md`
-> **Operational work queue: Linear (live)**
-> **Historical record (Phases 1–6, Sprints A–D, Waves 1–2, M11–M13): `PROGRAM_STATUS_ARCHIVE.md`**
+> Adopted 2026-03-21. Operating model: `docs/05_operations/SPRINT_MODEL_v2.md`.
+> **Operational work queue: Linear (live).**
+> **Historical record:** `PROGRAM_STATUS_ARCHIVE.md`.
 
 ## Last Updated
 
-2026-04-25 — **UTV2-576 Done. Closing-line truth ratified. UTV2-433 MLB gate FAIL diagnosed — pick provenance gap.**
-UTV2-576 (T1): CTO ratified closing-line truth as `provider_offers WHERE is_closing = true`; `market_universe` is canonical persistence. Verification run confirmed: NBA 57/59 PASS, NHL 25/31 PASS, MLB 3/167 FAIL. MLB gap is **pick provenance** — 164/167 settled MLB picks have no `marketUniverseId`/`scoredCandidateId` in payload (not through scored candidate pipeline). `provider_offers` has 310K MLB closing rows; data exists but join path does not. UTV2-433 remains Blocked Internal pending remediation decision (backfill or pipeline routing fix). M2 closing-line blocker (UTV2-576) is now Done.
+2026-04-26 — **PM reconciliation complete through PR #489. QA trust layer is the active PR but blocked by governance cleanup.**
 
-2026-04-25 — **UTV2-748 Done. UTV2-435 Done. Matchup Card wired. NHL production gate closed.**
-UTV2-748 (PR #472, T2): Matchup Card live — `GET /api/operator/events` + detail endpoint + command-center UI wired end-to-end. UTV2-435 (T2, data-only): NHL production-readiness gate PASS — 25/31 CLV-backed outcomes (≥10 threshold PM-confirmed), 1,685 open-close rows, 31/31 P&L populated.
-
-2026-04-25 — **UTV2-753 Done. Auto-graded settlement P&L gap closed.**
-UTV2-753 (PR #471, T2): `recordGradedSettlement()` now calls `computeProfitLossUnits()`; backfill migration patched 254 existing win/loss/push records — 257/257 verified. Live-DB proof gate passes. smart-form `stake_units` chain confirmed correct at 99.2% non-null.
-
-2026-04-25 — **UTV2-722 Done. SGO historical CLV coverage proven. UTV2-723 unblocked.**
-UTV2-722 (PR #469, T1): SGO historical CLV coverage proof complete — MLB 393/492 candidates replay-eligible (79.9%), NBA 100/168 (59.5%), NHL live-only burn-in (model gap, no scored candidates). Total 493 replay-eligible. UTV2-723 (R5 model-trust replay) now Ready for MLB + NBA slices.
-
-2026-04-25 — **UTV2-752 Done. Closing-line CLV fallback shipped. UTV2-727, UTV2-728, UTV2-750, UTV2-592 also Done.**
-UTV2-752 (PR #463, T2): `market_universe.closing_*` fallback added to CLV service — when `provider_offers` has no closing snapshot, CLV now reads persisted closing line from `market_universe`. Proof script confirms live fallback path works. Combined with UTV2-727 backfill (15,965 rows), closing-line coverage gap is substantially reduced.
-
-2026-04-25 — **UTV2-727, UTV2-728, UTV2-750, UTV2-592 Done. Closing-line evidence partially restored. Syndicate gate FAIL by design.**
-UTV2-750 (PR #461/#462): stale MLB CLV hyphen aliases removed, market_type_id backfill migration applied — MLBclosing coverage path unblocked. UTV2-727 (PR #459, T1): backfill migration populated 15,965 `market_universe.closing_line` rows; `sgo_replay_coverage` view created — 493/660 scored candidates now replay-eligible (74.7%). UTV2-728 (PR #460, T2): high-volume shadow scoring runner added; guardrail tests confirm no picks created, shadow_mode never false. UTV2-592 (PR #464, T2): syndicate proof gate ran on 1,000-row live sample — 0% market-backed, 97.9% confidence-delta → FAIL by design, syndicate readiness correctly blocked until real-edge pipeline delivers provenance.
-
-2026-04-24 — **UTV2-587 + UTV2-589 Done. DEBT-003 resolved. UTV2-590 blocked on UTV2-737 → UTV2-732.**
-UTV2-587 (E2E pipeline freshness proof, PR #455) merged and Done. UTV2-589 (Settlement/CLV/P&L validation, PR #456) merged and Done — settlement integrity PASS, correction chain PASS, CLV/P&L PARTIAL_ACCEPTABLE (DEBT-003 resolved). DEBT-003 closed: system-pick-scanner re-enabled, board-construction picks flowing, CLV join proven on 3/7 picks. UTV2-749 created for board-pick-writer scheduling gap. UTV2-590 now blocked only by UTV2-737 (auto-settle proof), which awaits UTV2-732 (Ready for Codex).
-
-2026-04-22 — **M1 Runtime Foundation complete. M4 gate partially unblocked.**
-UTV2-602 (cloud deploy path) and UTV2-621 (ingestion staleness alerting) both merged and marked Done in Linear. M1 milestone is closed. UTV2-588 (Smart Form convergence proof) unblocked and moved to Ready. UTV2-654 (E2E Live Canary) moved to Ready — deploy path prerequisite satisfied. UTV2-587/589/590 remain Blocked Internal on UTV2-576 (closing-line truth). Phase 7A brake source set ratified (UTV2-628, PR #429). CI Fibery sync fixed (UTV2-709, PR #433).
-
-2026-04-15 — **Audit: runtime/readiness docs reconciled with observed truth.**
-Worker confirmed DOWN (no runs in 2hr window). Prior claim of worker UP was false. Gate claim "All gates green" referred only to `pnpm verify` static baseline (lint/type-check/build/test) — not to runtime health or deploy-pipeline health. These are now explicitly separated below.
+- **UTV2-751 is Done.** PR #489 merged as proof closure: pre-April-20 SGO historical backfill is **not** a current CLV blocker because all current settled picks are inside the 2026-04-20+ `provider_offers` data window.
+- **UTV2-760 created.** Historical pre-April-20 SGO backfill remains tracked as low-priority archive/completeness work only; it does not block CLV, grading, settlement, or UTV2-433.
+- **UTV2-433 remains open.** MLB production-readiness gate cannot close from backfill or retroactive evidence. It requires fresh post-fix MLB settlements from the fixed provenance path with `clvBackedOutcomeCount >= 10`.
+- **UTV2-761 created.** PR #490 is the active QA trust-layer implementation lane, but it is **not merge-ready** until it links to UTV2-761, updates onto latest `main`, re-runs verification, and resolves the `.ops/sync.yml` governance bypass.
+- **Recent completed work:** UTV2-747 Line-Shopper, UTV2-736 R5 CLV ROI proof, UTV2-759 grading/QA unblock, UTV2-754 MLB provenance remediation, UTV2-758 candidate builder, UTV2-757 candidate scanner, UTV2-756/755 SGO fetch hardening.
 
 ---
 
 ## Current State
 
 | Field | Value |
-|-------|-------|
+|---|---|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Static Baseline | `pnpm verify` PASS (lint, type-check, build, test). CI on `main` passes. |
-| Runtime Health | **Unknown** — deploy path (UTV2-602) merged 2026-04-22. Worker health post-deploy not yet confirmed. Run `pnpm test:db` + `pnpm stage:freshness` against hosted instance to verify. |
-| Deploy Pipeline | **Shipped** — UTV2-602 (PR #423) merged. CI-driven deploy path active. |
-| Operating Model | Risk-tiered lanes (T1/T2/T3) with canonical lane manifests |
-| Active Phase | **Phase 7A closed. M4 Production Proof gates active.** |
-| Provider | **SGO Pro active (permanent).** Results pipeline uses `odds.<oddID>.score`. |
-| Roadmap | M1 **COMPLETE**. M2 partial (UTV2-576 open). M3 partial (UTV2-579 ✓). M4 gate: UTV2-654 (E2E canary) now Ready. |
+| Active operating mode | Proof/readiness hardening, not broad feature expansion |
+| Static baseline | Recent PRs report `pnpm verify` PASS; PR #490 must re-run after updating from latest `main` |
+| Runtime health | **Not fully proven** — worker/runtime health must be verified separately from static checks |
+| Provider | SGO Pro active; closing-line truth is `provider_offers WHERE is_closing = true`; `market_universe` is canonical persistence |
+| Current active PR | **PR #490** — QA trust layer; blocked by PM gate |
+| Current active Linear lane | **UTV2-761** — Experience QA trust layer |
+| Main readiness gate still open | **UTV2-433** — MLB production-readiness gate |
+| Next non-QA infrastructure candidate | Discord bot foundation, after QA/status cleanup |
 
 ---
 
-## Milestone State
+## Active Work Queue
 
-| Milestone | Status | Remaining |
-|-----------|--------|-----------|
-| **M1 Runtime Foundation** | ✅ **COMPLETE** | — (602 + 621 both Done) |
-| **M2 Data & Canonical Truth** | 🔴 Blocked | UTV2-576 (closing-line truth) still open |
-| **M3 Machine & Decisioning** | 🟡 Partial | UTV2-579 ✓; others dependent on M2 |
-| **M4 Production Proof** | 🟡 Partial | UTV2-588 Ready; 587/589/590 blocked on 576/581 |
-
-## M4 Issue Detail
-
-| Issue | Title | Status | Blocked On |
-|-------|-------|--------|------------|
-| UTV2-587 | E2E governed pipeline freshness proof | Blocked Internal | UTV2-576 (closing-line) |
-| UTV2-588 | Smart Form ↔ API convergence proof | **Ready** | — (577 Done, 602 Done) |
-| UTV2-589 | Settlement/CLV/P&L validation | Blocked Internal | UTV2-576 + UTV2-581 |
-| UTV2-590 | Full production-readiness closeout | Blocked Internal | All above |
-| UTV2-654 | E2E Live Canary (T1) | **Ready** | Worker health confirm needed |
+| Priority | Issue / PR | Status | PM Direction |
+|---:|---|---|---|
+| 1 | **PR #490 / UTV2-761** | Open, blocked | Fix lane linkage, latest-main drift, verification, and `.ops/sync.yml` governance before merge |
+| 2 | **UTV2-433** | In Progress | Wait for fresh post-fix MLB settlement evidence; do not close from historical backfill |
+| 3 | **UTV2-739** | Stale umbrella | Reconcile child issue completions and either move to PM Review or Ready to Close |
+| 4 | **UTV2-729** | Stale/blocked | Re-triage after UTV2-736/751; likely obsolete or needs rewritten proof purpose |
+| 5 | **UTV2-760** | Backlog | Historical completeness only; low priority; does not block readiness |
 
 ---
 
-## Active PRs (pending review)
+## Recently Merged / Closed
 
-None open as of 2026-04-25.
-
----
-
-## Recently Merged (2026-04-24 → 2026-04-25)
-
-| PR | Issue | Tier | Description |
-|----|-------|------|-------------|
-| [#461](https://github.com/griff843/Unit-Talk-v2/pull/461) | UTV2-750 | T1 | Remove stale MLB CLV hyphen aliases + market_type_id backfill migration |
-| [#462](https://github.com/griff843/Unit-Talk-v2/pull/462) | UTV2-750 | T1 | MLB CLV alias resolution fix (alias key format mismatch) |
-| [#459](https://github.com/griff843/Unit-Talk-v2/pull/459) | UTV2-727 | T1 | Carry closing-line evidence into scored candidate replay — 15,965 rows backfilled, 74.7% replay-eligible |
-| [#460](https://github.com/griff843/Unit-Talk-v2/pull/460) | UTV2-728 | T2 | High-volume shadow scoring runner with guardrail tests |
-| [#464](https://github.com/griff843/Unit-Talk-v2/pull/464) | UTV2-592 | T2 | Syndicate proof gate — FAIL by design (0% market-backed; gate working correctly) |
-| [#455](https://github.com/griff843/Unit-Talk-v2/pull/455) | UTV2-587 | T1 | E2E pipeline freshness proof |
-| [#456](https://github.com/griff843/Unit-Talk-v2/pull/456) | UTV2-589 | T1 | Settlement/CLV/P&L validation — DEBT-003 resolved |
+| PR | Issue | Tier | Result |
+|---|---|---|---|
+| #489 | UTV2-751 | T2 | SGO historical backfill proof accepted; current CLV not blocked; UTV2-760 follow-up created |
+| #488 | UTV2-759 | T2 | Smart Form/Command Center QA blockers fixed; Smart Form QA passes; Command Center dependency warnings remain explicit |
+| #487 | UTV2-736 | T2 | R5 CLV ROI proof generated; all shadow slices blocked by data as expected |
+| #486 | UTV2-747 | T2 | Line-Shopper operator endpoint + Command Center UI merged |
+| #485 | — | T2/T3 foundation | Experience QA Agent foundation merged |
+| #484 | UTV2-759 | T2 | Auto-grading end-to-end proof / market-key normalization merged |
+| #483 | UTV2-754 | T2 | MLB provenance path remediation merged |
+| #481 | UTV2-758 | T2 | CandidateBuilderService populates `pick_candidates` from `provider_offers` |
+| #480 | UTV2-757 | T2 | CandidatePickScanner converts scored candidates into governed picks |
+| #479 | UTV2-756 | T3 | SGO fetch loop total-time budget added |
+| #478 | UTV2-755 | T2 | SGO fetch timeout and per-league error isolation added |
 
 ---
 
-## Closed Phase Summary
+## Readiness Gates
 
-| Phase | Gate SHA | Proof | Closed |
-|-------|---------|-------|--------|
-| 1 | `66c9cc1` | — | 2026-04-09 |
-| 2 | `c077ab1` | UTV2-464 | 2026-04-09 |
-| 3 | `4b5e4a9` | UTV2-471 | 2026-04-09 |
-| 4 | `5daaf0b` | UTV2-475 | 2026-04-09 |
-| 5 | `aeb978e` | UTV2-478 (7/7 PASS) | 2026-04-10 |
-| 6 | `b74c384` | UTV2-481 (7/7 PASS) | 2026-04-10 |
-
----
-
-## Live Routing
-
-| Target | Status |
-|--------|--------|
-| `discord:canary` | **LIVE** — permanent control lane |
-| `discord:best-bets` | **LIVE** |
-| `discord:trader-insights` | **LIVE** |
-| `discord:recaps` | **LIVE** |
-| `discord:exclusive-insights` | Code merged — activation deferred (PM approval required) |
+| Gate | Status | Current Truth |
+|---|---|---|
+| NHL production-readiness | ✅ Done | UTV2-435 passed threshold and closed |
+| MLB production-readiness | 🔴 Open | UTV2-433 failed previous proof: 3/167 CLV-backed; needs fresh post-fix settlements >=10 CLV-backed |
+| Current CLV viability | ✅ Acceptable | UTV2-751 proved existing settled picks are inside current SGO data window |
+| Historical SGO completeness | 🟡 Backlog | UTV2-760 tracks pre-April-20 archive-quality backfill; non-blocking |
+| QA regression gate | 🟡 In progress | PR #490/UTV2-761 adds trust layer but is not merge-ready |
+| Discord bot foundation | ⚪ Ready candidate | Spec exists; defer until QA/status cleanup is landed |
 
 ---
 
 ## Open Risks
 
-| Risk | Severity | Status |
-|------|----------|--------|
-| **Worker runtime post-deploy unconfirmed** | **Critical** | Deploy path (602) merged but hosted worker health not yet observed. Must confirm before M4. |
-| **Closing-line truth gap** (UTV2-576) | High | Partially mitigated — UTV2-727 backfilled 15,965 `market_universe.closing_line` rows; UTV2-750 fixed MLB alias mismatch. UTV2-576 (closing-line truth source canonicalization) still open. |
-| Settlement sample volume too thin (UTV2-581) | High | Open — only 16 settlement records in last audit sample. Blocks UTV2-589. |
-| Score provenance mostly unknown (UTV2-580) | High | Open — 97.9% confidence-delta on 30-day sample (UTV2-592 gate). Syndicate readiness blocked. |
-| Production readiness canary not yet executed | High | UTV2-654 now Ready. Requires worker health confirmation first. |
-| Board cap `perSport: 3` saturates for single-capper NBA | Medium | Open — UTV2-284 awaiting PM decision |
+| Risk | Severity | Status / Action |
+|---|---:|---|
+| PR #490 governance drift | High | `.ops/sync.yml` disables sync and clears entities; must be justified or reverted before merge |
+| UTV2-433 fresh proof dependency | High | Need enough fresh MLB settlements from the post-UTV2-754 provenance path |
+| Worker/runtime health not independently confirmed | High | Do not equate `pnpm verify` with runtime health |
+| Linear umbrella/status drift | Medium | UTV2-739 and UTV2-729 need cleanup after recent completions |
+| Fibery entity seeding failures | Medium | Bypass used on UTV2-736/751 due to missing seeded proof artifacts; needs lane-start guardrail |
+| QA trust-layer quality | Medium | PR #490 intent is correct; merge only after updated verification and governance fixes |
 
 ---
 
-## Open New Issues (created 2026-04-22)
+## PM Decisions / Boundaries
 
-| Issue | Title | Tier |
-|-------|-------|------|
-| UTV2-711 | Update PROGRAM_STATUS.md (this file — ongoing) | T3 |
-| UTV2-712 | Wire model health alerts into Command Center UI | T2 |
-
----
-
-## Runner Architecture
-
-| Script | Files | Surface |
-|--------|-------|---------|
-| `pnpm test:apps` | 10 | api (6) + worker + operator-web + discord-bot |
-| `pnpm test:verification` | 4 | packages/verification |
-| `pnpm test:domain-probability` | 6 | domain/probability + outcomes-core |
-| `pnpm test:domain-features` | 9 | domain/features + models |
-| `pnpm test:domain-signals` | 6 | domain/signals + bands + calibration + scoring |
-| `pnpm test:domain-analytics` | 9 | domain/outcomes + market + eval + edge + rollups + system-health + risk + strategy + market-key |
+- **Do not close UTV2-433** from historical backfill or old/direct-submitted picks.
+- **Do not start duplicate QA trust-layer work.** Fix PR #490 under UTV2-761.
+- **Do not start Discord foundation** until PR #490 is resolved or explicitly paused.
+- **Do not use Fibery bypass as normal flow.** It is allowed only when the missing Fibery entity is a sync-seeding failure, not a product/proof failure.
+- **Do not treat static checks as runtime readiness.** Worker, API, settlement, and Discord delivery proof must be explicit.
 
 ---
 
-## Do Not Start Without Planning
+## Next PM Actions
 
-- `discord:game-threads` or `discord:strategy-room` live routing
-- Broad multi-channel expansion
-- Any new product surface without a ratified contract
+1. Force PR #490 into compliance: link UTV2-761, update from latest `main`, restore/justify sync config, re-run verification.
+2. Re-triage UTV2-739 and UTV2-729 for stale blocked status.
+3. Add/track Fibery lane-start guardrail so proof artifacts are seeded before PR open.
+4. Schedule UTV2-433 re-run only after fresh post-fix MLB settlements exist.
+5. After QA trust layer lands, decide between Discord foundation and UTV2-433 proof rerun based on data availability.
 
 ---
 
 ## Authority References
 
-| Purpose | File |
-|---------|------|
-| **Active program status** | this file |
-| **Historical record** | `PROGRAM_STATUS_ARCHIVE.md` |
-| Operating model | `docs/05_operations/SPRINT_MODEL_v2.md` |
-| Docs authority map | `docs/05_operations/docs_authority_map.md` |
-| Platform surfaces | `docs/03_product/PLATFORM_SURFACES_AUTHORITY.md` |
-| Phase 7 charter | `docs/06_status/PHASE7_PLAN_DRAFT.md` |
-| Phase 7 ratification | `docs/06_status/PHASE7R_RATIFICATION.md` |
+| Purpose | File / System |
+|---|---|
+| Active program status | `docs/06_status/PROGRAM_STATUS.md` |
+| Historical record | `docs/06_status/PROGRAM_STATUS_ARCHIVE.md` |
+| Operational work queue | Linear |
+| PR/source truth | GitHub |
+| Lifecycle truth | `docs/ai_context/v2_truth_pack` and current lifecycle proof docs |
+| Discord foundation scope | `DISCORD_BOT_FOUNDATION_SPEC.md` |
 
 ---
 
 ## Update Rule
 
-Update at **T1/T2 sprint close only**. T3: update Linear only, no PROGRAM_STATUS.md change required.
+Update this file at T1/T2 sprint close or whenever GitHub/Linear status would otherwise tell a materially different story.
