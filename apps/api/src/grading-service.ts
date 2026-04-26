@@ -366,7 +366,8 @@ function classifyMarketFamilyForGrading(marketKey: string): MarketFamilyRule {
 function isPlayerPropMarket(marketKey: string): boolean {
   return (
     marketKey.endsWith('-all-game-ou') ||
-    /^player_[a-z0-9_]+_ou$/.test(marketKey)
+    /^player_[a-z0-9_]+_ou$/.test(marketKey) ||
+    /^(batting|pitching)_[a-z0-9_]+_ou$/.test(marketKey)
   );
 }
 
@@ -430,6 +431,19 @@ const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   player_rebounds_ou: 'rebounds-all-game-ou',
   'assists-all-game-ou': 'player_assists_ou',
   player_assists_ou: 'assists-all-game-ou',
+  // SGO batting/pitching underscore keys → player_ prefixed game_results keys
+  batting_hits_ou: 'player_batting_hits_ou',
+  batting_total_bases_ou: 'player_batting_total_bases_ou',
+  batting_walks_ou: 'player_batting_walks_ou',
+  batting_singles_ou: 'player_batting_singles_ou',
+  batting_doubles_ou: 'player_batting_doubles_ou',
+  batting_triples_ou: 'player_batting_triples_ou',
+  batting_home_runs_ou: 'player_batting_home_runs_ou',
+  batting_rbi_ou: 'player_batting_rbi_ou',
+  batting_hrr_ou: 'player_batting_hrr_ou',
+  batting_strikeouts_ou: 'batting_strikeouts-all-game-ou',
+  pitching_strikeouts_ou: 'player_pitching_strikeouts_ou',
+  pitching_innings_ou: 'player_pitching_innings_ou',
 };
 
 function validateEventProvenanceForGrading(
