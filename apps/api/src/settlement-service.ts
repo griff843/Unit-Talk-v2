@@ -63,6 +63,7 @@ export async function recordPickSettlement(
     participants?: ParticipantRepository;
     events?: EventRepository;
     eventParticipants?: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
   },
 ): Promise<RecordSettlementResult> {
   const validation = validateSettlementRequest(request);
@@ -154,6 +155,7 @@ export async function recordGradedSettlement(
   const payload: Record<string, unknown> = {
     gradingContext,
     correction: false,
+    ...buildPickProvenancePayload(pick),
     clv: clv ?? null,
     ...buildClvDiagnosticPayload(clvOutcome),
   };
@@ -287,6 +289,7 @@ async function recordManualReview(
     settledAt,
     payload: {
       requestStatus: request.status,
+      ...buildPickProvenancePayload(pick),
     },
   });
 
@@ -331,6 +334,7 @@ async function recordInitialSettlement(
     participants?: ParticipantRepository;
     events?: EventRepository;
     eventParticipants?: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
   },
 ): Promise<RecordSettlementResult> {
   const settledAt = new Date().toISOString();
@@ -344,6 +348,7 @@ async function recordInitialSettlement(
         participants: repositories.participants,
         events: repositories.events,
         eventParticipants: repositories.eventParticipants,
+        ...(repositories.marketUniverse ? { marketUniverse: repositories.marketUniverse } : {}),
       });
     } catch {
       // CLV is fail-open on manual settlement
@@ -361,6 +366,7 @@ async function recordInitialSettlement(
   const payload: Record<string, unknown> = {
     requestStatus: request.status,
     correction: false,
+    ...buildPickProvenancePayload(pick),
     clv: clv ?? null,
     ...(clvOutcome ? buildClvDiagnosticPayload(clvOutcome) : {}),
     ...(clv ? {
@@ -519,6 +525,7 @@ async function recordSettlementCorrection(
     participants?: ParticipantRepository;
     events?: EventRepository;
     eventParticipants?: EventParticipantRepository;
+    marketUniverse?: IMarketUniverseRepository;
   },
 ): Promise<RecordSettlementResult> {
   const latest = await repositories.settlements.findLatestForPick(pick.id);
@@ -539,6 +546,7 @@ async function recordSettlementCorrection(
         participants: repositories.participants,
         events: repositories.events,
         eventParticipants: repositories.eventParticipants,
+        ...(repositories.marketUniverse ? { marketUniverse: repositories.marketUniverse } : {}),
       });
     } catch {
       // CLV is fail-open on correction
@@ -569,6 +577,7 @@ async function recordSettlementCorrection(
       requestStatus: request.status,
       correction: true,
       priorSettlementRecordId: latest.id,
+      ...buildPickProvenancePayload(pick),
       clv: clv ?? null,
       ...(clvOutcome ? buildClvDiagnosticPayload(clvOutcome) : {}),
       ...(clv ? {
@@ -631,6 +640,17 @@ function buildClvDiagnosticPayload(outcome: CLVComputationOutcome): Record<strin
     ...(outcome.result?.isOpeningLineFallback ? { isOpeningLineFallback: true } : {}),
     ...(outcome.resolvedMarketKey ? { clvResolvedMarketKey: outcome.resolvedMarketKey } : {}),
     ...(outcome.availableMarkets.length > 0 ? { clvAvailableMarkets: outcome.availableMarkets } : {}),
+  };
+}
+
+function buildPickProvenancePayload(pick: PickRecord): Record<string, unknown> {
+  const metadata = asRecord(pick.metadata) ?? {};
+  const marketUniverseId = readString(metadata, 'marketUniverseId') ?? readString(metadata, 'universeId');
+  const scoredCandidateId = readString(metadata, 'scoredCandidateId') ?? readString(metadata, 'candidateId');
+
+  return {
+    ...(marketUniverseId ? { marketUniverseId } : {}),
+    ...(scoredCandidateId ? { scoredCandidateId } : {}),
   };
 }
 
@@ -719,6 +739,11 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 function readNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function readString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 function readBoolean(value: unknown): boolean | null {

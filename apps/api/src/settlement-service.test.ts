@@ -89,6 +89,32 @@ test('recordPickSettlement settles a posted pick and records audit evidence', as
   assert.equal(result.auditRecords[0]?.action, 'settlement.recorded');
 });
 
+test('recordPickSettlement preserves candidate and market-universe provenance in payload', async () => {
+  const { repositories, pick } = await createPostedPick({
+    metadata: {
+      scoredCandidateId: 'candidate-754',
+      marketUniverseId: 'universe-754',
+    },
+  });
+
+  const result = await recordPickSettlement(
+    pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'boxscore://mlb/provenance',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['scoredCandidateId'], 'candidate-754');
+  assert.equal(payload['marketUniverseId'], 'universe-754');
+});
+
 test('recordPickSettlement rejects invalid settlement requests without writes', async () => {
   const { repositories, pick } = await createPostedPick();
 
