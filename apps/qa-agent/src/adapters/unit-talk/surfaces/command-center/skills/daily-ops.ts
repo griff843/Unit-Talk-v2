@@ -1,4 +1,7 @@
 import type { QASkill, SkillContext, SkillResult, StepResult } from '../../../../../core/types.js';
+import { httpPreflight } from '../../../../../core/preflight.js';
+
+const lifecycleSignalNames = ['submission', 'scoring', 'promotion', 'discord_delivery', 'settlement', 'stats_propagation'];
 
 export const dailyOpsSkill: QASkill = {
   id: 'command-center/daily-ops',
@@ -7,6 +10,121 @@ export const dailyOpsSkill: QASkill = {
   flow: 'daily_ops',
   supportedPersonas: ['operator', 'admin'],
   description: 'Operator daily operations check: health signals, picks pipeline, exception queues',
+  selectors: {
+    lifecycleCard: {
+      preferred: '[data-testid="command-center-lifecycle-card"]',
+      fallbacks: ['text=/Pick Lifecycle/i', 'text=/validated|queued|posted|settled/i'],
+    },
+    apiStatus: {
+      preferred: '[data-testid="command-center-api-status"]',
+      fallbacks: ['text=/System Health|Backend Connection|API/i'],
+    },
+    workerStatus: {
+      preferred: '[data-testid="command-center-worker-status"]',
+      fallbacks: ['text=/Worker Runtime|Drain state/i'],
+    },
+    picksTable: {
+      preferred: '[data-testid="command-center-picks-table"]',
+      fallbacks: ['text=/Pick Lifecycle|Status|Edge/i'],
+    },
+    settlementQueue: {
+      preferred: '[data-testid="command-center-settlement-queue"]',
+      fallbacks: ['text=/settled|settlement|Stale posted/i'],
+    },
+  },
+  preflightChecks: [
+    {
+      id: 'command_center_route_reachable',
+      description: 'Command Center frontend route is reachable.',
+      required: true,
+      run: async ({ surface, env }) => httpPreflight(
+        'command_center_route_reachable',
+        surface.baseUrls[env],
+        'Command Center route',
+        true,
+      ),
+    },
+    {
+      id: 'operator_health_reachable',
+      description: 'Operator API health endpoint is reachable.',
+      required: true,
+      run: async () => httpPreflight(
+        'operator_health_reachable',
+        `${process.env['OPERATOR_WEB_URL'] ?? 'http://localhost:4200'}/health`,
+        'operator-web /health',
+        true,
+      ),
+    },
+    {
+      id: 'operator_snapshot_reachable',
+      description: 'Operator dashboard snapshot endpoint is reachable.',
+      required: true,
+      run: async () => httpPreflight(
+        'operator_snapshot_reachable',
+        `${process.env['OPERATOR_WEB_URL'] ?? 'http://localhost:4200'}/api/operator/snapshot`,
+        'operator-web snapshot',
+        true,
+      ),
+    },
+  ],
+  expectations: [
+    {
+      id: 'command_center_no_broken_lifecycle_signals',
+      description: 'No lifecycle signal may be BROKEN for picks.status lifecycle validated -> queued -> posted -> settled.',
+      severity: 'critical',
+      hard: true,
+      evaluate: async ({ page }) => {
+        const bodyText = await page.locator('body').innerText().catch(() => '');
+        const brokenCount = await page.locator('text=/BROKEN/i').count().catch(() => 0);
+        const namedBrokenSignals = lifecycleSignalNames.filter((signal) => {
+          const label = signal.replace('_', '[ _-]?');
+          return new RegExp(`${label}[\\s\\S]{0,160}\\bBROKEN\\b`, 'i').test(bodyText);
+        });
+        return {
+          id: 'command_center_no_broken_lifecycle_signals',
+          status: brokenCount === 0 ? 'passed' : 'failed',
+          severity: 'critical',
+          message: brokenCount === 0
+            ? 'No BROKEN lifecycle signals detected.'
+            : `${brokenCount} BROKEN lifecycle signal marker(s) detected. Canonical lifecycle is picks.status: validated -> queued -> posted -> settled.`,
+          evidence: { brokenCount, namedBrokenSignals },
+        };
+      },
+    },
+    {
+      id: 'command_center_no_5xx_network_responses',
+      description: 'No HTTP 5xx network responses.',
+      severity: 'critical',
+      hard: true,
+      evaluate: ({ network }) => {
+        const failures = network.filter((record) => (record.status ?? 0) >= 500);
+        return {
+          id: 'command_center_no_5xx_network_responses',
+          status: failures.length === 0 ? 'passed' : 'failed',
+          severity: 'critical',
+          message: failures.length === 0 ? 'No HTTP 5xx network responses observed.' : `${failures.length} HTTP 5xx response(s) observed.`,
+          evidence: failures,
+        };
+      },
+    },
+    {
+      id: 'command_center_dashboard_shell_renders',
+      description: 'Required dashboard shell renders.',
+      severity: 'critical',
+      hard: true,
+      evaluate: ({ selectorResults }) => {
+        const required = ['lifecycleCard', 'apiStatus', 'workerStatus'];
+        const missing = required.filter((key) => !selectorResults.some((result) => result.key === key && result.found));
+        return {
+          id: 'command_center_dashboard_shell_renders',
+          status: missing.length === 0 ? 'passed' : 'failed',
+          severity: 'critical',
+          message: missing.length === 0 ? 'Required Command Center dashboard shell rendered.' : `Missing dashboard shell selectors: ${missing.join(', ')}.`,
+          evidence: selectorResults.filter((result) => required.includes(result.key)),
+        };
+      },
+    },
+  ],
 
   async run(ctx: SkillContext): Promise<SkillResult> {
     const steps: StepResult[] = [];
@@ -84,6 +202,11 @@ export const dailyOpsSkill: QASkill = {
       await ctx.screenshot('03-review-queue');
     }
 
+    await step('Return to dashboard for invariant checks', async () => {
+      await ctx.page.goto(baseUrl, { waitUntil: 'domcontentloaded', timeout: 15_000 });
+      await ctx.page.waitForSelector('main, body > *:not(script)', { timeout: 8_000 });
+    });
+
     await step('No critical JS errors on dashboard pages', async () => {
       // Console errors are captured by the runner; this step documents the check
     });
@@ -128,8 +251,9 @@ export const dailyOpsSkill: QASkill = {
       consoleErrors: [],
       networkErrors: [],
       uxFriction,
+      observations: uxFriction,
       regressionRecommendation: hasFriction
-        ? 'Add health signal count assertions and BROKEN-state alerting'
+        ? 'Command Center shell rendered, but backend lifecycle/API signals were unavailable. Classify as dependency/backend failure rather than frontend render failure.'
         : undefined,
     };
   },

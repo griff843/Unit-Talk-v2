@@ -1,9 +1,10 @@
 version: 1
 approval:
-  allow_multiple_issues: true
+  allow_multiple_issues: false
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-751
-  proofs:
-    - docs/06_status/proof/UTV2-751.md
+    - UTV2-761
+  findings: []
+  controls: []
+  proofs: []

@@ -47,12 +47,35 @@ function renderMarkdown(r: QAResult): string {
     `Timestamp:   ${r.timestamp}`,
     `Mode:        ${r.mode}`,
     `Status:      ${icon}${r.severity ? ` (${r.severity})` : ''}`,
+    `Verdict:     ${r.verdictReason}`,
     `Duration:    ${r.durationMs}ms`,
     '```',
     '',
-    '## Steps',
+    '## Preflight Results',
+    '',
+    r.preflightResults.length === 0
+      ? '- None'
+      : r.preflightResults.map((p) => `- ${p.status.toUpperCase()} ${p.id}: ${p.message}`).join('\n'),
+    '',
+    '## Step Results',
     '',
     stepsBlock,
+    '',
+    '## Observations',
+    '',
+    r.observations.length === 0 ? '- None' : r.observations.map((item) => `- ${item}`).join('\n'),
+    '',
+    '## Expectation Results',
+    '',
+    r.expectationResults.length === 0
+      ? '- None'
+      : r.expectationResults.map((item) => (
+        `- ${item.status.toUpperCase()} ${item.id} (${item.severity}): ${item.message}`
+      )).join('\n'),
+    '',
+    '## Final Verdict',
+    '',
+    `${r.status}: ${r.verdictReason}`,
   ];
 
   if (r.consoleErrors.length > 0) {
@@ -68,6 +91,11 @@ function renderMarkdown(r: QAResult): string {
   if (r.uxFriction.length > 0) {
     sections.push('', '## UX Friction', '');
     sections.push(...r.uxFriction.map((e) => `- ${e}`));
+  }
+
+  if (r.regressionRecommendations && r.regressionRecommendations.length > 0) {
+    sections.push('', '## Regression Recommendations', '');
+    sections.push(...r.regressionRecommendations.map((e) => `- ${e}`));
   }
 
   if (r.screenshots.length > 0) {

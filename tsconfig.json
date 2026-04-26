@@ -16,6 +16,7 @@
     { "path": "./apps/worker" },
     { "path": "./apps/operator-web" },
     { "path": "./apps/discord-bot" },
-    { "path": "./apps/command-center" }
+    { "path": "./apps/command-center" },
+    { "path": "./apps/qa-agent" }
   ]
 }

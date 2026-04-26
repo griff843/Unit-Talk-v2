@@ -29,6 +29,8 @@ skills-lock.json
 # Test output and session artifacts (never commit)
 apps/smart-form/test-results/
 artifacts/
+personas/*.json
+!personas/*.example.json
 # Session-specific diagnostic scripts (scratch, not governed)
 scripts/debug-*.ts
 scripts/live-data-lab-*.ts
