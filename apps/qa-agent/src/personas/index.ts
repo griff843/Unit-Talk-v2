@@ -8,6 +8,13 @@ export const personas: Record<string, Persona> = {
     capabilities: ['view_public_content'],
     discordRoles: [],
   },
+  free: {
+    id: 'free',
+    displayName: 'Free User',
+    memberTier: 'free',
+    capabilities: ['view_public_content'],
+    discordRoles: [],
+  },
   trial_user: {
     id: 'trial_user',
     displayName: 'Trial User',
@@ -17,6 +24,13 @@ export const personas: Record<string, Persona> = {
   },
   vip_user: {
     id: 'vip_user',
+    displayName: 'VIP User',
+    memberTier: 'vip',
+    capabilities: ['view_public_content', 'view_trial_picks', 'view_vip_picks', 'submit_picks'],
+    discordRoles: ['vip'],
+  },
+  vip: {
+    id: 'vip',
     displayName: 'VIP User',
     memberTier: 'vip',
     capabilities: ['view_public_content', 'view_trial_picks', 'view_vip_picks', 'submit_picks'],

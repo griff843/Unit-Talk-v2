@@ -1,4 +1,5 @@
 import type { QASkill, SkillContext, SkillResult, StepResult } from '../../../../../core/types.js';
+import { httpPreflight } from '../../../../../core/preflight.js';
 
 /**
  * Smart Form submit-pick flow.
@@ -10,8 +11,152 @@ export const submitPickSkill: QASkill = {
   product: 'unit-talk',
   surface: 'smart_form',
   flow: 'submit_pick',
-  supportedPersonas: ['operator', 'vip_user', 'vip_plus_user', 'capper'],
+  supportedPersonas: ['operator', 'vip', 'vip_user', 'vip_plus_user', 'capper', 'free', 'free_user'],
   description: 'Smart Form submit-pick flow: form renders, sport/market controls present, validation works',
+  requiresAuth: true,
+  selectors: {
+    sportSelect: {
+      preferred: '[data-testid="smart-form-sport-select"]',
+      fallbacks: ['text=/NBA|NFL|NHL|MLB|Sport/i', '[name="sport"]', '[aria-label*="sport" i]'],
+    },
+    marketSelect: {
+      preferred: '[data-testid="smart-form-market-select"]',
+      fallbacks: ['text=/Market Family|Spread|Moneyline|Total|Market/i', '[name="marketType"]', '[aria-label*="market" i]'],
+    },
+    bookSelect: {
+      preferred: '[data-testid="smart-form-book-select"]',
+      fallbacks: ['text=/Sportsbook|Fanatics|DraftKings|FanDuel|BetMGM|Book/i', '[name="sportsbook"]', '[aria-label*="book" i]'],
+    },
+    submitButton: {
+      preferred: '[data-testid="smart-form-submit-button"]',
+      fallbacks: ['button:has-text("Submit")', 'button:has-text("Post Pick")', '[data-testid*="submit"]'],
+    },
+    authError: {
+      preferred: '[data-testid="smart-form-auth-error"]',
+      fallbacks: ['text=/login|auth|unauthorized/i'],
+    },
+    successState: {
+      preferred: '[data-testid="smart-form-success-state"]',
+      fallbacks: ['text=/submitted|success|queued/i'],
+    },
+  },
+  preflightChecks: [
+    {
+      id: 'smart_form_route_reachable',
+      description: 'Smart Form submit route is reachable.',
+      required: true,
+      run: async ({ surface, env }) => httpPreflight(
+        'smart_form_route_reachable',
+        `${surface.baseUrls[env]}/submit`,
+        'Smart Form /submit',
+        true,
+      ),
+    },
+    {
+      id: 'nextauth_session_no_500',
+      description: 'NextAuth session endpoint does not return HTTP 500.',
+      required: true,
+      run: async ({ surface, env }) => {
+        const baseUrl = surface.baseUrls[env];
+        const result = await httpPreflight(
+          'nextauth_session_no_500',
+          `${baseUrl}/api/auth/session`,
+          'Smart Form /api/auth/session',
+          true,
+        );
+        if (result.status === 'failed') {
+          return {
+            ...result,
+            message: `${result.message} Check AUTH_SECRET / NEXTAUTH_SECRET in local.env and NextAuth config.`,
+          };
+        }
+        return result;
+      },
+    },
+  ],
+  expectations: [
+    {
+      id: 'smart_form_session_no_500',
+      description: 'Smart Form /api/auth/session must not return HTTP 500.',
+      severity: 'critical',
+      hard: true,
+      evaluate: ({ network }) => {
+        const failures = network.filter((record) => (
+          record.url.includes('/api/auth/session') && (record.status ?? 0) >= 500
+        ));
+        return {
+          id: 'smart_form_session_no_500',
+          status: failures.length === 0 ? 'passed' : 'failed',
+          severity: 'critical',
+          message: failures.length === 0
+            ? '/api/auth/session did not return HTTP 500.'
+            : '/api/auth/session returned HTTP 500. Check AUTH_SECRET / NEXTAUTH_SECRET in local.env and NextAuth config.',
+          evidence: failures,
+        };
+      },
+    },
+    {
+      id: 'smart_form_no_login_redirect_before_form',
+      description: 'Smart Form must not unexpectedly redirect to /login before controls render.',
+      severity: 'critical',
+      hard: true,
+      evaluate: ({ page }) => {
+        const pageUrl = page.url();
+        const redirected = pageUrl.includes('/login');
+        return {
+          id: 'smart_form_no_login_redirect_before_form',
+          status: redirected ? 'failed' : 'passed',
+          severity: 'critical',
+          message: redirected
+            ? 'Unexpected redirect to /login before Smart Form controls rendered.'
+            : 'No unexpected redirect to /login before form render.',
+          evidence: { pageUrl },
+        };
+      },
+    },
+    {
+      id: 'smart_form_controls_render',
+      description: 'Sport, market, book, and submit controls render or intentional auth state is shown.',
+      severity: 'critical',
+      hard: true,
+      evaluate: ({ selectorResults }) => {
+        const authRendered = selectorResults.some((result) => result.key === 'authError' && result.found);
+        if (authRendered) {
+          return {
+            id: 'smart_form_controls_render',
+            status: 'passed',
+            severity: 'critical',
+            message: 'Intentional auth state rendered instead of form controls.',
+          };
+        }
+        const required = ['sportSelect', 'marketSelect', 'bookSelect', 'submitButton'];
+        const missing = required.filter((key) => !selectorResults.some((result) => result.key === key && result.found));
+        return {
+          id: 'smart_form_controls_render',
+          status: missing.length === 0 ? 'passed' : 'failed',
+          severity: 'critical',
+          message: missing.length === 0 ? 'Sport, market, book, and submit controls rendered.' : `Missing form controls: ${missing.join(', ')}.`,
+          evidence: selectorResults.filter((result) => required.includes(result.key)),
+        };
+      },
+    },
+    {
+      id: 'smart_form_no_5xx_network_responses',
+      description: 'No HTTP 5xx network responses.',
+      severity: 'critical',
+      hard: true,
+      evaluate: ({ network }) => {
+        const failures = network.filter((record) => (record.status ?? 0) >= 500);
+        return {
+          id: 'smart_form_no_5xx_network_responses',
+          status: failures.length === 0 ? 'passed' : 'failed',
+          severity: 'critical',
+          message: failures.length === 0 ? 'No HTTP 5xx network responses observed.' : `${failures.length} HTTP 5xx response(s) observed.`,
+          evidence: failures,
+        };
+      },
+    },
+  ],
 
   async run(ctx: SkillContext): Promise<SkillResult> {
     const steps: StepResult[] = [];
@@ -157,8 +302,9 @@ export const submitPickSkill: QASkill = {
       consoleErrors: [],
       networkErrors: [],
       uxFriction,
+      observations: uxFriction,
       regressionRecommendation: hasFriction
-        ? 'Add data-testid attributes to sport, market, and book selectors for stable test targeting'
+        ? 'Check AUTH_SECRET / NEXTAUTH_SECRET in local.env and NextAuth config if controls did not render; add stable data-testid selectors for sport, market, book, and submit.'
         : undefined,
     };
   },

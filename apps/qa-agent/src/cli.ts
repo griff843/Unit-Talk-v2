@@ -22,6 +22,7 @@ import { writeArtifact } from './core/artifact-writer.js';
 import { writeIssueReport } from './core/issue-reporter.js';
 import { QALedger } from './core/ledger.js';
 import { getChangedSurfaces } from './regression/run-changed-surfaces.js';
+import { seedAuthState } from './core/auth-state.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const AGENT_ROOT = resolve(__dirname, '..');
@@ -33,6 +34,8 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
     if (arg === '--help' || arg === '-h') { args['help'] = true; }
     else if (arg === '--dry-run') { args['dryRun'] = true; }
     else if (arg === '--regression') { args['regression'] = true; }
+    else if (arg === '--skip-preflight') { args['skipPreflight'] = true; }
+    else if (arg === '--force') { args['force'] = true; }
     else if (arg?.startsWith('--')) {
       const key = arg.slice(2).replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
       args[key] = argv[i + 1] ?? true;
@@ -58,6 +61,8 @@ OPTIONS
   --env <env>        local (default) | staging | production
   --output <dir>     Artifacts output dir (default: ./artifacts)
   --regression       Run all skills affected by changed files since main
+  --skip-preflight   Skip API/service preflight checks
+  --force            Continue browser automation after failed required preflights
   --dry-run          Parse and validate options without running browser
   --help             Show this help
 
@@ -66,13 +71,32 @@ EXAMPLES
   pnpm qa:experience --surface smart_form --persona operator --flow submit_pick --mode observe
   pnpm qa:experience --surface discord --persona free_user --flow access_check
   pnpm qa:experience --regression
+  pnpm qa:experience auth --product unit-talk --persona capper
+  pnpm qa:auth --product unit-talk --persona operator
 `);
 }
 
 async function main(): Promise<void> {
-  const raw = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  const command = argv[0] === 'auth' ? 'auth' : 'run';
+  const raw = parseArgs(command === 'auth' ? argv.slice(1) : argv);
 
   if (raw['help']) { printHelp(); process.exit(0); }
+
+  if (command === 'auth') {
+    const product = (raw['product'] as string | undefined) ?? 'unit-talk';
+    const persona = (raw['persona'] as string | undefined) ?? 'operator';
+    const env = (raw['env'] as Environment | undefined) ?? 'local';
+    const adapter = getAdapter(product);
+    const surfaceId = persona === 'operator' || persona === 'admin' ? 'command_center' : 'smart_form';
+    const surface = adapter.config.surfaces[surfaceId];
+    if (!surface) throw new Error(`Surface "${surfaceId}" not found for product "${product}"`);
+    const baseUrl = surface.baseUrls[env];
+    const loginUrl = surfaceId === 'smart_form' ? `${baseUrl}/login` : baseUrl;
+    const path = await seedAuthState({ product, persona, loginUrl, successUrl: baseUrl });
+    console.log(`Saved storage state: ${path}`);
+    process.exit(0);
+  }
 
   const artifactsDir = resolve(AGENT_ROOT, (raw['outputDir'] as string | undefined) ?? 'artifacts');
   const ledgerDir = resolve(AGENT_ROOT, 'ledger');
@@ -92,7 +116,11 @@ async function main(): Promise<void> {
         product: t.product, surface: t.surface, persona: t.persona, flow: t.flow,
         mode: (raw['mode'] as RunMode | undefined) ?? 'fast',
         env: (raw['env'] as Environment | undefined) ?? 'local',
-        outputDir: artifactsDir, dryRun: (raw['dryRun'] as boolean) ?? false, ledger,
+        outputDir: artifactsDir,
+        dryRun: (raw['dryRun'] as boolean) ?? false,
+        skipPreflight: (raw['skipPreflight'] as boolean) ?? false,
+        force: (raw['force'] as boolean) ?? false,
+        ledger,
       });
       if (result === 'fail') anyFail = true;
     }
@@ -109,6 +137,8 @@ async function main(): Promise<void> {
     env: (raw['env'] as Environment | undefined) ?? 'local',
     outputDir: artifactsDir,
     dryRun: (raw['dryRun'] as boolean | undefined) ?? false,
+    skipPreflight: (raw['skipPreflight'] as boolean | undefined) ?? false,
+    force: (raw['force'] as boolean | undefined) ?? false,
   };
 
   if (!opts.surface || !opts.persona || !opts.flow) {
@@ -154,7 +184,16 @@ async function runOne(opts: CLIOptions & { ledger: QALedger }): Promise<'pass' |
   const runDir = resolve(outputDir, `${product}-${surface}-${flow}-${personaId}`);
   console.log(`Running: ${skill.description}\n`);
 
-  const result = await runSkill({ skill, persona, adapter, env, mode, artifactsBaseDir: runDir });
+  const result = await runSkill({
+    skill,
+    persona,
+    adapter,
+    env,
+    mode,
+    artifactsBaseDir: runDir,
+    skipPreflight: opts.skipPreflight,
+    force: opts.force,
+  });
 
   const finalRunDir = resolve(runDir, result.runId);
   const { json: jsonPath, md: mdPath } = await writeArtifact(result, finalRunDir);

@@ -15,6 +15,8 @@ export type RunMode = 'observe' | 'fast';
 export type Environment = 'local' | 'staging' | 'production';
 export type QAStatus = 'PASS' | 'FAIL' | 'NEEDS_REVIEW' | 'SKIP' | 'ERROR';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
+export type QAExpectationStatus = 'passed' | 'failed' | 'skipped';
+export type QAPreflightStatus = 'passed' | 'failed' | 'skipped';
 
 // ─── Persona ────────────────────────────────────────────────────────────────
 
@@ -62,6 +64,79 @@ export interface StepResult {
   durationMs: number;
 }
 
+export interface QAPreflightResult {
+  id: string;
+  status: QAPreflightStatus;
+  message: string;
+  required: boolean;
+  evidence?: unknown;
+}
+
+export interface QAPreflightContext {
+  product: ProductConfig;
+  surface: SurfaceConfig;
+  persona: Persona;
+  env: Environment;
+}
+
+export interface QAPreflightCheck {
+  id: string;
+  description: string;
+  required: boolean;
+  run(context: QAPreflightContext): Promise<QAPreflightResult>;
+}
+
+export interface QAExpectationResult {
+  id: string;
+  status: QAExpectationStatus;
+  severity: Severity;
+  message: string;
+  evidence?: unknown;
+  hard?: boolean;
+}
+
+export interface NetworkObservation {
+  method: string;
+  url: string;
+  status?: number;
+  failureText?: string;
+}
+
+export interface SelectorContract {
+  preferred: string;
+  fallbacks: string[];
+}
+
+export interface SelectorResult {
+  key: string;
+  preferred: string;
+  preferredFound: boolean;
+  fallbackUsed?: string;
+  found: boolean;
+  recommendation?: string;
+}
+
+export interface QAExpectationContext {
+  page: Page;
+  persona: Persona;
+  surface: SurfaceConfig;
+  product: ProductConfig;
+  env: Environment;
+  skillResult: SkillResult;
+  preflightResults: QAPreflightResult[];
+  selectorResults: SelectorResult[];
+  consoleErrors: string[];
+  network: NetworkObservation[];
+}
+
+export interface QAExpectation {
+  id: string;
+  description: string;
+  severity: Severity;
+  hard?: boolean;
+  evaluate(context: QAExpectationContext): Promise<QAExpectationResult> | QAExpectationResult;
+}
+
 export interface IssueRecommendation {
   title: string;
   severity: Severity;
@@ -83,6 +158,7 @@ export interface SkillResult {
   consoleErrors: string[];
   networkErrors: string[];
   uxFriction: string[];
+  observations?: string[];
   issueRecommendation?: IssueRecommendation;
   regressionRecommendation?: string;
 }
@@ -110,6 +186,10 @@ export interface QASkill {
   readonly flow: string;
   readonly supportedPersonas: readonly string[];
   readonly description: string;
+  readonly requiresAuth?: boolean;
+  readonly selectors?: Record<string, SelectorContract>;
+  readonly preflightChecks?: readonly QAPreflightCheck[];
+  readonly expectations?: readonly QAExpectation[];
   run(context: SkillContext): Promise<SkillResult>;
 }
 
@@ -136,16 +216,23 @@ export interface QAResult {
   timestamp: string;
   mode: RunMode;
   status: QAStatus;
+  verdictReason: string;
   severity?: Severity;
+  preflightResults: QAPreflightResult[];
   steps: StepResult[];
+  expectationResults: QAExpectationResult[];
+  observations: string[];
+  selectorResults: SelectorResult[];
   screenshots: string[];
   videoPath?: string;
   tracePath?: string;
   consoleErrors: string[];
   networkErrors: string[];
+  networkObservations: NetworkObservation[];
   uxFriction: string[];
   issueRecommendation?: IssueRecommendation;
   regressionRecommendation?: string;
+  regressionRecommendations?: string[];
   durationMs: number;
 }
 
@@ -178,4 +265,6 @@ export interface CLIOptions {
   env: Environment;
   outputDir: string;
   dryRun: boolean;
+  skipPreflight: boolean;
+  force: boolean;
 }

@@ -11,7 +11,13 @@ import type {
   Environment,
   RunMode,
   StepResult,
+  NetworkObservation,
+  SkillResult,
+  QAExpectationResult,
 } from './core/types.js';
+import { assertStorageState } from './core/auth-state.js';
+import { runPreflightChecks } from './core/preflight.js';
+import { calculateFinalVerdict, evaluateSelectorContracts, selectorRecommendations } from './core/trust.js';
 
 export interface RunSkillOptions {
   skill: QASkill;
@@ -20,6 +26,8 @@ export interface RunSkillOptions {
   env: Environment;
   mode: RunMode;
   artifactsBaseDir: string;
+  skipPreflight?: boolean;
+  force?: boolean;
 }
 
 function getHeadSha(): string {
@@ -48,6 +56,60 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
   const timestamp = new Date().toISOString();
   const isObserve = mode === 'observe';
 
+  const preflightResults = await runPreflightChecks(
+    skill.preflightChecks,
+    { product: adapter.config, surface, persona, env },
+    opts.skipPreflight ?? false,
+  );
+  const requiredPreflightFailed = preflightResults.some((result) => (
+    result.required && result.status === 'failed'
+  ));
+
+  if (requiredPreflightFailed && !opts.force) {
+    const verdict = calculateFinalVerdict({
+      stepStatus: 'SKIP',
+      preflightResults,
+      expectationResults: [],
+      force: false,
+    });
+
+    return {
+      schema: 'experience-qa/v1',
+      runId,
+      product: adapter.config.id,
+      surface: surface.id,
+      persona: persona.id,
+      flow: skill.flow,
+      environment: env,
+      headSha: getHeadSha(),
+      timestamp,
+      mode,
+      status: verdict.status,
+      verdictReason: verdict.reason,
+      preflightResults,
+      steps: [{
+        step: 'browser automation',
+        status: 'skip',
+        detail: 'Skipped after required preflight failure. Use --force to continue into browser steps.',
+        timestamp: new Date().toISOString(),
+        durationMs: 0,
+      }],
+      expectationResults: [],
+      observations: ['Browser steps skipped because a required preflight failed.'],
+      selectorResults: [],
+      screenshots: [],
+      consoleErrors: [],
+      networkErrors: [],
+      networkObservations: [],
+      uxFriction: [],
+      durationMs: Date.now() - startTime,
+    };
+  }
+
+  const storageStatePath = skill.requiresAuth
+    ? await assertStorageState(adapter.config.id, persona.id)
+    : persona.credentials?.storageStatePath;
+
   const browser = await chromium.launch({
     headless: !isObserve,
     slowMo: isObserve ? 300 : 0,
@@ -57,9 +119,7 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
   const context = await browser.newContext({
     recordVideo: isObserve ? { dir: runDir, size: { width: 1280, height: 800 } } : undefined,
     viewport: { width: 1280, height: 800 },
-    ...(persona.credentials?.storageStatePath
-      ? { storageState: persona.credentials.storageStatePath }
-      : {}),
+    ...(storageStatePath ? { storageState: storageStatePath } : {}),
   });
 
   if (isObserve) {
@@ -67,10 +127,9 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
   }
 
   const page = await context.newPage();
-
-  // ── Collect browser-level errors ───────────────────────────────────────────
   const capturedConsoleErrors: string[] = [];
   const capturedNetworkErrors: string[] = [];
+  const capturedNetworkObservations: NetworkObservation[] = [];
 
   page.on('console', (msg) => {
     if (msg.type() === 'error') capturedConsoleErrors.push(msg.text());
@@ -81,10 +140,20 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
   page.on('requestfailed', (req) => {
     const url = req.url();
     if (url.startsWith('chrome-extension://') || url.startsWith('data:')) return;
-    capturedNetworkErrors.push(`${req.method()} ${url} — ${req.failure()?.errorText ?? 'failed'}`);
+    const failureText = req.failure()?.errorText ?? 'failed';
+    capturedNetworkErrors.push(`${req.method()} ${url} - ${failureText}`);
+    capturedNetworkObservations.push({ method: req.method(), url, failureText });
+  });
+  page.on('response', (res) => {
+    const url = res.url();
+    if (url.startsWith('chrome-extension://') || url.startsWith('data:')) return;
+    const observation = { method: res.request().method(), url, status: res.status() };
+    capturedNetworkObservations.push(observation);
+    if (res.status() >= 500) {
+      capturedNetworkErrors.push(`${observation.method} ${url} - HTTP ${res.status()}`);
+    }
   });
 
-  // ── Build skill context ────────────────────────────────────────────────────
   const capturedScreenshots: string[] = [];
   let stepCounter = 0;
 
@@ -99,7 +168,7 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
     artifactsDir: runDir,
 
     log(step: string, detail?: string): void {
-      process.stdout.write(`  [${++stepCounter}] ${step}${detail ? ` — ${detail}` : ''}\n`);
+      process.stdout.write(`  [${++stepCounter}] ${step}${detail ? ` - ${detail}` : ''}\n`);
     },
 
     async screenshot(name: string): Promise<string> {
@@ -110,8 +179,7 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
     },
   };
 
-  // ── Run skill ──────────────────────────────────────────────────────────────
-  let skillResult;
+  let skillResult: SkillResult;
   try {
     await adapter.authenticate(page, persona, env);
     skillResult = await skill.run(skillContext);
@@ -131,16 +199,51 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
     } catch { /* ignore */ }
 
     skillResult = {
-      status: 'ERROR' as const,
-      severity: 'critical' as const,
+      status: 'ERROR',
+      severity: 'critical',
       steps: [errorStep],
       consoleErrors: [message],
       networkErrors: [],
       uxFriction: [],
+      observations: [],
     };
   }
 
-  // ── Collect trace + video ──────────────────────────────────────────────────
+  const selectorResults = await evaluateSelectorContracts(page, skill.selectors);
+  const expectationResults: QAExpectationResult[] = [];
+  for (const expectation of skill.expectations ?? []) {
+    try {
+      const result = await expectation.evaluate({
+        page,
+        persona,
+        surface,
+        product: adapter.config,
+        env,
+        skillResult,
+        preflightResults,
+        selectorResults,
+        consoleErrors: [...capturedConsoleErrors, ...skillResult.consoleErrors],
+        network: capturedNetworkObservations,
+      });
+      expectationResults.push({ ...result, severity: expectation.severity, hard: expectation.hard });
+    } catch (error) {
+      expectationResults.push({
+        id: expectation.id,
+        status: 'failed',
+        severity: expectation.severity,
+        hard: expectation.hard,
+        message: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  const verdict = calculateFinalVerdict({
+    stepStatus: skillResult.status,
+    preflightResults,
+    expectationResults,
+    force: opts.force ?? false,
+  });
+
   let tracePath: string | undefined;
   if (isObserve) {
     tracePath = join(runDir, 'trace.zip');
@@ -160,6 +263,10 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
     ...capturedScreenshots,
     ...skillResult.steps.flatMap((s) => (s.screenshotPath ? [s.screenshotPath] : [])),
   ];
+  const regressionRecommendations = [
+    ...selectorRecommendations(selectorResults),
+    ...(skillResult.regressionRecommendation ? [skillResult.regressionRecommendation] : []),
+  ];
 
   return {
     schema: 'experience-qa/v1',
@@ -172,17 +279,24 @@ export async function runSkill(opts: RunSkillOptions): Promise<QAResult> {
     headSha: getHeadSha(),
     timestamp,
     mode,
-    status: skillResult.status,
+    status: verdict.status,
+    verdictReason: verdict.reason,
     severity: skillResult.severity,
+    preflightResults,
     steps: skillResult.steps,
+    expectationResults,
+    observations: skillResult.observations ?? [],
+    selectorResults,
     screenshots: allScreenshots,
     videoPath,
     tracePath,
     consoleErrors: [...capturedConsoleErrors, ...skillResult.consoleErrors],
     networkErrors: [...capturedNetworkErrors, ...skillResult.networkErrors],
+    networkObservations: capturedNetworkObservations,
     uxFriction: skillResult.uxFriction,
     issueRecommendation: skillResult.issueRecommendation,
-    regressionRecommendation: skillResult.regressionRecommendation,
+    regressionRecommendation: regressionRecommendations[0],
+    regressionRecommendations,
     durationMs: Date.now() - startTime,
   };
 }

@@ -51,6 +51,7 @@ pnpm build
 - `pnpm lint` runs repo-wide ESLint checks
 - `pnpm type-check` validates all workspace TypeScript packages
 - `pnpm build` builds all workspace packages
+- `pnpm qa:experience --help` shows the Experience QA trust-layer commands; see `docs/05_operations/EXPERIENCE_QA.md`
 
 ## Environment Files
 
