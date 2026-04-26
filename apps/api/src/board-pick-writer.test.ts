@@ -179,6 +179,8 @@ test('writes pick for a board candidate and links pick_id', async () => {
   assert.equal(meta['boardRunId'], boardRunId);
   assert.equal(meta['boardRank'], 1);
   assert.equal(meta['candidateId'], candidateId);
+  assert.equal(meta['scoredCandidateId'], candidateId);
+  assert.equal(typeof meta['marketUniverseId'], 'string');
   assert.equal(meta['governedBoardWrite'], true);
 
   const [candidate] = await repos.pickCandidates.findByStatus('qualified');

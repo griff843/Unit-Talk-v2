@@ -159,6 +159,9 @@ test('candidate-pick-scanner: happy path — qualified+scored candidate becomes 
   assert.ok(pick, 'pick record must exist in DB');
   assert.equal(pick!.status, 'awaiting_approval', 'governance brake must set status to awaiting_approval');
   assert.equal(pick!.source, 'system-pick-scanner', 'pick source must be system-pick-scanner');
+  const metadata = pick!.metadata as Record<string, unknown>;
+  assert.equal(metadata['scoredCandidateId'], candidate.id);
+  assert.equal(metadata['marketUniverseId'], universe.id);
 });
 
 test('candidate-pick-scanner: duplicate prevention — candidate with pick_id already set is skipped', async () => {

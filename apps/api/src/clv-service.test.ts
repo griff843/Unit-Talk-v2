@@ -109,6 +109,80 @@ test('ProviderOfferRepository.findClosingLine handles participant-less markets',
   assert.equal(result?.idempotency_key, 'total-1');
 });
 
+test('computeCLVOutcome uses marketUniverseId provenance before event resolution', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  await repositories.marketUniverse.upsertMarketUniverse([
+    {
+      provider_key: 'sgo',
+      provider_event_id: 'mlb-event-754',
+      provider_participant_id: 'MLB_PLAYER_754',
+      provider_market_key: 'batting-hits-all-game-ou',
+      sport_key: 'MLB',
+      league_key: 'MLB',
+      event_id: null,
+      participant_id: null,
+      market_type_id: 'player_batting_hits_ou',
+      canonical_market_key: 'player_batting_hits_ou',
+      current_line: 1.5,
+      current_over_odds: -110,
+      current_under_odds: -110,
+      opening_line: 1.5,
+      opening_over_odds: -110,
+      opening_under_odds: -110,
+      closing_line: 1.5,
+      closing_over_odds: -135,
+      closing_under_odds: 115,
+      fair_over_prob: null,
+      fair_under_prob: null,
+      is_stale: false,
+      last_offer_snapshot_at: '2026-04-24T18:55:00.000Z',
+    },
+  ]);
+  const [universe] = await repositories.marketUniverse.listForScan(1);
+  assert.ok(universe);
+
+  const outcome = await computeCLVOutcome(
+    {
+      id: 'pick-provenance-754',
+      submission_id: 'sub-provenance-754',
+      participant_id: null,
+      player_id: null,
+      capper_id: null,
+      market_type_id: 'player_batting_hits_ou',
+      sport_id: 'MLB',
+      market: 'player_batting_hits_ou',
+      selection: 'Over 1.5',
+      line: 1.5,
+      odds: -120,
+      stake_units: 1,
+      confidence: 0.7,
+      source: 'board-construction',
+      approval_status: 'approved',
+      promotion_status: 'qualified',
+      promotion_target: 'best-bets',
+      promotion_score: 91,
+      promotion_reason: 'test',
+      promotion_version: 'v1',
+      promotion_decided_at: '2026-04-24T20:00:00.000Z',
+      promotion_decided_by: 'api',
+      status: 'posted',
+      posted_at: '2026-04-24T20:05:00.000Z',
+      settled_at: null,
+      idempotency_key: null,
+      metadata: { marketUniverseId: universe.id, scoredCandidateId: 'candidate-754' },
+      created_at: '2026-04-24T20:00:00.000Z',
+      updated_at: '2026-04-24T20:05:00.000Z',
+    },
+    repositories,
+  );
+
+  assert.equal(outcome.status, 'computed');
+  assert.equal(outcome.resolvedMarketKey, 'batting-hits-all-game-ou');
+  assert.equal(outcome.result?.closingOdds, -135);
+  assert.equal(typeof outcome.result?.clvRaw, 'number');
+});
+
 test('computeCLVOutcome resolves provider market from market_type_id before legacy pick.market', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const resolvedAliases: string[] = [];

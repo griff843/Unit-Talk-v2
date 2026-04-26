@@ -138,6 +138,34 @@ export async function computeCLVOutcome(
         availableMarkets: [],
       };
     }
+
+    const directUniverseLine = await resolveClosingLineFromPickProvenance(
+      pick,
+      repositories.marketUniverse,
+    );
+    if (directUniverseLine) {
+      const result = computeClvFromClosingLine(
+        pick,
+        directUniverseLine.closingLine,
+        selectionSide,
+        false,
+      );
+      if (!result) {
+        return {
+          result: null,
+          status: 'missing_priced_side',
+          resolvedMarketKey: directUniverseLine.resolvedMarketKey,
+          availableMarkets: [],
+        };
+      }
+
+      return {
+        result,
+        status: 'computed',
+        resolvedMarketKey: directUniverseLine.resolvedMarketKey,
+        availableMarkets: [],
+      };
+    }
   }
 
   const eventContext: PickEventContext | null = options.preResolvedContext
@@ -306,6 +334,86 @@ export async function computeCLVOutcome(
     status: isOpeningFallback ? 'opening_line_fallback' : 'computed',
     resolvedMarketKey,
     availableMarkets: [],
+  };
+}
+
+async function resolveClosingLineFromPickProvenance(
+  pick: PickRecord,
+  marketUniverse: IMarketUniverseRepository | undefined,
+): Promise<{ closingLine: ClosingLineLike; resolvedMarketKey: string } | null> {
+  if (!marketUniverse) {
+    return null;
+  }
+
+  const metadata = asRecord(pick.metadata);
+  const marketUniverseId = readString(metadata, 'marketUniverseId') ?? readString(metadata, 'universeId');
+  if (!marketUniverseId) {
+    return null;
+  }
+
+  const [row] = await marketUniverse.findByIds([marketUniverseId]);
+  if (!row || row.closing_line === null) {
+    return null;
+  }
+
+  return {
+    closingLine: {
+      line: row.closing_line,
+      over_odds: row.closing_over_odds,
+      under_odds: row.closing_under_odds,
+      snapshot_at: row.last_offer_snapshot_at,
+      provider_key: row.provider_key,
+    },
+    resolvedMarketKey: row.provider_market_key,
+  };
+}
+
+function computeClvFromClosingLine(
+  pick: PickRecord,
+  closingLine: ClosingLineLike,
+  resolvedSide: 'over' | 'under',
+  isOpeningFallback: boolean,
+): CLVResult | null {
+  const pricedSide = readClosingSideOdds(closingLine, resolvedSide);
+  if (!pricedSide) {
+    return null;
+  }
+
+  const pickImpliedProb = americanToImplied(pick.odds as number);
+  const overImplied = americanToImplied(closingLine.over_odds as number);
+  const underImplied = americanToImplied(closingLine.under_odds as number);
+  const bothSidesAvailable = Number.isFinite(overImplied) && Number.isFinite(underImplied);
+  const devigged = bothSidesAvailable
+    ? applyDevig(overImplied, underImplied, 'proportional')
+    : null;
+
+  let closingImpliedProb: number;
+  let isSingleSideDevig = false;
+
+  if (devigged) {
+    closingImpliedProb = resolvedSide === 'over' ? devigged.overFair : devigged.underFair;
+  } else {
+    const rawImplied = resolvedSide === 'over' ? overImplied : underImplied;
+    if (!Number.isFinite(rawImplied)) {
+      return null;
+    }
+    closingImpliedProb = rawImplied;
+    isSingleSideDevig = true;
+  }
+
+  const clvRaw = roundTo(pickImpliedProb - closingImpliedProb, 6);
+
+  return {
+    pickOdds: pick.odds as number,
+    closingOdds: pricedSide,
+    closingLine: closingLine.line,
+    closingSnapshotAt: closingLine.snapshot_at,
+    clvRaw,
+    clvPercent: roundTo(clvRaw * 100, 4),
+    beatsClosingLine: clvRaw > 0,
+    providerKey: closingLine.provider_key,
+    ...(isOpeningFallback ? { isOpeningLineFallback: true } : {}),
+    ...(isSingleSideDevig ? { isSingleSideDevig: true } : {}),
   };
 }
 
@@ -516,6 +624,11 @@ function asRecord(value: unknown) {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
     ? (value as Record<string, unknown>)
     : {};
+}
+
+function readString(record: Record<string, unknown>, key: string): string | null {
+  const value = record[key];
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
 }
 
 function roundTo(value: number, decimals: number) {

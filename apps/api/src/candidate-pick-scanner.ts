@@ -109,13 +109,22 @@ export async function runCandidatePickScan(
       confidence: side === 'over' ? devigged.overFair : devigged.underFair,
       metadata: {
         candidateId: candidate.id,
+        scoredCandidateId: candidate.id,
         universeId: universe.id,
+        marketUniverseId: universe.id,
         modelScore: candidate.model_score,
         modelTier: candidate.model_tier,
         sportKey: universe.sport_key,
         leagueKey: universe.league_key,
         providerKey: universe.provider_key,
         providerEventId: universe.provider_event_id,
+        providerMarketKey: universe.provider_market_key,
+        ...(universe.event_id ? { eventId: universe.event_id } : {}),
+        ...(universe.participant_id ? { participantId: universe.participant_id } : {}),
+        ...(universe.market_type_id ? { marketTypeId: universe.market_type_id } : {}),
+        ...(universe.provider_participant_id
+          ? { providerParticipantId: universe.provider_participant_id }
+          : {}),
         systemGenerated: true,
       },
     };

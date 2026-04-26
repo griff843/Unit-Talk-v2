@@ -1478,7 +1478,7 @@ test('mapSGOStatus marks completed and in-progress events from SGO booleans', ()
 
 test('resolveSgoEntities upserts events and players idempotently', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
-  const events = [createResolvedEvent()];
+  const events = [createResolvedEvent({ startsAt: '2026-05-01T23:30:00.000Z' })];
 
   const first = await resolveSgoEntities(events, repositories);
   const second = await resolveSgoEntities(events, repositories);
