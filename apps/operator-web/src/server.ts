@@ -62,6 +62,7 @@ import { handleRoutingPreviewRequest } from './routes/routing-preview.js';
 import { handlePromotionPreviewRequest } from './routes/promotion-preview.js';
 import { handlePropOffersRequest } from './routes/prop-offers.js';
 import { handleEventsRequest } from './routes/events.js';
+import { handleLineShopperRequest, type LineShopperBook } from './routes/line-shopper.js';
 
 export interface OperatorHealthSignal {
   component: 'api' | 'worker' | 'distribution' | 'ingestor' | 'grading' | 'alert-agent';
@@ -369,6 +370,13 @@ export interface OperatorEventsFilter {
   limit?: number;
 }
 
+export interface LineShopperFilter {
+  participant: string;
+  market: string;
+  eventId?: string;
+  sport?: string;
+}
+
 export interface OperatorEventRow {
   eventId: string;
   externalId: string | null;
@@ -430,6 +438,7 @@ export interface OperatorSnapshotProvider {
   getParticipants?(filter?: OperatorParticipantsFilter): Promise<OperatorParticipantsResponse>;
   getPropOffers?(filter?: PropOffersFilter): Promise<PropOffersResponse>;
   getEvents?(filter?: OperatorEventsFilter): Promise<OperatorEventsResponse>;
+  getLineShopperBooks?(filter: LineShopperFilter): Promise<LineShopperBook[]>;
   /** Supabase client exposed for pick detail route queries. Only present on database providers. */
   _supabaseClient?: unknown;
 }
@@ -613,6 +622,10 @@ export async function routeOperatorRequest(
 
   if (method === 'GET' && url.pathname === '/api/operator/events') {
     return handleEventsRequest(request, response, deps);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/operator/line-shopper') {
+    return handleLineShopperRequest(request, response, deps);
   }
 
   if (method === 'GET' && url.pathname === '/api/operator/pick-search') {
@@ -1017,6 +1030,40 @@ export function createOperatorSnapshotProvider(
           total: filteredMatchups.length,
           observedAt: new Date().toISOString(),
         };
+      },
+      async getLineShopperBooks(filter: LineShopperFilter) {
+        let query = client
+          .from('provider_offers')
+          .select('bookmaker_key, line, over_odds, under_odds, is_opening, is_closing, snapshot_at')
+          .eq('provider_participant_id', filter.participant)
+          .eq('provider_market_key', filter.market)
+          .not('bookmaker_key', 'is', null)
+          .order('snapshot_at', { ascending: false })
+          .limit(500);
+
+        if (filter.eventId) query = query.eq('provider_event_id', filter.eventId);
+        if (filter.sport) query = query.eq('sport_key', filter.sport);
+
+        const { data, error } = await query;
+        if (error) throw new Error(`Failed to query line shopper: ${error.message}`);
+
+        // Deduplicate by bookmaker_key (latest snapshot wins)
+        const seen = new Map<string, LineShopperBook>();
+        for (const row of (data ?? [])) {
+          const key = row.bookmaker_key as string;
+          if (!seen.has(key)) {
+            seen.set(key, {
+              bookmakerKey: key,
+              line: row.line,
+              overOdds: row.over_odds,
+              underOdds: row.under_odds,
+              isOpening: row.is_opening ?? false,
+              isClosing: row.is_closing ?? false,
+              snapshotAt: row.snapshot_at,
+            });
+          }
+        }
+        return Array.from(seen.values());
       },
     };
   } catch (error) {
@@ -2652,6 +2699,9 @@ function handleOperatorProviderFailure(
         total: 0,
         observedAt: new Date().toISOString(),
       };
+    },
+    async getLineShopperBooks(_filter: LineShopperFilter) {
+      return [];
     },
   };
 }
