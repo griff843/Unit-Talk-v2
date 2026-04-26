@@ -1,0 +1,143 @@
+import { writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
+import type { QAResult, IssueRecommendation } from './types.js';
+
+/**
+ * Writes an issue-ready markdown report when a QA run fails or needs review.
+ * Returns the path written, or undefined if the result was a clean PASS.
+ */
+export async function writeIssueReport(result: QAResult, runDir: string): Promise<string | undefined> {
+  if (result.status === 'PASS' && !result.issueRecommendation) return undefined;
+
+  const recommendation = result.issueRecommendation ?? deriveIssue(result);
+
+  // Merge runner-captured screenshots into recommendation if skill left them empty
+  if (recommendation.screenshotPaths.length === 0 && result.screenshots.length > 0) {
+    recommendation.screenshotPaths = result.screenshots;
+  }
+
+  const issuePath = join(runDir, 'issue_report.md');
+  await writeFile(issuePath, renderIssue(result, recommendation), 'utf-8');
+  return issuePath;
+}
+
+function deriveIssue(result: QAResult): IssueRecommendation {
+  const failedSteps = result.steps.filter((s) => s.status === 'fail');
+  const isNeedsReview = result.status === 'NEEDS_REVIEW';
+
+  const actualBehaviorParts: string[] = [];
+  if (failedSteps.length > 0) {
+    actualBehaviorParts.push(failedSteps.map((s) => s.detail ?? s.step).join('; '));
+  }
+  if (result.uxFriction.length > 0) {
+    actualBehaviorParts.push(...result.uxFriction);
+  }
+  if (result.consoleErrors.length > 0) {
+    actualBehaviorParts.push(`Console errors: ${result.consoleErrors.slice(0, 3).map(e => e.split('\n')[0]).join('; ')}`);
+  }
+
+  const titleSuffix = isNeedsReview ? 'needs review' : 'fails';
+  const severityLabel = result.severity ?? (isNeedsReview ? 'low' : 'medium');
+
+  return {
+    title: `[QA] ${result.surface}: ${result.flow} ${titleSuffix} for persona '${result.persona}'`,
+    severity: severityLabel,
+    product: result.product,
+    surface: result.surface,
+    description: [
+      `Automated QA detected a **${result.status}** in the **${result.flow}** flow`,
+      `on **${result.surface}** for persona **${result.persona}**.`,
+      result.uxFriction.length > 0
+        ? `\n\nUX issues found:\n${result.uxFriction.map((f) => `- ${f}`).join('\n')}`
+        : '',
+      failedSteps.length > 0
+        ? `\n\nFailed at step: "${failedSteps[0]?.step ?? 'unknown'}".`
+        : '',
+    ]
+      .filter(Boolean)
+      .join(' '),
+    stepsToReproduce: [
+      `Environment: ${result.environment} (${result.headSha})`,
+      `Persona: ${result.persona}`,
+      ...(failedSteps.length > 0
+        ? failedSteps.map((s) => s.step)
+        : [`Run: pnpm qa:experience --surface ${result.surface} --persona ${result.persona} --flow ${result.flow}`]),
+    ],
+    expectedBehavior: `${result.flow} flow completes without UX friction or errors for persona ${result.persona}`,
+    actualBehavior: actualBehaviorParts.join('\n') || `Status: ${result.status}`,
+    screenshotPaths: result.screenshots,
+    labels: [
+      'qa-agent',
+      result.product,
+      result.surface,
+      `severity-${severityLabel}`,
+      ...(isNeedsReview ? ['needs-review'] : []),
+    ],
+  };
+}
+
+function renderIssue(result: QAResult, issue: IssueRecommendation): string {
+  const lines: string[] = [
+    `# ${issue.title}`,
+    '',
+    `**Severity:** ${issue.severity}`,
+    `**Product:** ${issue.product}`,
+    `**Surface:** ${issue.surface}`,
+    `**Labels:** ${issue.labels.join(', ')}`,
+    '',
+    '---',
+    '',
+    '## Description',
+    '',
+    issue.description,
+    '',
+    '## Steps to Reproduce',
+    '',
+    ...issue.stepsToReproduce.map((s, i) => `${i + 1}. ${s}`),
+    '',
+    '## Expected Behavior',
+    '',
+    issue.expectedBehavior,
+    '',
+    '## Actual Behavior',
+    '',
+    issue.actualBehavior,
+    '',
+    '## QA Run Context',
+    '',
+    `- Run ID: \`${result.runId}\``,
+    `- SHA: \`${result.headSha}\``,
+    `- Timestamp: ${result.timestamp}`,
+    `- Persona: ${result.persona}`,
+    `- Environment: ${result.environment}`,
+    `- Mode: ${result.mode}`,
+  ];
+
+  if (result.consoleErrors.length > 0) {
+    lines.push('', '## Console Errors', '');
+    const deduped = [...new Set(result.consoleErrors.map((e) => e.split('\n')[0]))].slice(0, 8);
+    lines.push(...deduped.map((e) => `- \`${e}\``));
+    if (result.consoleErrors.length > deduped.length) {
+      lines.push(`- _...and ${result.consoleErrors.length - deduped.length} more (see qa_result.json)_`);
+    }
+  }
+
+  if (result.networkErrors.length > 0) {
+    lines.push('', '## Network Errors', '');
+    lines.push(...result.networkErrors.slice(0, 5).map((e) => `- \`${e}\``));
+    if (result.networkErrors.length > 5) {
+      lines.push(`- _...and ${result.networkErrors.length - 5} more (see qa_result.json)_`);
+    }
+  }
+
+  lines.push('', '## Screenshots', '');
+  if (issue.screenshotPaths.length > 0) {
+    lines.push(...issue.screenshotPaths.map((p) => `- \`${p}\``));
+  } else {
+    lines.push('_No screenshots captured_');
+  }
+
+  lines.push('', '---', '', `_Generated by Experience QA Agent · ${result.timestamp}_`);
+
+  return lines.join('\n') + '\n';
+}
