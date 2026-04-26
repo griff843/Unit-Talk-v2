@@ -82,6 +82,7 @@
     "ops:truth-check": "tsx scripts/ops/truth-check.ts",
     "ops:update-record": "tsx scripts/ops/update-record.ts",
     "pi-m5:verify": "tsx scripts/pi-m5-verify.ts",
+    "qa:experience": "tsx apps/qa-agent/src/cli.ts",
     "migration:audit": "tsx scripts/utv2-356-migration-audit.ts",
     "portfolio:review": "tsx scripts/portfolio-review.ts",
     "proof:check": "tsx scripts/proof-check.ts",
