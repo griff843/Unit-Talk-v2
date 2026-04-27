@@ -156,7 +156,8 @@ test('recordPickSettlement creates manual-review record for ambiguous settlement
 
   assert.equal(result.settlementRecord.status, 'manual_review');
   assert.equal(result.settlementRecord.result, null);
-  assert.equal(result.lifecycleEvent, null);
+  assert.ok(result.lifecycleEvent !== null, 'manual review must write a lifecycle row');
+  assert.equal(result.lifecycleEvent?.to_state, 'posted');
   assert.equal(result.finalLifecycleState, 'posted');
   assert.equal(result.auditRecords[0]?.action, 'settlement.manual_review');
 });
@@ -194,7 +195,8 @@ test('recordPickSettlement creates additive correction record for already-settle
   assert.equal(first.finalLifecycleState, 'settled');
   assert.equal(correction.finalLifecycleState, 'settled');
   assert.equal(correction.settlementRecord.corrects_id, first.settlementRecord.id);
-  assert.equal(correction.lifecycleEvent, null);
+  assert.ok(correction.lifecycleEvent !== null, 'correction must write a lifecycle row');
+  assert.equal(correction.lifecycleEvent?.to_state, 'settled');
   assert.equal(correction.auditRecords[0]?.action, 'settlement.corrected');
 });
 
