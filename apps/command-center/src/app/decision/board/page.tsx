@@ -1,10 +1,12 @@
-import { fetchBoardState } from '@/lib/api';
+import { getBoardState } from '@/lib/data';
+import type { BoardStateData } from '@/lib/types';
 import { BoardCapacityGauge } from '@/components/BoardCapacityGauge';
 import { ConflictCard } from '@/components/ConflictCard';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default async function BoardSaturationPage() {
-  const board = await fetchBoardState();
+  const boardResult = await getBoardState();
+  const board = (boardResult.ok ? boardResult.data : null) as BoardStateData;
 
   return (
     <div className="space-y-6">

@@ -3,8 +3,8 @@ import { PickIdentityPanel } from '@/components/PickIdentityPanel';
 import { InterventionAction } from '@/components/InterventionAction';
 import { Card } from '@/components/ui/Card';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
+import { getExceptionQueues } from '@/lib/data';
 
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
 interface ExceptionQueues {
@@ -30,17 +30,8 @@ interface ExceptionQueues {
 }
 
 async function fetchExceptionQueues(): Promise<ExceptionQueues | null> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/exception-queues`, { cache: 'no-store' });
-    if (!res.ok) {
-      return null;
-    }
-
-    const json = (await res.json()) as { ok: boolean; data: ExceptionQueues };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
+  const response = await getExceptionQueues();
+  return response.ok ? (response.data as ExceptionQueues) : null;
 }
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {

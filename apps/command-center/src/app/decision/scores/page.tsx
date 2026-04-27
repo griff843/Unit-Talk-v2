@@ -1,9 +1,11 @@
-import { fetchBoardState } from '@/lib/api';
+import { getBoardState } from '@/lib/data';
+import type { BoardStateData } from '@/lib/types';
 import { ScoreBreakdownBar } from '@/components/ScoreBreakdownBar';
 import { EmptyState } from '@/components/ui/EmptyState';
 
 export default async function ScoreBreakdownPage() {
-  const board = await fetchBoardState();
+  const boardResult = await getBoardState();
+  const board = (boardResult.ok ? boardResult.data : null) as BoardStateData;
 
   // Sort by thresholdDelta descending — highest above threshold first
   const sorted = [...board.scoreBreakdowns].sort(

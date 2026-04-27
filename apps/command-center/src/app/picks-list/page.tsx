@@ -7,30 +7,9 @@ import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { InlineSettleButton } from '@/components/InlineSettleButton';
 
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { searchPicks } from '@/lib/data';
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
-
-interface SearchResult {
-  picks: Array<Record<string, unknown>>;
-  total: number;
-  limit: number;
-  offset: number;
-}
-
-async function fetchPickSearch(params: Record<string, string>): Promise<SearchResult> {
-  try {
-    const qs = new URLSearchParams(params).toString();
-    const response = await fetch(`${OPERATOR_WEB_BASE}/api/operator/pick-search?${qs}`, { cache: 'no-store' });
-    if (!response.ok) {
-      return { picks: [], total: 0, limit: 25, offset: 0 };
-    }
-
-    const json = (await response.json()) as { ok: boolean; data: SearchResult };
-    return json.ok ? json.data : { picks: [], total: 0, limit: 25, offset: 0 };
-  } catch {
-    return { picks: [], total: 0, limit: 25, offset: 0 };
-  }
-}
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
   const raw = searchParams?.refresh;
@@ -115,7 +94,7 @@ export default async function PicksListPage({
     }
   }
 
-  const { picks, total, limit, offset } = await fetchPickSearch(params);
+  const { picks, total, limit, offset } = await searchPicks(params);
   const page = Math.floor(offset / limit) + 1;
   const totalPages = Math.ceil(total / limit);
   const hasFilters = Object.keys(params).length > 0;

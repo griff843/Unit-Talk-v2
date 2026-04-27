@@ -35,8 +35,7 @@ import type { SubmitPickControllerResult } from './controllers/submit-pick-contr
 // pathToFileURL is required on Windows where resolve() yields C:\ paths.
 const dirname = fileURLToPath(new URL('.', import.meta.url));
 const calibrationPath = pathToFileURL(resolve(dirname, '../../../packages/domain/src/probability/calibration.js')).href;
-const intelligencePath = pathToFileURL(resolve(dirname, '../../../apps/operator-web/src/routes/intelligence.js')).href;
-const sharedIntelligencePath = pathToFileURL(resolve(dirname, '../../../apps/operator-web/src/routes/shared-intelligence.js')).href;
+const analyticsPath = pathToFileURL(resolve(dirname, '../../../apps/command-center/src/lib/data/analytics.js')).href;
 
 // ─── Test 1: CLV computation wiring ─────────────────────────────────────────
 // Proves: computeAndAttachCLV exists, accepts the expected repository shape,
@@ -329,35 +328,23 @@ test('Promotion gate: high-confidence pick with strong scores IS promoted', asyn
   assert.equal(data.outboxEnqueued, true);
 });
 
-// ─── Test 5: Intelligence endpoint serves expected shape ────────────────────
-// Proves: The intelligence route handler exists as an exported function and
-// the shared computation functions used by the endpoint are all properly exported.
+// ─── Test 5: Intelligence data layer exports expected surface ───────────────
+// Proves: The command-center analytics data layer (which replaced the operator-web
+// intelligence route) exports the correct entry points for the intelligence page.
 //
 // DATA-GATED: Actual intelligence data requires live settled picks in the DB.
 //
 // Note: cross-app import via resolved path to avoid TypeScript rootDir violations.
 // Apps never import from apps in production; this is verification-only.
 
-test('Intelligence endpoint: handleIntelligenceRequest is an exported function', async () => {
-  const mod = await import(intelligencePath) as { handleIntelligenceRequest: (...args: unknown[]) => unknown };
-  assert.equal(typeof mod.handleIntelligenceRequest, 'function');
+test('Intelligence data layer: getIntelligenceData is an exported async function', async () => {
+  const mod = await import(analyticsPath) as Record<string, unknown>;
+  assert.equal(typeof mod.getIntelligenceData, 'function');
 });
 
-test('Intelligence endpoint: shared computation functions are exported', async () => {
-  const mod = await import(intelligencePath) as { handleIntelligenceRequest: (...args: unknown[]) => unknown };
-
-  // Handler accepts (request, response, deps) — verify arity
-  assert.equal(mod.handleIntelligenceRequest.length, 3);
-
-  const sharedMod = await import(sharedIntelligencePath) as Record<string, unknown>;
-  assert.equal(typeof sharedMod.fetchIntelligenceDataset, 'function');
-  assert.equal(typeof sharedMod.computeMiniStats, 'function');
-  assert.equal(typeof sharedMod.computePickPayout, 'function');
-  assert.equal(typeof sharedMod.computeScoreCorrelation, 'function');
-  assert.equal(typeof sharedMod.evaluateScoreSignal, 'function');
-  assert.equal(typeof sharedMod.sliceBySource, 'function');
-  assert.equal(typeof sharedMod.sliceByDecision, 'function');
-  assert.equal(typeof sharedMod.bucketBySport, 'function');
-  assert.equal(typeof sharedMod.bucketBySource, 'function');
-  assert.equal(typeof sharedMod.extractSport, 'function');
+test('Intelligence data layer: getPerformanceData and getLeaderboard are exported', async () => {
+  const mod = await import(analyticsPath) as Record<string, unknown>;
+  assert.equal(typeof mod.getPerformanceData, 'function');
+  assert.equal(typeof mod.getLeaderboard, 'function');
+  assert.equal(typeof mod.getReviewHistory, 'function');
 });

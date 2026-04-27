@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 //
 // Contract: Command Center Wave 4 Contract
 //
-// These tests run without a live operator-web — when the upstream is unreachable,
+// These tests run against the direct DB data layer. When the DB has no data,
 // the pages render gracefully with empty/fallback states. The tests verify that
 // all Wave 4 surfaces load, render the correct structural elements, and do not
 // crash regardless of data availability.

@@ -3,44 +3,9 @@ import { QueueFilters } from '@/components/QueueFilters';
 import { ReviewQueueClient } from '@/components/ReviewQueueClient';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { Suspense } from 'react';
+import { getReviewQueue } from '@/lib/data';
 
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
-
-interface ReviewPick {
-  id: string;
-  source: string;
-  market: string;
-  selection: string;
-  line: number | null;
-  odds: number | null;
-  stake_units: number | null;
-  promotion_score: number | null;
-  created_at: string;
-  status: string;
-  approval_status: string;
-  governanceQueueState?: string;
-  metadata: Record<string, unknown>;
-  eventName?: string | null;
-  eventStartTime?: string | null;
-  sportDisplayName?: string | null;
-  capperDisplayName?: string | null;
-  marketTypeDisplayName?: string | null;
-  settlementResult?: string | null;
-  reviewDecision?: string | null;
-}
-
-async function fetchReviewQueue(params: Record<string, string>): Promise<{ picks: ReviewPick[]; total: number }> {
-  try {
-    const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/review-queue?${qs}`, { cache: 'no-store' });
-    if (!res.ok) return { picks: [], total: 0 };
-    const json = (await res.json()) as { ok: boolean; data: { picks: ReviewPick[]; total: number } };
-    return json.ok ? json.data : { picks: [], total: 0 };
-  } catch {
-    return { picks: [], total: 0 };
-  }
-}
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
   const raw = searchParams?.refresh;
@@ -61,7 +26,7 @@ export default async function ReviewQueuePage({
     if (typeof val === 'string' && val.trim()) params[key] = val.trim();
   }
 
-  const { picks, total } = await fetchReviewQueue(params);
+  const { picks, total } = await getReviewQueue(params);
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();
   const lifecycleAwaitingApproval = picks.filter(

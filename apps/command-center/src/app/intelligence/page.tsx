@@ -1,6 +1,5 @@
 import { Card, EmptyState, MetricsCard } from '@/components/ui';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getIntelligenceData } from '@/lib/data';
 
 interface MiniStats {
   wins: number;
@@ -15,73 +14,6 @@ interface FormWindow {
   last5: MiniStats;
   last10: MiniStats;
   last20: MiniStats;
-}
-
-interface ScoreBand {
-  range: string;
-  total: number;
-  wins: number;
-  losses: number;
-  pushes: number;
-  hitRatePct: number;
-  roiPct: number;
-}
-
-interface FeedbackEntry {
-  pickId: string;
-  source: string;
-  sport: string;
-  promotionScore: number | null;
-  reviewDecision: string | null;
-  result: string;
-  scoreSignal: 'correct' | 'incorrect' | 'marginal' | null;
-  reviewWasRight: boolean | null;
-}
-
-interface IntelligenceData {
-  recentForm: {
-    overall: FormWindow;
-    capper: FormWindow;
-    system: FormWindow;
-    approved: FormWindow;
-    denied: FormWindow;
-    bySport: Record<string, FormWindow>;
-    bySource: Record<string, FormWindow>;
-  };
-  scoreQuality: {
-    bands: ScoreBand[];
-    scoreVsOutcome: {
-      avgScoreWins: number | null;
-      avgScoreLosses: number | null;
-      correlation: 'positive' | 'weak' | 'negative' | 'insufficient_data';
-      sampleSize: number;
-      confidence: 'high' | 'medium' | 'low' | 'none';
-    };
-  };
-  decisionQuality: {
-    approvedWinRate: number | null;
-    deniedWouldHaveWonRate: number | null;
-    approvedVsDeniedRoiDelta: number;
-    holdsResolvedCount: number;
-    holdsTotal: number;
-  };
-  feedbackLoop: FeedbackEntry[];
-  insights: {
-    bestScoreBand: { range: string; roiPct: number } | null;
-    warnings: Array<{ segment: string; message: string }>;
-  };
-  observedAt: string;
-}
-
-async function fetchIntelligence(): Promise<IntelligenceData | null> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/intelligence`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; data: IntelligenceData };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
 }
 
 function FormRow({ label, stats }: { label: string; stats: MiniStats }) {
@@ -187,7 +119,7 @@ function formWindowSampleSize(form: FormWindow) {
 }
 
 export default async function IntelligencePage() {
-  const data = await fetchIntelligence();
+  const data = await getIntelligenceData();
 
   if (!data) {
     return (
@@ -195,7 +127,7 @@ export default async function IntelligencePage() {
         <h1 className="text-lg font-bold text-gray-100">Intelligence</h1>
         <EmptyState
           message="Unable to load intelligence data."
-          detail="Check that operator-web is reachable and the /api/operator/intelligence endpoint is responding."
+          detail="The intelligence data could not be read from the database. Check Supabase connectivity."
         />
       </div>
     );

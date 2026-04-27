@@ -1,7 +1,7 @@
 import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
 
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getPerformanceData } from '@/lib/data';
 
 interface Stats {
   total: number;
@@ -22,19 +22,6 @@ interface PerformanceData {
   bySport: Record<string, Stats>;
   byIndividualSource: Record<string, Stats>;
   decisions: { approved: Stats; denied: Stats; held: Stats; heldCount: number };
-}
-
-async function fetchPerformance(): Promise<PerformanceData | null> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/performance`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; data: PerformanceData };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
 }
 
 function fmt(n: number | null | undefined, fallback = '—'): string {
@@ -83,7 +70,7 @@ function HitRateBar({
 }
 
 export default async function HitRatePage() {
-  const perf = await fetchPerformance();
+  const perf = await getPerformanceData() as PerformanceData | null;
 
   if (!perf) {
     return (
@@ -94,7 +81,7 @@ export default async function HitRatePage() {
         </div>
         <EmptyState
           message="Unable to load performance data."
-          detail="Check that operator-web is reachable and the /api/operator/performance endpoint is responding."
+          detail="Performance data could not be read from the database. Check Supabase connectivity."
           action={{ label: 'Back to Research', href: '/research' }}
         />
       </div>

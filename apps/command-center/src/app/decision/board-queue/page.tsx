@@ -1,19 +1,14 @@
-import { fetchBoardQueue } from '@/lib/api';
+import { getBoardQueue } from '@/lib/data';
+import type { BoardQueueData } from '@/lib/data';
 import { BoardQueueTable } from '@/components/BoardQueueTable';
 
 export default async function BoardQueuePage() {
-  let queue;
+  let queue: BoardQueueData;
   try {
-    queue = await fetchBoardQueue();
+    const result = await getBoardQueue();
+    queue = result.ok ? result.data : { boardRunId: '', observedAt: new Date().toISOString(), totalRows: 0, pendingCount: 0, writtenCount: 0, rows: [] };
   } catch {
-    queue = {
-      boardRunId: '',
-      observedAt: new Date().toISOString(),
-      totalRows: 0,
-      pendingCount: 0,
-      writtenCount: 0,
-      rows: [],
-    };
+    queue = { boardRunId: '', observedAt: new Date().toISOString(), totalRows: 0, pendingCount: 0, writtenCount: 0, rows: [] };
   }
 
   return (

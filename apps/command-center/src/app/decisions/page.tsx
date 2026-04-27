@@ -1,7 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getReviewHistory } from '@/lib/data';
 
 interface ReviewRow {
   id: string;
@@ -18,20 +17,6 @@ interface ReviewRow {
     status: string;
   } | null;
   outcome: string | null;
-}
-
-async function fetchReviewHistory(decision?: string): Promise<{ reviews: ReviewRow[]; total: number }> {
-  try {
-    const params = new URLSearchParams();
-    if (decision) params.set('decision', decision);
-    params.set('limit', '50');
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/review-history?${params}`, { cache: 'no-store' });
-    if (!res.ok) return { reviews: [], total: 0 };
-    const json = (await res.json()) as { ok: boolean; data: { reviews: ReviewRow[]; total: number } };
-    return json.ok ? json.data : { reviews: [], total: 0 };
-  } catch {
-    return { reviews: [], total: 0 };
-  }
 }
 
 const DECISION_COLORS: Record<string, string> = {
@@ -54,7 +39,7 @@ export default async function DecisionsPage({
   searchParams: Record<string, string | string[] | undefined>;
 }) {
   const filterDecision = typeof searchParams['decision'] === 'string' ? searchParams['decision'] : undefined;
-  const { reviews, total } = await fetchReviewHistory(filterDecision);
+  const { reviews, total } = await getReviewHistory(filterDecision);
 
   return (
     <div className="flex flex-col gap-6">
@@ -103,7 +88,7 @@ export default async function DecisionsPage({
                 </tr>
               </thead>
               <tbody>
-                {reviews.map((r) => (
+                {(reviews as ReviewRow[]).map((r) => (
                   <tr key={r.id} className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">
                     <td className="py-2 pr-3">
                       <Link href={`/picks/${r.pickId}`} className="font-mono text-xs text-blue-400 hover:underline">

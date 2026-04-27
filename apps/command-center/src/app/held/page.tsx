@@ -6,47 +6,9 @@ import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
 import { Suspense } from 'react';
 
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getHeldQueue } from '@/lib/data';
+
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
-
-interface HeldPick {
-  id: string;
-  source: string;
-  market: string;
-  selection: string;
-  line: number | null;
-  odds: number | null;
-  stake_units: number | null;
-  promotion_score: number | null;
-  created_at: string;
-  heldBy: string;
-  heldAt: string;
-  holdReason: string;
-  ageHours: number;
-  status: string;
-  approval_status: string;
-  governanceQueueState?: string;
-  metadata?: Record<string, unknown>;
-  eventName?: string | null;
-  eventStartTime?: string | null;
-  sportDisplayName?: string | null;
-  capperDisplayName?: string | null;
-  marketTypeDisplayName?: string | null;
-  settlementResult?: string | null;
-  reviewDecision?: string | null;
-}
-
-async function fetchHeldQueue(params: Record<string, string>): Promise<{ picks: HeldPick[]; total: number }> {
-  try {
-    const qs = new URLSearchParams(params).toString();
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/held-queue?${qs}`, { cache: 'no-store' });
-    if (!res.ok) return { picks: [], total: 0 };
-    const json = (await res.json()) as { ok: boolean; data: { picks: HeldPick[]; total: number } };
-    return json.ok ? json.data : { picks: [], total: 0 };
-  } catch {
-    return { picks: [], total: 0 };
-  }
-}
 
 function readRefreshIntervalMs(searchParams?: Record<string, string | string[] | undefined>) {
   const raw = searchParams?.refresh;
@@ -67,7 +29,7 @@ export default async function HeldQueuePage({
     if (typeof val === 'string' && val.trim()) params[key] = val.trim();
   }
 
-  const { picks, total } = await fetchHeldQueue(params);
+  const { picks, total } = await getHeldQueue(params);
   const intervalMs = readRefreshIntervalMs(searchParams);
   const observedAt = new Date().toISOString();
   const lifecycleAwaitingApproval = picks.filter(

@@ -5,9 +5,9 @@ import { test, expect } from '@playwright/test';
 //
 // Contract: docs/03_product/COMMAND_CENTER_REDESIGN_CONTRACT.md
 //
-// The app runs without a live operator-web — when the upstream is unreachable,
-// the dashboard renders gracefully with BROKEN signals and an empty pick table.
-// These tests verify every structural requirement from the contract.
+// The app reads directly from Supabase via the data layer. When the DB is
+// unavailable the dashboard renders gracefully with BROKEN signals and an empty
+// pick table. These tests verify every structural requirement from the contract.
 // ═══════════════════════════════════════════════════════════════════════════════
 
 // ── §4 System Health Signals ────────────────────────────────────────────────
@@ -37,7 +37,7 @@ test.describe('§4 System Health Signals', () => {
   test('§4.3 — each signal includes a detail explanation', async ({ page }) => {
     await page.goto('/');
     // Each signal card has 3 children: label, badge, detail text
-    // In BROKEN state (no operator-web), details say things like "API unreachable"
+    // In BROKEN state (DB unavailable), details say things like "unavailable"
     const signalCards = page.locator('[class*="border-gray-700"][class*="bg-gray-800"]');
     const count = await signalCards.count();
     expect(count).toBe(6);
@@ -136,7 +136,7 @@ test.describe('§6.3 Pick Detail View', () => {
   });
 
   test('pick detail renders settlement or correction surface (not both)', async ({ page }) => {
-    // Without operator-web, falls back to SettlementForm (unsettled default)
+    // Without live DB data, falls back to SettlementForm (unsettled default)
     await page.goto('/picks/test-pick-xyz');
     // Should have either "Settle Pick" or "Correct Settlement" or voided message
     const hasSettle = await page.getByText('Settle Pick').count();
@@ -145,9 +145,9 @@ test.describe('§6.3 Pick Detail View', () => {
     expect(hasSettle + hasCorrect + hasVoided).toBeGreaterThan(0);
   });
 
-  // When operator-web is down, the 8 sections aren't populated but the page
-  // must still show a not-found/unavailable state — not crash
-  test('pick detail shows not-found state when operator-web is unreachable', async ({ page }) => {
+  // When the pick is not in the DB, the page must show a not-found/unavailable
+  // state — not crash
+  test('pick detail shows not-found state when pick does not exist in DB', async ({ page }) => {
     await page.goto('/picks/nonexistent-pick-id');
     await expect(page.getByText(/not found|unavailable/i)).toBeVisible();
   });
@@ -330,7 +330,7 @@ test.describe('§8 Operator Actions', () => {
 // ── §10 Exception Visibility ────────────────────────────────────────────────
 
 test.describe('§10 Exception Visibility', () => {
-  // Without operator-web, the dashboard has empty picks and no exceptions to detect.
+  // Without picks in the DB, the dashboard has no exceptions to detect.
   // The exception panel only shows when exceptions > 0.
   // We verify the structural capability exists.
 

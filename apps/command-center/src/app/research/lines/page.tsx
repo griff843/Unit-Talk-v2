@@ -1,6 +1,5 @@
 import { Card, EmptyState } from '@/components/ui';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getResearchLines } from '@/lib/data';
 
 interface LineShopperBook {
   bookmakerKey: string;
@@ -25,17 +24,45 @@ async function fetchLineShopperData(
   participant: string,
   market: string,
 ): Promise<LineShopperResponse | null> {
-  try {
-    const query = new URLSearchParams({ participant, market });
-    const res = await fetch(
-      `${OPERATOR_WEB_BASE}/api/operator/line-shopper?${query.toString()}`,
-      { cache: 'no-store' },
-    );
-    if (!res.ok) return null;
-    return (await res.json()) as LineShopperResponse;
-  } catch {
-    return null;
+  const result = await getResearchLines({ participant, market });
+  if (!result) return null;
+
+  const bookMap = new Map<string, LineShopperBook>();
+  for (const offer of result.offers) {
+    const key = String(offer['bookmaker_key'] ?? '');
+    if (!key) continue;
+    const existing = bookMap.get(key);
+    const snapshotAt = String(offer['snapshot_at'] ?? '');
+    if (!existing || snapshotAt > existing.snapshotAt) {
+      bookMap.set(key, {
+        bookmakerKey: key,
+        line: typeof offer['line'] === 'number' ? offer['line'] : null,
+        overOdds: typeof offer['over_odds'] === 'number' ? offer['over_odds'] : null,
+        underOdds: typeof offer['under_odds'] === 'number' ? offer['under_odds'] : null,
+        isOpening: offer['is_opening'] === true,
+        isClosing: offer['is_closing'] === true,
+        snapshotAt,
+      });
+    }
   }
+
+  const books = Array.from(bookMap.values());
+  let bestOver: string | null = null;
+  let bestUnder: string | null = null;
+  let bestOverOdds = -Infinity;
+  let bestUnderOdds = -Infinity;
+  for (const book of books) {
+    if (book.overOdds != null && book.overOdds > bestOverOdds) {
+      bestOverOdds = book.overOdds;
+      bestOver = book.bookmakerKey;
+    }
+    if (book.underOdds != null && book.underOdds > bestUnderOdds) {
+      bestUnderOdds = book.underOdds;
+      bestUnder = book.bookmakerKey;
+    }
+  }
+
+  return { participant, market, books, bestOver, bestUnder, observedAt: result.observedAt };
 }
 
 function formatOdds(value: number | null): string {
@@ -123,7 +150,7 @@ export default async function LineShopperPage({
       {fetchFailed ? (
         <EmptyState
           message="Unable to load line data"
-          detail="Check that operator-web is reachable and the /api/operator/line-shopper endpoint is responding."
+          detail="No matching offers found in provider_offers for this participant and market."
           action={{ label: 'Back to Research', href: '/research' }}
         />
       ) : !data ? (

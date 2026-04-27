@@ -1,63 +1,7 @@
 import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
-
-interface EventSummary {
-  eventId: string;
-  externalId: string | null;
-  eventName: string;
-  eventDate: string;
-  startTime: string | null;
-  status: string;
-  sportId: string;
-  leagueId: string | null;
-  matchupLabel: string;
-  teams: Array<{
-    participantId: string;
-    teamId: string | null;
-    displayName: string;
-    role: 'home' | 'away';
-  }>;
-}
-
-interface EventParticipant {
-  participantId: string;
-  canonicalId: string | null;
-  participantType: 'team' | 'player';
-  displayName: string;
-  role: string;
-  teamId: string | null;
-  teamName: string | null;
-}
-
-interface EventOffer {
-  sportsbookId: string | null;
-  sportsbookName: string | null;
-  marketTypeId: string | null;
-  marketDisplayName: string;
-  participantId: string | null;
-  participantName: string | null;
-  line: number | null;
-  overOdds: number | null;
-  underOdds: number | null;
-  snapshotAt: string;
-  providerKey: string;
-  providerMarketKey: string;
-  providerParticipantId: string | null;
-}
-
-interface EventDetail extends EventSummary {
-  participants: EventParticipant[];
-  offers: EventOffer[];
-}
-
-interface EventsResponse {
-  events: EventSummary[];
-  selectedEvent: EventDetail | null;
-  total: number;
-  observedAt: string;
-}
+import { getResearchMatchups } from '@/lib/data';
+import type { ResearchMatchup } from '@/lib/data';
 
 const SPORT_OPTIONS = [
   { value: 'nba', label: 'NBA' },
@@ -70,34 +14,9 @@ function defaultDateValue() {
   return new Date().toISOString().slice(0, 10);
 }
 
-async function fetchEvents(params: {
-  sport: string;
-  date: string;
-  q?: string;
-  eventId?: string;
-}): Promise<EventsResponse | null> {
-  try {
-    const query = new URLSearchParams({
-      sport: params.sport,
-      date: params.date,
-      limit: '24',
-    });
-    if (params.q) query.set('q', params.q);
-    if (params.eventId) query.set('eventId', params.eventId);
-
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/events?${query.toString()}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as EventsResponse;
-  } catch {
-    return null;
-  }
-}
-
-function formatStartTime(startTime: string | null, eventDate: string): string {
-  const source = startTime ?? `${eventDate}T00:00:00.000Z`;
-  return new Date(source).toLocaleString(undefined, {
+function formatEventDate(eventDate: string | null): string {
+  if (!eventDate) return 'â€”';
+  return new Date(eventDate).toLocaleString(undefined, {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -105,11 +24,11 @@ function formatStartTime(startTime: string | null, eventDate: string): string {
   });
 }
 
-function formatOdds(value: number | null): string {
-  if (value === null) {
-    return '—';
+function matchupLabel(event: ResearchMatchup): string {
+  if (event.homeTeam && event.awayTeam) {
+    return `${event.awayTeam} @ ${event.homeTeam}`;
   }
-  return value > 0 ? `+${value}` : String(value);
+  return event.eventName ?? event.id;
 }
 
 export default async function MatchupCardPage({
@@ -122,8 +41,10 @@ export default async function MatchupCardPage({
   const q = typeof searchParams['q'] === 'string' ? searchParams['q'] : undefined;
   const eventId = typeof searchParams['eventId'] === 'string' ? searchParams['eventId'] : undefined;
 
-  const data = await fetchEvents({ sport, date, q, eventId });
-  const selectedEvent = data?.selectedEvent ?? null;
+  const result = await getResearchMatchups({ sport, date, q, eventId });
+  const events = result?.events ?? [];
+  const total = result?.total ?? 0;
+  const selectedEvent = eventId ? events.find((e) => e.id === eventId) ?? null : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -131,7 +52,7 @@ export default async function MatchupCardPage({
         <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
         <h1 className="mt-1 text-xl font-bold text-white">Matchup Card</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Browse upcoming events with participant assignments and recent market context.
+          Browse upcoming events with matchup context.
         </p>
       </div>
 
@@ -196,13 +117,13 @@ export default async function MatchupCardPage({
         </div>
       </form>
 
-      {!data ? (
+      {!result ? (
         <EmptyState
           message="Unable to load matchup data."
-          detail="Check that operator-web is reachable and the /api/operator/events endpoint is responding."
+          detail="The events table may be empty or unavailable."
           action={{ label: 'Back to Research', href: '/research' }}
         />
-      ) : data.events.length === 0 ? (
+      ) : events.length === 0 ? (
         <EmptyState
           message="No matchups found"
           detail="Try another sport, date, or broader search term."
@@ -210,20 +131,20 @@ export default async function MatchupCardPage({
         />
       ) : (
         <div className="grid grid-cols-1 gap-6 xl:grid-cols-[1.2fr,0.8fr]">
-          <Card title={`Matchups (${data.total})`}>
+          <Card title={`Matchups (${total})`}>
             <div className="space-y-3">
-              {data.events.map((event) => {
+              {events.map((event) => {
                 const href = `/research/matchups?${new URLSearchParams({
                   sport,
                   date,
                   ...(q ? { q } : {}),
-                  eventId: event.eventId,
+                  eventId: event.id,
                 }).toString()}`;
-                const active = selectedEvent?.eventId === event.eventId;
+                const active = selectedEvent?.id === event.id;
 
                 return (
                   <Link
-                    key={event.eventId}
+                    key={event.id}
                     href={href}
                     className={`block rounded border px-4 py-3 transition-colors ${
                       active
@@ -233,24 +154,14 @@ export default async function MatchupCardPage({
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="text-sm font-semibold text-gray-100">{event.matchupLabel}</div>
+                        <div className="text-sm font-semibold text-gray-100">{matchupLabel(event)}</div>
                         <div className="mt-1 text-xs text-gray-400">
-                          {event.leagueId ?? event.sportId.toUpperCase()} · {formatStartTime(event.startTime, event.eventDate)}
+                          {event.sportId?.toUpperCase() ?? 'â€”'} Â· {formatEventDate(event.eventDate)}
                         </div>
                       </div>
                       <span className="rounded border border-gray-700 px-2 py-0.5 text-[10px] uppercase tracking-wide text-gray-400">
-                        {event.status}
+                        {event.status ?? 'unknown'}
                       </span>
-                    </div>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      {event.teams.map((team) => (
-                        <span
-                          key={`${event.eventId}-${team.participantId}`}
-                          className="rounded border border-gray-800 bg-gray-900 px-2 py-1 text-[11px] text-gray-300"
-                        >
-                          {team.role} · {team.displayName}
-                        </span>
-                      ))}
                     </div>
                   </Link>
                 );
@@ -259,82 +170,34 @@ export default async function MatchupCardPage({
           </Card>
 
           {selectedEvent ? (
-            <div className="space-y-6">
-              <Card title="Selected Matchup">
-                <div className="space-y-3">
-                  <div>
-                    <div className="text-lg font-semibold text-white">{selectedEvent.matchupLabel}</div>
-                    <div className="mt-1 text-xs text-gray-400">
-                      {selectedEvent.eventName} · {selectedEvent.leagueId ?? selectedEvent.sportId.toUpperCase()} · {formatStartTime(selectedEvent.startTime, selectedEvent.eventDate)}
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-1 gap-2">
-                    {selectedEvent.teams.map((team) => (
-                      <div
-                        key={`${selectedEvent.eventId}-${team.participantId}`}
-                        className="flex items-center justify-between rounded border border-gray-800 bg-gray-950/60 px-3 py-2"
-                      >
-                        <span className="text-sm text-gray-200">{team.displayName}</span>
-                        <span className="text-[10px] uppercase tracking-wide text-gray-500">{team.role}</span>
-                      </div>
-                    ))}
-                  </div>
+            <Card title="Selected Matchup">
+              <div className="space-y-3">
+                <div className="text-lg font-semibold text-white">{matchupLabel(selectedEvent)}</div>
+                <div className="text-xs text-gray-400">
+                  {selectedEvent.eventName ?? selectedEvent.id} Â· {selectedEvent.sportId?.toUpperCase() ?? 'â€”'} Â· {formatEventDate(selectedEvent.eventDate)}
                 </div>
-              </Card>
-
-              <Card title={`Participants (${selectedEvent.participants.length})`}>
-                <div className="space-y-2">
-                  {selectedEvent.participants.map((participant) => (
-                    <div
-                      key={`${selectedEvent.eventId}-${participant.participantId}`}
-                      className="flex items-center justify-between rounded border border-gray-800 bg-gray-950/60 px-3 py-2"
-                    >
-                      <div className="min-w-0">
-                        <div className="truncate text-sm text-gray-200">{participant.displayName}</div>
-                        <div className="text-[11px] text-gray-500">
-                          {participant.participantType} · {participant.teamName ?? participant.role}
-                        </div>
+                {(selectedEvent.homeTeam || selectedEvent.awayTeam) && (
+                  <div className="grid grid-cols-1 gap-2 mt-2">
+                    {selectedEvent.awayTeam && (
+                      <div className="flex items-center justify-between rounded border border-gray-800 bg-gray-950/60 px-3 py-2">
+                        <span className="text-sm text-gray-200">{selectedEvent.awayTeam}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-gray-500">away</span>
                       </div>
-                      <div className="text-[10px] uppercase tracking-wide text-gray-500">{participant.role}</div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              <Card title={`Recent Offers (${selectedEvent.offers.length})`}>
-                {selectedEvent.offers.length === 0 ? (
-                  <div className="text-xs text-gray-500">No recent provider offers attached to this event.</div>
-                ) : (
-                  <div className="space-y-2">
-                    {selectedEvent.offers.slice(0, 12).map((offer, index) => (
-                      <div
-                        key={`${offer.providerKey}-${offer.providerMarketKey}-${offer.participantId ?? 'event'}-${index}`}
-                        className="rounded border border-gray-800 bg-gray-950/60 px-3 py-3"
-                      >
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="min-w-0">
-                            <div className="truncate text-sm text-gray-200">{offer.marketDisplayName}</div>
-                            <div className="mt-1 text-[11px] text-gray-500">
-                              {offer.participantName ?? 'Event market'} · {offer.sportsbookName ?? offer.providerKey}
-                            </div>
-                          </div>
-                          <div className="text-right text-xs text-gray-300">
-                            <div>Line {offer.line ?? '—'}</div>
-                            <div className="text-[11px] text-gray-500">
-                              O {formatOdds(offer.overOdds)} / U {formatOdds(offer.underOdds)}
-                            </div>
-                          </div>
-                        </div>
+                    )}
+                    {selectedEvent.homeTeam && (
+                      <div className="flex items-center justify-between rounded border border-gray-800 bg-gray-950/60 px-3 py-2">
+                        <span className="text-sm text-gray-200">{selectedEvent.homeTeam}</span>
+                        <span className="text-[10px] uppercase tracking-wide text-gray-500">home</span>
                       </div>
-                    ))}
+                    )}
                   </div>
                 )}
-              </Card>
-            </div>
+              </div>
+            </Card>
           ) : (
             <EmptyState
               message="Select a matchup"
-              detail="Choose an event from the list to inspect participants and recent offers."
+              detail="Choose an event from the list to inspect its details."
               action={{ label: 'Back to Research', href: '/research' }}
             />
           )}

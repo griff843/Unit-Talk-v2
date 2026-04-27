@@ -25,7 +25,7 @@ test.describe('Pick Visibility — open and inspect', () => {
     await page.goto('/picks/test-lifecycle');
     // Must have the Lifecycle Transitions section
     const _body = await page.content();
-    // The page renders either the full 8-section trace (when operator-web is up)
+    // The page renders either the full 8-section trace (when DB has the pick)
     // or the settlement/correction surface (always rendered)
     await expect(page.getByText('Pick Detail')).toBeVisible();
   });
