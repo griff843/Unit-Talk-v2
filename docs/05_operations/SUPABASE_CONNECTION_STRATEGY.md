@@ -44,7 +44,7 @@ SUPABASE_SERVICE_ROLE_KEY = (secret, server-only — used by API, worker, ingest
 ```
 
 - **Never expose `SUPABASE_SERVICE_ROLE_KEY` to the browser or smart-form**
-- `apps/api`, `apps/worker`, `apps/ingestor`, `apps/operator-web` all use service role key
+- `apps/api`, `apps/worker`, `apps/ingestor` all use service role key
 - `apps/smart-form` uses anon key (no direct DB access — posts to API)
 
 ### CLI operations

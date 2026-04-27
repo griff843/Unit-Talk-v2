@@ -79,7 +79,7 @@ The orchestrator may plan, dispatch, write code, run verification, and open the 
 
 **Eligible work:**
 - T2 runtime changes with explicit allowed-file lists and bounded file scope
-- New read surfaces (operator-web routes, command-center pages) that do not change the write path
+- New read surfaces (command-center pages) that do not change the write path
 - Bounded refactors with test coverage that did not previously exist
 - New CI workflows or GitHub Actions that add checks (not lower them)
 - Tooling changes that affect how other agents or lanes execute (e.g. new `pnpm codex:*` commands, new script helpers)

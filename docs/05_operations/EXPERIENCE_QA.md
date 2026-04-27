@@ -69,8 +69,7 @@ Add preflights to the product adapter or skill definition. Required preflights s
 Command Center checks:
 
 - Frontend route reachable.
-- `operator-web /health` reachable.
-- Operator dashboard snapshot reachable.
+- Operator dashboard (`command-center`) reachable.
 
 Smart Form checks:
 

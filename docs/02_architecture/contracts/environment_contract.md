@@ -108,7 +108,7 @@ When `UNIT_TALK_RUNTIME_MODE=in-memory` (default):
 - This is the expected mode for local dev and unit tests.
 - **Never use `in-memory` mode in production.**
 
-Enforcement surface: `apps/api/src/server.ts` and `apps/operator-web/src/server.ts` check `UNIT_TALK_RUNTIME_MODE` at startup.
+Enforcement surface: `apps/api/src/server.ts` checks `UNIT_TALK_RUNTIME_MODE` at startup.
 
 ---
 

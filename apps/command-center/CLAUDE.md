@@ -43,7 +43,7 @@ None (traditional). Playwright E2E tests exist in `e2e/` directory.
 
 ## Rules
 
-- Reads via `src/lib/data/` (direct Supabase), writes through `apps/api` — never call operator-web
+- Reads via `src/lib/data/` (direct Supabase), writes through `apps/api`
 - All mutations must include `Authorization` header
 - No business logic duplication — UI only
 
@@ -53,7 +53,7 @@ None (traditional). Playwright E2E tests exist in `e2e/` directory.
 - Do not add business logic (scoring, promotion, settlement logic)
 - Do not bypass API auth for mutations
 - Do not add new write surfaces without corresponding API endpoints
-- Do not reintroduce HTTP calls to operator-web — that dependency has been removed
+- Do not introduce HTTP calls to other internal apps — all reads come from `src/lib/data/` (Supabase), all writes go through `apps/api`
 
 
 ---

@@ -20,7 +20,6 @@ Unit Talk V2 is a sports-betting pick management system. It accepts bet picks fr
 apps/
   api/             The only canonical DB writer. Node HTTP server, port 4000.
   worker/          Outbox drain daemon. Polls distribution_outbox, delivers to Discord.
-  operator-web/    Read-only operator dashboard. Node HTTP server, port 4200.
   discord-bot/     Discord slash command bot (9 commands). Reads via API, no direct DB.
   smart-form/      Browser pick intake form. Next.js, port 4100.
   alert-agent/     Line movement detection daemon. Thin wrapper around API alert services.
@@ -55,7 +54,7 @@ apps/* (import packages; never import from each other)
 ```
 
 Supporting packages imported by apps:
-- `@unit-talk/config` — used by api, worker, ingestor, operator-web, discord-bot
+- `@unit-talk/config` — used by api, worker, ingestor, discord-bot
 - `@unit-talk/observability` — used by all apps including alert-agent
 - `@unit-talk/events` — used by api, worker, discord-bot
 - `@unit-talk/intelligence` — used by api, worker
@@ -298,7 +297,7 @@ pnpm ops:brief
 **Test suite structure** (from package.json `test` script): [CONFIRMED]
 - `test:apps-api-core` — 9 api test files (submission, settlement, scoring, CLV, grading, etc.)
 - `test:apps-api-agent` — 13 api agent test files (grading-cron, recap, alerts, hedge, shadow, etc.)
-- `test:apps-rest` — 14 test files across worker, ingestor, operator-web, discord-bot, and db packages
+- `test:apps-rest` — test files across worker, ingestor, discord-bot, and db packages
 - `test:smart-form` — 3 test files
 - `test:verification` — 4 test files
 - `test:domain-*` — 7 domain sub-suites (probability, features, signals, hedge, shadow, analytics)
@@ -403,5 +402,4 @@ Apps with HTTP servers and their ports:
 |---|---|
 | `apps/api` | 4000 |
 | `apps/smart-form` | 4100 |
-| `apps/operator-web` | 4200 |
 | `apps/command-center` | 4300 |

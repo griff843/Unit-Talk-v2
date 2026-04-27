@@ -43,7 +43,6 @@ pnpm supabase:types
 apps/
   api/            ← only canonical DB writer; node:http server
   worker/         ← polls distribution_outbox, delivers to Discord
-  operator-web/   ← read-only dashboard; node:http server
   discord-bot/    ← Discord slash commands + event handlers
   smart-form/     ← browser HTML intake form
   alert-agent/    ← alert detection + notification pass runner
@@ -167,7 +166,6 @@ Codex is the **implementation lane**. You own:
 - **Never** import from another app (e.g., `apps/api` must not import from `apps/worker`)
 - **Never** hand-edit `packages/db/src/database.types.ts` — generated only
 - **Never** activate a blocked Discord target (`discord:exclusive-insights`, `discord:game-threads`, `discord:strategy-room`) — requires a written contract
-- **Never** add write surfaces to `apps/operator-web` — it is read-only
 - **Never** mutate `settlement_records` rows — corrections use `corrects_id`
 - **Never** UPDATE or DELETE from `audit_log` — append-only
 - **Never** create new packages without a clear justification

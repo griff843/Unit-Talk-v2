@@ -88,7 +88,7 @@ All writes to the database go through this server. No other app writes directly.
 
 - Do not add direct Supabase client calls in routes/controllers — use repositories
 - Do not bypass auth middleware for new write endpoints
-- Do not add write surfaces to other apps (operator-web, command-center, smart-form)
+- Do not add write surfaces to other apps (command-center, smart-form)
 - Do not swallow errors on critical paths — fail closed
 
 ## Known Drift or Cautions

@@ -1,7 +1,7 @@
 # Command Center Operations IA — Simplification Proposal
 
 **Status:** Ratified 2026-04-14 (UTV2-567)
-**Authority:** Canonical navigation and route structure for operator-web.
+**Authority:** Canonical navigation and route structure for operator-web. **[ARCHIVED — operator-web decommissioned 2026-04-27]**
 **Blocked by:** UTV2-565 (queue legibility), UTV2-566 (detail hero) — both merged.
 
 ---

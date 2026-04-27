@@ -15,7 +15,6 @@ The legacy repository is available for audit, extraction, and migration mapping 
 apps/
   api/
   worker/
-  operator-web/
   smart-form/
   discord-bot/
 packages/
