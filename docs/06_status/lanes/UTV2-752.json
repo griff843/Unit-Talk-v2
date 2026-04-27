@@ -3,17 +3,22 @@
   "issue_id": "UTV2-752",
   "lane_type": "claude",
   "tier": "T2",
-  "branch": "claude/utv2-752-closing-null-clv-gap",
-  "commit_sha": "45dacfde4acc0b2e56bae8ee43eba1d3a23baf49",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/463",
+  "branch": "fix/utv2-752-v2",
+  "commit_sha": "2cd2361b1bf1632ab8a2c72b0b1905ab7da89dc2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/496",
   "status": "done",
   "started_at": "2026-04-25T01:00:00.000Z",
-  "closed_at": "2026-04-25T04:42:31.000Z",
+  "closed_at": "2026-04-27T05:23:00.000Z",
   "truth_check_history": [
     {
       "verdict": "PASS",
       "merge_sha": "45dacfde4acc0b2e56bae8ee43eba1d3a23baf49",
-      "note": "T2: verify green, live-DB proof present, PM verdict APPROVED, Fibery entity seeded"
+      "note": "T2: initial closing-line fallback (PR #463)"
+    },
+    {
+      "verdict": "PASS",
+      "merge_sha": "2cd2361b1bf1632ab8a2c72b0b1905ab7da89dc2",
+      "note": "T2: canonical key join fix + migration backfill (PR #496). PM verdict APPROVED. CI green."
     }
   ]
 }

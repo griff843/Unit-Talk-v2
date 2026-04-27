@@ -298,7 +298,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       },
       {
         settlement: { id: 'settlement_2', status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'proof://nhl-correction', notes: 'stat correction', reviewReason: null, settledBy: 'operator', correctsId: 'settlement_1', payload: { requestStatus: 'settled', correction: true, priorSettlementRecordId: 'settlement_1', clv: null, clvStatus: 'missing_pick_odds', clvUnavailableReason: 'missing_pick_odds', clvSkipReason: 'Pick has no valid odds', profitLossUnits: 1 } },
-        lifecycleToState: null,
+        lifecycleToState: 'settled',
         auditAction: 'settlement.corrected',
         finalLifecycleState: 'settled',
         downstream: { effectiveSettlement: { effectiveRecordId: 'settlement_2', result: 'win', status: 'settled', confidence: 'confirmed', correctionDepth: 1, isFinal: true }, settlementSummary: { totalRecords: 2, totalPicks: 1, byResult: { win: 1 }, byStatus: { settled: 1 }, byConfidence: { confirmed: 1 }, hitRatePct: 100, flatBetRoi: { roiPct: 90.9090909090909, totalWagered: 110, totalProfit: 100 }, correctionCount: 1, pendingReviewCount: 0 }, lossAttribution: null, lossAttributionSummary: null, unresolvedReason: null },
