@@ -78,6 +78,23 @@ export async function runCandidatePickScan(
       continue;
     }
 
+    const unsupportedReason = readUnsupportedGeneratedPickReason(universe);
+    if (unsupportedReason) {
+      skipped++;
+      logger?.warn?.(
+        JSON.stringify({
+          service: 'candidate-pick-scanner',
+          event: 'candidate_skipped',
+          candidateId: candidate.id,
+          universeId: universe.id,
+          reason: unsupportedReason,
+          marketKey: universe.canonical_market_key,
+          marketTypeId: universe.market_type_id,
+        }),
+      );
+      continue;
+    }
+
     const overOdds = universe.current_over_odds;
     const underOdds = universe.current_under_odds;
     if (!Number.isFinite(overOdds) || !Number.isFinite(underOdds)) {
@@ -219,4 +236,38 @@ export async function runCandidatePickScan(
   );
 
   return { scanned: candidates.length, submitted, skipped, errors };
+}
+
+function readUnsupportedGeneratedPickReason(universe: {
+  canonical_market_key: string;
+  market_type_id: string | null;
+  participant_id: string | null;
+  current_line: number | null;
+}): string | null {
+  const marketKey = universe.canonical_market_key;
+  const marketTypeId = universe.market_type_id ?? '';
+  const isOverUnderMarket =
+    marketKey.endsWith('-all-game-ou') ||
+    marketKey === 'game_total_ou' ||
+    marketKey === 'team_total_ou' ||
+    marketTypeId.endsWith('_ou') ||
+    marketTypeId === 'game_total_ou' ||
+    marketTypeId === 'team_total_ou';
+
+  if (!isOverUnderMarket) {
+    return 'unsupported_market_family';
+  }
+
+  if (!Number.isFinite(universe.current_line)) {
+    return 'missing_line';
+  }
+
+  const participantRequired =
+    marketKey !== 'game_total_ou' &&
+    marketTypeId !== 'game_total_ou';
+  if (participantRequired && !universe.participant_id) {
+    return 'missing_participant_id';
+  }
+
+  return null;
 }
