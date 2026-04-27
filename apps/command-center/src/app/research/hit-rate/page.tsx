@@ -81,7 +81,7 @@ export default async function HitRatePage() {
         </div>
         <EmptyState
           message="Unable to load performance data."
-          detail="Check that operator-web is reachable and the /api/operator/performance endpoint is responding."
+          detail="Performance data could not be read from the database. Check Supabase connectivity."
           action={{ label: 'Back to Research', href: '/research' }}
         />
       </div>

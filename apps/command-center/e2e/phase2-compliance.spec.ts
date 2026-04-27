@@ -147,8 +147,8 @@ test.describe('2C — Decision Outcomes', () => {
 // ── 2C: Operator Insight Panel ──────────────────────────────────────────────
 
 test.describe('2C — Operator Insights', () => {
-  // Insights render conditionally when performance API has data.
-  // With live operator-web, the panel appears; without, it's absent.
+  // Insights render conditionally when performance data is available in the DB.
+  // With settled picks the panel appears; without, it's absent.
   test('insight panel renders when data available', async ({ page }) => {
     await page.goto('/performance');
     // Page must not crash

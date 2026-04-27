@@ -8,13 +8,13 @@ Next.js 14 operator intelligence dashboard. Interactive React UI for operator in
 - Runtime: Next.js app (port 4300)
 - Maturity: active development (20+ components, no traditional tests, Playwright for E2E)
 
-Reads from `apps/operator-web`. Writes through `apps/api` via server actions with Bearer token auth.
+Reads directly from Supabase via `src/lib/data/`. Writes through `apps/api` via server actions with Bearer token auth.
 
 ## Role in Dependency Graph
 
 **Imports:** `next`, `react`, `tailwindcss` (no `@unit-talk/*` packages — frontend only)
 
-**Calls:** `apps/operator-web` (GET data), `apps/api` (POST mutations via server actions)
+**Calls:** `apps/api` (POST mutations via server actions). All reads go direct to Supabase via `src/lib/data/`.
 
 ## What Lives Here
 
@@ -28,7 +28,7 @@ Reads from `apps/operator-web`. Writes through `apps/api` via server actions wit
 
 **Server actions:** all mutations (settle, review, retry, rerun, override, requeue) use Next.js server actions that POST to API with `Authorization: Bearer` header from `UNIT_TALK_CC_API_KEY` env var.
 
-**Data flow:** pages fetch from operator-web JSON endpoints → render React components → user actions → server action → API POST.
+**Data flow:** pages fetch directly from Supabase via `src/lib/data/` → render React components → user actions → server action → API POST.
 
 ## Runtime Behavior
 
@@ -43,16 +43,17 @@ None (traditional). Playwright E2E tests exist in `e2e/` directory.
 
 ## Rules
 
-- Reads from operator-web, writes through API — never direct DB access
+- Reads via `src/lib/data/` (direct Supabase), writes through `apps/api` — never call operator-web
 - All mutations must include `Authorization` header
 - No business logic duplication — UI only
 
 ## What NOT to Do
 
-- Do not add direct database access
+- Do not add new data fetching outside `src/lib/data/` — extend the data layer there
 - Do not add business logic (scoring, promotion, settlement logic)
 - Do not bypass API auth for mutations
 - Do not add new write surfaces without corresponding API endpoints
+- Do not reintroduce HTTP calls to operator-web — that dependency has been removed
 
 
 ---

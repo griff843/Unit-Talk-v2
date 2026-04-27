@@ -1,12 +1,18 @@
 # App: apps/operator-web
 
-Read-only operator dashboard. Server-side rendered HTML + JSON API endpoints consumed by Command Center.
+> **DEPRECATED — do not extend or rely on this app.**
+> `apps/command-center` no longer reads from this service. All command-center data
+> fetching was rewired to direct Supabase reads via `src/lib/data/` (UTV2-766).
+> This app is retained until a cleanup lane removes it. Do not add new routes or
+> consumers. Deletion is tracked in Linear (create UTV2-### for operator-web teardown).
+
+Read-only operator dashboard. Was the JSON API layer consumed by Command Center; that role is now fulfilled directly by the command-center data layer.
 
 ## Role in Unit Talk V2
 
-- System layer: **operator read surface**
-- Runtime: Node HTTP server (port 4200)
-- Maturity: stable (15 routes, 1 test file at 150KB)
+- System layer: **deprecated operator read surface**
+- Runtime: Node HTTP server (port 4200) — no longer required in production
+- Maturity: frozen
 
 No write surfaces. All mutations go through `apps/api`.
 
@@ -14,7 +20,7 @@ No write surfaces. All mutations go through `apps/api`.
 
 **Imports:** `@unit-talk/config`, `@unit-talk/contracts`, `@unit-talk/db`, `@unit-talk/domain`, `@unit-talk/observability`
 
-**Consumed by:** `apps/command-center` (fetches JSON data)
+**Consumed by:** nothing (command-center dependency removed in UTV2-766)
 
 ## What Lives Here
 

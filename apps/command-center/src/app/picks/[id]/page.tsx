@@ -252,7 +252,7 @@ export default async function PickDetailPage({ params }: PickDetailPageProps) {
           <p className="mt-1 font-mono text-sm text-gray-400">{pickId}</p>
         </div>
         <div className="text-sm text-red-400">
-          Pick not found or operator-web unavailable: {pickId}
+          Pick not found or database unavailable: {pickId}
         </div>
       </div>
     );

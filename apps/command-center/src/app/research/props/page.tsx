@@ -209,7 +209,7 @@ export default async function PropExplorerPage({
       {hasFilters && !data && (
         <EmptyState
           message="Unable to load prop offers."
-          detail="Check that operator-web is reachable and the /api/operator/prop-offers endpoint is responding."
+          detail="Prop offers could not be read from the database. Check Supabase connectivity."
           action={{ label: 'Back to Research', href: '/research' }}
         />
       )}

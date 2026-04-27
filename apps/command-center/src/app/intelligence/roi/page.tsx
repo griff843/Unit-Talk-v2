@@ -79,7 +79,7 @@ export default async function RoiOverviewPage() {
         <h1 className="text-xl font-bold text-white">ROI Overview</h1>
         <div className="rounded-md border border-gray-700 bg-gray-900/50 px-4 py-6 text-center">
           <p className="text-sm text-gray-400">Unable to load performance data.</p>
-          <p className="text-xs text-gray-600 mt-1">Ensure operator-web is running.</p>
+          <p className="text-xs text-gray-600 mt-1">Check Supabase connectivity.</p>
         </div>
       </div>
     );

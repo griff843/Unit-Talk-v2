@@ -158,13 +158,27 @@ describe('GC-M5 Governance Readiness — Write Isolation', () => {
     });
   }
 
-  it('operator-web has no direct write operations', () => {
-    // Confirmed via grep: no .insert()/.update()/.upsert()/.delete() in operator-web
-    const serverSource = readSource('apps/operator-web/src/server.ts');
-    assert.ok(serverSource.length > 0, 'operator-web server.ts must exist');
-    // operator-web uses createDatabaseClient for reads only
-    assert.ok(!serverSource.includes('.insert('), 'operator-web must not insert directly');
-    assert.ok(!serverSource.includes('.upsert('), 'operator-web must not upsert directly');
+  it('command-center data layer has no direct Supabase write operations', () => {
+    // command-center reads via src/lib/data/ (direct Supabase) — mutations go through apps/api only
+    const dataFiles = [
+      'apps/command-center/src/lib/data/analytics.ts',
+      'apps/command-center/src/lib/data/dashboard.ts',
+      'apps/command-center/src/lib/data/queues.ts',
+      'apps/command-center/src/lib/data/research.ts',
+      'apps/command-center/src/lib/data/snapshot.ts',
+      'apps/command-center/src/lib/data/board.ts',
+      'apps/command-center/src/lib/data/picks.ts',
+      'apps/command-center/src/lib/data/preview.ts',
+      'apps/command-center/src/lib/data/intelligence.ts',
+    ];
+    const writePatterns = ['.insert(', '.update(', '.upsert(', '.delete('];
+    for (const f of dataFiles) {
+      const source = readSource(f);
+      if (source.length === 0) continue;
+      for (const pattern of writePatterns) {
+        assert.ok(!source.includes(pattern), `${f} must not contain Supabase ${pattern} call — data layer is read-only`);
+      }
+    }
   });
 });
 
@@ -174,9 +188,9 @@ describe('GC-M5 Governance Readiness — Write Isolation', () => {
 
 describe('GC-M5 Governance Readiness — Key Exposure Prevention', () => {
   it('command-center does not reference service role key in source code', () => {
-    // Check key source files — next.config, lib/api, env handling
+    // Check key source files — next.config, data layer client, env handling
     const files = [
-      'apps/command-center/src/lib/api.ts',
+      'apps/command-center/src/lib/data/client.ts',
       'apps/command-center/next.config.mjs',
       'apps/command-center/next.config.js',
     ];

@@ -127,7 +127,7 @@ export default async function IntelligencePage() {
         <h1 className="text-lg font-bold text-gray-100">Intelligence</h1>
         <EmptyState
           message="Unable to load intelligence data."
-          detail="Check that operator-web is reachable and the /api/operator/intelligence endpoint is responding."
+          detail="The intelligence data could not be read from the database. Check Supabase connectivity."
         />
       </div>
     );
