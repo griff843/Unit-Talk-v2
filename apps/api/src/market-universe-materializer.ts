@@ -87,14 +87,15 @@ export class MarketUniverseMaterializer {
     try {
       closingOffers = await this.repos.providerOffers.listClosingOffers(since);
     } catch (err) {
-      logger?.warn?.(
+      logger?.error?.(
         JSON.stringify({
           service: 'market-universe-materializer',
           event: 'fetch_closing_offers_failed',
           error: err instanceof Error ? err.message : String(err),
-          note: 'continuing without closing offers — closing_line will not be populated',
         }),
       );
+      // Fail loudly — CLV settlement must not proceed with silently missing closing data.
+      throw err;
     }
 
     const offerById = new Map<string, (typeof offers)[0]>();

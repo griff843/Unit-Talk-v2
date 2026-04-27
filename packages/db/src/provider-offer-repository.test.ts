@@ -25,6 +25,26 @@ type ProviderOfferRepositoryHarness = {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
 };
 
+type ClosingOffersHarness = {
+  client: {
+    from(table: string): {
+      select(columns: string): {
+        eq(column: string, value: boolean): {
+          gte(column: string, value: string): {
+            lt(column: string, value: string): {
+              range(
+                from: number,
+                to: number,
+              ): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
+            };
+          };
+        };
+      };
+    };
+  };
+  listClosingOffers(since: string): Promise<unknown[]>;
+};
+
 test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to preserve first-write flags', async () => {
   const selectCalls: string[][] = [];
   const upsertCalls: Array<{
@@ -117,4 +137,130 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
     updatedCount: 1,
     totalProcessed: 1,
   });
+});
+
+test('DatabaseProviderOfferRepository.listClosingOffers paginates windowed results', async () => {
+  const fixedNow = Date.parse('2026-04-27T15:30:00.000Z');
+  const originalNow = Date.now;
+  Date.now = () => fixedNow;
+
+  const ltFilters: Array<{ column: string; value: string }> = [];
+  const rangeCalls: Array<{ from: number; to: number }> = [];
+  const firstPage = Array.from({ length: 1000 }, (_unused, index) => ({
+    id: `id-${String(1000 - index).padStart(4, '0')}`,
+    snapshot_at: '2026-04-27T15:15:00.000Z',
+  }));
+
+  const pages = [
+    {
+      data: firstPage,
+      error: null,
+    },
+    {
+      data: [
+        {
+          id: '90000000-0000-0000-0000-000000000000',
+          snapshot_at: '2026-04-27T14:58:00.000Z',
+        },
+      ],
+      error: null,
+    },
+  ];
+  let pageIndex = 0;
+
+  const fakeClient = {
+    from(table: string) {
+      assert.equal(table, 'provider_offers');
+      return {
+        select(columns: string) {
+          assert.equal(columns, '*');
+          return {
+            eq(column: string, value: boolean) {
+              assert.equal(column, 'is_closing');
+              assert.equal(value, true);
+              return {
+                gte(gteColumn: string, gteValue: string) {
+                  assert.equal(gteColumn, 'snapshot_at');
+                  assert.equal(gteValue, '2026-04-27T15:00:00.000Z');
+                  return {
+                    lt(ltColumn: string, ltValue: string) {
+                      ltFilters.push({ column: ltColumn, value: ltValue });
+                      return {
+                        async range(from: number, to: number) {
+                          rangeCalls.push({ from, to });
+                          return pages[pageIndex++] ?? { data: [], error: null };
+                        },
+                      };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const repository = Object.create(
+    DatabaseProviderOfferRepository.prototype,
+  ) as unknown as ClosingOffersHarness;
+  repository.client = fakeClient;
+
+  try {
+    const rows = await repository.listClosingOffers('2026-04-27T15:00:00.000Z');
+    assert.equal(rows.length, 1001);
+    assert.deepEqual(rangeCalls, [
+      { from: 0, to: 999 },
+      { from: 1000, to: 1999 },
+    ]);
+    assert.deepEqual(ltFilters, [
+      { column: 'snapshot_at', value: '2026-04-27T15:30:00.000Z' },
+      { column: 'snapshot_at', value: '2026-04-27T15:30:00.000Z' },
+    ]);
+  } finally {
+    Date.now = originalNow;
+  }
+});
+
+test('DatabaseProviderOfferRepository.listClosingOffers fails loudly on timeout', async () => {
+  const fakeClient = {
+    from(table: string) {
+      assert.equal(table, 'provider_offers');
+      return {
+        select() {
+          return {
+            eq() {
+              return {
+                gte() {
+                  return {
+                    lt() {
+                      return {
+                        async range(_from: number, _to: number) {
+                          return {
+                            data: null,
+                            error: { message: 'canceling statement due to statement timeout' },
+                          };
+                        },
+                      };
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+
+  const repository = Object.create(
+    DatabaseProviderOfferRepository.prototype,
+  ) as unknown as ClosingOffersHarness;
+  repository.client = fakeClient;
+
+  await assert.rejects(
+    () => repository.listClosingOffers('2026-04-27T00:00:00.000Z'),
+    /must fail loudly when closing data is unavailable/i,
+  );
 });

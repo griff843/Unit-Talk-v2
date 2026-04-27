@@ -4349,29 +4349,42 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
-    // Paginate in 1 000-row pages — Supabase PostgREST defaults to a 1 000-row
-    // cap unless explicitly overridden. Closing rows can number in the hundreds
-    // of thousands so pagination is required to fetch them all.
+    // Read closing offers in narrow time windows to avoid broad scans that can
+    // hit statement_timeout on large provider_offers tables.
     const PAGE = 1000;
     const all: ProviderOfferRecord[] = [];
-    let from = 0;
+    const sinceMs = new Date(since).getTime();
+    const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
-    for (;;) {
-      const { data, error } = await this.client
-        .from('provider_offers')
-        .select('*')
-        .eq('is_closing', true)
-        .gte('snapshot_at', since)
-        .range(from, from + PAGE - 1);
+    for (let windowEndMs = Date.now(); windowEndMs > sinceMs; windowEndMs -= WINDOW_MS) {
+      const windowStartMs = Math.max(sinceMs, windowEndMs - WINDOW_MS);
+      const windowStartIso = new Date(windowStartMs).toISOString();
+      const windowEndIso = new Date(windowEndMs).toISOString();
+      let from = 0;
 
-      if (error) {
-        throw new Error(`Failed to list closing offers: ${error.message}`);
+      for (;;) {
+        const { data, error } = await this.client
+          .from('provider_offers')
+          .select('*')
+          .eq('is_closing', true)
+          .gte('snapshot_at', windowStartIso)
+          .lt('snapshot_at', windowEndIso)
+          .range(from, from + PAGE - 1);
+
+        if (error) {
+          if (/statement timeout/i.test(error.message)) {
+            throw new Error(
+              `Failed to list closing offers: statement timeout while loading closing data; materializer must fail loudly when closing data is unavailable (${error.message})`,
+            );
+          }
+          throw new Error(`Failed to list closing offers: ${error.message}`);
+        }
+
+        const page = data ?? [];
+        all.push(...page);
+        if (page.length < PAGE) break;
+        from += PAGE;
       }
-
-      const page = data ?? [];
-      all.push(...page);
-      if (page.length < PAGE) break;
-      from += PAGE;
     }
 
     return all;
@@ -6966,16 +6979,53 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     // We match on (provider_key, provider_event_id, provider_market_key) and then
     // do provider_participant_id matching in JS (COALESCE semantics).
     const providerEventIds = [...new Set(rows.map((r) => r.provider_event_id))];
-    const { data: existingRows, error: fetchError } = await this.client
-      .from('market_universe')
-      .select(
-        'provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds',
-      )
-      .in('provider_event_id', providerEventIds);
+    const existingRows: Array<{
+      provider_key: string;
+      provider_event_id: string;
+      provider_participant_id: string | null;
+      provider_market_key: string;
+      opening_line: number | null;
+      opening_over_odds: number | null;
+      opening_under_odds: number | null;
+      closing_line: number | null;
+      closing_over_odds: number | null;
+      closing_under_odds: number | null;
+    }> = [];
+    const FETCH_CHUNK_SIZE = 25;
 
-    if (fetchError) {
-      throw new Error(
-        `market_universe fetch for immutability check failed: ${fetchError.message}`,
+    for (let i = 0; i < providerEventIds.length; i += FETCH_CHUNK_SIZE) {
+      const chunk = providerEventIds.slice(i, i + FETCH_CHUNK_SIZE);
+      const { data, error: fetchError } = await this.client
+        .from('market_universe')
+        .select(
+          'provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds',
+        )
+        .in('provider_event_id', chunk);
+
+      if (fetchError) {
+        if (/statement timeout/i.test(fetchError.message)) {
+          throw new Error(
+            `market_universe fetch for immutability check timed out; refusing to continue with partial closing data (${fetchError.message})`,
+          );
+        }
+        throw new Error(
+          `market_universe fetch for immutability check failed: ${fetchError.message}`,
+        );
+      }
+
+      existingRows.push(
+        ...((data ?? []) as Array<{
+          provider_key: string;
+          provider_event_id: string;
+          provider_participant_id: string | null;
+          provider_market_key: string;
+          opening_line: number | null;
+          opening_over_odds: number | null;
+          opening_under_odds: number | null;
+          closing_line: number | null;
+          closing_over_odds: number | null;
+          closing_under_odds: number | null;
+        }>),
       );
     }
 

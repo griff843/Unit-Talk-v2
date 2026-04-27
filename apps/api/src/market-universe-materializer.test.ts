@@ -690,7 +690,7 @@ test('materializer: NHL sport_key — closing_line set correctly from separate c
   assert.equal(row.closing_over_odds, -125, 'NHL closing_over_odds from is_closing=true row');
 });
 
-test('materializer: listClosingOffers failure is non-fatal — materializer continues and sets current_line without closing_line', async () => {
+test('materializer: listClosingOffers failure throws — no silent CLV substitution', async () => {
   const offer = makeOffer({
     id: 'ok-1',
     idempotency_key: 'ok-1',
@@ -711,11 +711,10 @@ test('materializer: listClosingOffers failure is non-fatal — materializer cont
 
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const materializer = new MarketUniverseMaterializer({ providerOffers: faultyRepo, marketUniverse });
-  const result = await materializer.run();
 
-  assert.equal(result.errors, 0, 'closing fetch failure must not increment error count');
-  assert.equal(result.upserted, 1, 'materializer must still upsert from listRecentOffers');
-  const row = marketUniverse.listAll()[0]!;
-  assert.equal(row.current_line, 20.5);
-  assert.equal(row.closing_line, null, 'closing_line null when closing fetch failed');
+  await assert.rejects(
+    () => materializer.run(),
+    /closing offers fetch timeout/,
+    'materializer must throw when closing-offer fetch fails — no silent CLV substitution',
+  );
 });
