@@ -56,7 +56,7 @@ function makeUniverseRow(overrides: Partial<MarketUniverseRow> = {}): MarketUniv
     sport_key: 'nba',
     league_key: 'nba',
     event_id: null,
-    participant_id: null,
+    participant_id: 'participant-test-1',
     market_type_id: 'player_points_ou',
     canonical_market_key: 'player.points',
     provider_key: 'sgo',
@@ -226,4 +226,47 @@ test('candidate-pick-scanner: no-op when no scored candidates exist', async () =
 
   assert.equal(result.scanned, 0, 'unscored candidates must not be counted as scanned');
   assert.equal(result.submitted, 0);
+});
+
+test('candidate-pick-scanner: skips non-O/U markets that grading cannot settle', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
+
+  const universe = makeUniverseRow({
+    id: 'universe-moneyline-1',
+    canonical_market_key: 'f3_moneyline',
+    market_type_id: 'f3_moneyline',
+    provider_market_key: 'points-all-1ix3-ml3way',
+    participant_id: null,
+    provider_participant_id: null,
+    current_line: null,
+  });
+  const candidate = makeCandidate({
+    id: 'cand-moneyline',
+    universe_id: 'universe-moneyline-1',
+  });
+
+  seedUniverseRows(muRepo, [universe]);
+  seedCandidateRows(pcRepo, [candidate]);
+
+  const result = await runCandidatePickScan({
+    pickCandidates: repos.pickCandidates,
+    marketUniverse: repos.marketUniverse,
+    picks: repos.picks,
+    submissions: repos.submissions,
+    audit: repos.audit,
+    participants: repos.participants,
+    events: repos.events,
+    providerOffers: repos.providerOffers,
+  });
+
+  assert.equal(result.scanned, 1);
+  assert.equal(result.submitted, 0);
+  assert.equal(result.skipped, 1);
+  assert.equal(result.errors, 0);
+
+  const qualified = await repos.pickCandidates.findByStatus('qualified');
+  const unlinked = qualified.find((row) => row.id === candidate.id);
+  assert.equal(unlinked?.pick_id, null, 'unsupported candidate must not link to a pick');
 });
