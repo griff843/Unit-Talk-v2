@@ -60,7 +60,7 @@ async function main(): Promise<void> {
       evidence: {
         canonical_writer: 'apps/api — "This is the ONLY canonical DB writer — no other app writes directly" (apps/api/CLAUDE.md)',
         enforcement: ['Auth-gated write endpoints', 'Atomic RPC paths for submissions/settlements/delivery', 'Repository pattern — services receive RepositoryBundle, never create DB clients'],
-        read_only_apps: ['operator-web (read surfaces)', 'command-center (read + preview)', 'smart-form (submits via API HTTP)', 'discord-bot (reads + posts via API)'],
+        read_only_apps: ['command-center (read + preview)', 'smart-form (submits via API HTTP)', 'discord-bot (reads + posts via API)'],
       },
       notes: 'apps/api is the single canonical DB writer. All other apps are read-only or submit via HTTP to the API. Enforced by architecture docs + repository pattern.',
     });

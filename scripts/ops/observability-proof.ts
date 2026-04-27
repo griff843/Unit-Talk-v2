@@ -30,11 +30,11 @@ async function main(): Promise<void> {
         metrics_collector: hasMetrics,
         health_signal: hasHealth,
         capabilities: ['counters', 'gauges', 'histograms', 'label-based cardinality', 'snapshot for /metrics export'],
-        stack_decision: 'OBSERVABILITY_STACK_DECISION: metrics=prometheus-json, dashboards=operator-web',
+        stack_decision: 'OBSERVABILITY_STACK_DECISION: metrics=prometheus-json, dashboards=command-center',
         runtime_metrics: ['Worker cycle time', 'Delivery success/failure counts', 'Circuit breaker state', 'API request duration'],
         code: 'packages/observability/src/index.ts — createMetricsCollector()',
       },
-      notes: `MetricsCollector with counters/gauges/histograms exists. Stack decision: prometheus-json metrics + operator-web dashboards. Used across API, worker, ingestor.`,
+      notes: `MetricsCollector with counters/gauges/histograms exists. Stack decision: prometheus-json metrics + command-center dashboards. Used across API, worker, ingestor.`,
     });
   }
 
@@ -133,7 +133,7 @@ async function main(): Promise<void> {
   // 6. All critical services expose structured logs
   {
     // Check which apps import createLogger
-    const apps = ['api', 'worker', 'ingestor', 'discord-bot', 'alert-agent', 'operator-web'];
+    const apps = ['api', 'worker', 'ingestor', 'discord-bot', 'alert-agent'];
     const appsWithLogger: string[] = [];
     for (const app of apps) {
       const indexPath = path.resolve(`apps/${app}/src/index.ts`);

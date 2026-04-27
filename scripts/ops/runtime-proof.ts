@@ -129,7 +129,7 @@ async function main(): Promise<void> {
       verdict: 'PROVEN',
       evidence: {
         cross_reference: 'Proven in UTV2-683 observability proof (PR #386)',
-        apps_verified: ['api', 'worker', 'ingestor', 'discord-bot', 'alert-agent', 'operator-web'],
+        apps_verified: ['api', 'worker', 'ingestor', 'discord-bot', 'alert-agent'],
         format: 'JSON via createLogger() from @unit-talk/observability',
       },
       notes: '6/6 apps use structured logging via @unit-talk/observability. Already proven in UTV2-683.',
