@@ -2,6 +2,7 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildCommandManifest } from '../src/command-manifest.js';
+import { manifestContentsMatch } from '../src/command-manifest-file.js';
 
 const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../../..');
 const manifestPath = resolve(repoRoot, 'apps/discord-bot/command-manifest.json');
@@ -31,7 +32,7 @@ async function main() {
     );
   }
 
-  if (existingContent !== nextContent) {
+  if (!manifestContentsMatch(existingContent, nextContent)) {
     throw new Error(
       'Discord command manifest is out of date. Run pnpm --filter @unit-talk/discord-bot command-manifest:write.',
     );
