@@ -2258,6 +2258,82 @@ test('resolveAndInsertResults skips rows when participant or stat mapping is mis
   assert.ok(summary.skippedResults > 0);
 });
 
+test('resolveAndInsertResults warns and skips malformed scored markets', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  await resolveSgoEntities(
+    [
+      createResolvedEvent({
+        status: {
+          started: true,
+          completed: true,
+          cancelled: false,
+          ended: true,
+          live: false,
+          delayed: false,
+          finalized: true,
+          oddsAvailable: false,
+        },
+      }),
+    ],
+    repositories,
+  );
+
+  const warnings: string[] = [];
+  const logger = {
+    warn: (message: string) => {
+      warnings.push(message);
+    },
+    info: () => {},
+  };
+
+  const summary = await resolveAndInsertResults(
+    [
+      {
+        providerEventId: 'evt-entity-1',
+        status: {
+          started: true,
+          completed: true,
+          cancelled: false,
+          ended: true,
+          live: false,
+          delayed: false,
+          finalized: true,
+          oddsAvailable: false,
+        },
+        playerStats: [],
+        scoredMarkets: [
+          {
+            oddId: 'points-player-JALEN_BRUNSON_1_NBA-game-ou-over',
+            baseMarketKey: 'points-all-game-ou',
+            providerParticipantId: 'JALEN_BRUNSON_1_NBA',
+            score: 31,
+            scoringSupported: true,
+          },
+          {
+            oddId: 'broken',
+            baseMarketKey: 'points-all-game-ou',
+            providerParticipantId: undefined as unknown as string,
+            score: 12,
+            scoringSupported: true,
+          },
+        ],
+        resolvedEvent: null,
+      },
+    ],
+    repositories,
+    logger,
+  );
+
+  assert.equal(summary.completedEvents, 1);
+  assert.equal(summary.insertedResults, 1);
+  assert.equal(summary.skippedResults, 1);
+  assert.ok(
+    warnings.some((message) =>
+      message.includes('invalid providerParticipantId'),
+    ),
+  );
+});
+
 test('resolveAndInsertResults inserts game-line result with null participant_id', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const event = createResolvedEvent({
