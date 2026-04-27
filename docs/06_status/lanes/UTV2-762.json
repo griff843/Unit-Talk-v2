@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-762",
+  "lane_type": "codex-cli",
+  "tier": "T3",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main",
+  "branch": "codex/utv2-762-fibery-sync-guardrail",
+  "base_branch": "main",
+  "commit_sha": "c33040b9839805f0d972e32649001acabec97e98",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/492",
+  "files_changed": [
+    ".ops/sync.yml",
+    "docs/05_operations/FIBERY_SYNC.md",
+    "docs/06_status/lanes/UTV2-762.json",
+    "package.json",
+    "scripts/ops/fibery-check.test.ts",
+    "scripts/ops/fibery-check.ts",
+    "scripts/ops/fibery-client.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync.yml",
+    "docs/05_operations/FIBERY_SYNC.md",
+    "docs/06_status/lanes/UTV2-762.json",
+    "package.json",
+    "scripts/ops/fibery-check.test.ts",
+    "scripts/ops/fibery-check.ts",
+    "scripts/ops/fibery-client.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-762/fibery-readiness.md"
+  ],
+  "status": "done",
+  "started_at": "2026-04-26T00:00:00.000Z",
+  "heartbeat_at": "2026-04-26T18:00:00.000Z",
+  "closed_at": "2026-04-26T18:00:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "timestamp": "2026-04-26T18:00:00.000Z",
+      "result": "pass",
+      "notes": "T3: CI green on merge SHA, proof bundle present"
+    }
+  ],
+  "reopen_history": []
+}
