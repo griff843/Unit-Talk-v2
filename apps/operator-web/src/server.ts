@@ -8,6 +8,13 @@ import { fileURLToPath } from 'node:url';
  * in operator incident triage.
  */
 export const OUTBOX_HISTORY_CUTOFF = '2026-03-20T00:00:00.000Z';
+const SNAPSHOT_RUN_TYPES = [
+  'distribution.process',
+  'distribution.attempt',
+  'worker.circuit-open',
+  'worker.circuit-close',
+  'recap.post',
+] as const;
 import {
   createServiceRoleDatabaseConnectionConfig,
   createDatabaseClientFromConnection,
@@ -727,11 +734,78 @@ export function createOperatorSnapshotProvider(
         // Fetch one extra row beyond the requested limit so the route can detect hasMore
         const requestedLimit = filter?.limit ?? 25;
         const fetchLimit = requestedLimit + 1;
+        const isHealthProbe =
+          requestedLimit <= 1 &&
+          !filter?.status &&
+          !filter?.target &&
+          !filter?.since &&
+          !filter?.lifecycleState;
+
+        if (isHealthProbe) {
+          const [outboxResult, receiptsResult, picksResult, latestProviderOfferResult] = await Promise.all([
+            client
+              .from('distribution_outbox')
+              .select('*')
+              .gte('created_at', OUTBOX_HISTORY_CUTOFF)
+              .order('created_at', { ascending: false })
+              .limit(fetchLimit),
+            client
+              .from('distribution_receipts')
+              .select('*')
+              .order('recorded_at', { ascending: false })
+              .limit(fetchLimit),
+            client
+              .from('picks')
+              .select('*')
+              .order('created_at', { ascending: false })
+              .limit(fetchLimit),
+            client
+              .from('provider_offers')
+              .select('snapshot_at')
+              .order('snapshot_at', { ascending: false })
+              .limit(1),
+          ]);
+
+          if (outboxResult.error) throw outboxResult.error;
+          if (receiptsResult.error) throw receiptsResult.error;
+          if (picksResult.error) throw picksResult.error;
+          if (latestProviderOfferResult.error) throw latestProviderOfferResult.error;
+
+          const recentRuns = (
+            await Promise.all(
+              SNAPSHOT_RUN_TYPES.map((runType) => repositories.runs.listByType(runType, fetchLimit)),
+            )
+          )
+            .flat()
+            .sort((left, right) => right.created_at.localeCompare(left.created_at))
+            .slice(0, fetchLimit);
+
+          return createSnapshotFromRows({
+            persistenceMode: 'database',
+            recentOutbox: outboxResult.data ?? [],
+            recentReceipts: receiptsResult.data ?? [],
+            recentSettlements: [],
+            recentRuns,
+            recentPicks: picksResult.data ?? [],
+            recentAudit: [],
+            entityHealth: createEmptyEntityHealth(),
+            upcomingEvents: [],
+            picksPipelineCounts: {
+              validated: 0,
+              queued: 0,
+              posted: 0,
+              settled: 0,
+              total: 0,
+            },
+            memberTierRows: [],
+            latestProviderOfferSnapshotAt: latestProviderOfferResult.data?.[0]?.snapshot_at ?? null,
+            ingestorOfferStaleThresholdMinutes: resolveProviderOfferFreshnessThresholdMinutes(environment),
+          });
+        }
         const [
           outboxResult,
           receiptsResult,
           settlementsResult,
-          runsResult,
           picksResult,
           auditResult,
           validatedCountResult,
@@ -768,11 +842,6 @@ export function createOperatorSnapshotProvider(
             .select('*')
             .order('created_at', { ascending: false })
             .limit(fetchLimit),
-          (() => {
-            let q = client.from('system_runs').select('*');
-            if (filter?.since) q = q.gte('created_at', filter.since);
-            return q.order('created_at', { ascending: false }).limit(fetchLimit);
-          })(),
           (() => {
             let q = client.from('picks').select('*');
             if (filter?.lifecycleState) q = q.eq('status', filter.lifecycleState);
@@ -830,9 +899,6 @@ export function createOperatorSnapshotProvider(
         if (settlementsResult.error) {
           throw settlementsResult.error;
         }
-        if (runsResult.error) {
-          throw runsResult.error;
-        }
         if (picksResult.error) {
           throw picksResult.error;
         }
@@ -867,7 +933,14 @@ export function createOperatorSnapshotProvider(
         const recentOutbox = outboxResult.data ?? [];
         const recentReceipts = receiptsResult.data ?? [];
         const recentSettlements = settlementsResult.data ?? [];
-        const recentRuns = runsResult.data ?? [];
+        const recentRuns = (
+          await Promise.all(
+            SNAPSHOT_RUN_TYPES.map((runType) => repositories.runs.listByType(runType, fetchLimit)),
+          )
+        )
+          .flat()
+          .sort((left, right) => right.created_at.localeCompare(left.created_at))
+          .slice(0, fetchLimit);
         const recentPicks = picksResult.data ?? [];
         const recentAudit = auditResult.data ?? [];
         const upcomingEvents = upcomingEventsResult.data ?? [];

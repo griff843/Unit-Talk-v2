@@ -7,7 +7,7 @@ export async function handleHealthRequest(
   response: ServerResponse,
   deps: OperatorRouteDependencies,
 ): Promise<void> {
-  const snapshot = await deps.provider.getSnapshot();
+  const snapshot = await deps.provider.getSnapshot({ limit: 1 });
   writeJson(response, 200, {
     ok: true,
     service: 'operator-web',
