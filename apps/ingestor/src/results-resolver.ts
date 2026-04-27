@@ -138,6 +138,17 @@ export async function resolveAndInsertResults(
       const now = new Date().toISOString();
 
       for (const scoredMarket of eventResult.scoredMarkets) {
+        if (
+          !isValidScoredMarket(
+            scoredMarket,
+            eventResult.providerEventId,
+            logger,
+          )
+        ) {
+          summary.skippedResults += 1;
+          continue;
+        }
+
         if (scoredMarket.providerParticipantId === null) {
           const canonicalMarketKey =
             SGO_GAME_LINE_CANONICAL_ID[scoredMarket.baseMarketKey] ??
@@ -197,4 +208,49 @@ export async function resolveAndInsertResults(
   }
 
   return summary;
+}
+
+function isValidScoredMarket(
+  scoredMarket: SGOEventResult['scoredMarkets'][number],
+  providerEventId: string,
+  logger?: Pick<Console, 'warn' | 'info'>,
+) {
+  if (
+    typeof scoredMarket.baseMarketKey !== 'string' ||
+    scoredMarket.baseMarketKey.length === 0
+  ) {
+    logger?.warn?.(
+      `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid baseMarketKey; payload=${safeExcerpt(scoredMarket)}`,
+    );
+    return false;
+  }
+  if (!Number.isFinite(scoredMarket.score)) {
+    logger?.warn?.(
+      `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid score; payload=${safeExcerpt(scoredMarket)}`,
+    );
+    return false;
+  }
+  if (
+    scoredMarket.providerParticipantId !== null &&
+    (typeof scoredMarket.providerParticipantId !== 'string' ||
+      scoredMarket.providerParticipantId.length === 0)
+  ) {
+    logger?.warn?.(
+      `[sgo-results-parser] skipping malformed scored market for event ${providerEventId}: invalid providerParticipantId; payload=${safeExcerpt(scoredMarket)}`,
+    );
+    return false;
+  }
+  return true;
+}
+
+function safeExcerpt(value: unknown) {
+  try {
+    const json = JSON.stringify(value);
+    if (!json) {
+      return 'null';
+    }
+    return json.length > 500 ? `${json.slice(0, 500)}...` : json;
+  } catch {
+    return '[unserializable payload]';
+  }
 }
