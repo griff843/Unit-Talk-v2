@@ -182,6 +182,25 @@ export async function runCandidatePickScan(
       );
     } catch (brakeErr) {
       errors++;
+      try {
+        await transitionPickLifecycle(
+          repos.picks,
+          pickId,
+          'voided',
+          `governance-brake-failed: ${brakeErr instanceof Error ? brakeErr.message : String(brakeErr)}`,
+          'operator_override',
+        );
+      } catch (voidErr) {
+        logger?.error?.(
+          JSON.stringify({
+            service: 'candidate-pick-scanner',
+            event: 'governance_brake_void_failed',
+            pickId,
+            candidateId: candidate.id,
+            error: voidErr instanceof Error ? voidErr.message : String(voidErr),
+          }),
+        );
+      }
       logger?.error?.(
         JSON.stringify({
           service: 'candidate-pick-scanner',
