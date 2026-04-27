@@ -103,6 +103,16 @@ export async function computeAndAttachCLV(
   return outcome.result;
 }
 
+// Market types where provider_offers rows are event-scoped (provider_participant_id = null).
+// Mirrors the materializer's PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS check — CLV must use
+// null participant when querying provider_offers for these markets, regardless of whether
+// a participant is resolved from the pick.
+const PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS = new Set([
+  'game_total_ou',
+  '1h_total_ou',
+  '2h_total_ou',
+]);
+
 export async function computeCLVOutcome(
   pick: PickRecord,
   repositories: {
@@ -192,12 +202,17 @@ export async function computeCLVOutcome(
       : await repositories.providerOffers.resolveProviderMarketKey(pick.market, 'sgo')) ??
     pick.market;
 
+  // game_total_ou / 1h_total_ou / 2h_total_ou offers are event-scoped in provider_offers
+  // (provider_participant_id = null), so never pass a participant ID for these markets —
+  // the participant_id from a team-linked pick would produce zero rows from the offer lookup.
+  const isParticipantForbiddenMarket = PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(canonicalMarketKey);
+
   const baseLineCriteria = {
     providerEventId: eventContext.providerEventId,
     providerMarketKey: resolvedMarketKey,
-    // Moneyline offers are event-level (no participant), so query with null.
-    // O/U player-prop offers are participant-scoped.
-    providerParticipantId: isMoneyline ? null : eventContext.participantExternalId,
+    // Moneyline and event-level total markets are event-scoped — use null participant.
+    // Player-prop O/U markets are participant-scoped.
+    providerParticipantId: (isMoneyline || isParticipantForbiddenMarket) ? null : eventContext.participantExternalId,
     before: eventContext.eventStartTime,
   };
 
