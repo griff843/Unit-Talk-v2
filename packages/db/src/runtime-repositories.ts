@@ -2802,6 +2802,21 @@ export class DatabasePickRepository implements PickRepository {
       .single();
 
     if (historyError || !history) {
+      // Compensating rollback: undo the picks update to prevent state-without-history.
+      // The UPDATE and INSERT are sequential non-atomic calls, so on INSERT failure we
+      // must reset promotion fields so the pick can be re-evaluated cleanly on retry.
+      await this.client
+        .from('picks')
+        .update({
+          promotion_status: null,
+          promotion_target: null,
+          promotion_score: null,
+          promotion_reason: null,
+          promotion_version: null,
+          promotion_decided_at: null,
+          promotion_decided_by: null,
+        })
+        .eq('id', input.pickId);
       throw new Error(
         `Failed to persist promotion history: ${historyError?.message ?? 'unknown error'}`,
       );
