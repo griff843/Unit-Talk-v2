@@ -214,10 +214,6 @@ function asRecordOrNull(v: unknown): JsonObject | null {
   return v !== null && typeof v === 'object' && !Array.isArray(v) ? (v as JsonObject) : null;
 }
 
-function asArray(v: unknown): unknown[] {
-  return Array.isArray(v) ? v : [];
-}
-
 // ── Fixture filter ────────────────────────────────────────────────────────────
 
 function isFixtureLikePick(row: JsonObject): boolean {

@@ -16,63 +16,6 @@ interface FormWindow {
   last20: MiniStats;
 }
 
-interface ScoreBand {
-  range: string;
-  total: number;
-  wins: number;
-  losses: number;
-  pushes: number;
-  hitRatePct: number;
-  roiPct: number;
-}
-
-interface FeedbackEntry {
-  pickId: string;
-  source: string;
-  sport: string;
-  promotionScore: number | null;
-  reviewDecision: string | null;
-  result: string;
-  scoreSignal: 'correct' | 'incorrect' | 'marginal' | null;
-  reviewWasRight: boolean | null;
-}
-
-interface IntelligenceData {
-  recentForm: {
-    overall: FormWindow;
-    capper: FormWindow;
-    system: FormWindow;
-    approved: FormWindow;
-    denied: FormWindow;
-    bySport: Record<string, FormWindow>;
-    bySource: Record<string, FormWindow>;
-  };
-  scoreQuality: {
-    bands: ScoreBand[];
-    scoreVsOutcome: {
-      avgScoreWins: number | null;
-      avgScoreLosses: number | null;
-      correlation: 'positive' | 'weak' | 'negative' | 'insufficient_data';
-      sampleSize: number;
-      confidence: 'high' | 'medium' | 'low' | 'none';
-    };
-  };
-  decisionQuality: {
-    approvedWinRate: number | null;
-    deniedWouldHaveWonRate: number | null;
-    approvedVsDeniedRoiDelta: number;
-    holdsResolvedCount: number;
-    holdsTotal: number;
-  };
-  feedbackLoop: FeedbackEntry[];
-  insights: {
-    bestScoreBand: { range: string; roiPct: number } | null;
-    warnings: Array<{ segment: string; message: string }>;
-  };
-  observedAt: string;
-}
-
-
 function FormRow({ label, stats }: { label: string; stats: MiniStats }) {
   return (
     <tr className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors">

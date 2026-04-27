@@ -223,13 +223,6 @@ function computeStats(rows: Row[]): Stats {
   };
 }
 
-function emptyStats(): Stats {
-  return {
-    total: 0, settled: 0, wins: 0, losses: 0, pushes: 0,
-    hitRatePct: 0, roiPct: 0, avgScore: null, avgClvPct: null, avgStakeUnits: null,
-  };
-}
-
 /**
  * Source classification: picks where source contains 'capper' or doesn't
  * contain 'system'/'scanner'/'board' are 'capper'; else 'system'.
@@ -343,7 +336,7 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
     // Collect pick IDs to fetch associated picks data
     const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
 
-    let picksMap = new Map<string, Row>();
+    const picksMap = new Map<string, Row>();
     if (pickIds.length > 0) {
       const picksResult = await client
         .from('picks')
@@ -358,7 +351,7 @@ export async function getPerformanceData(): Promise<PerformanceData | null> {
     }
 
     // Fetch picks_current_state for review_decision grouping
-    let pcsMap = new Map<string, Row>();
+    const pcsMap = new Map<string, Row>();
     if (pickIds.length > 0) {
       const pcsResult = await client
         .from('picks_current_state')
@@ -742,11 +735,6 @@ function computeFormWindow(rows: Row[]): FormWindow {
   };
 }
 
-function emptyFormWindow(): FormWindow {
-  const empty: MiniStats = { wins: 0, losses: 0, pushes: 0, hitRatePct: 0, roiPct: 0, streak: '—' };
-  return { last5: empty, last10: empty, last20: empty };
-}
-
 const SCORE_BANDS = [
   { range: '0–40', min: 0, max: 40 },
   { range: '40–60', min: 40, max: 60 },
@@ -792,8 +780,8 @@ export async function getIntelligenceData(): Promise<IntelligenceData | null> {
     // Collect pick IDs
     const pickIds = [...new Set(settlementRows.map((r) => asString(r['pick_id'])).filter(Boolean))] as string[];
 
-    let picksMap = new Map<string, Row>();
-    let pcsMap = new Map<string, Row>();
+    const picksMap = new Map<string, Row>();
+    const pcsMap = new Map<string, Row>();
 
     if (pickIds.length > 0) {
       const [picksResult, pcsResult] = await Promise.all([

@@ -15,43 +15,6 @@ interface Stats {
   avgStakeUnits: number | null;
 }
 
-interface NamedInsight {
-  name: string;
-  roiPct: number;
-  sampleSize: number;
-}
-
-interface PerformanceData {
-  windows: { today: Stats; last7d: Stats; last30d: Stats; mtd: Stats };
-  bySource: { capper: Stats; system: Stats };
-  bySport: Record<string, Stats>;
-  byIndividualSource: Record<string, Stats>;
-  decisions: { approved: Stats; denied: Stats; held: Stats; heldCount: number };
-  insights: {
-    capperRoiPct: number;
-    systemRoiPct: number;
-    approvedRoiPct: number;
-    deniedRoiPct: number;
-    approvedVsDeniedDelta: number;
-    topCapper: NamedInsight;
-    worstSegment: NamedInsight;
-    strongestSport: NamedInsight;
-    weakestSport: NamedInsight;
-  };
-}
-
-interface LeaderboardRow {
-  capper: string;
-  total: number;
-  wins: number;
-  losses: number;
-  pushes: number;
-  hitRatePct: number;
-  roiPct: number;
-  avgClvPct: number | null;
-}
-
-
 function fmt(n: number | null | undefined, fallback = '—'): string {
   if (n == null || !Number.isFinite(n)) return fallback;
   return n.toFixed(1);
