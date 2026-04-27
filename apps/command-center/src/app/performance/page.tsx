@@ -1,7 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getPerformanceData, getLeaderboard } from '@/lib/data';
 
 interface Stats {
   total: number;
@@ -52,37 +51,6 @@ interface LeaderboardRow {
   avgClvPct: number | null;
 }
 
-async function fetchPerformance(): Promise<PerformanceData | null> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/performance`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; data: PerformanceData };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchLeaderboard(window: number): Promise<LeaderboardRow[]> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/leaderboard?last=${window}&limit=25`, { cache: 'no-store' });
-    if (!res.ok) return [];
-    const json = (await res.json()) as { ok: boolean; data: { rows: Array<Record<string, unknown>> } };
-    if (!json.ok) return [];
-    return (json.data.rows ?? []).map((r) => ({
-      capper: String(r['capper'] ?? 'unknown'),
-      total: Number(r['totalPicks'] ?? 0),
-      wins: Number(r['wins'] ?? 0),
-      losses: Number(r['losses'] ?? 0),
-      pushes: Number(r['pushes'] ?? 0),
-      hitRatePct: Number(r['hitRatePct'] ?? 0),
-      roiPct: Number(r['roiPct'] ?? 0),
-      avgClvPct: r['avgClvPct'] != null ? Number(r['avgClvPct']) : null,
-    }));
-  } catch {
-    return [];
-  }
-}
 
 function fmt(n: number | null | undefined, fallback = '—'): string {
   if (n == null || !Number.isFinite(n)) return fallback;
@@ -176,8 +144,8 @@ export default async function PerformancePage({
   const window = windowParam === '7' ? 7 : windowParam === '90' ? 90 : 30;
 
   const [perf, leaderboard] = await Promise.all([
-    fetchPerformance(),
-    fetchLeaderboard(window),
+    getPerformanceData(),
+    getLeaderboard(window),
   ]);
   const leaderboardHasThinSignal = leaderboard.length === 0;
   const heldReviewSignalIsThin =

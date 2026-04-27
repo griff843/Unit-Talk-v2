@@ -1,5 +1,5 @@
 import { EmptyState } from '@/components/ui/EmptyState';
-import { fetchPromotionPreview } from '@/lib/api';
+import { getPromotionPreview } from '@/lib/data';
 
 interface PromotionPreviewPageProps {
   searchParams?: {
@@ -64,7 +64,9 @@ export default async function PromotionPreviewPage({ searchParams }: PromotionPr
 
 async function loadPromotionPreview(pickId: string) {
   try {
-    return { ok: true as const, data: await fetchPromotionPreview(pickId) };
+    const raw = await getPromotionPreview(pickId) as { ok: boolean; data?: { wouldPromoteTo: string | null; score: number | null; reasons: string[]; qualifies: boolean }; error?: string };
+    if (raw.ok && raw.data) return { ok: true as const, data: raw.data };
+    return { ok: false as const, error: raw.error ?? 'Promotion preview failed' };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
   }

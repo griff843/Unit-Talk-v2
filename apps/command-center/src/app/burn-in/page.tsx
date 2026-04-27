@@ -1,10 +1,11 @@
 import { Card } from '@/components/ui/Card';
 import {
-  fetchExceptionQueues,
-  fetchIntelligenceCoverage,
-  fetchProviderHealth,
-  fetchSnapshot,
-} from '@/lib/api';
+  getExceptionQueues,
+  getIntelligenceCoverage,
+  getProviderHealth,
+  getSnapshotData,
+} from '@/lib/data';
+import type { IntelligenceCoverage, ProviderHealth } from '@/lib/types';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
@@ -177,16 +178,19 @@ export default async function BurnInPage({
   searchParams?: Record<string, string | string[] | undefined>;
 }) {
   const intervalMs = readRefreshIntervalMs(searchParams);
-  const [snapshotRaw, todayCoverage, weeklyCoverage, providerHealth, exceptionQueuesRaw] = await Promise.all([
-    fetchSnapshot(100),
-    fetchIntelligenceCoverage('1d'),
-    fetchIntelligenceCoverage('7d'),
-    fetchProviderHealth(),
-    fetchExceptionQueues(),
+  const [snapshotResult, todayCoverageResult, weeklyCoverageResult, providerHealthResult, exceptionQueuesResult] = await Promise.all([
+    getSnapshotData(),
+    getIntelligenceCoverage('1d'),
+    getIntelligenceCoverage('7d'),
+    getProviderHealth(),
+    getExceptionQueues(),
   ]);
 
-  const snapshot = unwrapResponse(snapshotRaw);
-  const exceptionQueues = unwrapResponse(exceptionQueuesRaw);
+  const snapshot = unwrapResponse(snapshotResult);
+  const exceptionQueues = unwrapResponse(exceptionQueuesResult);
+  const todayCoverage = unwrapResponse(todayCoverageResult) as unknown as IntelligenceCoverage;
+  const weeklyCoverage = unwrapResponse(weeklyCoverageResult) as unknown as IntelligenceCoverage;
+  const providerHealth = unwrapResponse(providerHealthResult) as unknown as ProviderHealth;
   const counts = asRecord(snapshot['counts']);
   const workerRuntime = asRecord(snapshot['workerRuntime']);
   const gradingAgent = asRecord(snapshot['gradingAgent']);

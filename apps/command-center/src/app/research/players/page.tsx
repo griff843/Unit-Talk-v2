@@ -1,43 +1,6 @@
 import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
-
-interface Participant {
-  id: string;
-  name: string;
-  type: 'player' | 'team';
-  sport: string | null;
-  team: string | null;
-  externalId: string | null;
-}
-
-interface ParticipantsResponse {
-  participants: Participant[];
-  total: number;
-  observedAt: string;
-}
-
-async function fetchParticipants(
-  type: string,
-  sport?: string,
-  q?: string,
-): Promise<ParticipantsResponse | null> {
-  try {
-    const params = new URLSearchParams({ type, limit: '50' });
-    if (sport) params.set('sport', sport);
-    if (q) params.set('q', q);
-    const res = await fetch(
-      `${OPERATOR_WEB_BASE}/api/operator/participants?${params.toString()}`,
-      { cache: 'no-store' },
-    );
-    if (!res.ok) return null;
-    const json = (await res.json()) as ParticipantsResponse;
-    return json;
-  } catch {
-    return null;
-  }
-}
+import { getResearchPlayers } from '@/lib/data';
 
 export default async function PlayerCardPage({
   searchParams,
@@ -48,7 +11,7 @@ export default async function PlayerCardPage({
   const sport = typeof searchParams['sport'] === 'string' ? searchParams['sport'] : undefined;
   const q = typeof searchParams['q'] === 'string' ? searchParams['q'] : undefined;
 
-  const data = await fetchParticipants(tab, sport, q);
+  const data = await getResearchPlayers({ type: tab, sport, q });
 
   return (
     <div className="flex flex-col gap-6">
@@ -138,7 +101,7 @@ export default async function PlayerCardPage({
       {!data ? (
         <EmptyState
           message="Unable to load participants data."
-          detail="Check that operator-web is reachable and the /api/operator/participants endpoint is responding."
+          detail="The participants table may be empty or unavailable."
           action={{ label: 'Back to Research', href: '/research' }}
         />
       ) : data.participants.length === 0 ? (
@@ -159,8 +122,6 @@ export default async function PlayerCardPage({
                 <tr className="border-b border-gray-700 text-xs uppercase text-gray-400">
                   <th className="py-2 pr-3">Name</th>
                   <th className="py-2 pr-3">Sport</th>
-                  {tab === 'player' && <th className="py-2 pr-3">Team</th>}
-                  <th className="py-2 pr-3">External ID</th>
                   <th className="py-2">ID</th>
                 </tr>
               </thead>
@@ -170,24 +131,14 @@ export default async function PlayerCardPage({
                     key={p.id}
                     className="border-b border-gray-800 hover:bg-gray-800/50 transition-colors"
                   >
-                    <td className="py-2 pr-3 text-xs font-medium text-gray-200">{p.name}</td>
+                    <td className="py-2 pr-3 text-xs font-medium text-gray-200">{p.displayName ?? '—'}</td>
                     <td className="py-2 pr-3 text-xs text-gray-300">{p.sport ?? '—'}</td>
-                    {tab === 'player' && (
-                      <td className="py-2 pr-3 text-xs text-gray-300">{p.team ?? '—'}</td>
-                    )}
-                    <td className="py-2 pr-3 text-xs text-gray-400 font-mono">
-                      {p.externalId ?? '—'}
-                    </td>
                     <td className="py-2 text-xs text-gray-500 font-mono">{p.id.slice(0, 8)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
-
-          <p className="mt-3 text-[10px] text-gray-600">
-            Observed at {new Date(data.observedAt).toLocaleTimeString()}
-          </p>
         </Card>
       )}
     </div>

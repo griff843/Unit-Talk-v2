@@ -1,5 +1,5 @@
 import { EmptyState } from '@/components/ui/EmptyState';
-import { fetchRoutingPreview } from '@/lib/api';
+import { getRoutingPreview } from '@/lib/data';
 
 interface RoutingPreviewPageProps {
   searchParams?: {
@@ -59,7 +59,9 @@ export default async function RoutingPreviewPage({ searchParams }: RoutingPrevie
 
 async function loadRoutingPreview(pickId: string) {
   try {
-    return { ok: true as const, data: await fetchRoutingPreview(pickId) };
+    const raw = await getRoutingPreview(pickId) as { ok: boolean; data?: { distributionTarget: string | null; promotionTarget: string | null; status: string; outboxStatus: string; routingReason: string }; error?: string };
+    if (raw.ok && raw.data) return { ok: true as const, data: raw.data };
+    return { ok: false as const, error: raw.error ?? 'Routing preview failed' };
   } catch (error) {
     return { ok: false as const, error: error instanceof Error ? error.message : String(error) };
   }

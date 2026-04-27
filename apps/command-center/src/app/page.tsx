@@ -2,7 +2,7 @@ import { Card } from '@/components/ui/Card';
 import { ExceptionPanel } from '@/components/ExceptionPanel';
 import { HealthSignalsPanel } from '@/components/HealthSignalsPanel';
 import { PickLifecycleTable } from '@/components/PickLifecycleTable';
-import { fetchDashboardData, fetchDashboardRuntimeData, fetchExceptionQueues } from '@/lib/api';
+import { getDashboardData, getDashboardRuntimeData, getExceptionQueues } from '@/lib/data';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib/types';
 
@@ -82,9 +82,9 @@ export default async function DashboardPage({
   let aliasReviewCounts = { missingBookAliases: 0, missingMarketAliases: 0 };
   try {
     const [dashboardData, dashboardRuntimeData, exceptionQueues] = await Promise.all([
-      fetchDashboardData(),
-      fetchDashboardRuntimeData(),
-      fetchExceptionQueues(),
+      getDashboardData(),
+      getDashboardRuntimeData(),
+      getExceptionQueues(),
     ]);
     data = dashboardData;
     runtime = dashboardRuntimeData;

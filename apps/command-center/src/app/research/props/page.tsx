@@ -1,56 +1,6 @@
 import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
-
-interface PropOfferRow {
-  id: string;
-  sportKey: string | null;
-  providerMarketKey: string;
-  bookmakerKey: string | null;
-  line: number | null;
-  overOdds: number | null;
-  underOdds: number | null;
-  providerParticipantId: string | null;
-  providerEventId: string;
-  isOpening: boolean;
-  isClosing: boolean;
-  snapshotAt: string;
-}
-
-interface PropOffersResponse {
-  offers: PropOfferRow[];
-  total: number;
-  hasMore: boolean;
-  observedAt: string;
-}
-
-async function fetchPropOffers(params: {
-  sport?: string;
-  market?: string;
-  bookmaker?: string;
-  participant?: string;
-  since?: string;
-  offset?: number;
-}): Promise<PropOffersResponse | null> {
-  try {
-    const qs = new URLSearchParams({ limit: '50' });
-    if (params.sport) qs.set('sport', params.sport);
-    if (params.market) qs.set('market', params.market);
-    if (params.bookmaker) qs.set('bookmaker', params.bookmaker);
-    if (params.participant) qs.set('participant', params.participant);
-    if (params.since) qs.set('since', params.since);
-    if (params.offset) qs.set('offset', String(params.offset));
-
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/prop-offers?${qs.toString()}`, {
-      cache: 'no-store',
-    });
-    if (!res.ok) return null;
-    return (await res.json()) as PropOffersResponse;
-  } catch {
-    return null;
-  }
-}
+import { getPropOffers } from '@/lib/data';
 
 function formatOdds(odds: number | null): string {
   if (odds === null) return '—';
@@ -106,7 +56,7 @@ export default async function PropExplorerPage({
   const hasFilters = Boolean(sport || market || bookmaker || participant || since);
 
   const data = hasFilters || offset > 0
-    ? await fetchPropOffers({ sport, market, bookmaker, participant, since, offset })
+    ? await getPropOffers({ sport, market, bookmaker, participant, since, offset })
     : null;
 
   const activeFilterCount = [sport, market, bookmaker, participant, since].filter(Boolean).length;

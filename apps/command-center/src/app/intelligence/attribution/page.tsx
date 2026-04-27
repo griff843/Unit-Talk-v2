@@ -1,4 +1,4 @@
-import { fetchBoardPerformance } from '@/lib/api';
+import { getBoardPerformance } from '@/lib/data';
 import { GovernedAttributionTable } from '@/components/GovernedAttributionTable';
 import type { GovernedPickPerformanceRow } from '@/lib/types';
 
@@ -9,7 +9,8 @@ export default async function GovernedAttributionPage() {
   let fetchError: string | null = null;
 
   try {
-    rows = await fetchBoardPerformance();
+    const result = await getBoardPerformance();
+    if (result.ok) rows = result.data;
   } catch (err) {
     fetchError = err instanceof Error ? err.message : String(err);
   }

@@ -1,4 +1,4 @@
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getPerformanceData } from '@/lib/data';
 
 interface Stats {
   total: number;
@@ -19,17 +19,6 @@ interface PerformanceData {
   bySport: Record<string, Stats>;
   byIndividualSource: Record<string, Stats>;
   decisions: { approved: Stats; denied: Stats; held: Stats; heldCount: number };
-}
-
-async function fetchPerformance(): Promise<PerformanceData | null> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/performance`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; data: PerformanceData };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
 }
 
 function fmt(n: number | null | undefined, fallback = '—'): string {
@@ -81,7 +70,7 @@ function TableHeader() {
 }
 
 export default async function RoiOverviewPage() {
-  const perf = await fetchPerformance();
+  const perf = await getPerformanceData() as PerformanceData | null;
 
   if (!perf) {
     return (

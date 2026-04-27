@@ -1,6 +1,5 @@
 import { Card, EmptyState, MetricsCard } from '@/components/ui';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+import { getIntelligenceData } from '@/lib/data';
 
 interface MiniStats {
   wins: number;
@@ -73,16 +72,6 @@ interface IntelligenceData {
   observedAt: string;
 }
 
-async function fetchIntelligence(): Promise<IntelligenceData | null> {
-  try {
-    const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/intelligence`, { cache: 'no-store' });
-    if (!res.ok) return null;
-    const json = (await res.json()) as { ok: boolean; data: IntelligenceData };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
-}
 
 function FormRow({ label, stats }: { label: string; stats: MiniStats }) {
   return (
@@ -187,7 +176,7 @@ function formWindowSampleSize(form: FormWindow) {
 }
 
 export default async function IntelligencePage() {
-  const data = await fetchIntelligence();
+  const data = await getIntelligenceData();
 
   if (!data) {
     return (

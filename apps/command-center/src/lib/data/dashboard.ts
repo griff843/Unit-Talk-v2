@@ -1,171 +1,32 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { getSnapshotData, getPicksPipelineData, getRecapData } from './snapshot.js';
+import { getProviderHealth } from './intelligence.js';
+import { getDataClient } from './client.js';
 import type {
-  BoardQueueData,
-  BoardStateData,
   DashboardData,
   DashboardRuntimeData,
-  DeliveryStatus,
-  GovernedPickPerformanceRow,
-  IntelligenceCoverage,
   LifecycleSignal,
-  LifecycleStatus,
   OperationalException,
   PickRow,
-  ProviderHealth,
-  SettlementStatus,
-  SignalStatus,
-  StatsSnapshot,
-} from './types.js';
+} from '../types.js';
 
-const OPERATOR_WEB_BASE =
-  process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+type Client = any;
 
-// ── Raw fetch helpers ────────────────────────────────────────────────────────
+// ── InterventionAuditRow ──────────────────────────────────────────────────────
 
-export async function fetchSnapshot(limit?: number): Promise<unknown> {
-  const params = new URLSearchParams();
-  if (typeof limit === 'number' && Number.isFinite(limit) && limit > 0) {
-    params.set('limit', String(Math.round(limit)));
-  }
-  const suffix = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/snapshot${suffix}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Snapshot fetch failed: ${res.status}`);
-  return res.json();
+export interface InterventionAuditRow {
+  id: string;
+  entity_type: string;
+  entity_id: string;
+  entity_ref: string;
+  action: string;
+  actor: string;
+  payload: Record<string, unknown>;
+  created_at: string;
 }
 
-export async function fetchPicksPipeline(): Promise<unknown> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/picks-pipeline`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Pipeline fetch failed: ${res.status}`);
-  return res.json();
-}
-
-export async function fetchRecap(): Promise<unknown> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/recap`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Recap fetch failed: ${res.status}`);
-  return res.json();
-}
-
-export async function fetchExceptionQueues(): Promise<unknown> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/exception-queues`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Exception queues fetch failed: ${res.status}`);
-  return res.json();
-}
-
-export async function fetchIntelligenceCoverage(window = '7d'): Promise<IntelligenceCoverage> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/intelligence-coverage?window=${encodeURIComponent(window)}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Intelligence coverage fetch failed: ${res.status}`);
-  const json = (await res.json()) as { ok: boolean; data: IntelligenceCoverage };
-  if (!json.ok) {
-    throw new Error('Intelligence coverage fetch failed');
-  }
-  return json.data;
-}
-
-export async function fetchProviderHealth(): Promise<ProviderHealth> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/provider-health`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Provider health fetch failed: ${res.status}`);
-  const json = (await res.json()) as { ok: boolean; data: ProviderHealth };
-  if (!json.ok) {
-    throw new Error('Provider health fetch failed');
-  }
-  return json.data;
-}
-
-export async function fetchBoardState(target = 'best-bets'): Promise<BoardStateData> {
-  const res = await fetch(
-    `${OPERATOR_WEB_BASE}/api/operator/board-state?target=${encodeURIComponent(target)}`,
-    { cache: 'no-store' },
-  );
-  if (!res.ok) throw new Error(`Board state fetch failed: ${res.status}`);
-  const json = (await res.json()) as { ok: boolean; data: BoardStateData };
-  if (!json.ok) {
-    throw new Error('Board state fetch failed');
-  }
-  return json.data;
-}
-
-export async function fetchBoardQueue(): Promise<BoardQueueData> {
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/operator/board-queue`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Board queue fetch failed: ${res.status}`);
-  const json = (await res.json()) as { ok: boolean; data: BoardQueueData };
-  if (!json.ok) {
-    throw new Error('Board queue fetch failed');
-  }
-  return json.data;
-}
-
-export async function fetchBoardPerformance(boardRunId?: string): Promise<GovernedPickPerformanceRow[]> {
-  const params = new URLSearchParams();
-  if (boardRunId) {
-    params.set('boardRunId', boardRunId);
-  }
-  const suffix = params.toString() ? `?${params.toString()}` : '';
-  const res = await fetch(`${OPERATOR_WEB_BASE}/api/board/performance${suffix}`, {
-    cache: 'no-store',
-  });
-  if (!res.ok) throw new Error(`Board performance fetch failed: ${res.status}`);
-  const json = (await res.json()) as { ok: boolean; data: GovernedPickPerformanceRow[] };
-  if (!json.ok) {
-    throw new Error('Board performance fetch failed');
-  }
-  return json.data;
-}
-
-export interface RoutingPreviewData {
-  pickId: string;
-  status: string;
-  promotionTarget: string | null;
-  distributionTarget: string | null;
-  routingReason: string;
-  outboxStatus: string;
-}
-
-export async function fetchRoutingPreview(pickId: string): Promise<RoutingPreviewData> {
-  const res = await fetch(
-    `${OPERATOR_WEB_BASE}/api/operator/picks/${encodeURIComponent(pickId)}/routing-preview`,
-    { cache: 'no-store' },
-  );
-  const json = await res.json() as { ok: boolean; data?: RoutingPreviewData; error?: { message?: string } };
-  if (!res.ok || !json.ok || !json.data) {
-    throw new Error(json.error?.message ?? `Routing preview fetch failed: ${res.status}`);
-  }
-  return json.data;
-}
-
-export interface PromotionPreviewData {
-  pickId: string;
-  wouldPromoteTo: string | null;
-  score: number | null;
-  reasons: string[];
-  qualifies: boolean;
-}
-
-export async function fetchPromotionPreview(pickId: string): Promise<PromotionPreviewData> {
-  const res = await fetch(
-    `${OPERATOR_WEB_BASE}/api/operator/picks/${encodeURIComponent(pickId)}/promotion-preview`,
-    { cache: 'no-store' },
-  );
-  const json = await res.json() as { ok: boolean; data?: PromotionPreviewData; error?: { message?: string } };
-  if (!res.ok || !json.ok || !json.data) {
-    throw new Error(json.error?.message ?? `Promotion preview fetch failed: ${res.status}`);
-  }
-  return json.data;
-}
-
-// ── Type-safe accessors (unknown → primitive) ────────────────────────────────
+// ── Type-safe accessors ───────────────────────────────────────────────────────
 
 function asRecord(v: unknown): Record<string, unknown> {
   if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
@@ -198,20 +59,21 @@ function readJsonObject(v: unknown): Record<string, unknown> | null {
   if (v !== null && typeof v === 'object' && !Array.isArray(v)) {
     return v as Record<string, unknown>;
   }
-
   return null;
 }
 
-// ── Signal derivation ────────────────────────────────────────────────────────
+// ── unwrapResponse ────────────────────────────────────────────────────────────
 
 function unwrapResponse(raw: unknown): Record<string, unknown> {
   const top = asRecord(raw);
-  // Operator-web wraps all responses: { ok, data: { ... } }
-  const data = top['data'];
-  return data !== undefined ? asRecord(data) : top;
+  return top['data'] !== undefined ? asRecord(top['data']) : top;
 }
 
-export function deriveSignals(
+// ── Signal derivation ─────────────────────────────────────────────────────────
+
+type SignalStatus = 'WORKING' | 'DEGRADED' | 'BROKEN';
+
+function deriveSignals(
   snapshot: unknown,
   recap: unknown,
   pipeline?: unknown,
@@ -319,9 +181,10 @@ export function deriveSignals(
   if (total === 0) {
     settlementStatus = 'WORKING';
     settlementDetail = 'No settled picks yet';
-  } else if (pendingManualReview > 0 || recentSettlements.some(
-    (s) => asRecord(s)['status'] === 'manual_review',
-  )) {
+  } else if (
+    pendingManualReview > 0 ||
+    recentSettlements.some((s) => asRecord(s)['status'] === 'manual_review')
+  ) {
     settlementStatus = 'DEGRADED';
     settlementDetail = `${total} settled; pending manual review`;
   } else {
@@ -330,10 +193,10 @@ export function deriveSignals(
   }
 
   // ── stats_propagation ────────────────────────────────────────────────────
-  // Use pipeline settled count (covers ALL picks in DB) instead of
-  // recentPicks (limited to 12 most recent — causes false divergence).
   const totalPicks = asNumber(recapData['total_picks']);
-  const pipelineCounts = pipeline ? asRecord(unwrapResponse(pipeline)['counts']) : null;
+  const pipelineCounts = pipeline
+    ? asRecord(unwrapResponse(pipeline)['counts'])
+    : null;
   const settledPickCount = pipelineCounts
     ? asNumber(pipelineCounts['settled'])
     : recentPicks.filter((p) => asRecord(p)['status'] === 'settled').length;
@@ -370,32 +233,9 @@ export function deriveSignals(
   ];
 }
 
-export function resolveLaneHealth(
-  lane: Record<string, unknown>,
-  kind: 'canary' | 'activation',
-): boolean {
-  const explicit = kind === 'canary'
-    ? lane['graduationReady']
-    : lane['activationHealthy'];
-  if (typeof explicit === 'boolean') {
-    return explicit;
-  }
+// ── Lifecycle / promotion / delivery / settlement status mapping ──────────────
 
-  const failures =
-    asNumber(lane['recentFailureCount']) +
-    asNumber(lane['recentDeadLetterCount']);
-  const sent = asNumber(lane['recentSentCount']);
-
-  if (kind === 'canary') {
-    return failures === 0 && sent > 0;
-  }
-
-  return failures === 0;
-}
-
-// ── Lifecycle status mapping ─────────────────────────────────────────────────
-
-function mapLifecycleStatus(status: string): LifecycleStatus {
+function mapLifecycleStatus(status: string): PickRow['lifecycleStatus'] {
   switch (status) {
     case 'submitted': return 'submitted';
     case 'validated': return 'validated';
@@ -407,8 +247,6 @@ function mapLifecycleStatus(status: string): LifecycleStatus {
   }
 }
 
-// ── Promotion status mapping ─────────────────────────────────────────────────
-
 function mapPromotionStatus(status: string): PickRow['promotionStatus'] {
   switch (status) {
     case 'qualified': return 'qualified';
@@ -419,9 +257,7 @@ function mapPromotionStatus(status: string): PickRow['promotionStatus'] {
   }
 }
 
-// ── Delivery status mapping ──────────────────────────────────────────────────
-
-function mapDeliveryStatus(outboxRow: Record<string, unknown> | null): DeliveryStatus {
+function mapDeliveryStatus(outboxRow: Record<string, unknown> | null): PickRow['deliveryStatus'] {
   if (outboxRow === null) return 'not_promoted';
   const status = asString(outboxRow['status']);
   switch (status) {
@@ -434,16 +270,13 @@ function mapDeliveryStatus(outboxRow: Record<string, unknown> | null): DeliveryS
   }
 }
 
-// ── Settlement status mapping ────────────────────────────────────────────────
-
 function mapSettlementStatus(
   pickId: string,
   settlementResult: string | null,
   recentSettlements: unknown[],
-): SettlementStatus {
+): PickRow['settlementStatus'] {
   if (settlementResult === null) return 'pending';
 
-  // Check recentSettlements for this pick to determine if corrected or manual_review
   const settlementForPick = recentSettlements
     .map(asRecord)
     .filter((s) => asString(s['pick_id']) === pickId);
@@ -451,11 +284,17 @@ function mapSettlementStatus(
   if (settlementForPick.some((s) => asString(s['status']) === 'manual_review')) {
     return 'manual_review';
   }
-  if (settlementForPick.some((s) => s['corrects_id'] !== null && s['corrects_id'] !== undefined)) {
+  if (
+    settlementForPick.some(
+      (s) => s['corrects_id'] !== null && s['corrects_id'] !== undefined,
+    )
+  ) {
     return 'corrected';
   }
   return 'settled';
 }
+
+// ── Helpers for readSubmittedBy, readSport, buildIntelligenceSummary ──────────
 
 function readSubmittedBy(pick: Record<string, unknown>): string {
   const metadata = readJsonObject(pick['metadata']);
@@ -465,26 +304,22 @@ function readSubmittedBy(pick: Record<string, unknown>): string {
     metadata?.['submitted_by'],
     metadata?.['capper'],
   ];
-
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim().length > 0) {
       return candidate.trim();
     }
   }
-
   return asString(pick['source'], 'unknown');
 }
 
 function readSport(pick: Record<string, unknown>): string | null {
   const metadata = readJsonObject(pick['metadata']);
   const candidates = [metadata?.['sport'], metadata?.['league']];
-
   for (const candidate of candidates) {
     if (typeof candidate === 'string' && candidate.trim().length > 0) {
       return candidate.trim();
     }
   }
-
   return null;
 }
 
@@ -507,7 +342,10 @@ function buildIntelligenceSummary(
         : null;
   const clv = settlementRows.some((row) => {
     const payload = readJsonObject(row['payload']);
-    return typeof payload?.['clvRaw'] === 'number' || typeof payload?.['clvPercent'] === 'number';
+    return (
+      typeof payload?.['clvRaw'] === 'number' ||
+      typeof payload?.['clvPercent'] === 'number'
+    );
   });
 
   return {
@@ -520,21 +358,15 @@ function buildIntelligenceSummary(
   };
 }
 
-// ── Pick rows mapping ────────────────────────────────────────────────────────
-//
-// Uses snapshot.recentPicks (full PickRecord with all DB columns, snake_case)
-// instead of picksPipeline.recentPicks (which strips source/market/selection/
-// line/odds/stake_units). Settlement result is resolved from the pipeline
-// endpoint which applies correction-aware effective settlement logic.
+// ── mapPickRows ───────────────────────────────────────────────────────────────
 
-export function mapPickRows(
+function mapPickRows(
   snapshotPicks: unknown[],
   pipelinePicks: unknown[],
   outbox: unknown[],
   recentSettlements: unknown[],
   recentReceipts: unknown[],
 ): PickRow[] {
-  // Build a lookup from pipeline picks for settlement result (correction-aware)
   const pipelineByPickId = new Map<string, Record<string, unknown>>();
   for (const pp of pipelinePicks) {
     const row = asRecord(pp);
@@ -548,7 +380,6 @@ export function mapPickRows(
     const status = asString(p['status']);
     const createdAt = asString(p['created_at']);
 
-    // Real fields from full PickRecord (snapshot, snake_case DB columns)
     const source = asString(p['source'], 'unknown');
     const market = asString(p['market'], '—');
     const selection = asString(p['selection'], '—');
@@ -560,13 +391,11 @@ export function mapPickRows(
     const promotionReason = asStringOrNull(p['promotion_reason']);
     const promotionTarget = asStringOrNull(p['promotion_target']);
 
-    // Settlement result from pipeline (correction-aware effective result)
     const pipelineRow = pipelineByPickId.get(pickId);
     const settlementResult = pipelineRow
       ? asStringOrNull(pipelineRow['settlementResult'])
       : null;
 
-    // Find matching outbox row
     const outboxRow =
       outbox
         .map(asRecord)
@@ -608,9 +437,9 @@ export function mapPickRows(
   });
 }
 
-// ── Stats mapping ────────────────────────────────────────────────────────────
+// ── mapStats ──────────────────────────────────────────────────────────────────
 
-function mapStats(recap: unknown): StatsSnapshot {
+function mapStats(recap: unknown) {
   const r = unwrapResponse(recap);
   const byResult = asRecord(r['by_result']);
   const flatBetRoi = asRecord(r['flat_bet_roi']);
@@ -624,13 +453,13 @@ function mapStats(recap: unknown): StatsSnapshot {
   return { total, wins, losses, pushes, roiPct };
 }
 
-// ── Exception detection ─────────────────────────────────────────────────────
+// ── detectExceptions ──────────────────────────────────────────────────────────
 
 const SETTLEMENT_PENDING_HOURS = 48;
 
 function detectExceptions(
   snapshot: unknown,
-  recap: unknown,
+  _recap: unknown,
   picks: PickRow[],
 ): OperationalException[] {
   const exceptions: OperationalException[] = [];
@@ -688,7 +517,7 @@ function detectExceptions(
     }
   }
 
-  // Stuck lifecycle states (validated or queued for too long)
+  // Stuck lifecycle states (validated for too long)
   for (const pick of picks) {
     if (pick.lifecycleStatus === 'validated') {
       const age = now - new Date(pick.submittedAt).getTime();
@@ -734,7 +563,7 @@ function detectExceptions(
     }
   }
 
-  // Manual review items (correction conflicts / pending reviews)
+  // Manual review items
   for (const row of recentSettlements) {
     const s = asRecord(row);
     if (asString(s['status']) === 'manual_review') {
@@ -752,13 +581,32 @@ function detectExceptions(
   return exceptions;
 }
 
-// ── Main dashboard fetch ─────────────────────────────────────────────────────
+// ── resolveLaneHealth ─────────────────────────────────────────────────────────
 
-export async function fetchDashboardData(): Promise<DashboardData> {
+function resolveLaneHealth(
+  lane: Record<string, unknown>,
+  kind: 'canary' | 'activation',
+): boolean {
+  const explicit =
+    kind === 'canary' ? lane['graduationReady'] : lane['activationHealthy'];
+  if (typeof explicit === 'boolean') return explicit;
+
+  const failures =
+    asNumber(lane['recentFailureCount']) +
+    asNumber(lane['recentDeadLetterCount']);
+  const sent = asNumber(lane['recentSentCount']);
+
+  if (kind === 'canary') return failures === 0 && sent > 0;
+  return failures === 0;
+}
+
+// ── getDashboardData ──────────────────────────────────────────────────────────
+
+export async function getDashboardData(): Promise<DashboardData> {
   const [snapshot, pipeline, recap] = await Promise.all([
-    fetchSnapshot(),
-    fetchPicksPipeline(),
-    fetchRecap(),
+    getSnapshotData(),
+    getPicksPipelineData(),
+    getRecapData(),
   ]);
 
   const snap = unwrapResponse(snapshot);
@@ -767,12 +615,17 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   const recentSettlements = asArray(snap['recentSettlements']);
   const snapshotPicks = asArray(snap['recentPicks']);
 
-  // Pipeline picks carry correction-aware settlement results (camelCase keys)
   const pipelineData = unwrapResponse(pipeline);
   const pipelinePicks = asArray(pipelineData['recentPicks']);
 
   const signals = deriveSignals(snapshot, recap, pipeline);
-  const picks = mapPickRows(snapshotPicks, pipelinePicks, outbox, recentSettlements, recentReceipts);
+  const picks = mapPickRows(
+    snapshotPicks,
+    pipelinePicks,
+    outbox,
+    recentSettlements,
+    recentReceipts,
+  );
   const stats = mapStats(recap);
   const exceptions = detectExceptions(snapshot, recap, picks);
   const observedAt = asString(snap['observedAt'], new Date().toISOString());
@@ -780,11 +633,14 @@ export async function fetchDashboardData(): Promise<DashboardData> {
   return { signals, picks, stats, exceptions, observedAt };
 }
 
-export async function fetchDashboardRuntimeData(): Promise<DashboardRuntimeData> {
-  const [snapshot, providerHealth] = await Promise.all([
-    fetchSnapshot(),
-    fetchProviderHealth(),
+// ── getDashboardRuntimeData ───────────────────────────────────────────────────
+
+export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
+  const [snapshot, providerHealthResult] = await Promise.all([
+    getSnapshotData(),
+    getProviderHealth(),
   ]);
+
   const snap = unwrapResponse(snapshot);
   const counts = asRecord(snap['counts']);
   const workerRuntime = asRecord(snap['workerRuntime']);
@@ -793,9 +649,15 @@ export async function fetchDashboardRuntimeData(): Promise<DashboardRuntimeData>
   const bestBets = asRecord(snap['bestBets']);
   const traderInsights = asRecord(snap['traderInsights']);
 
-  const activeProviders = providerHealth.providers.filter((provider) => provider.status === 'active').length;
-  const staleProviders = providerHealth.providers.filter((provider) => provider.status === 'stale').length;
-  const absentProviders = providerHealth.providers.filter((provider) => provider.status === 'absent').length;
+  const providerHealth = asRecord(unwrapResponse(providerHealthResult));
+  const providers = asArray(providerHealth['providers']).map(asRecord);
+
+  const activeProviders = providers.filter((p) => asString(p['status']) === 'active').length;
+  const staleProviders = providers.filter((p) => asString(p['status']) === 'stale').length;
+  const absentProviders = providers.filter((p) => asString(p['status']) === 'absent').length;
+  const distinctEventsLast24h = asNumber(providerHealth['distinctEventsLast24h']);
+  const ingestorHealth = asRecord(providerHealth['ingestorHealth']);
+  const ingestorStatus = asString(ingestorHealth['status'], 'unknown');
 
   return {
     outbox: {
@@ -844,8 +706,38 @@ export async function fetchDashboardRuntimeData(): Promise<DashboardRuntimeData>
       active: activeProviders,
       stale: staleProviders,
       absent: absentProviders,
-      distinctEventsLast24h: providerHealth.distinctEventsLast24h,
-      ingestorStatus: providerHealth.ingestorHealth.status,
+      distinctEventsLast24h,
+      ingestorStatus,
     },
   };
+}
+
+// ── getInterventionAudit ──────────────────────────────────────────────────────
+
+const INTERVENTION_ACTIONS = [
+  'delivery.retry',
+  'promotion.rerun',
+  'promotion.override.force_promote',
+  'promotion.override.suppress',
+  'review.approve',
+  'review.deny',
+  'review.hold',
+  'review.return',
+];
+
+export async function getInterventionAudit(): Promise<InterventionAuditRow[]> {
+  const client = getDataClient();
+  const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data, error } = await client
+    .from('audit_log')
+    .select('id, entity_type, entity_id, entity_ref, action, actor, payload, created_at')
+    .in('action', INTERVENTION_ACTIONS)
+    .gte('created_at', sevenDaysAgo)
+    .order('created_at', { ascending: false })
+    .limit(100);
+
+  if (error) throw error;
+
+  return (data ?? []) as InterventionAuditRow[];
 }

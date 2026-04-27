@@ -8,6 +8,7 @@ import { SettlementForm } from '@/components/SettlementForm';
 import { getAllowedActions } from '@/lib/pick-actions';
 import { humanizeMarketType } from '@/lib/pick-identity';
 import { buildScoreInsight, scoreToneClasses } from '@/lib/score-insight';
+import { getPickDetail } from '@/lib/data';
 
 interface PickDetailPageProps {
   params: { id: string };
@@ -232,26 +233,9 @@ function renderClvSummary(settlement: SettlementRow | undefined) {
   return settlement.hasClv ? 'present' : 'missing';
 }
 
-async function fetchPickDetail(pickId: string): Promise<PickDetailViewResponse | null> {
-  const operatorWebUrl = process.env['OPERATOR_WEB_URL'] ?? 'http://localhost:4200';
-  try {
-    const response = await fetch(`${operatorWebUrl}/api/operator/picks/${pickId}`, {
-      cache: 'no-store',
-    });
-    if (!response.ok) {
-      return null;
-    }
-
-    const json = (await response.json()) as { ok: boolean; data: PickDetailViewResponse };
-    return json.ok ? json.data : null;
-  } catch {
-    return null;
-  }
-}
-
 export default async function PickDetailPage({ params }: PickDetailPageProps) {
   const pickId = params.id;
-  const detail = await fetchPickDetail(pickId);
+  const detail = await getPickDetail(pickId) as PickDetailViewResponse | null;
 
   if (detail == null) {
     return (

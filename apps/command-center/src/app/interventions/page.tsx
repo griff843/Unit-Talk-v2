@@ -1,44 +1,6 @@
 import { Card } from '@/components/ui/Card';
 import Link from 'next/link';
-
-const OPERATOR_WEB_BASE = process.env.OPERATOR_WEB_URL ?? 'http://localhost:4200';
-
-interface AuditRow {
-  id: string;
-  entity_type: string;
-  entity_id: string;
-  entity_ref: string;
-  action: string;
-  actor: string;
-  payload: Record<string, unknown>;
-  created_at: string;
-}
-
-const INTERVENTION_ACTIONS: ReadonlySet<string> = new Set([
-  'delivery.retry',
-  'promotion.rerun',
-  'promotion.override.force_promote',
-  'promotion.override.suppress',
-  'review.approve',
-  'review.deny',
-  'review.hold',
-  'review.return',
-]);
-
-async function fetchInterventionAudit(): Promise<AuditRow[]> {
-  try {
-    const provider = await fetch(`${OPERATOR_WEB_BASE}/api/operator/snapshot`, { cache: 'no-store' });
-    if (!provider.ok) return [];
-    const json = (await provider.json()) as { ok: boolean; data: { recentAudit: AuditRow[] } };
-    if (!json.ok) return [];
-    // Filter to intervention actions only — exact match, no prefix matching
-    return (json.data.recentAudit ?? []).filter((row) =>
-      INTERVENTION_ACTIONS.has(row.action),
-    );
-  } catch {
-    return [];
-  }
-}
+import { getInterventionAudit, type InterventionAuditRow } from '@/lib/data';
 
 const ACTION_COLORS: Record<string, string> = {
   'delivery.retry': 'text-blue-400',
@@ -76,7 +38,7 @@ function PayloadSummary({ payload }: { payload: Record<string, unknown> }) {
 }
 
 export default async function InterventionsPage() {
-  const audit = await fetchInterventionAudit();
+  const audit = await getInterventionAudit();
 
   return (
     <div className="flex flex-col gap-6">
@@ -98,7 +60,7 @@ export default async function InterventionsPage() {
                 </tr>
               </thead>
               <tbody>
-                {audit.map((row) => (
+                {audit.map((row: InterventionAuditRow) => (
                   <tr key={row.id} className="border-b border-gray-800 hover:bg-gray-800/50">
                     <td className={`py-2 pr-3 text-xs font-medium ${getActionColor(row.action)}`}>
                       {row.action}
