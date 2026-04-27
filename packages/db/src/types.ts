@@ -214,6 +214,7 @@ export interface PickCandidateRow {
   is_board_candidate: boolean;         // boolean NOT NULL DEFAULT false — Phase 4: true if in the pre-scarcity board pool for current cycle.
   shadow_mode: boolean;                // boolean NOT NULL DEFAULT true — must remain true in Phase 2
   pick_id: string | null;              // uuid NULL FK → picks — must remain NULL in Phase 2
+  sport_key: string | null;            // text NULL — from market_universe.sport_key; enables per-sport shadow reports
   scan_run_id: string | null;          // text NULL — provenance: ID of scan cycle that last wrote this row
   provenance: Record<string, unknown> | null; // jsonb NULL — scan version, filter set version, timestamp
   expires_at: string | null;           // timestamptz NULL — set from event starts_at if known

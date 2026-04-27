@@ -939,6 +939,7 @@ export interface PickCandidateUpsertInput {
   scan_run_id: string | null;                              // UUID of the scan run that produced this row
   provenance: Record<string, unknown> | null;              // { scanVersion, filterVersion, runAt }
   expires_at: string | null;                               // ISO timestamptz from event.starts_at or null
+  sport_key?: string | null;                               // from market_universe.sport_key — enables per-sport coverage reports
   // NOTE: pick_id, model_score, model_tier, model_confidence, shadow_mode must NEVER be set in Phase 2
 }
 
