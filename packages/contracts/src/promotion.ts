@@ -412,7 +412,7 @@ export interface RolloutConfigOverride {
  * Returns an empty record when the env var is absent or unparseable.
  */
 export function resolveRolloutConfig(
-  env: { UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env,
+  env: { UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env as Record<string, string | undefined>,
 ): Record<string, RolloutConfigOverride> {
   const raw = env.UNIT_TALK_ROLLOUT_CONFIG;
   if (!raw) return {};
@@ -442,7 +442,7 @@ export function resolveRolloutConfig(
 }
 
 export function resolveTargetRegistry(
-  env: { UNIT_TALK_ENABLED_TARGETS?: string; UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env,
+  env: { UNIT_TALK_ENABLED_TARGETS?: string; UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env as Record<string, string | undefined>,
 ): TargetRegistryEntry[] {
   const raw = env.UNIT_TALK_ENABLED_TARGETS;
   let registry: TargetRegistryEntry[];
@@ -524,7 +524,7 @@ export const defaultExposureGateConfig: ExposureGateConfig = {
  * or return defaults. Malformed JSON silently falls back to defaults.
  */
 export function resolveExposureGateConfig(
-  env: { UNIT_TALK_EXPOSURE_GATE_CONFIG?: string } = process.env,
+  env: { UNIT_TALK_EXPOSURE_GATE_CONFIG?: string } = process.env as Record<string, string | undefined>,
 ): ExposureGateConfig {
   const raw = env.UNIT_TALK_EXPOSURE_GATE_CONFIG;
   if (!raw) return { ...defaultExposureGateConfig };

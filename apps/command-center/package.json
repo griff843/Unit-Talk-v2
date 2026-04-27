@@ -9,6 +9,11 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@unit-talk/config": "workspace:*",
+    "@unit-talk/contracts": "workspace:*",
+    "@unit-talk/db": "workspace:*",
+    "@unit-talk/domain": "workspace:*",
+    "@unit-talk/observability": "workspace:*",
     "next": "14.2.29",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
