@@ -212,6 +212,7 @@ export class BoardScanService {
         scan_run_id: scanRunId,
         provenance,
         expires_at,
+        sport_key: universeRow.sport_key ?? null,
         // Phase 2 invariants — these fields must NEVER be set here:
         //   pick_id          → omitted (null in DB)
         //   shadow_mode      → omitted (true in DB)

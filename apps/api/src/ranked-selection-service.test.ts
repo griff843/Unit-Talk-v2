@@ -108,6 +108,7 @@ function makeCandidate(overrides: Partial<PickCandidateRow> = {}): PickCandidate
     is_board_candidate: false,
     shadow_mode: true,
     pick_id: null,
+    sport_key: null,
     scan_run_id: 'run-1',
     provenance: null,
     expires_at: null,

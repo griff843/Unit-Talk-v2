@@ -171,6 +171,7 @@ function makeCandidateRow(overrides: Partial<PickCandidateRow> & { id: string; u
     is_board_candidate: overrides.is_board_candidate ?? true,
     shadow_mode: overrides.shadow_mode ?? true,
     pick_id: overrides.pick_id ?? null,
+    sport_key: overrides.sport_key ?? null,
     scan_run_id: overrides.scan_run_id ?? null,
     provenance: overrides.provenance ?? null,
     expires_at: overrides.expires_at ?? null,
