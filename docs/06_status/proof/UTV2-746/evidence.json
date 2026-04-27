@@ -1,66 +1,176 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "UTV2-746",
   "title": "SGO contract hardening: replay audit and trust scorecard",
   "tier": "T2",
   "status": "complete",
-  "produced_at": "2026-04-24",
-  "head_sha": "c4b26b673412ef64fd9e7675f200261686466d44",
+  "produced_at": "2026-04-27",
+  "run_type": "live_db_replay",
+  "db_project": "zfzdnfwdarxucxtaojxm",
 
   "scorecard_docs": [
     "docs/05_operations/SGO_REPLAY_SCORECARD.md",
     "docs/05_operations/SGO_CONTRACT_HARDENING.md"
   ],
-
-  "hardening_issues_done": [
-    { "issue": "UTV2-664", "title": "SGO raw market key format mismatch", "pr": "#408", "status": "Done" },
-    { "issue": "UTV2-715", "title": "Moneyline CLV side inference broken", "pr": "#442", "status": "Done" },
-    { "issue": "UTV2-716", "title": "Player prop CLV missing participant_id", "pr": null, "status": "Done" },
-    { "issue": "UTV2-719", "title": "Team external_id standardization", "pr": null, "status": "Done" },
-    { "issue": "UTV2-721", "title": "Historical ingest missing includeOpenCloseOdds", "sha": "924c9f2", "status": "Done" },
-    { "issue": "UTV2-726", "title": "Grading used results.game instead of odds.<oddID>.score", "sha": "c9a58a0", "status": "Done" },
-    { "issue": "UTV2-731", "title": "Participant identity matrix — statEntityID preservation rule", "status": "Done" },
-    { "issue": "UTV2-733", "title": "Legacy totals picks grading skip — market key join", "pr": "#452", "status": "Done" },
-    { "issue": "UTV2-734", "title": "Finalized results ingest — mapSGOStatus status.finalized gate", "pr": "#448", "status": "Done" },
-    { "issue": "UTV2-738", "title": "Closing line materializer DESC cap + PostgREST 1000-row cap", "prs": ["#449", "#451"], "status": "Done" },
-    { "issue": "UTV2-743", "title": "Centralized SGO request contract module", "pr": "#453", "status": "Done" },
-    { "issue": "UTV2-745", "title": "Finalized results repoll for in_progress events", "pr": "#454", "status": "Done" }
-  ],
+  "replay_script": "scripts/proof/utv2-746-sgo-contract-replay-scorecard.ts",
 
   "grading_snapshot": {
-    "run_at": "~2026-04-23T21:22Z",
-    "attempted": 326,
-    "graded": 0,
-    "skipped": 326,
-    "skip_buckets": {
-      "event_not_completed": { "count": 286, "pct": 87.7, "fix": "UTV2-745 Done PR #454" },
-      "missing_participant_id": { "count": 40, "pct": 12.3, "fix": "UTV2-740 Ready for Codex" }
+    "run_at": "2026-04-27",
+    "scope": "all picks (settled + posted)",
+    "attempted": 392,
+    "graded": 386,
+    "skipped": 6,
+    "pass_rate_pct": 98.5,
+    "gradeable_families_only": {
+      "attempted": 387,
+      "graded": 386,
+      "pass_rate_pct": 99.7
     },
-    "note": "0 graded reflects pre-repoll state. UTV2-745 (Done) adds periodic finalized-results repoll — next grading pass expected to clear Bucket A substantially."
-  },
-
-  "clv_coverage": {
-    "snapshot_at": "2026-04-23T13:52Z",
-    "post_issues": ["UTV2-738"],
-    "by_sport": {
-      "MLB": { "rows_72h": 783, "with_closing_line": 690, "coverage_pct": 88.1 },
-      "NBA": { "rows_72h": 192, "with_closing_line": 159, "coverage_pct": 82.8 },
-      "NHL": { "rows_72h": 25, "with_closing_line": 4, "coverage_pct": 16.0, "note": "Low playoff volume — not a methodology gap" }
+    "skip_breakdown": {
+      "unsupported_market_family": {
+        "count": 5,
+        "pct": 1.3,
+        "market": "moneyline",
+        "sport": "MLB",
+        "root_cause": "Moneyline not in SGO grading contract scope — expected behavior, not a failure",
+        "fix": "None required — by design"
+      },
+      "game_result_not_found": {
+        "count": 1,
+        "pct": 0.3,
+        "market": "player_threes_ou",
+        "sport": "NBA",
+        "pick_id": "dc864a66-05d3-46d3-af04-ab9bd3536655",
+        "event_status": "completed",
+        "root_cause": "player_threes_ou missing from COMMON_GRADING_MARKET_ALIASES in grading-service.ts; canonical key player_3pm_ou IS present in game_results but alias bridge is absent",
+        "fix": "Add player_threes_ou: 'player_3pm_ou' alias pair to COMMON_GRADING_MARKET_ALIASES"
+      }
     }
   },
 
+  "by_sport_family": [
+    {
+      "sport": "MLB",
+      "market_family": "game_total",
+      "attempted": 40,
+      "graded": 40,
+      "pass_rate_pct": 100,
+      "wins": 22,
+      "losses": 18,
+      "pushes": 0
+    },
+    {
+      "sport": "MLB",
+      "market_family": "player_prop",
+      "attempted": 255,
+      "graded": 255,
+      "pass_rate_pct": 100,
+      "wins": 64,
+      "losses": 191,
+      "pushes": 0
+    },
+    {
+      "sport": "MLB",
+      "market_family": "unsupported",
+      "attempted": 5,
+      "graded": 0,
+      "pass_rate_pct": 0,
+      "skip_reason": "unsupported_market_family",
+      "note": "Moneyline — outside SGO grading contract scope by design"
+    },
+    {
+      "sport": "NBA",
+      "market_family": "player_prop",
+      "attempted": 59,
+      "graded": 58,
+      "pass_rate_pct": 98.3,
+      "wins": 26,
+      "losses": 32,
+      "pushes": 0,
+      "skip_reason": "game_result_not_found (1 pick: player_threes_ou — missing alias)"
+    },
+    {
+      "sport": "NBA",
+      "market_family": "unsupported",
+      "attempted": 1,
+      "graded": 1,
+      "pass_rate_pct": 100,
+      "note": "Legacy moneyline settlement from pre-hardening"
+    },
+    {
+      "sport": "NHL",
+      "market_family": "game_total",
+      "attempted": 3,
+      "graded": 3,
+      "pass_rate_pct": 100,
+      "wins": 3,
+      "losses": 0,
+      "pushes": 0
+    },
+    {
+      "sport": "NHL",
+      "market_family": "player_prop",
+      "attempted": 29,
+      "graded": 29,
+      "pass_rate_pct": 100,
+      "wins": 8,
+      "losses": 21,
+      "pushes": 0
+    }
+  ],
+
+  "pre_post_comparison": {
+    "pre_sprint_snapshot_at": "2026-04-23T21:22Z",
+    "pre_sprint_graded": 0,
+    "pre_sprint_graded_pct": 0,
+    "post_sprint_graded": 386,
+    "post_sprint_graded_pct": 98.5,
+    "delta_graded": 386,
+    "bucket_a_event_not_completed": {
+      "pre": 286,
+      "post": 0,
+      "fix": "UTV2-745 PR #454 — finalized-results repoll"
+    },
+    "bucket_b_missing_participant_id": {
+      "pre": 40,
+      "post": 0,
+      "fix": "Cleared via grading cron after UTV2-745 ran"
+    }
+  },
+
+  "hardening_issues_done": [
+    { "issue": "UTV2-664", "title": "SGO raw market key format mismatch", "pr": "#408" },
+    { "issue": "UTV2-715", "title": "Moneyline CLV side inference broken", "pr": "#442" },
+    { "issue": "UTV2-716", "title": "Player prop CLV missing participant_id" },
+    { "issue": "UTV2-719", "title": "Team external_id standardization" },
+    { "issue": "UTV2-721", "title": "Historical ingest missing includeOpenCloseOdds", "sha": "924c9f2" },
+    { "issue": "UTV2-726", "title": "Grading used results.game instead of odds.<oddID>.score", "sha": "c9a58a0" },
+    { "issue": "UTV2-731", "title": "Participant identity matrix — statEntityID preservation rule" },
+    { "issue": "UTV2-733", "title": "Legacy totals picks grading skip — market key join", "pr": "#452" },
+    { "issue": "UTV2-734", "title": "Finalized results ingest — mapSGOStatus status.finalized gate", "pr": "#448" },
+    { "issue": "UTV2-738", "title": "Closing line materializer DESC cap + PostgREST 1000-row cap", "prs": ["#449", "#451"] },
+    { "issue": "UTV2-743", "title": "Centralized SGO request contract module", "pr": "#453" },
+    { "issue": "UTV2-745", "title": "Finalized results repoll for in_progress events", "pr": "#454" }
+  ],
+
+  "new_gap_identified": {
+    "gap": "player_threes_ou missing from COMMON_GRADING_MARKET_ALIASES",
+    "file": "apps/api/src/grading-service.ts",
+    "fix": "Add: player_threes_ou: 'player_3pm_ou' and reverse alias",
+    "severity": "T3",
+    "impact": "1 NBA pick currently ungraded"
+  },
+
   "remaining_gaps": [
-    { "gap": "missing_participant_id — 40 player alias rows unresolved", "issue": "UTV2-740", "state": "Ready for Codex", "priority": "T1" },
-    { "gap": "Participant-aware market aliasing in materializer (statEntityID must not collapse to all)", "issue": "UTV2-732", "state": "In Progress (Codex lane active)", "priority": "T1" },
-    { "gap": "scoringSupported=true hard gate before using odds score", "issue": "UTV2-742", "state": "Ready for Codex", "priority": "T1" },
-    { "gap": "includeOpenCloseOdds=true always in historical ingest", "issue": "UTV2-744", "state": "Ready for Codex", "priority": "T1" },
-    { "gap": "R5 replay CLV ROI proof with full eligible universe", "issue": "UTV2-736", "state": "Blocked Internal (needs UTV2-732+UTV2-745 data)", "priority": "T2" },
-    { "gap": "event_id FK in market_universe for replay joins", "issue": "deferred", "state": "Phase 3 materializer", "priority": "low" }
+    { "gap": "player_threes_ou alias missing in grading-service.ts", "severity": "T3", "state": "new — narrow fix" },
+    { "gap": "Participant-aware market aliasing in materializer", "issue": "UTV2-732", "state": "Codex lane active" },
+    { "gap": "scoringSupported=true hard gate", "issue": "UTV2-742", "state": "Ready for Codex" },
+    { "gap": "includeOpenCloseOdds=true always in historical ingest", "issue": "UTV2-744", "state": "Ready for Codex" },
+    { "gap": "R5 replay CLV ROI proof", "issue": "UTV2-736", "state": "Blocked (needs UTV2-732+745 data)" }
   ],
 
   "acceptance_criteria_check": {
-    "maintained_scorecard": "PASS — SGO_REPLAY_SCORECARD.md + SGO_CONTRACT_HARDENING.md both live in docs/05_operations",
-    "proof_linked_to_narrative": "PASS — all 12 Done issues linked with PR/SHA in SGO_CONTRACT_HARDENING.md §5",
-    "gaps_bucketed": "PASS — 6 open gaps with issue handle, state, and priority in remaining_gaps above"
+    "scorecard_pass_rate_by_event_type": "PASS — §by_sport_family shows pass rate per sport × market family",
+    "failures_documented_with_root_cause": "PASS — 2 failure types with root cause and fix path in §grading_snapshot.skip_breakdown"
   }
 }
