@@ -340,6 +340,11 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'ingestor',
   },
   {
+    name: 'provider_offer_history',
+    purpose: 'Stores partitioned raw provider offer history for bounded retention and replay-safe analysis.',
+    owner: 'ingestor',
+  },
+  {
     name: 'provider_offer_staging',
     purpose: 'Stores bounded, cycle-scoped provider offers before explicit merge into provider_offers.',
     owner: 'ingestor',

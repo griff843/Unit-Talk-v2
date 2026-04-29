@@ -240,14 +240,19 @@ describe('GC-M5 Governance Readiness — Data Retention', () => {
   });
 
   it('retention intervals match documented policy', () => {
-    const source = readSource('supabase/migrations/202604080016_utv2_439_pg_cron_retention.sql');
+    const baseSource = readSource('supabase/migrations/202604080016_utv2_439_pg_cron_retention.sql');
+    const boundedSource = readSource('supabase/migrations/202604291001_utv2_772_bounded_provider_offers_retention.sql');
 
-    // provider_offers: 30 days
-    assert.ok(source.includes("provider_offers") && source.includes("30 days"),
-      'provider_offers retention must be 30 days');
+    assert.ok(
+      boundedSource.includes('prune_provider_offers_bounded') &&
+        boundedSource.includes('7') &&
+        boundedSource.includes('5000') &&
+        boundedSource.includes('20'),
+      'provider_offers retention must be bounded to 7 days with explicit batch limits',
+    );
 
     // audit_log: 90 days
-    assert.ok(source.includes("audit_log") && source.includes("90 days"),
+    assert.ok(baseSource.includes("audit_log") && baseSource.includes("90 days"),
       'audit_log retention must be 90 days');
   });
 
