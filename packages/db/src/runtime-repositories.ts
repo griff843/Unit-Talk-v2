@@ -128,6 +128,7 @@ import type {
   ProviderCycleStatusRow,
   ProviderMarketAliasRow,
   ProviderEntityAliasRow,
+  ProviderOfferCurrentRow,
   ProviderOfferRecord,
   ProviderOfferStagingRow,
   PromotionHistoryRecord,
@@ -1345,12 +1346,6 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       .filter((offer) => offer.run_id === input.runId && offer.merge_status === 'pending')
       .sort((left, right) => left.created_at.localeCompare(right.created_at));
 
-    if (pending.length > input.maxRows) {
-      throw new Error(
-        `Bounded merge refused: run ${input.runId} has ${pending.length} pending staged offers which exceeds maxRows=${input.maxRows}`,
-      );
-    }
-
     if (input.identityStrategy !== 'provider_event_market_participant_book') {
       throw new Error(
         `Unsupported provider offer identity strategy: ${input.identityStrategy}`,
@@ -1359,7 +1354,8 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
     let mergedCount = 0;
     let duplicateCount = 0;
-    for (const staged of pending) {
+    const candidates = pending.slice(0, input.maxRows);
+    for (const staged of candidates) {
       if (this.offers.has(staged.idempotency_key)) {
         this.stagedOffers.set(`${staged.run_id}:${staged.idempotency_key}`, {
           ...staged,
@@ -1400,7 +1396,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     }
 
     return {
-      processedCount: pending.length,
+      processedCount: candidates.length,
       mergedCount,
       duplicateCount,
     };
@@ -1638,6 +1634,51 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
           o.provider_participant_id != null,
       )
       .slice(0, limit);
+  }
+
+  async listOpeningCurrentOffers(
+    since: string,
+    provider: string,
+    limit = 500,
+  ): Promise<ProviderOfferCurrentRow[]> {
+    const sinceMs = new Date(since).getTime();
+    return Array.from(this.offers.values())
+      .filter(
+        (o) =>
+          o.provider_key === provider &&
+          o.is_opening === true &&
+          new Date(o.snapshot_at).getTime() >= sinceMs &&
+          o.over_odds != null &&
+          o.under_odds != null &&
+          o.line != null &&
+          o.provider_participant_id != null,
+      )
+      .slice(0, limit)
+      .map((offer) => {
+        const cycle = Array.from(this.cycleStatuses.values())
+          .filter(
+            (status) =>
+              status.provider_key === offer.provider_key &&
+              status.league === (offer.sport_key ?? ''),
+          )
+          .sort((left, right) =>
+            right.cycle_snapshot_at.localeCompare(left.cycle_snapshot_at),
+          )[0];
+        return {
+          ...offer,
+          cycle_run_id: cycle?.run_id ?? null,
+          cycle_stage_status: cycle?.stage_status ?? null,
+          cycle_freshness_status: cycle?.freshness_status ?? null,
+          cycle_proof_status: cycle?.proof_status ?? null,
+          cycle_failure_category: cycle?.failure_category ?? null,
+          cycle_failure_scope: cycle?.failure_scope ?? null,
+          cycle_affected_provider_key: cycle?.affected_provider_key ?? null,
+          cycle_affected_sport_key: cycle?.affected_sport_key ?? null,
+          cycle_affected_market_key: cycle?.affected_market_key ?? null,
+          cycle_updated_at: cycle?.updated_at ?? null,
+          provider_health_state: deriveProviderHealthState(cycle),
+        };
+      });
   }
 }
 
@@ -4966,6 +5007,41 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     return (data ?? []) as ProviderOfferRecord[];
   }
+
+  async listOpeningCurrentOffers(
+    since: string,
+    provider: string,
+    limit = 500,
+  ): Promise<ProviderOfferCurrentRow[]> {
+    const { data, error } = await this.client.rpc(
+      'list_provider_offer_current_opening',
+      {
+        p_provider_key: provider,
+        p_since: since,
+        p_limit: limit,
+      },
+    );
+
+    if (error) {
+      throw new Error(`Failed to list opening current offers: ${error.message}`);
+    }
+
+    return (data ?? []) as ProviderOfferCurrentRow[];
+  }
+}
+
+function deriveProviderHealthState(cycle: ProviderCycleStatusRow | undefined): 'healthy' | 'degraded' | 'fail' {
+  if (!cycle) {
+    return 'fail';
+  }
+  if (
+    cycle.stage_status === 'merged' &&
+    cycle.freshness_status === 'fresh' &&
+    (cycle.proof_status === 'verified' || cycle.proof_status === 'waived')
+  ) {
+    return cycle.failure_category === null ? 'healthy' : 'degraded';
+  }
+  return 'fail';
 }
 
 export class DatabaseAuditLogRepository implements AuditLogRepository {

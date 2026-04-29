@@ -270,6 +270,50 @@ test('stageProviderOfferCycle merges verified fresh offers once and marks reruns
   assert.equal(second.stageStatus, 'merged');
   assert.equal(second.mergedCount, 0);
   assert.equal(second.duplicateCount, 1);
+  assert.equal(first.stageLatencyMs >= 0, true);
+  assert.equal(first.mergeLatencyMs >= 0, true);
+  assert.equal(first.totalLatencyMs >= first.stageLatencyMs, true);
+});
+
+test('stageProviderOfferCycle merges in bounded chunks when mergeChunkSize is smaller than staged rows', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const offers = [1, 2, 3].map((index) => ({
+    providerKey: 'sgo',
+    providerEventId: `evt-chunk-${index}`,
+    providerMarketKey: 'points-all-game-ou',
+    providerParticipantId: `player-${index}`,
+    sportKey: 'NBA',
+    line: 20 + index,
+    overOdds: -110,
+    underOdds: -110,
+    devigMode: 'PAIRED' as const,
+    isOpening: true,
+    isClosing: false,
+    snapshotAt: '2026-04-28T12:00:00.000Z',
+    idempotencyKey: `sgo:evt-chunk-${index}:points-all-game-ou:player-${index}:${20 + index}:2026-04-28T12:00:00.000Z`,
+    bookmakerKey: 'pinnacle',
+  }));
+
+  const result = await stageProviderOfferCycle({
+    repositories,
+    runId: '00000000-0000-0000-0000-000000000790',
+    providerKey: 'sgo',
+    league: 'NBA',
+    snapshotAt: '2026-04-28T12:00:00.000Z',
+    now: '2026-04-28T12:05:00.000Z',
+    mode: 'stage_and_merge_verified',
+    freshnessMaxAgeMs: 30 * 60 * 1000,
+    proofStatus: 'verified',
+    mergeChunkSize: 1,
+    offers,
+  });
+
+  assert.equal(result.stageStatus, 'merged');
+  assert.equal(result.mergedCount, 3);
+  const staged = await repositories.providerOffers.listStagedOffers(
+    '00000000-0000-0000-0000-000000000790',
+  );
+  assert.ok(staged.every((row) => row.merge_status === 'merged'));
 });
 
 test('collectConfiguredSgoApiKeyCandidates preserves both configured subscriptions without duplicating the active key', () => {

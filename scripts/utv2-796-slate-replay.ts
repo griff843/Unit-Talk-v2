@@ -4,17 +4,31 @@ import { dirname, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { loadEnvironment } from '../packages/config/src/index.js';
+import {
+  createDatabaseIngestorRepositoryBundle,
+  createInMemoryIngestorRepositoryBundle,
+  createServiceRoleDatabaseConnectionConfig,
+  type IngestorRepositoryBundle,
+} from '../packages/db/src/index.js';
 import {
   runSlateReplayHarness,
   type SlateReplayHookCapture,
   type SlateReplayVolumeMode,
-} from '../packages/verification/src/engine/slate-replay.ts';
+} from '../packages/verification/src/engine/slate-replay.js';
+import {
+  captureProviderOfferReplayPack,
+  runProviderOfferReplay,
+} from '../apps/ingestor/src/provider-offer-replay.js';
 
 const execFileAsync = promisify(execFile);
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const PNPM_COMMAND = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm';
 
 interface CliOptions {
+  engine: 'slate' | 'provider-offer';
+  action: 'run' | 'capture' | 'replay';
+  persistence: 'database' | 'in-memory';
   runId: string;
   scenarioId: string;
   volumeMode: SlateReplayVolumeMode;
@@ -23,10 +37,36 @@ interface CliOptions {
   outPath?: string;
   captureFreshness: boolean;
   captureDbMetrics: boolean;
+  providerKey: string;
+  league: string;
+  packDir?: string;
+  captureRootDir?: string;
+  snapshotAt?: string;
+  freshnessSlaMs?: number;
+  apiKey?: string;
+  skipResults: boolean;
+  startsAfter?: string;
+  startsBefore?: string;
+  providerEventIds?: string[];
 }
 
 async function main() {
   const options = parseCliOptions(process.argv.slice(2));
+  const output =
+    options.engine === 'provider-offer'
+      ? await runProviderOfferEngine(options)
+      : await runSlateEngine(options);
+
+  if (options.outPath) {
+    const outPath = resolve(options.outPath);
+    await mkdir(dirname(outPath), { recursive: true });
+    await writeFile(outPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
+  }
+
+  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+}
+
+async function runSlateEngine(options: CliOptions) {
   const commitHash = await readCommitHash();
   const freshnessCapture = options.captureFreshness
     ? await captureHook('freshness', PNPM_COMMAND, ['stage:freshness', '--json'])
@@ -47,24 +87,95 @@ async function main() {
     dbMetricsCapture,
   });
 
-  const output = {
+  return {
+    engine: 'slate',
+    action: 'run',
     summary: result.summary,
     runRecord: result.runRecord,
   };
+}
 
-  if (options.outPath) {
-    const outPath = resolve(options.outPath);
-    await mkdir(dirname(outPath), { recursive: true });
-    await writeFile(outPath, `${JSON.stringify(output, null, 2)}\n`, 'utf8');
+async function runProviderOfferEngine(options: CliOptions) {
+  const env = loadEnvironment(REPO_ROOT);
+  const repositories = resolveIngestorRepositories(options.persistence, env);
+  const apiKey = options.apiKey ?? env.SGO_API_KEY ?? env.SGO_API_KEYS?.[0] ?? 'replay-key';
+  const freshnessSlaMs =
+    options.freshnessSlaMs ??
+    resolveFreshnessSlaMs(env.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES);
+
+  if (options.action === 'capture') {
+    const snapshotAt = options.snapshotAt ?? new Date().toISOString();
+    const capture = await captureProviderOfferReplayPack(repositories, {
+      rootDir: resolve(options.captureRootDir ?? 'out/provider-offer-replay'),
+      providerKey: options.providerKey,
+      league: options.league,
+      apiKey,
+      snapshotAt,
+      freshnessMaxAgeMs: freshnessSlaMs,
+      skipResults: options.skipResults,
+      ...(options.startsAfter ? { startsAfter: options.startsAfter } : {}),
+      ...(options.startsBefore ? { startsBefore: options.startsBefore } : {}),
+      ...(options.providerEventIds
+        ? { providerEventIds: options.providerEventIds }
+        : {}),
+      logger: console,
+    });
+    return {
+      engine: 'provider-offer',
+      action: 'capture',
+      packDir: capture.packDir,
+      manifest: capture.manifest,
+      replayContract: {
+        spec: 'UTV2-796',
+        freshnessSlaMs,
+      },
+    };
   }
 
-  process.stdout.write(`${JSON.stringify(output, null, 2)}\n`);
+  if (!options.packDir) {
+    throw new Error('--pack-dir is required for provider-offer replay');
+  }
+
+  const replay = await runProviderOfferReplay(repositories, {
+    packDir: resolve(options.packDir),
+    mode: options.volumeMode,
+    apiKey,
+    league: options.league,
+    logger: console,
+  });
+  return {
+    engine: 'provider-offer',
+    action: 'replay',
+    mode: options.volumeMode,
+    reportPath: replay.reportPath,
+    manifest: replay.manifest,
+    replaySummary: replay.replaySummary,
+    replayCycleStatus: replay.replayCycleStatus,
+    requestMetrics: replay.requestMetrics,
+    replayContract: {
+      spec: 'UTV2-796',
+      freshnessSlaMs: replay.manifest.freshnessMaxAgeMs,
+    },
+  };
+}
+
+function resolveIngestorRepositories(
+  persistence: CliOptions['persistence'],
+  env: ReturnType<typeof loadEnvironment>,
+): IngestorRepositoryBundle {
+  if (persistence === 'in-memory') {
+    return createInMemoryIngestorRepositoryBundle();
+  }
+
+  return createDatabaseIngestorRepositoryBundle(
+    createServiceRoleDatabaseConnectionConfig(env),
+  );
 }
 
 async function captureHook(
   hookId: string,
   command: string,
-  args: string[]
+  args: string[],
 ): Promise<SlateReplayHookCapture> {
   try {
     const { stdout } = await execFileAsync(command, args, {
@@ -124,6 +235,7 @@ function parseCliOptions(args: string[]): CliOptions {
   const values = new Map<string, string>();
   let captureFreshness = false;
   let captureDbMetrics = false;
+  let skipResults = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -141,6 +253,11 @@ function parseCliOptions(args: string[]): CliOptions {
       continue;
     }
 
+    if (arg === '--skip-results') {
+      skipResults = true;
+      continue;
+    }
+
     const value = args[index + 1];
     if (value && !value.startsWith('--')) {
       values.set(arg.slice(2), value);
@@ -153,7 +270,25 @@ function parseCliOptions(args: string[]): CliOptions {
     throw new Error('--volume must be 1x or 2x');
   }
 
+  const engine = (values.get('engine') ?? 'slate') as CliOptions['engine'];
+  if (engine !== 'slate' && engine !== 'provider-offer') {
+    throw new Error('--engine must be slate or provider-offer');
+  }
+
+  const action = (values.get('action') ?? 'run') as CliOptions['action'];
+  if (!['run', 'capture', 'replay'].includes(action)) {
+    throw new Error('--action must be run, capture, or replay');
+  }
+
+  const persistence = (values.get('persistence') ?? 'database') as CliOptions['persistence'];
+  if (persistence !== 'database' && persistence !== 'in-memory') {
+    throw new Error('--persistence must be database or in-memory');
+  }
+
   return {
+    engine,
+    action,
+    persistence,
     runId: values.get('run-id') ?? `utv2-796-${volumeMode}`,
     scenarioId: values.get('scenario') ?? 'slate-replay',
     volumeMode,
@@ -162,7 +297,31 @@ function parseCliOptions(args: string[]): CliOptions {
     outPath: values.get('out'),
     captureFreshness,
     captureDbMetrics,
+    providerKey: values.get('provider') ?? 'sgo',
+    league: values.get('league') ?? 'NBA',
+    packDir: values.get('pack-dir'),
+    captureRootDir: values.get('capture-root'),
+    snapshotAt: values.get('snapshot-at'),
+    freshnessSlaMs: parsePositiveInt(values.get('freshness-sla-ms')),
+    apiKey: values.get('api-key'),
+    skipResults,
+    startsAfter: values.get('starts-after'),
+    startsBefore: values.get('starts-before'),
+    providerEventIds: values.get('provider-event-ids')?.split(',').map((value) => value.trim()).filter(Boolean),
   };
+}
+
+function parsePositiveInt(value: string | undefined) {
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+function resolveFreshnessSlaMs(staleMinutes: string | undefined) {
+  const parsedMinutes = parsePositiveInt(staleMinutes);
+  return (parsedMinutes ?? 30) * 60 * 1000;
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {

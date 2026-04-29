@@ -53,6 +53,7 @@ import type {
   ReceiptRecord,
   SettlementConfidence,
   SettlementRecord,
+  ProviderOfferCurrentRow,
   SettlementSource,
   SubmissionEventRecord,
   SubmissionRecord,
@@ -678,6 +679,11 @@ export interface ProviderOfferRepository {
    * Used by the system pick scanner to auto-generate picks from opening lines.
    */
   listOpeningOffers(since: string, provider: string, limit?: number): Promise<ProviderOfferRecord[]>;
+  listOpeningCurrentOffers(
+    since: string,
+    provider: string,
+    limit?: number,
+  ): Promise<ProviderOfferCurrentRow[]>;
 }
 
 export interface ParticipantUpsertInput {

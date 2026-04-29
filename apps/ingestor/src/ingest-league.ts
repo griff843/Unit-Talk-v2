@@ -25,6 +25,10 @@ import {
   type ProviderOfferStagingMode,
   stageProviderOfferCycle,
 } from './provider-offer-staging.js';
+import type {
+  ProviderOfferReplayCaptureSession,
+  ProviderOfferReplayMarketCoverage,
+} from './provider-offer-replay.js';
 import { resolveAndInsertResults } from './results-resolver.js';
 import {
   fetchAndPairSGOProps,
@@ -66,6 +70,9 @@ export interface IngestLeagueOptions {
   providerOfferStagingMode?: ProviderOfferStagingMode;
   providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
   providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
+  providerOfferProofStatus?: 'required' | 'verified' | 'waived';
+  providerOfferFreshnessMaxAgeMs?: number;
+  replayCaptureSession?: ProviderOfferReplayCaptureSession;
 }
 
 export interface IngestQuotaSummary {
@@ -146,6 +153,9 @@ export async function ingestLeague(
     spoolDir: 'out/provider-payload-archive',
   };
   const providerOfferStagingMode = options.providerOfferStagingMode ?? 'off';
+  const providerOfferProofStatus = options.providerOfferProofStatus ?? 'required';
+  const providerOfferFreshnessMaxAgeMs =
+    options.providerOfferFreshnessMaxAgeMs ?? 30 * 60 * 1000;
   const run = await repositories.runs.startRun({
     runType: 'ingestor.cycle',
     actor: 'ingestor',
@@ -186,6 +196,9 @@ export async function ingestLeague(
             : {}),
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),
+          ...(options.replayCaptureSession
+            ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
+            : {}),
           ...(options.historical ? { historical: true } : {}),
         });
 
@@ -264,6 +277,11 @@ export async function ingestLeague(
           };
         });
       normalizedCount = normalized.length;
+      if (options.replayCaptureSession) {
+        options.replayCaptureSession.recordMarketCoverage(
+          summarizeReplayMarkets(normalized),
+        );
+      }
       if (normalized.length === 0) {
         const zeroOffersFailure = createZeroOffersFailure('sgo', league);
         await repositories.providerOffers.upsertCycleStatus({
@@ -301,7 +319,7 @@ export async function ingestLeague(
 
         const freshness = evaluateProviderOfferFreshnessGate({
           snapshotAt,
-          maxAgeMs: 30 * 60 * 1000,
+          maxAgeMs: providerOfferFreshnessMaxAgeMs,
         });
         const partialFailure =
           fetched.pairedProps.length !== normalized.length
@@ -363,8 +381,9 @@ export async function ingestLeague(
           snapshotAt,
           offers: normalized,
           mode: providerOfferStagingMode,
-          freshnessMaxAgeMs: 30 * 60 * 1000,
-          proofStatus: 'required',
+          freshnessMaxAgeMs: providerOfferFreshnessMaxAgeMs,
+          proofStatus: providerOfferProofStatus,
+          mergeChunkSize: providerDbWritePolicy.mergeChunkSize,
         });
         upsert = {
           insertedCount: stagingResult.mergedCount,
@@ -439,6 +458,9 @@ export async function ingestLeague(
             : {}),
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),
+          ...(options.replayCaptureSession
+            ? { requestObserver: (capture) => options.replayCaptureSession?.recordRequest(capture) }
+            : {}),
         });
 
       const resultsCb =
@@ -678,4 +700,33 @@ function buildSgoCombinationKey(input: {
     input.providerParticipantId ?? '',
     input.bookmakerKey ?? '',
   ].join(':');
+}
+
+function summarizeReplayMarkets(
+  offers: Array<{
+    providerKey: string;
+    providerMarketKey: string;
+    sportKey: string | null;
+  }>,
+): ProviderOfferReplayMarketCoverage[] {
+  const coverage = new Map<string, ProviderOfferReplayMarketCoverage>();
+  for (const offer of offers) {
+    const key = [
+      offer.providerKey,
+      offer.sportKey ?? '',
+      offer.providerMarketKey,
+    ].join(':');
+    const existing = coverage.get(key);
+    if (existing) {
+      existing.offerCount += 1;
+    } else {
+      coverage.set(key, {
+        providerKey: offer.providerKey,
+        sportKey: offer.sportKey,
+        providerMarketKey: offer.providerMarketKey,
+        offerCount: 1,
+      });
+    }
+  }
+  return Array.from(coverage.values());
 }

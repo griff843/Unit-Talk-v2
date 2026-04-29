@@ -82,6 +82,7 @@ export interface AppEnv {
   SYSTEM_PICK_SCANNER_ENABLED?: string | undefined;
   SYSTEM_PICK_SCANNER_LOOKBACK_HOURS?: string | undefined;
   SYSTEM_PICK_SCANNER_MAX_PICKS?: string | undefined;
+  SYSTEM_PICK_SCANNER_DEGRADED_CONFIDENCE_FACTOR?: string | undefined;
   SYNDICATE_MACHINE_ENABLED?: string | undefined;
   BOARD_PICK_WRITER_ENABLED?: string | undefined;
   /** Discord webhook URL for ops staleness alerts (grading-cron, ingestor). Fire-and-forget POST. */
@@ -236,6 +237,7 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     SYSTEM_PICK_SCANNER_ENABLED: optionalEnv('SYSTEM_PICK_SCANNER_ENABLED', merged),
     SYSTEM_PICK_SCANNER_LOOKBACK_HOURS: optionalEnv('SYSTEM_PICK_SCANNER_LOOKBACK_HOURS', merged),
     SYSTEM_PICK_SCANNER_MAX_PICKS: optionalEnv('SYSTEM_PICK_SCANNER_MAX_PICKS', merged),
+    SYSTEM_PICK_SCANNER_DEGRADED_CONFIDENCE_FACTOR: optionalEnv('SYSTEM_PICK_SCANNER_DEGRADED_CONFIDENCE_FACTOR', merged),
     SYNDICATE_MACHINE_ENABLED: optionalEnv('SYNDICATE_MACHINE_ENABLED', merged),
     BOARD_PICK_WRITER_ENABLED: optionalEnv('BOARD_PICK_WRITER_ENABLED', merged),
     UNIT_TALK_OPS_ALERT_WEBHOOK_URL: optionalEnv('UNIT_TALK_OPS_ALERT_WEBHOOK_URL', merged),

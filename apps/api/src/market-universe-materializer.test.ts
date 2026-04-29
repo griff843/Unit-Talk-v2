@@ -15,7 +15,9 @@ import { InMemoryMarketUniverseRepository } from '@unit-talk/db';
 import type {
   ProviderEntityAliasRow,
   ProviderMarketAliasRow,
+  ProviderCycleStatusRow,
   ProviderOfferRecord,
+  ProviderOfferRepository,
 } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
@@ -48,13 +50,39 @@ function makeProviderOffersRepo(
   offers: ProviderOfferRecord[],
   aliasRows: ProviderMarketAliasRow[] = [],
   participantAliasRows: ProviderEntityAliasRow[] = [],
-) {
+): ProviderOfferRepository {
+  const cycleStatus: ProviderCycleStatusRow = {
+    run_id: 'run-1',
+    provider_key: 'sgo',
+    league: 'nba',
+    cycle_snapshot_at: new Date().toISOString(),
+    stage_status: 'merged',
+    freshness_status: 'fresh',
+    proof_status: 'verified',
+    staged_count: 0,
+    merged_count: 0,
+    duplicate_count: 0,
+    failure_category: null,
+    failure_scope: null,
+    affected_provider_key: null,
+    affected_sport_key: null,
+    affected_market_key: null,
+    last_error: null,
+    metadata: {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
   return {
     async listRecentOffers(_since: string, _limit?: number) {
       return offers;
     },
     // Satisfy interface — unused in these tests
     upsertBatch: async () => ({ insertedCount: 0, updatedCount: 0, totalProcessed: 0 }),
+    stageBatch: async () => ({ stagedCount: 0, duplicateCount: 0, totalProcessed: 0 }),
+    mergeStagedCycle: async () => ({ processedCount: 0, mergedCount: 0, duplicateCount: 0 }),
+    upsertCycleStatus: async () => cycleStatus,
+    getCycleStatus: async () => null,
+    listStagedOffers: async () => [],
     findClosingLine: async () => null,
     findOpeningLine: async () => null,
     findLatestByMarketKey: async () => null,
@@ -67,6 +95,7 @@ function makeProviderOffersRepo(
     listAliasLookup: async () => aliasRows,
     listParticipantAliasLookup: async () => participantAliasRows,
     listOpeningOffers: async () => [],
+    listOpeningCurrentOffers: async () => [],
     listClosingOffers: async () => offers.filter((o) => o.is_closing),
   };
 }
@@ -476,27 +505,20 @@ function makeProviderOffersRepoSplit(
   closingOffers: ProviderOfferRecord[],
   aliasRows: ProviderMarketAliasRow[] = [],
   participantAliasRows: ProviderEntityAliasRow[] = [],
-) {
+): ProviderOfferRepository {
+  const base = makeProviderOffersRepo(
+    recentOffers,
+    aliasRows,
+    participantAliasRows,
+  );
   return {
+    ...base,
     async listRecentOffers(_since: string, _limit?: number) {
       return recentOffers;
     },
     async listClosingOffers(_since: string) {
       return closingOffers;
     },
-    upsertBatch: async () => ({ insertedCount: 0, updatedCount: 0, totalProcessed: 0 }),
-    findClosingLine: async () => null,
-    findOpeningLine: async () => null,
-    findLatestByMarketKey: async () => null,
-    listAll: async () => [],
-    listByProvider: async () => [],
-    findExistingCombinations: async () => new Set<string>(),
-    markClosingLines: async () => 0,
-    resolveProviderMarketKey: async () => null,
-    resolveCanonicalMarketKey: async () => null,
-    listAliasLookup: async () => aliasRows,
-    listParticipantAliasLookup: async () => participantAliasRows,
-    listOpeningOffers: async () => [],
   };
 }
 

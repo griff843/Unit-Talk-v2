@@ -334,6 +334,22 @@ export interface ProviderCycleStatusRow {
   updated_at: string;
 }
 
+export type ProviderHealthState = 'healthy' | 'degraded' | 'fail';
+
+export interface ProviderOfferCurrentRow extends ProviderOfferRecord {
+  cycle_run_id: string | null;
+  cycle_stage_status: ProviderCycleStageStatus | null;
+  cycle_freshness_status: ProviderCycleFreshnessStatus | null;
+  cycle_proof_status: ProviderCycleProofStatus | null;
+  cycle_failure_category: ProviderIngestionFailureCategory | null;
+  cycle_failure_scope: ProviderIngestionFailureScope | null;
+  cycle_affected_provider_key: string | null;
+  cycle_affected_sport_key: string | null;
+  cycle_affected_market_key: string | null;
+  cycle_updated_at: string | null;
+  provider_health_state: ProviderHealthState;
+}
+
 export interface SportMarketTypeRow {
   id: string;
   sport_id: string;

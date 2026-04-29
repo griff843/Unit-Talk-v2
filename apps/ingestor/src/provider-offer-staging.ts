@@ -36,6 +36,7 @@ export interface StageProviderOfferCycleOptions {
   mode: ProviderOfferStagingMode;
   freshnessMaxAgeMs: number;
   proofStatus?: ProviderCycleProofStatus;
+  mergeChunkSize?: number;
 }
 
 export interface StageProviderOfferCycleResult {
@@ -46,6 +47,9 @@ export interface StageProviderOfferCycleResult {
   stagedCount: number;
   mergedCount: number;
   duplicateCount: number;
+  stageLatencyMs: number;
+  mergeLatencyMs: number;
+  totalLatencyMs: number;
 }
 
 export function parseProviderOfferStagingMode(
@@ -116,6 +120,7 @@ export async function stageProviderOfferCycle(
   options: StageProviderOfferCycleOptions,
 ): Promise<StageProviderOfferCycleResult> {
   const proofStatus = options.proofStatus ?? 'required';
+  const totalStartedAt = Date.now();
 
   if (options.mode === 'off') {
     return {
@@ -126,9 +131,13 @@ export async function stageProviderOfferCycle(
       stagedCount: 0,
       mergedCount: 0,
       duplicateCount: 0,
+      stageLatencyMs: 0,
+      mergeLatencyMs: 0,
+      totalLatencyMs: 0,
     };
   }
 
+  const stageStartedAt = Date.now();
   const stageResult = await options.repositories.providerOffers.stageBatch(
     options.offers.map((offer) => ({
       ...offer,
@@ -137,6 +146,7 @@ export async function stageProviderOfferCycle(
       identityKey: buildProviderOfferIdentityKey(offer),
     })),
   );
+  const stageLatencyMs = Date.now() - stageStartedAt;
 
   const freshness = evaluateProviderOfferFreshnessGate({
     snapshotAt: options.snapshotAt,
@@ -157,6 +167,11 @@ export async function stageProviderOfferCycle(
       duplicateCount: stageResult.duplicateCount,
       metadata: {
         mode: options.mode,
+        latencyMs: {
+          stage: stageLatencyMs,
+          merge: 0,
+          total: Date.now() - totalStartedAt,
+        },
       },
     });
 
@@ -168,6 +183,9 @@ export async function stageProviderOfferCycle(
       stagedCount: stageResult.stagedCount,
       mergedCount: 0,
       duplicateCount: stageResult.duplicateCount,
+      stageLatencyMs,
+      mergeLatencyMs: 0,
+      totalLatencyMs: Date.now() - totalStartedAt,
     };
   }
 
@@ -186,6 +204,11 @@ export async function stageProviderOfferCycle(
       metadata: {
         mode: options.mode,
         gate: 'freshness',
+        latencyMs: {
+          stage: stageLatencyMs,
+          merge: 0,
+          total: Date.now() - totalStartedAt,
+        },
       },
     });
 
@@ -197,6 +220,9 @@ export async function stageProviderOfferCycle(
       stagedCount: stageResult.stagedCount,
       mergedCount: 0,
       duplicateCount: stageResult.duplicateCount,
+      stageLatencyMs,
+      mergeLatencyMs: 0,
+      totalLatencyMs: Date.now() - totalStartedAt,
     };
   }
 
@@ -215,6 +241,11 @@ export async function stageProviderOfferCycle(
       metadata: {
         mode: options.mode,
         gate: 'replay_proof',
+        latencyMs: {
+          stage: stageLatencyMs,
+          merge: 0,
+          total: Date.now() - totalStartedAt,
+        },
       },
     });
 
@@ -226,14 +257,33 @@ export async function stageProviderOfferCycle(
       stagedCount: stageResult.stagedCount,
       mergedCount: 0,
       duplicateCount: stageResult.duplicateCount,
+      stageLatencyMs,
+      mergeLatencyMs: 0,
+      totalLatencyMs: Date.now() - totalStartedAt,
     };
   }
 
-  const mergeResult = await options.repositories.providerOffers.mergeStagedCycle({
-    runId: options.runId,
-    maxRows: stageResult.totalProcessed,
-    identityStrategy: PROVISIONAL_PROVIDER_OFFER_IDENTITY_STRATEGY,
-  });
+  const mergeChunkSize = Math.max(1, options.mergeChunkSize ?? stageResult.totalProcessed);
+  const mergeStartedAt = Date.now();
+  let processedCount = 0;
+  let mergedCount = 0;
+  let mergeDuplicateCount = 0;
+
+  while (processedCount < stageResult.totalProcessed) {
+    const mergeResult = await options.repositories.providerOffers.mergeStagedCycle({
+      runId: options.runId,
+      maxRows: Math.min(mergeChunkSize, stageResult.totalProcessed - processedCount),
+      identityStrategy: PROVISIONAL_PROVIDER_OFFER_IDENTITY_STRATEGY,
+    });
+    if (mergeResult.processedCount === 0) {
+      break;
+    }
+    processedCount += mergeResult.processedCount;
+    mergedCount += mergeResult.mergedCount;
+    mergeDuplicateCount += mergeResult.duplicateCount;
+  }
+  const mergeLatencyMs = Date.now() - mergeStartedAt;
+  const totalLatencyMs = Date.now() - totalStartedAt;
 
   await options.repositories.providerOffers.upsertCycleStatus({
     runId: options.runId,
@@ -244,10 +294,17 @@ export async function stageProviderOfferCycle(
     freshnessStatus: freshness.status,
     proofStatus,
     stagedCount: stageResult.stagedCount,
-    mergedCount: mergeResult.mergedCount,
-    duplicateCount: mergeResult.duplicateCount + stageResult.duplicateCount,
+    mergedCount,
+    duplicateCount: mergeDuplicateCount + stageResult.duplicateCount,
     metadata: {
       mode: options.mode,
+      latencyMs: {
+        stage: stageLatencyMs,
+        merge: mergeLatencyMs,
+        total: totalLatencyMs,
+      },
+      mergeChunkSize,
+      mergeProcessedCount: processedCount,
     },
   });
 
@@ -257,7 +314,10 @@ export async function stageProviderOfferCycle(
     freshnessStatus: freshness.status,
     proofStatus,
     stagedCount: stageResult.stagedCount,
-    mergedCount: mergeResult.mergedCount,
-    duplicateCount: mergeResult.duplicateCount + stageResult.duplicateCount,
+    mergedCount,
+    duplicateCount: mergeDuplicateCount + stageResult.duplicateCount,
+    stageLatencyMs,
+    mergeLatencyMs,
+    totalLatencyMs,
   };
 }
