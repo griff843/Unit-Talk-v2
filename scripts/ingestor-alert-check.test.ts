@@ -8,6 +8,7 @@ import {
 
 test('ingestor alert thresholds prefer canonical provider-offer staleness env', () => {
   const thresholds = resolveIngestorAlertThresholds({
+    UNIT_TALK_APP_ENV: 'local',
     UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES: '45',
     INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES: '15',
     INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES: '90',
@@ -19,6 +20,35 @@ test('ingestor alert thresholds prefer canonical provider-offer staleness env', 
     results: 90,
     cycle: 10,
   });
+});
+
+test('production cadence thresholds fail above the five minute provider-offer cadence', () => {
+  const thresholds = resolveIngestorAlertThresholds({
+    UNIT_TALK_APP_ENV: 'production',
+    UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES: '30',
+    INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES: undefined,
+    INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES: undefined,
+    INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES: '30',
+  });
+
+  assert.deepEqual(thresholds, {
+    offers: 5,
+    results: 60,
+    cycle: 5,
+  });
+
+  const now = new Date('2026-04-21T16:00:00.000Z');
+  const finding = evaluateAgeFinding(
+    'offers',
+    '2026-04-21T15:54:00.000Z',
+    thresholds.offers,
+    null,
+    now,
+  );
+
+  assert.equal(finding.level, 'CRITICAL');
+  assert.equal(finding.ageMinutes, 6);
+  assert.match(finding.message, /threshold: 5m/);
 });
 
 test('ingestor alert threshold parser rejects invalid values', () => {

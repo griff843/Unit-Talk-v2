@@ -26,10 +26,12 @@ import type {
 
 export interface SystemPickScanOptions {
   enabled: boolean;
-  /** How far back to look for opening lines. Default: 24 hours. */
+  /** How far back to look for current opening lines. Default: 1 hour. */
   lookbackHours?: number;
   /** Max offers to process per run. Default: 100. */
   maxOffersPerRun?: number;
+  /** Shrinks fair probabilities toward 0.5 for degraded provider health. */
+  degradedConfidenceFactor?: number;
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
 }
 
@@ -45,11 +47,13 @@ export function loadSystemPickScannerConfig(env: Pick<
   | 'SYSTEM_PICK_SCANNER_ENABLED'
   | 'SYSTEM_PICK_SCANNER_LOOKBACK_HOURS'
   | 'SYSTEM_PICK_SCANNER_MAX_PICKS'
->): Pick<SystemPickScanOptions, 'enabled' | 'lookbackHours' | 'maxOffersPerRun'> {
+  | 'SYSTEM_PICK_SCANNER_DEGRADED_CONFIDENCE_FACTOR'
+>): Pick<SystemPickScanOptions, 'enabled' | 'lookbackHours' | 'maxOffersPerRun' | 'degradedConfidenceFactor'> {
   return {
     enabled: env.SYSTEM_PICK_SCANNER_ENABLED === 'true',
-    lookbackHours: parsePositiveInt(env.SYSTEM_PICK_SCANNER_LOOKBACK_HOURS, 24),
+    lookbackHours: parsePositiveInt(env.SYSTEM_PICK_SCANNER_LOOKBACK_HOURS, 1),
     maxOffersPerRun: parsePositiveInt(env.SYSTEM_PICK_SCANNER_MAX_PICKS, 100),
+    degradedConfidenceFactor: parseRatio(env.SYSTEM_PICK_SCANNER_DEGRADED_CONFIDENCE_FACTOR, 0.85),
   };
 }
 
@@ -70,7 +74,12 @@ export async function runSystemPickScan(
   const maxOffersPerRun = options.maxOffersPerRun ?? 100;
 
   const since = new Date(Date.now() - lookbackHours * 60 * 60 * 1000).toISOString();
-  const offers = await repositories.providerOffers.listOpeningOffers(since, 'sgo', maxOffersPerRun);
+  const degradedConfidenceFactor = options.degradedConfidenceFactor ?? 0.85;
+  const offers = await repositories.providerOffers.listOpeningCurrentOffers(
+    since,
+    'sgo',
+    maxOffersPerRun,
+  );
 
   if (offers.length === 0) {
     options.logger?.info?.(
@@ -111,12 +120,17 @@ export async function runSystemPickScan(
     // Non-fatal
   }
 
-  const upsertBatch: MarketUniverseUpsertInput[] = [];
+  const upsertBatchByKey = new Map<string, MarketUniverseUpsertInput>();
   let skipped = 0;
   let errors = 0;
 
   for (const offer of offers) {
     try {
+      if (offer.provider_health_state === 'fail') {
+        skipped++;
+        continue;
+      }
+
       // Resolve canonical market key
       const canonicalMarketKey = await repositories.providerOffers.resolveCanonicalMarketKey(
         offer.provider_market_key,
@@ -131,6 +145,9 @@ export async function runSystemPickScan(
       const overImplied = americanToImplied(offer.over_odds as number);
       const underImplied = americanToImplied(offer.under_odds as number);
       const devigged = applyDevig(overImplied, underImplied, 'proportional');
+      const adjustedFair = offer.provider_health_state === 'degraded'
+        ? applyConfidenceDrop(devigged, degradedConfidenceFactor)
+        : devigged;
 
       // Resolve participant FK
       const participantId = offer.provider_participant_id
@@ -164,13 +181,13 @@ export async function runSystemPickScan(
         closing_line: null,
         closing_over_odds: null,
         closing_under_odds: null,
-        fair_over_prob: devigged?.overFair ?? null,
-        fair_under_prob: devigged?.underFair ?? null,
+        fair_over_prob: adjustedFair?.overFair ?? null,
+        fair_under_prob: adjustedFair?.underFair ?? null,
         is_stale: false,
         last_offer_snapshot_at: offer.snapshot_at,
       };
 
-      upsertBatch.push(row);
+      upsertBatchByKey.set(buildMarketUniverseKey(row), row);
     } catch (err) {
       errors++;
       options.logger?.error?.(
@@ -184,6 +201,7 @@ export async function runSystemPickScan(
     }
   }
 
+  const upsertBatch = Array.from(upsertBatchByKey.values());
   if (upsertBatch.length > 0) {
     try {
       await repositories.marketUniverse.upsertMarketUniverse(upsertBatch);
@@ -218,4 +236,41 @@ function parsePositiveInt(value: string | undefined, fallback: number): number {
   if (!value) return fallback;
   const parsed = Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
+
+function parseRatio(value: string | undefined, fallback: number): number {
+  if (!value) return fallback;
+  const parsed = Number.parseFloat(value);
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 1 ? parsed : fallback;
+}
+
+function applyConfidenceDrop(
+  fair:
+    | {
+        overFair: number;
+        underFair: number;
+      }
+    | null,
+  factor: number,
+) {
+  if (!fair) {
+    return null;
+  }
+
+  return {
+    overFair: 0.5 + (fair.overFair - 0.5) * factor,
+    underFair: 0.5 + (fair.underFair - 0.5) * factor,
+  };
+}
+
+function buildMarketUniverseKey(row: Pick<
+  MarketUniverseUpsertInput,
+  'provider_key' | 'provider_event_id' | 'provider_market_key' | 'provider_participant_id'
+>) {
+  return [
+    row.provider_key,
+    row.provider_event_id,
+    row.provider_market_key,
+    row.provider_participant_id ?? '',
+  ].join(':');
 }

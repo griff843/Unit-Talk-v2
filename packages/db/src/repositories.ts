@@ -37,15 +37,23 @@ import type {
   PickRecord,
   PickLifecycleRecord,
   PromotionHistoryRecord,
+  ProviderCycleFreshnessStatus,
+  ProviderIngestionFailureCategory,
+  ProviderIngestionFailureScope,
+  ProviderCycleProofStatus,
+  ProviderCycleStageStatus,
   PromotionOverrideAction,
   PromotionStatus,
   PromotionTarget,
   OutboxRecord,
   ProviderMarketAliasRow,
+  ProviderCycleStatusRow,
+  ProviderOfferStagingRow,
   ProviderOfferRecord,
   ReceiptRecord,
   SettlementConfidence,
   SettlementRecord,
+  ProviderOfferCurrentRow,
   SettlementSource,
   SubmissionEventRecord,
   SubmissionRecord,
@@ -534,6 +542,50 @@ export interface ProviderOfferUpsertResult {
   totalProcessed: number;
 }
 
+export interface ProviderOfferStageInput extends ProviderOfferInsert {
+  runId: string;
+  league: string;
+  identityKey: string;
+}
+
+export interface ProviderOfferStageResult {
+  stagedCount: number;
+  duplicateCount: number;
+  totalProcessed: number;
+}
+
+export interface ProviderOfferMergeInput {
+  runId: string;
+  maxRows: number;
+  identityStrategy: string;
+}
+
+export interface ProviderOfferMergeResult {
+  processedCount: number;
+  mergedCount: number;
+  duplicateCount: number;
+}
+
+export interface ProviderCycleStatusUpsertInput {
+  runId: string;
+  providerKey: string;
+  league: string;
+  cycleSnapshotAt: string;
+  stageStatus: ProviderCycleStageStatus;
+  freshnessStatus?: ProviderCycleFreshnessStatus | undefined;
+  proofStatus?: ProviderCycleProofStatus | undefined;
+  stagedCount?: number | undefined;
+  mergedCount?: number | undefined;
+  duplicateCount?: number | undefined;
+  failureCategory?: ProviderIngestionFailureCategory | null | undefined;
+  failureScope?: ProviderIngestionFailureScope | null | undefined;
+  affectedProviderKey?: string | null | undefined;
+  affectedSportKey?: string | null | undefined;
+  affectedMarketKey?: string | null | undefined;
+  lastError?: string | null | undefined;
+  metadata?: Record<string, unknown> | undefined;
+}
+
 export interface ClosingLineLookupCriteria {
   providerEventId: string;
   providerMarketKey: string;
@@ -544,6 +596,11 @@ export interface ClosingLineLookupCriteria {
 
 export interface ProviderOfferRepository {
   upsertBatch(offers: ProviderOfferUpsertInput[]): Promise<ProviderOfferUpsertResult>;
+  stageBatch(offers: ProviderOfferStageInput[]): Promise<ProviderOfferStageResult>;
+  mergeStagedCycle(input: ProviderOfferMergeInput): Promise<ProviderOfferMergeResult>;
+  upsertCycleStatus(input: ProviderCycleStatusUpsertInput): Promise<ProviderCycleStatusRow>;
+  getCycleStatus(runId: string): Promise<ProviderCycleStatusRow | null>;
+  listStagedOffers(runId: string): Promise<ProviderOfferStagingRow[]>;
   findClosingLine(criteria: ClosingLineLookupCriteria): Promise<ProviderOfferRecord | null>;
   /**
    * Returns the earliest is_opening=true snapshot for the given market criteria.
@@ -622,6 +679,11 @@ export interface ProviderOfferRepository {
    * Used by the system pick scanner to auto-generate picks from opening lines.
    */
   listOpeningOffers(since: string, provider: string, limit?: number): Promise<ProviderOfferRecord[]>;
+  listOpeningCurrentOffers(
+    since: string,
+    provider: string,
+    limit?: number,
+  ): Promise<ProviderOfferCurrentRow[]>;
 }
 
 export interface ParticipantUpsertInput {

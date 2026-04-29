@@ -125,6 +125,71 @@ export interface ProviderHealth {
     oddsApi: ProviderQuotaSummary | null;
   };
   distinctEventsLast24h: number;
+  latestProviderOfferSnapshotAt?: string | null;
+}
+
+export type ProviderCycleStageStatus =
+  | 'pending'
+  | 'staged'
+  | 'merge_blocked'
+  | 'merged'
+  | 'failed';
+export type ProviderCycleFreshnessStatus =
+  | 'unknown'
+  | 'fresh'
+  | 'stale'
+  | 'invalid_snapshot';
+export type ProviderCycleProofStatus = 'required' | 'verified' | 'waived';
+export type ProviderIngestionFailureCategory =
+  | 'provider_api_failure'
+  | 'parse_failure'
+  | 'zero_offers'
+  | 'db_statement_timeout'
+  | 'db_lock_timeout'
+  | 'db_deadlock'
+  | 'partial_market_failure'
+  | 'stale_after_cycle'
+  | 'archive_failure'
+  | 'unknown_failure';
+export type ProviderIngestionFailureScope =
+  | 'cycle'
+  | 'provider'
+  | 'sport'
+  | 'market'
+  | 'archive'
+  | 'db';
+
+export interface ProviderCycleStatusRow {
+  runId: string;
+  providerKey: string;
+  league: string;
+  cycleSnapshotAt: string;
+  stageStatus: ProviderCycleStageStatus;
+  freshnessStatus: ProviderCycleFreshnessStatus;
+  proofStatus: ProviderCycleProofStatus;
+  stagedCount: number;
+  mergedCount: number;
+  duplicateCount: number;
+  failureCategory: ProviderIngestionFailureCategory | null;
+  failureScope: ProviderIngestionFailureScope | null;
+  lastError: string | null;
+  updatedAt: string;
+  productionStatus: 'healthy' | 'warning' | 'critical';
+  statusReason: string;
+}
+
+export interface ProviderCycleHealthSummary {
+  overallStatus: 'healthy' | 'warning' | 'critical';
+  trackedLanes: number;
+  mergedLanes: number;
+  blockedLanes: number;
+  failedLanes: number;
+  staleLanes: number;
+  proofRequiredLanes: number;
+  latestCycleSnapshotAt: string | null;
+  latestUpdatedAt: string | null;
+  liveOfferSnapshotAt: string | null;
+  rows: ProviderCycleStatusRow[];
 }
 
 // ---------------------------------------------------------------------------
@@ -311,5 +376,17 @@ export interface DashboardRuntimeData {
     absent: number;
     distinctEventsLast24h: number;
     ingestorStatus: string;
+    latestLiveSnapshotAt: string | null;
+  };
+  providerCycleSummary: {
+    overallStatus: 'healthy' | 'warning' | 'critical';
+    trackedLanes: number;
+    mergedLanes: number;
+    blockedLanes: number;
+    failedLanes: number;
+    staleLanes: number;
+    proofRequiredLanes: number;
+    latestCycleSnapshotAt: string | null;
+    latestUpdatedAt: string | null;
   };
 }

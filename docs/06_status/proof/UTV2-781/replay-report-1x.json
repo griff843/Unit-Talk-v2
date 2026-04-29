@@ -1,0 +1,532 @@
+{
+  "schemaVersion": "provider-offer-replay.v1",
+  "verdict": "pass",
+  "packDir": "provider-replay-capture-1777467869674",
+  "mode": "1x",
+  "providerKey": "sgo",
+  "league": "NBA",
+  "freshness": [
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "assists-all-game-ou",
+      "offerCount": 269,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "blocks-all-game-ou",
+      "offerCount": 189,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "blocks+steals-all-game-ou",
+      "offerCount": 91,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "fantasyScore-all-game-ou",
+      "offerCount": 27,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "fieldGoalsAttempted-all-game-ou",
+      "offerCount": 82,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "fieldGoalsMade-all-game-ou",
+      "offerCount": 82,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "firstTo20-all-game-ml",
+      "offerCount": 6,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "freeThrowsAttempted-all-game-ou",
+      "offerCount": 26,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "freeThrowsMade-all-game-ou",
+      "offerCount": 19,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1h-ml",
+      "offerCount": 23,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1h-ml3way",
+      "offerCount": 6,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1h-ou",
+      "offerCount": 63,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1h-sp",
+      "offerCount": 21,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1q-ml",
+      "offerCount": 23,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1q-ml3way",
+      "offerCount": 6,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1q-ou",
+      "offerCount": 51,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-1q-sp",
+      "offerCount": 21,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2h-ml",
+      "offerCount": 9,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2h-ou",
+      "offerCount": 18,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2h-sp",
+      "offerCount": 6,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2q-ml",
+      "offerCount": 20,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2q-ml3way",
+      "offerCount": 2,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2q-ou",
+      "offerCount": 42,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-2q-sp",
+      "offerCount": 18,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-3q-ml",
+      "offerCount": 14,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-3q-ml3way",
+      "offerCount": 2,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-3q-ou",
+      "offerCount": 24,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-3q-sp",
+      "offerCount": 12,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-4q-ml",
+      "offerCount": 14,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-4q-ml3way",
+      "offerCount": 4,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-4q-ou",
+      "offerCount": 24,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-4q-sp",
+      "offerCount": 12,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-game-ml",
+      "offerCount": 24,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-game-ou",
+      "offerCount": 411,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-game-sp",
+      "offerCount": 24,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points-all-reg-ml3way",
+      "offerCount": 12,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points+assists-all-game-ou",
+      "offerCount": 246,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points+rebounds-all-game-ou",
+      "offerCount": 281,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points+rebounds+assists-all-1h-ou",
+      "offerCount": 32,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "points+rebounds+assists-all-game-ou",
+      "offerCount": 269,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "rebounds-all-game-ou",
+      "offerCount": 326,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "rebounds+assists-all-game-ou",
+      "offerCount": 241,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "steals-all-game-ou",
+      "offerCount": 182,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "threePointersAttempted-all-game-ou",
+      "offerCount": 70,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "threePointersMade-all-1h-ou",
+      "offerCount": 5,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "threePointersMade-all-1q-ou",
+      "offerCount": 2,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "threePointersMade-all-game-ou",
+      "offerCount": 223,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "turnovers-all-game-ou",
+      "offerCount": 20,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "twoPointersAttempted-all-game-ou",
+      "offerCount": 82,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    },
+    {
+      "providerKey": "sgo",
+      "sportKey": "NBA",
+      "providerMarketKey": "twoPointersMade-all-game-ou",
+      "offerCount": 82,
+      "freshnessStatus": "fresh",
+      "ageMs": 175383,
+      "freshnessSlaMs": 1800000
+    }
+  ],
+  "dbBehavior": {
+    "sourceCycleStatus": {
+      "stageStatus": "merged",
+      "freshnessStatus": "fresh",
+      "proofStatus": "verified",
+      "mergedCount": 3758,
+      "duplicateCount": 0,
+      "failureCategory": null,
+      "failureScope": null
+    },
+    "replayCycleStatus": {
+      "stageStatus": "merged",
+      "freshnessStatus": "fresh",
+      "proofStatus": "verified",
+      "mergedCount": 0,
+      "duplicateCount": 3758,
+      "failureCategory": null,
+      "failureScope": null
+    },
+    "sourceMergeLatencyMs": 5268,
+    "replayMergeLatencyMs": 2420,
+    "sourceStageLatencyMs": 6352,
+    "replayStageLatencyMs": 6272
+  },
+  "mergeLatency": {
+    "source": {
+      "stageLatencyMs": 6352,
+      "mergeLatencyMs": 5268,
+      "totalLatencyMs": 11620
+    },
+    "replay": {
+      "stageLatencyMs": 6272,
+      "mergeLatencyMs": 2420,
+      "totalLatencyMs": 8692
+    }
+  },
+  "failureTaxonomy": {
+    "source": {
+      "category": null,
+      "scope": null,
+      "lastError": null
+    },
+    "replay": {
+      "category": null,
+      "scope": null,
+      "lastError": null
+    }
+  },
+  "summary": {
+    "sourceRunId": "provider-replay-capture-1777467869674",
+    "replayRunId": "8ae6c73e-98cb-4ae7-bffb-c36a8d775aa4",
+    "requestsCaptured": 1,
+    "requestsReplayed": 1,
+    "insertedCount": 0,
+    "updatedCount": 3758,
+    "skippedCount": 0
+  },
+  "requestMetrics": [
+    {
+      "requestId": "odds-0001",
+      "endpoint": "odds",
+      "scheduledOffsetMs": 0,
+      "observedOffsetMs": 192,
+      "scheduledDurationMs": 1298,
+      "observedDurationMs": 1320,
+      "status": 200
+    }
+  ],
+  "notes": [
+    "1x replay preserves captured request timing offsets and response durations.",
+    "No fake payload duplication is used in this replay report."
+  ]
+}

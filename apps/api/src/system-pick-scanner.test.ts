@@ -70,7 +70,7 @@ test('skips offers with no canonical market key', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => null,
-    listOpeningOffers: async () => [makeOffer()],
+    listOpeningCurrentOffers: async () => [makeOffer({ provider_health_state: 'healthy' })],
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -87,7 +87,7 @@ test('materializes a valid offer into market_universe', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [makeOffer()],
+    listOpeningCurrentOffers: async () => [makeOffer({ provider_health_state: 'healthy' })],
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -122,7 +122,7 @@ test('does not POST to /api/submissions (no HTTP calls)', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [makeOffer()],
+    listOpeningCurrentOffers: async () => [makeOffer({ provider_health_state: 'healthy' })],
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -140,7 +140,7 @@ test('computes fair probabilities in upserted rows', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [makeOffer({ over_odds: -115, under_odds: -105 })],
+    listOpeningCurrentOffers: async () => [makeOffer({ over_odds: -115, under_odds: -105, provider_health_state: 'healthy' })],
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -171,7 +171,7 @@ test('sets opening values from opening offers', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [offer],
+    listOpeningCurrentOffers: async () => [offer],
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -201,7 +201,7 @@ test('counts upsert errors without throwing', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => [makeOffer()],
+    listOpeningCurrentOffers: async () => [makeOffer({ provider_health_state: 'healthy' })],
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -233,7 +233,7 @@ test('multiple offers are batched into a single upsert', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),
     resolveCanonicalMarketKey: async () => 'player_points_ou',
-    listOpeningOffers: async () => offers,
+    listOpeningCurrentOffers: async () => offers,
     listAliasLookup: async () => [],
     listParticipantAliasLookup: async () => [],
   } as ReturnType<typeof Object.assign>;
@@ -255,4 +255,67 @@ test('multiple offers are batched into a single upsert', async () => {
 
   assert.equal(result.materialized, 2);
   assert.equal(upsertedRows.length, 2);
+});
+
+test('suppresses fail-state current offers before market_universe materialization', async () => {
+  const mockOffers = {
+    ...new InMemoryProviderOfferRepository(),
+    resolveCanonicalMarketKey: async () => 'player_points_ou',
+    listOpeningCurrentOffers: async () => [makeOffer({ provider_health_state: 'fail' })],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
+  } as ReturnType<typeof Object.assign>;
+
+  const repos = makeRepos({ providerOffers: mockOffers });
+  const result = await runSystemPickScan(repos, baseOptions());
+
+  assert.equal(result.scanned, 1);
+  assert.equal(result.materialized, 0);
+  assert.equal(result.skipped, 1);
+});
+
+test('degraded current offers receive a confidence drop before fair probabilities are written', async () => {
+  const degradedOffer = makeOffer({
+    over_odds: -115,
+    under_odds: -105,
+    provider_health_state: 'degraded',
+  });
+  const healthyOffer = makeOffer({
+    provider_event_id: 'event-2',
+    provider_participant_id: 'player-ext-2',
+    over_odds: -115,
+    under_odds: -105,
+    provider_health_state: 'healthy',
+  });
+  const mockOffers = {
+    ...new InMemoryProviderOfferRepository(),
+    resolveCanonicalMarketKey: async () => 'player_points_ou',
+    listOpeningCurrentOffers: async () => [degradedOffer, healthyOffer],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
+  } as ReturnType<typeof Object.assign>;
+
+  let upsertedRows: Array<Record<string, unknown>> = [];
+  const mockMarketUniverse = {
+    ...new InMemoryMarketUniverseRepository(),
+    upsertMarketUniverse: async (rows: Array<Record<string, unknown>>) => {
+      upsertedRows = rows;
+    },
+  } as ReturnType<typeof Object.assign>;
+
+  const repos = makeRepos({
+    providerOffers: mockOffers,
+    marketUniverse: mockMarketUniverse,
+  });
+
+  await runSystemPickScan(repos, baseOptions({ degradedConfidenceFactor: 0.5 }));
+
+  const degradedRow = upsertedRows.find((row) => row.provider_event_id === 'event-1');
+  const healthyRow = upsertedRows.find((row) => row.provider_event_id === 'event-2');
+  assert.ok(degradedRow);
+  assert.ok(healthyRow);
+  assert.ok(
+    Math.abs((degradedRow.fair_over_prob as number) - 0.5) <
+      Math.abs((healthyRow.fair_over_prob as number) - 0.5),
+  );
 });

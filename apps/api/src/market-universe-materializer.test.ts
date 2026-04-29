@@ -15,7 +15,9 @@ import { InMemoryMarketUniverseRepository } from '@unit-talk/db';
 import type {
   ProviderEntityAliasRow,
   ProviderMarketAliasRow,
+  ProviderCycleStatusRow,
   ProviderOfferRecord,
+  ProviderOfferRepository,
 } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
@@ -48,13 +50,39 @@ function makeProviderOffersRepo(
   offers: ProviderOfferRecord[],
   aliasRows: ProviderMarketAliasRow[] = [],
   participantAliasRows: ProviderEntityAliasRow[] = [],
-) {
+): ProviderOfferRepository {
+  const cycleStatus: ProviderCycleStatusRow = {
+    run_id: 'run-1',
+    provider_key: 'sgo',
+    league: 'nba',
+    cycle_snapshot_at: new Date().toISOString(),
+    stage_status: 'merged',
+    freshness_status: 'fresh',
+    proof_status: 'verified',
+    staged_count: 0,
+    merged_count: 0,
+    duplicate_count: 0,
+    failure_category: null,
+    failure_scope: null,
+    affected_provider_key: null,
+    affected_sport_key: null,
+    affected_market_key: null,
+    last_error: null,
+    metadata: {},
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString(),
+  };
   return {
     async listRecentOffers(_since: string, _limit?: number) {
       return offers;
     },
     // Satisfy interface — unused in these tests
     upsertBatch: async () => ({ insertedCount: 0, updatedCount: 0, totalProcessed: 0 }),
+    stageBatch: async () => ({ stagedCount: 0, duplicateCount: 0, totalProcessed: 0 }),
+    mergeStagedCycle: async () => ({ processedCount: 0, mergedCount: 0, duplicateCount: 0 }),
+    upsertCycleStatus: async () => cycleStatus,
+    getCycleStatus: async () => null,
+    listStagedOffers: async () => [],
     findClosingLine: async () => null,
     findOpeningLine: async () => null,
     findLatestByMarketKey: async () => null,
@@ -67,6 +95,7 @@ function makeProviderOffersRepo(
     listAliasLookup: async () => aliasRows,
     listParticipantAliasLookup: async () => participantAliasRows,
     listOpeningOffers: async () => [],
+    listOpeningCurrentOffers: async () => [],
     listClosingOffers: async () => offers.filter((o) => o.is_closing),
   };
 }
@@ -476,27 +505,20 @@ function makeProviderOffersRepoSplit(
   closingOffers: ProviderOfferRecord[],
   aliasRows: ProviderMarketAliasRow[] = [],
   participantAliasRows: ProviderEntityAliasRow[] = [],
-) {
+): ProviderOfferRepository {
+  const base = makeProviderOffersRepo(
+    recentOffers,
+    aliasRows,
+    participantAliasRows,
+  );
   return {
+    ...base,
     async listRecentOffers(_since: string, _limit?: number) {
       return recentOffers;
     },
     async listClosingOffers(_since: string) {
       return closingOffers;
     },
-    upsertBatch: async () => ({ insertedCount: 0, updatedCount: 0, totalProcessed: 0 }),
-    findClosingLine: async () => null,
-    findOpeningLine: async () => null,
-    findLatestByMarketKey: async () => null,
-    listAll: async () => [],
-    listByProvider: async () => [],
-    findExistingCombinations: async () => new Set<string>(),
-    markClosingLines: async () => 0,
-    resolveProviderMarketKey: async () => null,
-    resolveCanonicalMarketKey: async () => null,
-    listAliasLookup: async () => aliasRows,
-    listParticipantAliasLookup: async () => participantAliasRows,
-    listOpeningOffers: async () => [],
   };
 }
 
@@ -690,7 +712,7 @@ test('materializer: NHL sport_key — closing_line set correctly from separate c
   assert.equal(row.closing_over_odds, -125, 'NHL closing_over_odds from is_closing=true row');
 });
 
-test('materializer: listClosingOffers failure is non-fatal — materializer continues and sets current_line without closing_line', async () => {
+test('materializer: listClosingOffers failure throws — no silent CLV substitution', async () => {
   const offer = makeOffer({
     id: 'ok-1',
     idempotency_key: 'ok-1',
@@ -711,11 +733,10 @@ test('materializer: listClosingOffers failure is non-fatal — materializer cont
 
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const materializer = new MarketUniverseMaterializer({ providerOffers: faultyRepo, marketUniverse });
-  const result = await materializer.run();
 
-  assert.equal(result.errors, 0, 'closing fetch failure must not increment error count');
-  assert.equal(result.upserted, 1, 'materializer must still upsert from listRecentOffers');
-  const row = marketUniverse.listAll()[0]!;
-  assert.equal(row.current_line, 20.5);
-  assert.equal(row.closing_line, null, 'closing_line null when closing fetch failed');
+  await assert.rejects(
+    () => materializer.run(),
+    /closing offers fetch timeout/,
+    'materializer must throw when closing-offer fetch fails — no silent CLV substitution',
+  );
 });

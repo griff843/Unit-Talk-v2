@@ -2,6 +2,18 @@ import type { ScenarioDefinition } from './types.js';
 
 export const CORE_SCENARIOS: ScenarioDefinition[] = [
   {
+    id: 'slate-replay',
+    name: 'Slate Replay Harness',
+    mode: 'replay',
+    fixturePath: 'v2-lifecycle-events.jsonl',
+    lifecycleStagesExpected: ['validated', 'queued', 'posted', 'settled'],
+    expectedAssertions: [
+      'Replay bundle remains machine-readable across repeated runs.',
+      '1x and 2x slate copies preserve deterministic identity remapping.'
+    ],
+    tags: ['replay', 'proof', 'slate']
+  },
+  {
     id: 'submission-validation',
     name: 'Submission and Validation',
     mode: 'replay',

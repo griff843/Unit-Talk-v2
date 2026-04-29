@@ -18,18 +18,27 @@ export function parseThreshold(value: string | undefined, fallback: number) {
 
 export function resolveIngestorAlertThresholds(environment: Pick<
   AppEnv,
+  | 'UNIT_TALK_APP_ENV'
   | 'UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES'
   | 'INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES'
   | 'INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES'
   | 'INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES'
->) {
+>, options: { productionCadence?: boolean } = {}) {
+  const productionCadence =
+    options.productionCadence ?? environment.UNIT_TALK_APP_ENV === 'production';
+  const offers = parseThreshold(
+    environment.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES ?? environment.INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES,
+    productionCadence ? 5 : 30,
+  );
+  const cycle = parseThreshold(
+    environment.INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES,
+    productionCadence ? 5 : 30,
+  );
+
   return {
-    offers: parseThreshold(
-      environment.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES ?? environment.INGESTOR_ALERT_OFFERS_THRESHOLD_MINUTES,
-      30,
-    ),
+    offers: productionCadence ? Math.min(offers, 5) : offers,
     results: parseThreshold(environment.INGESTOR_ALERT_RESULTS_THRESHOLD_MINUTES, 60),
-    cycle: parseThreshold(environment.INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES, 30),
+    cycle: productionCadence ? Math.min(cycle, 5) : cycle,
   };
 }
 
@@ -135,7 +144,12 @@ async function main() {
     auth: { persistSession: false },
   });
 
-  const [{ data: cycleRows }, { data: offerRows }, { data: resultRows }] = await Promise.all([
+  const [
+    { data: cycleRows },
+    { data: offerRows },
+    { data: resultRows },
+    { data: cycleStatusRows },
+  ] = await Promise.all([
     db
       .from('system_runs')
       .select('status, started_at')
@@ -152,12 +166,19 @@ async function main() {
       .select('created_at')
       .order('created_at', { ascending: false })
       .limit(1),
+    db
+      .from('provider_cycle_status')
+      .select('provider_key,league,stage_status,freshness_status,failure_category,failure_scope,affected_provider_key,affected_sport_key,affected_market_key,last_error,updated_at')
+      .order('updated_at', { ascending: false })
+      .limit(1),
   ]);
 
   const lastCycle = cycleRows?.[0] ?? null;
   const lastOffer = offerRows?.[0] ?? null;
   const lastResult = resultRows?.[0] ?? null;
-  const thresholds = resolveIngestorAlertThresholds(env);
+  const latestCycleStatus = cycleStatusRows?.[0] ?? null;
+  const productionCadence = process.argv.includes('--production-cadence') || env.UNIT_TALK_APP_ENV === 'production';
+  const thresholds = resolveIngestorAlertThresholds(env, { productionCadence });
 
   const findings = [
     evaluateAgeFinding('cycle', lastCycle?.started_at ?? null, thresholds.cycle, lastCycle?.status ?? null),
@@ -169,7 +190,38 @@ async function main() {
     emit(finding.level, finding.message, finding.check, finding.ageMinutes);
   }
 
-  const criticalFindings = findings.filter((finding) => finding.level === 'CRITICAL');
+  if (latestCycleStatus?.failure_category) {
+    const scope = latestCycleStatus.failure_scope ?? 'cycle';
+    const affected = [
+      latestCycleStatus.affected_provider_key ?? latestCycleStatus.provider_key,
+      latestCycleStatus.affected_sport_key ?? latestCycleStatus.league,
+      latestCycleStatus.affected_market_key ?? null,
+    ]
+      .filter((value): value is string => typeof value === 'string' && value.length > 0)
+      .join('/');
+    emit(
+      'CRITICAL',
+      `Latest provider cycle failure category=${latestCycleStatus.failure_category} scope=${scope} affected=${affected || 'n/a'} stage=${latestCycleStatus.stage_status} freshness=${latestCycleStatus.freshness_status}. ${latestCycleStatus.last_error ?? ''}`.trim(),
+      'cycle',
+      latestCycleStatus.updated_at ? Math.round((Date.now() - new Date(latestCycleStatus.updated_at).getTime()) / 60_000) : null,
+    );
+  }
+
+  const cycleFailureFinding = latestCycleStatus?.failure_category
+    ? {
+        level: 'CRITICAL' as const,
+        check: 'cycle' as const,
+        ageMinutes: latestCycleStatus.updated_at
+          ? Math.round((Date.now() - new Date(latestCycleStatus.updated_at).getTime()) / 60_000)
+          : null,
+        message: `Latest provider cycle failure category=${latestCycleStatus.failure_category} scope=${latestCycleStatus.failure_scope ?? 'cycle'}`,
+      }
+    : null;
+
+  const criticalFindings = [
+    ...findings.filter((finding) => finding.level === 'CRITICAL'),
+    ...(cycleFailureFinding ? [cycleFailureFinding] : []),
+  ];
   if (criticalFindings.length > 0) {
     await postDiscordAlert(criticalFindings.map((finding) => `- ${finding.message}`).join('\n'));
     process.exit(1);

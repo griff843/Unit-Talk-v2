@@ -69,6 +69,57 @@ export const systemRunStatuses = [
   'cancelled',
 ] as const;
 
+export const providerOfferStageStatuses = [
+  'pending',
+  'merged',
+  'duplicate',
+  'stale_blocked',
+  'failed',
+] as const;
+
+export const providerCycleStageStatuses = [
+  'pending',
+  'staged',
+  'merge_blocked',
+  'merged',
+  'failed',
+] as const;
+
+export const providerCycleFreshnessStatuses = [
+  'unknown',
+  'fresh',
+  'stale',
+  'invalid_snapshot',
+] as const;
+
+export const providerCycleProofStatuses = [
+  'required',
+  'verified',
+  'waived',
+] as const;
+
+export const providerIngestionFailureCategories = [
+  'provider_api_failure',
+  'parse_failure',
+  'zero_offers',
+  'db_statement_timeout',
+  'db_lock_timeout',
+  'db_deadlock',
+  'partial_market_failure',
+  'stale_after_cycle',
+  'archive_failure',
+  'unknown_failure',
+] as const;
+
+export const providerIngestionFailureScopes = [
+  'cycle',
+  'provider',
+  'sport',
+  'market',
+  'archive',
+  'db',
+] as const;
+
 export const approvalStatuses = [
   'pending',
   'approved',
@@ -286,6 +337,16 @@ export const canonicalSchema: TableDefinition[] = [
   {
     name: 'provider_offers',
     purpose: 'Stores normalized external provider odds snapshots for market intelligence.',
+    owner: 'ingestor',
+  },
+  {
+    name: 'provider_offer_staging',
+    purpose: 'Stores bounded, cycle-scoped provider offers before explicit merge into provider_offers.',
+    owner: 'ingestor',
+  },
+  {
+    name: 'provider_cycle_status',
+    purpose: 'Tracks staging, freshness, proof, and merge state for provider ingest cycles.',
     owner: 'ingestor',
   },
   {

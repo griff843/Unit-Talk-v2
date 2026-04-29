@@ -2,6 +2,7 @@
 import { getSnapshotData, getPicksPipelineData, getRecapData } from './snapshot.js';
 import { getProviderHealth } from './intelligence.js';
 import { getDataClient } from './client.js';
+import { getProviderCycleHealth } from './provider-cycle-health.js';
 import type {
   DashboardData,
   DashboardRuntimeData,
@@ -658,6 +659,10 @@ export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
   const distinctEventsLast24h = asNumber(providerHealth['distinctEventsLast24h']);
   const ingestorHealth = asRecord(providerHealth['ingestorHealth']);
   const ingestorStatus = asString(ingestorHealth['status'], 'unknown');
+  const latestLiveSnapshotAt = asStringOrNull(providerHealth['latestProviderOfferSnapshotAt']);
+  const providerCycleSummary = await getProviderCycleHealth({
+    latestProviderOfferSnapshotAt: latestLiveSnapshotAt,
+  });
 
   return {
     outbox: {
@@ -708,6 +713,18 @@ export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
       absent: absentProviders,
       distinctEventsLast24h,
       ingestorStatus,
+      latestLiveSnapshotAt,
+    },
+    providerCycleSummary: {
+      overallStatus: providerCycleSummary.overallStatus,
+      trackedLanes: providerCycleSummary.trackedLanes,
+      mergedLanes: providerCycleSummary.mergedLanes,
+      blockedLanes: providerCycleSummary.blockedLanes,
+      failedLanes: providerCycleSummary.failedLanes,
+      staleLanes: providerCycleSummary.staleLanes,
+      proofRequiredLanes: providerCycleSummary.proofRequiredLanes,
+      latestCycleSnapshotAt: providerCycleSummary.latestCycleSnapshotAt,
+      latestUpdatedAt: providerCycleSummary.latestUpdatedAt,
     },
   };
 }

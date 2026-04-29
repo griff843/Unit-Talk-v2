@@ -5,8 +5,8 @@ import { DEFAULT_REGISTRY, ScenarioRegistry } from './registry.js';
 
 import type { ScenarioDefinition } from './types.js';
 
-test('DEFAULT_REGISTRY contains all five built-in scenarios', () => {
-  assert.equal(DEFAULT_REGISTRY.getAll().length, 5);
+test('DEFAULT_REGISTRY contains all built-in scenarios', () => {
+  assert.equal(DEFAULT_REGISTRY.getAll().length, 6);
 });
 
 test('registry.get(id) returns the correct scenario', () => {
@@ -19,7 +19,7 @@ test("registry.getByMode('replay') filters correctly", () => {
   const replayScenarios = DEFAULT_REGISTRY.getByMode('replay');
   assert.deepEqual(
     replayScenarios.map(scenario => scenario.id).sort(),
-    ['promotion-routing', 'settlement-resolution', 'submission-validation']
+    ['promotion-routing', 'settlement-resolution', 'slate-replay', 'submission-validation']
   );
 });
 

@@ -23,6 +23,12 @@ import { join } from 'path';
 import type { ReplayEvent } from './event-store.js';
 import type { ReplayResult } from './replay-orchestrator.js';
 
+export interface ReplayProofArtifact {
+  filename: string;
+  format: 'json' | 'jsonl' | 'text';
+  content: unknown;
+}
+
 // ─────────────────────────────────────────────────────────────
 // WRITER
 // ─────────────────────────────────────────────────────────────
@@ -42,7 +48,12 @@ export class ReplayProofWriter {
    * Write all proof artifacts for a completed replay run.
    * Returns the absolute path to the bundle directory.
    */
-  write(result: ReplayResult, events: ReadonlyArray<ReplayEvent>, secondRunHash?: string): string {
+  write(
+    result: ReplayResult,
+    events: ReadonlyArray<ReplayEvent>,
+    secondRunHash?: string,
+    artifacts: ReadonlyArray<ReplayProofArtifact> = []
+  ): string {
     const bundleDir = join(this.outDir, result.runId);
     if (!existsSync(bundleDir)) {
       mkdirSync(bundleDir, { recursive: true });
@@ -98,8 +109,15 @@ export class ReplayProofWriter {
     // 7. errors.jsonl
     this.writeJsonl(bundleDir, 'errors.jsonl', result.errors);
 
+    for (const artifact of artifacts) {
+      this.writeArtifact(bundleDir, artifact);
+    }
+
     // 8. proof-bundle-checksum.txt (computed over all other files)
-    const checksum = this.computeBundleChecksum(bundleDir);
+    const checksum = this.computeBundleChecksum(
+      bundleDir,
+      artifacts.map(artifact => artifact.filename)
+    );
     this.writeText(
       bundleDir,
       'proof-bundle-checksum.txt',
@@ -127,7 +145,24 @@ export class ReplayProofWriter {
     writeFileSync(join(dir, filename), content, 'utf8');
   }
 
-  private computeBundleChecksum(dir: string): string {
+  private writeArtifact(dir: string, artifact: ReplayProofArtifact): void {
+    if (artifact.format === 'json') {
+      this.writeJson(dir, artifact.filename, artifact.content);
+      return;
+    }
+
+    if (artifact.format === 'jsonl') {
+      if (!Array.isArray(artifact.content)) {
+        throw new Error(`ReplayProofWriter: jsonl artifact '${artifact.filename}' must be an array`);
+      }
+      this.writeJsonl(dir, artifact.filename, [...artifact.content]);
+      return;
+    }
+
+    this.writeText(dir, artifact.filename, String(artifact.content));
+  }
+
+  private computeBundleChecksum(dir: string, artifactFiles: ReadonlyArray<string>): string {
     const files = [
       'manifest.json',
       'adapter-manifest.json',
@@ -136,6 +171,7 @@ export class ReplayProofWriter {
       'events-processed.json',
       'determinism-hash.txt',
       'errors.jsonl',
+      ...artifactFiles,
     ];
     const hash = createHash('sha256');
     for (const filename of files) {

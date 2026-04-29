@@ -25,12 +25,14 @@ export interface SGOFetchOptions {
    * Historical events have oddsAvailable=false so they are excluded by the live filter.
    */
   historical?: boolean;
+  requestObserver?: SGORequestObserver;
 }
 
 export interface SGOFetchResult {
   eventsCount: number;
   events: SGOResolvedEvent[];
   pairedProps: SGOPairedProp[];
+  rawPayloads: unknown[];
   requestTelemetry: SGORequestTelemetry;
 }
 
@@ -46,6 +48,7 @@ export interface SGOResultsFetchOptions {
   sleep?: (ms: number) => Promise<void>;
   /** Max total time for all paginated fetches (ms). Defaults to 300_000 (5 min). */
   maxFetchMs?: number;
+  requestObserver?: SGORequestObserver;
 }
 
 export interface SGORequestTelemetry {
@@ -65,6 +68,25 @@ export interface SGORequestTelemetry {
   throttled: boolean;
   headersSeen: boolean;
 }
+
+export interface SGORequestCapture {
+  provider: 'sgo';
+  endpoint: 'odds' | 'results';
+  url: string;
+  pageIndex: number;
+  cursor: string | null;
+  startedAt: string;
+  completedAt: string;
+  durationMs: number;
+  status: number;
+  headers: Record<string, string>;
+  payload: unknown;
+  responseBytes: number;
+  endOfResults: boolean;
+}
+
+export type SGORequestObserver =
+  (capture: SGORequestCapture) => void | Promise<void>;
 
 export interface SGOResolvedTeam {
   teamId: string | null;
@@ -165,6 +187,9 @@ export async function fetchAndPairSGOProps(
     url,
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
+    ...(options.requestObserver
+      ? { requestObserver: options.requestObserver }
+      : {}),
   });
   const rawEvents = payloads.flatMap(extractEvents);
   const events = rawEvents
@@ -180,6 +205,7 @@ export async function fetchAndPairSGOProps(
     eventsCount: rawEvents.length,
     events,
     pairedProps,
+    rawPayloads: payloads,
     requestTelemetry: telemetry,
   };
 }
@@ -235,6 +261,7 @@ export async function fetchSGOResultsWithTelemetry(
   options: SGOResultsFetchOptions,
 ): Promise<{
   results: SGOEventResult[];
+  rawPayloads: unknown[];
   requestTelemetry: SGORequestTelemetry;
 }> {
   const url = buildSgoResultsRequestUrl(options);
@@ -245,6 +272,9 @@ export async function fetchSGOResultsWithTelemetry(
     fetchImpl: options.fetchImpl ?? fetch,
     ...(options.sleep ? { sleep: options.sleep } : {}),
     ...(options.maxFetchMs !== undefined ? { maxFetchMs: options.maxFetchMs } : {}),
+    ...(options.requestObserver
+      ? { requestObserver: options.requestObserver }
+      : {}),
   });
   const rawEvents = payloads.flatMap(extractEvents);
 
@@ -252,6 +282,7 @@ export async function fetchSGOResultsWithTelemetry(
     results: rawEvents
       .map(extractEventResult)
       .filter((event): event is SGOEventResult => event !== null),
+    rawPayloads: payloads,
     requestTelemetry: telemetry,
   };
 }
@@ -267,6 +298,7 @@ async function fetchSgoPages(input: {
   fetchImpl: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   maxFetchMs?: number;
+  requestObserver?: SGORequestObserver;
 }) {
   const telemetry = createEmptyTelemetry(input.endpoint);
   const payloads: unknown[] = [];
@@ -291,6 +323,8 @@ async function fetchSgoPages(input: {
     const result = await fetchSgoJson({
       ...input,
       url: pageUrl,
+      pageIndex: page + 1,
+      cursor: nextCursor,
     });
     mergeTelemetry(telemetry, result.telemetry);
     if (result.endOfResults) {
@@ -320,11 +354,15 @@ async function fetchSgoJson(input: {
   url: URL;
   fetchImpl: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
+  requestObserver?: SGORequestObserver;
+  pageIndex: number;
+  cursor: string | null;
 }) {
   const telemetry = createEmptyTelemetry(input.endpoint);
   let lastStatusText = 'unknown';
 
   for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt += 1) {
+    const startedAtMs = Date.now();
     const response = await input.fetchImpl(input.url.toString(), {
       method: 'GET',
       headers: {
@@ -340,16 +378,51 @@ async function fetchSgoJson(input: {
 
     if (response.ok) {
       telemetry.successfulRequests += 1;
+      const text = await response.text();
+      const payload = text.length === 0 ? null : JSON.parse(text);
+      const completedAtMs = Date.now();
+      await input.requestObserver?.({
+        provider: 'sgo',
+        endpoint: input.endpoint,
+        url: input.url.toString(),
+        pageIndex: input.pageIndex,
+        cursor: input.cursor,
+        startedAt: new Date(startedAtMs).toISOString(),
+        completedAt: new Date(completedAtMs).toISOString(),
+        durationMs: completedAtMs - startedAtMs,
+        status: response.status,
+        headers: headersToObject(response.headers),
+        payload,
+        responseBytes: text.length,
+        endOfResults: false,
+      });
       return {
-        payload: (await response.json()) as unknown,
+        payload,
         telemetry,
         endOfResults: false,
       };
     }
 
     if (response.status === 404) {
+      const completedAtMs = Date.now();
+      const payload = { data: [] };
+      await input.requestObserver?.({
+        provider: 'sgo',
+        endpoint: input.endpoint,
+        url: input.url.toString(),
+        pageIndex: input.pageIndex,
+        cursor: input.cursor,
+        startedAt: new Date(startedAtMs).toISOString(),
+        completedAt: new Date(completedAtMs).toISOString(),
+        durationMs: completedAtMs - startedAtMs,
+        status: response.status,
+        headers: headersToObject(response.headers),
+        payload,
+        responseBytes: 0,
+        endOfResults: true,
+      });
       return {
-        payload: { data: [] },
+        payload,
         telemetry,
         endOfResults: true,
       };
@@ -536,6 +609,14 @@ function defaultSleep(ms: number) {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+function headersToObject(headers: Headers) {
+  const result: Record<string, string> = {};
+  headers.forEach((value, key) => {
+    result[key] = value;
+  });
+  return result;
 }
 
 function pairEventOdds(event: Record<string, unknown>, snapshotAt: string) {

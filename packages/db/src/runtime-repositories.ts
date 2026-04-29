@@ -69,7 +69,12 @@ import type {
   ParticipantUpsertInput,
   PickRepository,
   PlayerSearchResult,
+  ProviderCycleStatusUpsertInput,
+  ProviderOfferMergeInput,
+  ProviderOfferMergeResult,
   ProviderOfferRepository,
+  ProviderOfferStageInput,
+  ProviderOfferStageResult,
   ProviderOfferUpsertInput,
   ProviderOfferUpsertResult,
   PromotionBoardStateQuery,
@@ -120,9 +125,12 @@ import type {
   PickRecord,
   PickLifecycleRecord,
   HedgeOpportunityRecord,
+  ProviderCycleStatusRow,
   ProviderMarketAliasRow,
   ProviderEntityAliasRow,
+  ProviderOfferCurrentRow,
   ProviderOfferRecord,
+  ProviderOfferStagingRow,
   PromotionHistoryRecord,
   ReceiptRecord,
   SettlementRecord,
@@ -1267,6 +1275,8 @@ export class InMemorySettlementRepository implements SettlementRepository {
 
 export class InMemoryProviderOfferRepository implements ProviderOfferRepository {
   private readonly offers = new Map<string, ProviderOfferRecord>();
+  private readonly stagedOffers = new Map<string, ProviderOfferStagingRow>();
+  private readonly cycleStatuses = new Map<string, ProviderCycleStatusRow>();
 
   async upsertBatch(
     offers: ProviderOfferUpsertInput[],
@@ -1300,6 +1310,115 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       updatedCount,
       totalProcessed: offers.length,
     };
+  }
+
+  async stageBatch(
+    offers: ProviderOfferStageInput[],
+  ): Promise<ProviderOfferStageResult> {
+    let stagedCount = 0;
+    let duplicateCount = 0;
+
+    for (const offer of offers) {
+      const storageKey = `${offer.runId}:${offer.idempotencyKey}`;
+      if (this.stagedOffers.has(storageKey)) {
+        duplicateCount += 1;
+        continue;
+      }
+
+      this.stagedOffers.set(
+        storageKey,
+        mapProviderOfferStageInsertToRecord(offer),
+      );
+      stagedCount += 1;
+    }
+
+    return {
+      stagedCount,
+      duplicateCount,
+      totalProcessed: offers.length,
+    };
+  }
+
+  async mergeStagedCycle(
+    input: ProviderOfferMergeInput,
+  ): Promise<ProviderOfferMergeResult> {
+    const pending = Array.from(this.stagedOffers.values())
+      .filter((offer) => offer.run_id === input.runId && offer.merge_status === 'pending')
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
+
+    if (input.identityStrategy !== 'provider_event_market_participant_book') {
+      throw new Error(
+        `Unsupported provider offer identity strategy: ${input.identityStrategy}`,
+      );
+    }
+
+    let mergedCount = 0;
+    let duplicateCount = 0;
+    const candidates = pending.slice(0, input.maxRows);
+    for (const staged of candidates) {
+      if (this.offers.has(staged.idempotency_key)) {
+        this.stagedOffers.set(`${staged.run_id}:${staged.idempotency_key}`, {
+          ...staged,
+          merge_status: 'duplicate',
+          merged_at: new Date().toISOString(),
+        });
+        duplicateCount += 1;
+        continue;
+      }
+
+      const insert: ProviderOfferInsert = {
+        providerKey: staged.provider_key,
+        providerEventId: staged.provider_event_id,
+        providerMarketKey: staged.provider_market_key,
+        providerParticipantId: staged.provider_participant_id,
+        sportKey: staged.sport_key,
+        line: staged.line,
+        overOdds: staged.over_odds,
+        underOdds: staged.under_odds,
+        devigMode: staged.devig_mode,
+        isOpening: staged.is_opening,
+        isClosing: staged.is_closing,
+        snapshotAt: staged.snapshot_at,
+        idempotencyKey: staged.idempotency_key,
+        bookmakerKey: staged.bookmaker_key,
+      };
+
+      this.offers.set(
+        staged.idempotency_key,
+        mapProviderOfferInsertToRecord(insert),
+      );
+      this.stagedOffers.set(`${staged.run_id}:${staged.idempotency_key}`, {
+        ...staged,
+        merge_status: 'merged',
+        merged_at: new Date().toISOString(),
+      });
+      mergedCount += 1;
+    }
+
+    return {
+      processedCount: candidates.length,
+      mergedCount,
+      duplicateCount,
+    };
+  }
+
+  async upsertCycleStatus(
+    input: ProviderCycleStatusUpsertInput,
+  ): Promise<ProviderCycleStatusRow> {
+    const existing = this.cycleStatuses.get(input.runId);
+    const next = mapProviderCycleStatusInputToRecord(input, existing);
+    this.cycleStatuses.set(input.runId, next);
+    return next;
+  }
+
+  async getCycleStatus(runId: string): Promise<ProviderCycleStatusRow | null> {
+    return this.cycleStatuses.get(runId) ?? null;
+  }
+
+  async listStagedOffers(runId: string): Promise<ProviderOfferStagingRow[]> {
+    return Array.from(this.stagedOffers.values())
+      .filter((offer) => offer.run_id === runId)
+      .sort((left, right) => left.created_at.localeCompare(right.created_at));
   }
 
   async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
@@ -1515,6 +1634,51 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
           o.provider_participant_id != null,
       )
       .slice(0, limit);
+  }
+
+  async listOpeningCurrentOffers(
+    since: string,
+    provider: string,
+    limit = 500,
+  ): Promise<ProviderOfferCurrentRow[]> {
+    const sinceMs = new Date(since).getTime();
+    return Array.from(this.offers.values())
+      .filter(
+        (o) =>
+          o.provider_key === provider &&
+          o.is_opening === true &&
+          new Date(o.snapshot_at).getTime() >= sinceMs &&
+          o.over_odds != null &&
+          o.under_odds != null &&
+          o.line != null &&
+          o.provider_participant_id != null,
+      )
+      .slice(0, limit)
+      .map((offer) => {
+        const cycle = Array.from(this.cycleStatuses.values())
+          .filter(
+            (status) =>
+              status.provider_key === offer.provider_key &&
+              status.league === (offer.sport_key ?? ''),
+          )
+          .sort((left, right) =>
+            right.cycle_snapshot_at.localeCompare(left.cycle_snapshot_at),
+          )[0];
+        return {
+          ...offer,
+          cycle_run_id: cycle?.run_id ?? null,
+          cycle_stage_status: cycle?.stage_status ?? null,
+          cycle_freshness_status: cycle?.freshness_status ?? null,
+          cycle_proof_status: cycle?.proof_status ?? null,
+          cycle_failure_category: cycle?.failure_category ?? null,
+          cycle_failure_scope: cycle?.failure_scope ?? null,
+          cycle_affected_provider_key: cycle?.affected_provider_key ?? null,
+          cycle_affected_sport_key: cycle?.affected_sport_key ?? null,
+          cycle_affected_market_key: cycle?.affected_market_key ?? null,
+          cycle_updated_at: cycle?.updated_at ?? null,
+          provider_health_state: deriveProviderHealthState(cycle),
+        };
+      });
   }
 }
 
@@ -4270,6 +4434,134 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     };
   }
 
+  async stageBatch(
+    offers: ProviderOfferStageInput[],
+  ): Promise<ProviderOfferStageResult> {
+    if (offers.length === 0) {
+      return {
+        stagedCount: 0,
+        duplicateCount: 0,
+        totalProcessed: 0,
+      };
+    }
+
+    const stageKeys = [...new Set(offers.map((offer) => `${offer.runId}:${offer.idempotencyKey}`))];
+    const existingKeys = new Set<string>();
+    for (let i = 0; i < stageKeys.length; i += 100) {
+      const chunk = stageKeys.slice(i, i + 100);
+      const runIds = [...new Set(chunk.map((value) => value.split(':', 1)[0] ?? ''))];
+      const idempotencyKeys = [...new Set(chunk.map((value) => value.slice(value.indexOf(':') + 1)))];
+      const { data, error } = await fromUntyped(this.client, 'provider_offer_staging')
+        .select('run_id,idempotency_key')
+        .in('run_id', runIds)
+        .in('idempotency_key', idempotencyKeys);
+      if (error) {
+        throw new Error(`Failed to load existing staged provider offers: ${error.message}`);
+      }
+      for (const row of (data as Array<{ run_id: string; idempotency_key: string }> | null) ?? []) {
+        existingKeys.add(`${row.run_id}:${row.idempotency_key}`);
+      }
+    }
+
+    const deduped = [...new Map(offers.map((offer) => [`${offer.runId}:${offer.idempotencyKey}`, offer])).values()];
+    const rows = deduped.map(mapProviderOfferStageInsertToRow);
+    const { error } = await (fromUntyped(this.client, 'provider_offer_staging').upsert(rows, {
+      onConflict: 'run_id,idempotency_key',
+      ignoreDuplicates: true,
+    }) as unknown as Promise<{
+      data: unknown;
+      error: { message: string } | null;
+    }>);
+    if (error) {
+      throw new Error(`Failed to stage provider offers: ${error.message}`);
+    }
+
+    return {
+      stagedCount: rows.length - existingKeys.size,
+      duplicateCount: existingKeys.size,
+      totalProcessed: rows.length,
+    };
+  }
+
+  async mergeStagedCycle(
+    input: ProviderOfferMergeInput,
+  ): Promise<ProviderOfferMergeResult> {
+    const { data, error } = await this.client.rpc('merge_provider_offer_staging_cycle', {
+      p_run_id: input.runId,
+      p_max_rows: input.maxRows,
+      p_identity_strategy: input.identityStrategy,
+    });
+
+    if (error) {
+      throw new Error(`Failed to merge staged provider offers: ${error.message}`);
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as
+      | { processed_count?: number; merged_count?: number; duplicate_count?: number }
+      | null;
+
+    return {
+      processedCount: row?.processed_count ?? 0,
+      mergedCount: row?.merged_count ?? 0,
+      duplicateCount: row?.duplicate_count ?? 0,
+    };
+  }
+
+  async upsertCycleStatus(
+    input: ProviderCycleStatusUpsertInput,
+  ): Promise<ProviderCycleStatusRow> {
+    const row = mapProviderCycleStatusInputToRow(input);
+    const { data, error } = await (fromUntyped(this.client, 'provider_cycle_status')
+      .upsert(row, { onConflict: 'run_id' })
+      .select('*')
+      .single() as unknown as Promise<{
+        data: ProviderCycleStatusRow | null;
+        error: { message: string } | null;
+      }>);
+
+    if (error) {
+      throw new Error(`Failed to upsert provider cycle status: ${error.message}`);
+    }
+
+    if (!data) {
+      throw new Error('Failed to upsert provider cycle status: empty response');
+    }
+
+    return data;
+  }
+
+  async getCycleStatus(runId: string): Promise<ProviderCycleStatusRow | null> {
+    const { data, error } = await (fromUntyped(this.client, 'provider_cycle_status')
+      .select('*')
+      .eq('run_id', runId)
+      .maybeSingle() as unknown as Promise<{
+        data: ProviderCycleStatusRow | null;
+        error: { message: string } | null;
+      }>);
+
+    if (error) {
+      throw new Error(`Failed to load provider cycle status: ${error.message}`);
+    }
+
+    return data;
+  }
+
+  async listStagedOffers(runId: string): Promise<ProviderOfferStagingRow[]> {
+    const { data, error } = await (fromUntyped(this.client, 'provider_offer_staging')
+      .select('*')
+      .eq('run_id', runId)
+      .order('created_at', { ascending: true }) as unknown as Promise<{
+        data: ProviderOfferStagingRow[] | null;
+        error: { message: string } | null;
+      }>);
+
+    if (error) {
+      throw new Error(`Failed to list staged provider offers: ${error.message}`);
+    }
+
+    return data ?? [];
+  }
+
   async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
     const { data, error } = await this.client
       .from('provider_offers')
@@ -4349,29 +4641,42 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listClosingOffers(since: string): Promise<ProviderOfferRecord[]> {
-    // Paginate in 1 000-row pages — Supabase PostgREST defaults to a 1 000-row
-    // cap unless explicitly overridden. Closing rows can number in the hundreds
-    // of thousands so pagination is required to fetch them all.
+    // Read closing offers in narrow time windows to avoid broad scans that can
+    // hit statement_timeout on large provider_offers tables.
     const PAGE = 1000;
     const all: ProviderOfferRecord[] = [];
-    let from = 0;
+    const sinceMs = new Date(since).getTime();
+    const WINDOW_MS = 60 * 60 * 1000; // 1 hour
 
-    for (;;) {
-      const { data, error } = await this.client
-        .from('provider_offers')
-        .select('*')
-        .eq('is_closing', true)
-        .gte('snapshot_at', since)
-        .range(from, from + PAGE - 1);
+    for (let windowEndMs = Date.now(); windowEndMs > sinceMs; windowEndMs -= WINDOW_MS) {
+      const windowStartMs = Math.max(sinceMs, windowEndMs - WINDOW_MS);
+      const windowStartIso = new Date(windowStartMs).toISOString();
+      const windowEndIso = new Date(windowEndMs).toISOString();
+      let from = 0;
 
-      if (error) {
-        throw new Error(`Failed to list closing offers: ${error.message}`);
+      for (;;) {
+        const { data, error } = await this.client
+          .from('provider_offers')
+          .select('*')
+          .eq('is_closing', true)
+          .gte('snapshot_at', windowStartIso)
+          .lt('snapshot_at', windowEndIso)
+          .range(from, from + PAGE - 1);
+
+        if (error) {
+          if (/statement timeout/i.test(error.message)) {
+            throw new Error(
+              `Failed to list closing offers: statement timeout while loading closing data; materializer must fail loudly when closing data is unavailable (${error.message})`,
+            );
+          }
+          throw new Error(`Failed to list closing offers: ${error.message}`);
+        }
+
+        const page = data ?? [];
+        all.push(...page);
+        if (page.length < PAGE) break;
+        from += PAGE;
       }
-
-      const page = data ?? [];
-      all.push(...page);
-      if (page.length < PAGE) break;
-      from += PAGE;
     }
 
     return all;
@@ -4702,6 +5007,41 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     return (data ?? []) as ProviderOfferRecord[];
   }
+
+  async listOpeningCurrentOffers(
+    since: string,
+    provider: string,
+    limit = 500,
+  ): Promise<ProviderOfferCurrentRow[]> {
+    const { data, error } = await this.client.rpc(
+      'list_provider_offer_current_opening',
+      {
+        p_provider_key: provider,
+        p_since: since,
+        p_limit: limit,
+      },
+    );
+
+    if (error) {
+      throw new Error(`Failed to list opening current offers: ${error.message}`);
+    }
+
+    return (data ?? []) as ProviderOfferCurrentRow[];
+  }
+}
+
+function deriveProviderHealthState(cycle: ProviderCycleStatusRow | undefined): 'healthy' | 'degraded' | 'fail' {
+  if (!cycle) {
+    return 'fail';
+  }
+  if (
+    cycle.stage_status === 'merged' &&
+    cycle.freshness_status === 'fresh' &&
+    (cycle.proof_status === 'verified' || cycle.proof_status === 'waived')
+  ) {
+    return cycle.failure_category === null ? 'healthy' : 'degraded';
+  }
+  return 'fail';
 }
 
 export class DatabaseAuditLogRepository implements AuditLogRepository {
@@ -6966,16 +7306,53 @@ export class DatabaseMarketUniverseRepository implements IMarketUniverseReposito
     // We match on (provider_key, provider_event_id, provider_market_key) and then
     // do provider_participant_id matching in JS (COALESCE semantics).
     const providerEventIds = [...new Set(rows.map((r) => r.provider_event_id))];
-    const { data: existingRows, error: fetchError } = await this.client
-      .from('market_universe')
-      .select(
-        'provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds',
-      )
-      .in('provider_event_id', providerEventIds);
+    const existingRows: Array<{
+      provider_key: string;
+      provider_event_id: string;
+      provider_participant_id: string | null;
+      provider_market_key: string;
+      opening_line: number | null;
+      opening_over_odds: number | null;
+      opening_under_odds: number | null;
+      closing_line: number | null;
+      closing_over_odds: number | null;
+      closing_under_odds: number | null;
+    }> = [];
+    const FETCH_CHUNK_SIZE = 25;
 
-    if (fetchError) {
-      throw new Error(
-        `market_universe fetch for immutability check failed: ${fetchError.message}`,
+    for (let i = 0; i < providerEventIds.length; i += FETCH_CHUNK_SIZE) {
+      const chunk = providerEventIds.slice(i, i + FETCH_CHUNK_SIZE);
+      const { data, error: fetchError } = await this.client
+        .from('market_universe')
+        .select(
+          'provider_key,provider_event_id,provider_participant_id,provider_market_key,opening_line,opening_over_odds,opening_under_odds,closing_line,closing_over_odds,closing_under_odds',
+        )
+        .in('provider_event_id', chunk);
+
+      if (fetchError) {
+        if (/statement timeout/i.test(fetchError.message)) {
+          throw new Error(
+            `market_universe fetch for immutability check timed out; refusing to continue with partial closing data (${fetchError.message})`,
+          );
+        }
+        throw new Error(
+          `market_universe fetch for immutability check failed: ${fetchError.message}`,
+        );
+      }
+
+      existingRows.push(
+        ...((data ?? []) as Array<{
+          provider_key: string;
+          provider_event_id: string;
+          provider_participant_id: string | null;
+          provider_market_key: string;
+          opening_line: number | null;
+          opening_over_odds: number | null;
+          opening_under_odds: number | null;
+          closing_line: number | null;
+          closing_over_odds: number | null;
+          closing_under_odds: number | null;
+        }>),
       );
     }
 
@@ -7668,6 +8045,10 @@ type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
   insert(
     values: Record<string, unknown> | readonly Record<string, unknown>[],
   ): UntypedQueryBuilder;
+  upsert(
+    values: Record<string, unknown> | readonly Record<string, unknown>[],
+    options?: Record<string, unknown>,
+  ): UntypedQueryBuilder;
   update(values: Record<string, unknown>): UntypedQueryBuilder;
   eq(column: string, value: unknown): UntypedQueryBuilder;
   neq(column: string, value: unknown): UntypedQueryBuilder;
@@ -7758,6 +8139,100 @@ function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
     snapshot_at: offer.snapshotAt,
     idempotency_key: offer.idempotencyKey,
     bookmaker_key: offer.bookmakerKey ?? null,
+  };
+}
+
+function mapProviderOfferStageInsertToRow(offer: ProviderOfferStageInput) {
+  return {
+    run_id: offer.runId,
+    league: offer.league,
+    identity_key: offer.identityKey,
+    merge_status: 'pending',
+    merge_error: null,
+    merged_at: null,
+    ...mapProviderOfferInsertToRow(offer),
+  };
+}
+
+function mapProviderOfferStageInsertToRecord(
+  offer: ProviderOfferStageInput,
+): ProviderOfferStagingRow {
+  const now = new Date().toISOString();
+  return {
+    id: crypto.randomUUID(),
+    run_id: offer.runId,
+    provider_key: offer.providerKey,
+    league: offer.league,
+    provider_event_id: offer.providerEventId,
+    provider_market_key: offer.providerMarketKey,
+    provider_participant_id: offer.providerParticipantId,
+    sport_key: offer.sportKey,
+    line: offer.line,
+    over_odds: offer.overOdds,
+    under_odds: offer.underOdds,
+    devig_mode: offer.devigMode,
+    is_opening: offer.isOpening,
+    is_closing: offer.isClosing,
+    snapshot_at: offer.snapshotAt,
+    idempotency_key: offer.idempotencyKey,
+    bookmaker_key: offer.bookmakerKey ?? null,
+    identity_key: offer.identityKey,
+    merge_status: 'pending',
+    merge_error: null,
+    merged_at: null,
+    created_at: now,
+  };
+}
+
+function mapProviderCycleStatusInputToRow(
+  input: ProviderCycleStatusUpsertInput,
+) {
+  return {
+    run_id: input.runId,
+    provider_key: input.providerKey,
+    league: input.league,
+    cycle_snapshot_at: input.cycleSnapshotAt,
+    stage_status: input.stageStatus,
+    freshness_status: input.freshnessStatus ?? 'unknown',
+    proof_status: input.proofStatus ?? 'required',
+    staged_count: input.stagedCount ?? 0,
+    merged_count: input.mergedCount ?? 0,
+    duplicate_count: input.duplicateCount ?? 0,
+    failure_category: input.failureCategory ?? null,
+    failure_scope: input.failureScope ?? null,
+    affected_provider_key: input.affectedProviderKey ?? null,
+    affected_sport_key: input.affectedSportKey ?? null,
+    affected_market_key: input.affectedMarketKey ?? null,
+    last_error: input.lastError ?? null,
+    metadata: input.metadata ?? {},
+  };
+}
+
+function mapProviderCycleStatusInputToRecord(
+  input: ProviderCycleStatusUpsertInput,
+  existing?: ProviderCycleStatusRow,
+): ProviderCycleStatusRow {
+  const now = new Date().toISOString();
+  return {
+    run_id: input.runId,
+    provider_key: input.providerKey,
+    league: input.league,
+    cycle_snapshot_at: input.cycleSnapshotAt,
+    stage_status: input.stageStatus,
+    freshness_status: input.freshnessStatus ?? existing?.freshness_status ?? 'unknown',
+    proof_status: input.proofStatus ?? existing?.proof_status ?? 'required',
+    staged_count: input.stagedCount ?? existing?.staged_count ?? 0,
+    merged_count: input.mergedCount ?? existing?.merged_count ?? 0,
+    duplicate_count: input.duplicateCount ?? existing?.duplicate_count ?? 0,
+    failure_category: input.failureCategory ?? existing?.failure_category ?? null,
+    failure_scope: input.failureScope ?? existing?.failure_scope ?? null,
+    affected_provider_key: input.affectedProviderKey ?? existing?.affected_provider_key ?? null,
+    affected_sport_key: input.affectedSportKey ?? existing?.affected_sport_key ?? null,
+    affected_market_key: input.affectedMarketKey ?? existing?.affected_market_key ?? null,
+    last_error: input.lastError ?? existing?.last_error ?? null,
+    metadata: input.metadata ?? existing?.metadata ?? {},
+    created_at: existing?.created_at ?? now,
+    updated_at: now,
   };
 }
 

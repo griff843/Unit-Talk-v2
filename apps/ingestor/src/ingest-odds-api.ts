@@ -16,6 +16,17 @@ import {
   type OddsApiFetchOptions,
   type OddsApiTelemetry,
 } from './odds-api-fetcher.js';
+import {
+  classifyProviderIngestionFailure,
+  createPartialMarketFailure,
+  createZeroOffersFailure,
+} from './provider-ingestion-failures.js';
+import { chunkByPolicy, withProviderDbRetry } from './provider-ingestion-db.js';
+import type {
+  ProviderIngestionDbWritePolicy,
+  ProviderPayloadArchivePolicy,
+} from './provider-ingestion-policy.js';
+import { archiveRawProviderPayload, shouldBlockOnArchiveFailure } from './raw-provider-payload-archive.js';
 
 function toEasternDate(utcIso: string): string {
   return new Date(utcIso).toLocaleDateString('en-CA', { timeZone: 'America/New_York' });
@@ -39,6 +50,8 @@ export interface OddsApiIngestOptions {
   markets?: string[];
   fetchImpl?: typeof fetch;
   logger?: Pick<Console, 'warn' | 'info'>;
+  providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
+  providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
 }
 
 export interface OddsApiIngestSummary {
@@ -76,6 +89,18 @@ export async function ingestOddsApiLeague(
   }
 
   const snapshotAt = new Date().toISOString();
+  const providerDbWritePolicy = options.providerDbWritePolicy ?? {
+    statementTimeoutMs: 15_000,
+    lockTimeoutMs: 5_000,
+    maxBatchSize: 500,
+    mergeChunkSize: 250,
+    retryMaxAttempts: 2,
+    retryBackoffMs: 1_000,
+  };
+  const providerPayloadArchivePolicy = options.providerPayloadArchivePolicy ?? {
+    mode: 'fail_open' as const,
+    spoolDir: 'out/provider-payload-archive',
+  };
   const run = await repositories.runs.startRun({
     runType: 'ingestor.cycle',
     actor: 'ingestor',
@@ -97,6 +122,24 @@ export async function ingestOddsApiLeague(
     };
 
     const result = await fetchOddsApiOdds(fetchOptions);
+    let archiveFailure: string | null = null;
+    try {
+      await archiveRawProviderPayload({
+        providerKey: 'odds-api',
+        league,
+        runId: run.id,
+        snapshotAt,
+        kind: 'odds',
+        payload: result.events,
+        spoolDir: providerPayloadArchivePolicy.spoolDir,
+      });
+    } catch (error) {
+      archiveFailure = error instanceof Error ? error.message : String(error);
+      if (shouldBlockOnArchiveFailure(providerPayloadArchivePolicy.mode)) {
+        throw new Error(`archive failure: ${archiveFailure}`);
+      }
+      logger?.warn?.(`[odds-api] archive fail-open for ${league}: ${archiveFailure}`);
+    }
     await resolveOddsApiEvents(result.events, league, repositories, logger);
     const offers = normalizeOddsApiToOffers(result.events, snapshotAt);
 
@@ -121,8 +164,39 @@ export async function ingestOddsApiLeague(
       seen.add(o.idempotencyKey);
       return true;
     });
+    if (upsertInputs.length === 0) {
+      const zeroOffersFailure = createZeroOffersFailure('odds-api', league);
+      await repositories.providerOffers.upsertCycleStatus({
+        runId: run.id,
+        providerKey: 'odds-api',
+        league,
+        cycleSnapshotAt: snapshotAt,
+        stageStatus: 'failed',
+        freshnessStatus: 'unknown',
+        proofStatus: 'waived',
+        failureCategory: zeroOffersFailure.category,
+        failureScope: zeroOffersFailure.scope,
+        affectedProviderKey: zeroOffersFailure.affectedProviderKey,
+        affectedSportKey: zeroOffersFailure.affectedSportKey,
+        lastError: zeroOffersFailure.message,
+        metadata: {
+          eventsCount: result.eventsCount,
+          offersCount: offers.length,
+        },
+      });
+    }
 
-    const upsertResult = await repositories.providerOffers.upsertBatch(upsertInputs);
+    const upsertResult = { insertedCount: 0, updatedCount: 0, totalProcessed: 0 };
+    for (const chunk of chunkByPolicy(upsertInputs, providerDbWritePolicy.maxBatchSize)) {
+      const chunkResult = await withProviderDbRetry(
+        () => repositories.providerOffers.upsertBatch(chunk),
+        providerDbWritePolicy,
+        { providerKey: 'odds-api', sportKey: league },
+      );
+      upsertResult.insertedCount += chunkResult.insertedCount;
+      upsertResult.updatedCount += chunkResult.updatedCount;
+      upsertResult.totalProcessed += chunkResult.totalProcessed;
+    }
 
     // Mark closing lines for any events that have already started
     const eventsForClosing = result.events.map((e) => ({
@@ -132,6 +206,43 @@ export async function ingestOddsApiLeague(
     await repositories.providerOffers.markClosingLines(eventsForClosing, snapshotAt);
     const inserted = upsertResult.insertedCount;
     const skipped = upsertResult.totalProcessed - upsertResult.insertedCount - upsertResult.updatedCount;
+    const partialFailure =
+      offers.length !== upsertInputs.length
+        ? createPartialMarketFailure(
+            'odds-api',
+            league,
+            null,
+            `Deduped ${offers.length - upsertInputs.length} duplicate normalized offer(s) before DB write`,
+          )
+        : null;
+
+    await repositories.providerOffers.upsertCycleStatus({
+      runId: run.id,
+      providerKey: 'odds-api',
+      league,
+      cycleSnapshotAt: snapshotAt,
+      stageStatus: upsertInputs.length === 0 ? 'failed' : 'merged',
+      freshnessStatus: 'fresh',
+      proofStatus: 'waived',
+      stagedCount: upsertInputs.length,
+      mergedCount: upsertResult.insertedCount + upsertResult.updatedCount,
+      duplicateCount: 0,
+      failureCategory:
+        archiveFailure != null
+          ? 'archive_failure'
+          : partialFailure?.category ?? null,
+      failureScope:
+        archiveFailure != null
+          ? 'archive'
+          : partialFailure?.scope ?? null,
+      affectedProviderKey: 'odds-api',
+      affectedSportKey: league,
+      lastError: archiveFailure ?? partialFailure?.message ?? null,
+      metadata: {
+        dbPolicy: providerDbWritePolicy,
+        archivePolicy: providerPayloadArchivePolicy,
+      },
+    });
 
     await repositories.runs.completeRun({
       runId: run.id,
@@ -176,6 +287,29 @@ export async function ingestOddsApiLeague(
     };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    const failure = classifyProviderIngestionFailure(error, {
+      providerKey: 'odds-api',
+      sportKey: league,
+    });
+    await repositories.providerOffers.upsertCycleStatus({
+      runId: run.id,
+      providerKey: 'odds-api',
+      league,
+      cycleSnapshotAt: snapshotAt,
+      stageStatus: 'failed',
+      freshnessStatus: 'unknown',
+      proofStatus: 'waived',
+      failureCategory: failure.category,
+      failureScope: failure.scope,
+      affectedProviderKey: failure.affectedProviderKey,
+      affectedSportKey: failure.affectedSportKey,
+      affectedMarketKey: failure.affectedMarketKey,
+      lastError: failure.message,
+      metadata: {
+        dbPolicy: providerDbWritePolicy,
+        archivePolicy: providerPayloadArchivePolicy,
+      },
+    });
     await repositories.runs.completeRun({
       runId: run.id,
       status: 'failed',
