@@ -15,6 +15,13 @@ import {
 import { ingestLeague } from './ingest-league.js';
 import { runIngestorCycles } from './ingestor-runner.js';
 import {
+  buildProviderOfferIdentityKey,
+  evaluateProviderOfferFreshnessGate,
+  parseProviderOfferStagingMode,
+  PROVISIONAL_PROVIDER_OFFER_IDENTITY_STRATEGY,
+  stageProviderOfferCycle,
+} from './provider-offer-staging.js';
+import {
   normalizeOddsApiToOffers,
   type NormalizedOddsOffer,
   type OddsApiEvent,
@@ -92,6 +99,177 @@ test('normalizeSGOPairedProp preserves supported player statEntity period props'
   assert.ok(normalized);
   assert.equal(normalized.providerMarketKey, 'threePointersMade-all-1h-ou');
   assert.equal(normalized.providerParticipantId, 'JALEN_BRUNSON_1_NBA');
+});
+
+test('buildProviderOfferIdentityKey uses the provisionally approved identity shape and leaves line semantics explicit', () => {
+  const base = {
+    providerKey: 'sgo',
+    providerEventId: 'evt-1',
+    providerMarketKey: 'points-all-game-ou',
+    providerParticipantId: 'player-1',
+    bookmakerKey: 'pinnacle',
+  };
+
+  const first = buildProviderOfferIdentityKey(base);
+  const second = buildProviderOfferIdentityKey({
+    ...base,
+    bookmakerKey: 'draftkings',
+  });
+
+  assert.equal(
+    first,
+    'sgo:evt-1:points-all-game-ou:player-1:pinnacle',
+  );
+  assert.notEqual(first, second);
+  assert.equal(
+    PROVISIONAL_PROVIDER_OFFER_IDENTITY_STRATEGY,
+    'provider_event_market_participant_book',
+  );
+});
+
+test('evaluateProviderOfferFreshnessGate flags stale and invalid snapshots', () => {
+  assert.deepEqual(
+    evaluateProviderOfferFreshnessGate({
+      snapshotAt: '2026-04-28T12:00:00.000Z',
+      now: '2026-04-28T12:10:00.000Z',
+      maxAgeMs: 15 * 60 * 1000,
+    }),
+    {
+      status: 'fresh',
+      ageMs: 10 * 60 * 1000,
+    },
+  );
+
+  assert.deepEqual(
+    evaluateProviderOfferFreshnessGate({
+      snapshotAt: '2026-04-28T12:00:00.000Z',
+      now: '2026-04-28T12:31:00.000Z',
+      maxAgeMs: 30 * 60 * 1000,
+    }),
+    {
+      status: 'stale',
+      ageMs: 31 * 60 * 1000,
+    },
+  );
+
+  assert.deepEqual(
+    evaluateProviderOfferFreshnessGate({
+      snapshotAt: 'not-a-date',
+      now: '2026-04-28T12:31:00.000Z',
+      maxAgeMs: 30 * 60 * 1000,
+    }),
+    {
+      status: 'invalid_snapshot',
+      ageMs: null,
+    },
+  );
+});
+
+test('parseProviderOfferStagingMode defaults to off for unknown values', () => {
+  assert.equal(parseProviderOfferStagingMode(undefined), 'off');
+  assert.equal(parseProviderOfferStagingMode('stage_only'), 'stage_only');
+  assert.equal(
+    parseProviderOfferStagingMode('stage_and_merge_verified'),
+    'stage_and_merge_verified',
+  );
+  assert.equal(parseProviderOfferStagingMode('mystery-mode'), 'off');
+});
+
+test('stageProviderOfferCycle blocks merge when replay proof is still required', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const result = await stageProviderOfferCycle({
+    repositories,
+    runId: '00000000-0000-0000-0000-000000000787',
+    providerKey: 'sgo',
+    league: 'NBA',
+    snapshotAt: '2026-04-28T12:00:00.000Z',
+    now: '2026-04-28T12:05:00.000Z',
+    mode: 'stage_and_merge_verified',
+    freshnessMaxAgeMs: 30 * 60 * 1000,
+    offers: [
+      {
+        providerKey: 'sgo',
+        providerEventId: 'evt-1',
+        providerMarketKey: 'points-all-game-ou',
+        providerParticipantId: 'player-1',
+        sportKey: 'NBA',
+        line: 22.5,
+        overOdds: -110,
+        underOdds: -110,
+        devigMode: 'PAIRED',
+        isOpening: true,
+        isClosing: false,
+        snapshotAt: '2026-04-28T12:00:00.000Z',
+        idempotencyKey: 'sgo:evt-1:points-all-game-ou:player-1:22.5:2026-04-28T12:00:00.000Z',
+        bookmakerKey: 'pinnacle',
+      },
+    ],
+  });
+
+  assert.equal(result.stageStatus, 'merge_blocked');
+  assert.equal(result.proofStatus, 'required');
+  assert.equal(result.stagedCount, 1);
+  assert.equal(result.mergedCount, 0);
+
+  const cycleStatus = await repositories.providerOffers.getCycleStatus(
+    '00000000-0000-0000-0000-000000000787',
+  );
+  assert.ok(cycleStatus);
+  assert.equal(cycleStatus.stage_status, 'merge_blocked');
+  assert.equal(cycleStatus.proof_status, 'required');
+  assert.match(cycleStatus.last_error ?? '', /Replay proof blocked merge/i);
+});
+
+test('stageProviderOfferCycle merges verified fresh offers once and marks reruns as duplicates', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const offer = {
+    providerKey: 'sgo',
+    providerEventId: 'evt-2',
+    providerMarketKey: 'rebounds-all-game-ou',
+    providerParticipantId: 'player-2',
+    sportKey: 'NBA',
+    line: 10.5,
+    overOdds: -112,
+    underOdds: -108,
+    devigMode: 'PAIRED' as const,
+    isOpening: true,
+    isClosing: false,
+    snapshotAt: '2026-04-28T12:00:00.000Z',
+    idempotencyKey: 'sgo:evt-2:rebounds-all-game-ou:player-2:10.5:2026-04-28T12:00:00.000Z',
+    bookmakerKey: 'pinnacle',
+  };
+
+  const first = await stageProviderOfferCycle({
+    repositories,
+    runId: '00000000-0000-0000-0000-000000000788',
+    providerKey: 'sgo',
+    league: 'NBA',
+    snapshotAt: '2026-04-28T12:00:00.000Z',
+    now: '2026-04-28T12:05:00.000Z',
+    mode: 'stage_and_merge_verified',
+    freshnessMaxAgeMs: 30 * 60 * 1000,
+    proofStatus: 'verified',
+    offers: [offer],
+  });
+
+  const second = await stageProviderOfferCycle({
+    repositories,
+    runId: '00000000-0000-0000-0000-000000000789',
+    providerKey: 'sgo',
+    league: 'NBA',
+    snapshotAt: '2026-04-28T12:00:00.000Z',
+    now: '2026-04-28T12:05:00.000Z',
+    mode: 'stage_and_merge_verified',
+    freshnessMaxAgeMs: 30 * 60 * 1000,
+    proofStatus: 'verified',
+    offers: [offer],
+  });
+
+  assert.equal(first.stageStatus, 'merged');
+  assert.equal(first.mergedCount, 1);
+  assert.equal(second.stageStatus, 'merged');
+  assert.equal(second.mergedCount, 0);
+  assert.equal(second.duplicateCount, 1);
 });
 
 test('collectConfiguredSgoApiKeyCandidates preserves both configured subscriptions without duplicating the active key', () => {

@@ -2,6 +2,21 @@ import type { ReplayRegistryEntry } from './types.js';
 
 export const CORE_REPLAY_PACKS: ReplayRegistryEntry[] = [
   {
+    id: 'v2-slate-replay-pack',
+    name: 'V2 Slate Replay Scaffold Pack',
+    scenarioId: 'slate-replay',
+    archiveSourceId: 'v2-lifecycle-fixture',
+    executionMode: 'replay',
+    expectedLifecycleCoverage: ['validated', 'queued', 'posted', 'settled'],
+    suitableFor: ['regression-canary', 'lifecycle-verification'],
+    expectedAssertions: [
+      'Slate replay scaffold can run deterministically with namespaced copies.',
+      'Proof bundles include machine-readable freshness and DB metric sidecars.'
+    ],
+    tags: ['v2', 'slate', 'replay'],
+    status: 'active'
+  },
+  {
     id: 'v2-full-lifecycle-pack',
     name: 'V2 Full Lifecycle Replay Pack',
     scenarioId: 'full-lifecycle',

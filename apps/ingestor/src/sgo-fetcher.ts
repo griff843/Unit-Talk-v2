@@ -31,6 +31,7 @@ export interface SGOFetchResult {
   eventsCount: number;
   events: SGOResolvedEvent[];
   pairedProps: SGOPairedProp[];
+  rawPayloads: unknown[];
   requestTelemetry: SGORequestTelemetry;
 }
 
@@ -180,6 +181,7 @@ export async function fetchAndPairSGOProps(
     eventsCount: rawEvents.length,
     events,
     pairedProps,
+    rawPayloads: payloads,
     requestTelemetry: telemetry,
   };
 }
@@ -235,6 +237,7 @@ export async function fetchSGOResultsWithTelemetry(
   options: SGOResultsFetchOptions,
 ): Promise<{
   results: SGOEventResult[];
+  rawPayloads: unknown[];
   requestTelemetry: SGORequestTelemetry;
 }> {
   const url = buildSgoResultsRequestUrl(options);
@@ -252,6 +255,7 @@ export async function fetchSGOResultsWithTelemetry(
     results: rawEvents
       .map(extractEventResult)
       .filter((event): event is SGOEventResult => event !== null),
+    rawPayloads: payloads,
     requestTelemetry: telemetry,
   };
 }

@@ -8,7 +8,6 @@ import type { DashboardData, DashboardRuntimeData, LifecycleSignal } from '@/lib
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
 
-/** Build drilldown links for health signals that have actionable detail pages */
 function buildDrilldownLinks(
   signals: LifecycleSignal[],
 ): Partial<Record<LifecycleSignal['signal'], string>> {
@@ -17,31 +16,26 @@ function buildDrilldownLinks(
   for (const s of signals) {
     switch (s.signal) {
       case 'discord_delivery':
-        // Failed or dead-letter outbox rows -> exceptions page filtered to delivery
         if (s.status !== 'WORKING') {
           links.discord_delivery = '/exceptions';
         }
         break;
       case 'submission':
-        // Drill down to picks list showing recently submitted
         if (s.status !== 'WORKING') {
           links.submission = '/picks-list?status=validated';
         }
         break;
       case 'scoring':
-        // Drill to picks missing scores
         if (s.status !== 'WORKING') {
           links.scoring = '/picks-list?status=validated';
         }
         break;
       case 'promotion':
-        // Drill to review queue for pending promotions
         if (s.status !== 'WORKING') {
           links.promotion = '/review';
         }
         break;
       case 'settlement':
-        // Manual review items in exceptions
         if (s.status !== 'WORKING') {
           links.settlement = '/exceptions';
         }
@@ -72,6 +66,21 @@ function readRefreshIntervalMs(searchParams?: Record<string, string | string[] |
   return DEFAULT_AUTO_REFRESH_INTERVAL_MS;
 }
 
+function formatTimestamp(value: string | null) {
+  return value ? new Date(value).toLocaleString() : '-';
+}
+
+function cycleStatusTone(status: DashboardRuntimeData['providerCycleSummary']['overallStatus']) {
+  switch (status) {
+    case 'healthy':
+      return 'text-emerald-300';
+    case 'warning':
+      return 'text-amber-300';
+    default:
+      return 'text-red-300';
+  }
+}
+
 export default async function DashboardPage({
   searchParams,
 }: {
@@ -80,6 +89,7 @@ export default async function DashboardPage({
   let data: DashboardData;
   let runtime: DashboardRuntimeData;
   let aliasReviewCounts = { missingBookAliases: 0, missingMarketAliases: 0 };
+
   try {
     const [dashboardData, dashboardRuntimeData, exceptionQueues] = await Promise.all([
       getDashboardData(),
@@ -129,9 +139,20 @@ export default async function DashboardPage({
         absent: 0,
         distinctEventsLast24h: 0,
         ingestorStatus: 'unknown',
+        latestLiveSnapshotAt: null,
+      },
+      providerCycleSummary: {
+        overallStatus: 'warning',
+        trackedLanes: 0,
+        mergedLanes: 0,
+        blockedLanes: 0,
+        failedLanes: 0,
+        staleLanes: 0,
+        proofRequiredLanes: 0,
+        latestCycleSnapshotAt: null,
+        latestUpdatedAt: null,
       },
     };
-    aliasReviewCounts = { missingBookAliases: 0, missingMarketAliases: 0 };
   }
 
   const observedAt = data.observedAt ?? new Date().toISOString();
@@ -142,14 +163,14 @@ export default async function DashboardPage({
       <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
         <div className="space-y-1">
           <h1 className="text-lg font-bold text-gray-100">Command Center</h1>
-          <p className="text-sm text-gray-500">Operational overview for pick flow, queue health, and delivery status.</p>
+          <p className="text-sm text-gray-500">Operational overview for pick flow, queue health, delivery status, and provider cycle staging.</p>
         </div>
         <AutoRefreshStatusBar lastUpdatedAt={observedAt} intervalMs={intervalMs} className="lg:min-w-[360px]" />
       </div>
 
       <HealthSignalsPanel signals={data.signals} drilldownLinks={buildDrilldownLinks(data.signals)} />
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
         <Card title="Delivery State">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div><span className="text-gray-400">Pending</span> <span className="font-bold">{runtime.outbox.pending}</span></div>
@@ -174,10 +195,10 @@ export default async function DashboardPage({
             </div>
             <div className="text-xs text-gray-500">{runtime.worker.detail}</div>
             <div className="text-xs text-gray-500">
-              Latest run: {runtime.worker.latestRunAt ? new Date(runtime.worker.latestRunAt).toLocaleString() : '—'}
+              Latest run: {formatTimestamp(runtime.worker.latestRunAt)}
             </div>
             <div className="text-xs text-gray-500">
-              Latest receipt: {runtime.worker.latestReceiptAt ? new Date(runtime.worker.latestReceiptAt).toLocaleString() : '—'}
+              Latest receipt: {formatTimestamp(runtime.worker.latestReceiptAt)}
             </div>
           </div>
         </Card>
@@ -191,12 +212,37 @@ export default async function DashboardPage({
           </div>
           <div className="mt-4 space-y-2 text-xs text-gray-500">
             <div>Ingestor status: {runtime.providerSummary.ingestorStatus}</div>
+            <div>Latest live snapshot: {formatTimestamp(runtime.providerSummary.latestLiveSnapshotAt)}</div>
             <div>Alias review: {aliasReviewCounts.missingBookAliases} missing book / {aliasReviewCounts.missingMarketAliases} missing market</div>
             {runtime.deliveryTargets.map((target) => (
               <div key={target.target}>
                 {target.target}: {target.recentSentCount} sent / {target.recentFailureCount} failed
               </div>
             ))}
+          </div>
+        </Card>
+
+        <Card title="Provider Cycle Staging">
+          <div className="space-y-3 text-sm">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-gray-400">Overall</span>
+              <span className={`font-bold uppercase ${cycleStatusTone(runtime.providerCycleSummary.overallStatus)}`}>
+                {runtime.providerCycleSummary.overallStatus}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div><span className="text-gray-400">Tracked lanes</span> <span className="font-bold">{runtime.providerCycleSummary.trackedLanes}</span></div>
+              <div><span className="text-gray-400">Merged</span> <span className="font-bold text-green-400">{runtime.providerCycleSummary.mergedLanes}</span></div>
+              <div><span className="text-gray-400">Blocked</span> <span className="font-bold text-yellow-400">{runtime.providerCycleSummary.blockedLanes}</span></div>
+              <div><span className="text-gray-400">Failed</span> <span className="font-bold text-red-400">{runtime.providerCycleSummary.failedLanes}</span></div>
+              <div><span className="text-gray-400">Stale gates</span> <span className="font-bold text-red-400">{runtime.providerCycleSummary.staleLanes}</span></div>
+              <div><span className="text-gray-400">Proof required</span> <span className="font-bold">{runtime.providerCycleSummary.proofRequiredLanes}</span></div>
+            </div>
+          </div>
+          <div className="mt-4 space-y-1 text-xs text-gray-500">
+            <div>Staging truth only. Live offer freshness remains in Provider Health.</div>
+            <div>Latest staged cycle snapshot: {formatTimestamp(runtime.providerCycleSummary.latestCycleSnapshotAt)}</div>
+            <div>Latest cycle status update: {formatTimestamp(runtime.providerCycleSummary.latestUpdatedAt)}</div>
           </div>
         </Card>
       </div>
@@ -228,7 +274,7 @@ export default async function DashboardPage({
             <span className="font-bold">
               {data.stats.roiPct != null
                 ? `${data.stats.roiPct.toFixed(1)}%`
-                : '—'}
+                : '-'}
             </span>
           </div>
         </div>

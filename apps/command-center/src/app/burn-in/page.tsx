@@ -2,10 +2,11 @@ import { Card } from '@/components/ui/Card';
 import {
   getExceptionQueues,
   getIntelligenceCoverage,
+  getProviderCycleHealth,
   getProviderHealth,
   getSnapshotData,
 } from '@/lib/data';
-import type { IntelligenceCoverage, ProviderHealth } from '@/lib/types';
+import type { IntelligenceCoverage, ProviderCycleHealthSummary, ProviderHealth } from '@/lib/types';
 import { AutoRefreshStatusBar } from '@/hooks/useAutoRefresh';
 
 const DEFAULT_AUTO_REFRESH_INTERVAL_MS = 30_000;
@@ -56,7 +57,7 @@ function formatPct(rate: number) {
 }
 
 function formatTimestamp(value: string | null) {
-  return value ? new Date(value).toLocaleString() : '—';
+  return value ? new Date(value).toLocaleString() : '-';
 }
 
 function statusClasses(status: RowStatus) {
@@ -106,7 +107,7 @@ function StatusTable({ rows }: { rows: StatusRow[] }) {
               <td className="py-3 pr-4 text-gray-200">{row.label}</td>
               <td className="py-3 pr-4 font-medium text-gray-100">{row.value}</td>
               <td className="py-3 pr-4"><StatusPill status={row.status} /></td>
-              <td className="py-3 text-xs text-gray-500">{row.note ?? '—'}</td>
+              <td className="py-3 text-xs text-gray-500">{row.note ?? '-'}</td>
             </tr>
           ))}
         </tbody>
@@ -162,6 +163,19 @@ function countDuplicateReceipts(rows: unknown[], cutoffMs: number) {
   return Array.from(counts.values()).filter((count) => count > 1).length;
 }
 
+function providerCycleRowStatus(
+  row: ProviderCycleHealthSummary['rows'][number],
+): RowStatus {
+  switch (row.productionStatus) {
+    case 'healthy':
+      return 'pass';
+    case 'warning':
+      return 'warn';
+    default:
+      return 'fail';
+  }
+}
+
 const SECTION8_ROWS: Array<{ component: string; verdict: string; note: string }> = [
   { component: 'Devigging', verdict: 'PROVEN', note: 'Submission-time path is live and covered in burn-in truth.' },
   { component: 'Kelly', verdict: 'PARTIAL', note: 'Computed in runtime metadata, but still not surfaced to members.' },
@@ -191,6 +205,9 @@ export default async function BurnInPage({
   const todayCoverage = unwrapResponse(todayCoverageResult) as unknown as IntelligenceCoverage;
   const weeklyCoverage = unwrapResponse(weeklyCoverageResult) as unknown as IntelligenceCoverage;
   const providerHealth = unwrapResponse(providerHealthResult) as unknown as ProviderHealth;
+  const providerCycleHealth = await getProviderCycleHealth({
+    latestProviderOfferSnapshotAt: providerHealth.latestProviderOfferSnapshotAt ?? null,
+  });
   const counts = asRecord(snapshot['counts']);
   const workerRuntime = asRecord(snapshot['workerRuntime']);
   const gradingAgent = asRecord(snapshot['gradingAgent']);
@@ -253,6 +270,12 @@ export default async function BurnInPage({
       label: 'Odds API data present',
       value: `${providerHealth.providers.filter((row) => row.providerKey.startsWith('odds-api') && row.last24hRows > 0).length} provider row(s) active`,
       status: providerHealth.providers.some((row) => row.providerKey.startsWith('odds-api') && row.last24hRows > 0) ? 'pass' : 'fail',
+    },
+    {
+      label: 'Provider cycle staging visible',
+      value: `${providerCycleHealth.trackedLanes} tracked lane(s)`,
+      status: providerCycleHealth.trackedLanes > 0 ? 'pass' : 'warn',
+      note: 'Staging-lane truth is shown separately from live provider_offers freshness.',
     },
     {
       label: 'Worker runtime healthy',
@@ -456,8 +479,9 @@ export default async function BurnInPage({
           <div className="space-y-3 text-sm">
             <div>Distinct offer events (24h): <span className="font-bold text-gray-100">{providerHealth.distinctEventsLast24h}</span></div>
             <div>Ingestor status: <span className="font-bold text-gray-100">{providerHealth.ingestorHealth.status}</span></div>
-            <div>SGO quota: <span className="font-bold text-gray-100">{providerHealth.quotaSummary.sgo ? `${providerHealth.quotaSummary.sgo.creditsUsed} used` : '—'}</span></div>
-            <div>Odds API quota: <span className="font-bold text-gray-100">{providerHealth.quotaSummary.oddsApi ? `${providerHealth.quotaSummary.oddsApi.creditsUsed} used` : '—'}</span></div>
+            <div>Latest live snapshot: <span className="font-bold text-gray-100">{formatTimestamp(providerHealth.latestProviderOfferSnapshotAt ?? null)}</span></div>
+            <div>SGO quota: <span className="font-bold text-gray-100">{providerHealth.quotaSummary.sgo ? `${providerHealth.quotaSummary.sgo.creditsUsed} used` : '-'}</span></div>
+            <div>Odds API quota: <span className="font-bold text-gray-100">{providerHealth.quotaSummary.oddsApi ? `${providerHealth.quotaSummary.oddsApi.creditsUsed} used` : '-'}</span></div>
           </div>
           <div className="mt-4 space-y-2 text-xs text-gray-500">
             {providerHealth.providers.map((row) => (
@@ -469,6 +493,95 @@ export default async function BurnInPage({
           </div>
         </Card>
       </div>
+
+      <Card title="Provider Cycle Production Health">
+        <div className="mb-4 grid gap-3 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="rounded border border-gray-800 px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Overall</div>
+            <div className="mt-1 font-semibold text-gray-100">{providerCycleHealth.overallStatus}</div>
+          </div>
+          <div className="rounded border border-gray-800 px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Tracked lanes</div>
+            <div className="mt-1 font-semibold text-gray-100">{providerCycleHealth.trackedLanes}</div>
+          </div>
+          <div className="rounded border border-gray-800 px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Merged</div>
+            <div className="mt-1 font-semibold text-emerald-300">{providerCycleHealth.mergedLanes}</div>
+          </div>
+          <div className="rounded border border-gray-800 px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Blocked</div>
+            <div className="mt-1 font-semibold text-amber-300">{providerCycleHealth.blockedLanes}</div>
+          </div>
+          <div className="rounded border border-gray-800 px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Stale gates</div>
+            <div className="mt-1 font-semibold text-red-300">{providerCycleHealth.staleLanes}</div>
+          </div>
+          <div className="rounded border border-gray-800 px-3 py-2 text-sm">
+            <div className="text-xs uppercase tracking-wide text-gray-500">Proof required</div>
+            <div className="mt-1 font-semibold text-gray-100">{providerCycleHealth.proofRequiredLanes}</div>
+          </div>
+        </div>
+        <div className="mb-4 space-y-1 text-xs text-gray-500">
+          <div>Staging truth only: this panel reflects `provider_cycle_status`, not live `provider_offers` cutover.</div>
+          <div>Latest staged cycle snapshot: {formatTimestamp(providerCycleHealth.latestCycleSnapshotAt)}</div>
+          <div>Latest live offer snapshot: {formatTimestamp(providerCycleHealth.liveOfferSnapshotAt)}</div>
+        </div>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left text-sm">
+            <thead>
+              <tr className="border-b border-gray-800 text-xs uppercase tracking-wide text-gray-500">
+                <th className="py-2 pr-4">Provider / League</th>
+                <th className="py-2 pr-4">Cycle Snapshot</th>
+                <th className="py-2 pr-4">Stage</th>
+                <th className="py-2 pr-4">Freshness</th>
+                <th className="py-2 pr-4">Proof</th>
+                <th className="py-2 pr-4">Counts</th>
+                <th className="py-2">Notes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {providerCycleHealth.rows.length === 0 ? (
+                <tr>
+                  <td className="py-3 text-xs text-gray-500" colSpan={7}>
+                    No provider cycle staging rows are visible yet.
+                  </td>
+                </tr>
+              ) : providerCycleHealth.rows.map((row) => (
+                <tr key={`${row.providerKey}-${row.league}`} className="border-b border-gray-900 align-top">
+                  <td className="py-3 pr-4 text-gray-200">
+                    <div>{row.providerKey}</div>
+                    <div className="text-xs text-gray-500">{row.league}</div>
+                  </td>
+                  <td className="py-3 pr-4 text-xs text-gray-400">
+                    <div>{formatTimestamp(row.cycleSnapshotAt)}</div>
+                    <div>updated {formatTimestamp(row.updatedAt)}</div>
+                  </td>
+                  <td className="py-3 pr-4">
+                    <StatusPill status={providerCycleRowStatus(row)} />
+                    <div className="mt-1 text-xs text-gray-500">{row.stageStatus}</div>
+                  </td>
+                  <td className="py-3 pr-4 text-gray-200">{row.freshnessStatus}</td>
+                  <td className="py-3 pr-4 text-gray-200">{row.proofStatus}</td>
+                  <td className="py-3 pr-4 text-xs text-gray-400">
+                    <div>staged {row.stagedCount}</div>
+                    <div>merged {row.mergedCount}</div>
+                    <div>dupes {row.duplicateCount}</div>
+                  </td>
+                  <td className="py-3 text-xs text-gray-500">
+                    <div>{row.statusReason}</div>
+                    {row.failureCategory && (
+                      <div className="mt-1">failure: {row.failureCategory}{row.failureScope ? ` / ${row.failureScope}` : ''}</div>
+                    )}
+                    {row.lastError && (
+                      <div className="mt-1 text-red-300">{row.lastError}</div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Card>
 
       <Card title="Daily Checklist">
         <StatusTable rows={checklistRows} />

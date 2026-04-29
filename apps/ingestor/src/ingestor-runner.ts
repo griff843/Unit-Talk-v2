@@ -1,6 +1,10 @@
 import type { EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
+import type {
+  ProviderIngestionDbWritePolicy,
+  ProviderPayloadArchivePolicy,
+} from './provider-ingestion-policy.js';
 import { fetchSGOAccountUsage, type SGOAccountUsage } from './sgo-fetcher.js';
 import {
   formatSchedulerLog,
@@ -29,6 +33,8 @@ export interface IngestorRunnerOptions {
   /** Max total time for the results pagination loop (ms). Defaults to 300_000 in sgo-fetcher. */
   resultsMaxFetchMs?: number;
   logger?: Pick<Console, 'warn' | 'info'>;
+  providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
+  providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
   triggerGradingRun?: typeof triggerGradingRun;
   /** Called with the staleness message when cycle gap > CYCLE_GAP_WARN_MS. Wire to Discord in production. */
   onStalenessAlert?: (message: string) => Promise<void>;
@@ -95,6 +101,12 @@ export async function runIngestorCycles(
               : {}),
             ...(options.sleep ? { sleep: options.sleep } : {}),
             ...(options.logger ? { logger: options.logger } : {}),
+            ...(options.providerDbWritePolicy
+              ? { providerDbWritePolicy: options.providerDbWritePolicy }
+              : {}),
+            ...(options.providerPayloadArchivePolicy
+              ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
+              : {}),
           }),
         );
       } catch (leagueError: unknown) {
@@ -120,6 +132,12 @@ export async function runIngestorCycles(
             repositories: options.repositories,
             ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
             ...(options.logger ? { logger: options.logger } : {}),
+            ...(options.providerDbWritePolicy
+              ? { providerDbWritePolicy: options.providerDbWritePolicy }
+              : {}),
+            ...(options.providerPayloadArchivePolicy
+              ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
+              : {}),
           }),
         );
       }
@@ -228,6 +246,12 @@ async function runFinalizedRepollsForCycle(
           ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
           ...(options.sleep ? { sleep: options.sleep } : {}),
           ...(options.logger ? { logger: options.logger } : {}),
+          ...(options.providerDbWritePolicy
+            ? { providerDbWritePolicy: options.providerDbWritePolicy }
+            : {}),
+          ...(options.providerPayloadArchivePolicy
+            ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
+            : {}),
         }),
       );
     }

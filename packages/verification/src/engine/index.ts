@@ -71,10 +71,20 @@ export { DeterminismValidator } from './determinism-validator.js';
 
 // R2: Proof writer
 export { ReplayProofWriter } from './replay-proof-writer.js';
+export type { ReplayProofArtifact } from './replay-proof-writer.js';
 
 // R2: Replay adapters
 export { ReplayFeedAdapter } from './adapters/replay-feed.js';
 export { ReplaySettlementAdapter } from './adapters/replay-settlement.js';
+export { runSlateReplayHarness, expandEventsForVolume } from './slate-replay.js';
+export type {
+  SlateReplayHookCapture,
+  SlateReplayHookStatus,
+  SlateReplayHarnessOptions,
+  SlateReplayHarnessResult,
+  SlateReplayMachineSummary,
+  SlateReplayVolumeMode,
+} from './slate-replay.js';
 
 // R3: Shadow mode
 export { ShadowFeedAdapter } from './adapters/shadow-feed.js';

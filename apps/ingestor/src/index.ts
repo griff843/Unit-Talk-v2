@@ -17,6 +17,11 @@ import {
   collectConfiguredSgoApiKeyCandidates,
   resolveActiveSgoApiKey,
 } from './sgo-key-manager.js';
+import { parseProviderOfferStagingMode } from './provider-offer-staging.js';
+import {
+  resolveProviderIngestionDbWritePolicy,
+  resolveProviderPayloadArchivePolicy,
+} from './provider-ingestion-policy.js';
 
 const lokiUrl = process.env.LOKI_URL?.trim();
 const ingestorWriter = lokiUrl
@@ -49,6 +54,11 @@ function createIngestorRuntimeDependencies() {
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
 
   const runtimeMode = readIngestorRuntimeMode(env);
+  const providerOfferStagingMode = parseProviderOfferStagingMode(
+    env.UNIT_TALK_PROVIDER_OFFER_STAGING_MODE,
+  );
+  const providerDbWritePolicy = resolveProviderIngestionDbWritePolicy(env);
+  const providerPayloadArchivePolicy = resolveProviderPayloadArchivePolicy(env);
 
   try {
     const connection = createServiceRoleDatabaseConnectionConfig(env);
@@ -64,6 +74,9 @@ function createIngestorRuntimeDependencies() {
       resultsLookbackHours,
       resultsMaxFetchMs,
       schedulerConfig,
+      providerOfferStagingMode,
+      providerDbWritePolicy,
+      providerPayloadArchivePolicy,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
@@ -94,6 +107,9 @@ function createIngestorRuntimeDependencies() {
       resultsLookbackHours,
       resultsMaxFetchMs,
       schedulerConfig,
+      providerOfferStagingMode,
+      providerDbWritePolicy,
+      providerPayloadArchivePolicy,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
       apiUrl,
@@ -118,6 +134,9 @@ export function createIngestorRuntimeSummary() {
     autorun: runtime.autorun,
     skipResults: runtime.skipResults,
     resultsLookbackHours: runtime.resultsLookbackHours,
+    providerOfferStagingMode: runtime.providerOfferStagingMode,
+    providerDbWritePolicy: runtime.providerDbWritePolicy,
+    providerPayloadArchivePolicy: runtime.providerPayloadArchivePolicy,
     scheduler: {
       enabled: runtime.schedulerConfig.enabled,
       peakPollMs: runtime.schedulerConfig.peakPollMs,
@@ -168,6 +187,8 @@ if (runtime.autorun) {
         resultsMaxFetchMs: runtime.resultsMaxFetchMs,
         pollIntervalMs: runtime.pollIntervalMs,
         schedulerConfig: runtime.schedulerConfig,
+        providerDbWritePolicy: runtime.providerDbWritePolicy,
+        providerPayloadArchivePolicy: runtime.providerPayloadArchivePolicy,
         logger: console,
         ...(opsAlertWebhookUrl
           ? { onStalenessAlert: (msg: string) => postOpsAlert(opsAlertWebhookUrl, msg) }

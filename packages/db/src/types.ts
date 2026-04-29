@@ -35,6 +35,12 @@ import {
   promotionTargets,
   settlementResults,
   submissionStatuses,
+  providerCycleFreshnessStatuses,
+  providerIngestionFailureCategories,
+  providerIngestionFailureScopes,
+  providerCycleProofStatuses,
+  providerCycleStageStatuses,
+  providerOfferStageStatuses,
   systemRunStatuses,
   writerRoles,
 } from './schema.js';
@@ -64,6 +70,12 @@ export type SettlementResult = (typeof settlementResults)[number];
 export type SettlementSource = (typeof settlementSources)[number];
 export type SettlementConfidence = (typeof settlementConfidences)[number];
 export type SystemRunStatus = (typeof systemRunStatuses)[number];
+export type ProviderOfferStageStatus = (typeof providerOfferStageStatuses)[number];
+export type ProviderCycleStageStatus = (typeof providerCycleStageStatuses)[number];
+export type ProviderCycleFreshnessStatus = (typeof providerCycleFreshnessStatuses)[number];
+export type ProviderCycleProofStatus = (typeof providerCycleProofStatuses)[number];
+export type ProviderIngestionFailureCategory = (typeof providerIngestionFailureCategories)[number];
+export type ProviderIngestionFailureScope = (typeof providerIngestionFailureScopes)[number];
 export type ParticipantType = (typeof participantTypes)[number];
 export type EventStatus = (typeof eventStatuses)[number];
 export type EventParticipantRole = (typeof eventParticipantRoles)[number];
@@ -274,6 +286,53 @@ export interface SportRow {
 export type ProviderOfferRow = Omit<Tables<'provider_offers'>, 'devig_mode'> & {
   devig_mode: 'PAIRED' | 'FALLBACK_SINGLE_SIDED';
 };
+
+export interface ProviderOfferStagingRow {
+  id: string;
+  run_id: string;
+  provider_key: string;
+  league: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  sport_key: string | null;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  devig_mode: 'PAIRED' | 'FALLBACK_SINGLE_SIDED';
+  is_opening: boolean;
+  is_closing: boolean;
+  snapshot_at: string;
+  idempotency_key: string;
+  bookmaker_key: string | null;
+  identity_key: string;
+  merge_status: ProviderOfferStageStatus;
+  merge_error: string | null;
+  merged_at: string | null;
+  created_at: string;
+}
+
+export interface ProviderCycleStatusRow {
+  run_id: string;
+  provider_key: string;
+  league: string;
+  cycle_snapshot_at: string;
+  stage_status: ProviderCycleStageStatus;
+  freshness_status: ProviderCycleFreshnessStatus;
+  proof_status: ProviderCycleProofStatus;
+  staged_count: number;
+  merged_count: number;
+  duplicate_count: number;
+  failure_category: ProviderIngestionFailureCategory | null;
+  failure_scope: ProviderIngestionFailureScope | null;
+  affected_provider_key: string | null;
+  affected_sport_key: string | null;
+  affected_market_key: string | null;
+  last_error: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
 
 export interface SportMarketTypeRow {
   id: string;

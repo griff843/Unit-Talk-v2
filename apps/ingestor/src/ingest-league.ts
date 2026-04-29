@@ -3,11 +3,28 @@ import {
   CircuitBreaker,
   type CircuitBreakerOptions,
 } from './circuit-breaker.js';
+import { archiveRawProviderPayload, shouldBlockOnArchiveFailure } from './raw-provider-payload-archive.js';
 import { resolveSgoEntities } from './entity-resolver.js';
 import {
   fetchSGOResultsWithTelemetry,
   type SGORequestTelemetry,
 } from './sgo-fetcher.js';
+import {
+  classifyProviderIngestionFailure,
+  createPartialMarketFailure,
+  createStaleAfterCycleFailure,
+  createZeroOffersFailure,
+} from './provider-ingestion-failures.js';
+import { chunkByPolicy, withProviderDbRetry } from './provider-ingestion-db.js';
+import type {
+  ProviderIngestionDbWritePolicy,
+  ProviderPayloadArchivePolicy,
+} from './provider-ingestion-policy.js';
+import {
+  evaluateProviderOfferFreshnessGate,
+  type ProviderOfferStagingMode,
+  stageProviderOfferCycle,
+} from './provider-offer-staging.js';
 import { resolveAndInsertResults } from './results-resolver.js';
 import {
   fetchAndPairSGOProps,
@@ -46,6 +63,9 @@ export interface IngestLeagueOptions {
    * Use for backfill of completed events. Live ingest should leave this unset.
    */
   historical?: boolean;
+  providerOfferStagingMode?: ProviderOfferStagingMode;
+  providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
+  providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
 }
 
 export interface IngestQuotaSummary {
@@ -113,6 +133,19 @@ export async function ingestLeague(
   }
 
   const snapshotAt = options.snapshotAt ?? new Date().toISOString();
+  const providerDbWritePolicy = options.providerDbWritePolicy ?? {
+    statementTimeoutMs: 15_000,
+    lockTimeoutMs: 5_000,
+    maxBatchSize: 500,
+    mergeChunkSize: 250,
+    retryMaxAttempts: 2,
+    retryBackoffMs: 1_000,
+  };
+  const providerPayloadArchivePolicy = options.providerPayloadArchivePolicy ?? {
+    mode: 'fail_open' as const,
+    spoolDir: 'out/provider-payload-archive',
+  };
+  const providerOfferStagingMode = options.providerOfferStagingMode ?? 'off';
   const run = await repositories.runs.startRun({
     runType: 'ingestor.cycle',
     actor: 'ingestor',
@@ -129,6 +162,12 @@ export async function ingestLeague(
     let upsert = { insertedCount: 0, updatedCount: 0 };
     let normalizedCount = 0;
     let skippedCount = 0;
+    let archiveFailure:
+      | {
+          message: string;
+          archivedAt: string | null;
+        }
+      | null = null;
 
     if (options.resultsOnly) {
       fetched = createEmptyFetchResult(snapshotAt);
@@ -158,6 +197,31 @@ export async function ingestLeague(
           options.circuitBreaker,
         );
       fetched = await oddsCb.call();
+
+      try {
+        await archiveRawProviderPayload({
+          providerKey: 'sgo',
+          league,
+          runId: run.id,
+          snapshotAt,
+          kind: 'odds',
+          payload: fetched.rawPayloads,
+          spoolDir: providerPayloadArchivePolicy.spoolDir,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        archiveFailure = {
+          message,
+          archivedAt: null,
+        };
+        if (shouldBlockOnArchiveFailure(providerPayloadArchivePolicy.mode)) {
+          throw new Error(`archive failure: ${message}`);
+        }
+        options.logger?.warn?.(
+          `[ingestor] archive fail-open for sgo/${league}: ${message}`,
+        );
+      }
 
       resolved = await resolveSgoEntities(fetched.events, repositories, {
         ...(options.logger ? { logger: options.logger } : {}),
@@ -199,9 +263,115 @@ export async function ingestLeague(
             isOpening,
           };
         });
-
-      upsert = await repositories.providerOffers.upsertBatch(normalized);
       normalizedCount = normalized.length;
+      if (normalized.length === 0) {
+        const zeroOffersFailure = createZeroOffersFailure('sgo', league);
+        await repositories.providerOffers.upsertCycleStatus({
+          runId: run.id,
+          providerKey: 'sgo',
+          league,
+          cycleSnapshotAt: snapshotAt,
+          stageStatus: 'failed',
+          freshnessStatus: 'unknown',
+          proofStatus: 'waived',
+          failureCategory: zeroOffersFailure.category,
+          failureScope: zeroOffersFailure.scope,
+          affectedProviderKey: zeroOffersFailure.affectedProviderKey,
+          affectedSportKey: zeroOffersFailure.affectedSportKey,
+          lastError: zeroOffersFailure.message,
+          metadata: {
+            providerOfferStagingMode,
+            pairedCount: fetched.pairedProps.length,
+            normalizedCount,
+          },
+        });
+      } else if (providerOfferStagingMode === 'off') {
+        for (const chunk of chunkByPolicy(
+          normalized,
+          providerDbWritePolicy.maxBatchSize,
+        )) {
+          const result = await withProviderDbRetry(
+            () => repositories.providerOffers.upsertBatch(chunk),
+            providerDbWritePolicy,
+            { providerKey: 'sgo', sportKey: league },
+          );
+          upsert.insertedCount += result.insertedCount;
+          upsert.updatedCount += result.updatedCount;
+        }
+
+        const freshness = evaluateProviderOfferFreshnessGate({
+          snapshotAt,
+          maxAgeMs: 30 * 60 * 1000,
+        });
+        const partialFailure =
+          fetched.pairedProps.length !== normalized.length
+            ? createPartialMarketFailure(
+                'sgo',
+                league,
+                null,
+                `Normalization skipped ${fetched.pairedProps.length - normalized.length} provider offer row(s)`,
+              )
+            : null;
+        const staleFailure =
+          freshness.status !== 'fresh'
+            ? createStaleAfterCycleFailure(
+                'sgo',
+                league,
+                `Freshness degraded after cycle with status=${freshness.status}`,
+              )
+            : null;
+
+        await repositories.providerOffers.upsertCycleStatus({
+          runId: run.id,
+          providerKey: 'sgo',
+          league,
+          cycleSnapshotAt: snapshotAt,
+          stageStatus: 'merged',
+          freshnessStatus: freshness.status,
+          proofStatus: 'waived',
+          stagedCount: normalized.length,
+          mergedCount: upsert.insertedCount + upsert.updatedCount,
+          duplicateCount: 0,
+          failureCategory:
+            archiveFailure != null
+              ? 'archive_failure'
+              : partialFailure?.category ?? staleFailure?.category ?? null,
+          failureScope:
+            archiveFailure != null
+              ? 'archive'
+              : partialFailure?.scope ?? staleFailure?.scope ?? null,
+          affectedProviderKey: 'sgo',
+          affectedSportKey: league,
+          lastError:
+            archiveFailure?.message ??
+            partialFailure?.message ??
+            staleFailure?.message ??
+            null,
+          metadata: {
+            directWrite: true,
+            providerOfferStagingMode,
+            dbPolicy: providerDbWritePolicy,
+            archivePolicy: providerPayloadArchivePolicy,
+          },
+        });
+      } else {
+        const stagingResult = await stageProviderOfferCycle({
+          repositories,
+          runId: run.id,
+          providerKey: 'sgo',
+          league,
+          snapshotAt,
+          offers: normalized,
+          mode: providerOfferStagingMode,
+          freshnessMaxAgeMs: 30 * 60 * 1000,
+          proofStatus: 'required',
+        });
+        upsert = {
+          insertedCount: stagingResult.mergedCount,
+          updatedCount: stagingResult.duplicateCount,
+        };
+      }
+
       const startedEvents =
         await repositories.events.listStartedBySnapshot(snapshotAt);
       const closingCandidates = new Map<
@@ -238,6 +408,7 @@ export async function ingestLeague(
     }
     const emptyResults = {
       results: [],
+      rawPayloads: [],
       requestTelemetry: createEmptyRequestTelemetry('results'),
     };
     let fetchedResults: Awaited<
@@ -278,6 +449,27 @@ export async function ingestLeague(
           options.circuitBreaker,
         );
       fetchedResults = await resultsCb.call();
+      try {
+        await archiveRawProviderPayload({
+          providerKey: 'sgo',
+          league,
+          runId: run.id,
+          snapshotAt,
+          kind: 'results',
+          payload: fetchedResults.rawPayloads,
+          spoolDir: providerPayloadArchivePolicy.spoolDir,
+        });
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        if (shouldBlockOnArchiveFailure(providerPayloadArchivePolicy.mode)) {
+          throw new Error(`archive failure: ${message}`);
+        }
+        archiveFailure = { message, archivedAt: null };
+        options.logger?.warn?.(
+          `[ingestor] archive fail-open for sgo/${league} results: ${message}`,
+        );
+      }
     }
 
     const completedResultEvents = fetchedResults.results
@@ -367,6 +559,30 @@ export async function ingestLeague(
       quota,
     };
   } catch (error) {
+    const failure = classifyProviderIngestionFailure(error, {
+      providerKey: 'sgo',
+      sportKey: league,
+    });
+    await repositories.providerOffers.upsertCycleStatus({
+      runId: run.id,
+      providerKey: 'sgo',
+      league,
+      cycleSnapshotAt: snapshotAt,
+      stageStatus: 'failed',
+      freshnessStatus: 'unknown',
+      proofStatus: 'waived',
+      failureCategory: failure.category,
+      failureScope: failure.scope,
+      affectedProviderKey: failure.affectedProviderKey,
+      affectedSportKey: failure.affectedSportKey,
+      affectedMarketKey: failure.affectedMarketKey,
+      lastError: failure.message,
+      metadata: {
+        providerOfferStagingMode,
+        dbPolicy: providerDbWritePolicy,
+        archivePolicy: providerPayloadArchivePolicy,
+      },
+    });
     await repositories.runs.completeRun({
       runId: run.id,
       status: 'failed',
@@ -443,6 +659,7 @@ function createEmptyFetchResult(_snapshotAt: string): SGOFetchResult {
     eventsCount: 0,
     events: [],
     pairedProps: [],
+    rawPayloads: [],
     requestTelemetry: createEmptyRequestTelemetry('odds'),
   };
 }
