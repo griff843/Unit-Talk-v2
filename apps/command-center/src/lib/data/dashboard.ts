@@ -3,6 +3,7 @@ import { getSnapshotData, getPicksPipelineData, getRecapData } from './snapshot.
 import { getProviderHealth } from './intelligence.js';
 import { getDataClient } from './client.js';
 import { getProviderCycleHealth } from './provider-cycle-health.js';
+import { getStorageHealth } from './storage-health.js';
 import type {
   DashboardData,
   DashboardRuntimeData,
@@ -637,9 +638,10 @@ export async function getDashboardData(): Promise<DashboardData> {
 // ── getDashboardRuntimeData ───────────────────────────────────────────────────
 
 export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
-  const [snapshot, providerHealthResult] = await Promise.all([
+  const [snapshot, providerHealthResult, storageHealth] = await Promise.all([
     getSnapshotData(),
     getProviderHealth(),
+    getStorageHealth(),
   ]);
 
   const snap = unwrapResponse(snapshot);
@@ -652,6 +654,11 @@ export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
 
   const providerHealth = asRecord(unwrapResponse(providerHealthResult));
   const providers = asArray(providerHealth['providers']).map(asRecord);
+  const recentReceipts = asArray(snap['recentReceipts']).map(asRecord);
+  const observability = asRecord(snap['observability']);
+  const observabilityMetrics = asRecord(observability['metrics']);
+  const observabilityAlerts = asArray(observability['alertConditions']).map(asRecord);
+  const gradingAgent = asRecord(snap['gradingAgent']);
 
   const activeProviders = providers.filter((p) => asString(p['status']) === 'active').length;
   const staleProviders = providers.filter((p) => asString(p['status']) === 'stale').length;
@@ -663,6 +670,12 @@ export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
   const providerCycleSummary = await getProviderCycleHealth({
     latestProviderOfferSnapshotAt: latestLiveSnapshotAt,
   });
+  const sentReceipts = recentReceipts.filter((receipt) => asString(receipt['status']) === 'sent').length;
+  const failedReceipts = recentReceipts.filter((receipt) => asString(receipt['status']) === 'failed').length;
+  const lastSentReceiptAt =
+    recentReceipts.find((receipt) => asString(receipt['status']) === 'sent')?.['recorded_at'];
+  const lastFailedReceiptAt =
+    recentReceipts.find((receipt) => asString(receipt['status']) === 'failed')?.['recorded_at'];
 
   return {
     outbox: {
@@ -725,6 +738,49 @@ export async function getDashboardRuntimeData(): Promise<DashboardRuntimeData> {
       proofRequiredLanes: providerCycleSummary.proofRequiredLanes,
       latestCycleSnapshotAt: providerCycleSummary.latestCycleSnapshotAt,
       latestUpdatedAt: providerCycleSummary.latestUpdatedAt,
+    },
+    receipts: {
+      sent: sentReceipts,
+      failed: failedReceipts,
+      simulated: asNumber(counts['simulatedDeliveries']),
+      lastSentAt: typeof lastSentReceiptAt === 'string' ? lastSentReceiptAt : null,
+      lastFailedAt: typeof lastFailedReceiptAt === 'string' ? lastFailedReceiptAt : null,
+    },
+    grading: {
+      lastGradingRunAt: asStringOrNull(gradingAgent['lastGradingRunAt']),
+      lastGradingRunStatus: asStringOrNull(gradingAgent['lastGradingRunStatus']),
+      lastPicksGraded: asNumberOrNull(gradingAgent['lastPicksGraded']),
+      lastFailed: asNumberOrNull(gradingAgent['lastFailed']),
+      lastRecapPostAt: asStringOrNull(gradingAgent['lastRecapPostAt']),
+      lastRecapChannel: asStringOrNull(gradingAgent['lastRecapChannel']),
+      runCount: asNumber(gradingAgent['runCount']),
+    },
+    observability: {
+      failedRuns: asNumber(observabilityMetrics['failedRuns']),
+      activeIncidents: asNumber(observabilityMetrics['activeIncidents']),
+      pendingOutboxAgeMaxMinutes: asNumberOrNull(observabilityMetrics['pendingOutboxAgeMaxMinutes']),
+      latestDistributionRunAt: asStringOrNull(observabilityMetrics['latestDistributionRunAt']),
+      latestIngestorRunAt: asStringOrNull(observabilityMetrics['latestIngestorRunAt']),
+      latestWorkerHeartbeatAt: asStringOrNull(observabilityMetrics['latestWorkerHeartbeatAt']),
+      alertConditions: observabilityAlerts.map((alert) => ({
+        id: asString(alert['id']),
+        severity: asString(alert['severity']),
+        active: alert['active'] === true,
+        detail: asString(alert['detail']),
+      })),
+    },
+    db: storageHealth,
+    baseline: {
+      normal: [
+        'Provider freshness stays green, worker heartbeat is recent, and no dead-letter backlog accumulates.',
+        'Disk projection remains outside the 14-day window, WAL growth is steady, and backups keep completing.',
+        'Locks, long transactions, and slow queries stay at zero or near-zero during normal slate traffic.',
+      ],
+      abnormal: [
+        'Days-to-full entering the 14/7/3 day bands, especially when provider-offer or archive growth accelerates.',
+        'Any waiting locks, long transactions over 5 minutes, or active slow queries over 30 seconds.',
+        'Missing grading/recap runs, stale receipts, dead-letter rows, or backups no longer completing cleanly.',
+      ],
     },
   };
 }

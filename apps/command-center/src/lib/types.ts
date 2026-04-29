@@ -389,4 +389,105 @@ export interface DashboardRuntimeData {
     latestCycleSnapshotAt: string | null;
     latestUpdatedAt: string | null;
   };
+  receipts: {
+    sent: number;
+    failed: number;
+    simulated: number;
+    lastSentAt: string | null;
+    lastFailedAt: string | null;
+  };
+  grading: {
+    lastGradingRunAt: string | null;
+    lastGradingRunStatus: string | null;
+    lastPicksGraded: number | null;
+    lastFailed: number | null;
+    lastRecapPostAt: string | null;
+    lastRecapChannel: string | null;
+    runCount: number;
+  };
+  observability: {
+    failedRuns: number;
+    activeIncidents: number;
+    pendingOutboxAgeMaxMinutes: number | null;
+    latestDistributionRunAt: string | null;
+    latestIngestorRunAt: string | null;
+    latestWorkerHeartbeatAt: string | null;
+    alertConditions: Array<{
+      id: string;
+      severity: string;
+      active: boolean;
+      detail: string;
+    }>;
+  };
+  db: DbRuntimeHealth;
+  baseline: {
+    normal: string[];
+    abnormal: string[];
+  };
+}
+
+export interface StorageGrowthSource {
+  source: string;
+  tableBytes: number;
+  indexBytes: number;
+  totalBytes: number;
+  estimatedGrowthBytesPerDay: number;
+  rowsLastDay: number;
+}
+
+export interface StorageDomainHealth {
+  name: 'app' | 'ingestion';
+  totalBytes: number;
+  totalGiB: number;
+  estimatedGrowthBytesPerDay: number;
+  estimatedGrowthGiBPerDay: number;
+  daysToFull: number | null;
+  alertStatus: 'stable' | 'watch' | 'warning' | 'critical';
+  topGrowthSources: StorageGrowthSource[];
+}
+
+export interface DbRuntimeHealth {
+  disk: {
+    provisionedGiB: number;
+    usedGiB: number;
+    availableGiB: number;
+    usedPct: number;
+    iops: number;
+    throughputMiBps: number;
+    diskType: string;
+    observedAt: string;
+    projectedDaysToFull: number | null;
+    alertStatus: 'stable' | 'watch' | 'warning' | 'critical';
+  };
+  connections: {
+    used: number;
+    max: number;
+    waiting: number;
+  };
+  locks: {
+    waiting: number;
+  };
+  longTransactions: {
+    count: number;
+    maxAgeSeconds: number;
+  };
+  slowQueries: {
+    count: number;
+    maxAgeSeconds: number;
+  };
+  wal: {
+    sizeGiB: number;
+    estimatedGrowthGiBPerDay: number;
+    archiveMode: string;
+    archiveConfigured: boolean;
+  };
+  backups: {
+    pitrEnabled: boolean;
+    walGEnabled: boolean;
+    lastBackupAt: string | null;
+    lastBackupStatus: string | null;
+    restorePointCount: number;
+  };
+  storageDomains: StorageDomainHealth[];
+  topGrowthSources: StorageGrowthSource[];
 }

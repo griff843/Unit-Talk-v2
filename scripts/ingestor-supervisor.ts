@@ -11,6 +11,12 @@ import {
   evaluateIngestorHealth,
   type IngestorSupervisorState,
 } from '../apps/ingestor/src/supervisor.js';
+import {
+  appendRestartAuditLog,
+  createRestartAuditEntry,
+  evaluateRestartRequest,
+  readRestartAuditLog,
+} from './restart-controls.js';
 
 type Command = 'start' | 'run' | 'status' | 'stop' | 'restart';
 
@@ -43,6 +49,7 @@ const CHILD_LOG = path.join(RUNTIME_DIR, 'ingestor.log');
 const STATE_FILE = path.join(RUNTIME_DIR, 'state.json');
 const SUPERVISOR_SCRIPT = path.join(ROOT, 'scripts', 'ingestor-supervisor.ts');
 const INGESTOR_ENTRY = path.join(ROOT, 'apps', 'ingestor', 'src', 'index.ts');
+const RESTART_AUDIT_LOG = path.join(ROOT, 'out', 'runtime-control', 'restart-audit.jsonl');
 
 async function main() {
   const command = normalizeCommand(process.argv[2]);
@@ -61,6 +68,7 @@ async function main() {
       await stopSupervisor();
       return;
     case 'restart':
+      enforceRestartPolicy('ingestor');
       await stopSupervisor({ silentIfMissing: true });
       await startSupervisor();
       return;
@@ -384,6 +392,28 @@ function persistState(state: IngestorSupervisorState) {
 
 function ensureRuntimeDir() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+}
+
+function enforceRestartPolicy(service: 'ingestor') {
+  const now = new Date();
+  const history = readRestartAuditLog(RESTART_AUDIT_LOG);
+  const decision = evaluateRestartRequest({ service, history, now });
+  appendRestartAuditLog(
+    RESTART_AUDIT_LOG,
+    createRestartAuditEntry({
+      service,
+      outcome: decision.allowed ? 'allowed' : 'denied',
+      reason: decision.reason,
+      message: decision.message,
+      now,
+    }),
+  );
+
+  if (!decision.allowed) {
+    throw new Error(decision.message);
+  }
+
+  console.log(`[ingestor-supervisor] ${decision.message}`);
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number) {

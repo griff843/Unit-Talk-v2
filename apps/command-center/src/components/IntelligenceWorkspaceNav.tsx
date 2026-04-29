@@ -13,7 +13,7 @@ const INTELLIGENCE_TABS: TabItem[] = [
   { href: '/performance', label: 'Performance' },
   { href: '/intelligence', label: 'Form Windows' },
   { href: '/intelligence/attribution', label: 'Governed Attribution' },
-  { href: '/intelligence/calibration', label: 'Scoring Calibration', badge: 'shell' },
+  { href: '/intelligence/calibration', label: 'Model Feedback' },
   { href: '/intelligence/roi', label: 'ROI Overview', badge: 'shell' },
 ];
 
