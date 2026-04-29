@@ -1,5 +1,6 @@
 {
   "schemaVersion": "provider-offer-replay.v1",
+  "verdict": "pass",
   "packDir": "provider-replay-capture-1777467869674",
   "mode": "2x",
   "providerKey": "sgo",
