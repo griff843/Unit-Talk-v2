@@ -2,7 +2,7 @@
  * The Odds API Ingest Module
  *
  * Fetches odds from The Odds API (Pinnacle + multi-book consensus)
- * and stores as provider_offers records alongside SGO data.
+ * and stores them into the compact/current provider-offer surfaces alongside SGO data.
  *
  * Issue: UTV2-197 (Sprint D)
  */
@@ -68,7 +68,7 @@ export interface OddsApiIngestSummary {
 
 /**
  * Ingest odds from The Odds API for a single league.
- * Fetches Pinnacle + configured bookmakers, normalizes, and upserts to provider_offers.
+ * Fetches Pinnacle + configured bookmakers, normalizes, and writes through the provider-offer repository.
  */
 export async function ingestOddsApiLeague(
   options: OddsApiIngestOptions,
@@ -146,13 +146,13 @@ export async function ingestOddsApiLeague(
     logger?.info?.(`[odds-api] ${league}: ${result.eventsCount} events, ${offers.length} offers from ${result.telemetry.bookmakerCount} bookmakers`);
 
     // Determine which (providerKey, eventId, marketKey, participantId) combinations
-    // already exist in provider_offers so we can tag is_opening correctly.
+    // already exist in current offer truth so we can tag is_opening correctly.
     const providerEventIds = [...new Set(offers.map((o) => o.providerEventId))];
     const existingCombinations = await repositories.providerOffers.findExistingCombinations(
       providerEventIds,
     );
 
-    // Batch upsert to provider_offers — deduplicate by idempotency key to avoid
+    // Batch provider-offer write — deduplicate by idempotency key to avoid
     // "ON CONFLICT DO UPDATE cannot affect row a second time" errors when the
     // normalizer emits multiple offers with the same key in a single batch.
     const mapped = offers.map((offer) =>

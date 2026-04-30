@@ -67,7 +67,7 @@ export default async function PropExplorerPage({
         <p className="text-xs font-medium uppercase tracking-widest text-gray-500">Research</p>
         <h1 className="mt-1 text-xl font-bold text-white">Props Explorer</h1>
         <p className="mt-1 text-sm text-gray-400">
-          Browse live prop offers from ingested provider data. Source: <code className="text-gray-300">provider_offers</code>.
+          Browse live prop offers from ingested provider data. Source: <code className="text-gray-300">compact/current offer truth</code>.
         </p>
       </div>
 
@@ -200,7 +200,7 @@ export default async function PropExplorerPage({
         <div className="rounded border border-gray-800 bg-gray-900/50 p-6 text-center">
           <p className="text-sm text-gray-400">Apply at least one filter to browse prop offers.</p>
           <p className="mt-1 text-xs text-gray-600">
-            The <code className="text-gray-500">provider_offers</code> table has 300k+ rows — filters required to keep results useful.
+            The offer-history surface is large, so filters are required to keep results useful.
           </p>
         </div>
       )}

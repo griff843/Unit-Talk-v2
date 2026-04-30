@@ -27,10 +27,14 @@ export function Sparkline({ points, label, strokeClassName, fillClassName }: Spa
       return `${i === 0 ? 'M' : 'L'} ${x} ${y}`;
     })
     .join(' ');
+  const areaPathData = `${pathData} L ${points.length * 4 - 2} 30 L 2 30 Z`;
+  const strokeClass = strokeClassName ?? 'stroke-current';
+  const fillClass = fillClassName ?? 'fill-white/10';
 
   return (
     <svg viewBox={viewBox} className="h-8 w-full" aria-label={label}>
-      <path d={pathData} stroke="currentColor" strokeWidth="1" fill="none" vectorEffect="non-scaling-stroke" />
+      <path d={areaPathData} className={fillClass} stroke="none" />
+      <path d={pathData} className={strokeClass} strokeWidth="1" fill="none" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }

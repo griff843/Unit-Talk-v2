@@ -7,7 +7,7 @@ import { CandidateBuilderService } from '../candidate-builder-service.js';
 /**
  * POST /api/candidates/build
  *
- * Converts opening provider_offers into qualified pick_candidates.
+ * Converts opening offer history into qualified pick_candidates.
  * Intended for controlled operator-driven backfills/manual rebuilds.
  */
 export async function handleBuildCandidates(

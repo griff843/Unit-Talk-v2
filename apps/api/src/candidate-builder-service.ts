@@ -1,7 +1,7 @@
 /**
  * Candidate Builder Service — UTV2-758
  *
- * Reads opening provider_offers rows and materializes corresponding
+ * Reads opening offer rows and materializes corresponding
  * qualified pick_candidates rows (idempotent by market-universe ID).
  *
  * Hard boundary invariants:

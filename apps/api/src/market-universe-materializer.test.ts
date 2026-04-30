@@ -86,6 +86,7 @@ function makeProviderOffersRepo(
     findClosingLine: async () => null,
     findOpeningLine: async () => null,
     findLatestByMarketKey: async () => null,
+    findCurrentOffer: async () => null,
     listAll: async () => [],
     listByProvider: async () => [],
     findExistingCombinations: async () => new Set<string>(),
@@ -97,6 +98,11 @@ function makeProviderOffersRepo(
     listOpeningOffers: async () => [],
     listOpeningCurrentOffers: async () => [],
     listClosingOffers: async () => offers.filter((o) => o.is_closing),
+    savePickOfferSnapshot: async () => {
+      throw new Error('unused in test');
+    },
+    listPickOfferSnapshots: async () => [],
+    listCompactHistory: async () => [],
   };
 }
 

@@ -1,7 +1,7 @@
 /**
  * System Pick Scanner — Governed Upstream Path (Phase 7B)
  *
- * Polls provider_offers for recent is_opening=true player prop rows and
+ * Polls current opening offers for recent is_opening=true player prop rows and
  * materializes them into market_universe via the governed upstream path.
  *
  * Prior to UTV2-495, this scanner POSTed directly to /api/submissions to

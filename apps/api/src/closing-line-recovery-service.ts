@@ -2,7 +2,7 @@
  * Closing-Line Recovery Service
  *
  * UTV2-576 — Runs independently from the ingestor to mark is_closing=true on
- * pre-commence provider_offers rows for events that have started.
+ * pre-commence offer rows for events that have started.
  *
  * Why this exists: the ingestor marks closing lines as part of each ingest cycle.
  * If the ingestor lags or is temporarily down, events can start without their

@@ -104,7 +104,7 @@ async function computeFeatureAvailability(
   const closingLines: FeatureAvailabilitySignal =
     closingLinesCount > 0
       ? { available: true, reason: `${closingLinesCount} closing-line offer(s) present` }
-      : { available: false, reason: 'zero is_closing rows in provider_offers' };
+      : { available: false, reason: 'zero compact closing-line rows available' };
 
   const clv: FeatureAvailabilitySignal =
     closingLinesCount > 0

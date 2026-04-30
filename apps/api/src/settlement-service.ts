@@ -799,7 +799,7 @@ async function buildCLVContextFromGradingEvent(
     };
   }
 
-  // For player-prop markets, resolve the participant's external_id for provider_offers lookup.
+  // For player-prop markets, resolve the participant's external_id for offer-history lookup.
   let participantExternalId: string | null = null;
   if (pick.participant_id) {
     const participant = await repositories.participants.findById(pick.participant_id);

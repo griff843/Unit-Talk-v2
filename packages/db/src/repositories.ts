@@ -54,6 +54,7 @@ import type {
   SettlementConfidence,
   SettlementRecord,
   ProviderOfferCurrentRow,
+  ProviderOfferHistoryCompactRow,
   SettlementSource,
   SubmissionEventRecord,
   SubmissionRecord,
@@ -62,6 +63,8 @@ import type {
   ExperimentRunType,
   ExecutionQualityReport,
   ProviderEntityAliasRow,
+  PickOfferSnapshotKind,
+  PickOfferSnapshotRow,
 } from './types.js';
 
 export interface SubmissionCreateInput {
@@ -613,6 +616,13 @@ export interface ProviderOfferRepository {
     providerKey?: string,
     providerParticipantId?: string | null,
   ): Promise<ProviderOfferRecord | null>;
+  findCurrentOffer(criteria: {
+    providerKey: string;
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId?: string | null;
+    bookmakerKey?: string | null;
+  }): Promise<ProviderOfferCurrentRow | null>;
   listAll(): Promise<ProviderOfferRecord[]>;
   listByProvider(providerKey: string): Promise<ProviderOfferRecord[]>;
   /**
@@ -631,7 +641,7 @@ export interface ProviderOfferRepository {
   /**
    * Returns a Set of combination keys in the format
    * "providerKey:providerEventId:marketKey:participantId" for which at least
-   * one row already exists in provider_offers for the given event IDs.
+   * one row already exists in current offer truth for the given event IDs.
    * Used before a batch insert to determine which offers are opening lines.
    */
   findExistingCombinations(
@@ -650,7 +660,7 @@ export interface ProviderOfferRepository {
   ): Promise<number>;
   /**
    * Translates a canonical market key (e.g. pick.market = 'player_turnovers_ou') to
-   * the provider-native market key used in provider_offers (e.g. 'turnovers-all-game-ou').
+   * the provider-native market key used in offer truth (e.g. 'turnovers-all-game-ou').
    * Returns null when no alias mapping exists for the given provider.
    */
   resolveProviderMarketKey(canonicalKey: string, provider: string): Promise<string | null>;
@@ -684,6 +694,40 @@ export interface ProviderOfferRepository {
     provider: string,
     limit?: number,
   ): Promise<ProviderOfferCurrentRow[]>;
+  savePickOfferSnapshot(input: {
+    pickId: string;
+    snapshotKind: PickOfferSnapshotKind;
+    providerKey: string;
+    providerEventId: string;
+    providerMarketKey: string;
+    providerParticipantId: string | null;
+    bookmakerKey: string | null;
+    identityKey: string;
+    line: number | null;
+    overOdds: number | null;
+    underOdds: number | null;
+    devigMode: ProviderOfferInsert['devigMode'];
+    sourceSnapshotAt: string | null;
+    capturedAt: string;
+    sourceRunId?: string | null;
+    sourceCompactSnapshotId?: string | null;
+    sourceCurrentIdentityKey?: string | null;
+    settlementRecordId?: string | null;
+    payload?: Record<string, unknown>;
+  }): Promise<PickOfferSnapshotRow>;
+  listPickOfferSnapshots(
+    pickId: string,
+    snapshotKinds?: PickOfferSnapshotKind[],
+  ): Promise<PickOfferSnapshotRow[]>;
+  listCompactHistory(criteria: {
+    providerKey?: string;
+    providerEventId?: string;
+    providerMarketKey?: string;
+    providerParticipantId?: string | null;
+    bookmakerKey?: string | null;
+    since?: string;
+    limit?: number;
+  }): Promise<ProviderOfferHistoryCompactRow[]>;
 }
 
 export interface ParticipantUpsertInput {

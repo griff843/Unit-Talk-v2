@@ -4,7 +4,7 @@
  * Phase 2 — UTV2-461
  * Contract authority: docs/02_architecture/PHASE2_SCHEMA_CONTRACT.md
  *
- * Reads provider_offers rows and upserts into market_universe using the
+ * Reads compact/current provider-offer rows and upserts into market_universe using the
  * natural key conflict target:
  *   (provider_key, provider_event_id, COALESCE(provider_participant_id,''), provider_market_key)
  *
@@ -25,7 +25,7 @@ import type { IMarketUniverseRepository, MarketUniverseUpsertInput, ProviderOffe
 // Phase 2: staleness threshold is hardcoded at 2 hours (see contract §4)
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
 
-// How far back to look for provider_offers rows per run.
+// How far back to look for offer rows per run.
 // 72h ensures closing-line offers (marked after game start) are picked up even when
 // there is a multi-day gap between the ingest cycle and the materializer run.
 const DEFAULT_LOOKBACK_HOURS = 72;
@@ -132,7 +132,7 @@ export class MarketUniverseMaterializer {
     }
 
     // Load participant alias lookup once per run for O(1) per-row participant FK resolution
-    // Key: provider_entity_id (matches provider_offers.provider_participant_id)
+    // Key: provider_entity_id (matches the offer participant identity)
     // Value: participant_id (UUID FK into participants table)
     const participantMap = new Map<string, string>();
     try {
@@ -251,7 +251,7 @@ export class MarketUniverseMaterializer {
 
           // Descriptive fields
           // sport_key comes from the offer; league_key defaults to sport_key
-          // when not separately stored on provider_offers (it isn't in Phase 2)
+          // when not separately stored on the offer surface (it isn't in Phase 2)
           sport_key: latest.sport_key ?? 'unknown',
           league_key: latest.sport_key ?? 'unknown',
           event_id: null,       // event FK resolution: Phase 3+ (requires event lookup service)
@@ -281,7 +281,7 @@ export class MarketUniverseMaterializer {
           // Staleness
           is_stale,
 
-          // Snapshot time of the most recent provider_offers row
+          // Snapshot time of the most recent offer row
           last_offer_snapshot_at: latest.snapshot_at,
         };
 

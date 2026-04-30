@@ -275,7 +275,7 @@ export default async function BurnInPage({
       label: 'Provider cycle staging visible',
       value: `${providerCycleHealth.trackedLanes} tracked lane(s)`,
       status: providerCycleHealth.trackedLanes > 0 ? 'pass' : 'warn',
-      note: 'Staging-lane truth is shown separately from live provider_offers freshness.',
+      note: 'Staging-lane truth is shown separately from live compact/current freshness.',
     },
     {
       label: 'Worker runtime healthy',
@@ -522,7 +522,7 @@ export default async function BurnInPage({
           </div>
         </div>
         <div className="mb-4 space-y-1 text-xs text-gray-500">
-          <div>Staging truth only: this panel reflects `provider_cycle_status`, not live `provider_offers` cutover.</div>
+          <div>Staging truth only: this panel reflects `provider_cycle_status`, not live compact/current offer cutover.</div>
           <div>Latest staged cycle snapshot: {formatTimestamp(providerCycleHealth.latestCycleSnapshotAt)}</div>
           <div>Latest live offer snapshot: {formatTimestamp(providerCycleHealth.liveOfferSnapshotAt)}</div>
         </div>

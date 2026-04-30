@@ -150,7 +150,7 @@ export default async function LineShopperPage({
       {fetchFailed ? (
         <EmptyState
           message="Unable to load line data"
-          detail="No matching offers found in provider_offers for this participant and market."
+          detail="No matching offers found in compact/current offer truth for this participant and market."
           action={{ label: 'Back to Research', href: '/research' }}
         />
       ) : !data ? (

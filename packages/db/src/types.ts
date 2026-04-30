@@ -143,6 +143,39 @@ export type HedgeOpportunityRecord = HedgeOpportunityRow;
 /** @see {@link ProviderOfferRow} */
 export type ProviderOfferRecord = ProviderOfferRow;
 
+export interface ProviderOfferHistoryCompactRow {
+  snapshot_id: string;
+  identity_key: string;
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  sport_key: string | null;
+  bookmaker_key: string | null;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  devig_mode: 'PAIRED' | 'FALLBACK_SINGLE_SIDED';
+  is_opening: boolean;
+  is_closing: boolean;
+  snapshot_at: string;
+  observed_at: string;
+  source_run_id: string | null;
+  change_reason:
+    | 'first_seen'
+    | 'line_change'
+    | 'odds_change'
+    | 'opening_capture'
+    | 'closing_capture'
+    | 'proof_capture'
+    | 'replay_capture';
+  previous_snapshot_id: string | null;
+  changed_fields: Record<string, unknown>;
+  idempotency_key: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
 /** @see {@link SettlementRecordRow} */
 export type SettlementRecord = SettlementRecordRow;
 
@@ -285,6 +318,7 @@ export interface SportRow {
 // We re-narrow here because the CHECK constraint and application code both enforce the union.
 export type ProviderOfferRow = Omit<Tables<'provider_offers'>, 'devig_mode'> & {
   devig_mode: 'PAIRED' | 'FALLBACK_SINGLE_SIDED';
+  source_run_id?: string | null;
 };
 
 export interface ProviderOfferStagingRow {
@@ -348,6 +382,37 @@ export interface ProviderOfferCurrentRow extends ProviderOfferRecord {
   cycle_affected_market_key: string | null;
   cycle_updated_at: string | null;
   provider_health_state: ProviderHealthState;
+}
+
+export type PickOfferSnapshotKind =
+  | 'submission'
+  | 'approval'
+  | 'posting'
+  | 'closing_for_clv'
+  | 'settlement_proof';
+
+export interface PickOfferSnapshotRow {
+  id: string;
+  pick_id: string;
+  settlement_record_id: string | null;
+  snapshot_kind: PickOfferSnapshotKind;
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_participant_id: string | null;
+  bookmaker_key: string | null;
+  identity_key: string;
+  line: number | null;
+  over_odds: number | null;
+  under_odds: number | null;
+  devig_mode: 'PAIRED' | 'FALLBACK_SINGLE_SIDED';
+  source_snapshot_at: string | null;
+  captured_at: string;
+  source_run_id: string | null;
+  source_compact_snapshot_id: string | null;
+  source_current_identity_key: string | null;
+  payload: Record<string, unknown>;
+  created_at: string;
 }
 
 export interface SportMarketTypeRow {

@@ -92,7 +92,7 @@ export interface MarketUniverseUpsertInput {
   // Staleness (computed at materializer run time)
   is_stale: boolean;
 
-  // Snapshot time of the most recent provider_offers row for this natural key
+  // Snapshot time of the most recent offer row for this natural key
   last_offer_snapshot_at: string;
 }
 
@@ -138,7 +138,7 @@ export interface IMarketUniverseRepository {
    * provider natural key triple (no alias resolution needed — caller supplies
    * the already-resolved provider_market_key).
    *
-   * Used by CLV service as a fallback when provider_offers has no closing line:
+   * Used by CLV service as a fallback when compact history has no closing line:
    * market_universe stores the closing snapshot written by the materializer.
    *
    * Returns null when no row matches or closing_line is NULL.

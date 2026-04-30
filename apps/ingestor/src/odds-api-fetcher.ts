@@ -253,7 +253,7 @@ export async function fetchOddsApiScores(
 }
 
 /**
- * Normalize The Odds API response into provider_offers-compatible records.
+ * Normalize The Odds API response into provider-offer repository records.
  *
  * Each bookmaker × market × outcome becomes a separate offer record,
  * keyed by provider like 'odds-api:pinnacle', 'odds-api:draftkings'.

@@ -103,9 +103,9 @@ export async function computeAndAttachCLV(
   return outcome.result;
 }
 
-// Market types where provider_offers rows are event-scoped (provider_participant_id = null).
+// Market types where offer rows are event-scoped (provider_participant_id = null).
 // Mirrors the materializer's PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS check — CLV must use
-// null participant when querying provider_offers for these markets, regardless of whether
+// null participant when querying offer history for these markets, regardless of whether
 // a participant is resolved from the pick.
 const PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS = new Set([
   'game_total_ou',
@@ -202,7 +202,7 @@ export async function computeCLVOutcome(
       : await repositories.providerOffers.resolveProviderMarketKey(pick.market, 'sgo')) ??
     pick.market;
 
-  // game_total_ou / 1h_total_ou / 2h_total_ou offers are event-scoped in provider_offers
+  // game_total_ou / 1h_total_ou / 2h_total_ou offers are event-scoped in compact/current truth
   // (provider_participant_id = null), so never pass a participant ID for these markets —
   // the participant_id from a team-linked pick would produce zero rows from the offer lookup.
   const isParticipantForbiddenMarket = PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS.has(canonicalMarketKey);
@@ -238,7 +238,7 @@ export async function computeCLVOutcome(
 
   // Fallback: read closing data from market_universe (materializer snapshot).
   // market_universe stores the closing line written by the ingestor even when
-  // provider_offers has no closing snapshot (alias mismatch, delayed ingest, etc.).
+  // compact history has no closing snapshot (alias mismatch, delayed ingest, etc.).
   if (!closingLine && repositories.marketUniverse) {
     const muRow = await repositories.marketUniverse.findClosingLineByProviderKey({
       providerEventId: baseLineCriteria.providerEventId,

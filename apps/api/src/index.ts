@@ -95,7 +95,7 @@ server.listen(port, () => {
     runClosingLineRecovery(closingLineRecoveryDeps, { logger: console }).catch(() => {});
   }, CLOSING_LINE_RECOVERY_INTERVAL_MS);
 
-  // Market universe materializer: keep market_universe current from provider_offers
+  // Market universe materializer: keep market_universe current from compact/current offer truth
   // Phase 2 UTV2-461 — always runs (no feature flag; shadow_mode is enforced at candidate layer)
   const materializerDeps = {
     providerOffers: runtime.repositories.providerOffers,

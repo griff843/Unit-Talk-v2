@@ -44,7 +44,7 @@ export const SGO_GAME_LINE_CANONICAL_ID: Record<string, string> = {
  * enabling the grading-service to match them without a provider-specific join.
  *
  * Key format: exact SGO baseMarketKey values as returned in the results feed
- * (verified against live provider_offers.provider_market_key).
+ * (verified against live provider market-key truth).
  *
  * Keep in sync with: provider_market_aliases WHERE provider='sgo'
  * Related issue: UTV2-384 (auto-settle E2E proof), UTV2-385 (game-line grading schema)

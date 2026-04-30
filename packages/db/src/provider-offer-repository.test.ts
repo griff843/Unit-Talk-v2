@@ -14,7 +14,7 @@ import type {
 type ProviderOfferRepositoryHarness = {
   client: {
     from(table: string): {
-      select(columns: string): {
+      select?: (columns: string) => {
         in(
           column: string,
           values: string[],
@@ -38,12 +38,10 @@ type ClosingOffersHarness = {
       select(columns: string): {
         eq(column: string, value: boolean): {
           gte(column: string, value: string): {
-            lt(column: string, value: string): {
-              range(
-                from: number,
-                to: number,
-              ): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
-            };
+            order(
+              column: string,
+              options: Record<string, unknown>,
+            ): Promise<{ data: unknown[] | null; error: { message: string } | null }>;
           };
         };
       };
@@ -121,22 +119,35 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
 
   const fakeClient = {
     from(table: string) {
-      assert.equal(table, 'provider_offers');
+      assert.ok(
+        table === 'provider_offer_current' || table === 'provider_offer_history_compact',
+      );
+
+      if (table === 'provider_offer_current') {
+        return {
+          select(columns: string) {
+            assert.equal(columns, 'idempotency_key');
+            return {
+              async in(column: string, values: string[]) {
+                assert.equal(column, 'idempotency_key');
+                selectCalls.push(values);
+                return {
+                  data: [{ idempotency_key: 'dup-key' }],
+                  error: null,
+                };
+              },
+            };
+          },
+          async upsert(rows: Array<Record<string, unknown>>, options: Record<string, unknown>) {
+            upsertCalls.push({ rows, options });
+            return {
+              error: null,
+            };
+          },
+        };
+      }
 
       return {
-        select(columns: string) {
-          assert.equal(columns, 'idempotency_key');
-          return {
-            async in(column: string, values: string[]) {
-              assert.equal(column, 'idempotency_key');
-              selectCalls.push(values);
-              return {
-                data: [{ idempotency_key: 'dup-key' }],
-                error: null,
-              };
-            },
-          };
-        },
         async upsert(rows: Array<Record<string, unknown>>, options: Record<string, unknown>) {
           upsertCalls.push({ rows, options });
           return {
@@ -190,15 +201,20 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
   const result = await repository.upsertBatch(offers);
 
   assert.deepEqual(selectCalls, [['dup-key']]);
-  assert.equal(upsertCalls.length, 1);
+  assert.equal(upsertCalls.length, 2);
   assert.deepEqual(upsertCalls[0]?.options, {
-    onConflict: 'idempotency_key',
+    onConflict: 'identity_key',
     ignoreDuplicates: true,
   });
   assert.equal(upsertCalls[0]?.rows.length, 1);
   assert.equal(upsertCalls[0]?.rows[0]?.idempotency_key, 'dup-key');
   assert.equal(upsertCalls[0]?.rows[0]?.is_opening, false);
   assert.equal(upsertCalls[0]?.rows[0]?.is_closing, true);
+  assert.deepEqual(upsertCalls[1]?.options, {
+    onConflict: 'snapshot_at,idempotency_key',
+    ignoreDuplicates: true,
+  });
+  assert.equal(upsertCalls[1]?.rows.length, 1);
   assert.deepEqual(result, {
     insertedCount: 0,
     updatedCount: 1,
@@ -206,38 +222,11 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
   });
 });
 
-test('DatabaseProviderOfferRepository.listClosingOffers paginates windowed results', async () => {
-  const fixedNow = Date.parse('2026-04-27T15:30:00.000Z');
-  const originalNow = Date.now;
-  Date.now = () => fixedNow;
-
-  const ltFilters: Array<{ column: string; value: string }> = [];
-  const rangeCalls: Array<{ from: number; to: number }> = [];
-  const firstPage = Array.from({ length: 1000 }, (_unused, index) => ({
-    id: `id-${String(1000 - index).padStart(4, '0')}`,
-    snapshot_at: '2026-04-27T15:15:00.000Z',
-  }));
-
-  const pages = [
-    {
-      data: firstPage,
-      error: null,
-    },
-    {
-      data: [
-        {
-          id: '90000000-0000-0000-0000-000000000000',
-          snapshot_at: '2026-04-27T14:58:00.000Z',
-        },
-      ],
-      error: null,
-    },
-  ];
-  let pageIndex = 0;
-
+test('DatabaseProviderOfferRepository.listClosingOffers reads compact closing rows ordered by snapshot', async () => {
+  const orderCalls: Array<{ column: string; options: Record<string, unknown> }> = [];
   const fakeClient = {
     from(table: string) {
-      assert.equal(table, 'provider_offers');
+      assert.equal(table, 'provider_offer_history_compact');
       return {
         select(columns: string) {
           assert.equal(columns, '*');
@@ -250,13 +239,20 @@ test('DatabaseProviderOfferRepository.listClosingOffers paginates windowed resul
                   assert.equal(gteColumn, 'snapshot_at');
                   assert.equal(gteValue, '2026-04-27T15:00:00.000Z');
                   return {
-                    lt(ltColumn: string, ltValue: string) {
-                      ltFilters.push({ column: ltColumn, value: ltValue });
+                    async order(column: string, options: Record<string, unknown>) {
+                      orderCalls.push({ column, options });
                       return {
-                        async range(from: number, to: number) {
-                          rangeCalls.push({ from, to });
-                          return pages[pageIndex++] ?? { data: [], error: null };
-                        },
+                        data: [
+                          {
+                            id: 'id-1000',
+                            snapshot_at: '2026-04-27T15:15:00.000Z',
+                          },
+                          {
+                            id: 'id-0999',
+                            snapshot_at: '2026-04-27T14:58:00.000Z',
+                          },
+                        ],
+                        error: null,
                       };
                     },
                   };
@@ -274,26 +270,17 @@ test('DatabaseProviderOfferRepository.listClosingOffers paginates windowed resul
   ) as unknown as ClosingOffersHarness;
   repository.client = fakeClient;
 
-  try {
-    const rows = await repository.listClosingOffers('2026-04-27T15:00:00.000Z');
-    assert.equal(rows.length, 1001);
-    assert.deepEqual(rangeCalls, [
-      { from: 0, to: 999 },
-      { from: 1000, to: 1999 },
-    ]);
-    assert.deepEqual(ltFilters, [
-      { column: 'snapshot_at', value: '2026-04-27T15:30:00.000Z' },
-      { column: 'snapshot_at', value: '2026-04-27T15:30:00.000Z' },
-    ]);
-  } finally {
-    Date.now = originalNow;
-  }
+  const rows = await repository.listClosingOffers('2026-04-27T15:00:00.000Z');
+  assert.equal(rows.length, 2);
+  assert.deepEqual(orderCalls, [
+    { column: 'snapshot_at', options: { ascending: false } },
+  ]);
 });
 
 test('DatabaseProviderOfferRepository.listClosingOffers fails loudly on timeout', async () => {
   const fakeClient = {
     from(table: string) {
-      assert.equal(table, 'provider_offers');
+      assert.equal(table, 'provider_offer_history_compact');
       return {
         select() {
           return {
@@ -301,14 +288,10 @@ test('DatabaseProviderOfferRepository.listClosingOffers fails loudly on timeout'
               return {
                 gte() {
                   return {
-                    lt() {
+                    async order(_column: string, _options: Record<string, unknown>) {
                       return {
-                        async range(_from: number, _to: number) {
-                          return {
-                            data: null,
-                            error: { message: 'canceling statement due to statement timeout' },
-                          };
-                        },
+                        data: null,
+                        error: { message: 'canceling statement due to statement timeout' },
                       };
                     },
                   };
@@ -328,7 +311,7 @@ test('DatabaseProviderOfferRepository.listClosingOffers fails loudly on timeout'
 
   await assert.rejects(
     () => repository.listClosingOffers('2026-04-27T00:00:00.000Z'),
-    /must fail loudly when closing data is unavailable/i,
+    /Failed to list closing offers: canceling statement due to statement timeout/i,
   );
 });
 
