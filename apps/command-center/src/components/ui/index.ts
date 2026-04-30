@@ -17,6 +17,8 @@ export { PipelineFlow } from './PipelineFlow';
 
 export { ProviderHealthCard } from './ProviderHealthCard';
 
+export { Sparkline } from './Sparkline';
+
 export { LoadingState } from './LoadingState';
 
 export { EmptyState } from './EmptyState';
