@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-782-walpitr-restore-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "7df45c1adeb58e9db6483eb35b3bd5d87f474c9d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/514",
   "files_changed": [
     "scripts/backup-alert-check.ts",
     "scripts/backup-alert-check.test.ts",
@@ -23,7 +23,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-782.md"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-04-30T17:45:00.000Z",
   "heartbeat_at": "2026-04-30T17:45:00.000Z",
   "closed_at": null,
