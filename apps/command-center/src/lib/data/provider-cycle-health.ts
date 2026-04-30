@@ -160,3 +160,52 @@ export async function getProviderCycleHealth(
 
   return summarizeProviderCycleHealth((data ?? []) as ProviderCycleStatusDbRow[], providerHealth);
 }
+
+export async function getProviderCycleLatencySamples(): Promise<Array<{ providerKey: string; updatedAt: string; totalLatencyMs: number | null }>> {
+  // Returns latency samples for provider health sparklines.
+  // This aggregates provider_offers latency over the last 24 hours per provider.
+  const client: Client = getDataClient();
+  const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
+
+  const { data, error } = await client
+    .from('provider_offers')
+    .select('provider_key, created_at, latency_ms')
+    .gte('created_at', new Date(oneDayAgoMs).toISOString())
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    // Return empty array on error (no latency data available)
+    return [];
+  }
+
+  const samplesByProvider = new Map<string, { timestamps: string[]; latencies: (number | null)[] }>();
+  for (const row of (data ?? []) as Array<{ provider_key: string; created_at: string; latency_ms: number | null }>) {
+    const key = String(row.provider_key ?? '').toLowerCase();
+    if (!key) continue;
+
+    if (!samplesByProvider.has(key)) {
+      samplesByProvider.set(key, { timestamps: [], latencies: [] });
+    }
+    const samples = samplesByProvider.get(key)!;
+    samples.timestamps.push(row.created_at);
+    samples.latencies.push(row.latency_ms);
+  }
+
+  const result: Array<{ providerKey: string; updatedAt: string; totalLatencyMs: number | null }> = [];
+  for (const [providerKey, samples] of samplesByProvider.entries()) {
+    if (samples.latencies.length === 0) continue;
+
+    const validLatencies = samples.latencies.filter((v): v is number => v !== null);
+    const avgLatency = validLatencies.length > 0
+      ? Math.round(validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length)
+      : null;
+
+    result.push({
+      providerKey,
+      updatedAt: samples.timestamps[0] ?? new Date().toISOString(),
+      totalLatencyMs: avgLatency,
+    });
+  }
+
+  return result;
+}

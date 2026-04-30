@@ -7,9 +7,15 @@ export type {} from './MetricsCard';
 export { DataTable } from './DataTable';
 export type { Column } from './DataTable';
 
-export { DetailPane } from './DetailPane';
+export { DetailPane, DetailPane as DetailPanel } from './DetailPane';
 
 export { HealthBadge } from './HealthBadge';
+
+export { LiveEventFeed } from './LiveEventFeed';
+
+export { PipelineFlow } from './PipelineFlow';
+
+export { ProviderHealthCard } from './ProviderHealthCard';
 
 export { LoadingState } from './LoadingState';
 
