@@ -1,13 +1,15 @@
-'use client';
+﻿'use client';
 
 import React from 'react';
 
 export interface SparklineProps {
   points: number[];
   label: string;
+  strokeClassName?: string;
+  fillClassName?: string;
 }
 
-export function Sparkline({ points, label }: SparklineProps) {
+export function Sparkline({ points, label, strokeClassName, fillClassName }: SparklineProps) {
   if (points.length === 0) {
     return <div className="h-8 bg-white/[0.06] rounded" />;
   }
