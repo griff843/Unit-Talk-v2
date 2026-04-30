@@ -21,7 +21,14 @@ test('provider_offer_history design includes partition create and drop helpers',
 
 test('provider_offer_history design defines per-partition index strategy', () => {
   assert.match(SOURCE, /provider_snapshot_idx/i);
-  assert.match(SOURCE, /event_market_snapshot_idx/i);
+  assert.match(SOURCE, /identity_snapshot_idx/i);
   assert.match(SOURCE, /idempotency_idx/i);
+  assert.match(SOURCE, /opening_idx/i);
+  assert.match(SOURCE, /closing_idx/i);
   assert.match(SOURCE, /created_at_idx/i);
+});
+
+test('provider_offer_history design enforces snapshot-scoped idempotency', () => {
+  assert.match(SOURCE, /provider_offer_history_snapshot_idempotency_key/i);
+  assert.match(SOURCE, /UNIQUE \(snapshot_at, idempotency_key\)/i);
 });

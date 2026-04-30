@@ -345,6 +345,11 @@ export const canonicalSchema: TableDefinition[] = [
     owner: 'ingestor',
   },
   {
+    name: 'provider_offer_current',
+    purpose: 'Stores the writer-maintained latest provider offer per identity for hot current reads.',
+    owner: 'ingestor',
+  },
+  {
     name: 'provider_offer_staging',
     purpose: 'Stores bounded, cycle-scoped provider offers before explicit merge into provider_offers.',
     owner: 'ingestor',

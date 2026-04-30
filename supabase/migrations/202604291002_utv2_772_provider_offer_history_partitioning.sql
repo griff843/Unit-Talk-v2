@@ -3,9 +3,11 @@
 -- raw snapshot history, separate from hot provider_offers reads.
 -- Design notes:
 --   - partition by snapshot_at day to make retention a partition-drop operation
---   - keep provider_offers as the current raw ingest sink for now; history
---     population / cutover follows in a later slice
---   - use per-partition indexes for current read patterns and cleanup paths
+--   - provider_offer_history is the high-resolution raw store
+--   - provider_offer_current becomes the hot current-only surface in a
+--     follow-up cutover migration
+--   - use per-partition indexes for history lookup, opening/closing scans, and
+--     cleanup paths
 
 CREATE TABLE IF NOT EXISTS public.provider_offer_history (
   id uuid NOT NULL DEFAULT gen_random_uuid(),
@@ -30,6 +32,20 @@ CREATE TABLE IF NOT EXISTS public.provider_offer_history (
 
 ALTER TABLE public.provider_offer_history ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE public.provider_offer_history FROM anon, authenticated;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'provider_offer_history_snapshot_idempotency_key'
+  ) THEN
+    ALTER TABLE public.provider_offer_history
+      ADD CONSTRAINT provider_offer_history_snapshot_idempotency_key
+      UNIQUE (snapshot_at, idempotency_key);
+  END IF;
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.ensure_provider_offer_history_partition(
   p_day date
@@ -59,13 +75,42 @@ BEGIN
     v_partition_name
   );
   EXECUTE format(
-    'CREATE INDEX IF NOT EXISTS %I ON public.%I (provider_event_id, provider_market_key, snapshot_at DESC)',
-    v_partition_name || '_event_market_snapshot_idx',
+    'CREATE INDEX IF NOT EXISTS %I ON public.%I (
+      provider_key,
+      provider_event_id,
+      provider_market_key,
+      COALESCE(provider_participant_id, ''''),
+      COALESCE(bookmaker_key, ''''),
+      snapshot_at DESC
+    )',
+    v_partition_name || '_identity_snapshot_idx',
     v_partition_name
   );
   EXECUTE format(
     'CREATE INDEX IF NOT EXISTS %I ON public.%I (idempotency_key)',
     v_partition_name || '_idempotency_idx',
+    v_partition_name
+  );
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS %I ON public.%I (
+      provider_event_id,
+      provider_market_key,
+      COALESCE(provider_participant_id, ''''),
+      COALESCE(bookmaker_key, ''''),
+      snapshot_at DESC
+    ) WHERE is_opening = true',
+    v_partition_name || '_opening_idx',
+    v_partition_name
+  );
+  EXECUTE format(
+    'CREATE INDEX IF NOT EXISTS %I ON public.%I (
+      provider_event_id,
+      provider_market_key,
+      COALESCE(provider_participant_id, ''''),
+      COALESCE(bookmaker_key, ''''),
+      snapshot_at DESC
+    ) WHERE is_closing = true',
+    v_partition_name || '_closing_idx',
     v_partition_name
   );
   EXECUTE format(

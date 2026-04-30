@@ -1275,6 +1275,7 @@ export class InMemorySettlementRepository implements SettlementRepository {
 
 export class InMemoryProviderOfferRepository implements ProviderOfferRepository {
   private readonly offers = new Map<string, ProviderOfferRecord>();
+  private readonly currentOffers = new Map<string, ProviderOfferRecord>();
   private readonly stagedOffers = new Map<string, ProviderOfferStagingRow>();
   private readonly cycleStatuses = new Map<string, ProviderCycleStatusRow>();
 
@@ -1286,23 +1287,17 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
     for (const offer of offers) {
       const existing = this.offers.get(offer.idempotencyKey);
+      const next = existing
+        ? mapProviderOfferInsertToRecord(offer, existing.id, existing.created_at)
+        : mapProviderOfferInsertToRecord(offer);
       if (existing) {
-        this.offers.set(
-          offer.idempotencyKey,
-          mapProviderOfferInsertToRecord(
-            offer,
-            existing.id,
-            existing.created_at,
-          ),
-        );
+        this.offers.set(offer.idempotencyKey, next);
         updatedCount += 1;
       } else {
-        this.offers.set(
-          offer.idempotencyKey,
-          mapProviderOfferInsertToRecord(offer),
-        );
+        this.offers.set(offer.idempotencyKey, next);
         insertedCount += 1;
       }
+      this.upsertCurrentOffer(next);
     }
 
     return {
@@ -1383,10 +1378,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
         bookmakerKey: staged.bookmaker_key,
       };
 
-      this.offers.set(
-        staged.idempotency_key,
-        mapProviderOfferInsertToRecord(insert),
-      );
+      const next = mapProviderOfferInsertToRecord(insert);
+      this.offers.set(staged.idempotency_key, next);
+      this.upsertCurrentOffer(next);
       this.stagedOffers.set(`${staged.run_id}:${staged.idempotency_key}`, {
         ...staged,
         merge_status: 'merged',
@@ -1432,7 +1426,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     providerKey?: string,
     providerParticipantId?: string | null,
   ): Promise<ProviderOfferRecord | null> {
-    const matches = Array.from(this.offers.values())
+    const matches = Array.from(this.currentOffers.values())
       .filter(
         (o) =>
           o.provider_market_key === marketKey &&
@@ -1578,10 +1572,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
       for (const offer of latestByKey.values()) {
         if (!offer.is_closing) {
-          this.offers.set(offer.idempotency_key, {
-            ...offer,
-            is_closing: true,
-          });
+          const updatedOffer = { ...offer, is_closing: true };
+          this.offers.set(offer.idempotency_key, updatedOffer);
+          this.upsertCurrentOffer(updatedOffer);
           updated += 1;
         }
       }
@@ -1642,7 +1635,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     limit = 500,
   ): Promise<ProviderOfferCurrentRow[]> {
     const sinceMs = new Date(since).getTime();
-    return Array.from(this.offers.values())
+    return Array.from(this.currentOffers.values())
       .filter(
         (o) =>
           o.provider_key === provider &&
@@ -1679,6 +1672,21 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
           provider_health_state: deriveProviderHealthState(cycle),
         };
       });
+  }
+
+  private upsertCurrentOffer(offer: ProviderOfferRecord) {
+    const identityKey = buildProviderOfferCurrentIdentityKey({
+      providerKey: offer.provider_key,
+      providerEventId: offer.provider_event_id,
+      providerMarketKey: offer.provider_market_key,
+      providerParticipantId: offer.provider_participant_id,
+      bookmakerKey: offer.bookmaker_key,
+    });
+    const existing = this.currentOffers.get(identityKey);
+    if (existing && compareProviderOfferRecords(offer, existing) < 0) {
+      return;
+    }
+    this.currentOffers.set(identityKey, offer);
   }
 }
 
@@ -4392,16 +4400,18 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const existingKeys = new Set<string>();
     for (let i = 0; i < idempotencyKeys.length; i += 100) {
       const chunk = idempotencyKeys.slice(i, i + 100);
-      const { data: chunkRows, error: existingError } = await this.client
-        .from('provider_offers')
+      const { data: chunkRows, error: existingError } = await fromUntyped(
+        this.client,
+        'provider_offer_history',
+      )
         .select('idempotency_key')
         .in('idempotency_key', chunk);
       if (existingError) {
         throw new Error(
-          `Failed to load existing provider offers: ${existingError.message}`,
+          `Failed to load existing provider offer history: ${existingError.message}`,
         );
       }
-      for (const row of chunkRows ?? []) {
+      for (const row of (chunkRows as Array<{ idempotency_key: string }> | null) ?? []) {
         existingKeys.add(row.idempotency_key);
       }
     }
@@ -4410,27 +4420,42 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     const deduped = [
       ...new Map(offers.map((o) => [o.idempotencyKey, o])).values(),
     ];
-    const rows = deduped.map(mapProviderOfferInsertToRow);
+    const historyRows = deduped.map((offer) => mapProviderOfferInsertToHistoryRow(offer));
+    const currentRows = buildProviderOfferCurrentRows(historyRows);
 
-    // Chunk upsert to avoid Supabase statement timeout on large MLB/NHL batches.
     const UPSERT_CHUNK_SIZE = 500;
-    for (let i = 0; i < rows.length; i += UPSERT_CHUNK_SIZE) {
-      const chunk = rows.slice(i, i + UPSERT_CHUNK_SIZE);
-      const { error } = await this.client
-        .from('provider_offers')
-        .upsert(chunk, {
-          onConflict: 'idempotency_key',
-          ignoreDuplicates: true,
-        });
+    for (let i = 0; i < historyRows.length; i += UPSERT_CHUNK_SIZE) {
+      const chunk = historyRows.slice(i, i + UPSERT_CHUNK_SIZE);
+      const { error } = await (fromUntyped(this.client, 'provider_offer_history').upsert(chunk, {
+        onConflict: 'snapshot_at,idempotency_key',
+        ignoreDuplicates: true,
+      }) as unknown as Promise<{
+        data: unknown;
+        error: { message: string } | null;
+      }>);
       if (error) {
-        throw new Error(`Failed to upsert provider offers: ${error.message}`);
+        throw new Error(`Failed to upsert provider offer history: ${error.message}`);
+      }
+    }
+
+    for (let i = 0; i < currentRows.length; i += UPSERT_CHUNK_SIZE) {
+      const chunk = currentRows.slice(i, i + UPSERT_CHUNK_SIZE);
+      const { error } = await (fromUntyped(this.client, 'provider_offer_current').upsert(chunk, {
+        onConflict: 'identity_key',
+        ignoreDuplicates: false,
+      }) as unknown as Promise<{
+        data: unknown;
+        error: { message: string } | null;
+      }>);
+      if (error) {
+        throw new Error(`Failed to upsert provider offer current rows: ${error.message}`);
       }
     }
 
     return {
-      insertedCount: rows.length - existingKeys.size,
+      insertedCount: historyRows.length - existingKeys.size,
       updatedCount: existingKeys.size,
-      totalProcessed: rows.length,
+      totalProcessed: historyRows.length,
     };
   }
 
@@ -4563,11 +4588,13 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await this.client
-      .from('provider_offers')
+    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
       .select('*')
       .eq('provider_key', providerKey)
-      .order('snapshot_at', { ascending: false });
+      .order('snapshot_at', { ascending: false }) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
     if (error) {
       throw new Error(`Failed to list provider offers: ${error.message}`);
@@ -4581,8 +4608,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     providerKey?: string,
     providerParticipantId?: string | null,
   ): Promise<ProviderOfferRecord | null> {
-    let query = this.client
-      .from('provider_offers')
+    let query = fromUntyped(this.client, 'provider_offer_current')
       .select('*')
       .eq('provider_market_key', marketKey)
       .order('snapshot_at', { ascending: false })
@@ -4596,7 +4622,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       query = query.eq('provider_participant_id', providerParticipantId);
     }
 
-    const { data, error } = await query.maybeSingle();
+    const { data, error } = await (query.maybeSingle() as unknown as Promise<{
+      data: ProviderOfferRecord | null;
+      error: { message: string } | null;
+    }>);
 
     if (error) {
       throw new Error(
@@ -4608,10 +4637,12 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   }
 
   async listAll(): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await this.client
-      .from('provider_offers')
+    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
       .select('*')
-      .order('snapshot_at', { ascending: false });
+      .order('snapshot_at', { ascending: false }) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
     if (error) {
       throw new Error(`Failed to list provider offers: ${error.message}`);
@@ -4624,12 +4655,14 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     since: string,
     limit = 10_000,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await this.client
-      .from('provider_offers')
+    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
       .select('*')
       .gte('snapshot_at', since)
       .order('snapshot_at', { ascending: false })
-      .limit(limit);
+      .limit(limit) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
     if (error) {
       throw new Error(
@@ -4655,13 +4688,15 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       let from = 0;
 
       for (;;) {
-        const { data, error } = await this.client
-          .from('provider_offers')
+        const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
           .select('*')
           .eq('is_closing', true)
           .gte('snapshot_at', windowStartIso)
           .lt('snapshot_at', windowEndIso)
-          .range(from, from + PAGE - 1);
+          .range(from, from + PAGE - 1) as unknown as Promise<{
+            data: ProviderOfferRecord[] | null;
+            error: { message: string } | null;
+          }>);
 
         if (error) {
           if (/statement timeout/i.test(error.message)) {
@@ -4686,8 +4721,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   async findClosingLine(
     criteria: ClosingLineLookupCriteria,
   ): Promise<ProviderOfferRecord | null> {
-    let query = this.client
-      .from('provider_offers')
+    let query = fromUntyped(this.client, 'provider_offer_history')
       .select('*')
       .eq('provider_event_id', criteria.providerEventId)
       .eq('provider_market_key', criteria.providerMarketKey)
@@ -4713,10 +4747,13 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       }
     }
 
-    const { data, error } = await query
+    const { data, error } = await (query
       .order('snapshot_at', { ascending: false })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle() as unknown as Promise<{
+        data: ProviderOfferRecord | null;
+        error: { message: string } | null;
+      }>);
 
     if (error) {
       throw new Error(`Failed to find closing line: ${error.message}`);
@@ -4728,8 +4765,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
   async findOpeningLine(
     criteria: ClosingLineLookupCriteria,
   ): Promise<ProviderOfferRecord | null> {
-    let query = this.client
-      .from('provider_offers')
+    let query = fromUntyped(this.client, 'provider_offer_history')
       .select('*')
       .eq('provider_event_id', criteria.providerEventId)
       .eq('provider_market_key', criteria.providerMarketKey)
@@ -4755,10 +4791,13 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       }
     }
 
-    const { data, error } = await query
+    const { data, error } = await (query
       .order('snapshot_at', { ascending: true })
       .limit(1)
-      .maybeSingle();
+      .maybeSingle() as unknown as Promise<{
+        data: ProviderOfferRecord | null;
+        error: { message: string } | null;
+      }>);
 
     if (error) {
       throw new Error(`Failed to find opening line: ${error.message}`);
@@ -4777,8 +4816,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     // Chunk to avoid URL length limits
     for (let i = 0; i < providerEventIds.length; i += 100) {
       const chunk = providerEventIds.slice(i, i + 100);
-      let query = this.client
-        .from('provider_offers')
+      let query = fromUntyped(this.client, 'provider_offer_history')
         .select(
           'provider_key, provider_event_id, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at',
         )
@@ -4786,7 +4824,17 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       if (options?.beforeSnapshotAt !== undefined) {
         query = query.lt('snapshot_at', options.beforeSnapshotAt);
       }
-      const { data, error } = await query;
+      const { data, error } = await (query as unknown as Promise<{
+        data: Array<{
+          provider_key: string;
+          provider_event_id: string;
+          provider_market_key: string;
+          provider_participant_id: string | null;
+          bookmaker_key: string | null;
+          snapshot_at: string;
+        }> | null;
+        error: { message: string } | null;
+      }>);
 
       if (error) {
         throw new Error(
@@ -4837,8 +4885,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
 
     for (const { providerEventId, commenceTime } of recentEvents) {
       // Fetch pre-commence offers for this event. Limit 5000 rows as a safety cap.
-      const { data, error } = await this.client
-        .from('provider_offers')
+      const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
         .select(
           'id, provider_key, provider_market_key, provider_participant_id, bookmaker_key, snapshot_at, is_closing',
         )
@@ -4846,7 +4893,18 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
         .lt('snapshot_at', commenceTime)
         .eq('is_closing', false)
         .order('snapshot_at', { ascending: false })
-        .limit(5000);
+        .limit(5000) as unknown as Promise<{
+          data: Array<{
+            id: string;
+            provider_key: string;
+            provider_market_key: string;
+            provider_participant_id: string | null;
+            bookmaker_key: string | null;
+            snapshot_at: string;
+            is_closing: boolean;
+          }> | null;
+          error: { message: string } | null;
+        }>);
 
       if (error) {
         throw new Error(
@@ -4879,14 +4937,29 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       // Batch update in chunks of 100
       for (let i = 0; i < idsToMark.length; i += 100) {
         const chunk = idsToMark.slice(i, i + 100);
-        const { error: updateError, count } = await this.client
-          .from('provider_offers')
+        const { error: updateError, count } = await (fromUntyped(this.client, 'provider_offer_history')
           .update({ is_closing: true })
-          .in('id', chunk);
+          .in('id', chunk) as unknown as Promise<{
+            data: unknown;
+            error: { message: string } | null;
+            count?: number | null;
+          }>);
 
         if (updateError) {
           throw new Error(
             `Failed to mark closing lines: ${updateError.message}`,
+          );
+        }
+
+        const { error: currentUpdateError } = await (fromUntyped(this.client, 'provider_offer_current')
+          .update({ is_closing: true })
+          .in('id', chunk) as unknown as Promise<{
+            data: unknown;
+            error: { message: string } | null;
+          }>);
+        if (currentUpdateError) {
+          throw new Error(
+            `Failed to mark closing current offers: ${currentUpdateError.message}`,
           );
         }
 
@@ -4988,8 +5061,7 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
     provider: string,
     limit = 500,
   ): Promise<ProviderOfferRecord[]> {
-    const { data, error } = await this.client
-      .from('provider_offers')
+    const { data, error } = await (fromUntyped(this.client, 'provider_offer_history')
       .select('*')
       .eq('provider_key', provider)
       .eq('is_opening', true)
@@ -4999,7 +5071,10 @@ export class DatabaseProviderOfferRepository implements ProviderOfferRepository 
       .not('line', 'is', null)
       .not('provider_participant_id', 'is', null)
       .order('snapshot_at', { ascending: false })
-      .limit(limit);
+      .limit(limit) as unknown as Promise<{
+        data: ProviderOfferRecord[] | null;
+        error: { message: string } | null;
+      }>);
 
     if (error) {
       throw new Error(`Failed to list opening offers: ${error.message}`);
@@ -8054,6 +8129,9 @@ type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
   ): UntypedQueryBuilder;
   update(values: Record<string, unknown>): UntypedQueryBuilder;
   eq(column: string, value: unknown): UntypedQueryBuilder;
+  gte(column: string, value: unknown): UntypedQueryBuilder;
+  lte(column: string, value: unknown): UntypedQueryBuilder;
+  lt(column: string, value: unknown): UntypedQueryBuilder;
   neq(column: string, value: unknown): UntypedQueryBuilder;
   in(column: string, values: readonly unknown[]): UntypedQueryBuilder;
   is(column: string, value: unknown): UntypedQueryBuilder;
@@ -8061,6 +8139,7 @@ type UntypedQueryBuilder = PromiseLike<UntypedQueryResult> & {
   order(column: string, options?: { ascending?: boolean }): UntypedQueryBuilder;
   ilike(column: string, pattern: string): UntypedQueryBuilder;
   limit(count: number): UntypedQueryBuilder;
+  range(from: number, to: number): UntypedQueryBuilder;
   single(): UntypedQueryBuilder;
   maybeSingle(): UntypedQueryBuilder;
 };
@@ -8143,6 +8222,96 @@ function mapProviderOfferInsertToRow(offer: ProviderOfferInsert) {
     idempotency_key: offer.idempotencyKey,
     bookmaker_key: offer.bookmakerKey ?? null,
   };
+}
+
+function mapProviderOfferInsertToHistoryRow(
+  offer: ProviderOfferInsert,
+  sourceRunId?: string,
+) {
+  return {
+    id: crypto.randomUUID(),
+    ...mapProviderOfferInsertToRow(offer),
+    source_run_id: sourceRunId ?? null,
+    created_at: new Date().toISOString(),
+  };
+}
+
+function buildProviderOfferCurrentIdentityKey(offer: {
+  providerKey: string;
+  providerEventId: string;
+  providerMarketKey: string;
+  providerParticipantId: string | null;
+  bookmakerKey: string | null;
+}) {
+  return [
+    offer.providerKey,
+    offer.providerEventId,
+    offer.providerMarketKey,
+    offer.providerParticipantId ?? '',
+    offer.bookmakerKey ?? '',
+  ].join(':');
+}
+
+function compareProviderOfferRecords(
+  left: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at' | 'id'>,
+  right: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at' | 'id'>,
+) {
+  const snapshotComparison = left.snapshot_at.localeCompare(right.snapshot_at);
+  if (snapshotComparison !== 0) {
+    return snapshotComparison;
+  }
+
+  const createdAtComparison = left.created_at.localeCompare(right.created_at);
+  if (createdAtComparison !== 0) {
+    return createdAtComparison;
+  }
+
+  return left.id.localeCompare(right.id);
+}
+
+function buildProviderOfferCurrentRows(
+  rows: Array<ReturnType<typeof mapProviderOfferInsertToHistoryRow>>,
+) {
+  const latestByIdentity = new Map<
+    string,
+    ReturnType<typeof mapProviderOfferInsertToHistoryRow> & { identity_key: string; updated_at: string }
+  >();
+
+  for (const row of rows) {
+    const now = new Date().toISOString();
+    const currentRow = {
+      identity_key: buildProviderOfferCurrentIdentityKey({
+        providerKey: row.provider_key,
+        providerEventId: row.provider_event_id,
+        providerMarketKey: row.provider_market_key,
+        providerParticipantId: row.provider_participant_id,
+        bookmakerKey: row.bookmaker_key ?? null,
+      }),
+      ...row,
+      updated_at: now,
+    };
+    const existing = latestByIdentity.get(currentRow.identity_key);
+    if (
+      existing &&
+      compareProviderOfferRecords(
+        {
+          id: currentRow.id,
+          snapshot_at: currentRow.snapshot_at,
+          created_at: currentRow.created_at,
+        },
+        {
+          id: existing.id,
+          snapshot_at: existing.snapshot_at,
+          created_at: existing.created_at,
+        },
+      ) < 0
+    ) {
+      continue;
+    }
+    latestByIdentity.set(currentRow.identity_key, currentRow);
+  }
+
+  return [...latestByIdentity.values()];
 }
 
 function mapProviderOfferStageInsertToRow(offer: ProviderOfferStageInput) {
