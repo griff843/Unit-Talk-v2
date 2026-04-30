@@ -459,7 +459,7 @@ export async function getSnapshotData(filter?: OutboxFilter): Promise<unknown> {
     client.from('participants').select('id', { count: 'exact', head: true }).eq('participant_type', 'team'),
     client.from('events').select('id,event_name,event_date,sport_id').gte('event_date', today).lte('event_date', nextWeek).order('event_date', { ascending: true }).limit(5),
     client.from('member_tiers').select('tier').is('effective_until', null),
-    client.from('provider_offers').select('snapshot_at').order('snapshot_at', { ascending: false }).limit(1),
+    client.from('provider_offer_current').select('snapshot_at').order('snapshot_at', { ascending: false }).limit(1),
   ]);
 
   for (const result of [outboxResult, receiptsResult, settlementsResult, runsResult, picksResult, auditResult, validatedCountResult, queuedCountResult, postedCountResult, settledCountResult, resolvedEventsCountResult, upcomingEventsCountResult, resolvedPlayersCountResult, resolvedTeamsWithExternalIdCountResult, totalTeamsCountResult, upcomingEventsResult, latestProviderOfferResult]) {

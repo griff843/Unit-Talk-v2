@@ -128,9 +128,9 @@ export async function getProviderHealth(): Promise<{ ok: true; data: unknown }> 
   const staleThresholdMinutes = resolveProviderOfferFreshnessThresholdMinutes();
 
   const [offersResult, runsResult, latestOfferResult] = await Promise.all([
-    client.from('provider_offers').select('provider_key, created_at, snapshot_at, provider_event_id'),
+    client.from('provider_offer_current').select('provider_key, created_at, snapshot_at, provider_event_id'),
     client.from('system_runs').select('*').order('created_at', { ascending: false }).limit(50),
-    client.from('provider_offers').select('snapshot_at').order('snapshot_at', { ascending: false }).limit(1),
+    client.from('provider_offer_current').select('snapshot_at').order('snapshot_at', { ascending: false }).limit(1),
   ]);
 
   if (offersResult.error) throw new Error(`getProviderHealth: ${String(offersResult.error)}`);

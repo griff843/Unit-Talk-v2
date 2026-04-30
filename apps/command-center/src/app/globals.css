@@ -2,8 +2,209 @@
 @tailwind components;
 @tailwind utilities;
 
-html {
+:root {
   color-scheme: dark;
+  --motion-fast: 150ms;
+  --motion-base: 250ms;
+  --motion-slow: 400ms;
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --surface-base: hsl(224 20% 7%);
+  --surface-raised: hsl(224 18% 10%);
+  --surface-overlay: hsl(224 16% 14%);
+  --cc-bg-canvas: #05070d;
+  --cc-bg-surface: #0b111b;
+  --cc-bg-surface-elevated: #131b2a;
+  --cc-bg-surface-hover: #1a2436;
+  --cc-border-subtle: #1f2b40;
+  --cc-border-strong: #2d3c56;
+  --cc-text-primary: #e7edf8;
+  --cc-text-secondary: #97a7c3;
+  --cc-text-muted: #6f819f;
+  --cc-accent: #3d8bff;
+  --cc-accent-strong: #2669cc;
+  --cc-success: #22c55e;
+  --cc-danger: #ef4444;
+  --cc-warning: #f59e0b;
+  --cc-radius-md: 0.5rem;
+  --cc-radius-lg: 0.75rem;
+}
+
+[data-theme='light'] {
+  color-scheme: light;
+  --cc-bg-canvas: #edf3fb;
+  --cc-bg-surface: #ffffff;
+  --cc-bg-surface-elevated: #f6f9fc;
+  --cc-bg-surface-hover: #e8eef8;
+  --cc-border-subtle: #cfdbec;
+  --cc-border-strong: #aebfd7;
+  --cc-text-primary: #0f172a;
+  --cc-text-secondary: #334155;
+  --cc-text-muted: #64748b;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+body {
+  background: radial-gradient(120% 120% at 0% 0%, #0f1725 0%, var(--cc-bg-canvas) 55%);
+  color: var(--cc-text-primary);
+  transition:
+    background-color var(--motion-slow) var(--ease-out),
+    color var(--motion-base) var(--ease-out);
+}
+
+.cc-shell {
+  background-color: transparent;
+  color: var(--cc-text-primary);
+}
+
+.cc-sidebar {
+  background-color: color-mix(in srgb, var(--cc-bg-surface) 93%, black 7%);
+  border-right: 1px solid var(--cc-border-subtle);
+}
+
+.cc-surface {
+  background-color: color-mix(in srgb, var(--surface-raised) 88%, transparent);
+  border: 1px solid var(--cc-border-subtle);
+  border-radius: var(--cc-radius-lg);
+  box-shadow: 0 18px 40px -32px rgba(15, 23, 42, 0.9);
+}
+
+.cc-text-secondary {
+  color: var(--cc-text-secondary);
+}
+
+.cc-text-muted {
+  color: var(--cc-text-muted);
+}
+
+.cc-link {
+  color: var(--cc-text-secondary);
+  transition: color 140ms ease, background-color 140ms ease;
+}
+
+.cc-link:hover {
+  color: var(--cc-text-primary);
+}
+
+.cc-link-active {
+  background-color: var(--cc-bg-surface-elevated);
+  color: var(--cc-text-primary);
+}
+
+.cc-badge {
+  border: 1px solid var(--cc-border-strong);
+  background-color: color-mix(in srgb, var(--surface-overlay) 95%, transparent);
+  color: var(--cc-text-muted);
+}
+
+.cc-icon-button {
+  display: inline-flex;
+  height: 2.5rem;
+  width: 2.5rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 9999px;
+  border: 1px solid var(--cc-border-subtle);
+  background-color: color-mix(in srgb, var(--surface-overlay) 94%, transparent);
+  color: var(--cc-text-secondary);
+  transition:
+    background-color var(--motion-fast) var(--ease-out),
+    color var(--motion-fast) var(--ease-out),
+    transform var(--motion-fast) var(--ease-out);
+}
+
+.cc-icon-button:hover {
+  background-color: var(--cc-bg-surface-hover);
+  color: var(--cc-text-primary);
+}
+
+.cc-icon-button:active {
+  transform: translateY(1px);
+}
+
+.cc-icon-button:focus-visible {
+  outline: 2px solid var(--cc-accent);
+  outline-offset: 2px;
+}
+
+.skip-link:focus {
+  background-color: var(--cc-accent);
+  color: white;
+}
+
+@keyframes cc-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.7;
+  }
+  70% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.8);
+    opacity: 0;
+  }
+}
+
+@keyframes cc-travel {
+  0% {
+    transform: translate(0, -50%);
+    opacity: 0;
+  }
+  15% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(5.75rem, -50%);
+    opacity: 0;
+  }
+}
+
+@keyframes cc-stage-ring {
+  0% {
+    transform: scale(1);
+    opacity: 0.55;
+  }
+  100% {
+    transform: scale(2.1);
+    opacity: 0;
+  }
+}
+
+@keyframes cc-event-enter {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes cc-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+@keyframes cc-feed-scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
 }
 
 @keyframes pipeline-travel {

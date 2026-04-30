@@ -1,8 +1,10 @@
+import React from 'react';
+
 export function Card({ title, children }: { title?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-gray-800 bg-gray-900/50 p-5">
+    <div className="cc-surface p-5">
       {title && (
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-400">
+        <h2 className="cc-text-secondary mb-4 text-sm font-semibold uppercase tracking-wide">
           {title}
         </h2>
       )}

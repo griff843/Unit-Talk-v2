@@ -1,267 +1,169 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
 
-type SecondaryNavItem = {
+export type SidebarNavItem = {
   href: string;
   label: string;
-  badge?: string;
-  disabled?: boolean;
-};
-
-type Workspace = {
-  id: string;
-  label: string;
   icon: React.ReactNode;
-  /** Routes that belong to this workspace — used to detect active workspace */
-  routes: string[];
-  secondaryNav: SecondaryNavItem[];
+  match?: string[];
+  unreadCount?: number;
 };
 
-const IconResearch = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="11" cy="11" r="8" />
-    <line x1="21" y1="21" x2="16.65" y2="16.65" />
-  </svg>
-);
+export type SidebarHealthStatus = 'healthy' | 'warning' | 'critical';
 
-const IconDecision = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <line x1="18" y1="20" x2="18" y2="10" />
-    <line x1="12" y1="20" x2="12" y2="4" />
-    <line x1="6" y1="20" x2="6" y2="14" />
-  </svg>
-);
+type WorkspaceSidebarProps = {
+  navItems: SidebarNavItem[];
+  activeRoute: string;
+  healthStatus: SidebarHealthStatus;
+  collapsed: boolean;
+  onToggle: () => void;
+};
 
-const IconOperations = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <circle cx="12" cy="12" r="3" />
-    <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
-    <path d="M4.93 4.93a10 10 0 0 0 0 14.14" />
-  </svg>
-);
-
-const IconIntelligence = () => (
-  <svg
-    xmlns="http://www.w3.org/2000/svg"
-    width="16"
-    height="16"
-    viewBox="0 0 24 24"
-    fill="none"
-    stroke="currentColor"
-    strokeWidth="2"
-    strokeLinecap="round"
-    strokeLinejoin="round"
-    aria-hidden="true"
-  >
-    <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
-  </svg>
-);
-
-const WORKSPACES: Workspace[] = [
-  {
-    id: 'research',
-    label: 'Research',
-    icon: <IconResearch />,
-    routes: ['/research'],
-    secondaryNav: [
-      { href: '/research/props', label: 'Prop Explorer' },
-      { href: '/research/lines', label: 'Line-Shopper' },
-      { href: '/research/players', label: 'Player Card' },
-      { href: '/research/matchups', label: 'Matchup Card' },
-      { href: '/research/hit-rate', label: 'Hit Rate', badge: 'shell' },
-      { href: '/research/trends', label: 'Trend Filters', disabled: true },
-    ],
-  },
-  {
-    id: 'decision',
-    label: 'Decision',
-    icon: <IconDecision />,
-    routes: ['/decision', '/decisions'],
-    secondaryNav: [
-      { href: '/decision/board-queue', label: 'Board Queue' },
-      { href: '/decision/scores', label: 'Score Breakdown' },
-      { href: '/decision/preview', label: 'Promotion Preview' },
-      { href: '/decision/routing', label: 'Routing Preview' },
-      { href: '/decision/board', label: 'Board Saturation' },
-      { href: '/decisions', label: 'Review History' },
-      { href: '/decision/hedges', label: 'Hedge Overlays', badge: 'shell' },
-    ],
-  },
-  {
-    id: 'operations',
-    label: 'Operations',
-    icon: <IconOperations />,
-    routes: ['/', '/burn-in', '/pipeline', '/picks-list', '/picks', '/review', '/held', '/exceptions', '/events', '/interventions'],
-    secondaryNav: [
-      { href: '/', label: 'Dashboard' },
-      { href: '/burn-in', label: 'Readiness / Health Scorecard' },
-      { href: '/pipeline', label: 'Pipeline Health' },
-      { href: '/picks-list', label: 'Picks List' },
-      { href: '/review', label: 'Review Queue' },
-      { href: '/held', label: 'Held Picks' },
-      { href: '/exceptions', label: 'Exceptions' },
-      { href: '/events', label: 'Events Stream' },
-      { href: '/interventions', label: 'Intervention Log' },
-    ],
-  },
-  {
-    id: 'intelligence',
-    label: 'Intelligence',
-    icon: <IconIntelligence />,
-    routes: ['/performance', '/intelligence'],
-    secondaryNav: [
-      { href: '/performance', label: 'Performance' },
-      { href: '/intelligence', label: 'Form Windows' },
-      { href: '/intelligence/attribution', label: 'Governed Attribution' },
-      { href: '/intelligence/calibration', label: 'Model Feedback' },
-      { href: '/intelligence/roi', label: 'ROI Overview', badge: 'shell' },
-    ],
-  },
-];
-
-function resolveActiveWorkspace(pathname: string): string {
-  // Exact root match belongs to Operations
-  if (pathname === '/') return 'operations';
-
-  // Check each workspace's routes for a prefix match, longest match wins
-  let bestMatch = { workspaceId: 'operations', matchLength: 0 };
-
-  for (const workspace of WORKSPACES) {
-    for (const route of workspace.routes) {
-      if (route === '/') continue; // root handled above
-      if (pathname === route || pathname.startsWith(route + '/')) {
-        if (route.length > bestMatch.matchLength) {
-          bestMatch = { workspaceId: workspace.id, matchLength: route.length };
-        }
-      }
-    }
-  }
-
-  return bestMatch.workspaceId;
+function cx(...values: Array<string | false | null | undefined>) {
+  return values.filter(Boolean).join(' ');
 }
 
-export function WorkspaceSidebar() {
-  const pathname = usePathname();
-  const activeWorkspaceId = resolveActiveWorkspace(pathname);
+function LogoMark() {
+  return (
+    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,var(--cc-accent),#7c3aed)] text-sm font-semibold text-white shadow-[0_12px_30px_-14px_rgba(61,139,255,0.8)]">
+      UT
+    </div>
+  );
+}
+
+function CollapseIcon({ collapsed }: { collapsed: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+      {collapsed ? <path d="m9 18 6-6-6-6" /> : <path d="m15 18-6-6 6-6" />}
+    </svg>
+  );
+}
+
+function HealthPulse({ status }: { status: SidebarHealthStatus }) {
+  const tone =
+    status === 'healthy'
+      ? 'bg-[var(--cc-success)]'
+      : status === 'warning'
+        ? 'bg-[var(--cc-warning)]'
+        : 'bg-[var(--cc-danger)]';
 
   return (
-    <aside className="flex w-[200px] flex-shrink-0 flex-col border-r border-gray-800 bg-gray-950 min-h-screen sticky top-0 overflow-y-auto">
-      {/* Brand */}
-      <div className="border-b border-gray-800 px-4 py-4">
-        <div className="text-sm font-bold tracking-tight text-white">Unit Talk</div>
-        <div className="text-xs font-medium uppercase tracking-widest text-gray-500">Command Center</div>
+    <div className="relative flex h-3 w-3 items-center justify-center" aria-hidden="true">
+      <span className={cx('absolute h-3 w-3 rounded-full opacity-75 animate-[cc-pulse_2s_infinite]', tone)} />
+      <span className={cx('relative h-2.5 w-2.5 rounded-full border border-white/30', tone)} />
+    </div>
+  );
+}
+
+function NavItemIcon({ children }: { children: React.ReactNode }) {
+  return <span className="flex h-5 w-5 items-center justify-center">{children}</span>;
+}
+
+function OperatorBadge({ collapsed }: { collapsed: boolean }) {
+  return (
+    <div
+      className={cx(
+        'cc-surface mx-3 mb-3 flex items-center gap-3 overflow-hidden px-3 py-3 transition-[padding,gap] duration-[var(--motion-base)] ease-[var(--ease-out)]',
+        collapsed && 'justify-center px-0',
+      )}
+    >
+      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,#f97316,#fb7185)] text-sm font-semibold text-white">
+        OA
+      </div>
+      {!collapsed && (
+        <div className="min-w-0">
+          <div className="truncate text-sm font-medium text-[var(--cc-text-primary)]">Operator Alpha</div>
+          <div className="mt-1 inline-flex items-center rounded-full border border-[var(--cc-border-strong)] px-2 py-0.5 text-[10px] uppercase tracking-[0.24em] text-[var(--cc-text-muted)]">
+            Runtime Lane
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function WorkspaceSidebar({
+  navItems,
+  activeRoute,
+  healthStatus,
+  collapsed,
+  onToggle,
+}: WorkspaceSidebarProps) {
+  return (
+    <aside
+      className={cx(
+        'cc-sidebar sticky top-0 flex min-h-screen shrink-0 flex-col border-r border-[var(--cc-border-subtle)] transition-[width] duration-[200ms] ease-[var(--ease-out)]',
+        collapsed ? 'w-16' : 'w-60',
+      )}
+    >
+      <div className={cx('flex items-center gap-3 px-3 py-4', collapsed && 'justify-center px-2')}>
+        <LogoMark />
+        {!collapsed && (
+          <div className="min-w-0 flex-1">
+            <div className="text-sm font-semibold tracking-[0.18em] text-[var(--cc-text-primary)]">UNIT TALK</div>
+            <div className="text-[11px] uppercase tracking-[0.3em] text-[var(--cc-text-muted)]">Command Center</div>
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onToggle}
+          className="cc-icon-button hidden md:inline-flex"
+          aria-label={collapsed ? 'Expand navigation' : 'Collapse navigation'}
+          aria-pressed={collapsed}
+        >
+          <CollapseIcon collapsed={collapsed} />
+        </button>
       </div>
 
-      {/* Workspace switcher */}
-      <nav className="flex flex-col gap-0.5 p-2 flex-1" aria-label="Workspaces">
-        {WORKSPACES.map((workspace) => {
-          const isActive = workspace.id === activeWorkspaceId;
+      <div className={cx('mx-3 mb-4 flex items-center rounded-2xl border border-[var(--cc-border-subtle)] bg-[var(--cc-bg-surface-elevated)] px-3 py-3', collapsed && 'mx-2 justify-center px-0')}>
+        <HealthPulse status={healthStatus} />
+        {!collapsed && (
+          <div className="ml-3 min-w-0">
+            <div className="text-xs font-medium uppercase tracking-[0.22em] text-[var(--cc-text-muted)]">Global Health</div>
+            <div className="text-sm text-[var(--cc-text-primary)]">{healthStatus}</div>
+          </div>
+        )}
+      </div>
 
-          return (
-            <div key={workspace.id}>
-              {/* Workspace top-level item */}
-              <Link
-                href={
-                  workspace.id === 'operations'
-                    ? '/'
-                    : workspace.id === 'research'
-                      ? '/research'
-                      : workspace.id === 'decision'
-                        ? '/decision'
-                        : '/intelligence'
-                }
-                className={`flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors ${
-                  isActive
-                    ? 'bg-gray-800 font-medium text-white'
-                    : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'
-                }`}
-                aria-current={isActive ? 'page' : undefined}
-              >
-                <span className={isActive ? 'text-white' : 'text-gray-500'}>{workspace.icon}</span>
-                {workspace.label}
-              </Link>
-
-              {/* Secondary nav — only visible when this workspace is active */}
-              {isActive && (
-                <div className="mt-0.5 mb-1 flex flex-col gap-0.5 pl-4">
-                  {workspace.secondaryNav.map((item) => {
-                    const isSecondaryActive = item.href === '/'
-                      ? pathname === '/'
-                      : pathname === item.href || pathname.startsWith(item.href + '/');
-
-                    if (item.disabled) {
-                      return (
-                        <span
-                          key={item.href}
-                          className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-gray-600 cursor-not-allowed select-none"
-                          title="Coming soon — requires stat history ingest"
-                        >
-                          {item.label}
-                          <span className="rounded bg-gray-800 px-1 py-0.5 text-[10px] text-gray-500">soon</span>
-                        </span>
-                      );
-                    }
-
-                    return (
-                      <Link
-                        key={item.href}
-                        href={item.href}
-                        className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs transition-colors ${
-                          isSecondaryActive
-                            ? 'bg-gray-700 font-medium text-white'
-                            : 'text-gray-400 hover:bg-gray-800/50 hover:text-gray-200'
-                        }`}
-                      >
-                        {item.label}
-                        {item.badge && (
-                          <span className="rounded bg-gray-800 px-1 py-0.5 text-[10px] text-gray-500">
-                            {item.badge}
-                          </span>
-                        )}
-                      </Link>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          );
-        })}
+      <nav className="flex-1 px-2 pb-4" aria-label="Primary">
+        <ul className="space-y-1">
+          {navItems.map((item) => {
+            const isActive = activeRoute === item.href;
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  className={cx(
+                    'group relative flex items-center rounded-2xl px-3 py-3 text-sm transition-colors duration-[var(--motion-fast)] ease-[var(--ease-out)]',
+                    collapsed && 'justify-center px-0',
+                    isActive
+                      ? 'bg-[color-mix(in_srgb,var(--cc-accent)_14%,transparent)] text-[var(--cc-text-primary)]'
+                      : 'text-[var(--cc-text-secondary)] hover:bg-[var(--cc-bg-surface-hover)] hover:text-[var(--cc-text-primary)]',
+                  )}
+                  aria-current={isActive ? 'page' : undefined}
+                  title={collapsed ? item.label : undefined}
+                >
+                  <span
+                    className={cx(
+                      'absolute left-0 top-2 bottom-2 rounded-r-full transition-opacity duration-[var(--motion-fast)] ease-[var(--ease-out)]',
+                      collapsed ? 'w-0' : 'w-1',
+                      isActive ? 'bg-violet-400 opacity-100' : 'opacity-0',
+                    )}
+                  />
+                  <NavItemIcon>{item.icon}</NavItemIcon>
+                  {!collapsed && <span className="ml-3 flex-1">{item.label}</span>}
+                  {!collapsed && typeof item.unreadCount === 'number' && item.unreadCount > 0 && (
+                    <span className="cc-badge rounded-full px-2 py-0.5 text-[10px]">{item.unreadCount}</span>
+                  )}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
       </nav>
+
+      <OperatorBadge collapsed={collapsed} />
     </aside>
   );
 }
