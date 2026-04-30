@@ -23,7 +23,7 @@ type AlertEvent = {
   title: string;
   detail: string;
   timestamp: string;
-  tone: 'info' | 'warning' | 'error';
+  tone: 'info' | 'medium' | 'warning' | 'error';
 };
 
 const TIER_CLASSES: Record<FeedRow['tier'], string> = {
@@ -110,7 +110,7 @@ function deriveAlertEvent(exception: OperationalException): AlertEvent {
     title: exception.title,
     detail: exception.detail,
     timestamp: severity.toUpperCase(),
-    tone: severity === 'critical' ? 'error' : severity === 'high' ? 'warning' : 'info',
+    tone: severity === 'critical' ? 'error' : severity === 'high' ? 'warning' : severity === 'medium' ? 'medium' : 'info',
   };
 }
 
@@ -223,7 +223,7 @@ function AlertLog({ events }: { events: AlertEvent[] }) {
         ) : (
           <div className="flex flex-col gap-3">
             {visibleEvents.map((event) => {
-              const severity = event.tone === 'error' ? 'critical' : event.tone === 'warning' ? 'high' : 'low';
+              const severity = event.tone === 'error' ? 'critical' : event.tone === 'warning' ? 'high' : event.tone === 'medium' ? 'medium' : 'low';
               return (
                 <article key={event.id} className={`rounded-[22px] border px-4 py-4 ${ALERT_TONE_CLASSES[severity]}`}>
                   <div className="flex items-start justify-between gap-3">
