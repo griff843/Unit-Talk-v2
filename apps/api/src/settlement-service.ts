@@ -659,6 +659,14 @@ async function computeSettlementDownstreamBundle(
   settlements: SettlementRepository,
 ): Promise<SettlementDownstreamBundle> {
   const records = await settlements.listByPick(pick.id);
+  if (records.length === 0) {
+    console.warn(JSON.stringify({
+      service: 'settlement-service',
+      event: 'settlement_records_empty',
+      pickId: pick.id,
+      reason: 'no settlement rows found for pick',
+    }));
+  }
   const resolved = resolveEffectiveSettlement(
     records.map(mapSettlementRecordToInput),
   );
