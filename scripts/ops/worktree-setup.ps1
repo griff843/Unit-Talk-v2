@@ -10,14 +10,16 @@
   Must be run after `git worktree add` and before the first `pnpm verify`.
 
 .PARAMETER WorktreePath
-  Absolute path to the worktree directory (e.g. C:\Dev\utv2-809-fix).
+  Path to the worktree directory. Use a path inside the main repo under .worktrees/
+  so it stays within the Codex sandbox boundary (e.g. .worktrees/utv2-809-fix).
+  Absolute paths outside the repo also work (for manual use).
 
 .PARAMETER MainRepoPath
   Absolute path to the main repo. Defaults to the repo root derived from
   git-common-dir (works correctly when called from inside any worktree).
 
 .EXAMPLE
-  pwsh scripts/ops/worktree-setup.ps1 C:\Dev\utv2-809-fix
+  pwsh scripts/ops/worktree-setup.ps1 .worktrees/utv2-809-fix
 #>
 param(
   [Parameter(Mandatory)][string]$WorktreePath,

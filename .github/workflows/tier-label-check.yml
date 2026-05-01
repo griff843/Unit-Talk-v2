@@ -1,0 +1,57 @@
+name: Tier Label Check
+
+on:
+  pull_request:
+    types: [opened, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  pull-requests: write
+
+jobs:
+  check-tier-label:
+    name: Require tier label
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check for tier label
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const labels = context.payload.pull_request.labels.map(l => l.name);
+            const hasTier = labels.some(l => l.startsWith('tier:'));
+
+            if (hasTier) {
+              console.log('Tier label present:', labels.filter(l => l.startsWith('tier:')));
+              return;
+            }
+
+            const body = [
+              '**Tier label missing.**',
+              '',
+              'Add one of the following before this PR can merge:',
+              '- `tier:T1` — production-critical path (requires `t1-approved` from PM)',
+              '- `tier:T2` — moderate impact with tests',
+              '- `tier:T3` — low impact / tooling / docs',
+              '',
+              'The Merge Gate will block without a tier label.',
+            ].join('\n');
+
+            // Only post if no existing tier-check comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('Tier label missing')
+            );
+
+            if (!existing) {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            }
