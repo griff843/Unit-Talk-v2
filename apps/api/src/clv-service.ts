@@ -91,14 +91,16 @@ export async function computeAndAttachCLV(
   const outcome = await computeCLVOutcome(pick, repositories, options);
   if (!outcome.result && outcome.status !== 'opening_line_fallback') {
     const logger = options.logger ?? console;
-    logger.warn({
-      msg: 'CLV computation skipped',
-      pickId: pick.id,
-      market: pick.market,
-      clvSkipReason: outcome.status,
-      resolvedMarketKey: outcome.resolvedMarketKey,
-      availableMarkets: outcome.availableMarkets,
-    });
+    logger.warn(
+      {
+        pickId: pick.id,
+        market: pick.market,
+        clvSkipReason: outcome.status,
+        resolvedMarketKey: outcome.resolvedMarketKey,
+        availableMarkets: outcome.availableMarkets,
+      },
+      'CLV computation skipped',
+    );
   }
   return outcome.result;
 }
