@@ -9,6 +9,7 @@
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.99.3",
     "@unit-talk/config": "workspace:*",
     "@unit-talk/contracts": "workspace:*",
     "@unit-talk/db": "workspace:*",

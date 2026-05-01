@@ -126,10 +126,11 @@ const WORKSPACES: Workspace[] = [
     id: 'operations',
     label: 'Operations',
     icon: <IconOperations />,
-    routes: ['/', '/burn-in', '/picks-list', '/picks', '/review', '/held', '/exceptions', '/events', '/interventions'],
+    routes: ['/', '/burn-in', '/pipeline', '/picks-list', '/picks', '/review', '/held', '/exceptions', '/events', '/interventions'],
     secondaryNav: [
       { href: '/', label: 'Dashboard' },
       { href: '/burn-in', label: 'Readiness / Health Scorecard' },
+      { href: '/pipeline', label: 'Pipeline Health' },
       { href: '/picks-list', label: 'Picks List' },
       { href: '/review', label: 'Review Queue' },
       { href: '/held', label: 'Held Picks' },

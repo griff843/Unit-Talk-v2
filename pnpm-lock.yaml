@@ -96,6 +96,9 @@ importers:
 
   apps/command-center:
     dependencies:
+      '@supabase/supabase-js':
+        specifier: ^2.99.3
+        version: 2.99.3
       '@unit-talk/config':
         specifier: workspace:*
         version: link:../../packages/config
@@ -178,24 +181,6 @@ importers:
       '@unit-talk/db':
         specifier: workspace:*
         version: link:../../packages/db
-      '@unit-talk/observability':
-        specifier: workspace:*
-        version: link:../../packages/observability
-
-  apps/operator-web:
-    dependencies:
-      '@unit-talk/config':
-        specifier: workspace:*
-        version: link:../../packages/config
-      '@unit-talk/contracts':
-        specifier: workspace:*
-        version: link:../../packages/contracts
-      '@unit-talk/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@unit-talk/domain':
-        specifier: workspace:*
-        version: link:../../packages/domain
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
