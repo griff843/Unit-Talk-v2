@@ -18,6 +18,13 @@ Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-cl
 
 ## Pre-merge checklist
 
+**Step 0 — R-level lookup (run before any other check, all tiers):**
+- [ ] Read `docs/05_operations/r1-r5-rules.json`
+- [ ] Identify which rules are triggered by the changed file paths (match `paths[]` globs)
+- [ ] For each triggered rule: verify every artifact in `artifactRequirements[]` is present at the corresponding path in `artifactPaths`
+- [ ] If any mandatory artifact is absent → verdict is **FAIL** (not INCOMPLETE — missing artifacts block merge)
+- [ ] Items listed in `pmGated[]` are advisory warnings only — emit the warning, do NOT block on absence alone
+
 **All tiers:**
 - [ ] `pnpm type-check` — green
 - [ ] `pnpm test` — green, count did not decrease

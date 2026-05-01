@@ -116,7 +116,20 @@ Emit this JSON to stdout:
     "flags": ["touches domain logic", "migration present"]
   },
   "recommended_verdict": "APPROVED|REVIEW_REQUIRED|CHANGES_REQUIRED",
-  "verdict_reason": "T2, CI green, no sensitive paths, scope compliant"
+  "verdict_reason": "T2, CI green, no sensitive paths, scope compliant",
+  "r_level_compliance": {
+    "rules_triggered": ["lifecycle-fsm"],
+    "mandatory_levels": ["R1", "R2", "R3", "R4"],
+    "pm_gated_levels": ["R4"],
+    "artifacts": {
+      "r2-determinism": { "present": true, "path": "artifacts/r2-determinism-2026-04-15.json" },
+      "r3-shadow-report": { "present": false, "path": null },
+      "r4-fault-report": { "present": false, "path": null }
+    },
+    "verdict": "FAIL | PASS | NOT_TRIGGERED",
+    "missing_artifacts": ["r3-shadow-report", "r4-fault-report"],
+    "pm_gated_warning": "R4 (fault injection) is pmGated — PM authorization required before R4 artifacts are expected"
+  }
 }
 ```
 
