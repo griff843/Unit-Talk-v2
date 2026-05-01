@@ -1,0 +1,320 @@
+name: Shadow Parity Check
+
+# Runs the shadow scoring runner (dry-run, no writes) for PRs that touch
+# lifecycle, settlement, or promotion code paths, then classifies guardrail
+# violations as CRITICAL and non-zero counts as WARNINGs.
+#
+# The runner requires live Supabase credentials (SUPABASE_URL +
+# SUPABASE_SERVICE_ROLE_KEY). When those secrets are absent the step is
+# advisory — it posts a comment explaining the requirement but does NOT
+# block the merge. Configure the secrets in repo Settings > Secrets for
+# full enforcement.
+#
+# Source analysis: scripts/shadow-scoring-runner.ts
+#   - CLI flags: --dry-run (flag), --batch-size N, --out-dir path, --statuses csv
+#   - Output format (stdout JSON): ProofOutput { timestamp, runId, dailyCounts, guardrails }
+#   - guardrails: { picksCreated, shadowModeFalseSet, distributionEnqueued, promotionWidened }
+#     All must be 0. Any non-zero value is a CRITICAL guardrail violation.
+#   - The runner throws (exit 1) when guardrails are violated.
+#   - --dry-run skips scoring writes; counts DB state only (safe for CI).
+#   - Requires: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+#
+# Issue: UTV2-821
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/api/src/**/*lifecycle*'
+      - 'apps/api/src/**/*promotion*'
+      - 'apps/api/src/**/*settlement*'
+      - 'apps/api/src/submission-service.ts'
+      - 'apps/api/src/candidate-pick-scanner.ts'
+      - 'packages/domain/src/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  shadow-parity:
+    name: Shadow Parity Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check for live DB credentials
+        id: db_check
+        run: |
+          if [ -n "$SUPABASE_URL" ] && [ -n "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "has_db=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_db=false" >> "$GITHUB_OUTPUT"
+            echo "Live DB credentials not configured — shadow runner will be advisory only."
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      # Advisory comment when secrets are absent — non-blocking.
+      - name: Post advisory comment (no DB credentials)
+        if: steps.db_check.outputs.has_db == 'false'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const marker = '<!-- shadow-parity-check -->';
+            const existing = comments.find(c => c.body?.includes(marker));
+
+            const body = [
+              marker,
+              '## Shadow Parity Check — Advisory (no live DB)',
+              '',
+              'The shadow parity runner requires live Supabase credentials',
+              '(`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`) to execute.',
+              '',
+              'These secrets are not configured for this repository. The check',
+              'is **non-blocking** in this state, but you must run the shadow',
+              'runner locally before merging:',
+              '',
+              '```bash',
+              'npx tsx scripts/shadow-scoring-runner.ts --dry-run',
+              '```',
+              '',
+              'Confirm guardrails are all zero before merge.',
+              'To enable full CI enforcement, configure the secrets in',
+              'repo Settings → Secrets and variables → Actions.',
+            ].join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            }
+
+      # Run the shadow scorer in --dry-run mode when DB credentials exist.
+      # --dry-run skips scoring writes and only queries counts — safe for CI.
+      # Pipe stdout (the JSON ProofOutput) to the artifact file.
+      - name: Run shadow scorer (dry-run)
+        id: shadow_run
+        if: steps.db_check.outputs.has_db == 'true'
+        run: |
+          mkdir -p artifacts
+          # Runner prints ProofOutput JSON to stdout; stderr has progress logs.
+          # Capture stdout only; let stderr flow to the Actions log.
+          if npx tsx scripts/shadow-scoring-runner.ts --dry-run 2>/dev/null > artifacts/shadow-report.json; then
+            echo "runner_exit=0" >> "$GITHUB_OUTPUT"
+          else
+            # Exit non-zero means assertGuardrails() threw — guardrail violation.
+            echo "runner_exit=1" >> "$GITHUB_OUTPUT"
+            # Re-run to capture stderr for diagnosis (stdout may be partial JSON)
+            npx tsx scripts/shadow-scoring-runner.ts --dry-run > artifacts/shadow-report.json 2>&1 || true
+          fi
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NODE_ENV: production
+
+      # Parse the ProofOutput JSON and classify divergences.
+      # CRITICAL: any guardrail field > 0 (picksCreated, shadowModeFalseSet,
+      #           distributionEnqueued, promotionWidened)
+      # WARNING:  non-zero counts that represent unexpected pipeline state
+      #           (no candidates scored, scoring errors, etc.)
+      - name: Parse shadow report and classify divergences
+        id: classify
+        if: steps.db_check.outputs.has_db == 'true'
+        run: |
+          REPORT="artifacts/shadow-report.json"
+
+          if [ ! -f "$REPORT" ]; then
+            echo "critical_count=1" >> "$GITHUB_OUTPUT"
+            echo "warning_count=0" >> "$GITHUB_OUTPUT"
+            echo "parse_error=true" >> "$GITHUB_OUTPUT"
+            echo "summary=Shadow report not produced — runner may have crashed." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Verify we have valid JSON before proceeding
+          if ! python3 -c "import json,sys; json.load(sys.stdin)" < "$REPORT" 2>/dev/null; then
+            echo "critical_count=1" >> "$GITHUB_OUTPUT"
+            echo "warning_count=0" >> "$GITHUB_OUTPUT"
+            echo "parse_error=true" >> "$GITHUB_OUTPUT"
+            echo "summary=Shadow report is not valid JSON — runner likely crashed or produced partial output." >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "parse_error=false" >> "$GITHUB_OUTPUT"
+
+          # Extract guardrail fields — all must be 0.
+          PICKS_CREATED=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('guardrails',{}).get('picksCreated',0))" < "$REPORT")
+          SHADOW_FALSE=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('guardrails',{}).get('shadowModeFalseSet',0))" < "$REPORT")
+          DIST_ENQUEUED=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('guardrails',{}).get('distributionEnqueued',0))" < "$REPORT")
+          PROMO_WIDENED=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('guardrails',{}).get('promotionWidened',0))" < "$REPORT")
+
+          CRITICAL=0
+          VIOLATIONS=""
+
+          for val_name in "picksCreated:$PICKS_CREATED" "shadowModeFalseSet:$SHADOW_FALSE" "distributionEnqueued:$DIST_ENQUEUED" "promotionWidened:$PROMO_WIDENED"; do
+            name="${val_name%%:*}"
+            val="${val_name##*:}"
+            if [ "$val" -gt 0 ] 2>/dev/null; then
+              CRITICAL=$((CRITICAL + 1))
+              VIOLATIONS="$VIOLATIONS $name=$val"
+            fi
+          done
+
+          echo "critical_count=$CRITICAL" >> "$GITHUB_OUTPUT"
+
+          # Warnings: expose as warning if candidatesScanned=0
+          # which may indicate the shadow pipeline is not running.
+          CANDIDATES=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('dailyCounts',{}).get('candidatesScanned',0))" < "$REPORT")
+          WARNINGS=0
+          if [ "$CANDIDATES" -eq 0 ] 2>/dev/null; then
+            WARNINGS=$((WARNINGS + 1))
+          fi
+          echo "warning_count=$WARNINGS" >> "$GITHUB_OUTPUT"
+
+          if [ -n "$VIOLATIONS" ]; then
+            echo "violations=$VIOLATIONS" >> "$GITHUB_OUTPUT"
+          else
+            echo "violations=none" >> "$GITHUB_OUTPUT"
+          fi
+
+          # Short summary for the comment
+          SCORED=$(python3 -c "import json,sys; d=json.load(sys.stdin); print(d.get('dailyCounts',{}).get('candidatesScoredThisRun',0))" < "$REPORT")
+          echo "candidates_scanned=$CANDIDATES" >> "$GITHUB_OUTPUT"
+          echo "candidates_scored=$SCORED" >> "$GITHUB_OUTPUT"
+
+      # Post a PR comment summarizing the result.
+      - name: Post shadow parity PR comment
+        if: steps.db_check.outputs.has_db == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const criticalCount = parseInt('${{ steps.classify.outputs.critical_count }}' || '0', 10);
+            const warningCount  = parseInt('${{ steps.classify.outputs.warning_count }}'  || '0', 10);
+            const parseError    = '${{ steps.classify.outputs.parse_error }}' === 'true';
+            const violations    = '${{ steps.classify.outputs.violations }}';
+            const scanned       = '${{ steps.classify.outputs.candidates_scanned }}';
+            const scored        = '${{ steps.classify.outputs.candidates_scored }}';
+
+            const marker = '<!-- shadow-parity-check -->';
+
+            let body;
+            if (parseError || criticalCount > 0) {
+              body = [
+                marker,
+                '## Shadow Parity Check — FAILED',
+                '',
+                `**Critical divergences:** ${criticalCount}  **Warnings:** ${warningCount}`,
+                '',
+                'This PR touches paths that require R3 shadow parity verification.',
+                'Resolve CRITICAL divergences before merge.',
+                '',
+                parseError
+                  ? '> The shadow runner crashed or produced invalid JSON. Check the Actions log.'
+                  : `> Guardrail violations:${violations}`,
+                '',
+                'See the **shadow-report** artifact for full details.',
+              ].join('\n');
+            } else if (warningCount > 0) {
+              body = [
+                marker,
+                '## Shadow Parity Check — PASSED (with warnings)',
+                '',
+                `**Critical divergences:** 0  **Warnings:** ${warningCount}`,
+                '',
+                `Candidates scanned: ${scanned} | Candidates scored (dry-run=0): ${scored}`,
+                '',
+                'Review warnings in the shadow-report artifact.',
+              ].join('\n');
+            } else {
+              body = [
+                marker,
+                '## Shadow Parity Check — PASSED',
+                '',
+                `**Critical divergences:** 0  **Warnings:** 0`,
+                '',
+                `Candidates scanned: ${scanned} | All guardrails: 0`,
+              ].join('\n');
+            }
+
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const existing = comments.find(c => c.body?.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            }
+
+      # Fail the job when CRITICAL divergences are detected.
+      - name: Fail on CRITICAL divergences
+        if: steps.db_check.outputs.has_db == 'true' && (steps.classify.outputs.critical_count != '0' || steps.classify.outputs.parse_error == 'true')
+        run: |
+          echo "::error title=Shadow Parity CRITICAL::Shadow parity check failed with ${{ steps.classify.outputs.critical_count }} critical divergence(s)."
+          echo "Violations: ${{ steps.classify.outputs.violations }}"
+          echo ""
+          echo "A guardrail field was non-zero, meaning the shadow pipeline"
+          echo "attempted a live side-effect (pick creation, shadow_mode=false,"
+          echo "distribution enqueue, or promotion widening)."
+          echo ""
+          echo "Resolve the violation before merging."
+          exit 1
+
+      # Upload the shadow report JSON as a workflow artifact (retained 30 days).
+      - name: Upload shadow report artifact
+        if: steps.db_check.outputs.has_db == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shadow-report
+          path: artifacts/shadow-report.json
+          retention-days: 30
+          if-no-files-found: warn
