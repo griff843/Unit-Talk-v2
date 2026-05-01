@@ -91,6 +91,24 @@ function makeDeps(universeRows: MarketUniverseRow[] = []) {
   return { marketUniverse, pickCandidates };
 }
 
+function eventRepo(startsAt: string | null) {
+  return {
+    async findById(eventId: string) {
+      return {
+        id: eventId,
+        sport_id: 'nba',
+        event_name: 'Test Event',
+        event_date: startsAt?.slice(0, 10) ?? '2026-05-01',
+        status: 'scheduled',
+        external_id: 'provider-event',
+        metadata: startsAt ? { starts_at: startsAt } : {},
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+    },
+  } as ReturnType<typeof Object.assign>;
+}
+
 // ---------------------------------------------------------------------------
 // Feature gate tests
 // ---------------------------------------------------------------------------
@@ -118,6 +136,68 @@ test('board-scan: feature gate ON — scans rows and writes candidates', async (
   assert.ok(result.durationMs >= 0);
   assert.ok(result.scanRunId.length > 0);
   assert.equal(deps.pickCandidates.listAll().length, 1);
+});
+
+test('board-scan: freshness_window_failed fires for game-day stale data', async () => {
+  const now = Date.now();
+  const universeRow = makeUniverseRow({
+    id: 'universe-freshness-game-day',
+    event_id: 'event-game-day',
+    last_offer_snapshot_at: new Date(now - 90 * 60 * 1000).toISOString(),
+  });
+  const deps = { ...makeDeps([universeRow]), events: eventRepo(new Date(now + 3 * 60 * 60 * 1000).toISOString()) };
+
+  await runBoardScan(deps, { enabled: true });
+
+  const candidate = deps.pickCandidates.listAll()[0]!;
+  assert.equal(candidate.status, 'rejected');
+  assert.equal(candidate.rejection_reason, 'freshness_window_failed');
+  assert.equal(candidate.filter_details?.freshness_window_failed, true);
+});
+
+test('board-scan: freshness_window_failed does not fire for pre tier fresh data', async () => {
+  const now = Date.now();
+  const universeRow = makeUniverseRow({
+    id: 'universe-freshness-pre',
+    event_id: 'event-pre',
+    last_offer_snapshot_at: new Date(now - 5 * 60 * 60 * 1000).toISOString(),
+  });
+  const deps = { ...makeDeps([universeRow]), events: eventRepo(new Date(now + 26 * 60 * 60 * 1000).toISOString()) };
+
+  await runBoardScan(deps, { enabled: true });
+
+  const candidate = deps.pickCandidates.listAll()[0]!;
+  assert.equal(candidate.filter_details?.freshness_window_failed, false);
+});
+
+test('board-scan: NFL modifier doubles game-day freshness threshold', async () => {
+  const now = Date.now();
+  const universeRow = makeUniverseRow({
+    id: 'universe-freshness-nfl',
+    sport_key: 'nfl',
+    event_id: 'event-nfl',
+    last_offer_snapshot_at: new Date(now - 90 * 60 * 1000).toISOString(),
+  });
+  const deps = { ...makeDeps([universeRow]), events: eventRepo(new Date(now + 3 * 60 * 60 * 1000).toISOString()) };
+
+  await runBoardScan(deps, { enabled: true });
+
+  const candidate = deps.pickCandidates.listAll()[0]!;
+  assert.equal(candidate.filter_details?.freshness_window_failed, false);
+});
+
+test('board-scan: unknown event FK does not fire freshness_window_failed', async () => {
+  const universeRow = makeUniverseRow({
+    id: 'universe-freshness-unknown',
+    event_id: 'event-unknown',
+    last_offer_snapshot_at: new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString(),
+  });
+  const deps = { ...makeDeps([universeRow]), events: eventRepo(null) };
+
+  await runBoardScan(deps, { enabled: true });
+
+  const candidate = deps.pickCandidates.listAll()[0]!;
+  assert.equal(candidate.filter_details?.freshness_window_failed, false);
 });
 
 // ---------------------------------------------------------------------------
