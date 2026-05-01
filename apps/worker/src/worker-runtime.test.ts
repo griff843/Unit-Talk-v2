@@ -1331,6 +1331,136 @@ test('processNextDistributionWork fails hung deliveries when watchdog expires', 
   }
 });
 
+test('processNextDistributionWork rejects zero watchdogMs before claiming work', async () => {
+  const outbox = createOutboxRecord('discord:watchdog-zero');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+
+  await assert.rejects(
+    processNextDistributionWork(
+      repositories,
+      'discord:watchdog-zero',
+      'worker-watchdog-zero',
+      async () => {
+        throw new Error('delivery should not be called');
+      },
+      {
+        watchdogMs: 0,
+        persistenceMode: 'in_memory',
+      },
+    ),
+    /watchdogMs must be between 1 and 300000ms, got 0/,
+  );
+
+  assert.equal(outbox.status, 'pending');
+});
+
+test('processNextDistributionWork rejects negative watchdogMs before claiming work', async () => {
+  const outbox = createOutboxRecord('discord:watchdog-negative');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+
+  await assert.rejects(
+    processNextDistributionWork(
+      repositories,
+      'discord:watchdog-negative',
+      'worker-watchdog-negative',
+      async () => {
+        throw new Error('delivery should not be called');
+      },
+      {
+        watchdogMs: -1,
+        persistenceMode: 'in_memory',
+      },
+    ),
+    /watchdogMs must be between 1 and 300000ms, got -1/,
+  );
+
+  assert.equal(outbox.status, 'pending');
+});
+
+test('processNextDistributionWork rejects watchdogMs above maximum before claiming work', async () => {
+  const outbox = createOutboxRecord('discord:watchdog-over-limit');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+
+  await assert.rejects(
+    processNextDistributionWork(
+      repositories,
+      'discord:watchdog-over-limit',
+      'worker-watchdog-over-limit',
+      async () => {
+        throw new Error('delivery should not be called');
+      },
+      {
+        watchdogMs: 300_001,
+        persistenceMode: 'in_memory',
+      },
+    ),
+    /watchdogMs must be between 1 and 300000ms, got 300001/,
+  );
+
+  assert.equal(outbox.status, 'pending');
+});
+
+test('processNextDistributionWork accepts watchdogMs at the maximum boundary', async () => {
+  const outbox = createOutboxRecord('discord:watchdog-valid');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+
+  const result = await processNextDistributionWork(
+    repositories,
+    'discord:watchdog-valid',
+    'worker-watchdog-valid',
+    async () => ({
+      receiptType: 'discord.message',
+      status: 'sent',
+      payload: {},
+    }),
+    {
+      watchdogMs: 300_000,
+      persistenceMode: 'in_memory',
+    },
+  );
+
+  assert.equal(result.status, 'sent');
+});
+
+test('processNextDistributionWork applies default watchdogMs when omitted', async () => {
+  const outbox = createOutboxRecord('discord:watchdog-default');
+  const { repositories } = createWorkerTestRepositories([outbox]);
+  const originalSetTimeout = globalThis.setTimeout;
+  const capturedTimeouts: number[] = [];
+
+  globalThis.setTimeout = ((
+    handler: Parameters<typeof setTimeout>[0],
+    timeout?: Parameters<typeof setTimeout>[1],
+  ) => {
+    if (typeof timeout === 'number') {
+      capturedTimeouts.push(timeout);
+    }
+    return originalSetTimeout(handler, 10_000);
+  }) as typeof setTimeout;
+
+  try {
+    const result = await processNextDistributionWork(
+      repositories,
+      'discord:watchdog-default',
+      'worker-watchdog-default',
+      async () => ({
+        receiptType: 'discord.message',
+        status: 'sent',
+        payload: {},
+      }),
+      {
+        persistenceMode: 'in_memory',
+      },
+    );
+
+    assert.equal(result.status, 'sent');
+  } finally {
+    globalThis.setTimeout = originalSetTimeout;
+  }
+
+  assert.equal(capturedTimeouts.includes(60_000), true);
+});
+
 test('createDiscordDeliveryAdapter dry-run with mapped target preserves canonical target key', async () => {
   const outbox = createOutboxRecord('discord:canary');
   const adapter = createDiscordDeliveryAdapter({
