@@ -83,6 +83,27 @@ test('skips offers with no canonical market key', async () => {
   assert.equal(result.skipped, 1);
 });
 
+test('logs warn with structured context when canonical market key resolves null', async () => {
+  const mockOffers = {
+    ...new InMemoryProviderOfferRepository(),
+    resolveCanonicalMarketKey: async () => null,
+    listOpeningCurrentOffers: async () => [makeOffer({ provider_key: 'sgo', provider_market_key: 'unknown-key' })],
+    listAliasLookup: async () => [],
+    listParticipantAliasLookup: async () => [],
+  } as ReturnType<typeof Object.assign>;
+
+  const warnMessages: string[] = [];
+  const logger = { info: () => {}, warn: (msg: string) => { warnMessages.push(msg); }, error: () => {} };
+  const repos = makeRepos({ providerOffers: mockOffers });
+  await runSystemPickScan(repos, baseOptions({ logger }));
+
+  assert.equal(warnMessages.length, 1);
+  const parsed = JSON.parse(warnMessages[0] as string);
+  assert.equal(parsed.reason, 'canonical_market_key_resolution_failed');
+  assert.equal(parsed.service, 'system-pick-scanner');
+  assert.ok(parsed.offerId);
+});
+
 test('materializes a valid offer into market_universe', async () => {
   const mockOffers = {
     ...new InMemoryProviderOfferRepository(),

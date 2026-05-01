@@ -137,6 +137,14 @@ export async function runSystemPickScan(
         offer.provider_key,
       );
       if (!canonicalMarketKey) {
+        options.logger?.warn?.(JSON.stringify({
+          service: 'system-pick-scanner',
+          event: 'scanner.skip',
+          offerId: offer.id,
+          providerKey: offer.provider_key,
+          rawMarketKey: offer.provider_market_key,
+          reason: 'canonical_market_key_resolution_failed',
+        }));
         skipped++;
         continue;
       }
