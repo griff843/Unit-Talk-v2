@@ -98,7 +98,7 @@ test('logs warn with structured context when canonical market key resolves null'
   await runSystemPickScan(repos, baseOptions({ logger }));
 
   assert.equal(warnMessages.length, 1);
-  const parsed = JSON.parse(warnMessages[0]);
+  const parsed = JSON.parse(warnMessages[0] as string);
   assert.equal(parsed.reason, 'canonical_market_key_resolution_failed');
   assert.equal(parsed.service, 'system-pick-scanner');
   assert.ok(parsed.offerId);
