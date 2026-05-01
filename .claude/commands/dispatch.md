@@ -64,6 +64,13 @@ For each validated target:
    git checkout main && git pull --ff-only origin main
    git checkout -b {branch}
    ```
+   For Codex lanes that need a separate worktree, create it and immediately run the setup script:
+   ```bash
+   git worktree add C:/Dev/utv2-{number}-fix {branch}
+   pwsh scripts/ops/worktree-setup.ps1 C:/Dev/utv2-{number}-fix
+   ```
+   This script junctions root + per-app node_modules from the main repo and copies `local.env`
+   so `pnpm verify` works without a full `pnpm install`.
 4. Update Linear issue state to "In Claude" or "In Codex" via MCP
 5. Create a minimal lane manifest at `docs/06_status/lanes/UTV2-{number}.json`
 
