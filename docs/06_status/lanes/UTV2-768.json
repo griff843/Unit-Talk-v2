@@ -1,0 +1,23 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-768",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": "C:/Dev/utv2-768-fix",
+  "branch": "claude/utv2-768-grading-alias-fix",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": ["apps/api/src/grading-service.ts"],
+  "file_scope_lock": ["apps/api/src/grading-service.ts"],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-01T04:52:00.000Z",
+  "heartbeat_at": "2026-05-01T04:52:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

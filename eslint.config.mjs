@@ -19,6 +19,9 @@ export default tseslint.config(
       'scripts/live-data-lab-*.ts',
       // Fibery automation snippets use injected runtime globals (context, args)
       'scripts/ops/fibery-automations/**',
+      // Playwright browser-runner scripts — page.evaluate() callbacks use browser globals
+      'check-cc.mjs',
+      '**/check-cc.mjs',
       // smart-form is a Next.js app with its own eslint-config-next setup.
       // Root lint covers .ts only; Next.js handles .tsx linting via `next lint`.
       'apps/smart-form/**/*.tsx',
