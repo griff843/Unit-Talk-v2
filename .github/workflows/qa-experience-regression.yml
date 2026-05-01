@@ -1,0 +1,123 @@
+name: QA Experience Regression
+
+# Advisory only — apps not running in CI. Upgrade to blocking once CI service startup is implemented.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'apps/command-center/**'
+      - 'apps/smart-form/**'
+      - 'apps/operator-web/**'
+
+jobs:
+  qa-regression:
+    name: QA Experience Regression (Advisory)
+    runs-on: ubuntu-latest
+    # Advisory only: never block the PR. Exit code is always 0.
+    continue-on-error: true
+
+    steps:
+      - name: Checkout PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright (Chromium only)
+        run: npx playwright install chromium --with-deps
+
+      - name: Run QA experience regression
+        id: qa
+        # Advisory only — apps not running in CI. Upgrade to blocking once CI service startup is implemented.
+        # --skip-preflight: bypasses HTTP health checks since apps are not running in CI.
+        # --mode fast: minimal screenshots and reduced timeouts for CI speed.
+        # --regression: runs only skills affected by changed files since main.
+        # Exit code is captured but we always continue (exit 0) because this is advisory.
+        run: |
+          set +e
+          pnpm qa:experience --regression --mode fast --skip-preflight
+          QA_EXIT=$?
+          echo "qa_exit=$QA_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$QA_EXIT" -eq 0 ]; then
+            echo "qa_result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "qa_result=NEEDS_REVIEW" >> "$GITHUB_OUTPUT"
+          fi
+          # Advisory: always exit 0 so the PR is never blocked by this check.
+          exit 0
+
+      - name: Detect changed surfaces
+        id: surfaces
+        run: |
+          CHANGED=""
+          if git diff --name-only origin/main...HEAD | grep -q "^apps/command-center/"; then
+            CHANGED="${CHANGED}command_center, "
+          fi
+          if git diff --name-only origin/main...HEAD | grep -q "^apps/smart-form/"; then
+            CHANGED="${CHANGED}smart_form, "
+          fi
+          if git diff --name-only origin/main...HEAD | grep -q "^apps/operator-web/"; then
+            CHANGED="${CHANGED}operator_web, "
+          fi
+          # Trim trailing ", "
+          CHANGED="${CHANGED%, }"
+          if [ -z "$CHANGED" ]; then
+            CHANGED="(none detected)"
+          fi
+          echo "surfaces=$CHANGED" >> "$GITHUB_OUTPUT"
+
+      - name: Upload QA artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qa-experience-artifacts
+          path: apps/qa-agent/artifacts/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      - name: Post PR comment
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const qaResult = '${{ steps.qa.outputs.qa_result }}' || 'SKIP';
+            const surfaces = '${{ steps.surfaces.outputs.surfaces }}' || '(none detected)';
+
+            const resultIcon =
+              qaResult === 'PASS' ? '✅ PASS' :
+              qaResult === 'FAIL' ? '❌ FAIL' :
+              qaResult === 'NEEDS_REVIEW' ? '⚠️ NEEDS_REVIEW' :
+              '⏭️ SKIP';
+
+            const body = `## QA Experience Regression — Advisory
+
+            Mode: \`fast\` | Regression: \`true\` | Skip-preflight: \`true\`
+
+            **Result:** ${resultIcon}
+
+            Changed surfaces detected: ${surfaces}
+
+            > **Note:** This check is advisory — apps are not running in CI.
+            > Run \`pnpm qa:experience --regression --mode fast\` locally to verify.
+            > Advisory only — upgrade to blocking once CI service startup is implemented.`;
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body,
+            });
