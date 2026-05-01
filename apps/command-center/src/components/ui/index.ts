@@ -15,6 +15,19 @@ export { LoadingState } from './LoadingState';
 
 export { EmptyState } from './EmptyState';
 
+// UNI-101 — Agents + Intelligence + Ops workspace UI primitives
+export { AgentCard } from './AgentCard';
+export type { AgentCardProps, AgentStatus } from './AgentCard';
+
+export { LogDrawer } from './LogDrawer';
+export type { LogDrawerProps } from './LogDrawer';
+
+export { StatCard } from './StatCard';
+export type { StatCardProps } from './StatCard';
+
+export { ConfirmDialog } from './ConfirmDialog';
+export type { ConfirmDialogProps } from './ConfirmDialog';
+
 // Pre-existing ui primitives — re-exported for convenience
 export { Breadcrumb } from './Breadcrumb';
 export { Button } from './Button';
