@@ -109,8 +109,56 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "required": false,
       "source": "manual",
       "scope": "repo",
-      "used_by": [".github/workflows/proof-regression.yml"],
-      "purpose": "Supabase anon key for proof-regression workflow. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+      "used_by": [".github/workflows/proof-regression.yml", ".github/workflows/deploy.yml"],
+      "purpose": "Supabase anon key for proof-regression workflow and deploy gate. Optional — workflow skips proof runs when absent (HAS_SUPABASE guard)."
+    },
+    {
+      "name": "DISCORD_BOT_TOKEN",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord bot token written into the deploy gate local.env for production validation. Optional for the deploy check step; must be set when the Discord worker is included in the deployment."
+    },
+    {
+      "name": "UNIT_TALK_DEPLOY_HOST",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Hostname or IP of the production server. Used by the deploy workflow SSH and SCP steps. Optional — deploy workflow only runs on workflow_dispatch."
+    },
+    {
+      "name": "UNIT_TALK_DEPLOY_USER",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "SSH username on the production server. Used by the deploy workflow SSH and SCP steps."
+    },
+    {
+      "name": "UNIT_TALK_DEPLOY_PATH",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Absolute path to the deployment directory on the production server."
+    },
+    {
+      "name": "UNIT_TALK_DEPLOY_HEALTH_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "HTTP URL polled after container startup to confirm the deployment is healthy. Must return 2xx."
+    },
+    {
+      "name": "UNIT_TALK_DEPLOY_SSH_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Ed25519 private key for SSH access to the production server. Must match an authorized key on UNIT_TALK_DEPLOY_USER@UNIT_TALK_DEPLOY_HOST."
     }
   ]
 }
