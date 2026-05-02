@@ -6,23 +6,20 @@
   "worktree_path": ".",
   "branch": "codex/utv2-837-qa-ci-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a14b75bf079f3e0030b1006eeba03baeabb25cbe",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/560",
   "files_changed": [
     ".github/workflows/qa-fast.yml",
     "apps/qa-agent/src/core/preflight.ts",
-    "apps/qa-agent/src/cli.ts"
+    "apps/qa-agent/src/cli.ts",
+    "apps/qa-agent/src/regression/run-changed-surfaces.ts"
   ],
-  "file_scope_lock": [
-    ".github/workflows/qa-fast.yml",
-    "apps/qa-agent/src/core/preflight.ts",
-    "apps/qa-agent/src/cli.ts"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-02T20:21:00.000Z",
-  "heartbeat_at": "2026-05-02T20:21:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T20:30:00.000Z",
+  "closed_at": "2026-05-02T20:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

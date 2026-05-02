@@ -6,22 +6,19 @@
   "worktree_path": ".",
   "branch": "codex/utv2-835-qa-persona-seed",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "de7ec422aa210de4ef8cb5f2d2df83c8a8816a0b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/559",
   "files_changed": [
     "apps/qa-agent/src/personas/seed.ts",
     "apps/qa-agent/src/adapters/unit-talk/surfaces/command-center/skills/access-matrix.ts",
     "apps/qa-agent/package.json"
   ],
-  "file_scope_lock": [
-    "apps/qa-agent/src/personas/seed.ts",
-    "apps/qa-agent/src/adapters/unit-talk/surfaces/command-center/skills/access-matrix.ts"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-02T20:21:00.000Z",
-  "heartbeat_at": "2026-05-02T20:21:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T20:30:00.000Z",
+  "closed_at": "2026-05-02T20:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
