@@ -35,6 +35,25 @@ jobs:
             echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
 
+      - name: Advisory — audit skip-proof-coverage label applier
+        if: steps.skip.outputs.skip == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # Advisory only — does not block CI. Logs who applied the bypass label for governance audit trail.
+          # Authorized appliers: maintainers with write access. Label must not be applied by bots or unreviewed automation.
+          echo "::warning title=skip-proof-coverage bypass active::This PR has bypassed the proof coverage guard."
+          echo ""
+          echo "PR:      #${{ github.event.pull_request.number }}"
+          echo "Author:  ${{ github.event.pull_request.user.login }}"
+          echo "Event:   ${{ github.event_name }}"
+          echo ""
+          echo "Governance note: skip-proof-coverage is intended for pure infrastructure PRs"
+          echo "that do not change runtime semantics. If this PR touches runtime paths, the"
+          echo "bypass is a governance exception and must be noted in the PR description."
+          echo ""
+          echo "If the label was applied in error, remove it to re-enable the guard."
+
       - name: Checkout PR
         if: steps.skip.outputs.skip != 'true'
         uses: actions/checkout@v4

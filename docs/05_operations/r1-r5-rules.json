@@ -1,0 +1,99 @@
+{
+  "$schema": "https://unit-talk.internal/schemas/r1-r5-rules/v1",
+  "version": "1",
+  "description": "Machine-readable trigger matrix for R1-R5 verification levels. Used by scripts/ci/r-level-check.ts. Human-readable policy: R1_R5_OPERATING_RULE.md",
+  "artifactPaths": {
+    "r2-determinism": "artifacts/r2-determinism*.json",
+    "r3-shadow-report": "artifacts/shadow-report*.json",
+    "r4-fault-report": "artifacts/r4-fault-report*.json",
+    "r5-strategy-proof": "artifacts/r5-strategy-proof*.json",
+    "qa-experience-report": "apps/qa-agent/artifacts/**/result.json"
+  },
+  "rules": [
+    {
+      "id": "lifecycle-fsm",
+      "description": "Picks lifecycle FSM: submission, scanning, status transitions, outbox delivery",
+      "paths": [
+        "apps/api/src/submission-service.ts",
+        "apps/api/src/candidate-pick-scanner.ts",
+        "packages/domain/src/lifecycle/**",
+        "apps/worker/**"
+      ],
+      "required": ["R1", "R2", "R3", "R4"],
+      "advisory": ["R5"],
+      "pmGated": ["R4"],
+      "artifactRequirements": ["r2-determinism", "r3-shadow-report", "r4-fault-report"]
+    },
+    {
+      "id": "promotion-scoring",
+      "description": "Pick promotion evaluation and scoring pipeline",
+      "paths": [
+        "packages/domain/src/promotion/**",
+        "apps/api/src/promotion-service.ts"
+      ],
+      "required": ["R1", "R2", "R3"],
+      "advisory": ["R4", "R5"],
+      "pmGated": ["R4"],
+      "artifactRequirements": ["r2-determinism", "r3-shadow-report"]
+    },
+    {
+      "id": "settlement-grading",
+      "description": "Settlement and grading, including CLV computation",
+      "paths": [
+        "apps/api/src/settlement-service.ts",
+        "packages/domain/src/grading/**",
+        "packages/domain/src/clv/**"
+      ],
+      "required": ["R1", "R2", "R3", "R4"],
+      "advisory": ["R5"],
+      "pmGated": ["R4"],
+      "artifactRequirements": ["r2-determinism", "r3-shadow-report", "r4-fault-report"]
+    },
+    {
+      "id": "strategy-bankroll",
+      "description": "Betting strategy, sizing, risk limits, drawdown guards",
+      "paths": [
+        "packages/domain/src/strategy/**"
+      ],
+      "required": ["R5"],
+      "advisory": ["R1", "R2"],
+      "pmGated": [],
+      "artifactRequirements": ["r5-strategy-proof"]
+    },
+    {
+      "id": "operator-ui",
+      "description": "Operator-facing browser surfaces: command center, operator web, smart form",
+      "paths": [
+        "apps/command-center/**",
+        "apps/operator-web/**",
+        "apps/smart-form/**"
+      ],
+      "required": ["qa-experience"],
+      "advisory": [],
+      "pmGated": [],
+      "artifactRequirements": ["qa-experience-report"]
+    },
+    {
+      "id": "discord-delivery",
+      "description": "Discord bot delivery and slash command surfaces",
+      "paths": [
+        "apps/discord-bot/**"
+      ],
+      "required": ["R1", "qa-experience"],
+      "advisory": ["R4"],
+      "pmGated": ["R4"],
+      "artifactRequirements": ["qa-experience-report"]
+    },
+    {
+      "id": "ingestor-provider",
+      "description": "External data ingestion: SGO provider, league data",
+      "paths": [
+        "apps/ingestor/**"
+      ],
+      "required": ["R1", "R3"],
+      "advisory": ["R2", "R4"],
+      "pmGated": ["R4"],
+      "artifactRequirements": ["r3-shadow-report"]
+    }
+  ]
+}

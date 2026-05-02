@@ -214,6 +214,54 @@ pnpm test:db
 
 ---
 
+## Codex Pre-PR Checklist
+
+Before opening any PR, complete all 6 steps in order:
+
+1. **R-level lookup** — open `docs/05_operations/r1-r5-rules.json`, identify which rules match your changed file paths, and confirm all `artifactRequirements[]` are satisfied. If any required artifact is absent, produce it or document why it is not applicable.
+2. **pnpm verify** — must be green. No exceptions.
+3. **Scope check** — every file you changed must be within the issue's acceptance criteria. Revert any scope bleed.
+4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
+5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
+6. **Commit message** — must reference the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
+
+### Forbidden actions (never do these in a PR)
+
+1. Install Jest, Vitest, Mocha, or any test runner — use `node:test` + `tsx --test` only
+2. Import from another app (`apps/api` must not import from `apps/worker`)
+3. Hand-edit `packages/db/src/database.types.ts` — run `pnpm supabase:types`
+4. Activate a blocked Discord target (`discord:exclusive-insights`, `discord:game-threads`, `discord:strategy-room`)
+5. Mutate `settlement_records` rows — corrections use `corrects_id`
+6. UPDATE or DELETE from `audit_log` — append-only, enforced by DB trigger
+7. Create new packages without explicit justification in the issue AC
+
+---
+
+## Required PR Body Template
+
+Every PR body must include these sections exactly:
+
+```markdown
+## Summary
+<1-3 bullet points describing what changed and why>
+
+## Files changed
+<list of files modified and what each does>
+
+## Verification
+<paste last 20 lines of `pnpm verify` output>
+
+## R-level compliance
+<which rules in r1-r5-rules.json were triggered by the changed paths>
+<for each triggered rule: list required[] levels and whether artifacts are present>
+<if no runtime paths triggered: write "N/A — no lifecycle/domain/strategy/UI paths touched">
+
+## Test coverage
+<list new or updated test files and what scenario each covers>
+```
+
+---
+
 ## What a Good PR Looks Like
 
 - Only touches files relevant to the issue's acceptance criteria

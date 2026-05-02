@@ -4,6 +4,7 @@
 **Authority:** Canonical policy for when R1-R5 verification layers are mandatory, optional, or not applicable.
 **Implements:** UTV2-554
 **Infrastructure:** `packages/verification/` (R1-R5 engine)
+**Machine enforcement source:** `docs/05_operations/r1-r5-rules.json` — this JSON is the authoritative trigger matrix consumed by `scripts/ci/r-level-check.ts`. The human-readable table in §3 is informational only; the JSON wins on any conflict.
 
 ---
 

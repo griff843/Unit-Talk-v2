@@ -75,7 +75,15 @@ Phase 7A focus: `awaiting_approval` lifecycle state + governance brake on autono
 Start a lane with `ops:lane:start <UTV2-###>`. Close with `ops:lane:close <UTV2-###>`. These are the only sanctioned transitions. No Done without `ops:truth-check` pass.
 
 Before starting: preflight token valid, tier label set, file scope declared, no overlap with active lanes.
-Before closing: tier-appropriate verification complete, proof tied to merge SHA, CI green on merge SHA.
+
+**Pre-closure checklist (7 steps — all required before `ops:lane:close`):**
+1. `pnpm verify` green on the branch
+2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
+3. Proof tied to merge SHA (not the branch HEAD SHA — the SHA after merge)
+4. CI green on merge SHA (not just branch CI)
+5. For T1: `pnpm test:db` green + evidence bundle generated and validated
+6. Tier label set in Linear and on the PR
+7. `ops:truth-check` runs and exits 0
 
 Procedural details: `/lane-management` and `/verification` skills.
 Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations/TRUTH_CHECK_SPEC.md`.
