@@ -109,29 +109,25 @@ jobs:
         # file. Resetting to issues: [] immediately after merge keeps main neutral
         # so subsequent branches only conflict if they have actual content changes.
         run: |
-          neutral=$(cat <<'YAML'
-version: 1
-approval:
-  allow_multiple_issues: true
-  skip_sync_required: false
-entities:
-  issues: []
-  findings: []
-  controls: []
-  proofs: []
-YAML
-)
-          current=$(cat .ops/sync.yml 2>/dev/null || echo "")
-          if [ "$current" = "$neutral" ]; then
-            echo "::notice title=post-merge-lane-close::sync.yml already neutral — no reset needed."
+          node -e "
+            const fs = require('fs');
+            const neutral = 'version: 1\napproval:\n  allow_multiple_issues: true\n  skip_sync_required: false\nentities:\n  issues: []\n  findings: []\n  controls: []\n  proofs: []\n';
+            const current = fs.existsSync('.ops/sync.yml') ? fs.readFileSync('.ops/sync.yml', 'utf8') : '';
+            if (current === neutral) {
+              console.log('::notice title=post-merge-lane-close::sync.yml already neutral — no reset needed.');
+              process.exit(0);
+            }
+            fs.writeFileSync('.ops/sync.yml', neutral);
+            console.log('::notice title=post-merge-lane-close::sync.yml reset to neutral.');
+          "
+          if git diff --quiet .ops/sync.yml; then
+            echo "::notice title=post-merge-lane-close::sync.yml unchanged — no commit needed."
           else
-            echo "$neutral" > .ops/sync.yml
             git config user.name "github-actions[bot]"
             git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
             git add .ops/sync.yml
             git commit -m "ops: reset sync.yml to neutral after merge [skip ci]"
             git push
-            echo "::notice title=post-merge-lane-close::sync.yml reset to neutral."
           fi
 
       - name: Check lane manifest exists
