@@ -1,0 +1,100 @@
+version: '3.9'
+
+x-prod-logging: &prod-logging
+  driver: json-file
+  options:
+    max-size: '10m'
+    max-file: '3'
+
+services:
+  api:
+    image: unit-talk/api:${API_IMAGE_TAG:-latest}
+    build: null
+    restart: always
+    ports:
+      - '4001:4000'
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+    logging: *prod-logging
+
+  worker:
+    image: unit-talk/worker:${WORKER_IMAGE_TAG:-latest}
+    build: null
+    restart: always
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.25'
+    logging: *prod-logging
+
+  ingestor:
+    image: unit-talk/ingestor:${INGESTOR_IMAGE_TAG:-latest}
+    build: null
+    restart: always
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.25'
+    logging: *prod-logging
+
+  discord-bot:
+    image: unit-talk/discord-bot:${DISCORD_BOT_IMAGE_TAG:-latest}
+    build: null
+    restart: always
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: '0.1'
+    logging: *prod-logging
+
+  scanner:
+    image: unit-talk/scanner:${SCANNER_IMAGE_TAG:-latest}
+    restart: always
+    profiles:
+      - scanner
+    env_file:
+      - .env.container
+    depends_on:
+      api:
+        condition: service_healthy
+    ports: []
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.25'
+    logging: *prod-logging
+
+  command-center:
+    image: unit-talk/command-center:${COMMAND_CENTER_IMAGE_TAG:-latest}
+    restart: always
+    profiles:
+      - command-center
+    env_file:
+      - .env.container
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - '${COMMAND_CENTER_PORT:-3000}:3000'
+    healthcheck:
+      test: ['CMD', 'wget', '-qO-', 'http://localhost:3000/health']
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
+    deploy:
+      resources:
+        limits:
+          memory: 512m
+          cpus: '0.5'
+    logging: *prod-logging
