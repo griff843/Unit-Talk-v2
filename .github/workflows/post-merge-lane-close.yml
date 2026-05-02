@@ -12,15 +12,26 @@ name: Post-Merge Lane Close
 #   5. Update Fibery            — skipped (fibery-sync-on-merge.yml handles it)
 #
 # Issue ID extraction:
-#   Scans the head commit message for UTV2-\d+ patterns from:
-#     - Branch name in merge commit (e.g., claude/utv2-670-stale-lane-alerter)
-#     - Explicit close markers (Closes UTV2-###, Fixes UTV2-###)
-#     - Conventional commit scope (e.g., feat(ops): UTV2-670)
+#   1. Scans the head commit message for UTV2-\d+ patterns (case-insensitive):
+#      - Branch name in merge commit (e.g., claude/utv2-670-stale-lane-alerter)
+#      - Explicit close markers (Closes UTV2-###, Fixes UTV2-###)
+#      - Conventional commit scope (e.g., feat(ops): UTV2-670)
+#   2. If not found in the commit message, queries the GitHub API for the PR
+#      associated with the merge commit and extracts the ID from the branch name
+#      (format: */utv2-NNN-* or */UTV2-NNN-*). This handles squash-merges.
 #   Only the FIRST matched ID is used (one commit = one lane).
+#   If no issue ID can be extracted, a warning is posted and the workflow exits
+#   cleanly (non-lane PRs should not fail the workflow).
+#
+# Truth-check failure handling:
+#   When ops:truth-check returns exit code 1/3/4, the workflow:
+#   - Posts a comment on the merged PR explaining why lane closure was blocked
+#   - Fails the workflow (so CI reflects the gate outcome)
+#   - Does NOT update the lane manifest or transition Linear
 #
 # Requirements:
 #   - Repo secret LINEAR_API_TOKEN (for truth-check's Linear checks)
-#   - GITHUB_TOKEN (automatic)
+#   - GITHUB_TOKEN (automatic, needs pull-requests: write to post comments)
 
 on:
   push:
@@ -29,7 +40,7 @@ on:
 
 permissions:
   contents: write
-  pull-requests: read
+  pull-requests: write
 
 jobs:
   lane-close:
@@ -37,23 +48,55 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Extract issue ID from commit message
+      - name: Extract issue ID from commit message and PR branch
         id: extract
         env:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
+          COMMIT_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           # Extract the first UTV2-NNN identifier from the commit message.
           # Sources: branch name in merge line, close markers, conventional
           # commit scope, or any freeform mention.
-          issue_id=$(echo "$COMMIT_MSG" | grep -oP 'UTV2-\d+' | head -n 1 || true)
+          issue_id=$(echo "$COMMIT_MSG" | grep -oP '(?i)UTV2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+
+          # If not found in commit message, query the GitHub API for the PR
+          # branch name (format: */utv2-NNN-* or */UTV2-NNN-*).
+          # This handles squash-merges and other commit styles that may not
+          # include the issue ID in the commit message body.
+          pr_number=""
+          pr_branch=""
+          if [ -z "$issue_id" ] || true; then
+            # Always try to find the associated PR to get pr_number for later comment posting.
+            api_resp=$(curl -sS \
+              -H "Authorization: Bearer $GITHUB_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/${{ github.repository }}/commits/${COMMIT_SHA}/pulls" \
+              2>/dev/null || echo "[]")
+
+            pr_number=$(echo "$api_resp" | jq -r '.[0].number // empty' 2>/dev/null || true)
+            pr_branch=$(echo "$api_resp" | jq -r '.[0].head.ref // empty' 2>/dev/null || true)
+
+            if [ -z "$issue_id" ] && [ -n "$pr_branch" ]; then
+              # Try to extract UTV2-NNN from branch name: claude/utv2-NNN-... or utv2-NNN-...
+              branch_issue=$(echo "$pr_branch" | grep -oiP '(?<![a-zA-Z])utv2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+              if [ -n "$branch_issue" ]; then
+                issue_id="$branch_issue"
+                echo "::notice title=post-merge-lane-close::Found issue $issue_id from PR branch $pr_branch"
+              fi
+            fi
+          fi
 
           if [ -z "$issue_id" ]; then
-            echo "::notice title=post-merge-lane-close::No UTV2-### found in commit message. Nothing to close."
+            echo "::notice title=post-merge-lane-close::No UTV2-### found in commit message or PR branch. Nothing to close."
             echo "issue_id=" >> "$GITHUB_OUTPUT"
           else
             echo "::notice title=post-merge-lane-close::Found issue $issue_id"
             echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
           fi
+
+          # Always emit pr_number so later steps can post comments
+          echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
         if: steps.extract.outputs.issue_id != ''
@@ -115,6 +158,10 @@ jobs:
       - name: Run truth-check (hard-gate)
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true'
         id: truth_check
+        # continue-on-error so the "Post PR comment on failure" step can run
+        # before the workflow is failed. The "Fail on truth-check failure" step
+        # below re-raises the failure after the comment is posted.
+        continue-on-error: true
         env:
           ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
@@ -149,6 +196,39 @@ jobs:
               exit $exit_code
               ;;
           esac
+
+      - name: Post PR comment on truth-check failure
+        # Run when truth-check failed (outcome is 'failure') and a PR number
+        # was resolved. Warns the author why lane closure was blocked and what
+        # to do next. This step must run BEFORE the re-raise step below so the
+        # comment lands even when the workflow ultimately fails.
+        if: >-
+          steps.truth_check.outcome == 'failure' &&
+          steps.extract.outputs.pr_number != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.extract.outputs.pr_number }}
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          TC_EXIT: ${{ steps.truth_check.outputs.exit_code }}
+        run: |
+          body="Lane closure blocked — \`ops:truth-check\` returned exit code ${TC_EXIT} for ${ISSUE_ID}. Resolve the failing checks and re-run the workflow manually or push a new commit."
+
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            -d "{\"body\": $(echo "$body" | jq -Rs .)}" \
+            > /dev/null
+
+          echo "::notice title=post-merge-lane-close::Posted blocking comment on PR #${PR_NUMBER}"
+
+      - name: Fail on truth-check failure
+        # Re-raise the failure after the PR comment has been posted.
+        # Keeps the workflow status red so CI reflects the gate outcome.
+        if: steps.truth_check.outcome == 'failure'
+        run: |
+          echo "::error title=post-merge-lane-close::Truth-check failed (exit ${{ steps.truth_check.outputs.exit_code }}) — lane NOT closed."
+          exit "${{ steps.truth_check.outputs.exit_code }}"
 
       - name: Update manifest to done
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.truth_check.outputs.exit_code == '0'
