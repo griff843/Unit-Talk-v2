@@ -121,3 +121,30 @@ jobs:
               repo: context.repo.repo,
               body,
             });
+
+      - name: Post Linear comment on QA failure
+        if: steps.qa.outputs.qa_result == 'NEEDS_REVIEW'
+        env:
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+        run: |
+          # Extract issue ID from branch name (e.g. claude/utv2-829-... → UTV2-829)
+          BRANCH="${{ github.head_ref }}"
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+
+          # Find the most recent issue-report.md
+          REPORT_PATH=$(find apps/qa-agent/artifacts -name "issue-report.md" | sort | tail -1)
+
+          if [ -z "$ISSUE_ID" ] || [ -z "$REPORT_PATH" ]; then
+            echo "No Linear issue ID or report found — skipping Linear comment"
+            exit 0
+          fi
+
+          REPORT_CONTENT=$(cat "$REPORT_PATH")
+          PREFIX="**[QA Agent — Automated]** Regression detected in CI. Flow: \`${{ steps.surfaces.outputs.surfaces }}\`. Run ID: \`${{ github.run_id }}\`."
+
+          COMMENT_BODY="$PREFIX
+
+          $REPORT_CONTENT"
+
+          # Post comment via Linear API
+          npx tsx scripts/ci/post-linear-comment.ts --issue-id "$ISSUE_ID" --body "$COMMENT_BODY"
