@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "codex/utv2-831-pipeline-health-monitor",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6036eb9d6b38d25b8ade121fd5485303f943dd1c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/546",
   "files_changed": [
     ".github/workflows/pipeline-health-monitor.yml",
     "scripts/pipeline-health.ts"
@@ -17,13 +17,26 @@
     "scripts/pipeline-health.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-01T16:28:00.000Z",
-  "heartbeat_at": "2026-05-02T15:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T16:05:00.000Z",
+  "closed_at": "2026-05-02T16:05:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-02T16:05:00.000Z",
+      "runner": "manual-close",
+      "merge_sha": "6036eb9d6b38d25b8ade121fd5485303f943dd1c",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": [
+        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA 6036eb9" },
+        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 546 merged at 6036eb9" }
+      ],
+      "note": "Pipeline health monitor scheduled workflow deployed; auto-opens Linear ticket on anomaly."
+    }
+  ],
   "reopen_history": []
 }
