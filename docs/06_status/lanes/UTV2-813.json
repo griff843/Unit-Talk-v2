@@ -6,18 +6,26 @@
   "worktree_path": ".",
   "branch": "claude/utv2-813-clv-logger-warn-message",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": ["apps/api/src/clv-service.ts"],
-  "file_scope_lock": ["apps/api/src/clv-service.ts"],
+  "commit_sha": "a998e45",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/527",
+  "files_changed": [
+    "apps/api/src/clv-service.ts"
+  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-01T13:40:00.000Z",
-  "heartbeat_at": "2026-05-01T13:40:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T17:35:00.000Z",
+  "closed_at": "2026-05-02T17:35:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-02T17:35:00.000Z",
+      "result": "done",
+      "note": "CLV pino logger.warn fix already shipped to main via PR #527 (a998e45). Stale lane manifest retroactively closed."
+    }
+  ],
   "reopen_history": []
 }

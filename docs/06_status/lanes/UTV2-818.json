@@ -11,17 +11,21 @@
   "files_changed": [
     "scripts/ci/r-level-check.ts"
   ],
-  "file_scope_lock": [
-    "scripts/ci/r-level-check.ts"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "abandoned",
   "started_at": "2026-05-02T04:43:35.762Z",
-  "heartbeat_at": "2026-05-02T04:43:35.762Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T17:30:00.000Z",
+  "closed_at": "2026-05-02T17:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-02T17:30:00.000Z",
+      "result": "abandoned",
+      "note": "r-level-check.ts already shipped to main via UTV2-820 PR #538 — branch content identical, no diff"
+    }
+  ],
   "reopen_history": []
 }

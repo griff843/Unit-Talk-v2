@@ -6,23 +6,29 @@
   "worktree_path": ".",
   "branch": "codex/utv2-751-sgo-historical-odds-backfill",
   "base_branch": "main",
-  "commit_sha": "463326ed321f3b22dc2471790d466a01adb7612f",
+  "commit_sha": "70d9573",
   "pr_url": null,
-  "files_changed": [],
-  "file_scope_lock": [
-    "apps/ingestor/src/",
-    "scripts/backfill/"
+  "files_changed": [
+    "docs/06_status/proof/UTV2-751.md",
+    "scripts/proof/utv2-751-sgo-historical-backfill.ts"
   ],
+  "file_scope_lock": [],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-751.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-26T14:57:00.000Z",
-  "heartbeat_at": "2026-04-26T14:57:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T17:40:00.000Z",
+  "closed_at": "2026-05-02T17:40:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-02T17:40:00.000Z",
+      "result": "done",
+      "note": "SGO backfill proof (diagnosis: backfill non-blocking, CLV viable) already shipped to main via 70d9573. Lane manifest retroactively closed."
+    }
+  ],
   "reopen_history": []
 }

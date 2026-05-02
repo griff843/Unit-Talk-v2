@@ -8,12 +8,17 @@
   "base_branch": "main",
   "commit_sha": null,
   "pr_url": null,
-  "files_changed": ["apps/api/src/system-pick-scanner.ts"],
-  "file_scope_lock": ["apps/api/src/system-pick-scanner.ts"],
+  "files_changed": [
+    "apps/api/src/system-pick-scanner.ts",
+    "apps/api/src/system-pick-scanner.test.ts"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/system-pick-scanner.ts"
+  ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-01T12:50:35.000Z",
-  "heartbeat_at": "2026-05-01T12:50:35.000Z",
+  "heartbeat_at": "2026-05-02T17:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
