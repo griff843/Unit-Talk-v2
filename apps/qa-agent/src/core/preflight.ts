@@ -1,5 +1,9 @@
 import type { QAPreflightCheck, QAPreflightContext, QAPreflightResult } from './types.js';
 
+function isServiceUnavailableError(message: string): boolean {
+  return /ECONNREFUSED|service unavailable/i.test(message);
+}
+
 export async function runPreflightChecks(
   checks: readonly QAPreflightCheck[] | undefined,
   context: QAPreflightContext,
@@ -21,11 +25,13 @@ export async function runPreflightChecks(
       const result = await check.run(context);
       results.push({ ...result, id: check.id, required: check.required });
     } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      const serviceUnavailable = isServiceUnavailableError(message);
       results.push({
         id: check.id,
         status: 'failed',
         required: check.required,
-        message: error instanceof Error ? error.message : String(error),
+        message: serviceUnavailable ? 'service unavailable in CI, skipping' : message,
       });
     }
   }
@@ -65,11 +71,29 @@ export async function httpPreflight(
 ): Promise<QAPreflightResult> {
   const evidence = await fetchStatus(url);
   if (evidence.error) {
+    if (isServiceUnavailableError(evidence.error)) {
+      return {
+        id,
+        status: 'failed',
+        required,
+        message: 'service unavailable in CI, skipping',
+        evidence,
+      };
+    }
     return {
       id,
       status: 'failed',
       required,
       message: `${label} unavailable: ${evidence.error}.`,
+      evidence,
+    };
+  }
+  if (evidence.status === 503) {
+    return {
+      id,
+      status: 'failed',
+      required,
+      message: 'service unavailable in CI, skipping',
       evidence,
     };
   }
