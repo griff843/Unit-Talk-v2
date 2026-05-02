@@ -94,7 +94,7 @@ jobs:
               '## Shadow Parity Check — Advisory (no live DB)',
               '',
               'The shadow parity runner requires live Supabase credentials',
-              '(`SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY`) to execute.',
+              '(database URL + service role key) to execute.',
               '',
               'These secrets are not configured for this repository. The check',
               'is **non-blocking** in this state, but you must run the shadow',
@@ -105,7 +105,7 @@ jobs:
               '```',
               '',
               'Confirm guardrails are all zero before merge.',
-              'To enable full CI enforcement, configure the secrets in',
+              'To enable full CI enforcement, configure the Supabase secrets in',
               'repo Settings → Secrets and variables → Actions.',
             ].join('\n');
 
