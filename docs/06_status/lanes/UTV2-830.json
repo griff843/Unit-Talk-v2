@@ -7,7 +7,7 @@
   "branch": "codex/utv2-830-pr-report-comments",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/547",
   "files_changed": [
     ".github/workflows/r-level-compliance-check.yml",
     ".github/workflows/shadow-parity-required.yml"
@@ -17,7 +17,7 @@
     ".github/workflows/shadow-parity-required.yml"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-02T16:10:00.000Z",
   "heartbeat_at": "2026-05-02T16:10:00.000Z",
   "closed_at": null,
