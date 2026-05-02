@@ -1,6 +1,11 @@
-// Pipeline health check — run with: tsx scripts/pipeline-health.ts
+// Pipeline health check — run with: tsx scripts/pipeline-health.ts [--output-json <path>]
 import { loadEnvironment } from '@unit-talk/config'
 import { createClient } from '@supabase/supabase-js'
+import fs from 'node:fs'
+
+const args = process.argv.slice(2)
+const jsonFlagIdx = args.indexOf('--output-json')
+const outputJsonPath = jsonFlagIdx !== -1 ? args[jsonFlagIdx + 1] : null
 
 const env = loadEnvironment()
 const url = env.SUPABASE_URL ?? ''
@@ -200,6 +205,22 @@ if (criticals.length === 0 && warns.length === 0) {
   console.log('  ✅ HEALTHY — no issues found')
 }
 console.log()
+
+if (outputJsonPath) {
+  const report = {
+    checked_at: now.toISOString(),
+    outbox_dead_letter_count: deadLetter.length,
+    outbox_failed_count: failed.length,
+    outbox_stuck_processing: stuckProc.length,
+    worker_verdict: workerVerdict,
+    criticals,
+    warns,
+    has_anomaly: criticals.length > 0 || deadLetter.length > 0,
+  }
+  fs.mkdirSync(outputJsonPath.split('/').slice(0, -1).join('/') || '.', { recursive: true })
+  fs.writeFileSync(outputJsonPath, JSON.stringify(report, null, 2) + '\n')
+  console.log(`JSON report written to ${outputJsonPath}`)
+}
 } // end main
 
 main().catch(e => { console.error(e); process.exit(1) })

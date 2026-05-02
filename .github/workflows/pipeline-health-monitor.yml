@@ -1,0 +1,216 @@
+name: Pipeline Health Monitor
+
+on:
+  schedule:
+    - cron: '0 10 * * *'
+  workflow_dispatch:
+
+jobs:
+  monitor:
+    name: Monitor pipeline health
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Generate pipeline health report
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_DISTRIBUTION_TARGETS: ${{ vars.UNIT_TALK_DISTRIBUTION_TARGETS }}
+        run: |
+          mkdir -p artifacts
+          pnpm exec tsx scripts/pipeline-health.ts --output-json artifacts/pipeline-health.json
+
+      - name: Check anomaly conditions
+        id: anomaly
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs');
+          const reportPath = 'artifacts/pipeline-health.json';
+
+          if (!fs.existsSync(reportPath)) {
+            console.error(`Pipeline health JSON report not found at ${reportPath}`);
+            process.exit(1);
+          }
+
+          const report = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
+          const checks = [
+            {
+              name: 'outbox_dead_letter_count',
+              value: Number(report.outbox_dead_letter_count ?? 0),
+              limit: '> 0',
+              triggered: Number(report.outbox_dead_letter_count ?? 0) > 0,
+            },
+            {
+              name: 'criticals',
+              value: (report.criticals ?? []).join('; '),
+              limit: 'length > 0',
+              triggered: Array.isArray(report.criticals) && report.criticals.length > 0,
+            },
+          ];
+
+          const triggered = checks.filter((check) => check.triggered);
+          const detected = triggered.length > 0;
+          const summary = detected
+            ? triggered.map((check) => `${check.name}=${check.value} (${check.limit})`).join('\n')
+            : 'No anomaly thresholds exceeded.';
+
+          fs.appendFileSync(process.env.GITHUB_ENV, `ANOMALY_DETECTED=${detected ? 'true' : 'false'}\n`);
+          fs.appendFileSync(process.env.GITHUB_ENV, `ANOMALY_SUMMARY<<PIPELINE_HEALTH_SUMMARY\n${summary}\nPIPELINE_HEALTH_SUMMARY\n`);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `detected=${detected ? 'true' : 'false'}\n`);
+          console.log(summary);
+          NODE
+
+      - name: Create Linear issue for anomaly
+        id: create-linear-issue
+        if: env.ANOMALY_DETECTED == 'true'
+        shell: bash
+        env:
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          ANOMALY_SUMMARY: ${{ env.ANOMALY_SUMMARY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${LINEAR_API_TOKEN:-}" ]; then
+            echo "::error title=pipeline-health-monitor::LINEAR_API_TOKEN is required to create Linear issues."
+            exit 1
+          fi
+
+          graphql() {
+            local payload="$1"
+            curl -sS https://api.linear.app/graphql \
+              -H "Authorization: $LINEAR_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              --data "$payload"
+          }
+
+          title_prefix="[Pipeline Health] Anomaly detected"
+          title="${title_prefix} — $(date +%Y-%m-%d)"
+          export LINEAR_ISSUE_TITLE="$title"
+
+          lookup_payload=$(TITLE_PREFIX="$title_prefix" node -e '
+            const query = `
+              query PipelineHealthLookup($assigneeEmail: String!, $titlePrefix: String!) {
+                teams(first: 50) { nodes { id name labels(first: 100) { nodes { id name } } } }
+                users(first: 10, filter: { email: { eq: $assigneeEmail } }) { nodes { id email } }
+                issues(first: 50, filter: { title: { contains: $titlePrefix }, state: { type: { nin: ["completed", "canceled"] } } }) {
+                  nodes { id identifier title url state { type } }
+                }
+              }
+            `;
+            const variables = {
+              assigneeEmail: "griffadavi@gmail.com",
+              titlePrefix: process.env.TITLE_PREFIX,
+            };
+            process.stdout.write(JSON.stringify({ query, variables }));
+          ')
+
+          lookup_response=$(graphql "$lookup_payload")
+          echo "$lookup_response" > artifacts/linear-lookup-response.json
+
+          existing_url=$(node -e '
+            const fs = require("fs");
+            const response = JSON.parse(fs.readFileSync("artifacts/linear-lookup-response.json", "utf8"));
+            if (response.errors) {
+              console.error(JSON.stringify(response.errors));
+              process.exit(1);
+            }
+            const issue = response.data.issues.nodes[0];
+            process.stdout.write(issue?.url || "");
+          ')
+
+          if [ -n "$existing_url" ]; then
+            echo "::notice title=pipeline-health-monitor::Open pipeline health issue already exists: $existing_url"
+            exit 0
+          fi
+
+          node <<'NODE'
+          const fs = require('fs');
+          const response = JSON.parse(fs.readFileSync('artifacts/linear-lookup-response.json', 'utf8'));
+          const teams = response.data.teams.nodes;
+          const team = teams.find((candidate) => /unit talk/i.test(candidate.name)) ?? teams[0];
+          if (!team) {
+            throw new Error('No Linear team found.');
+          }
+
+          const user = response.data.users.nodes[0];
+          if (!user) {
+            throw new Error('No Linear user found for griffadavi@gmail.com.');
+          }
+
+          const labels = team.labels.nodes
+            .filter((label) => ['kind:hardening', 'area:api'].includes(label.name))
+            .map((label) => label.id);
+
+          const report = fs.readFileSync('artifacts/pipeline-health.json', 'utf8');
+          const description = [
+            'Pipeline health anomaly thresholds were exceeded.',
+            '',
+            'Summary:',
+            process.env.ANOMALY_SUMMARY,
+            '',
+            'Report JSON:',
+            '```json',
+            report.trim(),
+            '```',
+          ].join('\n');
+
+          const query = `
+            mutation CreatePipelineHealthIssue($input: IssueCreateInput!) {
+              issueCreate(input: $input) {
+                success
+                issue { identifier title url }
+              }
+            }
+          `;
+          const variables = {
+            input: {
+              teamId: team.id,
+              title: process.env.LINEAR_ISSUE_TITLE,
+              description,
+              assigneeId: user.id,
+              labelIds: labels,
+            },
+          };
+
+          fs.writeFileSync('artifacts/linear-create-payload.json', JSON.stringify({ query, variables }));
+          NODE
+
+          create_response=$(graphql "$(cat artifacts/linear-create-payload.json)")
+          echo "$create_response" > artifacts/linear-create-response.json
+
+          node <<'NODE'
+          const fs = require('fs');
+          const response = JSON.parse(fs.readFileSync('artifacts/linear-create-response.json', 'utf8'));
+          if (response.errors) {
+            console.error(JSON.stringify(response.errors));
+            process.exit(1);
+          }
+          const issue = response.data.issueCreate.issue;
+          console.log(`Created Linear issue ${issue.identifier}: ${issue.url}`);
+          NODE
+
+      - name: Upload pipeline health report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: pipeline-health-report
+          path: artifacts/pipeline-health.json
+          retention-days: 7
