@@ -2,8 +2,37 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --motion-fast: 100ms;
+  --motion-base: 200ms;
+  --motion-slow: 400ms;
+  --surface-base: rgba(12, 17, 27, 0.76);
+  --surface-raised: rgba(20, 26, 40, 0.92);
+  --surface-overlay: rgba(8, 12, 20, 0.9);
+  --status-success-fg: rgb(94 234 212);
+  --status-warning-fg: rgb(251 191 36);
+  --status-error-fg: rgb(251 113 133);
+  --status-info-fg: rgb(196 181 253);
+  --cc-bg-canvas: #071019;
+  --cc-bg-surface-hover: rgba(255, 255, 255, 0.06);
+  --cc-accent: #b49bff;
+  --cc-accent-strong: #8063ff;
+  --cc-text-primary: rgba(248, 250, 255, 0.96);
+  --cc-text-secondary: rgba(215, 222, 239, 0.8);
+  --cc-text-muted: rgba(161, 175, 203, 0.62);
+}
+
 html {
   color-scheme: dark;
+}
+
+body {
+  background:
+    radial-gradient(circle at top left, rgba(128, 99, 255, 0.18), transparent 32%),
+    radial-gradient(circle at 82% 18%, rgba(94, 234, 212, 0.1), transparent 24%),
+    linear-gradient(180deg, #050a12 0%, #081220 38%, #0a1320 100%);
+  color: var(--cc-text-primary);
+  font-family: var(--font-body), sans-serif;
 }
 
 @keyframes pipeline-travel {
@@ -26,6 +55,16 @@ html {
   }
 }
 
+@keyframes shimmer {
+  0% {
+    transform: translateX(-100%);
+  }
+
+  100% {
+    transform: translateX(100%);
+  }
+}
+
 @keyframes pipeline-pulse {
   0% {
     box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.42);
@@ -34,6 +73,130 @@ html {
   100% {
     box-shadow: 0 0 0 12px rgba(16, 185, 129, 0);
   }
+}
+
+.cc-shell {
+  position: relative;
+  isolation: isolate;
+}
+
+.cc-mesh {
+  position: fixed;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: 90px 90px;
+  mask-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), transparent 80%);
+  pointer-events: none;
+}
+
+.cc-topbar {
+  display: grid;
+  gap: 1.5rem;
+  margin-bottom: 1.75rem;
+  padding: 1.5rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 2rem;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0.015)),
+    linear-gradient(180deg, rgba(128, 99, 255, 0.08), transparent 60%);
+  box-shadow: 0 28px 80px rgba(8, 11, 18, 0.34);
+}
+
+@media (min-width: 1024px) {
+  .cc-topbar {
+    grid-template-columns: minmax(0, 1.35fr) minmax(280px, 0.65fr);
+    align-items: end;
+  }
+}
+
+.cc-surface {
+  border-radius: 1.6rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.045), rgba(255, 255, 255, 0.02)),
+    var(--surface-base);
+  box-shadow: 0 22px 50px rgba(7, 10, 16, 0.22);
+  backdrop-filter: blur(14px);
+}
+
+.cc-panel {
+  border-radius: 1.7rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--surface-base);
+  padding: 1.4rem;
+  box-shadow: 0 18px 40px rgba(7, 10, 16, 0.2);
+}
+
+.cc-grid-12 {
+  display: grid;
+  gap: 1rem;
+}
+
+@media (min-width: 1024px) {
+  .cc-grid-12 {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+  }
+}
+
+.cc-event-line {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.45rem;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.03);
+  padding: 1rem 1.1rem;
+}
+
+.cc-event-line::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  transform: translateX(-100%);
+  animation: shimmer 3.8s linear infinite;
+  pointer-events: none;
+}
+
+.cc-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.cc-table th {
+  padding-bottom: 0.8rem;
+  text-align: left;
+  font-size: 0.68rem;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cc-text-muted);
+}
+
+.cc-table td {
+  padding: 0.95rem 0.35rem 0.95rem 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  vertical-align: top;
+}
+
+.cc-kicker {
+  font-size: 0.7rem;
+  letter-spacing: 0.28em;
+  text-transform: uppercase;
+  color: var(--cc-text-muted);
+}
+
+.cc-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+
+.cc-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.08), transparent);
+  animation: shimmer 2.2s linear infinite;
 }
 
 .pipeline-stage-dot {

@@ -19,11 +19,25 @@ export { EmptyState } from './EmptyState';
 export { AgentCard } from './AgentCard';
 export type { AgentCardProps, AgentStatus } from './AgentCard';
 
+export { EventStream } from './EventStream';
+export type { EventStreamItem } from './EventStream';
+
 export { LogDrawer } from './LogDrawer';
 export type { LogDrawerProps } from './LogDrawer';
 
+export { LLMUsageChart } from './LLMUsageChart';
+export type { LlmUsageRow } from './LLMUsageChart';
+
+export { PipelineFlow } from './PipelineFlow';
+export type { PipelineFlowStage } from './PipelineFlow';
+
+export { Sidebar } from './Sidebar';
+
 export { StatCard } from './StatCard';
 export type { StatCardProps } from './StatCard';
+
+export { TopBar } from './TopBar';
+export type { TopBarProps } from './TopBar';
 
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
