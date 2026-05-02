@@ -6,18 +6,18 @@
   "worktree_path": ".",
   "branch": "codex/utv2-836-qa-lifecycle-e2e",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
-  "file_scope_lock": [
+  "commit_sha": "917c55c742dfeeaeed9af29e44bafa76a485ecb7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/561",
+  "files_changed": [
     "apps/qa-agent/src/adapters/unit-talk/surfaces/smart-form/skills/lifecycle-e2e.ts",
-    "apps/qa-agent/src/adapters/unit-talk/surfaces/command-center/skills/lifecycle-e2e.ts"
+    "apps/qa-agent/src/adapters/unit-talk/surfaces/smart-form/index.ts"
   ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-02T20:41:00.000Z",
-  "heartbeat_at": "2026-05-02T20:41:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T20:50:00.000Z",
+  "closed_at": "2026-05-02T20:50:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
