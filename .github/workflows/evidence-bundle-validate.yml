@@ -28,6 +28,18 @@ jobs:
       - name: Validate evidence bundles
         run: node scripts/evidence-bundle/validate-bundle.mjs --all --allowlist-file scripts/evidence-bundle/.validate-allowlist | tee /tmp/evidence-validate.txt
 
+      - name: Bundle SHA tie check (T1)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TIER=$(gh pr view ${{ github.event.pull_request.number }} --json labels --jq '.labels[].name' | grep 'tier:T1' || echo "")
+          if [ -n "$TIER" ]; then
+            npx tsx scripts/ci/bundle-sha-check.ts \
+              --bundle-path docs/06_status/proof/bundle.json \
+              --expected-sha ${{ github.event.pull_request.head.sha }} \
+              --tier T1
+          fi
+
       - name: Job summary
         if: always()
         run: |
