@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "experience": "tsx src/cli.ts",
+    "qa:auth:seed": "tsx src/personas/seed.ts",
     "test": "tsx --test src/**/*.test.ts",
     "type-check": "tsc --noEmit"
   },
