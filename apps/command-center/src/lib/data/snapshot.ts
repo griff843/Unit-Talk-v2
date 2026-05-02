@@ -1,11 +1,15 @@
-import { getDataClient, OUTBOX_HISTORY_CUTOFF } from './client.js';
+import { getDataClient, OUTBOX_HISTORY_CUTOFF } from './client';
 import {
   resolveEffectiveSettlement,
   computeSettlementSummary,
   type EffectiveSettlement,
   type SettlementSummary,
-} from '@unit-talk/domain';
-import { memberTiers, resolveTargetRegistry, type MemberTier } from '@unit-talk/contracts';
+} from '../../../../../packages/domain/dist/outcomes/settlement-downstream.js';
+import {
+  memberTiers,
+  resolveTargetRegistry,
+  type MemberTier,
+} from '../../../../../packages/contracts/dist/index.js';
 import type {
   OutboxRecord,
   ReceiptRecord,
@@ -13,7 +17,7 @@ import type {
   PickRecord,
   SettlementRecord,
   AuditLogRow,
-} from '@unit-talk/db';
+} from '../../../../../packages/db/dist/types.js';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

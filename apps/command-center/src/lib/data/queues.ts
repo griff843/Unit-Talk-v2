@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getDataClient } from './client.js';
+import { getDataClient } from './client';
 
 // ── Shared internal type ─────────────────────────────────────────────────────
 
@@ -865,4 +865,4 @@ export async function getPickDetail(pickId: string): Promise<PickDetailViewRespo
 }
 
 // ── Re-export getDataClient for consumers that need it ────────────────────────
-export { getDataClient } from './client.js';
+export { getDataClient } from './client';

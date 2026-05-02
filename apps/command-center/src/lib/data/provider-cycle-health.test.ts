@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { summarizeProviderCycleHealth } from './provider-cycle-health.js';
+import { summarizeProviderCycleHealth } from './provider-cycle-health';
 
 test('summarizeProviderCycleHealth keeps only the latest row per provider/league lane', () => {
   const summary = summarizeProviderCycleHealth([

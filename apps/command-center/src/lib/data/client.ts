@@ -1,18 +1,58 @@
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import {
-  createServiceRoleDatabaseConnectionConfig,
-  createDatabaseClientFromConnection,
-} from '@unit-talk/db';
-import { loadEnvironment } from '@unit-talk/config';
+  loadEnvironment,
+  requireSupabaseEnvironment,
+  type AppEnv,
+} from '../../../../../packages/config/dist/env.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type SupabaseClient = any;
+interface DatabaseConnectionConfig {
+  url: string;
+  key: string;
+  role: 'anon' | 'service_role';
+}
+
+interface DatabaseClientOptions {
+  env?: AppEnv | undefined;
+  useServiceRole?: boolean;
+}
 
 let _client: SupabaseClient | null = null;
 
 function resolveWorkspaceRoot() {
   return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
+}
+
+export function createDatabaseConnectionConfig(
+  options: DatabaseClientOptions = {},
+): DatabaseConnectionConfig {
+  const env = options.env ?? loadEnvironment(resolveWorkspaceRoot());
+  const supabase = requireSupabaseEnvironment(env);
+  const useServiceRole = options.useServiceRole ?? false;
+
+  return {
+    url: supabase.url,
+    key: useServiceRole ? supabase.serviceRoleKey : supabase.anonKey,
+    role: useServiceRole ? 'service_role' : 'anon',
+  };
+}
+
+export function createServiceRoleDatabaseConnectionConfig(
+  env?: AppEnv,
+): DatabaseConnectionConfig {
+  return createDatabaseConnectionConfig({ env, useServiceRole: true });
+}
+
+export function createDatabaseClientFromConnection(
+  connection: DatabaseConnectionConfig,
+): SupabaseClient {
+  return createClient(connection.url, connection.key, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false,
+    },
+  });
 }
 
 export function getDataClient(): SupabaseClient {

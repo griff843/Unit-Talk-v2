@@ -4,7 +4,7 @@ import {
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
   resolveOperatorIdentity,
-} from './server-api.js';
+} from './server-api';
 
 function createEnv(overrides: Record<string, string> = {}): NodeJS.ProcessEnv {
   return {

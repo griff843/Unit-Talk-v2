@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { getDataClient } from './client.js';
+import { getDataClient } from './client';
 
 type Client = any;
 type Row = Record<string, unknown>;
