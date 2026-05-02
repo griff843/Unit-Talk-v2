@@ -43,3 +43,4 @@ export * from './portfolio/index.js';
 // evaluation/ not re-exported here (name collision: computeBrierScore/computeLogLoss)
 // import directly: import { computeAlphaEvaluation } from '@unit-talk/domain/evaluation'
 export * from './pick-narrative.js';
+export * from './stale-data.js';
