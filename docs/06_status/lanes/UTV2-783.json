@@ -6,25 +6,21 @@
   "worktree_path": ".",
   "branch": "codex/utv2-783-db-networking-verification",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "2f365bba2e9b4e42a855ee5c3b69aee1cce88b2f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/552",
   "files_changed": [
     "docs/ops/db-networking-policy.md",
     "docs/06_status/proof/UTV2-783.md",
     "docs/06_status/lanes/UTV2-783.json"
   ],
-  "file_scope_lock": [
-    "docs/ops/db-networking-policy.md",
-    "docs/06_status/proof/UTV2-783.md",
-    "docs/06_status/lanes/UTV2-783.json"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-783.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-02T18:00:00.000Z",
-  "heartbeat_at": "2026-05-02T18:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T19:00:00.000Z",
+  "closed_at": "2026-05-02T19:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
