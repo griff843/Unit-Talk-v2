@@ -6,28 +6,29 @@
   "worktree_path": ".",
   "branch": "codex/utv2-791-second-provider-backup",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b2a547a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/549",
   "files_changed": [
     "docs/ops/backup-dr-policy.md",
     "scripts/backup/r2-backup.sh",
     "scripts/backup/backup-verify.sh",
     "scripts/backup/r2-config-backup.sh"
   ],
-  "file_scope_lock": [
-    "docs/ops/backup-dr-policy.md",
-    "scripts/backup/r2-backup.sh",
-    "scripts/backup/backup-verify.sh",
-    "scripts/backup/r2-config-backup.sh"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-02T17:10:00.000Z",
-  "heartbeat_at": "2026-05-02T17:10:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T17:50:00.000Z",
+  "closed_at": "2026-05-02T17:50:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-02T17:50:00.000Z",
+      "result": "done",
+      "note": "Merged to main via PR #549 (b2a547a). Cloudflare R2 backup scripts and DR policy shipped."
+    }
+  ],
   "reopen_history": []
 }

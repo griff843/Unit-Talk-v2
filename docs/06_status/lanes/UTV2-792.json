@@ -6,26 +6,28 @@
   "worktree_path": ".",
   "branch": "codex/utv2-792-docker-compose-procedure",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6470d17",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/548",
   "files_changed": [
     "docs/ops/docker-compose-deployment.md",
     "docker-compose.prod.yml",
     "scripts/deploy.sh"
   ],
-  "file_scope_lock": [
-    "docs/ops/docker-compose-deployment.md",
-    "docker-compose.prod.yml",
-    "scripts/deploy.sh"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-02T17:10:00.000Z",
-  "heartbeat_at": "2026-05-02T17:20:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T17:50:00.000Z",
+  "closed_at": "2026-05-02T17:50:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-02T17:50:00.000Z",
+      "result": "done",
+      "note": "Merged to main via PR #548 (6470d17). Docker Compose deployment procedure, healthcheck, migration, and rollback shipped."
+    }
+  ],
   "reopen_history": []
 }
