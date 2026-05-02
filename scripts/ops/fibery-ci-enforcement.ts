@@ -111,10 +111,9 @@ export function evaluateFiberyCiEnforcement(input: {
   const labels = input.labels.map((label) => label.toLowerCase());
   const implementationFiles = changedFiles.filter(isImplementationFile);
   const proofSensitiveFiles = changedFiles.filter(isProofSensitiveFile);
-  const issueIds = extractIssueIds([
-    input.referencedText,
-    ...(input.metadata?.entities.issues ?? []),
-  ].join('\n'));
+  const issueIds = extractIssueIds(
+    (input.metadata?.entities.issues ?? []).join('\n'),
+  );
   const failures: string[] = [];
   const syncBypassApproved =
     labels.includes(SYNC_BYPASS_LABEL) || input.metadata?.approval.skip_sync_required === true;

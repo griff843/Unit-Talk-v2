@@ -70,6 +70,20 @@ Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-cl
 
 ---
 
+## PM verdict format (required for T2/T1 merge gate)
+
+When posting a PM verdict comment, use exactly this format — `parseVerdict()` in merge-gate.yml requires minimum 3 lines and `Issue:` on line 3:
+
+```
+PM_VERDICT: APPROVED
+schema: pm-verdict/v1
+Issue: UTV2-NNN
+```
+
+Replace `NNN` with the issue number. Replace `APPROVED` with `CHANGES_REQUIRED` to block. See full schema: `docs/05_operations/schemas/pm-verdict-v1.md`.
+
+---
+
 ## Completion discipline
 
 **Forbidden completion language** — never use these when claiming work is done:
