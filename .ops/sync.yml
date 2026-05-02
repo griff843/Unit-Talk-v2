@@ -1,12 +1,10 @@
 version: 1
 approval:
-  allow_multiple_issues: true
+  allow_multiple_issues: false
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-804
-    - UTV2-806
-    - UTV2-808
+    - UTV2-833
   findings: []
   controls: []
   proofs: []

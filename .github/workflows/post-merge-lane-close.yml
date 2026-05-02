@@ -99,10 +99,40 @@ jobs:
           echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
-        if: steps.extract.outputs.issue_id != ''
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Reset sync.yml to neutral on main
+        # Always run — every squash merge to main rewrites .ops/sync.yml with the
+        # merged PR's issue ID, causing all in-flight branches to conflict on that
+        # file. Resetting to issues: [] immediately after merge keeps main neutral
+        # so subsequent branches only conflict if they have actual content changes.
+        run: |
+          neutral=$(cat <<'YAML'
+version: 1
+approval:
+  allow_multiple_issues: true
+  skip_sync_required: false
+entities:
+  issues: []
+  findings: []
+  controls: []
+  proofs: []
+YAML
+)
+          current=$(cat .ops/sync.yml 2>/dev/null || echo "")
+          if [ "$current" = "$neutral" ]; then
+            echo "::notice title=post-merge-lane-close::sync.yml already neutral — no reset needed."
+          else
+            echo "$neutral" > .ops/sync.yml
+            git config user.name "github-actions[bot]"
+            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+            git add .ops/sync.yml
+            git commit -m "ops: reset sync.yml to neutral after merge [skip ci]"
+            git push
+            echo "::notice title=post-merge-lane-close::sync.yml reset to neutral."
+          fi
 
       - name: Check lane manifest exists
         if: steps.extract.outputs.issue_id != ''

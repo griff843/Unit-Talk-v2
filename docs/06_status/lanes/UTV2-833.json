@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-833",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-833-fix-merge-cycle-friction",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    ".claude/commands/verification.md",
+    ".claude/settings.json",
+    ".github/workflows/post-merge-lane-close.yml",
+    "scripts/ops/fibery-ci-enforcement.ts"
+  ],
+  "file_scope_lock": [
+    ".claude/commands/verification.md",
+    ".claude/settings.json",
+    ".github/workflows/post-merge-lane-close.yml",
+    "scripts/ops/fibery-ci-enforcement.ts",
+    ".ops/sync.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-02T04:07:12.527Z",
+  "heartbeat_at": "2026-05-02T04:07:12.527Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
