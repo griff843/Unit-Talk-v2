@@ -264,11 +264,14 @@ jobs:
             } else {
               body = [
                 marker,
-                '## Shadow Parity Check — PASSED',
+                '<details>',
+                '<summary>Shadow Parity Check — ✓ PASSED</summary>',
                 '',
                 `**Critical divergences:** 0  **Warnings:** 0`,
                 '',
                 `Candidates scanned: ${scanned} | All guardrails: 0`,
+                '',
+                '</details>',
               ].join('\n');
             }
 

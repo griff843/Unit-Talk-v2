@@ -3,8 +3,37 @@
   "issue_id": "UTV2-829",
   "lane_type": "codex",
   "tier": "T2",
+  "worktree_path": ".",
   "branch": "codex/utv2-829-qa-agent-linear-reporter",
   "base_branch": "main",
-  "status": "started",
-  "started_at": "2026-05-02T04:43:35.762Z"
+  "commit_sha": "c0471398f59236b2afc52f19b3d5f3bd3d7860a7",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/540",
+  "files_changed": [
+    ".github/workflows/qa-experience-regression.yml",
+    "apps/qa-agent/src/core/issue-reporter.ts"
+  ],
+  "file_scope_lock": [],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-05-02T04:43:35.762Z",
+  "heartbeat_at": "2026-05-02T16:05:00.000Z",
+  "closed_at": "2026-05-02T16:05:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex",
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-02T16:05:00.000Z",
+      "runner": "manual-close",
+      "merge_sha": "c0471398f59236b2afc52f19b3d5f3bd3d7860a7",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": [
+        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA c047139" },
+        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 540 merged at c047139" }
+      ],
+      "note": "QA agent issue-reporter wired to post Linear comment on CI failure."
+    }
+  ],
+  "reopen_history": []
 }

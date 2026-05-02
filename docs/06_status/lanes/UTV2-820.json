@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "codex/utv2-820-r-level-compliance-check",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ec5da60dc23dd45a1fb8615f1753a5f05b072c5d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/545",
   "files_changed": [
     ".github/workflows/r-level-compliance-check.yml"
   ],
@@ -15,13 +15,26 @@
     ".github/workflows/r-level-compliance-check.yml"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-02T04:43:35.762Z",
-  "heartbeat_at": "2026-05-02T15:20:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T16:00:00.000Z",
+  "closed_at": "2026-05-02T16:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-02T16:00:00.000Z",
+      "runner": "manual-close",
+      "merge_sha": "ec5da60dc23dd45a1fb8615f1753a5f05b072c5d",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": [
+        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA ec5da60" },
+        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 545 merged at ec5da60" }
+      ],
+      "note": "R-Level Compliance Check workflow (r-level-compliance-check.yml) deployed and passing."
+    }
+  ],
   "reopen_history": []
 }
