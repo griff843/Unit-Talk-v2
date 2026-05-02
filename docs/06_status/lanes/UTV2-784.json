@@ -6,24 +6,21 @@
   "worktree_path": ".",
   "branch": "codex/utv2-784-rollback-rehearsal",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a8460cc64a6b27eaf7d8c19c9359a6c33a3cf7a0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/553",
   "files_changed": [
     "docs/ops/rollback-rehearsal.md",
     "docs/06_status/proof/UTV2-784.md",
     "docs/06_status/lanes/UTV2-784.json"
   ],
-  "file_scope_lock": [
-    "docs/ops/rollback-rehearsal.md",
-    "docs/06_status/proof/UTV2-784.md"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-784.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-02T17:10:00.000Z",
-  "heartbeat_at": "2026-05-02T18:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T19:15:00.000Z",
+  "closed_at": "2026-05-02T19:15:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex",
