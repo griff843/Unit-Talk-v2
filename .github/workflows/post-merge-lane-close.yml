@@ -31,6 +31,9 @@ name: Post-Merge Lane Close
 #
 # Requirements:
 #   - Repo secret LINEAR_API_TOKEN (for truth-check's Linear checks)
+#   - Repo secret SYNC_BOT_TOKEN (PAT with repo scope — allows git push to bypass
+#     branch protection; must be a token from a repo admin/owner). Falls back to
+#     GITHUB_TOKEN if not set, but git push will be blocked by branch protection.
 #   - GITHUB_TOKEN (automatic, needs pull-requests: write to post comments)
 
 on:
@@ -102,6 +105,10 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          # SYNC_BOT_TOKEN is a PAT from the repo owner (admin bypass on classic
+          # branch protection). Falls back to GITHUB_TOKEN if not configured, but
+          # the git push steps will then be blocked by branch protection.
+          token: ${{ secrets.SYNC_BOT_TOKEN || secrets.GITHUB_TOKEN }}
 
       - name: Reset sync.yml to neutral on main
         # Always run — every squash merge to main rewrites .ops/sync.yml with the
