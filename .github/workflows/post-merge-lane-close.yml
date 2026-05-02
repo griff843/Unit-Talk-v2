@@ -200,7 +200,7 @@ YAML
           set -eo pipefail
 
           # Run truth-check and capture both output and exit code
-          truth_output=$(pnpm ops:truth-check -- "$ISSUE_ID" --json 2>&1) || exit_code=$?
+          truth_output=$(pnpm ops:truth-check "$ISSUE_ID" --json 2>&1) || exit_code=$?
           exit_code=${exit_code:-0}
 
           echo "$truth_output"
