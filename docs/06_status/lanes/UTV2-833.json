@@ -6,7 +6,7 @@
   "worktree_path": ".",
   "branch": "claude/utv2-833-fix-merge-cycle-friction",
   "base_branch": "main",
-  "commit_sha": "ef34635",
+  "commit_sha": "6a1c72783cac0fe71f5367212f074119f22ef724",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/537",
   "files_changed": [
     ".claude/commands/verification.md",
@@ -14,21 +14,28 @@
     ".github/workflows/post-merge-lane-close.yml",
     "scripts/ops/fibery-ci-enforcement.ts"
   ],
-  "file_scope_lock": [
-    ".claude/commands/verification.md",
-    ".claude/settings.json",
-    ".github/workflows/post-merge-lane-close.yml",
-    "scripts/ops/fibery-ci-enforcement.ts",
-    ".ops/sync.yml"
-  ],
+  "file_scope_lock": [],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-02T04:07:12.527Z",
-  "heartbeat_at": "2026-05-02T04:07:12.527Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-02T14:45:00.000Z",
+  "closed_at": "2026-05-02T14:45:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-02T14:45:00.000Z",
+      "runner": "manual-close",
+      "merge_sha": "6a1c72783cac0fe71f5367212f074119f22ef724",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": [
+        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA 6a1c727" },
+        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 537 merged at 6a1c727" }
+      ],
+      "note": "Closed manually: post-merge-lane-close YAML syntax error prevented auto-close (heredoc at col 0 in run: | block). Fixed in this same PR."
+    }
+  ],
   "reopen_history": []
 }
