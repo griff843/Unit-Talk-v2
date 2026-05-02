@@ -21,7 +21,7 @@ import { runSkill } from './runner.js';
 import { writeArtifact } from './core/artifact-writer.js';
 import { writeIssueReport } from './core/issue-reporter.js';
 import { QALedger } from './core/ledger.js';
-import { getChangedSurfaces } from './regression/run-changed-surfaces.js';
+import { getChangedSurfaces, runChangedSurfaces } from './regression/run-changed-surfaces.js';
 import { seedAuthState } from './core/auth-state.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -34,6 +34,7 @@ function parseArgs(argv: string[]): Record<string, string | boolean> {
     if (arg === '--help' || arg === '-h') { args['help'] = true; }
     else if (arg === '--dry-run') { args['dryRun'] = true; }
     else if (arg === '--regression') { args['regression'] = true; }
+    else if (arg === '--changed-only') { args['changedOnly'] = true; }
     else if (arg === '--skip-preflight') { args['skipPreflight'] = true; }
     else if (arg === '--force') { args['force'] = true; }
     else if (arg?.startsWith('--')) {
@@ -61,6 +62,7 @@ OPTIONS
   --env <env>        local (default) | staging | production
   --output <dir>     Artifacts output dir (default: ./artifacts)
   --regression       Run all skills affected by changed files since main
+  --changed-only     Run only mapped surfaces changed since main
   --skip-preflight   Skip API/service preflight checks
   --force            Continue browser automation after failed required preflights
   --dry-run          Parse and validate options without running browser
@@ -71,6 +73,7 @@ EXAMPLES
   pnpm qa:experience --surface smart_form --persona operator --flow submit_pick --mode observe
   pnpm qa:experience --surface discord --persona free_user --flow access_check
   pnpm qa:experience --regression
+  pnpm qa:experience --mode fast --changed-only
   pnpm qa:experience auth --product unit-talk --persona capper
   pnpm qa:auth --product unit-talk --persona operator
 `);
@@ -106,25 +109,23 @@ async function main(): Promise<void> {
 
   const ledger = new QALedger(ledgerDir);
 
+  if (raw['changedOnly']) {
+    const targets = runChangedSurfaces();
+    if (targets.length === 0) {
+      console.log('no mapped surfaces changed, skipping QA');
+      process.exit(0);
+    }
+    console.log(`\n[changed-only] Running ${targets.length} affected surface(s)...\n`);
+    const exitCode = await runTargets(targets, raw, artifactsDir, ledger);
+    process.exit(exitCode);
+  }
+
   if (raw['regression']) {
     const targets = getChangedSurfaces();
     if (targets.length === 0) { console.log('No changed surfaces detected.'); process.exit(0); }
     console.log(`\n[regression] Running ${targets.length} affected surface(s)...\n`);
-    let anyFail = false;
-    for (const t of targets) {
-      const result = await runOne({
-        product: t.product, surface: t.surface, persona: t.persona, flow: t.flow,
-        mode: (raw['mode'] as RunMode | undefined) ?? 'fast',
-        env: (raw['env'] as Environment | undefined) ?? 'local',
-        outputDir: artifactsDir,
-        dryRun: (raw['dryRun'] as boolean) ?? false,
-        skipPreflight: (raw['skipPreflight'] as boolean) ?? false,
-        force: (raw['force'] as boolean) ?? false,
-        ledger,
-      });
-      if (result === 'fail') anyFail = true;
-    }
-    process.exit(anyFail ? 1 : 0);
+    const exitCode = await runTargets(targets, raw, artifactsDir, ledger);
+    process.exit(exitCode);
     return;
   }
 
@@ -148,10 +149,39 @@ async function main(): Promise<void> {
   }
 
   const exitCode = await runOne({ ...opts, ledger });
-  process.exit(exitCode === 'fail' ? 1 : 0);
+  process.exit(statusToExitCode(exitCode));
 }
 
-async function runOne(opts: CLIOptions & { ledger: QALedger }): Promise<'pass' | 'fail'> {
+async function runTargets(
+  targets: Array<{ product: string; surface: string; persona: string; flow: string }>,
+  raw: Record<string, string | boolean>,
+  artifactsDir: string,
+  ledger: QALedger,
+): Promise<number> {
+  let exitCode = 0;
+  for (const t of targets) {
+    const result = await runOne({
+      product: t.product, surface: t.surface, persona: t.persona, flow: t.flow,
+      mode: (raw['mode'] as RunMode | undefined) ?? 'fast',
+      env: (raw['env'] as Environment | undefined) ?? 'local',
+      outputDir: artifactsDir,
+      dryRun: (raw['dryRun'] as boolean) ?? false,
+      skipPreflight: (raw['skipPreflight'] as boolean) ?? false,
+      force: (raw['force'] as boolean) ?? false,
+      ledger,
+    });
+    exitCode = Math.max(exitCode, statusToExitCode(result));
+  }
+  return exitCode;
+}
+
+function statusToExitCode(status: 'pass' | 'skip' | 'fail'): number {
+  if (status === 'fail') return 2;
+  if (status === 'skip') return 1;
+  return 0;
+}
+
+async function runOne(opts: CLIOptions & { ledger: QALedger }): Promise<'pass' | 'skip' | 'fail'> {
   const { product, surface, persona: personaId, flow, mode, env, dryRun, ledger, outputDir } = opts;
 
   console.log(`\n${'─'.repeat(60)}`);
@@ -225,10 +255,12 @@ async function runOne(opts: CLIOptions & { ledger: QALedger }): Promise<'pass' |
   }
 
   console.log('');
-  return result.status === 'PASS' || result.status === 'NEEDS_REVIEW' ? 'pass' : 'fail';
+  if (result.status === 'PASS') return 'pass';
+  if (result.status === 'SKIP' || result.status === 'NEEDS_REVIEW') return 'skip';
+  return 'fail';
 }
 
 main().catch((err) => {
   console.error('\nFatal error:', err instanceof Error ? err.message : err);
-  process.exit(1);
+  process.exit(2);
 });

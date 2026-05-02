@@ -17,6 +17,13 @@ const FILE_SURFACE_MAP: Array<{ pattern: RegExp; targets: SurfaceTarget[] }> = [
     targets: [{ product: 'unit-talk', surface: 'smart_form', flow: 'submit_pick', persona: 'operator' }],
   },
   {
+    pattern: /^apps\/qa-agent\//,
+    targets: [
+      { product: 'unit-talk', surface: 'command_center', flow: 'daily_ops', persona: 'operator' },
+      { product: 'unit-talk', surface: 'smart_form', flow: 'submit_pick', persona: 'operator' },
+    ],
+  },
+  {
     pattern: /^apps\/discord-bot\//,
     targets: [
       { product: 'unit-talk', surface: 'discord', flow: 'access_check', persona: 'free_user' },
@@ -37,15 +44,20 @@ const FILE_SURFACE_MAP: Array<{ pattern: RegExp; targets: SurfaceTarget[] }> = [
 ];
 
 export function getChangedSurfaces(compareBranch = 'main'): SurfaceTarget[] {
+  return runChangedSurfaces({ compareBranch, fallbackToDefaults: true });
+}
+
+export function runChangedSurfaces(options: {
+  compareBranch?: string;
+  fallbackToDefaults?: boolean;
+} = {}): SurfaceTarget[] {
+  const compareBranch = options.compareBranch ?? 'main';
+  const fallbackToDefaults = options.fallbackToDefaults ?? false;
   let changedFiles: string[] = [];
   try {
-    const output = execSync(`git diff --name-only ${compareBranch}...HEAD`, {
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    changedFiles = output.trim().split('\n').filter(Boolean);
+    changedFiles = getChangedFiles(compareBranch);
   } catch {
-    return getAllDefaultTargets();
+    return fallbackToDefaults ? getAllDefaultTargets() : [];
   }
 
   const seen = new Set<string>();
@@ -65,7 +77,23 @@ export function getChangedSurfaces(compareBranch = 'main'): SurfaceTarget[] {
     }
   }
 
-  return targets.length > 0 ? targets : getAllDefaultTargets();
+  return targets.length > 0 ? targets : fallbackToDefaults ? getAllDefaultTargets() : [];
+}
+
+function getChangedFiles(compareBranch: string): string[] {
+  const refsToTry = [compareBranch, `origin/${compareBranch}`];
+  for (const ref of refsToTry) {
+    try {
+      const output = execSync(`git diff --name-only ${ref}...HEAD`, {
+        encoding: 'utf-8',
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      return output.trim().split('\n').filter(Boolean);
+    } catch {
+      continue;
+    }
+  }
+  throw new Error(`Unable to diff against ${compareBranch}`);
 }
 
 function getAllDefaultTargets(): SurfaceTarget[] {
