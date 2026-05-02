@@ -1,4 +1,6 @@
-type HealthStatus = 'healthy' | 'warning' | 'error' | 'unknown';
+import React from 'react';
+
+type HealthStatus = 'healthy' | 'warning' | 'error' | 'unknown' | 'info';
 
 interface HealthBadgeProps {
   status: HealthStatus;
@@ -10,6 +12,7 @@ const statusStyles: Record<HealthStatus, string> = {
   warning: 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30',
   error: 'bg-red-500/20 text-red-400 border border-red-500/30',
   unknown: 'bg-gray-700/40 text-gray-400 border border-gray-700',
+  info: 'bg-sky-500/20 text-sky-300 border border-sky-500/30',
 };
 
 const defaultLabels: Record<HealthStatus, string> = {
@@ -17,6 +20,7 @@ const defaultLabels: Record<HealthStatus, string> = {
   warning: 'Warning',
   error: 'Error',
   unknown: 'Unknown',
+  info: 'Info',
 };
 
 export function HealthBadge({ status, label }: HealthBadgeProps) {

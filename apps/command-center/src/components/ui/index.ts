@@ -44,6 +44,18 @@ export { HealthBadge } from './HealthBadge';
 export { LoadingState } from './LoadingState';
 export { EmptyState } from './EmptyState';
 
+// UNI-174 additions
+export { EventStream } from './EventStream';
+export type { EventStreamItem } from './EventStream';
+
+export { LLMUsageChart } from './LLMUsageChart';
+export type { LlmUsageRow } from './LLMUsageChart';
+
+export { Sidebar } from './Sidebar';
+
+export { TopBar } from './TopBar';
+export type { TopBarProps } from './TopBar';
+
 // Pre-existing ui primitives
 export { Breadcrumb } from './Breadcrumb';
 export { Button } from './Button';
