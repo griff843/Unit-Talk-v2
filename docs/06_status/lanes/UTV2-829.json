@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-829",
+  "lane_type": "codex",
+  "tier": "T2",
+  "branch": "codex/utv2-829-qa-agent-linear-reporter",
+  "base_branch": "main",
+  "status": "started",
+  "started_at": "2026-05-02T04:43:35.762Z"
+}
