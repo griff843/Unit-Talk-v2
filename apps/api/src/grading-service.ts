@@ -240,6 +240,12 @@ export async function runGradingPass(
         continue;
       }
 
+      if (!Number.isFinite(gameResult.actual_value)) {
+        throw new Error(
+          `game_result_actual_value_invalid: actual_value=${gameResult.actual_value} for result=${gameResult.id}`,
+        );
+      }
+
       const gradedResult = mapOutcomeToSettlementResult(
         selectionSide === 'over'
           ? resolveOutcome(gameResult.actual_value, pick.line as number)
@@ -442,6 +448,8 @@ const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   batting_rbi_ou: 'player_batting_rbi_ou',
   batting_hrr_ou: 'player_batting_hrr_ou',
   batting_strikeouts_ou: 'batting_strikeouts-all-game-ou',
+  'batting_strikeouts-all-game-ou': 'batting_strikeouts_ou',
+  player_batting_strikeouts_ou: 'batting_strikeouts_ou',
   pitching_strikeouts_ou: 'player_pitching_strikeouts_ou',
   pitching_innings_ou: 'player_pitching_innings_ou',
 };
@@ -514,7 +522,8 @@ function eventReferenceMismatchMs(pick: PickRecord, event: EventRow) {
     return 0;
   }
 
-  const eventTime = new Date(readEventStartTime(event)).getTime();
+  const rawTime = readEventStartTime(event);
+  const eventTime = rawTime != null ? new Date(rawTime).getTime() : NaN;
   return Number.isFinite(eventTime)
     ? Math.abs(eventTime - referenceTime)
     : Number.POSITIVE_INFINITY;
@@ -734,12 +743,14 @@ function chooseEventForPick(
     readPickEventReferenceTime(pick) ?? new Date(pick.created_at).getTime();
   return (
     [...eventCandidates].sort((left, right) => {
-      const leftDistance = Math.abs(
-        new Date(readEventStartTime(left)).getTime() - referenceTime,
-      );
-      const rightDistance = Math.abs(
-        new Date(readEventStartTime(right)).getTime() - referenceTime,
-      );
+      const leftRaw = readEventStartTime(left);
+      const rightRaw = readEventStartTime(right);
+      const leftDistance = leftRaw != null
+        ? Math.abs(new Date(leftRaw).getTime() - referenceTime)
+        : Number.POSITIVE_INFINITY;
+      const rightDistance = rightRaw != null
+        ? Math.abs(new Date(rightRaw).getTime() - referenceTime)
+        : Number.POSITIVE_INFINITY;
       return leftDistance - rightDistance;
     })[0] ?? null
   );
@@ -764,12 +775,17 @@ function readPickEventReferenceTime(pick: PickRecord): number | null {
   return null;
 }
 
-function readEventStartTime(event: EventRow) {
+export function readEventStartTime(event: EventRow): string | null {
   const metadata = asRecord(event.metadata);
   const startsAt = metadata?.starts_at;
-  return typeof startsAt === 'string' && startsAt.trim().length > 0
-    ? startsAt
-    : `${event.event_date}T23:59:59Z`;
+  if (typeof startsAt === 'string' && startsAt.trim().length > 0) {
+    return startsAt;
+  }
+  if (!event.event_date) {
+    return null;
+  }
+  const fallback = `${event.event_date}T23:59:59Z`;
+  return Number.isFinite(new Date(fallback).getTime()) ? fallback : null;
 }
 
 async function resolvePickEventByName(

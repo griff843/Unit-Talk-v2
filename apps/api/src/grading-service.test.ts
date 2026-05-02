@@ -3,7 +3,7 @@ import test from 'node:test';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
-import { runGradingPass, type GradingRetryState } from './grading-service.js';
+import { runGradingPass, readEventStartTime, type GradingRetryState } from './grading-service.js';
 import { recordGradedSettlement } from './settlement-service.js';
 
 async function createPostedPickFixture(
@@ -2236,4 +2236,65 @@ test('runGradingPass skips pick with missing_participant_id when metadata.player
   assert.ok(detail);
   assert.equal(detail.outcome, 'skipped');
   assert.equal(detail.reason, 'missing_participant_id');
+});
+
+// UTV2-806: readEventStartTime null guard
+test('readEventStartTime returns null when event_date is null', () => {
+  const event = {
+    id: 'evt-test',
+    sport_id: 'MLB',
+    event_name: 'Test Game',
+    event_date: null as unknown as string,
+    status: 'completed' as const,
+    external_id: null,
+    metadata: {},
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+  assert.equal(readEventStartTime(event), null);
+});
+
+// UTV2-806: non-ISO event_date produces null rather than NaN timestamp
+test('readEventStartTime returns null for non-ISO event_date string', () => {
+  const event = {
+    id: 'evt-test',
+    sport_id: 'MLB',
+    event_name: 'Test Game',
+    event_date: 'not-a-date',
+    status: 'completed' as const,
+    external_id: null,
+    metadata: {},
+    created_at: '2026-01-01T00:00:00Z',
+    updated_at: '2026-01-01T00:00:00Z',
+  };
+  assert.equal(readEventStartTime(event), null);
+});
+
+// UTV2-808: non-finite actual_value records error detail rather than silently producing wrong verdict
+test('runGradingPass records error when game result actual_value is NaN', async () => {
+  const { repositories, pickId, eventName } = await createPostedPickFixture();
+  const { participant, event } = await attachPlayerEventContext(
+    repositories,
+    pickId,
+    { eventName, eventStatus: 'completed' },
+  );
+  await seedGameResult(repositories, {
+    eventId: event.id,
+    participantId: participant.id,
+    marketKey: 'points-all-game-ou',
+    actualValue: NaN,
+  });
+
+  const result = await runGradingPass(repositories);
+
+  assert.equal(result.errors, 1);
+  assert.equal(result.graded, 0);
+  const detail = result.details.find((d) => d.pickId === pickId);
+  assert.ok(detail);
+  assert.equal(detail.outcome, 'error');
+  assert.ok(
+    typeof detail.reason === 'string' &&
+    detail.reason.includes('game_result_actual_value_invalid'),
+    `expected reason to include game_result_actual_value_invalid, got: ${detail.reason}`,
+  );
 });
