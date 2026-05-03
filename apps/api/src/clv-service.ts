@@ -369,7 +369,11 @@ async function resolveClosingLineFromPickProvenance(
   }
 
   const [row] = await marketUniverse.findByIds([marketUniverseId]);
-  if (!row || row.closing_line === null) {
+  if (!row) {
+    console.warn({ marketUniverseId }, 'market_universe_row_not_found for CLV computation');
+    return null;
+  }
+  if (row.closing_line === null) {
     return null;
   }
 
