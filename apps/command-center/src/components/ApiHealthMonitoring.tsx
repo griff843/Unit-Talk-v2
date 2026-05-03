@@ -3,16 +3,8 @@
 import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@supabase/supabase-js';
-import {
-  Area,
-  AreaChart,
-  PolarAngleAxis,
-  RadialBar,
-  RadialBarChart,
-  ResponsiveContainer,
-  Tooltip,
-} from 'recharts';
 import { AutoRefreshStatusBar, DEFAULT_AUTO_REFRESH_INTERVAL_MS } from '@/hooks/useAutoRefresh';
+import { Sparkline } from '@/components/ui';
 import type { ApiHealthPageData, ApiHealthProviderCard } from '@/lib/data/api-health';
 
 const REFRESH_DEBOUNCE_MS = 1200;
@@ -66,7 +58,9 @@ function statusTone(status: ApiHealthProviderCard['status']) {
         dot: 'bg-fuchsia-400 shadow-[0_0_18px_rgba(232,121,249,0.65)]',
         ring: 'border-fuchsia-400/40 bg-fuchsia-500/10 text-fuchsia-100',
         panel: 'border-fuchsia-500/25 shadow-[0_0_0_1px_rgba(217,70,239,0.1),0_0_40px_rgba(168,85,247,0.10)]',
-        area: '#e879f9',
+        sparkStroke: 'stroke-fuchsia-300',
+        sparkFill: 'fill-fuchsia-400/10',
+        arcColor: 'rgb(232,121,249)',
       };
     case 'degraded':
       return {
@@ -74,7 +68,9 @@ function statusTone(status: ApiHealthProviderCard['status']) {
         dot: 'bg-amber-300 shadow-[0_0_18px_rgba(252,211,77,0.55)]',
         ring: 'border-amber-400/40 bg-amber-500/10 text-amber-100',
         panel: 'border-amber-500/25 shadow-[0_0_0_1px_rgba(245,158,11,0.08),0_0_40px_rgba(245,158,11,0.08)]',
-        area: '#fbbf24',
+        sparkStroke: 'stroke-amber-300',
+        sparkFill: 'fill-amber-400/10',
+        arcColor: 'rgb(251,191,36)',
       };
     default:
       return {
@@ -82,52 +78,43 @@ function statusTone(status: ApiHealthProviderCard['status']) {
         dot: 'bg-rose-400 shadow-[0_0_18px_rgba(251,113,133,0.55)]',
         ring: 'border-rose-400/40 bg-rose-500/10 text-rose-100',
         panel: 'border-rose-500/25 shadow-[0_0_0_1px_rgba(244,63,94,0.08),0_0_40px_rgba(244,63,94,0.08)]',
-        area: '#fb7185',
+        sparkStroke: 'stroke-rose-300',
+        sparkFill: 'fill-rose-400/10',
+        arcColor: 'rgb(251,113,133)',
       };
   }
 }
 
 function quotaTone(quotaPct: number | null) {
-  if (quotaPct == null) return { bar: 'bg-slate-500', text: 'text-slate-300', track: '#334155' };
-  if (quotaPct >= 90) return { bar: 'bg-rose-400', text: 'text-rose-200', track: '#4c1d24' };
-  if (quotaPct >= 70) return { bar: 'bg-amber-300', text: 'text-amber-200', track: '#3b2b12' };
-  return { bar: 'bg-emerald-400', text: 'text-emerald-200', track: '#0f2f22' };
+  if (quotaPct == null) return { bar: 'bg-slate-500', text: 'text-slate-300' };
+  if (quotaPct >= 90) return { bar: 'bg-rose-400', text: 'text-rose-200' };
+  if (quotaPct >= 70) return { bar: 'bg-amber-300', text: 'text-amber-200' };
+  return { bar: 'bg-emerald-400', text: 'text-emerald-200' };
 }
 
-function QuotaTooltip({ active, payload }: { active?: boolean; payload?: Array<{ value?: number }> }) {
-  if (!active || !payload?.[0] || typeof payload[0].value !== 'number') {
-    return null;
-  }
+function RadialQuota({ pct, color }: { pct: number; color: string }) {
+  const r = 44;
+  const cx = 56;
+  const cy = 56;
+  const circumference = 2 * Math.PI * r;
+  const dashOffset = circumference * (1 - Math.min(pct, 100) / 100);
 
   return (
-    <div className="rounded border border-white/10 bg-slate-950/95 px-3 py-2 text-xs text-slate-100 shadow-xl">
-      Quota used: {Math.round(payload[0].value)}%
-    </div>
-  );
-}
-
-function SparklineTooltip({
-  active,
-  payload,
-  label,
-}: {
-  active?: boolean;
-  payload?: Array<{ value?: number; payload?: { requestCount?: number } }>;
-  label?: string;
-}) {
-  if (!active || !payload?.[0]) {
-    return null;
-  }
-
-  const value = typeof payload[0].value === 'number' ? `${Math.round(payload[0].value)}ms` : 'No samples';
-  const requests = payload[0].payload?.requestCount ?? 0;
-
-  return (
-    <div className="rounded border border-white/10 bg-slate-950/95 px-3 py-2 text-xs text-slate-100 shadow-xl">
-      <div>{label}</div>
-      <div>{value}</div>
-      <div>{requests} call(s)</div>
-    </div>
+    <svg viewBox="0 0 112 112" className="h-36 w-36 -rotate-90">
+      <circle cx={cx} cy={cy} r={r} fill="none" stroke="rgb(30,41,59)" strokeWidth="10" />
+      <circle
+        cx={cx}
+        cy={cy}
+        r={r}
+        fill="none"
+        stroke={color}
+        strokeWidth="10"
+        strokeLinecap="round"
+        strokeDasharray={circumference}
+        strokeDashoffset={dashOffset}
+        style={{ transition: 'stroke-dashoffset 0.7s ease' }}
+      />
+    </svg>
   );
 }
 
@@ -135,6 +122,7 @@ function ProviderCard({ provider, nowMs }: { provider: ApiHealthProviderCard; no
   const tone = statusTone(provider.status);
   const quota = quotaTone(provider.quotaPct);
   const ringValue = provider.quotaPct ?? 0;
+  const sparkPoints = provider.sparkline.map((row) => row.avgResponseMs ?? 0);
 
   return (
     <article className={`relative overflow-hidden rounded-[28px] border bg-[linear-gradient(180deg,rgba(15,23,42,0.98),rgba(2,6,23,0.98))] p-5 ${tone.panel}`}>
@@ -171,29 +159,18 @@ function ProviderCard({ provider, nowMs }: { provider: ApiHealthProviderCard; no
                 <div className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500">24h Response Trend</div>
                 <div className="mt-1 text-sm text-slate-300">Hourly average runtime across ingestor heartbeats</div>
               </div>
-              <div className="text-xs text-slate-500">Recharts sparkline</div>
             </div>
-            <div className="h-40">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={provider.sparkline}>
-                  <defs>
-                    <linearGradient id={`spark-${provider.providerKey}`} x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="5%" stopColor={tone.area} stopOpacity={0.45} />
-                      <stop offset="95%" stopColor={tone.area} stopOpacity={0.05} />
-                    </linearGradient>
-                  </defs>
-                  <Tooltip content={<SparklineTooltip />} />
-                  <Area
-                    dataKey="avgResponseMs"
-                    type="monotone"
-                    stroke={tone.area}
-                    strokeWidth={2.2}
-                    fill={`url(#spark-${provider.providerKey})`}
-                    connectNulls={false}
-                    isAnimationActive={false}
-                  />
-                </AreaChart>
-              </ResponsiveContainer>
+            <div className="h-40 flex items-end">
+              {sparkPoints.length > 0 ? (
+                <Sparkline
+                  points={sparkPoints}
+                  label={`${provider.providerName} 24h response trend`}
+                  strokeClassName={tone.sparkStroke}
+                  fillClassName={tone.sparkFill}
+                />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-slate-500">No data</div>
+              )}
             </div>
           </section>
 
@@ -203,26 +180,9 @@ function ProviderCard({ provider, nowMs }: { provider: ApiHealthProviderCard; no
                 <div className="text-xs font-semibold uppercase tracking-[0.26em] text-slate-500">Quota Load</div>
                 <div className={`mt-1 text-sm ${quota.text}`}>{provider.quotaPct == null ? 'No cap reported' : `${Math.round(provider.quotaPct)}% used`}</div>
               </div>
-              <div className="text-xs text-slate-500">Radial snapshot</div>
             </div>
             <div className="flex items-center gap-4">
-              <div className="h-36 w-36 shrink-0">
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadialBarChart
-                    cx="50%"
-                    cy="50%"
-                    innerRadius="68%"
-                    outerRadius="100%"
-                    data={[{ value: ringValue, fill: tone.area }]}
-                    startAngle={90}
-                    endAngle={-270}
-                  >
-                    <PolarAngleAxis type="number" domain={[0, 100]} tick={false} />
-                    <Tooltip content={<QuotaTooltip />} />
-                    <RadialBar dataKey="value" cornerRadius={999} background={{ fill: quota.track }} fill={tone.area} />
-                  </RadialBarChart>
-                </ResponsiveContainer>
-              </div>
+              <RadialQuota pct={ringValue} color={tone.arcColor} />
               <div className="min-w-0 flex-1 space-y-3">
                 <div>
                   <div className="text-sm font-semibold text-slate-100">{formatQuotaDetail(provider)}</div>
