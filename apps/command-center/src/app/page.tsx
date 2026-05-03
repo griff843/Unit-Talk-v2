@@ -70,6 +70,23 @@ function formatTimestamp(value: string | null) {
   return value ? new Date(value).toLocaleString() : '-';
 }
 
+function formatDaysToFull(value: number | null) {
+  return value == null ? '-' : `${value.toFixed(1)}d`;
+}
+
+function diskTone(status: DashboardRuntimeData['db']['disk']['alertStatus']) {
+  switch (status) {
+    case 'critical':
+      return 'text-red-300';
+    case 'warning':
+      return 'text-amber-300';
+    case 'watch':
+      return 'text-yellow-300';
+    default:
+      return 'text-emerald-300';
+  }
+}
+
 function cycleStatusTone(status: DashboardRuntimeData['providerCycleSummary']['overallStatus']) {
   switch (status) {
     case 'healthy':
@@ -152,6 +169,80 @@ export default async function DashboardPage({
         latestCycleSnapshotAt: null,
         latestUpdatedAt: null,
       },
+      receipts: {
+        sent: 0,
+        failed: 0,
+        simulated: 0,
+        lastSentAt: null,
+        lastFailedAt: null,
+      },
+      grading: {
+        lastGradingRunAt: null,
+        lastGradingRunStatus: null,
+        lastPicksGraded: null,
+        lastFailed: null,
+        lastRecapPostAt: null,
+        lastRecapChannel: null,
+        runCount: 0,
+      },
+      observability: {
+        failedRuns: 0,
+        activeIncidents: 0,
+        pendingOutboxAgeMaxMinutes: null,
+        latestDistributionRunAt: null,
+        latestIngestorRunAt: null,
+        latestWorkerHeartbeatAt: null,
+        alertConditions: [],
+      },
+      db: {
+        disk: {
+          provisionedGiB: 0,
+          usedGiB: 0,
+          availableGiB: 0,
+          usedPct: 0,
+          iops: 0,
+          throughputMiBps: 0,
+          diskType: 'unknown',
+          observedAt: new Date().toISOString(),
+          projectedDaysToFull: null,
+          alertStatus: 'stable',
+        },
+        connections: {
+          used: 0,
+          max: 0,
+          waiting: 0,
+        },
+        locks: {
+          waiting: 0,
+        },
+        longTransactions: {
+          count: 0,
+          maxAgeSeconds: 0,
+        },
+        slowQueries: {
+          count: 0,
+          maxAgeSeconds: 0,
+        },
+        wal: {
+          sizeGiB: 0,
+          estimatedGrowthGiBPerDay: 0,
+          archiveMode: 'unknown',
+          archiveConfigured: false,
+        },
+        backups: {
+          pitrEnabled: false,
+          walGEnabled: false,
+          lastBackupAt: null,
+          lastBackupStatus: null,
+          restorePointCount: 0,
+        },
+        storageDomains: [],
+        topGrowthSources: [],
+      },
+      baseline: {
+        normal: [],
+        abnormal: [],
+      },
     };
   }
 
@@ -203,6 +294,21 @@ export default async function DashboardPage({
           </div>
         </Card>
 
+        <Card title="Receipt + Grading">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><span className="text-gray-400">Receipts sent</span> <span className="font-bold text-green-400">{runtime.receipts.sent}</span></div>
+            <div><span className="text-gray-400">Receipts failed</span> <span className="font-bold text-red-400">{runtime.receipts.failed}</span></div>
+            <div><span className="text-gray-400">Grading runs</span> <span className="font-bold">{runtime.grading.runCount}</span></div>
+            <div><span className="text-gray-400">Last graded</span> <span className="font-bold">{runtime.grading.lastPicksGraded ?? 0}</span></div>
+          </div>
+          <div className="mt-4 space-y-1 text-xs text-gray-500">
+            <div>Last sent receipt: {formatTimestamp(runtime.receipts.lastSentAt)}</div>
+            <div>Last failed receipt: {formatTimestamp(runtime.receipts.lastFailedAt)}</div>
+            <div>Last grading run: {formatTimestamp(runtime.grading.lastGradingRunAt)} ({runtime.grading.lastGradingRunStatus ?? 'unknown'})</div>
+            <div>Last recap post: {formatTimestamp(runtime.grading.lastRecapPostAt)} {runtime.grading.lastRecapChannel ? `to ${runtime.grading.lastRecapChannel}` : ''}</div>
+          </div>
+        </Card>
+
         <Card title="Provider Health">
           <div className="grid grid-cols-2 gap-3 text-sm">
             <div><span className="text-gray-400">Active</span> <span className="font-bold text-green-400">{runtime.providerSummary.active}</span></div>
@@ -247,9 +353,84 @@ export default async function DashboardPage({
         </Card>
       </div>
 
+      <div className="grid gap-4 xl:grid-cols-2">
+        <Card title="DB + Storage">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><span className="text-gray-400">Disk used</span> <span className="font-bold">{runtime.db.disk.usedGiB.toFixed(2)} / {runtime.db.disk.provisionedGiB.toFixed(0)} GiB</span></div>
+            <div><span className="text-gray-400">Days to full</span> <span className={`font-bold ${diskTone(runtime.db.disk.alertStatus)}`}>{formatDaysToFull(runtime.db.disk.projectedDaysToFull)}</span></div>
+            <div><span className="text-gray-400">Connections</span> <span className="font-bold">{runtime.db.connections.used} / {runtime.db.connections.max}</span></div>
+            <div><span className="text-gray-400">Waiting locks</span> <span className={`font-bold ${runtime.db.locks.waiting > 0 ? 'text-red-400' : 'text-green-400'}`}>{runtime.db.locks.waiting}</span></div>
+            <div><span className="text-gray-400">Long tx</span> <span className={`font-bold ${runtime.db.longTransactions.count > 0 ? 'text-red-400' : 'text-green-400'}`}>{runtime.db.longTransactions.count}</span></div>
+            <div><span className="text-gray-400">Slow queries</span> <span className={`font-bold ${runtime.db.slowQueries.count > 0 ? 'text-red-400' : 'text-green-400'}`}>{runtime.db.slowQueries.count}</span></div>
+            <div><span className="text-gray-400">WAL size</span> <span className="font-bold">{runtime.db.wal.sizeGiB.toFixed(2)} GiB</span></div>
+            <div><span className="text-gray-400">WAL/day</span> <span className="font-bold">{runtime.db.wal.estimatedGrowthGiBPerDay.toFixed(2)} GiB</span></div>
+          </div>
+          <div className="mt-4 space-y-1 text-xs text-gray-500">
+            <div>Observed: {formatTimestamp(runtime.db.disk.observedAt)}</div>
+            <div>Archive mode: {runtime.db.wal.archiveMode} ({runtime.db.wal.archiveConfigured ? 'configured' : 'not configured'})</div>
+            <div>Pending outbox max age: {runtime.observability.pendingOutboxAgeMaxMinutes != null ? `${runtime.observability.pendingOutboxAgeMaxMinutes}m` : '-'}</div>
+            <div>Latest distribution run: {formatTimestamp(runtime.observability.latestDistributionRunAt)}</div>
+          </div>
+        </Card>
+
+        <Card title="Backups + Top Growth">
+          <div className="grid grid-cols-2 gap-3 text-sm">
+            <div><span className="text-gray-400">Last backup</span> <span className={`font-bold ${runtime.db.backups.lastBackupStatus === 'COMPLETED' ? 'text-green-400' : 'text-red-400'}`}>{runtime.db.backups.lastBackupStatus ?? 'unknown'}</span></div>
+            <div><span className="text-gray-400">Restore points</span> <span className="font-bold">{runtime.db.backups.restorePointCount}</span></div>
+            <div><span className="text-gray-400">PITR</span> <span className={`font-bold ${runtime.db.backups.pitrEnabled ? 'text-green-400' : 'text-yellow-400'}`}>{runtime.db.backups.pitrEnabled ? 'enabled' : 'disabled'}</span></div>
+            <div><span className="text-gray-400">WAL-G</span> <span className={`font-bold ${runtime.db.backups.walGEnabled ? 'text-green-400' : 'text-red-400'}`}>{runtime.db.backups.walGEnabled ? 'enabled' : 'disabled'}</span></div>
+          </div>
+          <div className="mt-4 space-y-1 text-xs text-gray-500">
+            <div>Last completed backup: {formatTimestamp(runtime.db.backups.lastBackupAt)}</div>
+            {runtime.db.topGrowthSources.slice(0, 4).map((source) => (
+              <div key={source.source}>
+                {source.source}: {(source.totalBytes / 1024 / 1024 / 1024).toFixed(2)} GiB total / {(source.estimatedGrowthBytesPerDay / 1024 / 1024 / 1024).toFixed(2)} GiB per day
+              </div>
+            ))}
+          </div>
+        </Card>
+      </div>
+
+      <div className="grid gap-4 xl:grid-cols-2">
+        {runtime.db.storageDomains.map((domain) => (
+          <Card key={domain.name} title={`${domain.name === 'ingestion' ? 'Ingestion' : 'App'} Growth`}>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-gray-400">Current size</span> <span className="font-bold">{domain.totalGiB.toFixed(2)} GiB</span></div>
+              <div><span className="text-gray-400">Growth/day</span> <span className="font-bold">{domain.estimatedGrowthGiBPerDay.toFixed(2)} GiB</span></div>
+              <div><span className="text-gray-400">Days to full</span> <span className={`font-bold ${diskTone(domain.alertStatus)}`}>{formatDaysToFull(domain.daysToFull)}</span></div>
+              <div><span className="text-gray-400">Status</span> <span className={`font-bold ${diskTone(domain.alertStatus)}`}>{domain.alertStatus}</span></div>
+            </div>
+            <div className="mt-4 space-y-1 text-xs text-gray-500">
+              {domain.topGrowthSources.map((source) => (
+                <div key={source.source}>
+                  {source.source}: {(source.totalBytes / 1024 / 1024 / 1024).toFixed(2)} GiB total / {(source.estimatedGrowthBytesPerDay / 1024 / 1024 / 1024).toFixed(2)} GiB per day
+                </div>
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
+
       {data.exceptions.length > 0 && (
         <ExceptionPanel exceptions={data.exceptions} />
       )}
+
+      <Card title="Operational Baseline">
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="space-y-2 text-sm">
+            <div className="font-medium text-gray-200">Normal</div>
+            {runtime.baseline.normal.map((line) => (
+              <div key={line} className="text-gray-400">{line}</div>
+            ))}
+          </div>
+          <div className="space-y-2 text-sm">
+            <div className="font-medium text-gray-200">Abnormal</div>
+            {runtime.baseline.abnormal.map((line) => (
+              <div key={line} className="text-gray-400">{line}</div>
+            ))}
+          </div>
+        </div>
+      </Card>
 
       <Card title="Stats Summary">
         <div className="flex gap-6 text-sm">

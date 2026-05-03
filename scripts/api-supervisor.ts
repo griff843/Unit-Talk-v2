@@ -4,6 +4,12 @@ import path from 'node:path';
 import process from 'node:process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { loadEnvironment } from '@unit-talk/config';
+import {
+  appendRestartAuditLog,
+  createRestartAuditEntry,
+  evaluateRestartRequest,
+  readRestartAuditLog,
+} from './restart-controls.js';
 
 export type Command = 'start' | 'run' | 'status' | 'stop' | 'restart';
 
@@ -54,6 +60,7 @@ const CHILD_LOG = path.join(RUNTIME_DIR, 'api.log');
 const STATE_FILE = path.join(RUNTIME_DIR, 'state.json');
 const SUPERVISOR_SCRIPT = path.join(ROOT, 'scripts', 'api-supervisor.ts');
 const API_ENTRY = path.join(ROOT, 'apps', 'api', 'src', 'index.ts');
+const RESTART_AUDIT_LOG = path.join(ROOT, 'out', 'runtime-control', 'restart-audit.jsonl');
 
 async function main() {
   const command = normalizeCommand(process.argv[2]);
@@ -72,6 +79,7 @@ async function main() {
       await stopSupervisor();
       return;
     case 'restart':
+      enforceRestartPolicy('api');
       await stopSupervisor({ silentIfMissing: true });
       await startSupervisor();
       return;
@@ -385,6 +393,28 @@ function persistState(state: ApiSupervisorState) {
 
 function ensureRuntimeDir() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+}
+
+function enforceRestartPolicy(service: 'api') {
+  const now = new Date();
+  const history = readRestartAuditLog(RESTART_AUDIT_LOG);
+  const decision = evaluateRestartRequest({ service, history, now });
+  appendRestartAuditLog(
+    RESTART_AUDIT_LOG,
+    createRestartAuditEntry({
+      service,
+      outcome: decision.allowed ? 'allowed' : 'denied',
+      reason: decision.reason,
+      message: decision.message,
+      now,
+    }),
+  );
+
+  if (!decision.allowed) {
+    throw new Error(decision.message);
+  }
+
+  console.log(`[api-supervisor] ${decision.message}`);
 }
 
 function isProcessRunning(pid: number | null): boolean {

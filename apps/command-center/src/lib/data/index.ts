@@ -9,3 +9,4 @@ export { getPerformanceData, getLeaderboard, getReviewHistory, getIntelligenceDa
 export { getReviewQueue, getHeldQueue, searchPicks, getPickDetail } from './queues.js';
 export { getPropOffers, getResearchLines, getResearchMatchups, getResearchPlayers, type PropOffersResponse, type PropOfferRow, type ResearchLinesResult, type ResearchMatchup, type ResearchMatchupsResult, type ResearchPlayer, type ResearchPlayersResult } from './research.js';
 export { getDashboardData, getDashboardRuntimeData, getInterventionAudit, type InterventionAuditRow } from './dashboard.js';
+export { getStorageHealth, classifyStorageDomain } from './storage-health.js';

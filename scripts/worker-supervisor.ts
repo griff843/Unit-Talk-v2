@@ -26,6 +26,12 @@ import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { loadEnvironment } from '@unit-talk/config';
+import {
+  appendRestartAuditLog,
+  createRestartAuditEntry,
+  evaluateRestartRequest,
+  readRestartAuditLog,
+} from './restart-controls.js';
 
 // ---------------------------------------------------------------------------
 // Supervisor state
@@ -78,6 +84,7 @@ const CHILD_LOG = path.join(RUNTIME_DIR, 'worker.log');
 const STATE_FILE = path.join(RUNTIME_DIR, 'state.json');
 const SUPERVISOR_SCRIPT = path.join(ROOT, 'scripts', 'worker-supervisor.ts');
 const WORKER_ENTRY = path.join(ROOT, 'apps', 'worker', 'src', 'index.ts');
+const RESTART_AUDIT_LOG = path.join(ROOT, 'out', 'runtime-control', 'restart-audit.jsonl');
 
 // ---------------------------------------------------------------------------
 // Main
@@ -102,6 +109,7 @@ async function main() {
       await stopSupervisor();
       return;
     case 'restart':
+      enforceRestartPolicy('worker');
       await stopSupervisor({ silentIfMissing: true });
       await startSupervisor();
       return;
@@ -427,6 +435,28 @@ function persistState(state: WorkerSupervisorState) {
 
 function ensureRuntimeDir() {
   fs.mkdirSync(RUNTIME_DIR, { recursive: true });
+}
+
+function enforceRestartPolicy(service: 'worker') {
+  const now = new Date();
+  const history = readRestartAuditLog(RESTART_AUDIT_LOG);
+  const decision = evaluateRestartRequest({ service, history, now });
+  appendRestartAuditLog(
+    RESTART_AUDIT_LOG,
+    createRestartAuditEntry({
+      service,
+      outcome: decision.allowed ? 'allowed' : 'denied',
+      reason: decision.reason,
+      message: decision.message,
+      now,
+    }),
+  );
+
+  if (!decision.allowed) {
+    throw new Error(decision.message);
+  }
+
+  console.log(`[worker-supervisor] ${decision.message}`);
 }
 
 // ---------------------------------------------------------------------------
