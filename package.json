@@ -52,6 +52,7 @@
     "linear:work": "tsx scripts/linear-workflow.ts work",
     "linear:update": "tsx scripts/linear-workflow.ts update",
     "lint": "eslint . --cache --cache-location .cache/eslint/",
+    "db:compare": "tsx scripts/ops/compare-databases.ts",
     "db:prune": "tsx scripts/prune-all-tables.ts",
     "codex:classify": "tsx scripts/codex-classify.ts",
     "codex:dispatch": "tsx scripts/codex-dispatch.ts",
