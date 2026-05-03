@@ -7,4 +7,5 @@ entities:
     - UTV2-725
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - apps/api/src/t1-proof-utv2-725.test.ts
