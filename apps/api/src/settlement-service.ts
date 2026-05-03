@@ -1,5 +1,7 @@
 import {
+  createLifecycleEvent,
   validateSettlementRequest,
+  type PickLifecycleState,
   type SettlementRequest,
 } from '@unit-talk/contracts';
 import {
@@ -263,6 +265,7 @@ async function recordManualReview(
   pick: PickRecord,
   request: SettlementRequest,
   repositories: {
+    picks: PickRepository;
     settlements: SettlementRepository;
     audit: AuditLogRepository;
   },
@@ -293,6 +296,16 @@ async function recordManualReview(
     },
   });
 
+  const lifecycleEvent = await repositories.picks.saveLifecycleEvent(
+    createLifecycleEvent(
+      pick.id,
+      pick.status as PickLifecycleState,
+      'settler',
+      'manual review settlement recorded',
+      pick.status as PickLifecycleState,
+    ),
+  );
+
   const downstream = await computeSettlementDownstreamBundle(
     pick,
     repositories.settlements,
@@ -309,6 +322,7 @@ async function recordManualReview(
       settlementRecordId: settlementRecord.id,
       reviewReason: request.reviewReason,
       evidenceRef: request.evidenceRef,
+      lifecycleEventId: lifecycleEvent.id,
       downstream,
     },
   });
@@ -316,7 +330,7 @@ async function recordManualReview(
   return {
     pickRecord: pick,
     settlementRecord,
-    lifecycleEvent: null,
+    lifecycleEvent,
     auditRecords: [audit],
     finalLifecycleState: pick.status,
     downstream,
@@ -519,6 +533,7 @@ async function recordSettlementCorrection(
   pick: PickRecord,
   request: SettlementRequest,
   repositories: {
+    picks: PickRepository;
     settlements: SettlementRepository;
     audit: AuditLogRepository;
     providerOffers?: ProviderOfferRepository;
@@ -589,6 +604,16 @@ async function recordSettlementCorrection(
     },
   });
 
+  const correctionLifecycleEvent = await repositories.picks.saveLifecycleEvent(
+    createLifecycleEvent(
+      pick.id,
+      pick.status as PickLifecycleState,
+      'settler',
+      'settlement correction recorded',
+      pick.status as PickLifecycleState,
+    ),
+  );
+
   const downstream = await computeSettlementDownstreamBundle(
     pick,
     repositories.settlements,
@@ -608,6 +633,7 @@ async function recordSettlementCorrection(
       source: request.source,
       confidence: request.confidence,
       evidenceRef: request.evidenceRef,
+      lifecycleEventId: correctionLifecycleEvent.id,
       downstream,
     },
   });
@@ -615,7 +641,7 @@ async function recordSettlementCorrection(
   return {
     pickRecord: pick,
     settlementRecord,
-    lifecycleEvent: null,
+    lifecycleEvent: correctionLifecycleEvent,
     auditRecords: [audit],
     finalLifecycleState: pick.status,
     downstream,
