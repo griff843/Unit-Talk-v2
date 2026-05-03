@@ -31,6 +31,8 @@ export type { AgentCardProps, AgentStatus } from './AgentCard';
 export { LogDrawer } from './LogDrawer';
 export type { LogDrawerProps } from './LogDrawer';
 
+export { SkeletonShimmer } from './SkeletonShimmer';
+export type { SkeletonShimmerProps } from './SkeletonShimmer';
 
 export { ConfirmDialog } from './ConfirmDialog';
 export type { ConfirmDialogProps } from './ConfirmDialog';
