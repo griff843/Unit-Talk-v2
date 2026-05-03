@@ -849,6 +849,11 @@ function resolveKellySizing(
     return null;
   }
 
+  if (!Number.isFinite(deviggingResult.overFair)) {
+    console.warn(`Kelly sizing skipped: overFair is not a finite number for market ${normalizedMarketKey}`);
+    return null;
+  }
+
   try {
     return computeKellySize(
       deviggingResult.overFair,
