@@ -25,6 +25,8 @@ export type DeliveryOutcome = 'sent' | 'retryable-failure' | 'terminal-failure';
  * All other sources (proof, test, synthetic) are blocked at claim time.
  */
 const LIVE_SOURCES = new Set(['smart-form', 'discord', 'api', 'alert-agent', 'board-construction']);
+const DEFAULT_WATCHDOG_MS = 60_000;
+const MAX_WATCHDOG_MS = 300_000;
 
 /**
  * Event name patterns that indicate synthetic/test picks.
@@ -130,6 +132,10 @@ export async function processNextDistributionWork(
   } = {},
 ): Promise<WorkerProcessResult> {
   const persistenceMode = options.persistenceMode ?? 'database';
+  const watchdogMs = options.watchdogMs ?? DEFAULT_WATCHDOG_MS;
+  if (watchdogMs <= 0 || watchdogMs > MAX_WATCHDOG_MS) {
+    throw new Error(`watchdogMs must be between 1 and ${MAX_WATCHDOG_MS}ms, got ${watchdogMs}`);
+  }
 
   // Mode-aware claim: atomic in database mode (no silent fallback), sequential in in-memory mode.
   let claimed: OutboxRecord | null;
@@ -326,7 +332,7 @@ export async function processNextDistributionWork(
       workerId,
       deliver,
       ...(options.heartbeatMs === undefined ? {} : { heartbeatMs: options.heartbeatMs }),
-      ...(options.watchdogMs === undefined ? {} : { watchdogMs: options.watchdogMs }),
+      watchdogMs,
     });
     if (delivery.status === 'terminal-failure') {
       return handleFailedDelivery({
