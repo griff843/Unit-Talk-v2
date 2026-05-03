@@ -29,6 +29,8 @@ interface CliOptions {
   engine: 'slate' | 'provider-offer';
   action: 'run' | 'capture' | 'replay';
   persistence: 'database' | 'in-memory';
+  allowDbWrites: boolean;
+  confirmBillingChecklist: boolean;
   runId: string;
   scenarioId: string;
   volumeMode: SlateReplayVolumeMode;
@@ -96,6 +98,8 @@ async function runSlateEngine(options: CliOptions) {
 }
 
 async function runProviderOfferEngine(options: CliOptions) {
+  assertProviderOfferWriteApproval(options);
+
   const env = loadEnvironment(REPO_ROOT);
   const repositories = resolveIngestorRepositories(options.persistence, env);
   const apiKey = options.apiKey ?? env.SGO_API_KEY ?? env.SGO_API_KEYS?.[0] ?? 'replay-key';
@@ -207,6 +211,30 @@ async function captureHook(
   }
 }
 
+export function assertProviderOfferWriteApproval(
+  options: Pick<CliOptions, 'engine' | 'persistence' | 'allowDbWrites' | 'confirmBillingChecklist'>,
+) {
+  if (
+    options.engine === 'provider-offer' &&
+    options.persistence === 'database' &&
+    !options.allowDbWrites
+  ) {
+    throw new Error(
+      'provider-offer replay defaults to in-memory persistence; pass --allow-db-writes with --persistence database only for an intentional live DB write.',
+    );
+  }
+
+  if (
+    options.engine === 'provider-offer' &&
+    options.persistence === 'database' &&
+    !options.confirmBillingChecklist
+  ) {
+    throw new Error(
+      'provider-offer database replay requires --confirm-billing-checklist to acknowledge Supabase billing / spend-cap review before heavy ingestion tests.',
+    );
+  }
+}
+
 function parseHookPayload(stdout: string): unknown {
   const trimmed = stdout.trim();
   if (!trimmed) {
@@ -231,11 +259,13 @@ async function readCommitHash(): Promise<string> {
   }
 }
 
-function parseCliOptions(args: string[]): CliOptions {
+export function parseCliOptions(args: string[]): CliOptions {
   const values = new Map<string, string>();
   let captureFreshness = false;
   let captureDbMetrics = false;
   let skipResults = false;
+  let allowDbWrites = false;
+  let confirmBillingChecklist = false;
 
   for (let index = 0; index < args.length; index += 1) {
     const arg = args[index];
@@ -255,6 +285,16 @@ function parseCliOptions(args: string[]): CliOptions {
 
     if (arg === '--skip-results') {
       skipResults = true;
+      continue;
+    }
+
+    if (arg === '--allow-db-writes') {
+      allowDbWrites = true;
+      continue;
+    }
+
+    if (arg === '--confirm-billing-checklist') {
+      confirmBillingChecklist = true;
       continue;
     }
 
@@ -280,7 +320,8 @@ function parseCliOptions(args: string[]): CliOptions {
     throw new Error('--action must be run, capture, or replay');
   }
 
-  const persistence = (values.get('persistence') ?? 'database') as CliOptions['persistence'];
+  const persistence = (values.get('persistence') ??
+    defaultPersistenceForEngine(engine)) as CliOptions['persistence'];
   if (persistence !== 'database' && persistence !== 'in-memory') {
     throw new Error('--persistence must be database or in-memory');
   }
@@ -289,6 +330,8 @@ function parseCliOptions(args: string[]): CliOptions {
     engine,
     action,
     persistence,
+    allowDbWrites,
+    confirmBillingChecklist,
     runId: values.get('run-id') ?? `utv2-796-${volumeMode}`,
     scenarioId: values.get('scenario') ?? 'slate-replay',
     volumeMode,
@@ -309,6 +352,10 @@ function parseCliOptions(args: string[]): CliOptions {
     startsBefore: values.get('starts-before'),
     providerEventIds: values.get('provider-event-ids')?.split(',').map((value) => value.trim()).filter(Boolean),
   };
+}
+
+export function defaultPersistenceForEngine(engine: CliOptions['engine']): CliOptions['persistence'] {
+  return engine === 'provider-offer' ? 'in-memory' : 'database';
 }
 
 function parsePositiveInt(value: string | undefined) {

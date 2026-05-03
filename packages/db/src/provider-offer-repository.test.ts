@@ -114,31 +114,48 @@ type CycleStatusHarness = {
 
 test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to preserve first-write flags', async () => {
   const selectCalls: string[][] = [];
-  const upsertCalls: Array<{
+  const historyUpsertCalls: Array<{
+    rows: Array<Record<string, unknown>>;
+    options: Record<string, unknown>;
+  }> = [];
+  const currentUpsertCalls: Array<{
     rows: Array<Record<string, unknown>>;
     options: Record<string, unknown>;
   }> = [];
 
   const fakeClient = {
     from(table: string) {
-      assert.equal(table, 'provider_offers');
+      if (table === 'provider_offer_history') {
+        return {
+          select(columns: string) {
+            assert.equal(columns, 'idempotency_key');
+            return {
+              async in(column: string, values: string[]) {
+                assert.equal(column, 'idempotency_key');
+                selectCalls.push(values);
+                return {
+                  data: [{ idempotency_key: 'dup-key' }],
+                  error: null,
+                };
+              },
+            };
+          },
+          async upsert(rows: Array<Record<string, unknown>>, options: Record<string, unknown>) {
+            historyUpsertCalls.push({ rows, options });
+            return {
+              error: null,
+            };
+          },
+        };
+      }
 
+      assert.equal(table, 'provider_offer_current');
       return {
-        select(columns: string) {
-          assert.equal(columns, 'idempotency_key');
-          return {
-            async in(column: string, values: string[]) {
-              assert.equal(column, 'idempotency_key');
-              selectCalls.push(values);
-              return {
-                data: [{ idempotency_key: 'dup-key' }],
-                error: null,
-              };
-            },
-          };
+        select() {
+          throw new Error('provider_offer_current select should not be called in upsertBatch');
         },
         async upsert(rows: Array<Record<string, unknown>>, options: Record<string, unknown>) {
-          upsertCalls.push({ rows, options });
+          currentUpsertCalls.push({ rows, options });
           return {
             error: null,
           };
@@ -190,15 +207,23 @@ test('DatabaseProviderOfferRepository.upsertBatch uses ignoreDuplicates to prese
   const result = await repository.upsertBatch(offers);
 
   assert.deepEqual(selectCalls, [['dup-key']]);
-  assert.equal(upsertCalls.length, 1);
-  assert.deepEqual(upsertCalls[0]?.options, {
-    onConflict: 'idempotency_key',
+  assert.equal(historyUpsertCalls.length, 1);
+  assert.deepEqual(historyUpsertCalls[0]?.options, {
+    onConflict: 'snapshot_at,idempotency_key',
     ignoreDuplicates: true,
   });
-  assert.equal(upsertCalls[0]?.rows.length, 1);
-  assert.equal(upsertCalls[0]?.rows[0]?.idempotency_key, 'dup-key');
-  assert.equal(upsertCalls[0]?.rows[0]?.is_opening, false);
-  assert.equal(upsertCalls[0]?.rows[0]?.is_closing, true);
+  assert.equal(historyUpsertCalls[0]?.rows.length, 1);
+  assert.equal(historyUpsertCalls[0]?.rows[0]?.idempotency_key, 'dup-key');
+  assert.equal(historyUpsertCalls[0]?.rows[0]?.is_opening, false);
+  assert.equal(historyUpsertCalls[0]?.rows[0]?.is_closing, true);
+  assert.equal(currentUpsertCalls.length, 1);
+  assert.deepEqual(currentUpsertCalls[0]?.options, {
+    onConflict: 'identity_key',
+    ignoreDuplicates: false,
+  });
+  assert.equal(currentUpsertCalls[0]?.rows.length, 1);
+  assert.equal(currentUpsertCalls[0]?.rows[0]?.idempotency_key, 'dup-key');
+  assert.equal(currentUpsertCalls[0]?.rows[0]?.identity_key, 'sgo:evt-1:points-all-game-ou::pinnacle');
   assert.deepEqual(result, {
     insertedCount: 0,
     updatedCount: 1,
@@ -237,7 +262,7 @@ test('DatabaseProviderOfferRepository.listClosingOffers paginates windowed resul
 
   const fakeClient = {
     from(table: string) {
-      assert.equal(table, 'provider_offers');
+      assert.equal(table, 'provider_offer_history');
       return {
         select(columns: string) {
           assert.equal(columns, '*');
@@ -293,7 +318,7 @@ test('DatabaseProviderOfferRepository.listClosingOffers paginates windowed resul
 test('DatabaseProviderOfferRepository.listClosingOffers fails loudly on timeout', async () => {
   const fakeClient = {
     from(table: string) {
-      assert.equal(table, 'provider_offers');
+      assert.equal(table, 'provider_offer_history');
       return {
         select() {
           return {

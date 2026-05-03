@@ -41,7 +41,7 @@ interface PruneTarget {
 }
 
 const PRUNE_TARGETS: PruneTarget[] = [
-  { table: 'provider_offers', dateColumn: 'created_at', retentionDays: 30 },
+  { table: 'provider_offers', dateColumn: 'created_at', retentionDays: 7 },
   { table: 'audit_log', dateColumn: 'created_at', retentionDays: 90 },
   { table: 'alert_detections', dateColumn: 'created_at', retentionDays: 30 },
   { table: 'submission_events', dateColumn: 'created_at', retentionDays: 90 },
