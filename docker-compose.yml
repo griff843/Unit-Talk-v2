@@ -54,3 +54,27 @@ services:
     depends_on:
       api:
         condition: service_healthy
+
+  command-center:
+    build:
+      context: .
+      dockerfile: apps/command-center/Dockerfile
+    image: unit-talk/command-center:local
+    ports:
+      - "4300:4300"
+    env_file:
+      - .env.container
+    environment:
+      API_BASE_URL: http://api:4000
+      UNIT_TALK_CC_API_KEY: ${UNIT_TALK_CC_API_KEY}
+      OPERATOR_WEB_URL: http://operator-web:4200
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4300/api/health"]
+      interval: 10s
+      timeout: 5s
+      start_period: 20s
+      retries: 5
