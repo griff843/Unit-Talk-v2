@@ -3,8 +3,7 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues:
-    - UTV2-746
+  issues: []
   findings: []
   controls: []
   proofs: []
