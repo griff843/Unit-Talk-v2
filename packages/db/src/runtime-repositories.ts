@@ -4241,11 +4241,14 @@ export class DatabaseGradeResultRepository implements GradeResultRepository {
       .select()
       .single();
 
+    const errorMessage =
+      typeof error?.message === 'string' ? error.message : '';
+    const loweredErrorMessage = errorMessage.toLowerCase();
     if (
       error &&
       (error.code === '23505' ||
-        error.message.toLowerCase().includes('duplicate key') ||
-        error.message.toLowerCase().includes('duplicate'))
+        loweredErrorMessage.includes('duplicate key') ||
+        loweredErrorMessage.includes('duplicate'))
     ) {
       const existing = await this.findResult({
         eventId: input.eventId,
