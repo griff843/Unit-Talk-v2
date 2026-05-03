@@ -1,6 +1,11 @@
 import { loadEnvironment } from '@unit-talk/config';
 import type { OutboxRecord } from '@unit-talk/db';
+import { createLogger, serializeError } from '@unit-talk/observability';
 import type { DeliveryAdapter } from './runner.js';
+
+const logger = createLogger({
+  service: 'worker',
+});
 
 export interface DeliveryAdapterSelectionOptions {
   kind: 'stub' | 'discord';
@@ -182,7 +187,10 @@ export function createDiscordDeliveryAdapter(options?: {
 function loadDeliveryEnvironment() {
   try {
     return loadEnvironment();
-  } catch {
+  } catch (err) {
+    logger.warn('Failed to load delivery environment — delivery will be skipped', {
+      err: serializeError(err),
+    });
     return undefined;
   }
 }
