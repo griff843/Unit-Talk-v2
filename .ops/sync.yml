@@ -3,13 +3,7 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues:
-    - UTV2-793
-    - UTV2-794
-    - UTV2-795
-    - UTV2-777
-    - UTV2-778
-    - UTV2-798
+  issues: []
   findings: []
   controls: []
   proofs: []
