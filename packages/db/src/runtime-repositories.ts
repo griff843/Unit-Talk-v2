@@ -7579,6 +7579,7 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
           scan_run_id: input.scan_run_id,
           provenance: input.provenance,
           expires_at: input.expires_at,
+          sport_key: input.sport_key ?? null,
           updated_at: now,
           // Phase 2 invariants: never set these
           // pick_id: remains null
@@ -7600,6 +7601,7 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
           is_board_candidate: false, // Phase 4 placeholder — set by ranked selection service
           shadow_mode: true, // must remain true in Phase 2
           pick_id: null, // must remain null in Phase 2
+          sport_key: input.sport_key ?? null,
           scan_run_id: input.scan_run_id,
           provenance: input.provenance,
           expires_at: input.expires_at,
@@ -7719,6 +7721,7 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       scan_run_id: input.scan_run_id,
       provenance: input.provenance,
       expires_at: input.expires_at,
+      sport_key: input.sport_key ?? null,
       updated_at: now,
       // Phase 2 invariants — these are deliberately omitted from the upsert payload:
       // pick_id          → remains NULL (DB default; Phase 4+ only)

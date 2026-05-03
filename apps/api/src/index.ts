@@ -139,9 +139,13 @@ server.listen(port, () => {
     ...(runtime.repositories.modelRegistry ? { modelRegistry: runtime.repositories.modelRegistry } : {}),
     ...(runtime.repositories.experimentLedger ? { experimentLedger: runtime.repositories.experimentLedger } : {}),
   };
-  runCandidateScoring(scoringDeps, { logger: console }).catch(() => {});
+  // UTV2-725 Gap 3: score both qualified and rejected candidates in shadow mode so
+  // the full candidate pool receives model scores. Rejected candidates are never promoted;
+  // scoring them is informational-only and does not change their rejection status.
+  const shadowScoringOptions = { logger: console, statuses: ['qualified', 'rejected'] };
+  runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
   candidateScoringTimer = setInterval(() => {
-    runCandidateScoring(scoringDeps, { logger: console }).catch(() => {});
+    runCandidateScoring(scoringDeps, shadowScoringOptions).catch(() => {});
   }, CANDIDATE_SCORING_INTERVAL_MS);
 
   // Ranked selection: deterministically ranks qualified+scored candidates by model_score + tier
