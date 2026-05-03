@@ -51,7 +51,10 @@ supabase/.branches/
 # IDE workspace files
 *.code-workspace
 
-# Smart Form Playwright results
+# Playwright results (root-level and per-app)
+playwright-report/
+playwright-results.json
+test-results/
 apps/smart-form/test-results/
 
 # Governance CLI — local issue state (never committed)
