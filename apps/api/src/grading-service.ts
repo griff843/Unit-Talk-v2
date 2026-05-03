@@ -452,6 +452,8 @@ const COMMON_GRADING_MARKET_ALIASES: Record<string, string> = {
   player_batting_strikeouts_ou: 'batting_strikeouts_ou',
   pitching_strikeouts_ou: 'player_pitching_strikeouts_ou',
   pitching_innings_ou: 'player_pitching_innings_ou',
+  player_threes_ou: 'player_3pm_ou',
+  player_3pm_ou: 'player_threes_ou',
 };
 
 function validateEventProvenanceForGrading(
