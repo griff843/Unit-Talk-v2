@@ -7,13 +7,15 @@
 
 ## Last Updated
 
-2026-04-26 — **PM reconciliation complete through PR #489. QA trust layer is the active PR but blocked by governance cleanup.**
+2026-05-01 — **Worker/API hardening Wave 2 dispatched. T1 ops PRs approved. Provider-offer architecture cut over. Command-center pipeline pages merged.**
 
-- **UTV2-751 is Done.** PR #489 merged as proof closure: pre-April-20 SGO historical backfill is **not** a current CLV blocker because all current settled picks are inside the 2026-04-20+ `provider_offers` data window.
-- **UTV2-760 created.** Historical pre-April-20 SGO backfill remains tracked as low-priority archive/completeness work only; it does not block CLV, grading, settlement, or UTV2-433.
-- **UTV2-433 remains open.** MLB production-readiness gate cannot close from backfill or retroactive evidence. It requires fresh post-fix MLB settlements from the fixed provenance path with `clvBackedOutcomeCount >= 10`.
-- **UTV2-761 created.** PR #490 is the active QA trust-layer implementation lane, but it is **not merge-ready** until it links to UTV2-761, updates onto latest `main`, re-runs verification, and resolves the `.ops/sync.yml` governance bypass.
-- **Recent completed work:** UTV2-747 Line-Shopper, UTV2-736 R5 CLV ROI proof, UTV2-759 grading/QA unblock, UTV2-754 MLB provenance remediation, UTV2-758 candidate builder, UTV2-757 candidate scanner, UTV2-756/755 SGO fetch hardening.
+- **Wave 2 T3 hardening in review:** UTV2-805 (delivery-adapter logging), UTV2-807 (watchdogMs bounds), UTV2-809 (CLV null guard), UTV2-810 (Kelly overFair guard) — PRs #520–#523 all pass `pnpm verify`.
+- **T1 ops PRs approved and ready:** PR #514 (UTV2-782 WAL/PITR runbook) + PR #515 (UTV2-789 least-privilege Postgres roles) — both have `t1-approved` labels, awaiting PM merge.
+- **Provider-offer architecture cut over:** PR #513 merged (compact architecture + legacy quarantine). UTV2-803 disk-growth incident partially resolved — 7-day retention in place, `provider_offers` at ~7.47 GB but bounded.
+- **Command-center UNI pages merged:** UNI-101 (Agents/Intelligence/Ops), UNI-138 (Events live stream), UNI-137 (Pipeline page) all merged to main on 2026-05-01.
+- **T1 replay proof shipped:** UTV2-781 freshness-gated scanner + real provider-offer replay proof (PR #507, merged 2026-04-29).
+- **UTV2-433 remains open.** MLB production-readiness gate requires fresh post-fix MLB settlements with `clvBackedOutcomeCount >= 10`.
+- **Recent completed work since April 26:** UTV2-761 QA trust layer, UTV2-762 Fibery guardrail, UTV2-764 operator-web data layer extract, UTV2-766 command-center DB rewire, UTV2-769 operator-web teardown, UTV2-781 replay proof, UTV2-787/773/774/793/796/797 provider ingestion health.
 
 ---
 
@@ -22,14 +24,14 @@
 | Field | Value |
 |---|---|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Active operating mode | Proof/readiness hardening, not broad feature expansion |
-| Static baseline | Recent PRs report `pnpm verify` PASS; PR #490 must re-run after updating from latest `main` |
-| Runtime health | **Not fully proven** — worker/runtime health must be verified separately from static checks |
+| Active operating mode | Worker/API hardening (Wave 2 T3s) + T1 ops infrastructure merge |
+| Static baseline | `pnpm verify` PASS on main; all Wave 2 PRs (#520–#524) verified green |
+| Runtime health | Provider-offer architecture cut over; 7-day retention bounded; disk alert reduced but not cleared |
 | Provider | SGO Pro active; closing-line truth is `provider_offers WHERE is_closing = true`; `market_universe` is canonical persistence |
-| Current active PR | **PR #490** — QA trust layer; blocked by PM gate |
-| Current active Linear lane | **UTV2-761** — Experience QA trust layer |
-| Main readiness gate still open | **UTV2-433** — MLB production-readiness gate |
-| Next non-QA infrastructure candidate | Discord bot foundation, after QA/status cleanup |
+| Current active PRs | **#520–#524** — Wave 2 T3 hardening + cleanup (In Review); **#514, #515** — T1 ops (t1-approved, awaiting merge) |
+| Current active Linear lanes | UTV2-805, 807, 809, 810 (In Review); UTV2-768 (In Review) |
+| Main readiness gate still open | **UTV2-433** — MLB production-readiness gate (needs fresh post-fix settlements) |
+| Phase | Phase 7A — Governance Brake active |
 
 ---
 
@@ -37,11 +39,13 @@
 
 | Priority | Issue / PR | Status | PM Direction |
 |---:|---|---|---|
-| 1 | **PR #490 / UTV2-761** | Open, blocked | Fix lane linkage, latest-main drift, verification, and `.ops/sync.yml` governance before merge |
-| 2 | **UTV2-433** | In Progress | Wait for fresh post-fix MLB settlement evidence; do not close from historical backfill |
-| 3 | **UTV2-739** | Stale umbrella | Reconcile child issue completions and either move to PM Review or Ready to Close |
-| 4 | **UTV2-729** | Stale/blocked | Re-triage after UTV2-736/751; likely obsolete or needs rewritten proof purpose |
-| 5 | **UTV2-760** | Backlog | Historical completeness only; low priority; does not block readiness |
+| 1 | **PR #514 / UTV2-782** | t1-approved, open | WAL/PITR runbook + backup alerts — merge when ready |
+| 2 | **PR #515 / UTV2-789** | t1-approved, open | Least-privilege Postgres roles — merge when ready |
+| 3 | **PRs #520–#523** | In Review (T3) | Wave 2 worker/API hardening — merge on green |
+| 4 | **PR #519 / UTV2-768** | In Review (T3) | Grading alias fix — merge on green |
+| 5 | **PR #524** | In Review (T3) | Cleanup wave 1 (worktree-setup + orphaned CC files) |
+| 6 | **UTV2-433** | In Progress | Wait for fresh post-fix MLB settlement evidence |
+| 7 | **Wave 3 T3 hardening** | Backlog | UTV2-811/812/813 — system-pick-scanner + settlement-service hardening |
 
 ---
 
@@ -49,17 +53,20 @@
 
 | PR | Issue | Tier | Result |
 |---|---|---|---|
-| #489 | UTV2-751 | T2 | SGO historical backfill proof accepted; current CLV not blocked; UTV2-760 follow-up created |
-| #488 | UTV2-759 | T2 | Smart Form/Command Center QA blockers fixed; Smart Form QA passes; Command Center dependency warnings remain explicit |
-| #487 | UTV2-736 | T2 | R5 CLV ROI proof generated; all shadow slices blocked by data as expected |
-| #486 | UTV2-747 | T2 | Line-Shopper operator endpoint + Command Center UI merged |
-| #485 | — | T2/T3 foundation | Experience QA Agent foundation merged |
-| #484 | UTV2-759 | T2 | Auto-grading end-to-end proof / market-key normalization merged |
-| #483 | UTV2-754 | T2 | MLB provenance path remediation merged |
-| #481 | UTV2-758 | T2 | CandidateBuilderService populates `pick_candidates` from `provider_offers` |
-| #480 | UTV2-757 | T2 | CandidatePickScanner converts scored candidates into governed picks |
-| #479 | UTV2-756 | T3 | SGO fetch loop total-time budget added |
-| #478 | UTV2-755 | T2 | SGO fetch timeout and per-league error isolation added |
+| #518 | UNI-137 | T3 | Command-center pipeline page |
+| #517 | UNI-138 | T3 | Command-center events live stream and replay |
+| #516 | UNI-101 | T3 | Command-center Agents, Intelligence, and Ops pages |
+| #513 | UTV2-803 | T1 | Compact provider-offer architecture cut over; legacy table quarantined |
+| #507 | UTV2-781 | T1 | Real provider-offer replay proof + freshness-gated scanner |
+| #506 | UTV2-787/773/774/793/796/797 | T2 | Provider ingestion health surfaces |
+| #505 | UTV2-769 | T3 | operator-web teardown |
+| #504 | UTV2-766 | T3 | Command-center rewired to direct DB (no operator-web) |
+| #501 | UTV2-764 | T2 | Operator-web data layer extracted into command-center |
+| #496 | UTV2-752 | T2 | Canonical key join + market_universe backfill |
+| #493 | — | T2 | Guard ungradeable system picks |
+| #492 | UTV2-762 | T3 | Fibery lane-start guardrail |
+| #490 | UTV2-761 | T2 | Experience QA trust layer |
+| #489 | UTV2-751 | T2 | SGO historical backfill proof; CLV not blocked |
 
 ---
 
