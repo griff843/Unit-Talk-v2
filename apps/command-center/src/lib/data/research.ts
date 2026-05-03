@@ -77,7 +77,7 @@ export async function getPropOffers(params: {
     const offset = params.offset ?? 0;
 
     let query = client
-      .from('provider_offers')
+      .from('provider_offer_current')
       .select(
         'id, sport_key, provider_market_key, bookmaker_key, line, over_odds, under_odds, provider_participant_id, provider_event_id, is_opening, is_closing, snapshot_at',
         { count: 'exact' },
@@ -140,7 +140,7 @@ export async function getResearchLines(params: {
     const client = getDataClient();
 
     let query = client
-      .from('provider_offers')
+      .from('provider_offer_current')
       .select(
         'id, sport_key, provider_market_key, bookmaker_key, line, over_odds, under_odds, provider_participant_id, provider_event_id, is_opening, is_closing, snapshot_at',
       );

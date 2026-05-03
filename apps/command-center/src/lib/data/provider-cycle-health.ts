@@ -26,6 +26,26 @@ interface ProviderCycleStatusDbRow {
   failure_scope: ProviderCycleStatusRow['failureScope'];
   last_error: string | null;
   updated_at: string;
+  metadata?: unknown;
+}
+
+export interface ProviderCycleLatencySample {
+  providerKey: string;
+  updatedAt: string;
+  totalLatencyMs: number | null;
+}
+
+function readLatencyMs(value: unknown) {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const metadata = value as Record<string, unknown>;
+  const latency = metadata['latencyMs'];
+  if (latency === null || typeof latency !== 'object' || Array.isArray(latency)) {
+    return null;
+  }
+  const total = (latency as Record<string, unknown>)['total'];
+  return typeof total === 'number' && Number.isFinite(total) ? total : null;
 }
 
 function compareIsoDesc(left: string, right: string) {
@@ -161,51 +181,21 @@ export async function getProviderCycleHealth(
   return summarizeProviderCycleHealth((data ?? []) as ProviderCycleStatusDbRow[], providerHealth);
 }
 
-export async function getProviderCycleLatencySamples(): Promise<Array<{ providerKey: string; updatedAt: string; totalLatencyMs: number | null }>> {
-  // Returns latency samples for provider health sparklines.
-  // This aggregates provider_offers latency over the last 24 hours per provider.
+export async function getProviderCycleLatencySamples(): Promise<ProviderCycleLatencySample[]> {
   const client: Client = getDataClient();
-  const oneDayAgoMs = Date.now() - 24 * 60 * 60 * 1000;
-
   const { data, error } = await client
-    .from('provider_offers')
-    .select('provider_key, created_at, latency_ms')
-    .gte('created_at', new Date(oneDayAgoMs).toISOString())
-    .order('created_at', { ascending: false });
+    .from('provider_cycle_status')
+    .select('provider_key,updated_at,metadata')
+    .order('updated_at', { ascending: false })
+    .limit(250);
 
   if (error) {
-    // Return empty array on error (no latency data available)
-    return [];
+    throw new Error(`getProviderCycleLatencySamples: ${String(error.message ?? error)}`);
   }
 
-  const samplesByProvider = new Map<string, { timestamps: string[]; latencies: (number | null)[] }>();
-  for (const row of (data ?? []) as Array<{ provider_key: string; created_at: string; latency_ms: number | null }>) {
-    const key = String(row.provider_key ?? '').toLowerCase();
-    if (!key) continue;
-
-    if (!samplesByProvider.has(key)) {
-      samplesByProvider.set(key, { timestamps: [], latencies: [] });
-    }
-    const samples = samplesByProvider.get(key)!;
-    samples.timestamps.push(row.created_at);
-    samples.latencies.push(row.latency_ms);
-  }
-
-  const result: Array<{ providerKey: string; updatedAt: string; totalLatencyMs: number | null }> = [];
-  for (const [providerKey, samples] of samplesByProvider.entries()) {
-    if (samples.latencies.length === 0) continue;
-
-    const validLatencies = samples.latencies.filter((v): v is number => v !== null);
-    const avgLatency = validLatencies.length > 0
-      ? Math.round(validLatencies.reduce((a, b) => a + b, 0) / validLatencies.length)
-      : null;
-
-    result.push({
-      providerKey,
-      updatedAt: samples.timestamps[0] ?? new Date().toISOString(),
-      totalLatencyMs: avgLatency,
-    });
-  }
-
-  return result;
+  return ((data ?? []) as ProviderCycleStatusDbRow[]).map((row) => ({
+    providerKey: row.provider_key,
+    updatedAt: row.updated_at,
+    totalLatencyMs: readLatencyMs(row.metadata),
+  }));
 }

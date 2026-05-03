@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { DetailPanel, LiveEventFeed } from '@/components/ui';
+import { DetailPane, LiveEventFeed } from '@/components/ui';
 import type { CommandCenterEvent } from '@/lib/command-center-page-data';
 import type { LiveEventFeedEvent } from '@/components/ui';
 
@@ -36,7 +36,7 @@ export function EventsPageClient({ initialEvents }: EventsPageClientProps) {
           onTogglePause={() => setPaused(!paused)}
         />
       </div>
-      <DetailPanel title="Event Controls" defaultOpen>
+      <DetailPane title="Event Controls" defaultOpen>
         <div className="space-y-4">
           <div>
             <button
@@ -71,7 +71,7 @@ export function EventsPageClient({ initialEvents }: EventsPageClientProps) {
             </label>
           </div>
         </div>
-      </DetailPanel>
+      </DetailPane>
     </div>
   );
 }

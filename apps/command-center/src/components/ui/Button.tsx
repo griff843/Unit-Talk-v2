@@ -1,10 +1,14 @@
+import React from 'react';
+
 const variants = {
-  primary: 'bg-blue-600 text-white hover:bg-blue-700 focus:ring-blue-500',
-  secondary: 'border border-gray-600 text-gray-300 hover:bg-gray-800 focus:ring-gray-500',
-  danger: 'bg-red-600 text-white hover:bg-red-700 focus:ring-red-500',
-  success: 'bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500',
-  warning: 'bg-yellow-600 text-white hover:bg-yellow-700 focus:ring-yellow-500',
-  ghost: 'text-gray-400 hover:text-gray-200 hover:bg-gray-800 focus:ring-gray-500',
+  primary: 'bg-[var(--cc-accent)] text-white hover:bg-[var(--cc-accent-strong)] focus:ring-[var(--cc-accent)]',
+  secondary:
+    'border border-[var(--cc-border-strong)] text-[var(--cc-text-secondary)] hover:bg-[var(--cc-bg-surface-hover)] focus:ring-[var(--cc-border-strong)]',
+  danger: 'bg-[var(--cc-danger)] text-white hover:brightness-90 focus:ring-[var(--cc-danger)]',
+  success: 'bg-[var(--cc-success)] text-white hover:brightness-90 focus:ring-[var(--cc-success)]',
+  warning: 'bg-[var(--cc-warning)] text-white hover:brightness-90 focus:ring-[var(--cc-warning)]',
+  ghost:
+    'text-[var(--cc-text-secondary)] hover:text-[var(--cc-text-primary)] hover:bg-[var(--cc-bg-surface-hover)] focus:ring-[var(--cc-border-strong)]',
 } as const;
 
 const sizes = {
@@ -30,7 +34,7 @@ export function Button({
   return (
     <button
       disabled={disabled || loading}
-      className={`rounded font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-gray-950 disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`rounded font-medium transition-colors focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-offset-[var(--cc-bg-canvas)] disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
       {...props}
     >
       {loading ? (

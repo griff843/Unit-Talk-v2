@@ -14,14 +14,14 @@ const modules: ResearchModule[] = [
     href: '/research/props',
     description: 'Browse individual prop offers from ingested provider data.',
     status: 'live',
-    statusDetail: 'Wired to /api/operator/prop-offers (provider_offers table).',
+    statusDetail: 'Wired to /api/operator/prop-offers (provider_offer_current table).',
   },
   {
     name: 'Line-Shopper',
     href: '/research/lines',
     description: 'Compare lines across multiple bookmakers for the same market.',
     status: 'live',
-    statusDetail: 'Wired to /api/operator/line-shopper (provider_offers multi-book).',
+    statusDetail: 'Wired to /api/operator/line-shopper (provider_offer_current multi-book).',
   },
   {
     name: 'Player Card',
