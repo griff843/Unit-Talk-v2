@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-433",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "claude/utv2-433-mlb-clv-gate-reeval",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "scripts/ops/utv2-433-mlb-clv-gate-reeval.ts",
+    "docs/06_status/proof/UTV2-433-mlb-clv-gate-reeval-2026-05-02.md"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/utv2-433-mlb-clv-gate-reeval.ts",
+    "docs/06_status/proof/UTV2-433-mlb-clv-gate-reeval-2026-05-02.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-433-mlb-clv-gate-reeval-2026-05-02.md"
+  ],
+  "status": "in_proof",
+  "started_at": "2026-05-02T00:00:00.000Z",
+  "heartbeat_at": "2026-05-02T00:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": ["governance-brake-awaiting-approval"],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
