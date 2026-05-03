@@ -3,9 +3,7 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues:
-    - UTV2-725
+  issues: []
   findings: []
   controls: []
-  proofs:
-    - apps/api/src/t1-proof-utv2-725.test.ts
+  proofs: []
