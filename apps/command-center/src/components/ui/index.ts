@@ -14,7 +14,6 @@ export { PipelineFlow } from './PipelineFlow';
 export type { PipelineFlowProps, PipelineStage } from './PipelineFlow';
 
 export { DetailPanel } from './DetailPanel';
-export type { DetailPanelProps } from './DetailPanel';
 
 export { DetailPane } from './DetailPane';
 
