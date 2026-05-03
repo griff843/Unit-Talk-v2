@@ -54,6 +54,7 @@
     "lint": "eslint . --cache --cache-location .cache/eslint/",
     "db:compare": "tsx scripts/ops/compare-databases.ts",
     "db:prune": "tsx scripts/prune-all-tables.ts",
+    "db:disk-report": "tsx scripts/ops/disk-growth-report.ts",
     "codex:classify": "tsx scripts/codex-classify.ts",
     "codex:dispatch": "tsx scripts/codex-dispatch.ts",
     "codex:receive": "tsx scripts/codex-receive.ts",
