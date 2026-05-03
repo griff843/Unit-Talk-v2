@@ -1,4 +1,4 @@
-import { getDataClient } from './client.js';
+import { getDataClient } from './client';
 import type {
   ProviderCycleHealthSummary,
   ProviderCycleStatusRow,
@@ -6,7 +6,7 @@ import type {
   ProviderCycleProofStatus,
   ProviderCycleStageStatus,
   ProviderHealth,
-} from '../types.js';
+} from '../types';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

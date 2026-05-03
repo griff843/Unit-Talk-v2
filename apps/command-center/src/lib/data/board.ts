@@ -1,4 +1,4 @@
-import { getDataClient } from './client.js';
+import { getDataClient } from './client';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

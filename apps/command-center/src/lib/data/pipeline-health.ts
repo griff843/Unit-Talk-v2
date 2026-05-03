@@ -1,13 +1,19 @@
-import { loadEnvironment } from '@unit-talk/config';
-import type { OutboxRecord, PickRecord, ReceiptRecord, SubmissionRecord, SystemRunRecord } from '@unit-talk/db';
-import { createDatabaseConnectionConfig } from '@unit-talk/db';
+import { loadEnvironment } from '../../../../../packages/config/dist/env.js';
+import type {
+  OutboxRecord,
+  PickRecord,
+  ReceiptRecord,
+  SubmissionRecord,
+  SystemRunRecord,
+} from '../../../../../packages/db/dist/types.js';
+import { createDatabaseConnectionConfig } from './client';
 
-import { getDataClient } from './client.js';
+import { getDataClient } from './client';
 import {
   createPipelineLiveConfig,
   derivePipelineHealthSnapshot,
   type PipelineHealthSnapshot,
-} from '../pipeline-health.js';
+} from '../pipeline-health';
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Client = any;

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { derivePipelineHealthSnapshot } from './pipeline-health.js';
+import { derivePipelineHealthSnapshot } from './pipeline-health';
 
 test('derivePipelineHealthSnapshot maps five stages and computes publish errors', () => {
   const snapshot = derivePipelineHealthSnapshot({
