@@ -11,7 +11,7 @@ import PicksPage from './picks/page';
 import PipelinePage from './pipeline/page';
 
 test('overview route renders new command deck shell', async () => {
-  const html = renderToStaticMarkup(await OverviewPage());
+  const html = renderToStaticMarkup(await OverviewPage({}));
   assert.match(html, /Overview/);
   assert.match(html, /Pipeline status band/);
 });

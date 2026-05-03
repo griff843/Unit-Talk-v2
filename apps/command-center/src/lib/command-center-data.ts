@@ -5,7 +5,13 @@ import { getProviderCycleHealth } from '@/lib/data/provider-cycle-health';
 import { getPipelineHealthSnapshot } from '@/lib/data/pipeline-health';
 import type { EventStreamItem } from '@/components/ui/EventStream';
 import type { LlmUsageRow } from '@/components/ui/LLMUsageChart';
-import type { PipelineFlowStage } from '@/components/ui/PipelineFlow';
+export interface PipelineStageSummary {
+  key: string;
+  label: string;
+  status: 'healthy' | 'warning' | 'error' | 'idle' | 'unknown';
+  metric: string;
+  detail: string;
+}
 import type { AgentStatus } from '@/components/ui/AgentCard';
 import type { EventStreamRecord } from '@/lib/events-feed';
 
@@ -18,7 +24,7 @@ export interface CommandMetric {
 
 export interface OverviewContent {
   metrics: CommandMetric[];
-  pipeline: PipelineFlowStage[];
+  pipeline: PipelineStageSummary[];
   events: EventStreamItem[];
   focus: Array<{ label: string; value: string }>;
 }
@@ -47,7 +53,7 @@ export interface PicksContent {
 
 export interface PipelineContent {
   metrics: CommandMetric[];
-  pipeline: PipelineFlowStage[];
+  pipeline: PipelineStageSummary[];
   backlog: Array<{ label: string; count: number; detail: string }>;
   promotion: Array<{ label: string; count: number; detail: string }>;
 }
@@ -61,7 +67,7 @@ export interface ApiHealthContent {
     last24hRows: number;
     minutesSinceLastSnapshot: number | null;
   }>;
-  cycle: PipelineFlowStage[];
+  cycle: PipelineStageSummary[];
 }
 
 export interface AgentsContent {
@@ -114,7 +120,7 @@ function formatTimestamp(timestamp: string | null) {
   return timestamp ? new Date(timestamp).toLocaleString() : 'No signal';
 }
 
-function pipelineStatusTone(status: string): PipelineFlowStage['status'] {
+function pipelineStatusTone(status: string): PipelineStageSummary['status'] {
   if (status === 'healthy' || status === 'WORKING' || status === 'active') return 'healthy';
   if (status === 'warning' || status === 'DEGRADED' || status === 'stale') return 'warning';
   if (status === 'error' || status === 'BROKEN' || status === 'absent' || status === 'critical') return 'error';
@@ -203,7 +209,7 @@ function mapEventItems(events: EventStreamRecord[]): EventStreamItem[] {
     detail: event.summary,
     source: event.source,
     timestamp: formatRelativeTime(event.timestamp),
-    status: pipelineStatusTone(event.type.includes('error') ? 'error' : 'healthy'),
+    status: pipelineStatusTone(event.type.includes('error') ? 'error' : 'healthy') as EventStreamItem['status'],
   }));
 }
 
@@ -453,7 +459,7 @@ export async function getApiHealthContent(): Promise<ApiHealthContent> {
       ],
       providers: providers.map((provider) => ({
         providerKey: asString(provider['providerKey'], 'unknown'),
-        status: pipelineStatusTone(asString(provider['status'])),
+        status: (pipelineStatusTone(asString(provider['status'])) === 'idle' ? 'unknown' : pipelineStatusTone(asString(provider['status']))) as 'healthy' | 'warning' | 'error' | 'unknown',
         latestSnapshotAt: typeof provider['latestSnapshotAt'] === 'string' ? provider['latestSnapshotAt'] : null,
         last24hRows: asNumber(provider['last24hRows']),
         minutesSinceLastSnapshot: typeof provider['minutesSinceLastSnapshot'] === 'number' ? provider['minutesSinceLastSnapshot'] : null,

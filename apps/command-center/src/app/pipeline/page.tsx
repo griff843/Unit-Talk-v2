@@ -32,7 +32,11 @@ export default async function PipelinePage() {
           <div className="cc-kicker">Stage flow</div>
           <h2 className="mt-2 font-[family:var(--font-display)] text-3xl text-[var(--cc-text-primary)]">Current lane posture</h2>
         </div>
-        <PipelineFlow stages={content.pipeline} />
+        <PipelineFlow stages={content.pipeline.map((s) => ({
+          name: s.label,
+          count: parseInt(s.metric, 10) || 0,
+          status: (s.status === 'warning' || s.status === 'unknown' ? 'idle' : s.status) as 'healthy' | 'idle' | 'error',
+        }))} />
       </section>
 
       <div className="cc-grid-12">
