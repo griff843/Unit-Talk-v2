@@ -6,7 +6,9 @@
 
 ---
 
-## Gate result: PENDING — governance brake blocking settlement
+## Gate result: PENDING — awaiting fresh post-fix settlements
+
+**PM Verdict (2026-05-02):** `NOT_APPROVED` — blanket approval of the 503 `awaiting_approval` picks is blocked. Gate must close via genuine pipeline-generated settlements, not queue-drain. See Linear comment for full verdict.
 
 ---
 
