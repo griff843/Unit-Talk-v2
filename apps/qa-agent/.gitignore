@@ -4,3 +4,5 @@ artifacts/
 playwright-state/
 # Ledger is intentionally tracked — commit it to preserve regression history
 # ledger/
+personas/*.json
+!personas/*.example.json

@@ -49,6 +49,13 @@ export const personas: Record<string, Persona> = {
     ],
     discordRoles: ['vip', 'vip-plus'],
   },
+  no_access: {
+    id: 'no_access',
+    displayName: 'No Access User',
+    memberTier: 'free',
+    capabilities: [],
+    discordRoles: ['no-access'],
+  },
   capper: {
     id: 'capper',
     displayName: 'Capper',

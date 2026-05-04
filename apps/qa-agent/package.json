@@ -6,6 +6,7 @@
   "scripts": {
     "experience": "tsx src/cli.ts",
     "qa:auth:seed": "tsx src/personas/seed.ts",
+    "validate:discord-qa-config": "tsx scripts/validate-discord-qa-config.ts",
     "test": "tsx --test src/**/*.test.ts",
     "type-check": "tsc --noEmit"
   },
