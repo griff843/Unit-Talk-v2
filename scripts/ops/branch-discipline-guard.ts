@@ -8,7 +8,7 @@ export type BranchDisciplineResult = {
   warning: string | null;
 };
 
-const ISSUE_PATTERN = /\bUTV2-\d+\b/gi;
+const ISSUE_PATTERN = /\b(?:UTV2|UNI)-\d+\b/gi;
 
 export function extractIssueIds(text: string): string[] {
   const seen = new Set<string>();

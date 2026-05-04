@@ -17,7 +17,7 @@ export const defaultPrTemplatePath = path.join(
   'pull_request_template.md',
 );
 
-const issueHeaderPattern = /^### (UTV2-\d+) .+$/gm;
+const issueHeaderPattern = /^### ((?:UTV2|UNI)-\d+) .+$/gm;
 
 export function readText(filePath) {
   return fs.readFileSync(filePath, 'utf8');
@@ -136,7 +136,7 @@ export function updateQueueStateReference(markdown, issueId, replacementLine) {
 }
 
 export function parseBlockedIssueIds(value) {
-  return [...value.matchAll(/UTV2-\d+/g)].map((match) => match[0]);
+  return [...value.matchAll(/(?:UTV2|UNI)-\d+/g)].map((match) => match[0]);
 }
 
 export function slugifyIssueTitle(title) {

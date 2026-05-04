@@ -999,7 +999,7 @@ export function findPostMergeTouches(input: {
     if (!overlaps) {
       continue;
     }
-    const referencedIssues = subject.match(/UTV2-\d+/gi) ?? [];
+    const referencedIssues = subject.match(/(?:UTV2|UNI)-\d+/gi) ?? [];
     const hasFollowUpIssue = referencedIssues.some(
       (candidate) => candidate.toUpperCase() !== input.issueId,
     );

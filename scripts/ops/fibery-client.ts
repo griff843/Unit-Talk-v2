@@ -175,7 +175,7 @@ export class FiberyClient {
       'Unit Talk/Issue': true,
       'Unit Talk/Proof Artifacts': true,
     };
-    if (autoCreateTypes[config.type] && /^UTV2-\d+$/.test(publicId)) {
+    if (autoCreateTypes[config.type] && /^(?:UTV2|UNI)-\d+$/.test(publicId)) {
       await this.createIssueShell(config, publicId);
       const created = await this.queryEntity(config, publicId, extraFields);
       if (created) {

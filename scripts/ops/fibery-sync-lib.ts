@@ -60,8 +60,8 @@ export type SyncResult = {
 };
 
 const ENTITY_KINDS: EntityKind[] = ['issues', 'findings', 'controls', 'proofs'];
-const ISSUE_ID_PATTERN = /^UTV2-\d+$/;
-const ISSUE_ID_SCAN_PATTERN = /\bUTV2-\d+\b/gi;
+const ISSUE_ID_PATTERN = /^(?:UTV2|UNI)-\d+$/;
+const ISSUE_ID_SCAN_PATTERN = /\b(?:UTV2|UNI)-\d+\b/gi;
 
 export function extractIssueIds(text: string): string[] {
   const seen = new Set<string>();
