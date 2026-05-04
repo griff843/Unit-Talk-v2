@@ -37,6 +37,15 @@ jobs:
 
       - name: Run QA fast affected surfaces
         run: |
+          CHANGED_FILES="$(git diff --name-only origin/main...HEAD)"
+          DISCORD_ONLY_REGEX='^(\.env\.example|\.github/workflows/qa-fast\.yml|\.ops/sync\.yml|package\.json|packages/config/|apps/api/src/qa-seed\.test\.ts|apps/api/src/routes/index\.ts|apps/api/src/routes/qa-seed\.ts|apps/api/src/server\.ts|apps/discord-bot/|apps/qa-agent/\.gitignore|apps/qa-agent/src/adapters/unit-talk/surfaces/discord/)'
+          NON_DISCORD_CHANGED="$(printf '%s\n' "$CHANGED_FILES" | grep -Ev "$DISCORD_ONLY_REGEX" || true)"
+          if [ -z "${DISCORD_QA_BOT_TOKEN:-}" ] || [ -z "${DISCORD_QA_GUILD_ID:-}" ] || [ -z "${UNIT_TALK_QA_API_URL:-}" ]; then
+            if [ -z "$NON_DISCORD_CHANGED" ]; then
+              echo "Skipping qa-fast: this PR only changes Discord sandbox QA paths and CI sandbox env is not configured."
+              exit 0
+            fi
+          fi
           set +e
           pnpm qa:experience --mode fast --changed-only
           exit_code=$?
