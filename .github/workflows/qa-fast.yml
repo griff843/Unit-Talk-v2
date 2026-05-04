@@ -33,7 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright (Chromium only)
-        run: pnpm exec playwright install chromium --with-deps
+        run: pnpm --filter @unit-talk/qa-agent exec playwright install chromium --with-deps
 
       - name: Run QA fast affected surfaces
         run: |
