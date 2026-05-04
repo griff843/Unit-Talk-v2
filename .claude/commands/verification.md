@@ -25,6 +25,13 @@ Run tier-aware verification before any merge claim or `ops:truth-check`. Fail-cl
 - [ ] If any mandatory artifact is absent → verdict is **FAIL** (not INCOMPLETE — missing artifacts block merge)
 - [ ] Items listed in `pmGated[]` are advisory warnings only — emit the warning, do NOT block on absence alone
 
+**Step 0 execution (concrete command):**
+```
+Run: tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+If verdict is FAIL: generate the missing artifacts listed in the output, then re-run until PASS.
+Do not proceed to ops:truth-check without a PASS from r-level-check.ts.
+```
+
 **All tiers:**
 - [ ] `pnpm type-check` — green
 - [ ] `pnpm test` — green, count did not decrease
