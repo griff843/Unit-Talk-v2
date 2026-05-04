@@ -2,6 +2,15 @@
   "$schema": "https://unit-talk.internal/schemas/r1-r5-rules/v1",
   "version": "1",
   "description": "Machine-readable trigger matrix for R1-R5 verification levels. Used by scripts/ci/r-level-check.ts. Human-readable policy: R1_R5_OPERATING_RULE.md",
+  "scopeAnnotations": {
+    "additive-guard": {
+      "description": "Small additive guards (null checks, staleness flags, defensive conditions) that do not rewrite lifecycle authority, settlement logic, or promotion policy",
+      "allowedForRules": ["lifecycle-fsm", "ingestor-provider"],
+      "downgradesRequired": ["R2", "R3", "R4"],
+      "retains": ["R1"],
+      "pmGated": true
+    }
+  },
   "artifactPaths": {
     "r2-determinism": "artifacts/r2-determinism*.json",
     "r3-shadow-report": "artifacts/shadow-report*.json",
