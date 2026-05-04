@@ -55,6 +55,7 @@ import {
   handleBoardRunTuning,
   handlePromotionScores,
   handleBuildCandidates,
+  handleModelPerformance,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import { handleModelHealthAlerts, handleModelHealthDecision } from './routes/model-health.js';
@@ -399,6 +400,11 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/health/config') {
     return handleHealthConfig(request, response, runtime);
+  }
+
+  // UTV2-798: model performance calibration analytics
+  if (method === 'GET' && url.pathname === '/api/model-performance') {
+    return handleModelPerformance(request, response, runtime);
   }
 
   // --- Auth gate: all POST routes require authentication ---
