@@ -3,7 +3,7 @@
  * R-level artifact compliance check for PR diffs.
  *
  * Usage:
- *   tsx scripts/ci/r-level-check.ts [--base <ref>] [--head <ref>] [--output-json <path>]
+ *   tsx scripts/ci/r-level-check.ts [--base <ref>] [--head <ref>] [--output-json <path>] [--pr-body-file <path>]
  *
  * Exit codes:
  *   0 — all required (non-pmGated) artifacts present, or no rules matched
@@ -14,9 +14,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+interface ScopeAnnotationDef {
+  description: string;
+  allowedForRules: string[];
+  downgradesRequired: string[];
+  retains: string[];
+  pmGated: boolean;
+}
+
 interface RulesFile {
   artifactPaths: Record<string, string>;
   rules: RuleEntry[];
+  scopeAnnotations?: Record<string, ScopeAnnotationDef>;
 }
 
 interface RuleEntry {
@@ -33,6 +42,7 @@ interface ArtifactStatus {
   pmGated: boolean;
   found: boolean;
   path: string | null;
+  downgradedByAnnotation?: boolean;
 }
 
 interface RuleMatchSummary {
@@ -40,6 +50,7 @@ interface RuleMatchSummary {
   required: string[];
   advisory: string[];
   pmGated: string[];
+  annotationApplied?: boolean;
 }
 
 interface Report {
@@ -53,6 +64,8 @@ interface Report {
   missingArtifacts: string[];
   advisoryMissing: string[];
   nextActions: string[];
+  annotation_applied: boolean;
+  annotation_type: string | null;
 }
 
 // Maps artifact key → corresponding R-level identifier used in rule required/pmGated arrays
@@ -152,23 +165,77 @@ function findArtifact(repoRoot: string, globPattern: string): string | null {
   return null;
 }
 
-function parseArgs(argv: string[]): { base: string; head: string; outputJson: string | null } {
+function parseArgs(argv: string[]): {
+  base: string;
+  head: string;
+  outputJson: string | null;
+  prBodyFile: string | null;
+} {
   const args = argv.slice(2);
   let base = 'origin/main';
   let head = 'HEAD';
   let outputJson: string | null = null;
+  let prBodyFile: string | null = null;
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--base') base = args[++i] ?? base;
     else if (arg === '--head') head = args[++i] ?? head;
     else if (arg === '--output-json') outputJson = args[++i] ?? null;
+    else if (arg === '--pr-body-file') prBodyFile = args[++i] ?? null;
   }
-  return { base, head, outputJson };
+  return { base, head, outputJson, prBodyFile };
+}
+
+/**
+ * Parse the PR body file and detect scope annotations.
+ * Returns the annotation type if found (e.g. "additive-guard"), or null.
+ */
+function detectAnnotation(prBodyFile: string): string | null {
+  let content: string;
+  try {
+    content = fs.readFileSync(prBodyFile, 'utf8');
+  } catch {
+    return null;
+  }
+  for (const line of content.split('\n')) {
+    const match = /^r-scope:\s*(\S+)\s*$/.exec(line.trim());
+    if (match) {
+      return match[1];
+    }
+  }
+  return null;
+}
+
+/**
+ * Apply a scope annotation to a matched rule, returning the effective
+ * required/advisory/pmGated arrays after downgrade.
+ *
+ * Fail-closed: if the rule id is NOT in allowedForRules, returns null (no effect).
+ */
+function applyAnnotation(
+  rule: RuleEntry,
+  annotationDef: ScopeAnnotationDef,
+): { required: string[]; advisory: string[]; pmGated: string[]; applied: boolean } | null {
+  if (!annotationDef.allowedForRules.includes(rule.id)) {
+    return null;
+  }
+
+  const downgradeSet = new Set(annotationDef.downgradesRequired);
+  const retainSet = new Set(annotationDef.retains);
+
+  // Move downgraded R-levels from required → advisory (unless in retains)
+  const newRequired = rule.required.filter((r) => retainSet.has(r) || !downgradeSet.has(r));
+  const downgradedLevels = rule.required.filter(
+    (r) => downgradeSet.has(r) && !retainSet.has(r),
+  );
+  const newAdvisory = [...rule.advisory, ...downgradedLevels];
+  // pmGated remains unchanged
+  return { required: newRequired, advisory: newAdvisory, pmGated: rule.pmGated, applied: true };
 }
 
 function main(): void {
-  const { base, head, outputJson } = parseArgs(process.argv);
+  const { base, head, outputJson, prBodyFile } = parseArgs(process.argv);
 
   const __filename = fileURLToPath(import.meta.url);
   const repoRoot = path.resolve(path.dirname(__filename), '../..');
@@ -189,22 +256,60 @@ function main(): void {
   const rulesPath = path.join(repoRoot, 'docs/05_operations/r1-r5-rules.json');
   const rulesFile: RulesFile = JSON.parse(fs.readFileSync(rulesPath, 'utf8'));
 
+  // Detect scope annotation from PR body file
+  let annotationType: string | null = null;
+  let annotationDef: ScopeAnnotationDef | null = null;
+  if (prBodyFile) {
+    annotationType = detectAnnotation(prBodyFile);
+    if (annotationType && rulesFile.scopeAnnotations) {
+      annotationDef = rulesFile.scopeAnnotations[annotationType] ?? null;
+    }
+  }
+
   // Match rules against changed files
   const matchedRules: RuleEntry[] = rulesFile.rules.filter((rule) =>
     changedFiles.some((file) => rule.paths.some((p) => matchesGlob(file, p))),
   );
 
   // Union required / advisory / pmGated and artifact keys across matched rules
+  // Apply annotation overrides per-rule (fail-closed: only allowed rules are downgraded)
   const allRequired = new Set<string>();
   const allAdvisory = new Set<string>();
   const allPmGated = new Set<string>();
   const allArtifactKeys = new Set<string>();
 
+  let annotationAppliedGlobal = false;
+  const ruleMatchSummaries: RuleMatchSummary[] = [];
+
   for (const rule of matchedRules) {
-    rule.required.forEach((r) => allRequired.add(r));
-    rule.advisory.forEach((r) => allAdvisory.add(r));
-    rule.pmGated.forEach((r) => allPmGated.add(r));
+    let effectiveRequired = rule.required;
+    let effectiveAdvisory = rule.advisory;
+    let effectivePmGated = rule.pmGated;
+    let ruleAnnotationApplied = false;
+
+    if (annotationDef) {
+      const result = applyAnnotation(rule, annotationDef);
+      if (result !== null && result.applied) {
+        effectiveRequired = result.required;
+        effectiveAdvisory = result.advisory;
+        effectivePmGated = result.pmGated;
+        ruleAnnotationApplied = true;
+        annotationAppliedGlobal = true;
+      }
+    }
+
+    effectiveRequired.forEach((r) => allRequired.add(r));
+    effectiveAdvisory.forEach((r) => allAdvisory.add(r));
+    effectivePmGated.forEach((r) => allPmGated.add(r));
     rule.artifactRequirements.forEach((a) => allArtifactKeys.add(a));
+
+    ruleMatchSummaries.push({
+      id: rule.id,
+      required: effectiveRequired,
+      advisory: effectiveAdvisory,
+      pmGated: effectivePmGated,
+      ...(ruleAnnotationApplied ? { annotationApplied: true } : {}),
+    });
   }
 
   // Evaluate each artifact
@@ -218,6 +323,15 @@ function main(): void {
     const isPmGated = rlevel != null ? allPmGated.has(rlevel) : false;
     const isRequired = rlevel != null ? allRequired.has(rlevel) && !isPmGated : false;
 
+    // Check if this artifact was downgraded by annotation
+    let downgradedByAnnotation = false;
+    if (annotationAppliedGlobal && annotationDef && rlevel) {
+      const wasOriginallyRequired = matchedRules.some((r) => r.required.includes(rlevel));
+      if (wasOriginallyRequired && !isRequired) {
+        downgradedByAnnotation = true;
+      }
+    }
+
     const globPattern = rulesFile.artifactPaths[key];
     const foundPath = globPattern != null ? findArtifact(repoRoot, globPattern) : null;
 
@@ -226,6 +340,7 @@ function main(): void {
       pmGated: isPmGated,
       found: foundPath !== null,
       path: foundPath,
+      ...(downgradedByAnnotation ? { downgradedByAnnotation: true } : {}),
     };
 
     if (foundPath === null) {
@@ -242,12 +357,7 @@ function main(): void {
   const report: Report = {
     verdict: missingArtifacts.length > 0 ? 'FAIL' : 'PASS',
     changedFiles,
-    rulesMatched: matchedRules.map((r) => ({
-      id: r.id,
-      required: r.required,
-      advisory: r.advisory,
-      pmGated: r.pmGated,
-    })),
+    rulesMatched: ruleMatchSummaries,
     required: [...allRequired],
     advisory: [...allAdvisory],
     pmGated: [...allPmGated],
@@ -255,6 +365,8 @@ function main(): void {
     missingArtifacts,
     advisoryMissing,
     nextActions,
+    annotation_applied: annotationAppliedGlobal,
+    annotation_type: annotationAppliedGlobal ? annotationType : null,
   };
 
   const json = JSON.stringify(report, null, 2);
@@ -272,6 +384,24 @@ function main(): void {
     console.log(`Rules matched: ${matchedRules.map((r) => r.id).join(', ')}`);
   } else {
     console.log('Rules matched: (none) — no R-level artifacts required for this diff');
+  }
+
+  if (annotationAppliedGlobal) {
+    console.log(`\nAnnotation: r-scope: ${annotationType} — applied`);
+    const downgradedRules = ruleMatchSummaries.filter((r) => r.annotationApplied);
+    if (downgradedRules.length > 0) {
+      console.log(
+        `  Downgraded R2/R3/R4 to advisory for rules: ${downgradedRules.map((r) => r.id).join(', ')}`,
+      );
+    }
+    const skippedRules = ruleMatchSummaries.filter((r) => !r.annotationApplied);
+    if (skippedRules.length > 0) {
+      console.log(
+        `  Annotation NOT applied (rule not in allowedForRules): ${skippedRules.map((r) => r.id).join(', ')}`,
+      );
+    }
+  } else if (annotationType && !annotationDef) {
+    console.log(`\nAnnotation: r-scope: ${annotationType} — unknown annotation type, ignored`);
   }
 
   if (missingArtifacts.length > 0) {

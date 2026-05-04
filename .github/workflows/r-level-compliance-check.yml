@@ -33,11 +33,17 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Fetch PR body
+        run: |
+          gh pr view ${{ github.event.pull_request.number }} --json body -q .body > /tmp/pr-body.txt || true
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Run R-level check
         id: r_level_check
         run: |
           set +e
-          pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD --output-json /tmp/r-level-report.json
+          pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD --output-json /tmp/r-level-report.json --pr-body-file /tmp/pr-body.txt
           exit_code=$?
           echo "exit_code=${exit_code}" >> "${GITHUB_OUTPUT}"
           exit 0
