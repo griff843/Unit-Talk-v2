@@ -1,0 +1,80 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-795",
+  "title": "T1 lifecycle proof: posted → settlement → CLV → recap",
+  "merge_sha": "c76104658120dbd1674ee369c384602b376b0884",
+  "supabase_project": "zfzdnfwdarxucxtaojxm",
+  "generated_at": "2026-05-04T14:00:00.000Z",
+  "tier": "T1",
+  "verifier": {
+    "identity": "verification-lead",
+    "verdict": "PASS",
+    "notes": "PM VERDICT: PASS issued 2026-05-04. All 7 proof stages confirmed true for both designated picks. clvBacked=true."
+  },
+  "static_proof": {
+    "verify_command": "pnpm verify",
+    "verify_result": "66 suites, 0 failures",
+    "test_db_command": "pnpm test:db",
+    "test_db_result": "Both proof picks passed all 7 stage assertions. clvBacked=true for NHL d9b96f8d and MLB a3072fdc.",
+    "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/585",
+    "pr_number": 585,
+    "files_changed": [
+      "apps/api/src/scripts/utv2-795-lifecycle-proof.ts",
+      "apps/api/src/t1-proof-utv2-795-lifecycle.test.ts",
+      ".ops/sync.yml"
+    ],
+    "no_service_mutations": true,
+    "proof_only_files": true,
+    "settlement_source": "operator",
+    "feed_source_blocked": true,
+    "idempotent": true
+  },
+  "runtime_proof": {
+    "proof_picks": [
+      {
+        "pick_id": "d9b96f8d-7d57-4f70-adbd-260722cc70a5",
+        "label": "NHL player_hockey_points_ou",
+        "stages": {
+          "posted": true,
+          "settlement_created": true,
+          "corrects_id_null": true,
+          "clv_computed": true,
+          "clv_status": "computed",
+          "recap_consumes": true,
+          "audit_entity_id_present": true
+        },
+        "clvBacked": true,
+        "skipReason": null
+      },
+      {
+        "pick_id": "a3072fdc-c0f9-45e1-b10b-206f1f4c1f4b",
+        "label": "MLB player_batting_doubles_ou",
+        "stages": {
+          "posted": true,
+          "settlement_created": true,
+          "corrects_id_null": true,
+          "clv_computed": true,
+          "clv_status": "computed",
+          "recap_consumes": true,
+          "audit_entity_id_present": true
+        },
+        "clvBacked": true,
+        "skipReason": null
+      }
+    ],
+    "queries": [
+      "SELECT * FROM picks WHERE id IN ('d9b96f8d-...', 'a3072fdc-...') — both in posted/settled state",
+      "SELECT * FROM settlement_records WHERE pick_id IN (...) AND corrects_id IS NULL — original rows confirmed",
+      "SELECT clv_status FROM settlement_records.payload — both 'computed'",
+      "SELECT * FROM audit_log WHERE entity_ref = pick_id AND entity_id IS NOT NULL — both present"
+    ],
+    "row_counts": [
+      { "table": "settlement_records", "filter": "pick_id=d9b96f8d AND corrects_id IS NULL", "count": 1 },
+      { "table": "settlement_records", "filter": "pick_id=a3072fdc AND corrects_id IS NULL", "count": 1 },
+      { "table": "audit_log", "filter": "entity_ref=d9b96f8d AND entity_id IS NOT NULL", "count": 1 },
+      { "table": "audit_log", "filter": "entity_ref=a3072fdc AND entity_id IS NOT NULL", "count": 1 }
+    ],
+    "supabase_project": "zfzdnfwdarxucxtaojxm",
+    "run_at": "2026-05-04T13:35:00.000Z"
+  }
+}

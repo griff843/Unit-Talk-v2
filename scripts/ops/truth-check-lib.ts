@@ -828,10 +828,10 @@ async function fetchCommitChecks(
   }
   for (const checkRun of checksPayload.check_runs ?? []) {
     if (checkRun.name) {
-      statusMap.set(
-        checkRun.name,
-        checkRun.status === 'completed' && checkRun.conclusion === 'success',
-      );
+      const isPassed = checkRun.status === 'completed' && checkRun.conclusion === 'success';
+      if (isPassed || !statusMap.has(checkRun.name)) {
+        statusMap.set(checkRun.name, isPassed);
+      }
     }
   }
 
