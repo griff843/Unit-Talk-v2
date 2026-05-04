@@ -1,0 +1,23 @@
+{
+  "_note": "LOCAL ONLY - copy this file to repo-root discord-qa-role-channel-map.local.json and fill with real sandbox IDs. Do not commit bot tokens or secrets.",
+  "guildId": "",
+  "roles": {
+    "admin": "",
+    "operator": "",
+    "capper": "",
+    "vip": "",
+    "vipPlus": "",
+    "free": "",
+    "noAccess": ""
+  },
+  "channels": {
+    "qaBotLog": "",
+    "qaAccessCheck": "",
+    "qaPickDelivery": "",
+    "freePicks": "",
+    "vipPicks": "",
+    "vipPlusPicks": "",
+    "adminOps": "",
+    "recap": ""
+  }
+}

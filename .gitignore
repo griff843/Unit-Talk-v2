@@ -75,3 +75,6 @@ scripts/fix-*.ts
 scripts/pick-count.ts
 scripts/submit-slate.ts
 scripts/apply-migration-*.ts
+
+# Discord QA local credential maps
+discord-qa-role-channel-map.local.json

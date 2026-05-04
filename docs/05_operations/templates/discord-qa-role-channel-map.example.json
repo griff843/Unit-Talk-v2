@@ -1,0 +1,23 @@
+{
+  "_note": "Committed example only. Copy docs/05_operations/templates/discord-qa-role-channel-map.local.example.json to repo-root discord-qa-role-channel-map.local.json for real local sandbox IDs.",
+  "guildId": "",
+  "roles": {
+    "admin": "",
+    "operator": "",
+    "capper": "",
+    "vip": "",
+    "vipPlus": "",
+    "free": "",
+    "noAccess": ""
+  },
+  "channels": {
+    "qaBotLog": "",
+    "qaAccessCheck": "",
+    "qaPickDelivery": "",
+    "freePicks": "",
+    "vipPicks": "",
+    "vipPlusPicks": "",
+    "adminOps": "",
+    "recap": ""
+  }
+}
