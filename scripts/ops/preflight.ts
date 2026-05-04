@@ -585,7 +585,7 @@ async function runLinearChecks(
     const normalizedFiles = candidateFiles.map((filePath) => normalizeRepoRelativePath(filePath));
     const overlap = readAllManifests()
       .filter((manifest) => ['started', 'in_progress', 'in_review', 'blocked', 'reopened'].includes(manifest.status))
-      .find((manifest) => normalizedFiles.some((filePath) => manifest.file_scope_lock.includes(filePath)));
+      .find((manifest) => normalizedFiles.some((filePath) => (manifest.file_scope_lock ?? []).includes(filePath)));
     if (overlap) {
       addCheck('PL6', 'fail', `candidate file scope overlaps with active manifest ${overlap.issue_id}`);
     } else {
