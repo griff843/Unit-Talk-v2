@@ -85,6 +85,22 @@ For each validated target:
 - Execute the work directly in this conversation
 - Follow the acceptance criteria from the issue description
 - Run `pnpm verify` after implementation
+
+**Before opening PR — required for all lanes:**
+1. `pnpm verify` — must be green
+2. `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules; fix any FAIL
+3. For each missing required artifact flagged by step 2, generate it:
+   - `r2-determinism`: run `tsx scripts/live-data-lab-runner.ts` (if it exists — skip if not found)
+   - `r3-shadow-report`: run `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (if it exists — skip if not found)
+   - `qa-experience-report`: run `pnpm qa:experience --regression --mode fast` (if it exists — skip if not found)
+4. Re-run step 2 to confirm PASS before opening PR
+5. Paste the step 2 PASS output into PR body under `## R-level compliance`
+
+**If lane tier is T1:**
+- Also run: `pnpm test:db`
+- Paste the last 30 lines of output into PR body under `## Live-DB proof`
+- A T1 PR must not be opened without pnpm test:db PASS
+
 - Open PR via `gh pr create`
 - After `gh pr create` returns a PR URL/number, immediately apply the tier label:
   ```bash
@@ -96,6 +112,18 @@ For each validated target:
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
 - Dispatch via Codex rescue agent with the issue description as the prompt
 - Include: issue ID, acceptance criteria, file scope, branch name
+- Codex must complete the following before opening the PR:
+
+**Before opening PR — required for all lanes:**
+1. `pnpm verify` — must be green
+2. `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules; fix any FAIL
+3. For each missing required artifact flagged by step 2, generate it:
+   - `r2-determinism`: run `tsx scripts/live-data-lab-runner.ts` (if it exists — skip if not found)
+   - `r3-shadow-report`: run `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (if it exists — skip if not found)
+   - `qa-experience-report`: run `pnpm qa:experience --regression --mode fast` (if it exists — skip if not found)
+4. Re-run step 2 to confirm PASS before opening PR
+5. Paste the step 2 PASS output into PR body under `## R-level compliance`
+
 - After Codex opens the PR, immediately apply the tier label:
   ```bash
   gh pr edit <PR-number-or-URL> --add-label "tier:T2"   # replace with actual tier: T1 / T2 / T3

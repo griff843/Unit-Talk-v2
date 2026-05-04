@@ -207,10 +207,12 @@ pnpm verify
 
 This runs: env:check + lint + type-check + build + test. All must pass. If any fail, fix before submitting.
 
-For tasks touching the DB layer, also run:
+**`pnpm test:db` requirements:**
 ```bash
 pnpm test:db
 ```
+T1 issues ALWAYS require `pnpm test:db` regardless of whether they explicitly touch the DB layer.
+T2/T3 issues: run `pnpm test:db` only if changed files include `supabase/migrations/**`, `packages/db/**`, or `apps/api/src/**-service.ts`. When in doubt, run it — it's non-destructive.
 
 ---
 
@@ -220,6 +222,9 @@ Before opening any PR, complete all 7 steps in order:
 
 1. **R-level lookup** — open `docs/05_operations/r1-r5-rules.json`, identify which rules match your changed file paths, and confirm all `artifactRequirements[]` are satisfied. If any required artifact is absent, produce it or document why it is not applicable.
 2. **pnpm verify** — must be green. No exceptions.
+   Run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`.
+   If it prints FAIL, generate the missing artifacts from the NEXT_ACTION_COMMANDS output, then re-run until PASS.
+   Paste the final PASS output into the PR body under `## R-level compliance`.
 3. **Scope check** — every file you changed must be within the issue's acceptance criteria. Revert any scope bleed.
 4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
 5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
