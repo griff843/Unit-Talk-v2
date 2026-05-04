@@ -66,6 +66,7 @@ function createIngestorRuntimeDependencies() {
       persistenceMode: 'database' as const,
       runtimeMode,
       repositories: createDatabaseIngestorRepositoryBundle(connection),
+      retentionConnection: connection,
       leagues,
       pollIntervalMs,
       maxCycles,
@@ -190,6 +191,9 @@ if (runtime.autorun) {
         providerDbWritePolicy: runtime.providerDbWritePolicy,
         providerPayloadArchivePolicy: runtime.providerPayloadArchivePolicy,
         logger: console,
+        ...('retentionConnection' in runtime && runtime.retentionConnection
+          ? { retentionConnection: runtime.retentionConnection }
+          : {}),
         ...(opsAlertWebhookUrl
           ? { onStalenessAlert: (msg: string) => postOpsAlert(opsAlertWebhookUrl, msg) }
           : {}),
