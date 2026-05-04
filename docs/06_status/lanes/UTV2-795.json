@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-795",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "griffadavi/utv2-795-lifecycle-proof",
+  "base_branch": "main",
+  "commit_sha": "c76104658120dbd1674ee369c384602b376b0884",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/585",
+  "files_changed": [
+    "apps/api/src/scripts/utv2-795-lifecycle-proof.ts",
+    "apps/api/src/t1-proof-utv2-795-lifecycle.test.ts",
+    "docs/06_status/proof/UTV2-795/evidence.json",
+    "docs/06_status/lanes/UTV2-795.json"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/scripts/utv2-795-lifecycle-proof.ts",
+    "apps/api/src/t1-proof-utv2-795-lifecycle.test.ts",
+    ".ops/sync.yml",
+    "docs/06_status/proof/UTV2-795/evidence.json",
+    "docs/06_status/lanes/UTV2-795.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-795/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-04T00:00:00.000Z",
+  "heartbeat_at": "2026-05-04T13:54:32.795Z",
+  "closed_at": "2026-05-04T13:54:32.795Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-04T13:50:39.406Z",
+      "verdict": "reopen",
+      "merge_sha": "c76104658120dbd1674ee369c384602b376b0884",
+      "failures": [
+        "G3",
+        "G4",
+        "G5"
+      ],
+      "runner": "manual",
+      "notes": "G3=stale local main ref; G4=cancel-in-progress pattern false negative; G5=sync.yml auto-reset pattern. All fixed in subsequent run."
+    },
+    {
+      "checked_at": "2026-05-04T13:54:18.343Z",
+      "verdict": "pass",
+      "merge_sha": "c76104658120dbd1674ee369c384602b376b0884",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-04T13:54:28.747Z",
+      "verdict": "pass",
+      "merge_sha": "c76104658120dbd1674ee369c384602b376b0884",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": []
+}
