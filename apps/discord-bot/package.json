@@ -15,6 +15,7 @@
     "command-manifest:write": "tsx scripts/sync-command-manifest.ts",
     "deploy-commands": "tsx scripts/deploy-commands.ts",
     "dev": "tsx src/main.ts",
+    "dev:qa-sandbox": "tsx src/main-qa-sandbox.ts",
     "type-check": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
