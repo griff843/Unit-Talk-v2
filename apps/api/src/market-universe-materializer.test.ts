@@ -13,6 +13,8 @@ import assert from 'node:assert/strict';
 import { MarketUniverseMaterializer } from './market-universe-materializer.js';
 import { InMemoryMarketUniverseRepository } from '@unit-talk/db';
 import type {
+  EventRepository,
+  EventRow,
   ProviderEntityAliasRow,
   ProviderMarketAliasRow,
   ProviderCycleStatusRow,
@@ -141,6 +143,47 @@ function makeParticipantAliasRow(
   };
 }
 
+function makeEventRow(overrides: Partial<EventRow> = {}): EventRow {
+  const now = new Date().toISOString();
+  return {
+    id: 'event-uuid-1',
+    sport_id: 'nba',
+    event_name: 'Lakers at Warriors',
+    event_date: now,
+    status: 'scheduled',
+    external_id: 'event-abc',
+    metadata: {},
+    created_at: now,
+    updated_at: now,
+    ...overrides,
+  };
+}
+
+function makeEventRepo(events: EventRow[] = []): EventRepository {
+  return {
+    async upsertByExternalId() {
+      return events[0] ?? makeEventRow();
+    },
+    async findById(eventId: string) {
+      return events.find((event) => event.id === eventId) ?? null;
+    },
+    async findByExternalId(externalId: string) {
+      return events.find((event) => event.external_id === externalId) ?? null;
+    },
+    async listUpcoming() {
+      return events;
+    },
+    async listByName(eventName: string) {
+      return events.filter(
+        (event) => event.event_name.toLowerCase() === eventName.toLowerCase(),
+      );
+    },
+    async listStartedBySnapshot() {
+      return events;
+    },
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -149,7 +192,11 @@ test('materializer: returns zero result when no offers exist', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   const result = await materializer.run();
 
   assert.equal(result.upserted, 0);
@@ -163,7 +210,11 @@ test('materializer: upserts one row from a single offer', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([offer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   const result = await materializer.run();
 
   assert.equal(result.upserted, 1);
@@ -185,12 +236,54 @@ test('materializer: upserts one row from a single offer', async () => {
   assert.equal(row.closing_line, null);
 });
 
+test('materializer: resolves event_id from provider_event_id when matching event exists', async () => {
+  const offer = makeOffer({ provider_event_id: 'provider-event-123' });
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepo([offer]);
+  const events = makeEventRepo([
+    makeEventRow({
+      id: 'event-uuid-123',
+      external_id: 'provider-event-123',
+    }),
+  ]);
+
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events,
+  });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.event_id, 'event-uuid-123');
+});
+
+test('materializer: leaves event_id null when provider_event_id has no matching event', async () => {
+  const offer = makeOffer({ provider_event_id: 'provider-event-missing' });
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const providerOffers = makeProviderOffersRepo([offer]);
+
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
+  await materializer.run();
+
+  const row = marketUniverse.listAll()[0]!;
+  assert.equal(row.event_id, null);
+});
+
 test('materializer: idempotent — running twice does not increase row count', async () => {
   const offer = makeOffer();
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([offer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
   await materializer.run();
 
@@ -203,7 +296,11 @@ test('materializer: two offers with different natural keys produce two rows', as
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([offer1, offer2]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   const result = await materializer.run();
 
   assert.equal(result.upserted, 2);
@@ -241,6 +338,7 @@ test('materializer: opening values are not overwritten on second run', async () 
   const firstMaterializer = new MarketUniverseMaterializer({
     providerOffers: makeProviderOffersRepo([openingOffer, laterOffer]),
     marketUniverse,
+    events: makeEventRepo(),
   });
   await firstMaterializer.run();
 
@@ -253,6 +351,7 @@ test('materializer: opening values are not overwritten on second run', async () 
   const secondMaterializer = new MarketUniverseMaterializer({
     providerOffers: makeProviderOffersRepo([laterOffer]),
     marketUniverse,
+    events: makeEventRepo(),
   });
   await secondMaterializer.run();
 
@@ -290,7 +389,11 @@ test('materializer: closing values are set from is_closing=true offer', async ()
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([openingOffer, closingOffer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -309,7 +412,11 @@ test('materializer: is_stale=true when last snapshot older than 2 hours', async 
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([staleOffer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -325,7 +432,11 @@ test('materializer: is_stale=false when last snapshot is recent', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([freshOffer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -337,7 +448,11 @@ test('materializer: fair probabilities are computed for valid odds', async () =>
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([offer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -353,7 +468,11 @@ test('materializer: fair probabilities are null when odds are null', async () =>
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([offer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -386,7 +505,11 @@ test('materializer: current line reflects the latest snapshot among multiple off
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepo([earlier, later]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -410,6 +533,7 @@ test('materializer: SGO participant rows fail closed for participant-forbidden g
   const materializer = new MarketUniverseMaterializer({
     providerOffers,
     marketUniverse,
+    events: makeEventRepo(),
   });
   await materializer.run();
 
@@ -467,6 +591,7 @@ test('materializer: SGO participant contract covers required, forbidden, and opt
   const materializer = new MarketUniverseMaterializer({
     providerOffers,
     marketUniverse,
+    events: makeEventRepo(),
   });
   await materializer.run();
 
@@ -552,7 +677,11 @@ test('materializer: pre-commence closing offer absent from listRecentOffers is f
   // listRecentOffers returns only the live offer — closing offer excluded by row cap
   const providerOffers = makeProviderOffersRepoSplit([liveOffer], [closingOffer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -578,7 +707,11 @@ test('materializer: closing offer appearing in both result sets is deduplicated 
   // Same offer in both result sets — merged via offerById Map, so only one row
   const providerOffers = makeProviderOffersRepoSplit([closingOffer], [closingOffer]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   const result = await materializer.run();
 
   assert.equal(result.upserted, 1, 'duplicate closing offer must not produce two market_universe rows');
@@ -618,7 +751,11 @@ test('materializer: multiple is_closing offers for same natural key — earliest
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepoSplit([earlierClosing, laterClosing], []);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -659,7 +796,11 @@ test('materializer: MLB sport_key — closing_line set correctly from separate c
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepoSplit([mlbLive], [mlbClosing]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -703,7 +844,11 @@ test('materializer: NHL sport_key — closing_line set correctly from separate c
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const providerOffers = makeProviderOffersRepoSplit([nhlLive], [nhlClosing]);
 
-  const materializer = new MarketUniverseMaterializer({ providerOffers, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
   await materializer.run();
 
   const row = marketUniverse.listAll()[0]!;
@@ -732,7 +877,11 @@ test('materializer: listClosingOffers failure throws — no silent CLV substitut
   };
 
   const marketUniverse = new InMemoryMarketUniverseRepository();
-  const materializer = new MarketUniverseMaterializer({ providerOffers: faultyRepo, marketUniverse });
+  const materializer = new MarketUniverseMaterializer({
+    providerOffers: faultyRepo,
+    marketUniverse,
+    events: makeEventRepo(),
+  });
 
   await assert.rejects(
     () => materializer.run(),
