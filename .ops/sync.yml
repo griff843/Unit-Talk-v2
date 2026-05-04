@@ -3,7 +3,9 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues: []
+  issues:
+    - UTV2-794
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - utv2-794-canonical-write-proof
