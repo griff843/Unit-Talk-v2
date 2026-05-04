@@ -21,6 +21,7 @@ const COMMAND_ENTRIES: ReadonlyArray<{ name: string; description: string }> = [
   { name: 'leaderboard', description: 'Show the top cappers in the selected settled-pick window' },
   { name: 'help',        description: 'Show all available commands and their descriptions' },
   { name: 'recap',       description: 'Show your last settled picks' },
+  { name: 'ops-restart', description: 'Restart a named service — operator only, cooldown enforced' },
 ];
 
 export function createHelpCommand(): CommandHandler {

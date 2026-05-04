@@ -88,6 +88,27 @@
     "options": [
       {
         "type": 3,
+        "name": "service",
+        "description": "Service to restart. Restartable: api, worker, ingestor, discord-bot",
+        "required": true,
+        "max_length": 64
+      },
+      {
+        "type": 3,
+        "name": "reason",
+        "description": "Optional reason for the restart (for the audit log)",
+        "required": false,
+        "max_length": 256
+      }
+    ],
+    "name": "ops-restart",
+    "description": "Restart a named service (operator only)",
+    "type": 1
+  },
+  {
+    "options": [
+      {
+        "type": 3,
         "name": "market",
         "description": "Market label, e.g. NBA - Moneyline",
         "required": true,
