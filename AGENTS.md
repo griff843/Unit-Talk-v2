@@ -216,7 +216,7 @@ pnpm test:db
 
 ## Codex Pre-PR Checklist
 
-Before opening any PR, complete all 6 steps in order:
+Before opening any PR, complete all 7 steps in order:
 
 1. **R-level lookup** — open `docs/05_operations/r1-r5-rules.json`, identify which rules match your changed file paths, and confirm all `artifactRequirements[]` are satisfied. If any required artifact is absent, produce it or document why it is not applicable.
 2. **pnpm verify** — must be green. No exceptions.
@@ -224,6 +224,11 @@ Before opening any PR, complete all 6 steps in order:
 4. **No new `any` casts** — unless the existing code already uses them and the issue does not require typed fixes.
 5. **Tests** — new runtime behavior requires new `node:test` tests. No test count decrease.
 6. **Commit message** — must reference the Linear issue ID (e.g., `feat(api): UTV2-115 fail-closed runtime mode`).
+7. **Tier label** — after opening the PR with `gh pr create`, immediately run:
+   ```bash
+   gh pr edit <PR-URL-or-number> --add-label "tier:T2"
+   ```
+   Replace `T2` with the actual tier from the Linear issue labels. Never skip this step — tier-label-check CI will block the merge gate.
 
 ### Forbidden actions (never do these in a PR)
 
@@ -258,6 +263,11 @@ Every PR body must include these sections exactly:
 
 ## Test coverage
 <list new or updated test files and what scenario each covers>
+
+## Merge order
+State whether this PR must merge before or after any other currently open PR.
+- If independent: "No open lanes share overlapping files — no merge dependency."
+- If dependent: "Must merge after PR #NNN (UTV2-###) — that lane changes X which this PR imports."
 ```
 
 ---

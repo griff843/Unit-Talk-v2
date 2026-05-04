@@ -86,11 +86,21 @@ For each validated target:
 - Follow the acceptance criteria from the issue description
 - Run `pnpm verify` after implementation
 - Open PR via `gh pr create`
+- After `gh pr create` returns a PR URL/number, immediately apply the tier label:
+  ```bash
+  gh pr edit <PR-number-or-URL> --add-label "tier:T1"   # replace with actual tier: T1 / T2 / T3
+  ```
+  Never leave a PR open without a tier label — tier-label-check CI will block the merge gate.
 - Post executor-result comment on the PR
 
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
 - Dispatch via Codex rescue agent with the issue description as the prompt
 - Include: issue ID, acceptance criteria, file scope, branch name
+- After Codex opens the PR, immediately apply the tier label:
+  ```bash
+  gh pr edit <PR-number-or-URL> --add-label "tier:T2"   # replace with actual tier: T1 / T2 / T3
+  ```
+  Never leave a PR open without a tier label — tier-label-check CI will block the merge gate.
 - Report that Codex lane is dispatched and will need review on return
 
 ### Phase 5: Sequential execution for multiple lanes
@@ -100,6 +110,20 @@ When dispatching multiple lanes:
 2. Dispatch Codex lanes in background (they run in parallel)
 3. After Claude lane PR is open, check Codex status
 4. Review Codex results when they return
+
+### Merge order declaration
+
+When dispatching multiple lanes, emit a merge-order table before starting:
+
+| Lane | Issue | Files touched | Must merge after |
+|------|-------|--------------|-----------------|
+| Claude | UTV2-NNN | apps/api/src/foo.ts | (none — base) |
+| Codex  | UTV2-MMM | apps/command-center/** | UTV2-NNN (imports its output) |
+
+Rules:
+- A lane must appear in "Must merge after" if it imports or calls output from another open lane.
+- Lanes touching fully disjoint areas have no dependency — write "none" explicitly.
+- Each agent's PR body must include a `## Merge order` section citing this table.
 
 ### Phase 5.5: Fibery auto-sync (for proof lanes)
 
