@@ -150,7 +150,7 @@ jobs:
                 if (!verdictMatch) return null;
                 if (lines[1] !== 'schema: pm-verdict/v1') return null;
                 const issueMatch = lines[2].match(
-                  /^Issue:\s+(UTV2-\d+)$/i
+                  /^Issue:\s+((?:UTV2|UNI)-\d+)$/i
                 );
                 if (!issueMatch) return null;
                 return {
