@@ -60,18 +60,29 @@ if (-not $FullNextDir) {
     }
 }
 
-# ── Quick type-check to surface immediate errors ──────────────────────────────
-Write-Host "==> Running type-check on main..." -ForegroundColor Cyan
+# ── Quick check to surface immediate errors ───────────────────────────────────
+# verify:quick = sync-check + env:check + lint + type-check (~30s vs ~5min full verify)
+Write-Host "==> Running verify:quick on main..." -ForegroundColor Cyan
 Push-Location $Root
 try {
-    pnpm type-check
-    Write-Host "   type-check passed." -ForegroundColor Green
+    pnpm verify:quick
+    Write-Host "   verify:quick passed." -ForegroundColor Green
 } catch {
-    Write-Warning "type-check failed on main — investigate before starting lane work."
+    Write-Warning "verify:quick failed on main — investigate before starting lane work."
 } finally {
     Pop-Location
 }
 
+# ── One-time hook install (idempotent) ───────────────────────────────────────
+$PostRewriteHook = Join-Path $Root ".git\hooks\post-rewrite"
+if (-not (Test-Path $PostRewriteHook)) {
+    Write-Host "==> Installing git hooks (first-time setup)..." -ForegroundColor Cyan
+    node (Join-Path $Root "scripts\install-dev-hooks.mjs")
+} else {
+    Write-Host "==> Git hooks already installed." -ForegroundColor Green
+}
+
 Write-Host ""
 Write-Host "Session ready. Main is up to date, junction is healthy." -ForegroundColor Green
-Write-Host "Next: run 'pnpm verify' on your branch before any push." -ForegroundColor Cyan
+Write-Host "Tip: after rebase, sync.yml auto-repairs via post-rewrite hook." -ForegroundColor Cyan
+Write-Host "Tip: run 'pnpm verify:quick' after rebase, 'pnpm verify' before push." -ForegroundColor Cyan

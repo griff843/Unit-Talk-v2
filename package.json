@@ -130,7 +130,8 @@
     "verify:pick": "tsx scripts/verify-pick.ts",
     "lint:migrations": "node scripts/lint-migrations.mjs",
     "verify:commands": "pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs",
-    "verify": "pnpm ops:sync-check && pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test && pnpm --filter @unit-talk/smart-form verify && pnpm verify:commands"
+    "verify": "pnpm ops:sync-check && pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test && pnpm --filter @unit-talk/smart-form verify && pnpm verify:commands",
+    "verify:quick": "pnpm ops:sync-check && pnpm env:check && pnpm lint && pnpm type-check"
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",
