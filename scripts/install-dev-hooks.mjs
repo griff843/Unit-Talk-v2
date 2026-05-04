@@ -8,7 +8,7 @@
 //   post-rewrite  — after `git rebase`, auto-repairs .ops/sync.yml if it was
 //                   reset to neutral by the post-merge-lane-close Action
 
-import { writeFileSync, mkdirSync, chmodSync, existsSync } from 'fs';
+import { writeFileSync, chmodSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
