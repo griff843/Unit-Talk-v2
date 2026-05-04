@@ -66,6 +66,11 @@ export interface AppEnv {
   DISCORD_BOT_TOKEN?: string | undefined;
   DISCORD_CLIENT_ID?: string | undefined;
   DISCORD_GUILD_ID?: string | undefined;
+  DISCORD_QA_BOT_TOKEN?: string | undefined;
+  DISCORD_QA_CLIENT_ID?: string | undefined;
+  DISCORD_QA_GUILD_ID?: string | undefined;
+  DISCORD_QA_ROLE_MAP?: string | undefined;
+  DISCORD_QA_CHANNEL_MAP?: string | undefined;
   DISCORD_CAPPER_ROLE_ID?: string | undefined;
   DISCORD_OPERATOR_ROLE_ID?: string | undefined;
   DISCORD_VIP_ROLE_ID?: string | undefined;
@@ -74,6 +79,8 @@ export interface AppEnv {
   DISCORD_CAPPER_CHANNEL_ID?: string | undefined;
   DISCORD_ANNOUNCEMENT_CHANNEL_ID?: string | undefined;
   UNIT_TALK_API_URL?: string | undefined;
+  UNIT_TALK_QA_API_URL?: string | undefined;
+  UNIT_TALK_QA_SEED_ENABLED?: string | undefined;
   UNIT_TALK_API_KEY_SUBMITTER?: string | undefined;
   OPENAI_API_KEY?: string | undefined;
   NOTION_TOKEN?: string | undefined;
@@ -221,6 +228,11 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     DISCORD_BOT_TOKEN: optionalEnv('DISCORD_BOT_TOKEN', merged),
     DISCORD_CLIENT_ID: optionalEnv('DISCORD_CLIENT_ID', merged),
     DISCORD_GUILD_ID: optionalEnv('DISCORD_GUILD_ID', merged),
+    DISCORD_QA_BOT_TOKEN: optionalEnv('DISCORD_QA_BOT_TOKEN', merged),
+    DISCORD_QA_CLIENT_ID: optionalEnv('DISCORD_QA_CLIENT_ID', merged),
+    DISCORD_QA_GUILD_ID: optionalEnv('DISCORD_QA_GUILD_ID', merged),
+    DISCORD_QA_ROLE_MAP: optionalEnv('DISCORD_QA_ROLE_MAP', merged),
+    DISCORD_QA_CHANNEL_MAP: optionalEnv('DISCORD_QA_CHANNEL_MAP', merged),
     DISCORD_CAPPER_ROLE_ID: optionalEnv('DISCORD_CAPPER_ROLE_ID', merged),
     DISCORD_OPERATOR_ROLE_ID: optionalEnv('DISCORD_OPERATOR_ROLE_ID', merged),
     DISCORD_VIP_ROLE_ID: optionalEnv('DISCORD_VIP_ROLE_ID', merged),
@@ -229,6 +241,8 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     DISCORD_CAPPER_CHANNEL_ID: optionalEnv('DISCORD_CAPPER_CHANNEL_ID', merged),
     DISCORD_ANNOUNCEMENT_CHANNEL_ID: optionalEnv('DISCORD_ANNOUNCEMENT_CHANNEL_ID', merged),
     UNIT_TALK_API_URL: optionalEnv('UNIT_TALK_API_URL', merged),
+    UNIT_TALK_QA_API_URL: optionalEnv('UNIT_TALK_QA_API_URL', merged),
+    UNIT_TALK_QA_SEED_ENABLED: optionalEnv('UNIT_TALK_QA_SEED_ENABLED', merged),
     UNIT_TALK_API_KEY_SUBMITTER: optionalEnv('UNIT_TALK_API_KEY_SUBMITTER', merged),
     OPENAI_API_KEY: optionalEnv('OPENAI_API_KEY', merged),
     NOTION_TOKEN: optionalEnv('NOTION_TOKEN', merged),

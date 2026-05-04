@@ -56,6 +56,8 @@ import {
   handlePromotionScores,
   handleBuildCandidates,
   handleModelPerformance,
+  handleQaSeedPick,
+  handleQaPickStatus,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import { handleModelHealthAlerts, handleModelHealthDecision } from './routes/model-health.js';
@@ -405,6 +407,19 @@ export async function routeRequest(
   // UTV2-798: model performance calibration analytics
   if (method === 'GET' && url.pathname === '/api/model-performance') {
     return handleModelPerformance(request, response, runtime);
+  }
+
+  const qaPickStatusMatch =
+    method === 'GET'
+      ? /^\/api\/qa\/pick-status\/([^/]+)$/.exec(url.pathname)
+      : null;
+
+  if (qaPickStatusMatch) {
+    return handleQaPickStatus(request, response, runtime, qaPickStatusMatch[1] ?? '');
+  }
+
+  if (method === 'POST' && url.pathname === '/api/qa/seed-pick') {
+    return handleQaSeedPick(request, response, runtime);
   }
 
   // --- Auth gate: all POST routes require authentication ---

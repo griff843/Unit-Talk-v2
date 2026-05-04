@@ -19,3 +19,15 @@ export function createDiscordClient(): Client {
     ],
   });
 }
+
+/**
+ * QA sandbox startup path uses only non-privileged intents so the dedicated
+ * QA bot can come online without requiring member intent approval.
+ */
+export function createQaSandboxDiscordClient(): Client {
+  return new Client({
+    intents: [
+      GatewayIntentBits.Guilds,
+    ],
+  });
+}

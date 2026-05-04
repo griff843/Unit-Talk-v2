@@ -15,7 +15,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { AppEnv } from '@unit-talk/config';
-import { parseBotConfig } from './config.js';
+import { parseBotConfig, parseQaBotConfig } from './config.js';
 import { checkRoles } from './role-guard.js';
 import { loadCommandRegistry } from './command-registry.js';
 import { createInteractionHandler } from './router.js';
@@ -428,6 +428,40 @@ test('parseBotConfig returns BotConfig when all required vars are present', () =
   assert.equal(config.appEnv, 'local');
 });
 
+test('parseQaBotConfig maps DISCORD_QA_* env and sandbox role/channel ids into BotConfig', () => {
+  const env = makeMinimalEnv({
+    DISCORD_QA_BOT_TOKEN: 'qa-token',
+    DISCORD_QA_CLIENT_ID: 'qa-client-id',
+    DISCORD_QA_GUILD_ID: '1195598141026742343',
+    UNIT_TALK_QA_API_URL: 'http://localhost:4001',
+  });
+
+  const config = parseQaBotConfig(env, {
+    guildId: '1195598141026742343',
+    roles: {
+      operator: 'qa-operator-role',
+      capper: 'qa-capper-role',
+      vip: 'qa-vip-role',
+      vipPlus: 'qa-vip-plus-role',
+    },
+    channels: {
+      qaAccessCheck: 'qa-access-channel',
+      qaPickDelivery: 'qa-pick-delivery-channel',
+    },
+  });
+
+  assert.equal(config.token, 'qa-token');
+  assert.equal(config.clientId, 'qa-client-id');
+  assert.equal(config.guildId, '1195598141026742343');
+  assert.equal(config.capperRoleId, 'qa-capper-role');
+  assert.equal(config.vipRoleId, 'qa-vip-role');
+  assert.equal(config.vipPlusRoleId, 'qa-vip-plus-role');
+  assert.equal(config.trialRoleId, null);
+  assert.equal(config.capperChannelId, 'qa-access-channel');
+  assert.equal(config.operatorRoleId, 'qa-operator-role');
+  assert.equal(config.apiUrl, 'http://localhost:4001');
+});
+
 test('loadCommandRegistry also loads live, today, my-picks, and results commands', async () => {
   await withEnvVars(
     makeRegistryEnv({
@@ -763,6 +797,36 @@ test('parseBotConfig error message lists all missing vars at once', () => {
       assert.ok(err.message.includes('DISCORD_CLIENT_ID'), err.message);
       assert.ok(err.message.includes('DISCORD_VIP_ROLE_ID'), err.message);
       assert.ok(err.message.includes('UNIT_TALK_API_URL'), err.message);
+      return true;
+    },
+  );
+});
+
+test('parseQaBotConfig error message lists missing QA env and sandbox map requirements', () => {
+  const env = makeMinimalEnv({
+    DISCORD_QA_BOT_TOKEN: undefined,
+    DISCORD_QA_CLIENT_ID: undefined,
+    DISCORD_QA_GUILD_ID: undefined,
+    UNIT_TALK_QA_API_URL: undefined,
+  });
+
+  assert.throws(
+    () =>
+      parseQaBotConfig(env, {
+        roles: {
+          vipPlus: 'qa-vip-plus-role',
+        },
+        channels: {},
+      }),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.ok(err.message.includes('DISCORD_QA_BOT_TOKEN'), err.message);
+      assert.ok(err.message.includes('DISCORD_QA_CLIENT_ID'), err.message);
+      assert.ok(err.message.includes('DISCORD_QA_GUILD_ID'), err.message);
+      assert.ok(err.message.includes('qaMap.roles.capper'), err.message);
+      assert.ok(err.message.includes('qaMap.roles.vip'), err.message);
+      assert.ok(err.message.includes('qaMap.channels.qaAccessCheck|qaBotLog'), err.message);
+      assert.ok(err.message.includes('UNIT_TALK_QA_API_URL'), err.message);
       return true;
     },
   );
