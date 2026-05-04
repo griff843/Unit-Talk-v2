@@ -21,13 +21,14 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import test from 'node:test';
 
-const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+// ROOT points to apps/smart-form — the app whose source tree we are auditing
+const SMART_FORM_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../smart-form');
 
 // All directories containing Smart Form application code (not tests/scripts)
 const SOURCE_DIRS = [
-  path.join(ROOT, 'app'),
-  path.join(ROOT, 'components'),
-  path.join(ROOT, 'lib'),
+  path.join(SMART_FORM_ROOT, 'app'),
+  path.join(SMART_FORM_ROOT, 'components'),
+  path.join(SMART_FORM_ROOT, 'lib'),
 ];
 
 /**
@@ -92,7 +93,7 @@ test('smart-form source tree contains no direct DB write patterns', () => {
 
   for (const filePath of files) {
     const source = readText(filePath);
-    const relPath = path.relative(ROOT, filePath);
+    const relPath = path.relative(SMART_FORM_ROOT, filePath);
     for (const [pattern, description] of FORBIDDEN_WRITE_PATTERNS) {
       if (pattern.test(source)) {
         violations.push(`${relPath}: ${description} (pattern: ${pattern})`);
@@ -108,7 +109,7 @@ test('smart-form source tree contains no direct DB write patterns', () => {
 });
 
 test('smart-form submit path calls canonical /api/submissions endpoint (not direct DB)', () => {
-  const apiClientPath = path.join(ROOT, 'lib', 'api-client.ts');
+  const apiClientPath = path.join(SMART_FORM_ROOT, 'lib', 'api-client.ts');
   assert.ok(fs.existsSync(apiClientPath), 'lib/api-client.ts must exist');
 
   const source = readText(apiClientPath);
@@ -130,7 +131,7 @@ test('smart-form submit path calls canonical /api/submissions endpoint (not dire
 
 test('smart-form does not import @unit-talk/db anywhere in the dependency graph', () => {
   // Also check package.json to ensure the package is not listed as a dependency.
-  const packageJsonPath = path.join(ROOT, 'package.json');
+  const packageJsonPath = path.join(SMART_FORM_ROOT, 'package.json');
   const packageJson = JSON.parse(readText(packageJsonPath)) as {
     dependencies?: Record<string, string>;
     devDependencies?: Record<string, string>;
@@ -154,7 +155,7 @@ test('smart-form audit events are not written directly — must use canonical AP
 
   for (const filePath of files) {
     const source = readText(filePath);
-    const relPath = path.relative(ROOT, filePath);
+    const relPath = path.relative(SMART_FORM_ROOT, filePath);
 
     assert.doesNotMatch(
       source,

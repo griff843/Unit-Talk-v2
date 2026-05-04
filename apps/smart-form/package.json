@@ -10,7 +10,7 @@
     "verify": "pnpm type-check && pnpm test",
     "type-check": "tsc --noEmit",
     "lint": "next lint",
-    "test": "tsx --test test/form-schema.test.ts test/form-utils.test.ts test/api-client.test.ts test/allowlist.test.ts test/control-plane-boundary.test.ts src/canonical-write-contract.test.ts",
+    "test": "tsx --test test/form-schema.test.ts test/form-utils.test.ts test/api-client.test.ts test/allowlist.test.ts test/control-plane-boundary.test.ts",
     "test:e2e": "playwright test -c playwright.config.ts"
   },
   "dependencies": {
