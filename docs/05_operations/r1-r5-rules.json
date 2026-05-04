@@ -79,10 +79,12 @@
       "paths": [
         "apps/discord-bot/**"
       ],
-      "required": ["R1", "qa-experience"],
-      "advisory": ["R4"],
+      "required": ["R1"],
+      "advisory": ["R4", "qa-experience"],
       "pmGated": ["R4"],
-      "artifactRequirements": ["qa-experience-report"]
+      "artifactRequirements": [],
+      "blockedUntil": "UTV2-827 and UTV2-828 — Discord staging server and bot token required",
+      "blockedNote": "qa-experience downgraded to advisory; upgrade back to required once Discord QA infra is provisioned"
     },
     {
       "id": "ingestor-provider",

@@ -31,3 +31,4 @@ export { handleHealthConfig } from './config.js';
 export { handleBoardWritePicks, handleBoardRunTuning } from './board.js';
 export { handlePromotionScores } from './promotion-scores.js';
 export { handleBuildCandidates } from './candidates.js';
+export { handleModelPerformance } from './model-performance.js';

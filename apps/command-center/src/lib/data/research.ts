@@ -4,6 +4,165 @@ import { getDataClient } from './client';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 type Client = any;
 
+// ── Staleness utilities (UTV2-775) ────────────────────────────────────────────
+
+/**
+ * Format a timestamp as relative time, e.g. "3h ago", "45m ago".
+ */
+export function formatRelativeTime(isoTimestamp: string | null | undefined): string {
+  if (!isoTimestamp) return '—';
+  const ageMs = Date.now() - new Date(isoTimestamp).getTime();
+  if (ageMs < 0) return 'just now';
+  const ageMinutes = Math.floor(ageMs / 60_000);
+  if (ageMinutes < 1) return 'just now';
+  if (ageMinutes < 60) return `${ageMinutes}m ago`;
+  const ageHours = Math.floor(ageMinutes / 60);
+  if (ageHours < 24) return `${ageHours}h ago`;
+  return `${Math.floor(ageHours / 24)}d ago`;
+}
+
+/**
+ * Compute proximity tier from now to an event start time.
+ * Returns one of: 'pre-start', 'game-day', 'standard', 'pre', or null (unknown).
+ */
+export function computeProximityTier(
+  eventStartsAt: string | null | undefined,
+): 'pre-start' | 'game-day' | 'standard' | 'pre' | null {
+  if (!eventStartsAt) return null;
+  const minutesToEvent = Math.floor((new Date(eventStartsAt).getTime() - Date.now()) / 60_000);
+  if (minutesToEvent < 60) return 'pre-start';
+  if (minutesToEvent <= 6 * 60) return 'game-day';
+  if (minutesToEvent <= 24 * 60) return 'standard';
+  return 'pre';
+}
+
+/**
+ * Determine whether freshness_window_failed would fire for a universe row.
+ * Matches §5 of T2_STALE_DATA_BEHAVIOR_CONTRACT.md.
+ */
+export function isFreshnessWindowFailed(row: {
+  is_stale: boolean;
+  last_offer_snapshot_at: string | null;
+  event_starts_at?: string | null;
+}): boolean {
+  if (row.is_stale) return false; // globally stale — freshness_window_failed does not fire on top
+  if (!row.last_offer_snapshot_at || !row.event_starts_at) return false;
+  const tier = computeProximityTier(row.event_starts_at);
+  if (tier !== 'game-day' && tier !== 'pre-start') return false;
+  const snapshotAgeMs = Date.now() - new Date(row.last_offer_snapshot_at).getTime();
+  const thresholdMs = tier === 'pre-start' ? 20 * 60 * 1000 : 60 * 60 * 1000;
+  return snapshotAgeMs > thresholdMs;
+}
+
+// ── Market Universe Staleness (UTV2-775) ─────────────────────────────────────
+
+export interface MarketUniverseStalenessRow {
+  id: string;
+  canonicalMarketKey: string;
+  sportKey: string | null;
+  eventId: string | null;
+  isStale: boolean;
+  lastOfferSnapshotAt: string;
+  /** Staleness badge to render: 'STALE', 'PROXIMITY STALE', or null (fresh) */
+  stalenessBadge: 'STALE' | 'PROXIMITY STALE' | null;
+  /** Relative time string, e.g. "3h ago" */
+  snapshotRelativeTime: string;
+}
+
+/**
+ * Fetches market_universe rows for a set of universe IDs and annotates each
+ * with staleness badge information per UTV2-775 §11.
+ *
+ * Used by the Awaiting Approval panel and the Research line/prop pages to
+ * render STALE / PROXIMITY STALE badges.
+ */
+export async function getMarketUniverseStaleness(
+  universeIds: string[],
+): Promise<MarketUniverseStalenessRow[]> {
+  if (universeIds.length === 0) return [];
+  try {
+    const client = getDataClient();
+    const { data, error } = await client
+      .from('market_universe')
+      .select('id, canonical_market_key, sport_key, event_id, is_stale, last_offer_snapshot_at')
+      .in('id', universeIds);
+
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+
+    return rows.map((row) => mapUniverseRowToStaleness(row));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetches market_universe staleness info by provider market key (for Research pages
+ * that browse by participant/market rather than by universe ID).
+ * Returns the most-recent matching universe row's staleness info.
+ */
+export async function getMarketUniverseStalenessByMarketKey(params: {
+  providerMarketKey?: string;
+  providerParticipantId?: string;
+  sportKey?: string;
+  limit?: number;
+}): Promise<MarketUniverseStalenessRow[]> {
+  try {
+    const client = getDataClient();
+    let query = client
+      .from('market_universe')
+      .select('id, canonical_market_key, sport_key, event_id, is_stale, last_offer_snapshot_at');
+
+    if (params.providerMarketKey) {
+      query = query.ilike('provider_market_key', `%${params.providerMarketKey}%`);
+    }
+    if (params.providerParticipantId) {
+      query = query.eq('provider_participant_id', params.providerParticipantId);
+    }
+    if (params.sportKey) {
+      query = query.eq('sport_key', params.sportKey);
+    }
+
+    query = query.order('last_offer_snapshot_at', { ascending: false }).limit(params.limit ?? 50);
+
+    const { data, error } = await query;
+    if (error) throw error;
+
+    const rows = (data ?? []) as Array<Record<string, unknown>>;
+    return rows.map((row) => mapUniverseRowToStaleness(row));
+  } catch {
+    return [];
+  }
+}
+
+function mapUniverseRowToStaleness(row: Record<string, unknown>): MarketUniverseStalenessRow {
+  const isStale = row['is_stale'] === true;
+  const lastOfferSnapshotAt = typeof row['last_offer_snapshot_at'] === 'string'
+    ? row['last_offer_snapshot_at']
+    : '';
+  const eventId = typeof row['event_id'] === 'string' ? row['event_id'] : null;
+
+  // Derive staleness badge
+  let stalenessBadge: 'STALE' | 'PROXIMITY STALE' | null = null;
+  if (isStale) {
+    stalenessBadge = 'STALE';
+  }
+  // PROXIMITY STALE check requires event starts_at which is not in this query.
+  // When event FK is resolved with starts_at, freshnessWindowFailed is checked separately.
+
+  return {
+    id: String(row['id'] ?? ''),
+    canonicalMarketKey: String(row['canonical_market_key'] ?? ''),
+    sportKey: typeof row['sport_key'] === 'string' ? row['sport_key'] : null,
+    eventId,
+    isStale,
+    lastOfferSnapshotAt,
+    stalenessBadge,
+    snapshotRelativeTime: formatRelativeTime(lastOfferSnapshotAt),
+  };
+}
+
 // ── Interfaces ────────────────────────────────────────────────────────────────
 
 export interface PropOfferRow {

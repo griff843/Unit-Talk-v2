@@ -12,7 +12,7 @@
  * UTV2-757
  */
 
-import { applyDevig, americanToImplied } from '@unit-talk/domain';
+import { applyDevig, americanToImplied, evaluateProviderDataFreshness } from '@unit-talk/domain';
 import { transitionPickLifecycle } from '@unit-talk/db';
 import type {
   AuditLogRepository,
@@ -78,6 +78,52 @@ export async function runCandidatePickScan(
       continue;
     }
 
+    // UTV2-775: Re-read market_universe.is_stale at scan time before submitting.
+    // A universe row can become stale between board-scan and candidate-scanner runs.
+    // If stale at scan time: skip (do NOT submit), increment skipped, update provenance.
+    const freshUniverseRows = await repos.marketUniverse.findByIds([universe.id]);
+    const freshUniverse = freshUniverseRows[0];
+    if (freshUniverse?.is_stale === true) {
+      skipped++;
+      const staleCheckedAt = new Date().toISOString();
+      logger?.warn?.(
+        JSON.stringify({
+          service: 'candidate-pick-scanner',
+          event: 'candidate_skipped',
+          candidateId: candidate.id,
+          universeId: universe.id,
+          reason: 'stale_at_scan_time',
+        }),
+      );
+      // Update candidate provenance with stale metadata (§9B of UTV2-775 contract)
+      const existingProvenance = (candidate.provenance as Record<string, unknown> | null) ?? {};
+      const defaultFilterDetails = {
+        missing_canonical_identity: false,
+        stale_price_data: false,
+        unsupported_market_family: false,
+        missing_participant_linkage: false,
+        invalid_odds_structure: false,
+        duplicate_suppressed: false,
+        freshness_window_failed: false,
+      };
+      await repos.pickCandidates.upsertCandidates([{
+        universe_id: universe.id,
+        status: candidate.status ?? 'qualified',
+        rejection_reason: candidate.rejection_reason ?? null,
+        filter_details: candidate.filter_details ?? defaultFilterDetails,
+        scan_run_id: candidate.scan_run_id ?? null,
+        provenance: {
+          ...existingProvenance,
+          stale_at_scan_time: true,
+          stale_reason: 'stale_at_scan_time',
+          stale_checked_at: staleCheckedAt,
+        },
+        expires_at: candidate.expires_at ?? null,
+        sport_key: candidate.sport_key ?? null,
+      }]);
+      continue;
+    }
+
     const unsupportedReason = readUnsupportedGeneratedPickReason(universe);
     if (unsupportedReason) {
       skipped++;
@@ -116,6 +162,20 @@ export async function runCandidatePickScan(
     const odds = side === 'over' ? (overOdds as number) : (underOdds as number);
     const line = universe.current_line ?? null;
 
+    // Resolve event starts_at from candidate provenance (set by board-scan) or skip lookup
+    const candidateProvenance = (candidate.provenance as Record<string, unknown> | null) ?? {};
+    const provenanceEventStartsAt = typeof candidateProvenance['event_starts_at'] === 'string'
+      ? candidateProvenance['event_starts_at']
+      : null;
+
+    // Compute freshness metadata for picks.metadata (§9C of UTV2-775 contract)
+    const freshnessInfo = evaluateProviderDataFreshness({
+      snapshotAt: universe.last_offer_snapshot_at,
+      eventStartsAt: provenanceEventStartsAt,
+      sportKey: universe.sport_key,
+      marketKey: universe.canonical_market_key,
+    });
+
     const payload = {
       source: 'system-pick-scanner' as const,
       submittedBy: 'system:candidate-pick-scanner',
@@ -143,6 +203,11 @@ export async function runCandidatePickScan(
           ? { providerParticipantId: universe.provider_participant_id }
           : {}),
         systemGenerated: true,
+        // UTV2-775: staleness metadata recorded at submission time (§9C)
+        snapshot_age_ms: freshnessInfo.snapshotAgeMs,
+        snapshot_at: universe.last_offer_snapshot_at,
+        proximity_tier: freshnessInfo.proximityTier,
+        data_freshness: 'fresh' as const,
       },
     };
 

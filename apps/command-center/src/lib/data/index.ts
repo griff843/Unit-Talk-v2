@@ -7,6 +7,6 @@ export { getExceptionQueues } from './picks.js';
 export { getRoutingPreview, getPromotionPreview } from './preview.js';
 export { getPerformanceData, getLeaderboard, getReviewHistory, getIntelligenceData } from './analytics.js';
 export { getReviewQueue, getHeldQueue, searchPicks, getPickDetail } from './queues.js';
-export { getPropOffers, getResearchLines, getResearchMatchups, getResearchPlayers, type PropOffersResponse, type PropOfferRow, type ResearchLinesResult, type ResearchMatchup, type ResearchMatchupsResult, type ResearchPlayer, type ResearchPlayersResult } from './research.js';
+export { getPropOffers, getResearchLines, getResearchMatchups, getResearchPlayers, getMarketUniverseStaleness, getMarketUniverseStalenessByMarketKey, formatRelativeTime, computeProximityTier, isFreshnessWindowFailed, type PropOffersResponse, type PropOfferRow, type ResearchLinesResult, type ResearchMatchup, type ResearchMatchupsResult, type ResearchPlayer, type ResearchPlayersResult, type MarketUniverseStalenessRow } from './research.js';
 export { getDashboardData, getDashboardRuntimeData, getInterventionAudit, type InterventionAuditRow } from './dashboard.js';
 export { getStorageHealth, classifyStorageDomain } from './storage-health.js';

@@ -40,6 +40,19 @@ Ready → Started → In Progress → In Review → Merged → Done
 
 ---
 
+## Lane close checklist (pre-closure — all 7 steps required)
+
+- [ ] `pnpm verify` green on the branch
+- [ ] R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
+- [ ] Proof tied to merge SHA (not the branch HEAD SHA — the SHA after merge)
+- [ ] CI green on merge SHA (not just branch CI)
+- [ ] For T1: `pnpm test:db` green + evidence bundle generated and validated
+- [ ] Tier label is set on PR: verify with `gh pr view <number> --json labels`
+      If missing: `gh pr edit <number> --add-label "tier:T1"` (adjust tier as needed)
+- [ ] `ops:truth-check` runs and exits 0
+
+---
+
 ## File-scope lock
 
 Declared at lane start, immutable for lane life. Overlap check is hard — second lane is refused. Locks release on `status: done`. Blocked/reopened lanes retain locks.
