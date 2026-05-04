@@ -1,10 +1,14 @@
-import type { EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
+import type { DatabaseConnectionConfig, EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
 import type {
   ProviderIngestionDbWritePolicy,
   ProviderPayloadArchivePolicy,
 } from './provider-ingestion-policy.js';
+import {
+  runProviderOfferHistoryRetention,
+  type ProviderOfferHistoryRetentionResult,
+} from './provider-offer-history-retention.js';
 import { fetchSGOAccountUsage, type SGOAccountUsage } from './sgo-fetcher.js';
 import {
   formatSchedulerLog,
@@ -38,6 +42,14 @@ export interface IngestorRunnerOptions {
   triggerGradingRun?: typeof triggerGradingRun;
   /** Called with the staleness message when cycle gap > CYCLE_GAP_WARN_MS. Wire to Discord in production. */
   onStalenessAlert?: (message: string) => Promise<void>;
+  /**
+   * When provided, the retention job runs once after all ingestor cycles
+   * complete. Summarises and drops provider_offer_history partitions older
+   * than retentionDays (default 7).
+   */
+  retentionConnection?: DatabaseConnectionConfig;
+  /** Retention window in days. Defaults to 7. Only used when retentionConnection is set. */
+  retentionDays?: number;
 }
 
 export interface IngestorGradingTriggerSummary {
@@ -53,6 +65,8 @@ export interface IngestorCycleSummary {
   oddsApiResults: OddsApiIngestSummary[];
   gradingTrigger: IngestorGradingTriggerSummary;
   sgoUsage: SGOAccountUsage | null;
+  /** Present on the final cycle when retentionConnection is configured. */
+  retentionResult?: ProviderOfferHistoryRetentionResult | null;
 }
 
 /** Warn when a cycle gap exceeds this threshold (10 minutes). */
@@ -181,6 +195,30 @@ export async function runIngestorCycles(
       );
       options.logger?.info?.(`[ingestor] cycle=${cycle} next-sleep ${formatSchedulerLog(resolution)}`);
       await sleep(resolution.intervalMs);
+    }
+  }
+
+  // Run retention job once after all cycles complete (non-fatal).
+  if (options.retentionConnection && summaries.length > 0) {
+    let retentionResult: ProviderOfferHistoryRetentionResult | null = null;
+    try {
+      retentionResult = await runProviderOfferHistoryRetention({
+        connection: options.retentionConnection,
+        ...(options.retentionDays !== undefined ? { retentionDays: options.retentionDays } : {}),
+        ...(options.logger !== undefined ? { logger: options.logger } : {}),
+      });
+      options.logger?.info?.(
+        `[ingestor] retention complete: partitions_summarized=${retentionResult.partitions_summarized} partitions_dropped=${retentionResult.partitions_dropped} cutoff_date=${retentionResult.cutoff_date}`,
+      );
+    } catch (error) {
+      options.logger?.warn?.(
+        `[ingestor] retention job failed (non-fatal): ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    // Attach to the last cycle summary so callers can inspect / log it.
+    const last = summaries[summaries.length - 1];
+    if (last !== undefined) {
+      last.retentionResult = retentionResult;
     }
   }
 

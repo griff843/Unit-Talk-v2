@@ -92,10 +92,12 @@
       "paths": [
         "apps/ingestor/**"
       ],
-      "required": ["R1", "R3"],
-      "advisory": ["R2", "R4"],
+      "required": ["R1"],
+      "advisory": ["R2", "R3", "R4"],
       "pmGated": ["R4"],
-      "artifactRequirements": ["r3-shadow-report"]
+      "artifactRequirements": [],
+      "blockedUntil": "shadow-scoring-in-ci",
+      "blockedNote": "r3-shadow-report downgraded to advisory — artifacts/ is gitignored and shadow runner requires live DB credentials not available in CI. Shadow validation is performed via pnpm test:db instead."
     }
   ]
 }
