@@ -16,8 +16,8 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { runBoardScan } from './board-scan-service.js';
-import { InMemoryMarketUniverseRepository, InMemoryPickCandidateRepository } from '@unit-talk/db';
+import { runBoardScan, STALENESS_THRESHOLDS } from './board-scan-service.js';
+import { InMemoryMarketUniverseRepository, InMemoryPickCandidateRepository, createInMemoryRepositoryBundle } from '@unit-talk/db';
 import type { MarketUniverseRow } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
@@ -233,14 +233,24 @@ test('filter: duplicate_suppressed — always false in Phase 2', async () => {
   assert.equal(c.filter_details!.duplicate_suppressed, false);
 });
 
-test('filter: freshness_window_failed — always false in Phase 2', async () => {
-  const row = makeUniverseRow();
-  const deps = makeDeps([row]);
+test('filter: freshness_window_failed — false when event_id is null (AC-9)', async () => {
+  // AC-9: freshness_window_failed never fires for markets with null event_id
+  const row = makeUniverseRow({
+    event_id: null,
+    last_offer_snapshot_at: new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(), // 2h old
+  });
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  seedUniverseRows(muRepo, [row]);
 
-  await runBoardScan(deps, { enabled: true });
+  await runBoardScan(
+    { marketUniverse: repos.marketUniverse, pickCandidates: repos.pickCandidates, events: repos.events },
+    { enabled: true },
+  );
 
-  const c = deps.pickCandidates.listAll()[0]!;
-  assert.equal(c.filter_details!.freshness_window_failed, false);
+  const candidates = (repos.pickCandidates as InMemoryPickCandidateRepository).listAll();
+  const c = candidates[0]!;
+  assert.equal(c.filter_details!.freshness_window_failed, false, 'must never fire when event_id is null');
 });
 
 // ---------------------------------------------------------------------------
@@ -448,4 +458,131 @@ test('universe_id: candidate row links back to the universe row id', async () =>
 
   const c = deps.pickCandidates.listAll()[0]!;
   assert.equal(c.universe_id, 'universe-abc-123');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-775: Freshness window filter tests (AC-1, AC-2, AC-3, AC-9)
+// ---------------------------------------------------------------------------
+
+test('STALENESS_THRESHOLDS: exported constants have expected values (AC-11)', () => {
+  assert.equal(STALENESS_THRESHOLDS.tiers.game_day, 60 * 60 * 1000, 'game_day = 1h ms');
+  assert.equal(STALENESS_THRESHOLDS.tiers.pre_start, 20 * 60 * 1000, 'pre_start = 20min ms');
+  assert.equal(STALENESS_THRESHOLDS.tiers.pre, 6 * 60 * 60 * 1000, 'pre = 6h ms');
+  assert.equal(STALENESS_THRESHOLDS.sportModifiers.nfl, 2.0, 'nfl modifier = 2.0');
+  assert.equal(STALENESS_THRESHOLDS.sportModifiers.tennis, 0.75, 'tennis modifier = 0.75');
+  assert.equal(STALENESS_THRESHOLDS.marketModifiers.player_props, 1.5, 'player_props modifier = 1.5');
+});
+
+test('AC-1: freshness_window_failed fires for game-day tier with snapshot > 1h old', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+
+  // Event starts in 2h (game-day tier: 1h–6h to event)
+  const eventStartsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const event = await repos.events.upsertByExternalId({
+    externalId: 'ac1-event',
+    sportId: 'nba',
+    eventName: 'AC1 Game',
+    eventDate: eventStartsAt.slice(0, 10),
+    status: 'scheduled',
+    metadata: { starts_at: eventStartsAt },
+  });
+
+  // Snapshot is 90 min old — violates 1h game-day threshold
+  const row = makeUniverseRow({
+    id: 'universe-ac1',
+    event_id: event.id,
+    is_stale: false,
+    sport_key: 'nba',
+    canonical_market_key: 'game_total_ou',
+    last_offer_snapshot_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+  });
+  seedUniverseRows(muRepo, [row]);
+
+  await runBoardScan(
+    { marketUniverse: repos.marketUniverse, pickCandidates: repos.pickCandidates, events: repos.events },
+    { enabled: true },
+  );
+
+  const candidates = (repos.pickCandidates as InMemoryPickCandidateRepository).listAll();
+  const c = candidates[0]!;
+  assert.equal(c.filter_details!.freshness_window_failed, true, 'AC-1: must fire for game-day + snapshot > 1h');
+  assert.equal(c.status, 'rejected', 'AC-1: row must be rejected');
+  assert.equal(c.rejection_reason, 'freshness_window_failed', 'AC-1: rejection_reason = freshness_window_failed');
+});
+
+test('AC-2: freshness_window_failed does NOT fire for pre tier with snapshot < 6h old', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+
+  // Event starts in 30h (pre tier: > 24h to event)
+  const eventStartsAt = new Date(Date.now() + 30 * 60 * 60 * 1000).toISOString();
+  const event = await repos.events.upsertByExternalId({
+    externalId: 'ac2-event',
+    sportId: 'nba',
+    eventName: 'AC2 Game',
+    eventDate: eventStartsAt.slice(0, 10),
+    status: 'scheduled',
+    metadata: { starts_at: eventStartsAt },
+  });
+
+  // Snapshot is 4.5h old — within 6h pre threshold
+  const row = makeUniverseRow({
+    id: 'universe-ac2',
+    event_id: event.id,
+    is_stale: false,
+    sport_key: 'nba',
+    canonical_market_key: 'game_total_ou',
+    last_offer_snapshot_at: new Date(Date.now() - 4.5 * 60 * 60 * 1000).toISOString(),
+  });
+  seedUniverseRows(muRepo, [row]);
+
+  await runBoardScan(
+    { marketUniverse: repos.marketUniverse, pickCandidates: repos.pickCandidates, events: repos.events },
+    { enabled: true },
+  );
+
+  const candidates = (repos.pickCandidates as InMemoryPickCandidateRepository).listAll();
+  const c = candidates[0]!;
+  assert.equal(c.filter_details!.freshness_window_failed, false, 'AC-2: must NOT fire for pre + snapshot < 6h');
+});
+
+test('AC-3: NFL sport modifier doubles game-day threshold to 2h', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+
+  // Event starts in 2h (game-day tier)
+  const eventStartsAt = new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString();
+  const event = await repos.events.upsertByExternalId({
+    externalId: 'ac3-event',
+    sportId: 'nfl',
+    eventName: 'AC3 NFL Game',
+    eventDate: eventStartsAt.slice(0, 10),
+    status: 'scheduled',
+    metadata: { starts_at: eventStartsAt },
+  });
+
+  // Snapshot is 90 min old — within the NFL 2h game-day threshold (1h × 2.0)
+  const row = makeUniverseRow({
+    id: 'universe-ac3',
+    event_id: event.id,
+    is_stale: false,
+    sport_key: 'nfl',
+    canonical_market_key: 'game_total_ou',
+    last_offer_snapshot_at: new Date(Date.now() - 90 * 60 * 1000).toISOString(),
+  });
+  seedUniverseRows(muRepo, [row]);
+
+  await runBoardScan(
+    { marketUniverse: repos.marketUniverse, pickCandidates: repos.pickCandidates, events: repos.events },
+    { enabled: true },
+  );
+
+  const candidates = (repos.pickCandidates as InMemoryPickCandidateRepository).listAll();
+  const c = candidates[0]!;
+  assert.equal(
+    c.filter_details!.freshness_window_failed,
+    false,
+    'AC-3: NFL modifier doubles threshold to 2h — 90min snapshot must NOT fire',
+  );
 });

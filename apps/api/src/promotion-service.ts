@@ -19,6 +19,7 @@ import type { PortfolioSlot } from '@unit-talk/domain';
 import type {
   AuditLogRecord,
   AuditLogRepository,
+  IMarketUniverseRepository,
   PickRecord,
   PickRepository,
   PromotionHistoryRecord,
@@ -102,6 +103,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
   pickRepository: PickRepository,
   auditLogRepository: AuditLogRepository,
   settlementRepository?: SettlementRepository,
+  marketUniverseRepository?: IMarketUniverseRepository,
 ): Promise<EagerPromotionAllPoliciesResult> {
   const pickRecord = await pickRepository.findPickById(pickId);
   if (!pickRecord) {
@@ -109,6 +111,83 @@ export async function evaluateAllPoliciesEagerAndPersist(
   }
 
   const canonicalPick = mapPickRecordToCanonicalPick(pickRecord);
+
+  // UTV2-775: Staleness gate — block promotion when universe data is stale at approval time.
+  // Contract: §10 of T2_STALE_DATA_BEHAVIOR_CONTRACT.md
+  // Re-fetch market_universe for the pick's universe. If stale: block and write to audit_log.
+  if (marketUniverseRepository) {
+    const universeId = readMetadataString(canonicalPick.metadata, 'marketUniverseId')
+      ?? readMetadataString(canonicalPick.metadata, 'universeId');
+    if (universeId) {
+      const universeRows = await marketUniverseRepository.findByIds([universeId]);
+      const universe = universeRows[0];
+      if (universe?.is_stale === true) {
+        // Block promotion — write to audit_log
+        await auditLogRepository.record({
+          entityType: 'pick_promotion_history',
+          entityId: pickId,
+          entityRef: pickId,
+          action: 'promotion_blocked_stale_data',
+          actor,
+          payload: {
+            pickId,
+            universeId,
+            code: 'STALE_DATA_AT_PROMOTION',
+            blockedAt: new Date().toISOString(),
+          },
+        });
+
+        // Persist suppressed promotion result
+        const policies = activePromotionPolicies();
+        const decidedAt = new Date().toISOString();
+        const makeSuppressedDecision = (policy: PromotionPolicy): BoardPromotionDecision => ({
+          status: 'suppressed',
+          target: policy.target,
+          qualified: false,
+          score: 0,
+          breakdown: { edge: 0, trust: 0, readiness: 0, uniqueness: 0, boardFit: 0, total: 0 },
+          explanation: {
+            target: policy.target,
+            reasons: [],
+            suppressionReasons: ['STALE_DATA_AT_PROMOTION'],
+            weights: policy.weights,
+          },
+          version: policy.version,
+          decidedAt,
+          decidedBy: actor,
+        });
+        const decisions = policies.map(makeSuppressedDecision);
+        const decisionByTarget = new Map(
+          policies.map((policy, index) => [policy.target, decisions[index]!] as const),
+        );
+        const winnerPolicy = policies[policies.length - 1]!;
+
+        const persisted = await pickRepository.persistPromotionDecision({
+          pickId,
+          target: winnerPolicy.target,
+          approvalStatus: canonicalPick.approvalStatus,
+          promotionStatus: 'suppressed',
+          promotionTarget: null,
+          promotionScore: 0,
+          promotionReason: 'STALE_DATA_AT_PROMOTION',
+          promotionVersion: winnerPolicy.version,
+          promotionDecidedAt: decidedAt,
+          promotionDecidedBy: actor,
+          overrideAction: null,
+          payload: { staleDataBlock: true, code: 'STALE_DATA_AT_PROMOTION', universeId },
+        });
+
+        return {
+          pick: mapPickRecordToCanonicalPick(persisted.pick),
+          pickRecord: persisted.pick,
+          resolvedTarget: null,
+          exclusiveInsightsDecision: decisionByTarget.get('exclusive-insights')!,
+          traderInsightsDecision: decisionByTarget.get('trader-insights')!,
+          bestBetsDecision: decisionByTarget.get('best-bets')!,
+        };
+      }
+    }
+  }
 
   const policies = activePromotionPolicies();
   // Get board states for all targets in parallel (each target has its own board).

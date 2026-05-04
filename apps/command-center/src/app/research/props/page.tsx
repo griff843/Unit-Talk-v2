@@ -1,6 +1,6 @@
 import { Card, EmptyState } from '@/components/ui';
 import Link from 'next/link';
-import { getPropOffers } from '@/lib/data';
+import { getPropOffers, getMarketUniverseStalenessByMarketKey, formatRelativeTime } from '@/lib/data';
 
 function formatOdds(odds: number | null): string {
   if (odds === null) return '—';
@@ -58,6 +58,17 @@ export default async function PropExplorerPage({
   const data = hasFilters || offset > 0
     ? await getPropOffers({ sport, market, bookmaker, participant, since, offset })
     : null;
+
+  // UTV2-775: Fetch market universe staleness for the filtered market/participant/sport.
+  // Only when filters are active so we don't show irrelevant staleness info.
+  const universeStale = hasFilters
+    ? await getMarketUniverseStalenessByMarketKey({
+        providerMarketKey: market,
+        providerParticipantId: participant,
+        sportKey: sport,
+        limit: 20,
+      })
+    : [];
 
   const activeFilterCount = [sport, market, bookmaker, participant, since].filter(Boolean).length;
 
@@ -333,6 +344,55 @@ export default async function PropExplorerPage({
 
           <p className="mt-2 text-[10px] text-gray-600">
             Observed at {new Date(data.observedAt).toLocaleTimeString()}. O = opening line, C = closing line.
+          </p>
+        </Card>
+      )}
+
+      {/* UTV2-775: Market Universe Staleness indicators */}
+      {universeStale.length > 0 && (
+        <Card title="Market Universe Staleness">
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs">
+              <thead>
+                <tr className="border-b border-gray-700 text-[10px] font-medium uppercase tracking-wide text-gray-400">
+                  <th className="py-2 pr-3">Market Key</th>
+                  <th className="py-2 pr-3">Sport</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2">Last Snapshot</th>
+                </tr>
+              </thead>
+              <tbody>
+                {universeStale.map((row) => (
+                  <tr key={row.id} className="border-b border-gray-800 transition-colors hover:bg-gray-800/40">
+                    <td className="py-2 pr-3 font-mono text-gray-200">{row.canonicalMarketKey}</td>
+                    <td className="py-2 pr-3 text-gray-400">{row.sportKey ?? '—'}</td>
+                    <td className="py-2 pr-3">
+                      {row.stalenessBadge === 'STALE' && (
+                        <span className="rounded border border-amber-600/40 bg-amber-900/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-amber-400">
+                          STALE
+                        </span>
+                      )}
+                      {row.stalenessBadge === 'PROXIMITY STALE' && (
+                        <span className="rounded border border-orange-600/40 bg-orange-900/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-orange-400">
+                          PROXIMITY STALE
+                        </span>
+                      )}
+                      {row.stalenessBadge === null && (
+                        <span className="rounded border border-emerald-700/30 bg-emerald-900/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-emerald-400">
+                          FRESH
+                        </span>
+                      )}
+                    </td>
+                    <td className="py-2 text-[10px] text-gray-500">
+                      {formatRelativeTime(row.lastOfferSnapshotAt)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <p className="mt-2 text-[10px] text-gray-600">
+            Source: <code className="text-gray-500">market_universe</code>. STALE = data older than 2h global threshold.
           </p>
         </Card>
       )}

@@ -229,6 +229,77 @@ test('candidate-pick-scanner: no-op when no scored candidates exist', async () =
   assert.equal(result.submitted, 0);
 });
 
+// ---------------------------------------------------------------------------
+// UTV2-775: Staleness re-check at scan time (AC-4, AC-5)
+// ---------------------------------------------------------------------------
+
+test('AC-4: candidate scanner skips stale universe at scan time and increments skipped', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
+
+  // Universe is stale at scan time
+  const universe = makeUniverseRow({ id: 'universe-stale-ac4', is_stale: true });
+  const candidate = makeCandidate({ id: 'cand-stale-ac4', universe_id: 'universe-stale-ac4' });
+
+  seedUniverseRows(muRepo, [universe]);
+  seedCandidateRows(pcRepo, [candidate]);
+
+  const result = await runCandidatePickScan({
+    pickCandidates: repos.pickCandidates,
+    marketUniverse: repos.marketUniverse,
+    picks: repos.picks,
+    submissions: repos.submissions,
+    audit: repos.audit,
+    participants: repos.participants,
+    events: repos.events,
+    providerOffers: repos.providerOffers,
+  });
+
+  assert.equal(result.scanned, 1, 'AC-4: one candidate scanned');
+  assert.equal(result.submitted, 0, 'AC-4: processSubmission must NOT be called for stale universe');
+  assert.equal(result.skipped, 1, 'AC-4: skipped must be incremented');
+  assert.equal(result.errors, 0, 'AC-4: no errors');
+});
+
+test('AC-5: candidate provenance updated with stale_at_scan_time: true on skip', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
+
+  // Universe is stale at scan time
+  const universe = makeUniverseRow({ id: 'universe-stale-ac5', is_stale: true });
+  const candidate = makeCandidate({
+    id: 'cand-stale-ac5',
+    universe_id: 'universe-stale-ac5',
+    provenance: { scan_run_id: 'run-original', snapshot_age_ms: 1000 },
+  });
+
+  seedUniverseRows(muRepo, [universe]);
+  seedCandidateRows(pcRepo, [candidate]);
+
+  await runCandidatePickScan({
+    pickCandidates: repos.pickCandidates,
+    marketUniverse: repos.marketUniverse,
+    picks: repos.picks,
+    submissions: repos.submissions,
+    audit: repos.audit,
+    participants: repos.participants,
+    events: repos.events,
+    providerOffers: repos.providerOffers,
+  });
+
+  // After the scan, the candidate's provenance should have stale_at_scan_time: true
+  const updatedCandidates = await repos.pickCandidates.findByStatus('qualified');
+  const updatedCandidate = updatedCandidates.find((c) => c.id === 'cand-stale-ac5');
+  assert.ok(updatedCandidate !== undefined, 'AC-5: candidate must still exist');
+  const prov = updatedCandidate!.provenance as Record<string, unknown> | null;
+  assert.ok(prov !== null, 'AC-5: provenance must not be null');
+  assert.equal(prov!['stale_at_scan_time'], true, 'AC-5: stale_at_scan_time must be true');
+  assert.equal(prov!['stale_reason'], 'stale_at_scan_time', 'AC-5: stale_reason must be set');
+  assert.ok(typeof prov!['stale_checked_at'] === 'string', 'AC-5: stale_checked_at must be set');
+});
+
 test('candidate-pick-scanner: skips non-O/U markets that grading cannot settle', async () => {
   const repos = createInMemoryRepositoryBundle();
   const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;

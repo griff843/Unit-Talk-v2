@@ -53,7 +53,8 @@ function makeUniverseRow(overrides: Partial<MarketUniverseRow> = {}): MarketUniv
   };
 }
 
-test('promotion: stale market universe blocks with STALE_DATA_AT_PROMOTION and audit log', { skip: 'stale data promotion gate not yet implemented in evaluateAllPoliciesEagerAndPersist' }, async () => {
+// AC-7: Promotion blocked with STALE_DATA_AT_PROMOTION when universe is stale
+test('AC-7: promotion blocked with STALE_DATA_AT_PROMOTION when universe is stale', async () => {
   const repos = createInMemoryRepositoryBundle();
   const universe = makeUniverseRow();
   seedUniverseRows(repos.marketUniverse as InMemoryMarketUniverseRepository, [universe]);
@@ -85,16 +86,54 @@ test('promotion: stale market universe blocks with STALE_DATA_AT_PROMOTION and a
     repos.picks,
     repos.audit,
     repos.settlements,
+    repos.marketUniverse,
   );
 
-  assert.equal(result.resolvedTarget, null);
-  assert.equal(result.pickRecord.promotion_status, 'suppressed');
-  assert.equal(result.pickRecord.promotion_reason, 'STALE_DATA_AT_PROMOTION');
+  assert.equal(result.resolvedTarget, null, 'AC-7: resolvedTarget must be null');
+  assert.equal(result.pickRecord.promotion_status, 'suppressed', 'AC-7: promotion_status must be suppressed');
+  assert.equal(result.pickRecord.promotion_reason, 'STALE_DATA_AT_PROMOTION', 'AC-7: promotion_reason must be STALE_DATA_AT_PROMOTION');
+});
+
+// AC-8: Promotion block written to audit_log
+test('AC-8: promotion block written to audit_log with promotion_blocked_stale_data event', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  const universe = makeUniverseRow({ id: 'universe-ac8-stale', is_stale: true });
+  seedUniverseRows(repos.marketUniverse as InMemoryMarketUniverseRepository, [universe]);
+  const pick: CanonicalPick = {
+    id: 'pick-ac8-stale',
+    submissionId: 'sub-ac8-stale',
+    market: 'player_points_ou',
+    selection: 'over',
+    line: 24.5,
+    odds: -110,
+    confidence: 0.7,
+    source: 'system-pick-scanner',
+    approvalStatus: 'approved',
+    promotionStatus: 'not_eligible',
+    lifecycleState: 'awaiting_approval',
+    metadata: {
+      marketUniverseId: universe.id,
+      data_freshness: 'fresh',
+      promotionScores: { edge: 95, trust: 95, readiness: 95, uniqueness: 95, boardFit: 95 },
+    },
+    createdAt: new Date().toISOString(),
+  };
+  await repos.picks.savePick(pick);
+
+  await evaluateAllPoliciesEagerAndPersist(
+    pick.id,
+    'test',
+    repos.picks,
+    repos.audit,
+    repos.settlements,
+    repos.marketUniverse,
+  );
+
   const audits = await repos.audit.listRecentByEntityType(
     'pick_promotion_history',
     new Date(Date.now() - 60_000).toISOString(),
     'promotion_blocked_stale_data',
   );
-  assert.equal(audits.length, 1);
-  assert.equal((audits[0]!.payload as Record<string, unknown>)['code'], 'STALE_DATA_AT_PROMOTION');
+  assert.equal(audits.length, 1, 'AC-8: exactly one audit log entry');
+  assert.equal((audits[0]!.payload as Record<string, unknown>)['code'], 'STALE_DATA_AT_PROMOTION', 'AC-8: payload.code must be STALE_DATA_AT_PROMOTION');
 });

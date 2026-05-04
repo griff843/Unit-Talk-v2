@@ -22,7 +22,24 @@
  */
 
 import crypto from 'node:crypto';
-import type { IMarketUniverseRepository, IPickCandidateRepository, PickCandidateUpsertInput, MarketUniverseRow, PickCandidateFilterDetails } from '@unit-talk/db';
+import type { IMarketUniverseRepository, IPickCandidateRepository, PickCandidateUpsertInput, MarketUniverseRow, PickCandidateFilterDetails, EventRepository } from '@unit-talk/db';
+import { evaluateProviderDataFreshness } from '@unit-talk/domain';
+
+// ---------------------------------------------------------------------------
+// Staleness threshold constants (UTV2-775)
+// All threshold constants must live here — not scattered.
+// ---------------------------------------------------------------------------
+
+export const STALENESS_THRESHOLDS = {
+  tiers: {
+    pre: 6 * 60 * 60 * 1000,
+    standard: 2 * 60 * 60 * 1000,
+    game_day: 60 * 60 * 1000,
+    pre_start: 20 * 60 * 1000,
+  },
+  sportModifiers: { nfl: 2.0, tennis: 0.75 },
+  marketModifiers: { player_props: 1.5 },
+} as const;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -64,11 +81,35 @@ function isSyndicateMachineEnabled(override?: boolean): boolean {
  * Applies the 7 canonical coarse filters to a market_universe row.
  * Returns the filter_details object (all 7 booleans) and the first failing
  * filter key (for rejection_reason), or null if the row passes all filters.
+ *
+ * eventStartsAt: optional, resolved from event FK at scan time. When null,
+ * Filter 7 (freshness_window_failed) cannot fire (proximity unknown).
  */
-function applyCoarseFilters(row: MarketUniverseRow): {
+function applyCoarseFilters(row: MarketUniverseRow, eventStartsAt?: string | null): {
   filter_details: PickCandidateFilterDetails;
   firstFailingFilter: string | null;
 } {
+  // Filter 7: freshness_window_failed (UTV2-775)
+  // Fires ONLY when:
+  //   1. event_id is non-null AND event FK resolved (eventStartsAt provided)
+  //   2. Proximity tier is game-day or pre-start
+  //   3. snapshot age violates the computed threshold
+  //   4. Filter 2 (stale_price_data) did NOT already fire (not globally stale)
+  let freshness_window_failed = false;
+  if (
+    row.event_id != null &&
+    eventStartsAt != null &&
+    row.is_stale !== true
+  ) {
+    const freshness = evaluateProviderDataFreshness({
+      snapshotAt: row.last_offer_snapshot_at,
+      eventStartsAt,
+      sportKey: row.sport_key,
+      marketKey: row.canonical_market_key,
+    });
+    freshness_window_failed = freshness.freshnessWindowFailed;
+  }
+
   const filter_details: PickCandidateFilterDetails = {
     // Filter 1: canonical_market_key is null/empty
     missing_canonical_identity:
@@ -93,8 +134,8 @@ function applyCoarseFilters(row: MarketUniverseRow): {
     // Filter 6: duplicate_suppressed — always false in Phase 2 (no dedup logic yet)
     duplicate_suppressed: false,
 
-    // Filter 7: freshness_window_failed — always false in Phase 2
-    freshness_window_failed: false,
+    // Filter 7: freshness_window_failed — computed above (UTV2-775)
+    freshness_window_failed,
   };
 
   // Find the first failing filter key (for rejection_reason)
@@ -121,6 +162,7 @@ export class BoardScanService {
     private readonly repos: {
       marketUniverse: IMarketUniverseRepository;
       pickCandidates: IPickCandidateRepository;
+      events?: EventRepository;
     },
   ) {}
 
@@ -179,14 +221,47 @@ export class BoardScanService {
     let qualifiedCount = 0;
     let rejectedCount = 0;
 
-    const provenance: Record<string, unknown> = {
+    const baseProvenance: Record<string, unknown> = {
       scanVersion: '1.0.0',
-      filterVersion: '1.0.0',
+      filterVersion: '1.1.0',
       runAt: new Date().toISOString(),
     };
+    // Keep `provenance` as an alias for backward compat with surrounding code
+    const provenance = baseProvenance;
+
+    // Pre-resolve event starts_at for all rows that have a non-null event_id.
+    // This batch-loads events to avoid N+1 queries in the loop below.
+    // Only performed when an EventRepository is available (optional dep for backward compat).
+    const eventStartsAtMap = new Map<string, string | null>();
+    if (this.repos.events) {
+      const eventIds = [...new Set(
+        universeRows
+          .map((r) => r.event_id)
+          .filter((id): id is string => id != null),
+      )];
+      for (const eventId of eventIds) {
+        try {
+          const event = await this.repos.events.findById(eventId);
+          if (event) {
+            const startsAt = typeof event.metadata?.['starts_at'] === 'string'
+              ? event.metadata['starts_at']
+              : null;
+            eventStartsAtMap.set(eventId, startsAt);
+          }
+        } catch {
+          // Fail open: if event fetch fails, proximity tier falls back to unknown
+          eventStartsAtMap.set(eventId, null);
+        }
+      }
+    }
 
     for (const universeRow of universeRows) {
-      const { filter_details, firstFailingFilter } = applyCoarseFilters(universeRow);
+      // Resolve event starts_at for Filter 7 (freshness_window_failed)
+      const eventStartsAt = universeRow.event_id != null
+        ? (eventStartsAtMap.get(universeRow.event_id) ?? null)
+        : null;
+
+      const { filter_details, firstFailingFilter } = applyCoarseFilters(universeRow, eventStartsAt);
 
       const passed = firstFailingFilter === null;
       const status = passed ? 'qualified' : 'rejected';
@@ -198,11 +273,28 @@ export class BoardScanService {
         rejectedCount++;
       }
 
-      // expires_at: use event starts_at if event_id is linked (Phase 2: event FK not yet resolved,
-      // so event_id is null in materializer output — expires_at will be null per contract §5.6)
-      // If in the future event_id is populated, board scan would need an events lookup.
-      // For now: expires_at = null (event linkage not resolved in Phase 2 materializer).
-      const expires_at: string | null = null;
+      // expires_at: use event starts_at when resolved
+      const expires_at: string | null = eventStartsAt ?? null;
+
+      // Compute provenance with staleness metadata (§9B of UTV2-775 contract)
+      const freshnessInfo = evaluateProviderDataFreshness({
+        snapshotAt: universeRow.last_offer_snapshot_at,
+        eventStartsAt,
+        sportKey: universeRow.sport_key,
+        marketKey: universeRow.canonical_market_key,
+      });
+
+      const rowProvenance: Record<string, unknown> = {
+        ...provenance,
+        scan_run_id: scanRunId,
+        snapshot_age_ms: freshnessInfo.snapshotAgeMs,
+        event_starts_at: freshnessInfo.eventStartsAt,
+        minutes_to_event: freshnessInfo.minutesToEvent,
+        proximity_tier: freshnessInfo.proximityTier,
+        freshness_threshold_ms: freshnessInfo.freshnessThresholdMs,
+        stale_at_scan_time: false,
+        stale_reason: null,
+      };
 
       const candidate: PickCandidateUpsertInput = {
         universe_id: universeRow.id,
@@ -210,7 +302,7 @@ export class BoardScanService {
         rejection_reason,
         filter_details,
         scan_run_id: scanRunId,
-        provenance,
+        provenance: rowProvenance,
         expires_at,
         sport_key: universeRow.sport_key ?? null,
         // Phase 2 invariants — these fields must NEVER be set here:
@@ -285,6 +377,7 @@ export async function runBoardScan(
   repos: {
     marketUniverse: IMarketUniverseRepository;
     pickCandidates: IPickCandidateRepository;
+    events?: EventRepository;
   },
   options: BoardScanOptions = {},
 ): Promise<BoardScanResult> {
