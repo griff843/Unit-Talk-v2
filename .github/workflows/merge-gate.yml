@@ -35,6 +35,9 @@ permissions:
 jobs:
   gate:
     name: Merge Gate
+    concurrency:
+      group: merge-gate-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: true
     if: >-
       github.event_name == 'pull_request' ||
       github.event_name == 'pull_request_review' ||
@@ -142,9 +145,12 @@ jobs:
 
               function parseVerdict(body) {
                 if (!body) return null;
-                const lines = body.split(/\r?\n/).map(l => l.trim());
+                // Normalize: unescape literal \n from clients that escape newlines,
+                // then strip any leading $ that some clients prepend to the verdict line.
+                const normalized = body.replace(/\\n/g, '\n');
+                const lines = normalized.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
                 if (lines.length < 3) return null;
-                const verdictMatch = lines[0].match(
+                const verdictMatch = lines[0].replace(/^\$/, '').match(
                   /^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i
                 );
                 if (!verdictMatch) return null;
