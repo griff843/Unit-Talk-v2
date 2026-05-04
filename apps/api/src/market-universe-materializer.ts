@@ -20,7 +20,12 @@
  */
 
 import { americanToImplied, applyDevig } from '@unit-talk/domain';
-import type { IMarketUniverseRepository, MarketUniverseUpsertInput, ProviderOfferRepository } from '@unit-talk/db';
+import type {
+  EventRepository,
+  IMarketUniverseRepository,
+  MarketUniverseUpsertInput,
+  ProviderOfferRepository,
+} from '@unit-talk/db';
 
 // Phase 2: staleness threshold is hardcoded at 2 hours (see contract §4)
 const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
@@ -55,6 +60,7 @@ export class MarketUniverseMaterializer {
     private readonly repos: {
       providerOffers: ProviderOfferRepository;
       marketUniverse: IMarketUniverseRepository;
+      events: EventRepository;
     },
   ) {}
 
@@ -115,6 +121,12 @@ export class MarketUniverseMaterializer {
       );
       return { upserted: 0, errors: 0, durationMs: Date.now() - startMs };
     }
+
+    const eventIdByProviderEventId = await resolveEventIdsByProviderEventId(
+      this.repos.events,
+      allOffers.map((offer) => offer.provider_event_id),
+      logger,
+    );
 
     // Load alias lookup once per run for O(1) per-market resolution
     // Key structure: `${provider_market_key}:${sport_id ?? ''}` (sport-aware)
@@ -254,7 +266,7 @@ export class MarketUniverseMaterializer {
           // when not separately stored on provider_offers (it isn't in Phase 2)
           sport_key: latest.sport_key ?? 'unknown',
           league_key: latest.sport_key ?? 'unknown',
-          event_id: null,       // event FK resolution: Phase 3+ (requires event lookup service)
+          event_id: eventIdByProviderEventId.get(latest.provider_event_id) ?? null,
           participant_id: participantMap.get(latest.provider_participant_id ?? '') ?? null,
           market_type_id: alias?.market_type_id ?? null,
           canonical_market_key: alias?.market_type_id ?? latest.provider_market_key,
@@ -349,10 +361,41 @@ export async function runMarketUniverseMaterializer(
   repos: {
     providerOffers: ProviderOfferRepository;
     marketUniverse: IMarketUniverseRepository;
+    events: EventRepository;
   },
   options: MaterializerOptions = {},
 ): Promise<MaterializerResult> {
   return new MarketUniverseMaterializer(repos).run(options);
+}
+
+async function resolveEventIdsByProviderEventId(
+  events: EventRepository,
+  providerEventIds: string[],
+  logger?: Pick<Console, 'warn'>,
+): Promise<Map<string, string | null>> {
+  const eventIdByProviderEventId = new Map<string, string | null>();
+  const uniqueProviderEventIds = Array.from(new Set(providerEventIds));
+
+  await Promise.all(
+    uniqueProviderEventIds.map(async (providerEventId) => {
+      try {
+        const event = await events.findByExternalId(providerEventId);
+        eventIdByProviderEventId.set(providerEventId, event?.id ?? null);
+      } catch (err) {
+        eventIdByProviderEventId.set(providerEventId, null);
+        logger?.warn?.(
+          JSON.stringify({
+            service: 'market-universe-materializer',
+            event: 'event_lookup_failed',
+            providerEventId,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    }),
+  );
+
+  return eventIdByProviderEventId;
 }
 
 function isParticipantForbiddenAlias(
