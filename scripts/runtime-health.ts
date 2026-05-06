@@ -66,22 +66,37 @@ async function main() {
 
   // ── 1. Worker Supervision ─────────────────────────────────────────────────
   {
-    const { data: runs, error } = await db
-      .from('system_runs')
-      .select('id, status, started_at, finished_at, run_type, details')
-      .eq('run_type', 'distribution.process')
-      .order('started_at', { ascending: false })
-      .limit(10)
+    const [runResult, heartbeatResult] = await Promise.all([
+      db
+        .from('system_runs')
+        .select('id, status, started_at, finished_at, run_type, details')
+        .eq('run_type', 'distribution.process')
+        .order('started_at', { ascending: false })
+        .limit(10),
+      db
+        .from('system_runs')
+        .select('id, status, started_at, finished_at, run_type, details')
+        .eq('run_type', 'worker.heartbeat')
+        .order('started_at', { ascending: false })
+        .limit(1),
+    ])
 
-    if (error) {
-      subsystems.push({ name: 'Worker Supervision', state: 'UNKNOWN', value: 'query failed', detail: error.message })
+    if (runResult.error || heartbeatResult.error) {
+      const detail = [runResult.error?.message, heartbeatResult.error?.message].filter(Boolean).join('; ')
+      subsystems.push({ name: 'Worker Supervision', state: 'UNKNOWN', value: 'query failed', detail })
     } else {
-      const recent = runs ?? []
-      const last = recent[0]
+      const recent = runResult.data ?? []
+      const lastRun = recent[0]
+      const lastHeartbeat = heartbeatResult.data?.[0]
+      const last =
+        lastHeartbeat && (!lastRun || new Date(lastHeartbeat.started_at).getTime() >= new Date(lastRun.started_at).getTime())
+          ? lastHeartbeat
+          : lastRun
+      const evidenceType = last === lastHeartbeat ? 'heartbeat' : 'distribution run'
 
       if (!last) {
-        subsystems.push({ name: 'Worker Supervision', state: 'FAILED', value: 'no runs found', detail: 'No distribution.process runs in system_runs — worker never ran or table is empty' })
-        failed.push('Worker: no distribution runs recorded')
+        subsystems.push({ name: 'Worker Supervision', state: 'FAILED', value: 'no liveness evidence found', detail: 'No distribution.process or worker.heartbeat rows in system_runs' })
+        failed.push('Worker: no liveness evidence recorded')
       } else {
         const idleMin = ageMin(last.started_at)
         const recentFailed = recent.filter(r => r.status === 'failed').length
@@ -104,8 +119,8 @@ async function main() {
         subsystems.push({
           name: 'Worker Supervision',
           state,
-          value: `last run ${ageFmt(last.started_at)} ago (${last.status})`,
-          detail: `${recent.length} recent runs; last=${last.status}; failed_in_window=${recentFailed}; ${issues.join('; ')}`,
+          value: `last ${evidenceType} ${ageFmt(last.started_at)} ago (${last.status})`,
+          detail: `${recent.length} recent distribution runs; last_distribution=${lastRun?.status ?? 'none'}; failed_in_window=${recentFailed}; latest_heartbeat=${lastHeartbeat ? `${ageFmt(lastHeartbeat.started_at)} ago (${lastHeartbeat.status})` : 'none'}; ${issues.join('; ')}`,
           freshness: ageFmt(last.started_at),
         })
         if (state === 'FAILED') failed.push(`Worker: ${issues.join(', ')}`)
@@ -129,7 +144,7 @@ async function main() {
       const stuckProc = rows.filter(r =>
         r.status === 'processing' && r.claimed_at && ageMin(r.claimed_at) > T.outboxStuckProcMin
       )
-      const completed = rows.filter(r => r.status === 'completed' || r.status === 'delivered')
+      const completed = rows.filter(r => r.status === 'sent' || r.status === 'completed' || r.status === 'delivered')
 
       let state: SubsystemState = 'HEALTHY'
       const issues: string[] = []
