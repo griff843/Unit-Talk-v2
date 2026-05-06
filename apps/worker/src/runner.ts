@@ -250,7 +250,7 @@ export async function runWorkerCycles(
       }
     }
 
-    if (cycle < maxCycles) {
+    if (maxCycles === 0 || cycle < maxCycles) {
       await sleep(pollIntervalMs);
     }
   }

@@ -1,0 +1,136 @@
+{
+  "issue_id": "UTV2-843",
+  "generated_at": "2026-05-06T19:21:15Z",
+  "scope": "worker RCA and minimal runtime/health-check fix",
+  "dispatch_hygiene": {
+    "included": true,
+    "note": "UTV2-778.json was repaired before lane start by adding a missing file_scope_lock array. This is dispatch hygiene only and is not part of the worker RCA logic."
+  },
+  "rca_classification": {
+    "process_startup_failure": false,
+    "scheduler_registration_failure": false,
+    "env_config_issue": "not primary; worker env is valid when local.env is loaded from the main repo",
+    "queue_starvation": "not primary; no pending rows for worker targets, but heartbeat should still prove liveness",
+    "provider_api_poison": false,
+    "health_check_reporting_drift": true,
+    "runtime_loop_issue": true
+  },
+  "root_cause": [
+    "The supervised worker was down before intervention: supervisor DOWN, child DOWN, last heartbeat 2026-05-05T12:09:37.184106+00:00, pending outbox rows 5.",
+    "The worker process can start with the configured environment, which rules out a hard startup failure.",
+    "In indefinite autorun mode, runWorkerCycles used maxCycles=0 but only slept when cycle < maxCycles; this caused an unpaced loop instead of polling at UNIT_TALK_WORKER_POLL_MS.",
+    "runtime-health treated Worker Supervision as failed using only stale distribution.process rows, even when fresh worker.heartbeat rows proved the worker was alive and there were no eligible target rows.",
+    "worker-alert-check could not run because top-level await failed under the repo's CommonJS tsx execution path."
+  ],
+  "before": {
+    "worker_status": {
+      "command": "pnpm worker:status",
+      "exit_code": 0,
+      "supervisor": "DOWN",
+      "child": "DOWN",
+      "verdict": "DOWN",
+      "last_heartbeat_at": "2026-05-05T12:09:37.184106+00:00",
+      "heartbeat_age_minutes": 1866,
+      "pending_outbox_rows": 5
+    },
+    "pipeline_health": {
+      "command": "pnpm pipeline:health",
+      "exit_code": 1,
+      "worker_verdict": "DOWN - no runs or heartbeats in health window",
+      "outbox_counts": {
+        "sent": 402,
+        "pending": 5,
+        "pending_for_worker_targets": 0,
+        "deferred_pending_outside_worker_targets": 5,
+        "processing_stuck": 0,
+        "dead_letter": 0,
+        "failed": 0
+      }
+    },
+    "runtime_health": {
+      "command": "pnpm runtime:health --json",
+      "exit_code": 1,
+      "worker_supervision_state": "FAILED",
+      "worker_supervision_value": "last run 145.5h ago (succeeded)",
+      "queue_movement_state": "HEALTHY"
+    },
+    "worker_alert_check": {
+      "command": "pnpm worker:alert-check",
+      "exit_code": 1,
+      "failure": "Transform failed: top-level await is not supported with the CommonJS output format"
+    }
+  },
+  "after": {
+    "worker_status": {
+      "command": "pnpm worker:status",
+      "exit_code": 0,
+      "supervisor": "RUNNING",
+      "child": "RUNNING",
+      "verdict": "UP",
+      "last_heartbeat_at": "2026-05-06T19:20:18.1432+00:00",
+      "heartbeat_age_minutes": 0,
+      "pending_outbox_rows": 5
+    },
+    "heartbeat_cadence": {
+      "query": "latest 8 worker.heartbeat system_runs rows",
+      "latest_rows": [
+        "2026-05-06T19:21:10.35184+00:00",
+        "2026-05-06T19:21:04.49204+00:00",
+        "2026-05-06T19:20:58.740071+00:00",
+        "2026-05-06T19:20:52.967413+00:00",
+        "2026-05-06T19:20:47.203482+00:00",
+        "2026-05-06T19:20:41.24975+00:00",
+        "2026-05-06T19:20:35.467253+00:00",
+        "2026-05-06T19:20:29.649276+00:00"
+      ],
+      "observed_spacing_seconds": "about 5-6 seconds",
+      "status": "paced and succeeded"
+    },
+    "pipeline_health": {
+      "command": "pnpm pipeline:health",
+      "exit_code": 0,
+      "worker_verdict": "HEALTHY - heartbeat fresh, no eligible distribution rows processed",
+      "outbox_counts": {
+        "sent": 402,
+        "pending": 5,
+        "pending_for_worker_targets": 0,
+        "deferred_pending_outside_worker_targets": 5,
+        "processing_stuck": 0,
+        "dead_letter": 0,
+        "failed": 0
+      },
+      "warnings": [
+        "5 pending rows outside worker targets"
+      ]
+    },
+    "runtime_health": {
+      "command": "pnpm runtime:health --json",
+      "exit_code": 1,
+      "worker_supervision_state": "HEALTHY",
+      "worker_supervision_value": "last heartbeat 0m ago (succeeded)",
+      "queue_movement_state": "HEALTHY",
+      "completed_outbox_rows_counted": 402,
+      "remaining_failures_outside_worker_rca": [
+        "Provider freshness stale",
+        "Scheduler autonomous picks stale",
+        "Discord delivery stale"
+      ]
+    },
+    "worker_alert_check": {
+      "command": "pnpm worker:alert-check",
+      "exit_code": 0,
+      "result": "OK - Worker heartbeat is 0m old"
+    }
+  },
+  "files_changed": [
+    "apps/worker/src/runner.ts",
+    "scripts/runtime-health.ts",
+    "scripts/worker-alert-check.ts",
+    "docs/06_status/proof/UTV2-843/evidence.json"
+  ],
+  "skipped_or_out_of_scope": [
+    "runBoardPickWriter was not investigated or changed because the RCA did not show it as the same root cause.",
+    "Provider freshness, scheduler freshness, and Discord delivery freshness remain visible in runtime-health but were not changed because they are not the worker DOWN root cause.",
+    "The 5 pending outbox rows are outside configured worker targets, so they were preserved and not silently moved or dropped."
+  ]
+}
