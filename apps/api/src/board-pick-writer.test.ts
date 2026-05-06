@@ -15,7 +15,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
 import type { IPickCandidateRepository, PickIdUpdate } from '@unit-talk/db';
-import { runBoardPickWriter } from './board-pick-writer.js';
+import { runBoardPickWriter, shouldScheduleBoardPickWriter } from './board-pick-writer.js';
 import type {
   PickCandidateUpsertInput,
   MarketUniverseUpsertInput,
@@ -544,4 +544,31 @@ test('candidate with non-finite odds is counted in skipped, not errors or writte
   assert.equal(result.skipped, 2, 'both rows counted in skipped');
   assert.equal(result.errors, 0, 'non-finite odds must not increment errors');
   assert.deepEqual(result.pickIds, [], 'no pick ids returned');
+});
+
+test('scheduler enablement follows the syndicate machine runtime when board writing is not separately forced on', () => {
+  assert.equal(
+    shouldScheduleBoardPickWriter({
+      SYNDICATE_MACHINE_ENABLED: 'true',
+      BOARD_PICK_WRITER_ENABLED: 'false',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldScheduleBoardPickWriter({
+      SYNDICATE_MACHINE_ENABLED: 'false',
+      BOARD_PICK_WRITER_ENABLED: 'false',
+    }),
+    false,
+  );
+});
+
+test('scheduler enablement can be forced on independently of the broader syndicate machine gate', () => {
+  assert.equal(
+    shouldScheduleBoardPickWriter({
+      SYNDICATE_MACHINE_ENABLED: 'false',
+      BOARD_PICK_WRITER_ENABLED: 'true',
+    }),
+    true,
+  );
 });

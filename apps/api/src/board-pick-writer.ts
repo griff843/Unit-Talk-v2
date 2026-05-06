@@ -4,8 +4,9 @@
  * Governed write path from the syndicate_board into canonical picks.
  *
  * This is the ONLY authorized bridge between board output and pick creation
- * in the syndicate machine path. It fires only when explicitly invoked via
- * the operator-controlled route — never on an automatic schedule.
+ * in the syndicate machine path. It may run from the scheduled API runtime
+ * or an explicit operator-triggered path, but every invocation must preserve
+ * the same governed write semantics.
  *
  * Invariants (never violate):
  *   - Reads from syndicate_board (latest run only)
@@ -61,6 +62,15 @@ export interface BoardPickWriterOptions {
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
   /** Operator identity for audit records. Defaults to 'system:board-construction'. */
   actor?: string;
+}
+
+export interface BoardPickWriterScheduleFlags {
+  SYNDICATE_MACHINE_ENABLED?: string | undefined;
+  BOARD_PICK_WRITER_ENABLED?: string | undefined;
+}
+
+export function shouldScheduleBoardPickWriter(flags: BoardPickWriterScheduleFlags): boolean {
+  return flags.BOARD_PICK_WRITER_ENABLED === 'true' || flags.SYNDICATE_MACHINE_ENABLED === 'true';
 }
 
 // ---------------------------------------------------------------------------
@@ -194,6 +204,17 @@ export class BoardPickWriter {
         'proportional',
       );
       if (!devigged) {
+        options.logger?.warn?.(
+          JSON.stringify({
+            service: 'board-pick-writer',
+            event: 'devig_failed',
+            universeId: universe.id,
+            candidateId: candidate.id,
+            boardRunId,
+            overOdds,
+            underOdds,
+          }),
+        );
         skipped++;
         continue;
       }

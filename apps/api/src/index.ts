@@ -13,7 +13,7 @@ import { runRankedSelection } from './ranked-selection-service.js';
 import { runBoardConstruction } from './board-construction-service.js';
 import { runModelHealthScan } from './model-health-scanner.js';
 import { runClosingLineRecovery } from './closing-line-recovery-service.js';
-import { runBoardPickWriter } from './board-pick-writer.js';
+import { runBoardPickWriter, shouldScheduleBoardPickWriter } from './board-pick-writer.js';
 import { runCandidatePickScan } from './candidate-pick-scanner.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
@@ -174,8 +174,10 @@ server.listen(port, () => {
   }, BOARD_CONSTRUCTION_INTERVAL_MS);
 
   // Board pick writer: promotes syndicate_board entries to picks (10-min cadence, after board-construction)
-  // UTV2-749 — gated by BOARD_PICK_WRITER_ENABLED=true (default: false)
-  if (environment.BOARD_PICK_WRITER_ENABLED === 'true') {
+  // UTV2-844 — board write is part of the syndicate machine runtime, so it follows the
+  // master SYNDICATE_MACHINE_ENABLED gate. BOARD_PICK_WRITER_ENABLED can still force the
+  // writer on for isolated checks when the broader machine is disabled.
+  if (shouldScheduleBoardPickWriter(environment)) {
     const boardPickWriterDeps = {
       syndicateBoard: runtime.repositories.syndicateBoard,
       pickCandidates: runtime.repositories.pickCandidates,
@@ -189,6 +191,16 @@ server.listen(port, () => {
       settlements: runtime.repositories.settlements,
     };
     const boardPickWriterOpts = { logger: console, actor: 'scheduler:board-pick-writer' };
+    console.log(
+      JSON.stringify({
+        service: 'api',
+        event: 'board_pick_writer.scheduler_registered',
+        cadenceMs: BOARD_PICK_WRITER_INTERVAL_MS,
+        actor: boardPickWriterOpts.actor,
+        syndicateMachineEnabled: environment.SYNDICATE_MACHINE_ENABLED === 'true',
+        boardPickWriterEnabled: environment.BOARD_PICK_WRITER_ENABLED === 'true',
+      }),
+    );
     runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
     boardPickWriterTimer = setInterval(() => {
       runBoardPickWriter(boardPickWriterDeps, boardPickWriterOpts).catch(() => {});
