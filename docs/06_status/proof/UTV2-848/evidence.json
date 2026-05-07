@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-848",
+  "merge_sha": null,
+  "generated_at": "2026-05-07T14:45:00.000Z",
+  "verifier": {
+    "identity": "operator"
+  },
+  "captured_at": "2026-05-07T14:45:00.000Z",
+  "lane_type": "claude-governance",
+  "tier": "T2",
+  "static_proof": {
+    "commands": [],
+    "results": {
+      "governance_doc_written": "pass",
+      "schema_grounded": "pass",
+      "codex_packet_included": "pass"
+    },
+    "notes": "Governance-only lane. No code changes. No runtime verification required. Document completeness verified by operator."
+  },
+  "runtime_proof": null,
+  "deliverable": {
+    "path": "docs/06_status/provenance_contract_standard.md",
+    "sections": [
+      "1. Purpose",
+      "2. Mandatory Provenance Fields (schema-grounded)",
+      "3. Trusted vs Untrusted Provenance Policy",
+      "4. Runtime Enforcement Semantics",
+      "5. Historical-Row Policy",
+      "6. Relationship to Source-Separated Ledgers (UTV2-849)",
+      "7. Relationship to Model Registry (UTV2-850)",
+      "8. Relationship to Truthworthiness Score (UTV2-847)",
+      "9. Required Operational Reporting",
+      "10. PASS / WARN / FAIL System Verdicts",
+      "11. Unresolved Schema Questions",
+      "12. Codex Implementation Packet",
+      "13. Contracts That Depend on This Standard"
+    ],
+    "key_findings": {
+      "model_or_heuristic_id_exists": false,
+      "board_run_id_on_picks": false,
+      "scan_run_id_on_picks": false,
+      "model_registry_linked_to_candidates": false,
+      "candidate_linkage_via": "pick_candidates.pick_id → picks.id (inverted join)",
+      "provenance_jsonb_model_key": "unknown — Codex must verify at implementation time",
+      "root_blocker": "no_model_attribution — 4183/4183 picks fail model-edge evaluation"
+    }
+  },
+  "summary": {
+    "root_cause": "UTV2-848 is a governance lane. The provenance contract defines what provenance must mean, which fields are required, what PASS/WARN/FAIL/UNKNOWN mean, and how historical rows must be classified without fabrication. The primary gap identified is that model_or_heuristic_id does not exist anywhere in the current schema — there is no FK or JSONB reference linking pick_candidates to model_registry.",
+    "resolution": "Canonical provenance contract written at docs/06_status/provenance_contract_standard.md. All 13 required sections complete. Codex implementation packet included. No runtime changes made. No fabrication. No schema modifications.",
+    "unblocks": ["UTV2-849", "UTV2-850", "UTV2-851"]
+  },
+  "checklist": {
+    "all_13_sections_present": true,
+    "schema_grounded_in_actual_columns": true,
+    "codex_packet_written": true,
+    "no_fabricated_attribution": true,
+    "no_runtime_changes": true,
+    "historical_unknown_policy_defined": true,
+    "fail_closed_enforcement_defined": true,
+    "pass_warn_fail_verdicts_defined": true
+  }
+}
