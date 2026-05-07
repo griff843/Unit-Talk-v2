@@ -1,0 +1,7 @@
+source_class,raw_source_value,total_rows,roi_eligible,clv_eligible,model_edge_eligible,prod_readiness_eligible,syndicate_eligible,pct_of_total
+heuristic,board-construction,161,161,161,0,161,0,3.83
+heuristic,system-pick-scanner,3622,3622,3622,0,3622,0,86.2
+manual,api,28,28,0,0,23,0,0.67
+manual,human,3,3,0,0,3,0,0.07
+manual,smart-form,386,386,0,0,379,0,9.19
+synthetic,canary-proof,2,0,0,0,0,0,0.05

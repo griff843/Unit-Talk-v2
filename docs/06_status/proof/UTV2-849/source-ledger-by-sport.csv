@@ -1,0 +1,5 @@
+sport,total_rows,model_generated_pct,heuristic_pct,manual_pct,unknown_pct,unsupported_pct
+MLB,1949,0,84.86,15.14,0,0
+NBA,1915,0,95.3,4.7,0,0.42
+NHL,334,0,90.72,8.68,0,0.9
+unknown,4,0,25,75,0,25

@@ -1,18 +1,33 @@
 {
   "schema_version": 1,
-  "issue_id": "UTV2-849",
   "generated_at": "2026-05-07T18:20:24.518Z",
-  "report_paths": [
-    "source-ledger-summary.json",
-    "source-ledger-by-type.csv",
-    "source-ledger-contamination.csv",
-    "source-ledger-exclusions.csv",
-    "source-ledger-by-sport.csv",
-    "source-ledger-by-market-family.csv",
-    "README.md",
-    "evidence.json"
-  ],
+  "evaluation_window": {
+    "from": "2026-04-07T18:20:24.518Z",
+    "to": "2026-05-07T18:20:24.518Z",
+    "days": 30
+  },
   "system_verdict": "FAIL",
+  "verdict_reason": "No rows have resolvable model registry attribution; model-edge and syndicate samples remain fully blocked.",
+  "row_counts": {
+    "total_analyzed": 4202,
+    "source_pass": 0,
+    "source_warn": 4200,
+    "source_fail": 2,
+    "source_unknown": 0
+  },
+  "source_class_counts": {
+    "manual": 417,
+    "heuristic": 3783,
+    "model_generated": 0,
+    "shadow": 0,
+    "operator_edited": 0,
+    "unsupported_market": 12,
+    "replay": 0,
+    "synthetic": 2,
+    "imported_historical": 0,
+    "unknown": 0,
+    "legacy_mapped": 4041
+  },
   "source_metrics": {
     "source_separated_pct": 100,
     "model_only_pct": 0,
@@ -40,6 +55,19 @@
     "clv_sample_contaminated": true,
     "clv_contamination_pct": 9.97,
     "source_mixing_count": 4202
+  },
+  "exclusion_counts": {
+    "shadow_mode": 0,
+    "replay": 0,
+    "synthetic": 10,
+    "unsupported_market": 48,
+    "manual_source": 1215,
+    "heuristic_source": 7566,
+    "operator_edited": 0,
+    "unknown_source": 0,
+    "legacy_source": 8517,
+    "imported_historical": 0,
+    "total_exclusion_rows": 8839
   },
   "schema_findings": {
     "picks_source_column_exists": true,
@@ -97,10 +125,25 @@
     ],
     "model_registry_rows_seen": 6
   },
-  "policy": {
-    "read_only": true,
-    "migrations_added": false,
-    "fabricated_model_attribution": false,
-    "historical_unknowns_preserved": true
+  "reporting_findings": {
+    "model_edge_contaminants": [
+      "heuristic",
+      "manual",
+      "synthetic",
+      "unsupported_market"
+    ],
+    "roi_contaminants": [
+      "synthetic"
+    ],
+    "clv_contaminants": [
+      "manual",
+      "synthetic",
+      "unsupported_market"
+    ],
+    "operational_only_populations": [
+      "heuristic",
+      "manual"
+    ],
+    "any_model_generated_today": false
   }
 }

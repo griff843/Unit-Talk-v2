@@ -1,0 +1,9 @@
+sample_type,intended_source_class,contaminating_source_class,contamination_count,contamination_pct,severity
+model_edge,model_generated,heuristic,3783,90.03,major
+model_edge,model_generated,manual,405,9.64,significant
+model_edge,model_generated,synthetic,2,0.05,minor
+model_edge,model_generated,unsupported_market,12,0.29,minor
+roi,model_generated+heuristic+manual,synthetic,2,0.05,minor
+clv,model_generated+heuristic,manual,405,9.64,significant
+clv,model_generated+heuristic,synthetic,2,0.05,minor
+clv,model_generated+heuristic,unsupported_market,12,0.29,minor
