@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-850",
-  "merge_sha": null,
+  "merge_sha": "9b265a4",
   "generated_at": "2026-05-07T15:55:00.000Z",
   "verifier": {
     "identity": "operator"
