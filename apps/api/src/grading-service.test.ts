@@ -26,6 +26,7 @@ async function createPostedPickFixture(
         ? {}
         : { line: overrides.line === undefined ? 24.5 : overrides.line }),
       odds: overrides.odds ?? -105,
+      stakeUnits: 1,
       eventName,
     },
     repositories,
@@ -324,7 +325,7 @@ test('runGradingPass posts a settlement recap embed for a graded pick with CLV',
         ['P/L', '+1.0u'],
         ['CLV% (vs SGO close)', '+5.5%'],
         ['Capper', 'griff843'],
-        ['Stake', '—'],
+        ['Stake', '1.0u'],
       ],
     );
   } finally {

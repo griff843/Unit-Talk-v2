@@ -237,6 +237,7 @@ export class BoardPickWriter {
         selection,
         ...(line !== null ? { line } : {}),
         odds,
+        stakeUnits: 1,
         confidence: side === 'over' ? devigged.overFair : devigged.underFair,
         ...(event?.event_name ? { eventName: event.event_name } : {}),
         metadata: {
@@ -272,6 +273,7 @@ export class BoardPickWriter {
           },
           modelTier: candidate.model_tier,
           systemGenerated: true,
+          stakeUnitsSource: 'system_default_flat_1u',
           governedBoardWrite: true,
           actor,
         },

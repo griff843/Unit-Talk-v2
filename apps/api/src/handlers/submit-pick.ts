@@ -1,6 +1,6 @@
 import type { SubmissionPayload } from '@unit-talk/contracts';
 import type { RepositoryBundle } from '@unit-talk/db';
-import { normalizeApiError } from '../errors.js';
+import { ApiError, normalizeApiError } from '../errors.js';
 import type { ApiResponse } from '../http.js';
 import { errorResponse } from '../http.js';
 import type { AuthContext } from '../auth.js';
@@ -42,6 +42,17 @@ export async function handleSubmitPick(
  */
 function coerceSubmissionPayload(body: unknown, auth?: AuthContext | null): SubmissionPayload {
   const payload = isRecord(body) ? body : {};
+  const source = readString(payload.source) as SubmissionPayload['source'];
+  const stakeUnits = resolveStakeUnits(payload, source);
+  if (stakeUnits.value === undefined || stakeUnits.value <= 0) {
+    throw new ApiError(400, 'INVALID_SUBMISSION', 'stakeUnits must be a positive number.');
+  }
+  const metadata = isRecord(payload.metadata) ? { ...payload.metadata } : {};
+
+  if (stakeUnits.defaulted) {
+    // Keep the default explicit for machine-generated request paths.
+    metadata.stakeUnitsSource = 'system_default_flat_1u';
+  }
 
   // Capper JWT claim overrides any form-supplied submittedBy value.
   const submittedBy = auth?.role === 'capper' && auth.capperId
@@ -49,17 +60,43 @@ function coerceSubmissionPayload(body: unknown, auth?: AuthContext | null): Subm
     : readOptionalString(payload.submittedBy);
 
   return {
-    source: readString(payload.source) as SubmissionPayload['source'],
+    source,
     submittedBy,
     market: readString(payload.market),
     selection: readString(payload.selection),
     line: readOptionalNumber(payload.line),
     odds: readOptionalNumber(payload.odds),
-    stakeUnits: readOptionalNumber(payload.stakeUnits),
+    stakeUnits: stakeUnits.value,
     confidence: readOptionalNumber(payload.confidence),
     eventName: readOptionalString(payload.eventName),
-    metadata: isRecord(payload.metadata) ? payload.metadata : undefined,
+    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
   };
+}
+
+const SYSTEM_DEFAULT_STAKE_SOURCES = new Set<SubmissionPayload['source']>([
+  'alert-agent',
+  'board-construction',
+  'model-driven',
+  'system-pick-scanner',
+]);
+
+function resolveStakeUnits(
+  payload: Record<string, unknown>,
+  source: SubmissionPayload['source'],
+): { value: number | undefined; defaulted: boolean } {
+  const camel = readOptionalNumber(payload.stakeUnits);
+  const snake = readOptionalNumber(payload.stake_units);
+  const explicit = camel ?? snake;
+
+  if (explicit !== undefined) {
+    return { value: explicit, defaulted: false };
+  }
+
+  if (SYSTEM_DEFAULT_STAKE_SOURCES.has(source)) {
+    return { value: 1, defaulted: true };
+  }
+
+  return { value: undefined, defaulted: false };
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

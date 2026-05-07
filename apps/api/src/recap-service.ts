@@ -26,7 +26,7 @@ export interface RecapPickLine {
   selection: string;
   market: string;
   result: 'win' | 'loss' | 'push';
-  profitLossUnits: number;
+  profitLossUnits: number | null;
   confidence: number | null;
   sport: string | null;
   submittedBy: string;
@@ -36,6 +36,8 @@ export interface RecapSummary {
   period: RecapPeriod;
   window: RecapWindow;
   settledCount: number;
+  knownStakeCount: number;
+  unknownStakeCount: number;
   wins: number;
   losses: number;
   pushes: number;
@@ -181,12 +183,14 @@ export async function computeRecapSummary(
       }
 
       const result = settlement.result as 'win' | 'loss' | 'push';
+      const stakeUnits = readStakeUnits(pick);
       return {
         pick,
         result,
+        stakeUnits,
         profitLossUnits: computeProfitLossUnits(
           result,
-          readStakeUnits(pick),
+          stakeUnits,
           pick.odds,
         ),
       };
@@ -197,7 +201,8 @@ export async function computeRecapSummary(
       ): row is {
         pick: PickRecord;
         result: 'win' | 'loss' | 'push';
-        profitLossUnits: number;
+        stakeUnits: number | null;
+        profitLossUnits: number | null;
       } => row !== null,
     );
 
@@ -208,25 +213,29 @@ export async function computeRecapSummary(
   const wins = joinedRows.filter((row) => row.result === 'win').length;
   const losses = joinedRows.filter((row) => row.result === 'loss').length;
   const pushes = joinedRows.filter((row) => row.result === 'push').length;
+  const knownStakeRows = joinedRows.filter(
+    (row): row is typeof row & { stakeUnits: number; profitLossUnits: number } =>
+      row.stakeUnits !== null && row.profitLossUnits !== null,
+  );
+  const unknownStakeCount = joinedRows.length - knownStakeRows.length;
   const netUnits = roundToTwoDecimals(
-    joinedRows.reduce((sum, row) => sum + row.profitLossUnits, 0),
+    knownStakeRows.reduce((sum, row) => sum + row.profitLossUnits, 0),
   );
   const totalRiskedUnits = roundToTwoDecimals(
-    joinedRows.reduce((sum, row) => sum + (readStakeUnits(row.pick) ?? 1), 0),
+    knownStakeRows.reduce((sum, row) => sum + row.stakeUnits, 0),
   );
   const roiPercent =
     totalRiskedUnits > 0
       ? roundToTwoDecimals((netUnits / totalRiskedUnits) * 100)
       : 0;
   const topPlayRow =
-    [...joinedRows].sort((left, right) => {
+    [...knownStakeRows].sort((left, right) => {
       const profitCompare = right.profitLossUnits - left.profitLossUnits;
       if (profitCompare !== 0) {
         return profitCompare;
       }
 
-      const stakeCompare =
-        (readStakeUnits(right.pick) ?? 1) - (readStakeUnits(left.pick) ?? 1);
+      const stakeCompare = right.stakeUnits - left.stakeUnits;
       if (stakeCompare !== 0) {
         return stakeCompare;
       }
@@ -246,6 +255,8 @@ export async function computeRecapSummary(
     period,
     window,
     settledCount: joinedRows.length,
+    knownStakeCount: knownStakeRows.length,
+    unknownStakeCount,
     wins,
     losses,
     pushes,
@@ -272,7 +283,8 @@ export async function computeRecapSummary(
       selection: row.pick.selection,
       market: row.pick.market,
       result: row.result,
-      profitLossUnits: roundToTwoDecimals(row.profitLossUnits),
+      profitLossUnits:
+        row.profitLossUnits === null ? null : roundToTwoDecimals(row.profitLossUnits),
       confidence: readConfidence(row.pick),
       sport: readSport(row.pick),
       submittedBy: readSubmittedBy(row.pick),
@@ -451,6 +463,14 @@ export function buildRecapEmbed(summary: RecapSummary) {
     },
   ];
 
+  if (summary.unknownStakeCount > 0) {
+    fields.push({
+      name: 'Stake Integrity',
+      value: `${summary.unknownStakeCount} historical pick(s) excluded from ROI because stake_units was missing.`,
+      inline: false,
+    });
+  }
+
   // Per-pick breakdown (compact, max 10 picks to stay within Discord limits)
   if (summary.picks.length > 0) {
     const displayPicks = summary.picks.slice(0, 10);
@@ -458,7 +478,9 @@ export function buildRecapEmbed(summary: RecapSummary) {
       const icon = recapSportIcon(p.sport);
       const resultEmoji = p.result === 'win' ? '\u2705' : p.result === 'loss' ? '\u274c' : '\u2796';
       const confStr = p.confidence != null ? ` \u2022 ${Math.round(p.confidence * 100)}%` : '';
-      return `${resultEmoji} ${icon}**${p.selection}** (${p.market}) ${formatUnits(p.profitLossUnits)}${confStr}`;
+      const profitLossLabel =
+        p.profitLossUnits === null ? 'P/L unavailable (missing stake)' : formatUnits(p.profitLossUnits);
+      return `${resultEmoji} ${icon}**${p.selection}** (${p.market}) ${profitLossLabel}${confStr}`;
     });
     if (summary.picks.length > 10) {
       pickLines.push(`_...and ${summary.picks.length - 10} more_`);
@@ -644,7 +666,10 @@ function computeProfitLossUnits(
   stakeUnits: number | null,
   odds: number | null,
 ) {
-  const stake = stakeUnits ?? 1;
+  if (stakeUnits === null) {
+    return null;
+  }
+  const stake = stakeUnits;
 
   if (result === 'push') {
     return 0;

@@ -183,6 +183,7 @@ export async function runCandidatePickScan(
       selection: side,
       ...(line !== null ? { line } : {}),
       odds,
+      stakeUnits: 1,
       confidence: side === 'over' ? devigged.overFair : devigged.underFair,
       metadata: {
         candidateId: candidate.id,
@@ -203,6 +204,7 @@ export async function runCandidatePickScan(
           ? { providerParticipantId: universe.provider_participant_id }
           : {}),
         systemGenerated: true,
+        stakeUnitsSource: 'system_default_flat_1u',
         // UTV2-775: staleness metadata recorded at submission time (§9C)
         snapshot_age_ms: freshnessInfo.snapshotAgeMs,
         snapshot_at: universe.last_offer_snapshot_at,

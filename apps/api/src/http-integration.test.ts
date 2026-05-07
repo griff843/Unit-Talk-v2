@@ -49,6 +49,7 @@ test('POST /api/submissions rejects request bodies larger than the configured ca
         source: 'api',
         market: 'NBA points',
         selection: 'Player Over 18.5',
+        stakeUnits: 1,
         notes: 'x'.repeat(512),
       }),
     });
@@ -257,6 +258,7 @@ test('POST /api/submissions accepts a body within the configured cap', async () 
         source: 'api',
         market: 'NBA points',
         selection: 'Player Over 18.5',
+        stakeUnits: 1,
       }),
     });
 
@@ -271,7 +273,7 @@ test('POST /api/submissions accepts a body within the configured cap', async () 
 test('POST /api/picks/:id/settle rejects bodies exceeding the configured cap', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
-    { source: 'api', market: 'NBA rebounds', selection: 'Player Over 10.5' },
+    { source: 'api', market: 'NBA rebounds', selection: 'Player Over 10.5', stakeUnits: 1 },
     repositories,
   );
   await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
@@ -460,6 +462,7 @@ async function submitTestPick(port: number, headers: Record<string, string>) {
       source: 'api',
       market: 'NBA points',
       selection: 'Player Over 18.5',
+      stakeUnits: 1,
     }),
   });
 }
@@ -472,6 +475,7 @@ async function submitTestPickWithDiscordId(port: number, discordUserId: string) 
       source: 'discord',
       market: 'NBA points',
       selection: 'Player Over 18.5',
+      stakeUnits: 1,
       discordUserId,
     }),
   });
@@ -485,6 +489,7 @@ async function submitTestPickWithSubmittedBy(port: number, submittedBy: string) 
       source: 'discord',
       market: 'NBA points',
       selection: 'Player Over 18.5',
+      stakeUnits: 1,
       submittedBy,
     }),
   });
