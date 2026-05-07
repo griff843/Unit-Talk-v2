@@ -85,6 +85,7 @@ test('handleSubmitPick does not enqueue a not-eligible pick and returns outboxEn
         source: 'enqueue-gap-test',
         market: 'NBA points',
         selection: 'Player Over 18.5',
+        stakeUnits: 1,
         // No confidence, no promotionScores → confidenceFloor fails → not_eligible
       },
     },
@@ -179,6 +180,7 @@ test('handleSubmitPick qualified for best-bets enqueues to discord:best-bets', a
         source: 'enqueue-gap-test',
         market: 'NBA assists',
         selection: 'Player Over 8.5',
+        stakeUnits: 1,
         confidence: 0.9,
         metadata: {
           sport: 'NBA',
@@ -221,7 +223,8 @@ test('handleSubmitPick in local env keeps promotion target but enqueues to disco
         body: {
           source: 'enqueue-gap-test',
           market: 'NBA assists',
-          selection: 'Player Over 8.5',
+        selection: 'Player Over 8.5',
+        stakeUnits: 1,
           confidence: 0.9,
           metadata: {
             sport: 'NBA',
@@ -375,6 +378,50 @@ test('validateSubmissionPayload rejects empty required fields', () => {
     'market is required',
     'selection is required',
   ]);
+});
+
+test('handleSubmitPick accepts snake_case stake_units from request bodies', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await handleSubmitPick(
+    {
+      body: {
+        source: 'api',
+        market: 'NBA assists',
+        selection: 'Player Over 7.5',
+        odds: -110,
+        stake_units: 1.25,
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(response.status, 201);
+  assert.ok(response.body.ok);
+  if (!response.body.ok) return;
+
+  const stored = await repositories.picks.findPickById(response.body.data.pickId);
+  assert.equal(stored?.stake_units, 1.25);
+});
+
+test('handleSubmitPick rejects human request bodies that omit stakeUnits', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const response = await handleSubmitPick(
+    {
+      body: {
+        source: 'api',
+        market: 'NBA assists',
+        selection: 'Player Over 7.5',
+        odds: -110,
+      },
+    },
+    repositories,
+  );
+
+  assert.equal(response.status, 400);
+  assert.equal(response.body.ok, false);
+  if (response.body.ok) return;
+  assert.equal(response.body.error.code, 'INVALID_SUBMISSION');
+  assert.match(response.body.error.message, /stakeUnits must be a positive number/i);
 });
 
 test('processSubmission materializes canonical records and submission event', async () => {
@@ -793,6 +840,7 @@ test('handleSubmitPick returns success payload for valid requests', async () => 
         source: 'handler-test',
         market: 'NBA points',
         selection: 'Player Over 22.5',
+        stakeUnits: 1,
       },
     },
     repositories,
@@ -821,7 +869,7 @@ test('handleSubmitPick returns typed error payload for invalid requests', async 
   assert.equal(response.status, 400);
   assert.equal(response.body.ok, false);
   if (!response.body.ok) {
-    assert.equal(response.body.error.code, 'BAD_REQUEST');
+    assert.equal(response.body.error.code, 'INVALID_SUBMISSION');
   }
 });
 

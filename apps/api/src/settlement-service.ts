@@ -158,6 +158,7 @@ export async function recordGradedSettlement(
     gradingContext,
     correction: false,
     ...buildPickProvenancePayload(pick),
+    ...buildStakeIntegrityPayload(pick.stake_units),
     clv: clv ?? null,
     ...buildClvDiagnosticPayload(clvOutcome),
   };
@@ -381,6 +382,7 @@ async function recordInitialSettlement(
     requestStatus: request.status,
     correction: false,
     ...buildPickProvenancePayload(pick),
+    ...buildStakeIntegrityPayload(pick.stake_units),
     clv: clv ?? null,
     ...(clvOutcome ? buildClvDiagnosticPayload(clvOutcome) : {}),
     ...(clv ? {
@@ -593,6 +595,7 @@ async function recordSettlementCorrection(
       correction: true,
       priorSettlementRecordId: latest.id,
       ...buildPickProvenancePayload(pick),
+      ...buildStakeIntegrityPayload(pick.stake_units),
       clv: clv ?? null,
       ...(clvOutcome ? buildClvDiagnosticPayload(clvOutcome) : {}),
       ...(clv ? {
@@ -870,7 +873,10 @@ function computeProfitLossUnits(
   stakeUnits: number | null | undefined,
 ): number | null {
   if (!result) return null;
-  const stake = stakeUnits ?? 1;
+  if (stakeUnits == null || !Number.isFinite(stakeUnits)) {
+    return null;
+  }
+  const stake = stakeUnits;
 
   if (result === 'push') return 0;
   if (result === 'loss') return -stake;
@@ -887,5 +893,18 @@ function computeProfitLossUnits(
 
 function roundPL(value: number): number {
   return Math.round(value * 100) / 100;
+}
+
+function buildStakeIntegrityPayload(stakeUnits: number | null | undefined): Record<string, unknown> {
+  if (stakeUnits == null || !Number.isFinite(stakeUnits)) {
+    return {
+      stakeUnitsStatus: 'historical_unknown',
+      stakeUnitsHistoricalUnknown: true,
+    };
+  }
+
+  return {
+    stakeUnitsStatus: 'canonical',
+  };
 }
 

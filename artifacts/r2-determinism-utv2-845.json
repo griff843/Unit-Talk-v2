@@ -1,0 +1,40 @@
+{
+  "issue_id": "UTV2-845",
+  "artifact": "r2-determinism",
+  "generated_at": "2026-05-07T06:13:30.000Z",
+  "source": {
+    "command": "pnpm exec tsx --test apps/api/src/t1-proof-utv2-845.test.ts",
+    "note": "scripts/live-data-lab-runner.ts is referenced by r-level-check but is not present in this repo snapshot, so R2 is recorded from the executed live DB proof for this lane."
+  },
+  "determinism_proof": {
+    "proofRunId": "utv2-845-3c5b9f23-de2c-4cc2-b1cf-bd1c7bb0be7a",
+    "humanPick": {
+      "pickId": "72ebb437-a3d6-4715-abb7-0c008c9dbcb6",
+      "stakeUnits": 2.5
+    },
+    "machinePick": {
+      "pickId": "43b0eb69-1440-40ea-bf73-8c49662c347e",
+      "stakeUnits": 1,
+      "stakeUnitsSource": "system_default_flat_1u"
+    },
+    "settlement": {
+      "stakeUnitsStatus": "canonical",
+      "profitLossUnits": 2.27
+    },
+    "recap": {
+      "knownStakeCount": 1,
+      "unknownStakeCount": 0,
+      "totalRiskedUnits": 2.5,
+      "roiPercent": 90.8
+    }
+  },
+  "historical_sample": {
+    "windowStart": "2026-04-07T06:01:15.462Z",
+    "settledCount": 394,
+    "settledNullStakeCount": 10
+  },
+  "verification": {
+    "test_db": "pass",
+    "verify": "pass"
+  }
+}

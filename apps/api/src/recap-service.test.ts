@@ -99,6 +99,8 @@ test('computeRecapSummary returns record, net units, ROI, and top play for settl
   assert.ok(summary);
   assert.equal(summary?.record, '1-1-1');
   assert.equal(summary?.settledCount, 3);
+  assert.equal(summary?.knownStakeCount, 3);
+  assert.equal(summary?.unknownStakeCount, 0);
   assert.equal(summary?.netUnits, -0.5);
   assert.equal(summary?.totalRiskedUnits, 4);
   assert.equal(summary?.roiPercent, -12.5);
@@ -129,6 +131,52 @@ test('computeRecapSummary returns null when no settlements land inside the reque
   );
 
   assert.equal(summary, null);
+});
+
+test('computeRecapSummary excludes historical unknown stake rows from ROI and classifies them explicitly', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const knownPickId = await createSettledPick(repositories, {
+    selection: 'Over 24.5',
+    market: 'points-all-game-ou',
+    odds: 150,
+    stakeUnits: 2,
+    submittedBy: 'griff843',
+    result: 'win',
+    settledAt: '2026-03-27T04:00:00.000Z',
+  });
+  const unknownPickId = await createSettledPick(repositories, {
+    selection: 'Under 8.5',
+    market: 'assists-all-game-ou',
+    odds: -110,
+    stakeUnits: 1,
+    submittedBy: 'dalton',
+    result: 'loss',
+    settledAt: '2026-03-27T10:00:00.000Z',
+  });
+
+  const unknownPick = await repositories.picks.findPickById(unknownPickId);
+  assert.ok(unknownPick);
+  unknownPick!.stake_units = null;
+
+  const summary = await computeRecapSummary(
+    'daily',
+    repositories,
+    new Date('2026-03-28T16:00:00.000Z'),
+  );
+
+  assert.ok(summary);
+  assert.equal(summary.knownStakeCount, 1);
+  assert.equal(summary.unknownStakeCount, 1);
+  assert.equal(summary.totalRiskedUnits, 2);
+  assert.equal(summary.netUnits, 3);
+  assert.equal(summary.roiPercent, 150);
+  assert.equal(summary.topPlay.pickId, knownPickId);
+
+  const embed = buildRecapEmbed(summary);
+  const integrityField = embed.fields.find((field) => field.name === 'Stake Integrity');
+  assert.ok(integrityField);
+  assert.match(integrityField!.value, /1 historical pick\(s\) excluded from ROI/);
+  assert.notEqual(summary.topPlay.pickId, unknownPickId);
 });
 
 test('computeRecapSummary includes totalPicks, windowDescription, and sampleContext', async () => {

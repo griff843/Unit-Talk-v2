@@ -20,6 +20,7 @@ async function createPickInState(
       source: overrides?.source ?? 'api',
       market: overrides?.market ?? 'NBA points',
       selection: overrides?.selection ?? 'Player Over 24.5',
+      stakeUnits: 1,
       metadata: overrides?.metadata,
     },
     repositories,
@@ -113,6 +114,32 @@ test('recordPickSettlement preserves candidate and market-universe provenance in
   const payload = result.settlementRecord.payload as Record<string, unknown>;
   assert.equal(payload['scoredCandidateId'], 'candidate-754');
   assert.equal(payload['marketUniverseId'], 'universe-754');
+  assert.equal(payload['stakeUnitsStatus'], 'canonical');
+});
+
+test('recordPickSettlement classifies historical unknown stake rows and omits fake profit/loss', async () => {
+  const { repositories, pick } = await createPostedPick();
+  const stored = await repositories.picks.findPickById(pick.id);
+  assert.ok(stored);
+  stored!.stake_units = null;
+
+  const result = await recordPickSettlement(
+    pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'proof://historical-unknown-stake',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const payload = result.settlementRecord.payload as Record<string, unknown>;
+  assert.equal(payload['stakeUnitsStatus'], 'historical_unknown');
+  assert.equal(payload['stakeUnitsHistoricalUnknown'], true);
+  assert.equal('profitLossUnits' in payload, false);
 });
 
 test('recordPickSettlement rejects invalid settlement requests without writes', async () => {

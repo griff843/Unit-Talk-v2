@@ -1,0 +1,36 @@
+{
+  "issue_id": "UTV2-845",
+  "artifact": "r3-shadow-report",
+  "generated_at": "2026-05-07T06:13:30.000Z",
+  "source": {
+    "command": "pnpm exec tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json",
+    "proof_path": "docs/06_status/proof/UTV2-728/proof-cd9a5e5d-19af-4547-aa26-667c0a1bd4d5.json"
+  },
+  "shadow_run": {
+    "timestamp": "2026-05-07T06:12:16.802Z",
+    "runId": "cd9a5e5d-19af-4547-aa26-667c0a1bd4d5",
+    "dailyCounts": {
+      "rawPropsIngested": 0,
+      "marketUniverseRows": 0,
+      "candidatesScanned": 15806,
+      "candidatesAlreadyScored": 6843,
+      "candidatesScoredThisRun": 0,
+      "ranked": 0,
+      "posted": 3986,
+      "shadowOnly": 15806,
+      "settledResultBacked": 0,
+      "clvReady": 29642
+    },
+    "guardrails": {
+      "picksCreated": 0,
+      "shadowModeFalseSet": 0,
+      "distributionEnqueued": 0,
+      "promotionWidened": 0
+    },
+    "runnerSummary": {
+      "scored": 0,
+      "skipped": 1002,
+      "errors": 0
+    }
+  }
+}

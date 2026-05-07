@@ -42,14 +42,15 @@ test(
       {
         source: 'api',
         eventName: `db-smoke-${smokeRunId}`,
-        submittedBy: 'codex',
-        market: 'NBA points',
-        selection: 'Player Over 21.5',
-        line: 21.5,
-        odds: -110,
-      },
-      repositories,
-    );
+      submittedBy: 'codex',
+      market: 'NBA points',
+      selection: 'Player Over 21.5',
+      line: 21.5,
+      odds: -110,
+      stakeUnits: 1,
+    },
+    repositories,
+  );
 
     const queued = await transitionPickLifecycle(
       repositories.picks,

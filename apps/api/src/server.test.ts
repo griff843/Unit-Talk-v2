@@ -111,6 +111,7 @@ test('POST /api/submissions returns created submission payload', async () => {
         source: 'api',
         market: 'NBA points',
         selection: 'Player Over 18.5',
+        stakeUnits: 1,
       }),
     });
     const body = (await response.json()) as {
