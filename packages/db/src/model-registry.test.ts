@@ -15,6 +15,9 @@ test('model registry create() returns a staged record with correct fields', asyn
     version: 'v1',
     sport: 'NBA',
     marketFamily: 'spread',
+    registryEntityType: 'champion_model',
+    sourceTypeCompatibility: ['board-construction'],
+    activeState: 'draft',
     metadata: { owner: 'mp' },
   });
 
@@ -25,6 +28,9 @@ test('model registry create() returns a staged record with correct fields', asyn
   assert.equal(record.status, 'staged');
   assert.equal(record.champion_since, null);
   assert.deepEqual(record.metadata, { owner: 'mp' });
+  assert.equal(record.registry_entity_type, 'champion_model');
+  assert.deepEqual(record.source_type_compatibility, ['board-construction']);
+  assert.equal(record.active_state, 'draft');
 });
 
 test('model registry findChampion() returns null when no champion exists', async () => {
@@ -65,6 +71,27 @@ test('model registry findChampion() returns the promoted champion', async () => 
   assert.ok(champion);
   assert.equal(champion.id, record.id);
   assert.equal(champion.status, 'champion');
+});
+
+test('model registry findChampion() honors source compatibility when provided', async () => {
+  const repository = new InMemoryModelRegistryRepository();
+  await repository.create({
+    modelName: 'nba-spread',
+    version: 'v1',
+    sport: 'NBA',
+    marketFamily: 'spread',
+    status: 'champion',
+    registryEntityType: 'champion_model',
+    sourceTypeCompatibility: ['system-pick-scanner'],
+    activeState: 'champion',
+  });
+
+  const incompatible = await repository.findChampion('NBA', 'spread', 'board-construction');
+  const compatible = await repository.findChampion('NBA', 'spread', 'system-pick-scanner');
+
+  assert.equal(incompatible, null);
+  assert.ok(compatible);
+  assert.equal(compatible.source_type_compatibility?.[0], 'system-pick-scanner');
 });
 
 test('promoting a second champion archives the old champion for the same slot', async () => {

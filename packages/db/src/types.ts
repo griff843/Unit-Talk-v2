@@ -105,7 +105,18 @@ export type PlayerRow = Tables<'players'>;
 export type PlayerTeamAssignmentRow = Tables<'player_team_assignments'>;
 export type GradeResultRow = Tables<'game_results'>;
 export type MemberTierRow = Tables<'member_tiers'>;
-export type ModelRegistryRow = Tables<'model_registry'>;
+export interface ModelRegistryRow extends Tables<'model_registry'> {
+  registry_entity_type?: string | null;
+  source_type_compatibility?: string[] | null;
+  owner?: string | null;
+  training_window_start?: string | null;
+  training_window_end?: string | null;
+  validation_metrics?: Record<string, unknown> | null;
+  calibration_metadata?: Record<string, unknown> | null;
+  promotion_approved_by?: string | null;
+  promotion_approved_at?: string | null;
+  active_state?: string | null;
+}
 export type ExperimentLedgerRow = Tables<'experiment_ledger'>;
 export type ModelHealthSnapshotRow = Tables<'model_health_snapshots'>;
 
@@ -225,7 +236,10 @@ export interface PickCandidateRow {
   selection_rank: number | null;       // integer NULL — Phase 4: rank within the qualified pool (1 = highest). NULL = not yet ranked.
   is_board_candidate: boolean;         // boolean NOT NULL DEFAULT false — Phase 4: true if in the pre-scarcity board pool for current cycle.
   shadow_mode: boolean;                // boolean NOT NULL DEFAULT true — must remain true in Phase 2
-  pick_id: string | null;              // uuid NULL FK → picks — must remain NULL in Phase 2
+  pick_id: string | null;              // uuid NULL FK -> picks; must remain NULL in Phase 2
+  model_registry_id?: string | null;   // uuid NULL FK -> model_registry; written atomically with scoring
+  scoring_run_id?: string | null;      // uuid NULL FK -> system_runs; scoring run that wrote ownership
+  ownership_timestamp?: string | null; // timestamptz NULL; exact ownership write timestamp
   sport_key: string | null;            // text NULL — from market_universe.sport_key; enables per-sport shadow reports
   scan_run_id: string | null;          // text NULL — provenance: ID of scan cycle that last wrote this row
   provenance: Record<string, unknown> | null; // jsonb NULL — scan version, filter set version, timestamp
@@ -514,4 +528,5 @@ export interface EventParticipantRow {
   role: EventParticipantRole;
   created_at: string;
 }
+
 

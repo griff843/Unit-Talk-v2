@@ -32,6 +32,9 @@ async function seedChampion(modelRegistry: InMemoryModelRegistryRepository, spor
     sport,
     marketFamily,
     status: 'champion',
+    registryEntityType: 'champion_model',
+    sourceTypeCompatibility: ['board-construction'],
+    activeState: 'champion',
     metadata: { confidence: 0.8 },
   });
 }
@@ -123,6 +126,9 @@ function makeCandidate(overrides: Partial<PickCandidateRow> = {}): PickCandidate
     is_board_candidate: false,
     shadow_mode: true,
     pick_id: null,
+    model_registry_id: null,
+    scoring_run_id: null,
+    ownership_timestamp: null,
     sport_key: null,
     scan_run_id: 'run-1',
     provenance: null,
@@ -191,6 +197,9 @@ test('scores one qualified candidate with valid fair probs', async () => {
   assert.ok(updated!.model_score! >= 0.5 && updated!.model_score! <= 1, `model_score should be in [0.5,1], got ${updated!.model_score}`);
   assert.ok(updated!.model_tier !== null, 'model_tier should be set');
   assert.ok(updated!.model_confidence !== null, 'model_confidence should be set');
+  assert.ok(updated!.model_registry_id, 'model_registry_id should be set');
+  assert.ok(updated!.scoring_run_id, 'scoring_run_id should be set');
+  assert.ok(updated!.ownership_timestamp, 'ownership_timestamp should be set');
 });
 
 test('scores rejected candidates only when explicitly included for shadow proof', async () => {
@@ -551,4 +560,61 @@ test('UTV2-634: out availability suppresses scoring instead of degrading silentl
 
   assert.equal(result.scored, 0);
   assert.equal(result.availabilitySuppressed, 1);
+});
+
+test('rejects scoring when the resolved registry owner has an invalid entity type', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+
+  await modelRegistry.create({
+    modelName: 'bad-owner',
+    version: '1.0.0',
+    sport: 'nba',
+    marketFamily: 'player_prop',
+    status: 'champion',
+    registryEntityType: 'heuristic_system',
+    sourceTypeCompatibility: ['board-construction'],
+    activeState: 'champion',
+    metadata: { confidence: 0.8 },
+  });
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+
+  assert.equal(result.scored, 0);
+  assert.equal(result.errors, 1);
+  assert.equal(result.invalidEntityTypeRejected, 1);
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  assert.equal(rows.get('universe-1')?.model_score, null);
+});
+
+test('persists ownership but quarantines degraded registry ownership', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+
+  await modelRegistry.create({
+    modelName: 'degraded-owner',
+    version: '1.0.0',
+    sport: 'nba',
+    marketFamily: 'player_prop',
+    status: 'champion',
+    registryEntityType: 'champion_model',
+    sourceTypeCompatibility: ['board-construction'],
+    activeState: 'degraded',
+    metadata: { confidence: 0.8 },
+  });
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+
+  assert.equal(result.scored, 1);
+  assert.equal(result.degradedOwnership, 1);
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  assert.ok(rows.get('universe-1')?.model_registry_id);
 });
