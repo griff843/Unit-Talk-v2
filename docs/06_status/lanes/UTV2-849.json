@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-849",
+  "lane_type": "claude-governance",
+  "tier": "T2",
+  "worktree_path": null,
+  "branch": "docs/utv2-849-source-separated-pick-ledger-standard",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/source_separated_pick_ledger_standard.md",
+    "docs/06_status/lanes/UTV2-849.json",
+    "docs/06_status/proof/UTV2-849/evidence.json"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/source_separated_pick_ledger_standard.md",
+    "docs/06_status/lanes/UTV2-849.json",
+    "docs/06_status/proof/UTV2-849/evidence.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-849/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-07T15:00:00.000Z",
+  "heartbeat_at": "2026-05-07T15:20:00.000Z",
+  "closed_at": "2026-05-07T15:20:00.000Z",
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-07T15:20:00.000Z",
+      "verdict": "pass",
+      "merge_sha": null,
+      "failures": [],
+      "runner": "operator"
+    }
+  ],
+  "reopen_history": []
+}

@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-849",
+  "merge_sha": null,
+  "generated_at": "2026-05-07T15:20:00.000Z",
+  "verifier": {
+    "identity": "operator"
+  },
+  "captured_at": "2026-05-07T15:20:00.000Z",
+  "lane_type": "claude-governance",
+  "tier": "T2",
+  "static_proof": {
+    "commands": [],
+    "results": {
+      "governance_doc_written": "pass",
+      "schema_grounded": "pass",
+      "codex_packet_included": "pass",
+      "decision_tree_included": "pass"
+    },
+    "notes": "Governance-only lane. No code changes. No runtime verification required. Document completeness verified by operator."
+  },
+  "runtime_proof": null,
+  "deliverable": {
+    "path": "docs/06_status/source_separated_pick_ledger_standard.md",
+    "sections": [
+      "1. Purpose",
+      "2. Canonical Source Types (9 classes + UNKNOWN)",
+      "3. Immutable Source Policy",
+      "4. Trusted vs Untrusted Source Policy",
+      "5. Runtime Enforcement Semantics",
+      "6. Historical-Row Handling",
+      "7. Relationship to Provenance Contract (UTV2-848)",
+      "8. Relationship to Truthworthiness Score (UTV2-847)",
+      "9. Required Operational Reporting",
+      "10. Codex Implementation Packet",
+      "Appendix: Source class decision tree"
+    ],
+    "key_findings": {
+      "canonical_source_classes": [
+        "model_generated",
+        "heuristic",
+        "manual",
+        "shadow",
+        "operator_edited",
+        "unsupported_market",
+        "replay",
+        "synthetic",
+        "imported_historical"
+      ],
+      "picks_source_has_check_constraint": false,
+      "utv2_848_mapping_reconciled": true,
+      "system_scanner_board_construction_require_candidate_join_to_classify": true,
+      "shadow_override_applies_regardless_of_base_class": true,
+      "model_generated_requires_registry_link": true,
+      "historical_unknowns_permanent": true
+    }
+  },
+  "summary": {
+    "root_cause": "UTV2-849 is a governance lane. The source-separated ledger standard defines the nine canonical source classes, their analytics eligibility, immutability policy, contamination thresholds, runtime enforcement, and Codex implementation packet. Key insight: 'system-scanner' and 'board-construction' picks from UTV2-848 cannot be classified as model_generated without a verified model_registry link via the pick_candidates join. Without UTV2-850 (model registry FK), most scanner picks will classify as heuristic or UNKNOWN.",
+    "resolution": "Source-separated pick ledger standard written at docs/06_status/source_separated_pick_ledger_standard.md. All 10 required sections plus decision tree appendix complete. Codex implementation packet included. No runtime changes. No fabrication.",
+    "unblocks": ["UTV2-850", "UTV2-851"],
+    "depends_on_main": ["UTV2-848"]
+  },
+  "checklist": {
+    "all_10_sections_present": true,
+    "nine_canonical_source_classes_defined": true,
+    "eligibility_matrix_complete": true,
+    "contamination_thresholds_defined": true,
+    "decision_tree_included": true,
+    "codex_packet_written": true,
+    "no_fabricated_attribution": true,
+    "no_runtime_changes": true,
+    "historical_unknown_policy_defined": true,
+    "utv2_848_reconciliation_documented": true
+  }
+}
