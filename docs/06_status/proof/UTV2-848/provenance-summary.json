@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-07T15:23:10.475Z",
+  "evaluation_window": {
+    "from": "2026-04-07T15:23:10.475Z",
+    "to": "2026-05-07T15:23:10.475Z",
+    "days": 30
+  },
+  "system_verdict": "FAIL",
+  "verdict_reason": "Model attribution is not resolvable for the required threshold, so trusted model-edge evaluation remains blocked.",
+  "row_counts": {
+    "total_analyzed": 4201,
+    "total_picks_analyzed": 4201,
+    "total_candidates_analyzed": 19792,
+    "provenance_pass": 0,
+    "provenance_warn": 1,
+    "provenance_fail": 4198,
+    "provenance_unknown": 2,
+    "rows_with_partial_provenance": 4199,
+    "rows_with_no_provenance": 2,
+    "candidates_with_pick_id": 4035,
+    "candidates_without_pick_id": 15757
+  },
+  "provenance_metrics": {
+    "provenance_linked_pct": 99.95,
+    "model_attributed_pct": 0,
+    "candidate_linked_pct": 89.79,
+    "market_universe_linked_pct": 89.79,
+    "source_type_present_pct": 100,
+    "source_separated_pct": 3.83,
+    "shadow_pct": 0,
+    "historical_unknown_pct": 0.05,
+    "operator_edited_pct": 0,
+    "excluded_from_model_edge_pct": 100
+  },
+  "distinct_picks_source_values": [
+    {
+      "source": "system-pick-scanner",
+      "count": 3621
+    },
+    {
+      "source": "smart-form",
+      "count": 386
+    },
+    {
+      "source": "board-construction",
+      "count": 161
+    },
+    {
+      "source": "api",
+      "count": 28
+    },
+    {
+      "source": "human",
+      "count": 3
+    },
+    {
+      "source": "canary-proof",
+      "count": 2
+    }
+  ],
+  "model_reference_keys_found_in_jsonb": [],
+  "exclusion_counts": {
+    "no_candidate_link": 429,
+    "no_provenance": 2,
+    "no_model_attribution": 4201,
+    "source_ambiguous": 4040,
+    "shadow_mode": 0,
+    "no_market_universe": 429,
+    "no_stake": 3810,
+    "manual_source": 0,
+    "heuristic_source": 0,
+    "historical_unknown": 2,
+    "model_attribution_jsonb_absent": 3772
+  },
+  "schema_gaps": {
+    "model_id_column_exists_on_picks": false,
+    "board_run_id_column_exists_on_picks": false,
+    "scan_run_id_column_exists_on_picks": false,
+    "candidate_id_column_exists_on_picks": false,
+    "market_universe_id_column_exists_on_picks": false,
+    "model_registry_linked_to_candidates": false,
+    "provenance_jsonb_has_model_ref_pct": 0,
+    "required_fields_directly_on_picks": [
+      "source_type",
+      "submission_id",
+      "stake_units",
+      "posted_at",
+      "settled_at"
+    ],
+    "required_fields_only_through_joins": [
+      "candidate_id",
+      "market_universe_id",
+      "scan_run_id",
+      "score_snapshot",
+      "board_run_flag",
+      "shadow_mode_flag",
+      "runtime_env_id",
+      "provider_attribution"
+    ],
+    "required_fields_missing": [
+      "model_or_heuristic_id",
+      "feature_snapshot_id",
+      "score_snapshot_id",
+      "board_run_id_on_picks",
+      "scan_run_id_on_picks",
+      "candidate_id_on_picks",
+      "market_universe_id_on_picks"
+    ]
+  }
+}

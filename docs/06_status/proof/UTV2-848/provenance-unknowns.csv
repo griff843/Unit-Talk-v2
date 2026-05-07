@@ -1,0 +1,3 @@
+pick_id,source_type,has_submission_id,has_candidate_link,created_at,age_days
+b6764d3c-bafe-439f-9770-4932ec5253d8,canary-proof,false,false,2026-04-22T19:34:56.307318+00:00,14.83
+b5ef3573-a970-4f18-9772-79c5193a9cfe,canary-proof,false,false,2026-04-22T19:37:25.490218+00:00,14.82

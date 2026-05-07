@@ -1,0 +1,7 @@
+source_type,total_rows,provenance_pass,provenance_fail,provenance_unknown,model_attributed_pct,candidate_linked_pct
+api,28,0,28,0,0,0
+board-construction,161,0,160,0,0,99.38
+canary-proof,2,0,0,2,0,0
+human,3,0,3,0,0,0
+smart-form,386,0,386,0,0,0
+system-pick-scanner,3621,0,3621,0,0,99.75

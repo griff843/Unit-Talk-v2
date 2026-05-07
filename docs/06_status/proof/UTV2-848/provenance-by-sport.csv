@@ -1,0 +1,5 @@
+sport,total_rows,provenance_pass,provenance_fail,provenance_unknown,source_separated_pct,candidate_linked_pct,model_attributed_pct
+MLB,1949,0,1949,0,3.08,84.81,0
+NBA,1914,0,1914,0,2.61,94.88,0
+NHL,334,0,332,2,14.97,90.72,0
+unknown,4,0,3,0,25,0,0
