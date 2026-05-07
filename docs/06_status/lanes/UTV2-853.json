@@ -6,8 +6,8 @@
   "worktree_path": null,
   "branch": "docs/utv2-853-model-ownership-persistence-standard",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "8057388",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/600",
   "files_changed": [
     "docs/06_status/model_ownership_persistence_standard.md",
     "docs/06_status/lanes/UTV2-853.json",
