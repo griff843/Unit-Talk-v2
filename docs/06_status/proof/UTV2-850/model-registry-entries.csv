@@ -1,0 +1,7 @@
+model_id,model_name,model_version,registry_entity_type,sport,market_family,active_state,deployment_start,deployment_end,allowed_market_families,champion_since,owner
+29cd362d-7eca-4f26-9038-9678f5525822,baseline-nhl-player-prop,v0.1-baseline-2026-04-22,champion_model,NHL,player_prop,champion,,,,2026-04-28T00:44:45.166+00:00,
+869f39d2-9033-4da7-b803-b3883a1d439c,baseline-nhl-game-line,v0.1-baseline-2026-04-22,champion_model,NHL,game_line,champion,,,,2026-04-28T00:44:45.167+00:00,
+e103d9c4-1e9e-4f48-8754-095585840ce1,baseline-mlb-player-prop,v0.1-baseline-2026-04-22,champion_model,MLB,player_prop,champion,,,,2026-04-22T16:19:42.261+00:00,
+3ff55621-9608-479d-ab9e-913efd89f9ed,baseline-mlb-game-line,v0.1-baseline-2026-04-22,champion_model,MLB,game_line,champion,,,,2026-04-22T16:19:42.261+00:00,
+e1a4f218-f2f8-4868-b6d6-2688abcfcbbf,baseline-nba-game-line,v0.1-baseline-2026-04-22,champion_model,NBA,game_line,champion,,,,2026-04-22T16:19:42.261+00:00,
+7f31e8bf-6a29-44ea-b8c7-2932f268639f,baseline-nba-player-prop,v0.1-baseline-2026-04-22,champion_model,NBA,player_prop,champion,,,,2026-04-22T16:19:42.261+00:00,

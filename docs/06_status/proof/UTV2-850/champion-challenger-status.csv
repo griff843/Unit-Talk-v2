@@ -1,0 +1,7 @@
+sport,market_family,champion_model_id,champion_model_name,champion_since,challenger_model_id,challenger_model_name,shadow_model_id,shadow_model_name,has_contested_champion
+MLB,game_line,3ff55621-9608-479d-ab9e-913efd89f9ed,baseline-mlb-game-line,2026-04-22T16:19:42.261+00:00,,,,,false
+MLB,player_prop,e103d9c4-1e9e-4f48-8754-095585840ce1,baseline-mlb-player-prop,2026-04-22T16:19:42.261+00:00,,,,,false
+NBA,game_line,e1a4f218-f2f8-4868-b6d6-2688abcfcbbf,baseline-nba-game-line,2026-04-22T16:19:42.261+00:00,,,,,false
+NBA,player_prop,7f31e8bf-6a29-44ea-b8c7-2932f268639f,baseline-nba-player-prop,2026-04-22T16:19:42.261+00:00,,,,,false
+NHL,game_line,869f39d2-9033-4da7-b803-b3883a1d439c,baseline-nhl-game-line,2026-04-28T00:44:45.167+00:00,,,,,false
+NHL,player_prop,29cd362d-7eca-4f26-9038-9678f5525822,baseline-nhl-player-prop,2026-04-28T00:44:45.166+00:00,,,,,false

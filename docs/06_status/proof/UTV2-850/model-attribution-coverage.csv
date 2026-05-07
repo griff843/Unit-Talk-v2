@@ -1,0 +1,7 @@
+source_value,entity_type,pick_count,model_attributed_count,model_attributed_pct,registry_fk_present,model_edge_eligible
+api,manual_strategy,28,0,0,false,false
+board-construction,heuristic_system,161,0,0,false,false
+canary-proof,synthetic_model,2,0,0,false,false
+human,manual_strategy,3,0,0,false,false
+smart-form,manual_strategy,386,0,0,false,false
+system-pick-scanner,heuristic_system,3622,0,0,false,false
