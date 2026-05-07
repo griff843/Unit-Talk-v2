@@ -6,8 +6,8 @@
   "worktree_path": null,
   "branch": "docs/utv2-848-provenance-contract-standard",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a98188d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/595",
   "files_changed": [
     "docs/06_status/provenance_contract_standard.md",
     "docs/06_status/lanes/UTV2-848.json",
