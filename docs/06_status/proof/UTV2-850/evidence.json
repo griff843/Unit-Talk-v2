@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-850",
+  "merge_sha": null,
+  "generated_at": "2026-05-07T15:55:00.000Z",
+  "verifier": {
+    "identity": "operator"
+  },
+  "captured_at": "2026-05-07T15:55:00.000Z",
+  "lane_type": "claude-governance",
+  "tier": "T2",
+  "static_proof": {
+    "commands": [],
+    "results": {
+      "governance_doc_written": "pass",
+      "schema_grounded_in_utv2_848_findings": "pass",
+      "nine_entity_types_defined": "pass",
+      "lifecycle_states_defined": "pass",
+      "codex_packet_included": "pass"
+    },
+    "notes": "Governance-only lane. No code changes. Grounded in UTV2-848 verified findings: model_attributed_pct=0%, pick_candidates has no model_registry_id column, provenance JSONB has no model reference keys."
+  },
+  "runtime_proof": null,
+  "grounded_in": {
+    "utv2_848_evidence_sha": "a98188d",
+    "utv2_849_evidence_sha": "e414afa",
+    "verified_facts_used": [
+      "model_attributed_pct = 0% across 4201 picks",
+      "pick_candidates.provenance has no model reference key (sampled 19792 rows)",
+      "no FK from pick_candidates to model_registry found",
+      "distinct picks.source values: system-pick-scanner(3621), smart-form(386), board-construction(161), api(28), human(3), canary-proof(2)",
+      "source_separated_pct = 3.83% (only board-construction is near-canonical)"
+    ]
+  },
+  "deliverable": {
+    "path": "docs/06_status/champion_model_registry_standard.md",
+    "sections": [
+      "Pre-conditions: verified facts from UTV2-848 implementation pass",
+      "1. Purpose",
+      "2. Canonical Registry Entity Types (9 types)",
+      "3. Required Registry Fields (6 categories, 30+ fields)",
+      "4. Model Lifecycle States (8 states, allowed/invalid transitions)",
+      "5. Champion/Challenger Policy",
+      "6. Pick Attribution Contract",
+      "7. Historical Attribution Policy",
+      "8. Relationship to Existing Standards",
+      "9. Required Reporting (7 output files)",
+      "10. PASS/WARN/FAIL Verdicts",
+      "11. Unresolved Schema Questions",
+      "12. Codex Implementation Packet"
+    ],
+    "key_findings": {
+      "current_registry_verdict": "FAIL",
+      "model_attributed_pct_baseline": 0,
+      "pick_candidates_model_registry_id_exists": false,
+      "migration_required_before_model_attribution_possible": true,
+      "all_scanner_picks_are_heuristic_system_not_model_generated": true,
+      "champion_count_estimated": 0,
+      "system_pick_scanner_entity_type": "heuristic_system",
+      "board_construction_entity_type": "heuristic_system",
+      "smart_form_entity_type": "manual_strategy",
+      "api_entity_type": "manual_strategy",
+      "human_entity_type": "manual_strategy",
+      "canary_proof_entity_type": "synthetic_model"
+    }
+  },
+  "summary": {
+    "root_cause": "The model_registry table exists but has no FK from pick_candidates. The provenance JSONB on pick_candidates contains no model reference keys (verified across 19,792 rows). All 3,621 system-pick-scanner picks are heuristic_system under the UTV2-849 classification because no registry link exists. model_attributed_pct = 0% is a hard fact, not an estimate.",
+    "resolution": "Champion model registry standard written. 9 entity types, 8 lifecycle states, 30+ required fields, champion/challenger policy, attribution contract, and Codex packet complete. The critical migration (pick_candidates.model_registry_id FK) is defined as required but explicitly deferred — it needs operator approval and a separate implementation lane.",
+    "unblocks": ["UTV2-851"],
+    "migration_deferred": true,
+    "migration_description": "ADD COLUMN pick_candidates.model_registry_id UUID REFERENCES model_registry(id) — must be added at candidate scoring time, not backfilled to historical rows"
+  },
+  "checklist": {
+    "all_12_sections_present": true,
+    "grounded_in_verified_848_findings": true,
+    "nine_entity_types_defined": true,
+    "lifecycle_transitions_defined": true,
+    "pick_attribution_contract_defined": true,
+    "historical_unknown_policy_defined": true,
+    "codex_packet_written": true,
+    "no_fabricated_attribution": true,
+    "no_runtime_changes": true,
+    "no_migration_added": true,
+    "migration_explicitly_deferred": true
+  }
+}
