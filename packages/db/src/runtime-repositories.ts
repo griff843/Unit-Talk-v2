@@ -1,6 +1,7 @@
 import crypto from 'node:crypto';
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { InvalidTransitionError, InvalidPickStateError } from './lifecycle.js';
+import { PickCandidatesSchemaCacheDriftError } from './repositories.js';
 import {
   V1_REFERENCE_DATA,
   type ProviderOfferInsert,
@@ -7799,7 +7800,9 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
       scan_run_id: input.scan_run_id,
       provenance: input.provenance,
       expires_at: input.expires_at,
-      sport_key: input.sport_key ?? null,
+      ...(Object.prototype.hasOwnProperty.call(input, 'sport_key')
+        ? { sport_key: input.sport_key ?? null }
+        : {}),
       updated_at: now,
       // Phase 2 invariants — these are deliberately omitted from the upsert payload:
       // pick_id          → remains NULL (DB default; Phase 4+ only)
@@ -7815,6 +7818,9 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
     });
 
     if (error) {
+      if (isMissingSchemaCacheColumn(error.message, 'sport_key')) {
+        throw new PickCandidatesSchemaCacheDriftError('sport_key', error.message);
+      }
       throw new Error(`pick_candidates upsert failed: ${error.message}`);
     }
   }
@@ -7905,6 +7911,11 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
         );
     }
   }
+}
+
+function isMissingSchemaCacheColumn(message: string, column: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes('schema cache') && normalized.includes(`'${column.toLowerCase()}'`);
 }
 
 export function createInMemoryRepositoryBundle(): RepositoryBundle {

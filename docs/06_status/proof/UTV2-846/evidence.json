@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-846",
+  "captured_at": "2026-05-07T00:57:53.879Z",
+  "summary": {
+    "root_cause": "The live PostgREST schema cache still does not recognize pick_candidates.sport_key during upsert. Board-scan was already sending sport_key, and the DB-layer serializer always included the field even during retry by normalizing an omitted property to null, so the fallback path re-triggered the same schema-cache failure.",
+    "resolution": "Board-scan now detects sport_key schema-cache drift explicitly, logs a schema_cache_drift_fallback event, retries once with sport_key omitted at the DB payload boundary, and tags provenance with schema_cache_fallback metadata. Generated DB types now also include pick_candidates.sport_key so local type truth matches the intended schema.",
+    "trust_mode": "safe_fallback"
+  },
+  "proof": {
+    "board_scan": {
+      "scanned": 1000,
+      "qualified": 145,
+      "rejected": 855,
+      "scan_run_id": "07ea5f90-f3ec-4362-b159-5a022cf0985d",
+      "schema_cache_fallback_seen": true,
+      "completed_with_fallback": true
+    },
+    "candidate_materialization": {
+      "rows_persisted_for_scan_run": 1000,
+      "fresh_candidate_updates_seen": 10,
+      "latest_candidate_updated_at": "2026-05-07T00:57:53.305+00:00"
+    },
+    "downstream_inventory": {
+      "scoring_scored": 2,
+      "ranking_ranked": 87,
+      "board_size": 18,
+      "board_run_id": "08b3bfb6-7a26-4cde-8b2b-ae67a6ff279b",
+      "fresh_board_rows_seen": 10,
+      "latest_board_created_at": "2026-05-07T00:57:53.879+00:00"
+    },
+    "pipeline_health": {
+      "worker_verdict": "HEALTHY",
+      "pending_outside_worker_targets": 5
+    }
+  },
+  "commands": [
+    "pnpm exec tsx --test apps/api/src/board-scan-service.test.ts",
+    "pnpm type-check",
+    "pnpm test:db",
+    "pnpm verify",
+    "pnpm pipeline:health",
+    "inline tsx runtime proof: runBoardScan -> runCandidateScoring -> runRankedSelection -> runBoardConstruction"
+  ],
+  "checklist": {
+    "board_scan_no_longer_fails_on_pick_candidates_sport_key": true,
+    "schema_cache_drift_resolved_or_safely_handled": true,
+    "fresh_candidates_materialize": true,
+    "board_writer_receives_fresh_candidate_inventory": true,
+    "evidence_freshness_resumes": true,
+    "no_hidden_schema_shortcut": true,
+    "pnpm_verify_passes": true
+  },
+  "remaining_blockers": {
+    "in_scope": [],
+    "out_of_scope": [
+      "The upstream PostgREST schema cache itself is still stale for pick_candidates.sport_key; the runtime now handles that explicitly instead of failing closed.",
+      "Candidate scoring emitted experiment_ledger constraint warnings during proof (shadow_comparison_failed on experiment_ledger_run_type_check), but scoring continued and this lane does not change scoring or experiment-ledger contracts.",
+      "Pipeline health still reports 5 pending rows outside worker targets; worker targets remain healthy and this lane does not touch delivery routing."
+    ]
+  }
+}

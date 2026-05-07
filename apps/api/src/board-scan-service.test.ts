@@ -17,8 +17,13 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { runBoardScan, STALENESS_THRESHOLDS } from './board-scan-service.js';
-import { InMemoryMarketUniverseRepository, InMemoryPickCandidateRepository, createInMemoryRepositoryBundle } from '@unit-talk/db';
-import type { MarketUniverseRow } from '@unit-talk/db';
+import {
+  InMemoryMarketUniverseRepository,
+  InMemoryPickCandidateRepository,
+  PickCandidatesSchemaCacheDriftError,
+  createInMemoryRepositoryBundle,
+} from '@unit-talk/db';
+import type { MarketUniverseRow, PickCandidateUpsertInput } from '@unit-talk/db';
 
 // ---------------------------------------------------------------------------
 // Test helpers
@@ -106,6 +111,70 @@ test('board-scan: feature gate OFF — returns zeros immediately, writes no cand
   assert.equal(result.rejected, 0);
   assert.ok(result.scanRunId.length > 0);
   assert.equal(deps.pickCandidates.listAll().length, 0, 'no candidates written when gate is off');
+});
+
+test('schema cache drift: board-scan retries without sport_key and logs explicit fallback', async () => {
+  const universeRow = makeUniverseRow();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  seedUniverseRows(marketUniverse, [universeRow]);
+
+  const attempts: PickCandidateUpsertInput[][] = [];
+  const loggerMessages: string[] = [];
+  const fallbackRepo = {
+    async upsertCandidates(rows: PickCandidateUpsertInput[]): Promise<void> {
+      attempts.push(rows);
+      if (attempts.length === 1) {
+        throw new PickCandidatesSchemaCacheDriftError(
+          'sport_key',
+          "Could not find the 'sport_key' column of 'pick_candidates' in the schema cache",
+        );
+      }
+    },
+    async findByStatus(): Promise<never[]> {
+      return [];
+    },
+    async updateModelScoreBatch(): Promise<void> {},
+    async updateSelectionRankBatch(): Promise<void> {},
+    async resetSelectionRanks(): Promise<void> {},
+    async findByIds(): Promise<never[]> {
+      return [];
+    },
+    async updatePickIdBatch(): Promise<void> {},
+  };
+
+  const result = await runBoardScan(
+    {
+      marketUniverse,
+      pickCandidates: fallbackRepo,
+    },
+    {
+      enabled: true,
+      logger: {
+        info(message: string) {
+          loggerMessages.push(message);
+        },
+        warn(message: string) {
+          loggerMessages.push(message);
+        },
+        error(message: string) {
+          loggerMessages.push(message);
+        },
+      },
+    },
+  );
+
+  assert.equal(result.scanned, 1);
+  assert.equal(attempts.length, 2, 'board scan should retry once after schema-cache drift');
+  assert.equal(attempts[0]![0]!.sport_key, 'nba');
+  assert.equal(attempts[1]![0]!.sport_key, undefined);
+  assert.equal(
+    (attempts[1]![0]!.provenance as Record<string, unknown>)['schema_cache_fallback'],
+    true,
+  );
+  assert.ok(
+    loggerMessages.some((message) => message.includes('"event":"schema_cache_drift_fallback"')),
+    'fallback must be logged explicitly',
+  );
 });
 
 test('board-scan: feature gate ON — scans rows and writes candidates', async () => {

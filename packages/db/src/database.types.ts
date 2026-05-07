@@ -1189,6 +1189,7 @@ export type Database = {
           scan_run_id: string | null
           selection_rank: number | null
           shadow_mode: boolean
+          sport_key: string | null
           status: string
           universe_id: string
           updated_at: string
@@ -1208,6 +1209,7 @@ export type Database = {
           scan_run_id?: string | null
           selection_rank?: number | null
           shadow_mode?: boolean
+          sport_key?: string | null
           status?: string
           universe_id: string
           updated_at?: string
@@ -1227,6 +1229,7 @@ export type Database = {
           scan_run_id?: string | null
           selection_rank?: number | null
           shadow_mode?: boolean
+          sport_key?: string | null
           status?: string
           universe_id?: string
           updated_at?: string
