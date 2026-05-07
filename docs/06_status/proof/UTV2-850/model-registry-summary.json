@@ -1,19 +1,13 @@
 {
   "schema_version": 1,
-  "issue_id": "UTV2-850",
   "generated_at": "2026-05-07T18:44:39.195Z",
-  "report_paths": [
-    "model-registry-summary.json",
-    "model-registry-entries.csv",
-    "model-attribution-coverage.csv",
-    "model-performance-readiness.csv",
-    "champion-challenger-status.csv",
-    "model-attribution-gaps.csv",
-    "schema-gaps.json",
-    "README.md",
-    "evidence.json"
-  ],
+  "evaluation_window": {
+    "from": "2026-04-07T18:44:39.195Z",
+    "to": "2026-05-07T18:44:39.195Z",
+    "days": 30
+  },
   "system_verdict": "FAIL",
+  "verdict_reason": "No evaluation-window picks resolve to model_registry ownership, so model-edge attribution remains blocked.",
   "registry_state": {
     "total_registry_entries": 6,
     "champion_count": 6,
@@ -134,10 +128,17 @@
       }
     ]
   },
-  "policy": {
-    "read_only": true,
-    "migrations_added": false,
-    "fabricated_model_ownership": false,
-    "historical_rows_upgraded": false
+  "required_future_changes": {
+    "minimal_schema_changes": [
+      "Add pick_candidates.model_registry_id FK to model_registry.id.",
+      "Add or standardize model_registry registry_entity_type, active_state, source_type_compatibility, owner, training window, validation, calibration, and promotion metadata."
+    ],
+    "minimal_runtime_changes": [
+      "Candidate scoring must write model_registry_id at scoring time.",
+      "Pick conversion must preserve candidate linkage and block model_generated classification without registry ownership.",
+      "Analytics must require model_registry_id resolution before model-edge or syndicate eligibility."
+    ],
+    "future_enforcement_ready_today": false,
+    "reason_current_runtime_not_ready": "The registry exists, but no ownership FK path ties candidates or picks to registry entries."
   }
 }

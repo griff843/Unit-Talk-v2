@@ -1,0 +1,8 @@
+picks_source_value,pick_count,gap_type,gap_description,resolution_required
+api,28,source_not_model_owned,source is not eligible for model ownership under the current registry standard,Keep this source outside model-edge analytics unless a future governed source contract changes it
+board-construction,161,missing_registry_fk,pick_candidates has no resolvable registry ownership for this source; scanner/board rows remain heuristic_system,Add pick_candidates.model_registry_id FK and populate it at candidate scoring time
+canary-proof,2,source_not_model_owned,source is not eligible for model ownership under the current registry standard,Keep this source outside model-edge analytics unless a future governed source contract changes it
+human,3,source_not_model_owned,source is not eligible for model ownership under the current registry standard,Keep this source outside model-edge analytics unless a future governed source contract changes it
+smart-form,386,source_not_model_owned,source is not eligible for model ownership under the current registry standard,Keep this source outside model-edge analytics unless a future governed source contract changes it
+system-pick-scanner,3622,missing_registry_fk,pick_candidates has no resolvable registry ownership for this source; scanner/board rows remain heuristic_system,Add pick_candidates.model_registry_id FK and populate it at candidate scoring time
+ALL,4202,missing_registry_fk_column,pick_candidates.model_registry_id column does not exist,Create an approved migration in a future ownership-enforcement lane

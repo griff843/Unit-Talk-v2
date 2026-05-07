@@ -1,67 +1,48 @@
 {
   "schema_version": 1,
-  "issue_id": "UTV2-850",
   "generated_at": "2026-05-07T18:44:39.195Z",
-  "report_paths": [
-    "model-registry-summary.json",
-    "model-registry-entries.csv",
-    "model-attribution-coverage.csv",
-    "model-performance-readiness.csv",
-    "champion-challenger-status.csv",
-    "model-attribution-gaps.csv",
-    "schema-gaps.json",
-    "README.md",
-    "evidence.json"
-  ],
-  "system_verdict": "FAIL",
-  "registry_state": {
-    "total_registry_entries": 6,
-    "champion_count": 6,
-    "challenger_count": 0,
-    "shadow_count": 0,
-    "heuristic_count": 0,
-    "manual_count": 0,
-    "disabled_count": 0,
-    "retired_count": 0,
-    "unknown_count": 0,
-    "active_count": 6,
-    "retired_or_disabled_count": 0,
-    "status_distribution": {
-      "champion": 6
+  "model_registry": {
+    "exists": true,
+    "columns": {
+      "id": true,
+      "model_name": true,
+      "version": true,
+      "sport": true,
+      "market_family": true,
+      "status": true,
+      "champion_since": true,
+      "created_at": true,
+      "updated_at": true,
+      "metadata": true
     },
-    "sports_covered": [
-      "MLB",
-      "NBA",
-      "NHL"
-    ],
-    "market_families_covered": [
-      "game_line",
-      "player_prop"
-    ]
+    "error": null
   },
-  "attribution_coverage": {
-    "total_picks_analyzed": 4202,
-    "model_attributed_count": 0,
-    "model_attributed_pct": 0,
-    "champion_attributed_pct": 0,
-    "challenger_attributed_pct": 0,
-    "shadow_attributed_pct": 0,
-    "heuristic_owned_pct": 90.03,
-    "unknown_model_ownership_pct": 0,
-    "retired_disabled_exposure_pct": 0,
-    "rows_linked_to_picks": 0,
-    "rows_linked_to_candidates": 0
+  "pick_candidates": {
+    "exists": true,
+    "columns": {
+      "id": true,
+      "pick_id": true,
+      "provenance": true,
+      "model_score": true,
+      "model_tier": true,
+      "model_confidence": true,
+      "model_registry_id": false,
+      "registry_id": false
+    },
+    "error": "column pick_candidates.model_registry_id does not exist"
   },
-  "model_edge_eligibility": {
-    "eligible_rows": 0,
-    "eligible_pct": 0,
-    "ineligible_rows": 4202,
-    "reason_breakdown": {
-      "no_registry_fk": 4202,
-      "entity_type_ineligible": 4202,
-      "state_ineligible": 0,
-      "unknown_source": 0
-    }
+  "picks": {
+    "exists": true,
+    "columns": {
+      "id": true,
+      "created_at": true,
+      "source": true,
+      "sport_id": true,
+      "market": true,
+      "market_key": false,
+      "market_type_id": true
+    },
+    "error": "column picks.market_key does not exist"
   },
   "schema_findings": {
     "model_registry_table_exists": true,
@@ -134,10 +115,17 @@
       }
     ]
   },
-  "policy": {
-    "read_only": true,
-    "migrations_added": false,
-    "fabricated_model_ownership": false,
-    "historical_rows_upgraded": false
+  "required_future_changes": {
+    "minimal_schema_changes": [
+      "Add pick_candidates.model_registry_id FK to model_registry.id.",
+      "Add or standardize model_registry registry_entity_type, active_state, source_type_compatibility, owner, training window, validation, calibration, and promotion metadata."
+    ],
+    "minimal_runtime_changes": [
+      "Candidate scoring must write model_registry_id at scoring time.",
+      "Pick conversion must preserve candidate linkage and block model_generated classification without registry ownership.",
+      "Analytics must require model_registry_id resolution before model-edge or syndicate eligibility."
+    ],
+    "future_enforcement_ready_today": false,
+    "reason_current_runtime_not_ready": "The registry exists, but no ownership FK path ties candidates or picks to registry entries."
   }
 }
