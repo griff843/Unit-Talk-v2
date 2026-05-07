@@ -1,0 +1,53 @@
+{
+  "issue_id": "UTV2-854",
+  "generated_at": "2026-05-07T21:58:12.721Z",
+  "artifacts": [
+    "ownership-persistence-summary.json",
+    "ownership-write-results.csv",
+    "ownership-enforcement-results.csv",
+    "ownership-quarantine-results.csv",
+    "migration-results.json",
+    "README.md"
+  ],
+  "summary": {
+    "issue_id": "UTV2-854",
+    "generated_at": "2026-05-07T21:58:12.702Z",
+    "migration_file_present": true,
+    "schema_probe": {
+      "pick_candidates_model_registry_id": false,
+      "pick_candidates_scoring_run_id": false,
+      "pick_candidates_ownership_timestamp": false,
+      "model_registry_registry_entity_type": false,
+      "model_registry_source_type_compatibility": false,
+      "model_registry_active_state": false
+    },
+    "counts": {
+      "picks_total": 4204,
+      "candidates_total": 19792,
+      "scored_candidates_total": 6889,
+      "registry_total": 6
+    },
+    "metrics": {
+      "model_attributed_pct": 0,
+      "model_generated_pct": 0,
+      "heuristic_pct": 90.03,
+      "manual_pct": 9.92,
+      "unknown_pct": 0.05,
+      "ownership_write_success_pct": 0,
+      "ownership_write_failure_pct": 100
+    },
+    "quarantines": {
+      "null_ownership": 6889,
+      "degraded_ownership": 0
+    },
+    "enforcement": {
+      "disabled_retired_exposure_count": 0,
+      "invalid_entity_type_rows": 0
+    },
+    "reporting_findings": {
+      "any_model_generated_today": false,
+      "true_model_generated_inventory_exists": false,
+      "historical_unknown_rows_preserved": true
+    }
+  }
+}

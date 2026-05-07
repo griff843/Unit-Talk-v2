@@ -2208,6 +2208,27 @@ export class InMemoryReferenceDataRepository implements ReferenceDataRepository 
   }
 }
 
+function registrySupportsSource(
+  record: ModelRegistryRecord,
+  sourceType: string | undefined,
+): boolean {
+  if (!sourceType) return true;
+  const compat = record.source_type_compatibility;
+  return Array.isArray(compat) && compat.includes(sourceType);
+}
+
+function assertValidModelScoreUpdate(update: ModelScoreUpdate): void {
+  if (!update.model_registry_id) {
+    throw new Error(`Model score update missing model_registry_id for ${update.id}`);
+  }
+  if (!update.scoring_run_id) {
+    throw new Error(`Model score update missing scoring_run_id for ${update.id}`);
+  }
+  if (!update.ownership_timestamp) {
+    throw new Error(`Model score update missing ownership_timestamp for ${update.id}`);
+  }
+}
+
 export class InMemoryModelRegistryRepository implements ModelRegistryRepository {
   private readonly models = new Map<string, ModelRegistryRecord>();
 
@@ -2222,6 +2243,16 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
       status: input.status ?? 'staged',
       champion_since: input.status === 'champion' ? now : null,
       metadata: toJsonObject(input.metadata ?? {}),
+      registry_entity_type: input.registryEntityType ?? null,
+      source_type_compatibility: input.sourceTypeCompatibility ?? null,
+      owner: input.owner ?? null,
+      training_window_start: input.trainingWindowStart ?? null,
+      training_window_end: input.trainingWindowEnd ?? null,
+      validation_metrics: input.validationMetrics ?? null,
+      calibration_metadata: input.calibrationMetadata ?? null,
+      promotion_approved_by: input.promotionApprovedBy ?? null,
+      promotion_approved_at: input.promotionApprovedAt ?? null,
+      active_state: input.activeState ?? (input.status === 'champion' ? 'champion' : null),
       created_at: now,
       updated_at: now,
     };
@@ -2246,12 +2277,14 @@ export class InMemoryModelRegistryRepository implements ModelRegistryRepository 
   async findChampion(
     sport: string,
     marketFamily: string,
+    sourceType?: string,
   ): Promise<ModelRegistryRecord | null> {
     for (const record of this.models.values()) {
       if (
         record.sport === sport &&
         record.market_family === marketFamily &&
-        record.status === 'champion'
+        record.status === 'champion' &&
+        registrySupportsSource(record, sourceType)
       ) {
         return record;
       }
@@ -6764,8 +6797,7 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
       );
     }
 
-    const { data, error } = await this.client
-      .from('model_registry')
+    const { data, error } = await fromUntyped(this.client, 'model_registry')
       .insert({
         model_name: input.modelName,
         version: input.version,
@@ -6774,6 +6806,16 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
         status,
         champion_since: status === 'champion' ? now : null,
         metadata: toJsonObject(input.metadata ?? {}),
+        registry_entity_type: input.registryEntityType ?? null,
+        source_type_compatibility: input.sourceTypeCompatibility ?? null,
+        owner: input.owner ?? null,
+        training_window_start: input.trainingWindowStart ?? null,
+        training_window_end: input.trainingWindowEnd ?? null,
+        validation_metrics: input.validationMetrics ?? null,
+        calibration_metadata: input.calibrationMetadata ?? null,
+        promotion_approved_by: input.promotionApprovedBy ?? null,
+        promotion_approved_at: input.promotionApprovedAt ?? null,
+        active_state: input.activeState ?? (status === 'champion' ? 'champion' : null),
         updated_at: now,
       })
       .select('*')
@@ -6805,6 +6847,7 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
   async findChampion(
     sport: string,
     marketFamily: string,
+    sourceType?: string,
   ): Promise<ModelRegistryRecord | null> {
     const { data, error } = await this.client
       .from('model_registry')
@@ -6812,13 +6855,14 @@ export class DatabaseModelRegistryRepository implements ModelRegistryRepository 
       .eq('sport', sport)
       .eq('market_family', marketFamily)
       .eq('status', 'champion')
-      .maybeSingle();
+      .order('champion_since', { ascending: false });
 
     if (error) {
       throw new Error(`Failed to find champion model: ${error.message}`);
     }
 
-    return (data as ModelRegistryRecord | null) ?? null;
+    const rows = (data ?? []) as ModelRegistryRecord[];
+    return rows.find((record) => registrySupportsSource(record, sourceType)) ?? null;
   }
 
   async listBySport(sport: string): Promise<ModelRegistryRecord[]> {
@@ -7680,6 +7724,9 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
           is_board_candidate: false, // Phase 4 placeholder — set by ranked selection service
           shadow_mode: true, // must remain true in Phase 2
           pick_id: null, // must remain null in Phase 2
+          model_registry_id: null,
+          scoring_run_id: null,
+          ownership_timestamp: null,
           sport_key: input.sport_key ?? null,
           scan_run_id: input.scan_run_id,
           provenance: input.provenance,
@@ -7698,6 +7745,7 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
   async updateModelScoreBatch(updates: ModelScoreUpdate[]): Promise<void> {
     // InMemory rows are keyed by universe_id, so find by scanning values for matching id
     for (const u of updates) {
+      assertValidModelScoreUpdate(u);
       for (const [key, existing] of this.rows.entries()) {
         if (existing.id === u.id) {
           this.rows.set(key, {
@@ -7705,6 +7753,10 @@ export class InMemoryPickCandidateRepository implements IPickCandidateRepository
             model_score: u.model_score,
             model_tier: u.model_tier,
             model_confidence: u.model_confidence,
+            model_registry_id: u.model_registry_id,
+            scoring_run_id: u.scoring_run_id,
+            ownership_timestamp: u.ownership_timestamp,
+            updated_at: new Date().toISOString(),
           });
           break;
         }
@@ -7841,11 +7893,15 @@ export class DatabasePickCandidateRepository implements IPickCandidateRepository
   async updateModelScoreBatch(updates: ModelScoreUpdate[]): Promise<void> {
     if (updates.length === 0) return;
     for (const u of updates) {
+      assertValidModelScoreUpdate(u);
       const { error } = await fromUntyped(this.client, 'pick_candidates')
         .update({
           model_score: u.model_score,
           model_tier: u.model_tier,
           model_confidence: u.model_confidence,
+          model_registry_id: u.model_registry_id,
+          scoring_run_id: u.scoring_run_id,
+          ownership_timestamp: u.ownership_timestamp,
           updated_at: new Date().toISOString(),
         })
         .eq('id', u.id);
@@ -8760,3 +8816,4 @@ export class DatabaseMemberTierRepository implements MemberTierRepository {
     return (data ?? []) as MemberTierRecord[];
   }
 }
+

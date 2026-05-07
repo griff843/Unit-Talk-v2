@@ -784,12 +784,22 @@ export interface ModelRegistryCreateInput {
   marketFamily: string;
   status?: ModelStatus;
   metadata?: Record<string, unknown>;
+  registryEntityType?: string;
+  sourceTypeCompatibility?: string[];
+  owner?: string;
+  trainingWindowStart?: string;
+  trainingWindowEnd?: string;
+  validationMetrics?: Record<string, unknown>;
+  calibrationMetadata?: Record<string, unknown>;
+  promotionApprovedBy?: string;
+  promotionApprovedAt?: string;
+  activeState?: string;
 }
 
 export interface ModelRegistryRepository {
   create(input: ModelRegistryCreateInput): Promise<ModelRegistryRecord>;
   findById(id: string): Promise<ModelRegistryRecord | null>;
-  findChampion(sport: string, marketFamily: string): Promise<ModelRegistryRecord | null>;
+  findChampion(sport: string, marketFamily: string, sourceType?: string): Promise<ModelRegistryRecord | null>;
   listBySport(sport: string): Promise<ModelRegistryRecord[]>;
   updateStatus(id: string, status: ModelStatus, championSince?: string): Promise<ModelRegistryRecord>;
 }
@@ -1020,6 +1030,9 @@ export interface ModelScoreUpdate {
   model_score: number;
   model_tier: string;
   model_confidence: number;
+  model_registry_id: string;
+  scoring_run_id: string;
+  ownership_timestamp: string;
 }
 
 export interface SelectionRankUpdate {

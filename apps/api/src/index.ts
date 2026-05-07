@@ -137,6 +137,7 @@ server.listen(port, () => {
     pickCandidates: runtime.repositories.pickCandidates,
     marketUniverse: runtime.repositories.marketUniverse,
     marketFamilyTrust: runtime.repositories.marketFamilyTrust,
+    runs: runtime.repositories.runs,
     ...(runtime.repositories.modelRegistry ? { modelRegistry: runtime.repositories.modelRegistry } : {}),
     ...(runtime.repositories.experimentLedger ? { experimentLedger: runtime.repositories.experimentLedger } : {}),
   };
