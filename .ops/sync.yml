@@ -3,9 +3,7 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues:
-    - UTV2-845
+  issues: []
   findings: []
   controls: []
-  proofs:
-    - PROOF-UTV2-845
+  proofs: []
