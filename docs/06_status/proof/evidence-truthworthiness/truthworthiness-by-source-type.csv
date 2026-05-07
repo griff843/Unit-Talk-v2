@@ -1,0 +1,6 @@
+source_type,total_rows,trusted_pass,model_attributed_pct,source_separated_pct
+board-construction,145,0,0,100
+canary-proof,2,0,0,0
+human,3,0,0,0
+system-scanner,3619,0,0,100
+user-submitted,414,0,0,100

@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-847",
+  "merge_sha": "PENDING_MERGE_SHA",
+  "generated_at": "2026-05-07T13:15:00.000Z",
+  "verifier": {
+    "identity": "operator"
+  },
+  "captured_at": "2026-05-07T13:15:00.000Z",
+  "static_proof": {
+    "commands": [
+      "pnpm exec tsx --test scripts/evidence-truthworthiness/run-scoring.test.ts",
+      "pnpm type-check",
+      "pnpm test:db",
+      "pnpm verify"
+    ],
+    "results": {
+      "targeted_tests": "pass",
+      "type_check": "pass",
+      "test_db": "pass",
+      "verify": "pass"
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      "read-only evidence scoring over picks created in the last 30 days",
+      "system_runs freshness checks for worker and scheduler",
+      "provider_offers latest closing snapshot freshness check",
+      "pick_candidates latest materialization freshness check",
+      "distribution_outbox stranded pending count check"
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "slice": "30_day_evaluation_window",
+        "total_analyzed": 4183
+      },
+      {
+        "table": "distribution_outbox",
+        "slice": "stranded_pending_over_1h",
+        "count": 5
+      }
+    ],
+    "receipts": [
+      {
+        "truthworthiness_summary_path": "docs/06_status/proof/evidence-truthworthiness/truthworthiness-summary.json",
+        "system_verdict": "FAIL",
+        "trusted_pass": 0,
+        "untrusted_fail": 4183
+      },
+      {
+        "top_exclusion_counts": {
+          "no_model_attribution": 4183,
+          "no_clv": 4183,
+          "stale_scheduler": 4183
+        }
+      }
+    ]
+  },
+  "summary": {
+    "root_cause": "The 847 verification blocker was not the evidence scorer implementation. The lane worktree had incomplete workspace dependency resolution and no local.env linkage, which caused missing-module failures during type-check and verify before the new report code could be evaluated fairly.",
+    "resolution": "The lane now has a clean local pnpm workspace install, worktree-local package links resolve correctly, local.env is present for verification, pnpm type-check passes, pnpm test:db passes, and pnpm verify passes in the 847 worktree. The evidence scorer remains read-only and generates the required proof/report artifacts.",
+    "trust_mode": "environment_resolved_report_generated"
+  },
+  "proof": {
+    "worktree_dependency_resolution": {
+      "clean_local_install": true,
+      "workspace_links_present": true,
+      "tsx_tsc_eslint_resolve_locally": true
+    },
+    "verification": {
+      "pnpm_type_check": "pass",
+      "pnpm_test_db": "pass",
+      "pnpm_verify": "pass"
+    },
+    "classification": {
+      "lane_caused_failures": [],
+      "environmental_failures": [
+        "incomplete worktree-local pnpm workspace install",
+        "missing worktree-local package links for workspace dependencies",
+        "missing local.env file in the worktree during env:check"
+      ]
+    },
+    "report_generation": {
+      "required_outputs_written": true,
+      "evaluation_window_days": 30,
+      "system_verdict": "FAIL",
+      "report_is_machine_readable": true
+    }
+  },
+  "commands": [
+    "pnpm exec tsx --test scripts/evidence-truthworthiness/run-scoring.test.ts",
+    "pnpm type-check",
+    "pnpm test:db",
+    "pnpm verify"
+  ],
+  "checklist": {
+    "worktree_dependency_resolution_clean": true,
+    "typecheck_verification_successful": true,
+    "remaining_failures_classified": true,
+    "lane_remains_narrowed_to_847_scope": true,
+    "pnpm_verify_passes": true
+  },
+  "remaining_blockers": {
+    "in_scope": [],
+    "out_of_scope": [
+      "The generated truthworthiness report currently returns system_verdict=FAIL because live scheduler freshness, provider freshness, CLV coverage, and model attribution coverage are not yet healthy. Those are future issues, not 847 implementation blockers.",
+      "Model attribution implementation, CLV redesign, and scheduler runtime fixes remain intentionally out of scope for this lane."
+    ]
+  }
+}
