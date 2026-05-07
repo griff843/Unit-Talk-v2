@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-853",
+  "merge_sha": null,
+  "generated_at": "2026-05-07T19:25:00.000Z",
+  "verifier": {
+    "identity": "operator"
+  },
+  "captured_at": "2026-05-07T19:25:00.000Z",
+  "lane_type": "claude-governance",
+  "tier": "T2",
+  "static_proof": {
+    "commands": [],
+    "results": {
+      "governance_doc_written": "pass",
+      "grounded_in_849_850_findings": "pass",
+      "ownership_propagation_model_defined": "pass",
+      "lifecycle_chain_defined": "pass",
+      "migration_plan_documented": "pass",
+      "codex_packet_included": "pass"
+    },
+    "notes": "Governance-only lane. No code changes. Grounded in UTV2-849 (source_separated_pct=100%, picks_source_has_check_constraint=true, model_generated_pct=0%) and UTV2-850 (6 champion registry entries: MLB/NBA/NHL × game_line/player_prop; pick_candidates has model_score/model_tier/model_confidence but no model_registry_id; 4202 picks with 0% model attribution)."
+  },
+  "runtime_proof": null,
+  "grounded_in": {
+    "utv2_849_findings": {
+      "source_separated_pct": 100,
+      "model_generated_pct": 0,
+      "heuristic_pct": 90.03,
+      "picks_source_has_check_constraint": true,
+      "legacy_source_pct": 96.17
+    },
+    "utv2_850_findings": {
+      "registry_entries": 6,
+      "all_status_champion": true,
+      "sports": ["MLB", "NBA", "NHL"],
+      "market_families": ["game_line", "player_prop"],
+      "pick_candidates_model_columns_exist": ["model_score", "model_tier", "model_confidence"],
+      "pick_candidates_model_registry_id_exists": false,
+      "model_attributed_pct": 0,
+      "total_picks_analyzed": 4202
+    }
+  },
+  "deliverable": {
+    "path": "docs/06_status/model_ownership_persistence_standard.md",
+    "sections": [
+      "Verified pre-conditions (grounded in 849+850 findings)",
+      "1. Purpose",
+      "2. Ownership Persistence Contract (origin, storage, immutability, propagation)",
+      "3. Required Ownership Fields",
+      "4. Ownership Lifecycle (full candidate→recap chain)",
+      "5. Runtime Enforcement Semantics",
+      "6. Historical Policy",
+      "7. Relationship to Existing Governance",
+      "8. Future Implications",
+      "9. Codex Implementation Packet"
+    ],
+    "key_findings": {
+      "exact_gap": "pick_candidates.model_registry_id FK is never written at candidate scoring time, despite model_score being written",
+      "ownership_origin": "candidate scoring — atomic write with model_score",
+      "ownership_propagation": "join chain: picks → pick_candidates → model_registry (no FK duplication across tables)",
+      "minimal_migration_1": "ADD COLUMN pick_candidates.model_registry_id UUID REFERENCES model_registry(id), scoring_run_id UUID, ownership_timestamp TIMESTAMPTZ",
+      "minimal_migration_2": "ADD COLUMN model_registry.registry_entity_type, source_type_compatibility, owner, training_window_*, validation_metrics, calibration_metadata, promotion_approved_*",
+      "code_change": "At model_score write time, look up model_registry.id for sport+market_family+champion and write it atomically",
+      "historical_rows_permanently_unknown": true,
+      "migrations_deferred_pending_operator_approval": true
+    }
+  },
+  "summary": {
+    "root_cause": "Scoring already runs — model_score, model_tier, model_confidence are written to pick_candidates. The 6 champion registry entries exist and cover the relevant sports/markets. The gap is exactly one missing atomic write: model_registry_id is never persisted alongside model_score. This is a single FK column addition + one code change to the scanner write path.",
+    "resolution": "Model ownership persistence standard written. Full lifecycle chain defined from candidate scoring through recap/reporting. Ownership propagates via join (not duplicated columns). Minimal migration set documented. Codex investigation + planning packet included. No migrations added in this pass.",
+    "unblocks": [
+      "Codex investigation pass to find scanner write path",
+      "Operator approval of migration_1 (pick_candidates FK) and migration_2 (model_registry additions)",
+      "Implementation lane that adds the FK and code change",
+      "UTV2-851 (unsupported-market quarantine) — can proceed in parallel"
+    ]
+  },
+  "checklist": {
+    "all_9_sections_present": true,
+    "ownership_propagation_model_defined": true,
+    "lifecycle_chain_complete": true,
+    "runtime_enforcement_defined": true,
+    "historical_unknown_policy_defined": true,
+    "migration_plan_documented_not_executed": true,
+    "codex_packet_written": true,
+    "no_fabricated_attribution": true,
+    "no_runtime_changes": true,
+    "no_migration_added": true
+  }
+}
