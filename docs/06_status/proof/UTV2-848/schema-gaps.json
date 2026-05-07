@@ -1,47 +1,7 @@
 {
   "schema_version": 1,
-  "issue_id": "UTV2-848",
-  "generated_at": "2026-05-07T15:23:10.475Z",
-  "report_paths": [
-    "evidence.json",
-    "provenance-summary.json",
-    "provenance-by-source-type.csv",
-    "provenance-by-sport.csv",
-    "provenance-by-market-family.csv",
-    "provenance-exclusions.csv",
-    "provenance-unknowns.csv",
-    "schema-gaps.json",
-    "README.md"
-  ],
-  "summary_path": "docs/06_status/proof/UTV2-848/provenance-summary.json",
-  "schema_gaps_path": "docs/06_status/proof/UTV2-848/schema-gaps.json",
-  "system_verdict": "FAIL",
-  "row_counts": {
-    "total_analyzed": 4201,
-    "total_picks_analyzed": 4201,
-    "total_candidates_analyzed": 19792,
-    "provenance_pass": 0,
-    "provenance_warn": 1,
-    "provenance_fail": 4198,
-    "provenance_unknown": 2,
-    "rows_with_partial_provenance": 4199,
-    "rows_with_no_provenance": 2,
-    "candidates_with_pick_id": 4035,
-    "candidates_without_pick_id": 15757
-  },
-  "provenance_metrics": {
-    "provenance_linked_pct": 99.95,
-    "model_attributed_pct": 0,
-    "candidate_linked_pct": 89.79,
-    "market_universe_linked_pct": 89.79,
-    "source_type_present_pct": 100,
-    "source_separated_pct": 3.83,
-    "shadow_pct": 0,
-    "historical_unknown_pct": 0.05,
-    "operator_edited_pct": 0,
-    "excluded_from_model_edge_pct": 100
-  },
-  "schema_findings": {
+  "generated_at": "2026-05-07T15:23:27.126Z",
+  "required_schema_questions": {
     "pick_candidates_provenance_contains_model_reference_key": false,
     "model_reference_keys_found_in_jsonb": [],
     "model_reference_rows_sampled": 0,
@@ -104,6 +64,69 @@
       "market_universe_id_on_picks"
     ]
   },
+  "table_verification": {
+    "picks": {
+      "exists": true,
+      "columns": {
+        "id": true,
+        "created_at": true,
+        "source": true,
+        "sport_id": true,
+        "market": true,
+        "market_key": false,
+        "market_type_id": true,
+        "metadata": true,
+        "stake_units": true,
+        "submission_id": true,
+        "posted_at": true,
+        "settled_at": true
+      },
+      "error": "column picks.market_key does not exist"
+    },
+    "pick_candidates": {
+      "exists": true,
+      "columns": {
+        "id": true,
+        "pick_id": true,
+        "scan_run_id": true,
+        "universe_id": true,
+        "provenance": true,
+        "model_score": true,
+        "model_tier": true,
+        "model_confidence": true,
+        "shadow_mode": true,
+        "is_board_candidate": true,
+        "sport_key": false,
+        "market_key": false,
+        "created_at": true
+      },
+      "error": "column pick_candidates.sport_key does not exist"
+    },
+    "model_registry": {
+      "exists": true,
+      "columns": {
+        "id": true,
+        "model_name": true,
+        "version": true,
+        "sport": true,
+        "market_family": true,
+        "status": true
+      },
+      "error": null
+    },
+    "market_universe": {
+      "exists": true,
+      "columns": {
+        "id": true,
+        "canonical_market_key": true,
+        "provider_market_key": true,
+        "market_type_id": true,
+        "market_family_id": false,
+        "sport_key": true
+      },
+      "error": "column market_universe.market_family_id does not exist"
+    }
+  },
   "runtime_enforcement_gaps": {
     "hard_fail_should_cover": [
       "picks.source null at ingestion",
@@ -128,10 +151,5 @@
       "historical analytics must quarantine missing model attribution instead of filtering silently"
     ],
     "future_lane_needed": "UTV2-850 should establish model registry linkage; a later 848 enforcement lane should add write-boundary blocking once source ledger semantics land."
-  },
-  "policy": {
-    "historical_unknowns_preserved": true,
-    "fabricated_attribution": false,
-    "historical_rows_silently_upgraded": false
   }
 }
