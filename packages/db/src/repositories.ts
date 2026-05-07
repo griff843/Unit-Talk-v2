@@ -1005,6 +1005,16 @@ export interface PickCandidateUpsertInput {
   // NOTE: pick_id, model_score, model_tier, model_confidence, shadow_mode must NEVER be set in Phase 2
 }
 
+export class PickCandidatesSchemaCacheDriftError extends Error {
+  readonly column: string;
+
+  constructor(column: string, message: string) {
+    super(message);
+    this.name = 'PickCandidatesSchemaCacheDriftError';
+    this.column = column;
+  }
+}
+
 export interface ModelScoreUpdate {
   id: string;
   model_score: number;

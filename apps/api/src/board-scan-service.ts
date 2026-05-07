@@ -22,7 +22,15 @@
  */
 
 import crypto from 'node:crypto';
-import type { IMarketUniverseRepository, IPickCandidateRepository, PickCandidateUpsertInput, MarketUniverseRow, PickCandidateFilterDetails, EventRepository } from '@unit-talk/db';
+import {
+  PickCandidatesSchemaCacheDriftError,
+  type EventRepository,
+  type IMarketUniverseRepository,
+  type IPickCandidateRepository,
+  type MarketUniverseRow,
+  type PickCandidateFilterDetails,
+  type PickCandidateUpsertInput,
+} from '@unit-talk/db';
 import { evaluateProviderDataFreshness } from '@unit-talk/domain';
 
 // ---------------------------------------------------------------------------
@@ -320,6 +328,69 @@ export class BoardScanService {
       try {
         await this.repos.pickCandidates.upsertCandidates(upsertBatch);
       } catch (err) {
+        if (err instanceof PickCandidatesSchemaCacheDriftError && err.column === 'sport_key') {
+          const fallbackBatch = upsertBatch.map((candidate) => {
+            const { sport_key: _sportKey, ...rest } = candidate;
+            return {
+              ...rest,
+              provenance: {
+                ...(candidate.provenance ?? {}),
+                schema_cache_fallback: true,
+                schema_cache_fallback_column: err.column,
+              },
+            };
+          });
+          logger?.warn?.(
+            JSON.stringify({
+              service: 'board-scan',
+              event: 'schema_cache_drift_fallback',
+              column: err.column,
+              rowCount: fallbackBatch.length,
+              error: err.message,
+              scanRunId,
+            }),
+          );
+          try {
+            await this.repos.pickCandidates.upsertCandidates(fallbackBatch);
+          } catch (fallbackErr) {
+            logger?.error?.(
+              JSON.stringify({
+                service: 'board-scan',
+                event: 'upsert_candidates_failed',
+                error: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+                scanRunId,
+                fallback: 'schema_cache_drift',
+              }),
+            );
+            return {
+              scanned: universeRows.length,
+              qualified: qualifiedCount,
+              rejected: rejectedCount,
+              durationMs: Date.now() - startMs,
+              scanRunId,
+            };
+          }
+          const durationMs = Date.now() - startMs;
+          logger?.info?.(
+            JSON.stringify({
+              service: 'board-scan',
+              event: 'run.completed',
+              scanned: universeRows.length,
+              qualified: qualifiedCount,
+              rejected: rejectedCount,
+              durationMs,
+              scanRunId,
+              schemaCacheFallback: true,
+            }),
+          );
+          return {
+            scanned: universeRows.length,
+            qualified: qualifiedCount,
+            rejected: rejectedCount,
+            durationMs,
+            scanRunId,
+          };
+        }
         logger?.error?.(
           JSON.stringify({
             service: 'board-scan',
