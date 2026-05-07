@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-07T12:37:29.706Z",
+  "evaluation_window": {
+    "from": "2026-04-07T12:37:29.706Z",
+    "to": "2026-05-07T12:37:29.706Z",
+    "days": 30
+  },
+  "system_verdict": "FAIL",
+  "system_dimensions": {
+    "worker_freshness": {
+      "verdict": "PASS",
+      "age_minutes": 0.03
+    },
+    "scheduler_freshness": {
+      "verdict": "FAIL",
+      "age_hours": null
+    },
+    "provider_freshness": {
+      "verdict": "FAIL",
+      "age_hours": 191.55
+    },
+    "candidate_materialization_freshness": {
+      "verdict": "PASS",
+      "age_hours": 0
+    },
+    "board_writer_freshness": {
+      "verdict": "PASS",
+      "age_hours": 3.38
+    },
+    "stranded_queue_counts": {
+      "verdict": "WARN",
+      "count": 5
+    }
+  },
+  "row_counts": {
+    "total_analyzed": 4183,
+    "trusted_pass": 0,
+    "trusted_warn": 0,
+    "untrusted_fail": 4183,
+    "unknown": 3800
+  },
+  "dimension_pass_rates": {
+    "stake_valid_pct": 9.35,
+    "provenance_linked_pct": 99.95,
+    "clv_backed_pct": 0,
+    "supported_market_pct": 98.97,
+    "settlement_valid_pct": 9.4,
+    "model_attributed_pct": 0,
+    "source_separated_pct": 99.88
+  },
+  "latency": {
+    "avg_queue_latency_seconds": 355.48,
+    "avg_posting_latency_seconds": 21.54
+  },
+  "exclusion_counts": {
+    "no_stake": 3792,
+    "no_provenance": 2,
+    "no_model_attribution": 4183,
+    "source_ambiguous": 5,
+    "unsupported_market": 43,
+    "not_settled": 3789,
+    "no_clv": 4183,
+    "stale_provider_offer": 7,
+    "stale_scheduler": 4183,
+    "stale_candidates": 0,
+    "manual_source": 0
+  },
+  "sample_verdicts": {
+    "trusted_roi_sample": "FAIL",
+    "trusted_clv_sample": "FAIL",
+    "trusted_model_edge_sample": "FAIL",
+    "trusted_production_readiness_sample": "FAIL",
+    "trusted_syndicate_readiness_sample": "FAIL"
+  },
+  "schema_notes": [
+    "board_run_id/model_tier are read from v_governed_pick_performance because picks does not expose direct board/model columns",
+    "scan_run_id is read from pick_candidates because picks does not expose it directly",
+    "model attribution is cross-checked against model_registry.id"
+  ]
+}

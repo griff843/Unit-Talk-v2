@@ -1,0 +1,16 @@
+dimension,granularity,verdict,pass_count,warn_count,fail_count,unknown_count,pass_pct
+worker-freshness,system,PASS,1,0,0,0,100
+scheduler-freshness,system,FAIL,0,0,1,0,0
+provider-freshness,system,FAIL,0,0,1,0,0
+candidate-materialization-freshness,system,PASS,1,0,0,0,100
+board-writer-freshness,system,PASS,1,0,0,0,100
+stake-valid,row,FAIL,391,0,0,3792,9.35
+provenance-linked,row,FAIL,4181,0,2,0,99.95
+CLV-backed,row,FAIL,0,7,387,3789,0
+supported-market,row,FAIL,4140,0,43,0,98.97
+settlement-valid,row,FAIL,393,1,3789,0,9.4
+model-attributed,row,FAIL,0,0,4183,0,0
+source-separated,row,FAIL,4178,0,5,0,99.88
+queue-latency,row,FAIL,389,6,1852,1936,9.3
+posting-latency,row,FAIL,396,1,1,3785,9.47
+stranded-queue-counts,system,WARN,0,1,0,0,0
