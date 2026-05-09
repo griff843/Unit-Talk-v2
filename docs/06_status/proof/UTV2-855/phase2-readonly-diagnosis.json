@@ -1,0 +1,127 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 2,
+  "generated_at": "2026-05-07T22:05:37.1353370-04:00",
+  "mode": "read_only_diagnosis",
+  "project_ref": "zfzdnfwdarxucxtaojxm",
+  "inputs": {
+    "runbook": "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\supabase_migration_reconciliation_runbook.md",
+    "migration_file": "C:\\Dev\\Unit-Talk-v2-main\\supabase\\migrations\\202605070002_utv2_854_model_ownership_persistence.sql",
+    "ownership_summary": "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\proof\\UTV2-854\\ownership-persistence-summary.json",
+    "migration_results": "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\proof\\UTV2-854\\migration-results.json"
+  },
+  "remote_migration_history": {
+    "inspection_method": "npx supabase migration list --linked",
+    "matched_count": 77,
+    "migration_202605070002_recorded_remotely": false,
+    "local_only_versions": [
+      "202604230002",
+      "202604250001",
+      "202604250002",
+      "202604250004",
+      "202604250005",
+      "202604270001",
+      "202604270002",
+      "202604280001",
+      "202604290001",
+      "202604290002",
+      "202604290003",
+      "202604290004",
+      "202604290005",
+      "202604291001",
+      "202604291002",
+      "202604291003",
+      "202605020001",
+      "202605020002",
+      "202605030001",
+      "202605030002",
+      "202605070001",
+      "202605070002"
+    ],
+    "remote_only_versions": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "dry_run_finding": "supabase db push --dry-run reported remote migration versions not found in local migrations directory and recommended repair/db pull instead of applying head migrations"
+  },
+  "live_schema": {
+    "inspection_method": "npx supabase gen types typescript --project-id zfzdnfwdarxucxtaojxm --schema public",
+    "ownership_columns_present": {
+      "pick_candidates.model_registry_id": false,
+      "pick_candidates.scoring_run_id": false,
+      "pick_candidates.ownership_timestamp": false,
+      "model_registry.registry_entity_type": false,
+      "model_registry.source_type_compatibility": false,
+      "model_registry.active_state": false
+    },
+    "supporting_shape": {
+      "pick_candidates_row_fields_seen": [
+        "created_at",
+        "expires_at",
+        "filter_details",
+        "id",
+        "is_board_candidate",
+        "model_confidence",
+        "model_score",
+        "model_tier",
+        "pick_id",
+        "provenance",
+        "rejection_reason",
+        "scan_run_id",
+        "selection_rank",
+        "shadow_mode",
+        "status",
+        "universe_id",
+        "updated_at"
+      ],
+      "model_registry_row_fields_seen": [
+        "champion_since",
+        "created_at",
+        "id",
+        "market_family",
+        "metadata",
+        "model_name",
+        "sport",
+        "status",
+        "updated_at",
+        "version"
+      ]
+    }
+  },
+  "network_and_tooling": {
+    "direct_db_url_introspection": {
+      "attempted": true,
+      "result": "failed",
+      "error": "hostname resolving error for db.zfzdnfwdarxucxtaojxm.supabase.co"
+    },
+    "management_api_introspection": {
+      "attempted": true,
+      "result": "succeeded"
+    }
+  },
+  "classification": {
+    "case": "D",
+    "label": "corrupted_or_orphaned_migration_history",
+    "why_not_a": "202605070002 is absent remotely, but remote history also contains remote-only versions not present in the local migrations directory, so this is not a clean missing-head-only case",
+    "why_not_b": "202605070002 is not recorded remotely",
+    "why_not_c": "no partial ownership columns were observed live; the stronger problem is orphaned/remote-only migration history",
+    "why_not_e": "DNS failure exists on the direct DB host path, but management-API reads succeeded and independently confirmed history/schema divergence"
+  },
+  "operator_apply_readiness": {
+    "can_proceed_to_normal_migration_apply": false,
+    "reason": "dry-run is blocked by remote-only migration history entries; operator approval should proceed to reconciliation planning, not to applying 202605070002 yet"
+  },
+  "evidence": [
+    "Remote migration list does not include 202605070002 on the remote side",
+    "supabase db push --dry-run reports remote migration versions not found locally",
+    "Remote-only migration versions: 20260424202018, 20260425030626, 20260425030656, 20260425132920, 20260427045252, 20260427182229, 202604300003",
+    "Live schema generated from Supabase management API lacks all six required ownership columns",
+    "Direct DB URL introspection still fails DNS resolution, but that is secondary to the confirmed migration-history divergence"
+  ],
+  "no_db_writes_performed": true
+}

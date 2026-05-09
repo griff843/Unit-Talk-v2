@@ -1,0 +1,455 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 9,
+  "generated_at": "2026-05-08T10:15:00-04:00",
+  "mode": "planning_only_manual_schema_reconciliation",
+  "no_writes_confirmed": true,
+  "forbidden_actions_executed": [],
+  "sources": [
+    "docs/06_status/proof/UTV2-855/phase6-remote-schema-audit-rerun.json",
+    "docs/06_status/proof/UTV2-855/phase6-remote-schema-audit-rerun.md",
+    "supabase/migrations/",
+    "docs/06_status/proof/UTV2-854/evidence.json",
+    "docs/06_status/proof/UTV2-854/ownership-persistence-summary.json",
+    "docs/06_status/proof/UTV2-845/evidence.json",
+    "docs/06_status/proof/UTV2-846/evidence.json"
+  ],
+  "phase6_input": {
+    "case_classification": "D3",
+    "remote_only_versions": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "local_only_versions": [
+      "202604230002",
+      "202604250001",
+      "202604250002",
+      "202604250004",
+      "202604250005",
+      "202604270001",
+      "202604270002",
+      "202604291001",
+      "202604291002",
+      "202604291003",
+      "202605020001",
+      "202605020002",
+      "202605030001",
+      "202605030002",
+      "202605070001",
+      "202605070002"
+    ]
+  },
+  "migration_status": {
+    "202605020001": {
+      "file": "supabase/migrations/202605020001_utv2_725_pick_candidates_sport_key.sql",
+      "recorded_remotely": false,
+      "present_live_semantically": false
+    },
+    "202605020002": {
+      "file": "supabase/migrations/202605020002_utv2_725_backfill_pick_candidates_pick_id.sql",
+      "recorded_remotely": false,
+      "present_live_semantically": false
+    },
+    "202605030001": {
+      "file": "supabase/migrations/202605030001_utv2_772_provider_offer_history_partition_retention.sql",
+      "recorded_remotely": false,
+      "present_live_semantically": false
+    },
+    "202605030002": {
+      "file": "supabase/migrations/202605030002_utv2_772_provider_offer_line_snapshots.sql",
+      "recorded_remotely": false,
+      "present_live_semantically": false
+    },
+    "202605070001": {
+      "file": "supabase/migrations/202605070001_utv2_845_stake_units_integrity_guard.sql",
+      "recorded_remotely": false,
+      "present_live_semantically": false
+    },
+    "202605070002": {
+      "file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "recorded_remotely": false,
+      "present_live_semantically": false
+    }
+  },
+  "surface_mappings": [
+    {
+      "missing_surface": "pick_candidates.sport_key",
+      "migration_version": "202605020001",
+      "migration_file": "supabase/migrations/202605020001_utv2_725_pick_candidates_sport_key.sql",
+      "migration_type": [
+        "schema-only"
+      ],
+      "introduces": [
+        "ALTER TABLE public.pick_candidates ADD COLUMN sport_key text NULL",
+        "CREATE INDEX idx_pick_candidates_sport_key"
+      ],
+      "dependency_order": 1,
+      "hard_dependencies": [
+        "202604090002_utv2_460_pick_candidates"
+      ],
+      "soft_dependencies": [],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium",
+      "safe_to_apply_directly": true,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Lowest-risk direct candidate. Operator may approve applying the migration file after a final dry-run/review because it only adds a nullable column and index on an existing table. Re-run a live schema probe immediately after apply."
+    },
+    {
+      "missing_surface": "provider_offer_line_snapshots",
+      "migration_version": "202605030002",
+      "migration_file": "supabase/migrations/202605030002_utv2_772_provider_offer_line_snapshots.sql",
+      "migration_type": [
+        "schema-only",
+        "function-only",
+        "data-mutating",
+        "destructive"
+      ],
+      "introduces": [
+        "CREATE TABLE public.provider_offer_line_snapshots",
+        "CREATE FUNCTION public.summarize_provider_offer_history_partition(date)",
+        "cron.unschedule('nightly-retention-prune')",
+        "cron.schedule('nightly-retention-prune', ... DELETE ... provider_offer_line_snapshots ...)"
+      ],
+      "dependency_order": 4,
+      "hard_dependencies": [
+        "202604291001_utv2_772_bounded_provider_offers_retention",
+        "202604291002_utv2_772_provider_offer_history_partitioning"
+      ],
+      "soft_dependencies": [
+        "202605030001_utv2_772_provider_offer_history_partition_retention"
+      ],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Do not apply the file blindly. First verify the live state of the local-only-but-semantic-live UTV2-772 prerequisites, then prepare an operator-reviewed object-level delta for the missing table/function and separately decide whether the cron job body should be changed in the same window."
+    },
+    {
+      "missing_surface": "summarize_provider_offer_history_partition(date)",
+      "migration_version": "202605030002",
+      "migration_file": "supabase/migrations/202605030002_utv2_772_provider_offer_line_snapshots.sql",
+      "migration_type": [
+        "function-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "CREATE OR REPLACE FUNCTION public.summarize_provider_offer_history_partition(date)"
+      ],
+      "dependency_order": 4,
+      "hard_dependencies": [
+        "202604291002_utv2_772_provider_offer_history_partitioning"
+      ],
+      "soft_dependencies": [
+        "provider_offer_line_snapshots table from the same migration"
+      ],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Treat as part of the provider-retention manual delta, not as a stand-alone direct apply. The function performs INSERT/UPSERT writes into provider_offer_line_snapshots and should only be introduced after the target table and partitioned history baseline are re-verified."
+    },
+    {
+      "missing_surface": "drop_old_provider_offer_history_partitions(integer)",
+      "migration_version": "202605030001",
+      "migration_file": "supabase/migrations/202605030001_utv2_772_provider_offer_history_partition_retention.sql",
+      "migration_type": [
+        "function-only",
+        "destructive"
+      ],
+      "introduces": [
+        "CREATE OR REPLACE FUNCTION public.drop_old_provider_offer_history_partitions(integer)"
+      ],
+      "dependency_order": 3,
+      "hard_dependencies": [
+        "202604291002_utv2_772_provider_offer_history_partitioning"
+      ],
+      "soft_dependencies": [
+        "202605030002_utv2_772_provider_offer_line_snapshots"
+      ],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Do not approve direct file apply from this plan alone. Although the migration itself only defines a function, that function drops partitions when called. Reconcile it as part of the provider-retention slice only after the operator accepts the partitioning baseline and summarization path."
+    },
+    {
+      "missing_surface": "picks.picks_stake_units_canonical_check",
+      "migration_version": "202605070001",
+      "migration_file": "supabase/migrations/202605070001_utv2_845_stake_units_integrity_guard.sql",
+      "migration_type": [
+        "constraint-only"
+      ],
+      "introduces": [
+        "DROP CONSTRAINT IF EXISTS picks_stake_units_canonical_check",
+        "ADD CONSTRAINT picks_stake_units_canonical_check CHECK (stake_units is not null and stake_units > 0) NOT VALID"
+      ],
+      "dependency_order": 2,
+      "hard_dependencies": [
+        "202603200001_v2_foundation"
+      ],
+      "soft_dependencies": [],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium",
+      "safe_to_apply_directly": true,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Good direct candidate after sport_key. The constraint is NOT VALID and intentionally avoids rewriting historical rows, so the operator can review and approve a normal migration apply with low blast radius."
+    },
+    {
+      "missing_surface": "pick_candidates.model_registry_id",
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "migration_type": [
+        "schema-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "ALTER TABLE public.pick_candidates ADD COLUMN model_registry_id UUID REFERENCES public.model_registry(id)"
+      ],
+      "dependency_order": 5,
+      "hard_dependencies": [
+        "202604090002_utv2_460_pick_candidates",
+        "202604030001_model_registry",
+        "202603200004_system_runs_finished_at_trigger"
+      ],
+      "soft_dependencies": [
+        "202605020001_utv2_725_pick_candidates_sport_key"
+      ],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium-high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Do not approve yet. Ownership should remain blocked until the earlier missing low-risk schema surfaces are reconciled and the operator explicitly resumes the UTV2-855 ownership rollout."
+    },
+    {
+      "missing_surface": "pick_candidates.scoring_run_id",
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "migration_type": [
+        "schema-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "ALTER TABLE public.pick_candidates ADD COLUMN scoring_run_id UUID REFERENCES public.system_runs(id)"
+      ],
+      "dependency_order": 5,
+      "hard_dependencies": [
+        "202604090002_utv2_460_pick_candidates",
+        "202603200004_system_runs_finished_at_trigger"
+      ],
+      "soft_dependencies": [
+        "202605020001_utv2_725_pick_candidates_sport_key"
+      ],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium-high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Same as the ownership slice overall: defer until the operator approves the resumed UTV2-855 ownership rollout after earlier schema convergence."
+    },
+    {
+      "missing_surface": "pick_candidates.ownership_timestamp",
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "migration_type": [
+        "schema-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "ALTER TABLE public.pick_candidates ADD COLUMN ownership_timestamp TIMESTAMPTZ"
+      ],
+      "dependency_order": 5,
+      "hard_dependencies": [
+        "202604090002_utv2_460_pick_candidates"
+      ],
+      "soft_dependencies": [
+        "202605020001_utv2_725_pick_candidates_sport_key"
+      ],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium-high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Same as the ownership slice overall: defer until the operator approves the resumed UTV2-855 ownership rollout after earlier schema convergence."
+    },
+    {
+      "missing_surface": "model_registry.registry_entity_type",
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "migration_type": [
+        "schema-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "ALTER TABLE public.model_registry ADD COLUMN registry_entity_type TEXT",
+        "UPDATE public.model_registry SET registry_entity_type = ..."
+      ],
+      "dependency_order": 5,
+      "hard_dependencies": [
+        "202604030001_model_registry"
+      ],
+      "soft_dependencies": [],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium-high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Defer with the ownership slice. This column is part of the same migration that also normalizes existing model_registry rows."
+    },
+    {
+      "missing_surface": "model_registry.source_type_compatibility",
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "migration_type": [
+        "schema-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "ALTER TABLE public.model_registry ADD COLUMN source_type_compatibility TEXT[]",
+        "CREATE INDEX model_registry_source_type_compatibility_idx USING GIN",
+        "UPDATE public.model_registry SET source_type_compatibility = ..."
+      ],
+      "dependency_order": 5,
+      "hard_dependencies": [
+        "202604030001_model_registry"
+      ],
+      "soft_dependencies": [],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium-high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Defer with the ownership slice. The live rollout should handle the full model_registry metadata normalization in one approved window."
+    },
+    {
+      "missing_surface": "model_registry.active_state",
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "migration_type": [
+        "schema-only",
+        "data-mutating"
+      ],
+      "introduces": [
+        "ALTER TABLE public.model_registry ADD COLUMN active_state TEXT",
+        "CREATE INDEX model_registry_active_scope_idx",
+        "UPDATE public.model_registry SET active_state = ..."
+      ],
+      "dependency_order": 5,
+      "hard_dependencies": [
+        "202604030001_model_registry"
+      ],
+      "soft_dependencies": [],
+      "depends_on_unrecovered_remote_only_migrations": false,
+      "risk_level": "medium-high",
+      "safe_to_apply_directly": false,
+      "operator_approval_required": true,
+      "exact_recommended_next_action": "Defer with the ownership slice. This column changes runtime ownership gating and should not move forward until the operator explicitly resumes UTV2-855."
+    }
+  ],
+  "related_local_migration_not_required_for_listed_missing_surfaces": [
+    {
+      "migration_version": "202605020002",
+      "migration_file": "supabase/migrations/202605020002_utv2_725_backfill_pick_candidates_pick_id.sql",
+      "migration_type": [
+        "data-mutating"
+      ],
+      "why_not_in_immediate_apply_set": "It mutates historical pick_candidates rows and is not required to create any of the listed missing live surfaces.",
+      "recommended_next_action": "Defer. Reassess only after the schema-only and constraint-only surfaces are reconciled and the operator explicitly wants the historical linkage backfill."
+    }
+  ],
+  "dependency_assessment": {
+    "direct_dependencies_on_unrecovered_remote_only_migrations": [],
+    "indirect_or_semantic_dependencies": [
+      {
+        "migration_version": "202605030001",
+        "depends_on": "202604291002_utv2_772_provider_offer_history_partitioning",
+        "why_it_matters": "The drop function assumes the partitioned provider_offer_history baseline exists. Phase 6 confirmed that provider_offer_history exists live even though 202604291002 is missing from the remote ledger, so operator reconciliation must trust object-level live truth before touching the retention slice."
+      },
+      {
+        "migration_version": "202605030002",
+        "depends_on": [
+          "202604291001_utv2_772_bounded_provider_offers_retention",
+          "202604291002_utv2_772_provider_offer_history_partitioning"
+        ],
+        "why_it_matters": "The cron body calls prune_provider_offers_bounded(), and summarize_provider_offer_history_partition() reads provider_offer_history partitions. Those prerequisites are not remote-ledger aligned even though key live objects already exist."
+      }
+    ],
+    "soft_runtime_dependency_findings": [
+      {
+        "surface": "pick_candidates.sport_key",
+        "proof_reference": "docs/06_status/proof/UTV2-846/evidence.json",
+        "finding": "UTV2-846 added a schema-cache fallback because runtime observed sport_key failure on the DB path. Phase 6 later confirmed the physical column is absent live, so reconciliation should treat this as a real schema gap, not a cache-only issue."
+      },
+      {
+        "surface": "picks_stake_units_canonical_check",
+        "proof_reference": "docs/06_status/proof/UTV2-845/evidence.json",
+        "finding": "UTV2-845 runtime proof passed without the DB constraint being present live. The missing constraint is therefore a convergence gap, not an acute runtime blocker."
+      },
+      {
+        "surface": "UTV2-854 ownership columns",
+        "proof_reference": "docs/06_status/proof/UTV2-854/evidence.json",
+        "finding": "Ownership proof shows 0% ownership write success while columns are absent; rollout must stay blocked until earlier convergence is complete."
+      }
+    ]
+  },
+  "recommended_apply_order": [
+    {
+      "order": 1,
+      "scope": "202605020001_utv2_725_pick_candidates_sport_key",
+      "category": "schema-only",
+      "risk_level": "medium",
+      "why_first": "Smallest runtime-critical convergence gap. It aligns live schema with current DB types and removes the root physical gap behind the UTV2-846 fallback."
+    },
+    {
+      "order": 2,
+      "scope": "202605070001_utv2_845_stake_units_integrity_guard",
+      "category": "constraint-only",
+      "risk_level": "medium",
+      "why_second": "The constraint is intentionally NOT VALID and does not rewrite historical rows. It is a low-blast-radius convergence step after sport_key."
+    },
+    {
+      "order": 3,
+      "scope": "Provider-retention prerequisite verification",
+      "category": "operator review checkpoint",
+      "risk_level": "high",
+      "why_third": "Before touching 202605030001/202605030002, the operator should explicitly accept the live/object truth of 202604291001/202604291002/202604291003 because that slice is already partially present live but absent from the remote ledger."
+    },
+    {
+      "order": 4,
+      "scope": "202605030001 + 202605030002 provider-retention slice",
+      "category": "manual delta preferred",
+      "risk_level": "high",
+      "why_fourth": "This slice mixes tables, functions, cron mutation, and destructive future behavior. It should be reconciled as a tightly reviewed operator window, not a blind normal push."
+    },
+    {
+      "order": 5,
+      "scope": "202605070002_utv2_854_model_ownership_persistence",
+      "category": "ownership rollout",
+      "risk_level": "medium-high",
+      "why_fifth": "Ownership remains intentionally blocked until earlier missing surfaces are reconciled and the operator explicitly restarts the UTV2-855 rollout."
+    },
+    {
+      "order": 6,
+      "scope": "202605020002_utv2_725_backfill_pick_candidates_pick_id",
+      "category": "data-mutating optional follow-up",
+      "risk_level": "medium-high",
+      "why_last_or_defer": "Not required for the listed missing surfaces and mutates historical rows. Keep it outside the immediate schema-reconciliation window unless separately approved."
+    }
+  ],
+  "operator_decision_plan": {
+    "overall_risk_classification": "D3 remains in force until the earlier missing low-risk surfaces are reconciled and the provider-retention slice is explicitly reviewed.",
+    "direct_apply_candidates_after_operator_review": [
+      "202605020001_utv2_725_pick_candidates_sport_key",
+      "202605070001_utv2_845_stake_units_integrity_guard"
+    ],
+    "manual_delta_preferred_not_blind_file_apply": [
+      "202605030001_utv2_772_provider_offer_history_partition_retention",
+      "202605030002_utv2_772_provider_offer_line_snapshots"
+    ],
+    "still_blocked_after_phase9_planning": [
+      "202605070002_utv2_854_model_ownership_persistence",
+      "202605020002_utv2_725_backfill_pick_candidates_pick_id"
+    ],
+    "any_live_write_can_be_approved_now": "Not from this planning artifact alone. The plan identifies two lower-risk direct candidates, but actual approval remains an operator decision after reviewing dry-run/output and the provider-retention drift context."
+  }
+}

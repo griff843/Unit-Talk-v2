@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-847",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-847-evidence-truthworthiness-dashboard",
+  "branch": "codex/utv2-847-evidence-truthworthiness-dashboard",
+  "base_branch": "main",
+  "commit_sha": "cf5facf266028143bb067d85dbadfb0cdd6a1325",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/594",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/evidence-truthworthiness/README.md",
+    "docs/06_status/proof/evidence-truthworthiness/truthworthiness-by-dimension.csv",
+    "docs/06_status/proof/evidence-truthworthiness/truthworthiness-by-market-family.csv",
+    "docs/06_status/proof/evidence-truthworthiness/truthworthiness-by-source-type.csv",
+    "docs/06_status/proof/evidence-truthworthiness/truthworthiness-by-sport.csv",
+    "docs/06_status/proof/evidence-truthworthiness/truthworthiness-exclusions.csv",
+    "docs/06_status/proof/evidence-truthworthiness/truthworthiness-summary.json",
+    "scripts/evidence-truthworthiness/run-scoring.test.ts",
+    "scripts/evidence-truthworthiness/run-scoring.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-847/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-07T11:48:27.765Z",
+  "heartbeat_at": "2026-05-07T14:17:42.205Z",
+  "closed_at": "2026-05-07T14:17:42.205Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-847-evidence-truthworthiness-dashboard.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-07T14:17:39.887Z",
+      "verdict": "pass",
+      "merge_sha": "cf5facf266028143bb067d85dbadfb0cdd6a1325",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": []
+}

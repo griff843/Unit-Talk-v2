@@ -1,0 +1,121 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-844",
+  "merge_sha": "67b099cbfd48c873a584b435ff2fb4adc8c21ead",
+  "generated_at": "2026-05-06T23:49:30Z",
+  "verifier": {
+    "identity": "ops-truth-closeout"
+  },
+  "static_proof": {
+    "commands": [
+      "pnpm exec tsx --test apps/api/src/board-pick-writer.test.ts",
+      "pnpm type-check",
+      "pnpm test:db",
+      "pnpm verify"
+    ],
+    "results": {
+      "board_pick_writer_test": "pass (15/15)",
+      "type_check": "pass",
+      "test_db": "pass",
+      "verify": "pass"
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "name": "board-writer-before",
+        "source": "live-db snapshot before scheduler fix",
+        "result": {
+          "latestSchedulerAudit": null,
+          "latestBoardRunId": "ed6e5018-c372-48c5-a059-b5c0ee9fba2a",
+          "latestBoardRunSize": 18,
+          "latestBoardRunLinked": 6,
+          "latestBoardRunUnlinked": 12
+        }
+      },
+      {
+        "name": "scheduler-registration-runtime-log",
+        "command": "pnpm exec tsx apps/api/src/index.ts",
+        "result": {
+          "event": "board_pick_writer.scheduler_registered",
+          "cadenceMs": 600000,
+          "actor": "scheduler:board-pick-writer",
+          "syndicateMachineEnabled": true,
+          "boardPickWriterEnabled": false
+        }
+      },
+      {
+        "name": "board-writer-runtime-log",
+        "command": "pnpm exec tsx apps/api/src/index.ts",
+        "result": {
+          "pickWrittenEventsObserved": 3,
+          "actor": "scheduler:board-pick-writer",
+          "sampleBoardRunIds": [
+            "24f79637-80e2-49b5-9bcf-0ad38b23bfb3",
+            "c718a4b3-ed3b-4309-9f4e-1e7cbaad8281"
+          ]
+        }
+      },
+      {
+        "name": "board-writer-after",
+        "source": "live-db snapshot after scheduler fix",
+        "result": {
+          "boardPicksLastHour": 23,
+          "boardAwaitingApprovalLastHour": 0,
+          "latestBoardRunId": "bf00bf58-4d88-4536-a999-907cbe4b5430",
+          "latestBoardRunSize": 15,
+          "latestBoardRunLinked": 9,
+          "latestBoardRunUnlinked": 6
+        }
+      },
+      {
+        "name": "pipeline-health-after",
+        "command": "pnpm pipeline:health",
+        "result": {
+          "workerVerdict": "HEALTHY - heartbeat fresh, no eligible distribution rows processed",
+          "warnings": [
+            "5 pending row(s) outside worker targets"
+          ]
+        }
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "source": "board-construction",
+        "created_within_last_hour": 23,
+        "awaiting_approval_within_last_hour": 0
+      },
+      {
+        "table": "distribution_outbox",
+        "sent": 403,
+        "pending": 5,
+        "pending_for_worker_targets": 0,
+        "deferred_pending_outside_worker_targets": 5
+      }
+    ],
+    "receipts": [
+      {
+        "proof": "recent board-construction picks persisted as canonical picks with validated lifecycle state",
+        "samplePickIds": [
+          "91adc31a-7b79-4356-a63a-91bdf0f8fe4c",
+          "0988de6f-3cb1-4544-b994-0dc1cd2d04c8",
+          "b3f22212-ae86-4be5-b046-89b02e758409"
+        ]
+      }
+    ]
+  },
+  "root_cause": [
+    "The board-pick writer scheduler path existed in apps/api/src/index.ts, but the runtime required BOARD_PICK_WRITER_ENABLED=true even when the broader syndicate machine runtime was enabled.",
+    "In the real environment, SYNDICATE_MACHINE_ENABLED=true was present while BOARD_PICK_WRITER_ENABLED was absent and therefore defaulted to false, so scheduler registration never happened.",
+    "One writer skip branch also lacked telemetry: devig failures were counted as skipped with no warning, which created a silent-drop observability gap."
+  ],
+  "scope": "scheduler registration, governed board-writer execution, and proof of canonical board-pick persistence",
+  "remaining_blockers": {
+    "in_scope": [],
+    "out_of_scope": [
+      "board-scan candidate materialization is still degraded by schema-cache drift: pick_candidates.sport_key missing from schema cache",
+      "fresh evidence accumulation is still partially degraded until board-scan candidate materialization is restored"
+    ]
+  }
+}

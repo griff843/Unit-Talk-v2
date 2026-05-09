@@ -1,0 +1,279 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 6,
+  "audit_date": "2026-05-08T09:41:14.2862100-04:00",
+  "mode": "read_only_remote_schema_audit_rerun",
+  "route": {
+    "kind": "docker_backed_read_only_postgres_client_via_pooler",
+    "host": "aws-1-us-west-2.pooler.supabase.com",
+    "port": 5432,
+    "docker_image": "postgres:17-alpine",
+    "query_result_dir": ".temp/utv2-855-phase6-rerun/results",
+    "schema_dump_path": ".temp/utv2-855-phase6-rerun/public-schema.sql"
+  },
+  "no_writes_confirmed": true,
+  "forbidden_actions_executed": [],
+  "inventory_checks": [
+    {
+      "id": "3.1",
+      "name": "tables",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/01_tables.tsv"
+    },
+    {
+      "id": "3.2",
+      "name": "columns",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/02_columns.tsv"
+    },
+    {
+      "id": "3.3",
+      "name": "indexes",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/03_indexes.tsv"
+    },
+    {
+      "id": "3.4",
+      "name": "constraints",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/04_constraints.tsv"
+    },
+    {
+      "id": "3.5",
+      "name": "triggers",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/05_triggers.tsv"
+    },
+    {
+      "id": "3.6",
+      "name": "functions",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/06_functions.tsv"
+    },
+    {
+      "id": "3.7a",
+      "name": "rls_policies",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/07_rls_policies.tsv"
+    },
+    {
+      "id": "3.7b",
+      "name": "rls_enabled_tables",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/08_rls_tables.tsv"
+    },
+    {
+      "id": "3.8",
+      "name": "enums",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/09_enums.tsv"
+    },
+    {
+      "id": "3.9",
+      "name": "views",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/10_views.tsv"
+    },
+    {
+      "id": "3.10",
+      "name": "migration_ledger",
+      "status": "completed_with_live_column_adjustment",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/11_migration_ledger.tsv",
+      "notes": [
+        "The original Phase 5 query expected `inserted_at`, but the live ledger schema does not expose that column.",
+        "The live ledger columns are captured in `.temp/utv2-855-phase6-rerun/results/11b_migration_ledger_columns.tsv`."
+      ]
+    },
+    {
+      "id": "3.11",
+      "name": "extensions",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/12_extensions.tsv"
+    },
+    {
+      "id": "3.12",
+      "name": "ownership_precheck",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/13_ownership_precheck.tsv"
+    },
+    {
+      "id": "3.13-3.14",
+      "name": "priority_targets",
+      "status": "completed",
+      "output_path": ".temp/utv2-855-phase6-rerun/results/14_priority_targets.tsv"
+    }
+  ],
+  "inventory_summary": {
+    "tables_total": 72,
+    "public_tables": 66,
+    "public_views": 5,
+    "public_columns": 994,
+    "public_indexes": 329,
+    "public_constraints": 815,
+    "public_triggers": 22,
+    "public_functions": 22,
+    "public_rls_policies": 0,
+    "public_rls_tables": 65,
+    "public_enums": 0,
+    "extensions": 6
+  },
+  "migration_ledger": {
+    "remote_count": 90,
+    "local_count": 99,
+    "live_columns": [
+      "version",
+      "statements",
+      "name",
+      "created_by",
+      "idempotency_key",
+      "rollback"
+    ],
+    "remote_only_versions": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "local_only_versions": [
+      "202604230002",
+      "202604250001",
+      "202604250002",
+      "202604250004",
+      "202604250005",
+      "202604270001",
+      "202604270002",
+      "202604291001",
+      "202604291002",
+      "202604291003",
+      "202605020001",
+      "202605020002",
+      "202605030001",
+      "202605030002",
+      "202605070001",
+      "202605070002"
+    ],
+    "semantically_explained_remote_only_versions": [
+      {
+        "version": "20260424202018",
+        "name": "add_stake_units_to_settlement_records_with_trigger",
+        "live_evidence": [
+          "settlement_records.stake_units column exists",
+          "settlement_records_populate_stake_units() exists",
+          "trg_settlement_records_stake_units trigger exists"
+        ]
+      },
+      {
+        "version": "20260425030626",
+        "name": "utv2_727_backfill_market_universe_closing_from_provider_offers",
+        "maps_to_local_version": "202604250001"
+      },
+      {
+        "version": "20260425030656",
+        "name": "utv2_727_sgo_replay_coverage_view",
+        "maps_to_local_version": "202604250002"
+      },
+      {
+        "version": "20260425132920",
+        "name": "utv2_753_backfill_settlement_profit_loss",
+        "maps_to_local_version": "202604250005"
+      },
+      {
+        "version": "20260427045252",
+        "name": "202604270001_utv2_752_fix_market_universe_canonical_key",
+        "maps_to_local_version": "202604270001"
+      },
+      {
+        "version": "20260427182229",
+        "name": "utv2_82_closing_materializer_indexes",
+        "maps_to_local_version": "202604270002"
+      },
+      {
+        "version": "202604300003",
+        "name": "utv2_803_pick_offer_snapshots_posting_kind",
+        "live_evidence": [
+          "pick_offer_snapshots table exists",
+          "pick_offer_snapshots.snapshot_kind exists",
+          "pick_offer_snapshots_pick_kind_idx exists"
+        ]
+      }
+    ]
+  },
+  "ownership_columns": {
+    "any_present": false,
+    "pick_candidates": {
+      "model_registry_id": false,
+      "scoring_run_id": false,
+      "ownership_timestamp": false
+    },
+    "model_registry": {
+      "registry_entity_type": false,
+      "source_type_compatibility": false,
+      "owner": false,
+      "training_window_start": false,
+      "training_window_end": false,
+      "validation_metrics": false,
+      "calibration_metadata": false,
+      "promotion_approved_by": false,
+      "promotion_approved_at": false,
+      "active_state": false
+    }
+  },
+  "confirmed_live_matches": [
+    "pick_candidates table exists",
+    "model_registry table exists",
+    "provider_offer_current table exists",
+    "provider_offer_history table exists",
+    "provider_offer_staging table exists",
+    "provider_offer_history_compact table exists",
+    "pick_offer_snapshots table exists",
+    "sgo_replay_coverage view exists",
+    "experiment_ledger_run_type_check includes calibration",
+    "RLS is enabled on 65 public tables",
+    "No public RLS policies are defined, matching the dedicated RLS-enable migration posture"
+  ],
+  "schema_anomalies": [
+    {
+      "kind": "schema_gap",
+      "object": "public.pick_candidates.sport_key",
+      "detail": "Missing live, but local migration `202605020001_utv2_725_pick_candidates_sport_key.sql` adds it and app/test surfaces expect it."
+    },
+    {
+      "kind": "schema_gap",
+      "object": "public.provider_offer_line_snapshots",
+      "detail": "Missing live, but local migration `202605030002_utv2_772_provider_offer_line_snapshots.sql` creates it and ingestion retention code references it."
+    },
+    {
+      "kind": "function_gap",
+      "object": "public.summarize_provider_offer_history_partition(date)",
+      "detail": "Missing live, but local migration `202605030002_utv2_772_provider_offer_line_snapshots.sql` defines it."
+    },
+    {
+      "kind": "function_gap",
+      "object": "public.drop_old_provider_offer_history_partitions(integer)",
+      "detail": "Missing live, but local migration `202605030001_utv2_772_provider_offer_history_partition_retention.sql` defines it."
+    },
+    {
+      "kind": "constraint_gap",
+      "object": "public.picks.picks_stake_units_canonical_check",
+      "detail": "Missing live, but local migration `202605070001_utv2_845_stake_units_integrity_guard.sql` defines it."
+    },
+    {
+      "kind": "ownership_gap",
+      "object": "UTV2-854 ownership columns",
+      "detail": "All candidate ownership columns and model_registry ownership/metadata additions from `202605070002_utv2_854_model_ownership_persistence.sql` are absent live."
+    },
+    {
+      "kind": "ledger_shape_difference",
+      "object": "supabase_migrations.schema_migrations",
+      "detail": "The live ledger schema does not expose `inserted_at`; authoritative reads must use the actual live column set."
+    }
+  ],
+  "case_classification": "D3",
+  "classification_reason": "The remote schema is inspectable and many remote-only historical objects are explainable, but the live baseline is still missing multiple local schema changes beyond the ownership migration. Because active runtime-adjacent schema surfaces are absent live, this is not a clean D1 baseline and not a safe D2 absorb-and-apply case.",
+  "migration_apply_can_be_operator_approved": false,
+  "recommended_next_action": "Stop. Do not apply `202605070002_utv2_854_model_ownership_persistence.sql` yet. Prepare a manual reconciliation plan for the missing post-20260430 schema changes, then rerun the audit or otherwise verify those missing schema surfaces live before any ownership migration apply.",
+  "writes_executed": false
+}

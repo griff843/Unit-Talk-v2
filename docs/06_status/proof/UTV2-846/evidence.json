@@ -1,7 +1,38 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-846",
+  "merge_sha": "2844dce57d90985a7cbea4e46c009ce5ff859bc4",
+  "generated_at": "2026-05-07T03:57:06.419Z",
+  "verifier": {
+    "identity": "operator"
+  },
   "captured_at": "2026-05-07T00:57:53.879Z",
+  "static_proof": {
+    "commands": [
+      "pnpm exec tsx --test apps/api/src/board-scan-service.test.ts",
+      "pnpm exec tsx --test apps/api/src/t1-proof-utv2-846.test.ts",
+      "pnpm test:db",
+      "pnpm verify"
+    ]
+  },
+  "runtime_proof": {
+    "queries": [
+      "select count(*) from pick_candidates where scan_run_id = '07ea5f90-f3ec-4362-b159-5a022cf0985d'",
+      "select count(*) from pick_candidates where scan_run_id = 'c966afd9-3ec7-4051-99f0-4e2f1e1f403c'"
+    ],
+    "row_counts": [
+      {
+        "table": "pick_candidates",
+        "scan_run_id": "07ea5f90-f3ec-4362-b159-5a022cf0985d",
+        "count": 1000
+      },
+      {
+        "table": "pick_candidates",
+        "scan_run_id": "c966afd9-3ec7-4051-99f0-4e2f1e1f403c",
+        "count": 25
+      }
+    ]
+  },
   "summary": {
     "root_cause": "The live PostgREST schema cache still does not recognize pick_candidates.sport_key during upsert. Board-scan was already sending sport_key, and the DB-layer serializer always included the field even during retry by normalizing an omitted property to null, so the fallback path re-triggered the same schema-cache failure.",
     "resolution": "Board-scan now detects sport_key schema-cache drift explicitly, logs a schema_cache_drift_fallback event, retries once with sport_key omitted at the DB payload boundary, and tags provenance with schema_cache_fallback metadata. Generated DB types now also include pick_candidates.sport_key so local type truth matches the intended schema.",

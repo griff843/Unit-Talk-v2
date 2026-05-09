@@ -1,0 +1,91 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 6,
+  "audit_date": "2026-05-07T23:18:08.5629313-04:00",
+  "mode": "read_only_remote_schema_audit",
+  "connectivity": {
+    "management_api_types": "ok",
+    "migration_ledger_cli": "ok",
+    "direct_db_url": "failed_dns",
+    "remote_schema_dump": "failed_local_tooling",
+    "inspect_db_cli": "failed_or_timed_out",
+    "verdict": "partial_only"
+  },
+  "migration_ledger": {
+    "remote_only_versions_confirmed": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "local_only_versions_confirmed": [
+      "202605070001",
+      "202605070002"
+    ],
+    "notes": [
+      "Supabase CLI migration list confirms the seven unrecovered remote-only versions remain present.",
+      "The CLI output also shows alignment irregularities around 202604280001-202604290005, so distinct-set comparison should not be treated as a clean baseline proof without direct SQL inventory."
+    ]
+  },
+  "ownership_columns_pre_check": {
+    "inspection_source": "remote generated types via `supabase gen types typescript --project-id zfzdnfwdarxucxtaojxm --schema public`",
+    "any_ownership_column_present": false,
+    "unexpected_columns": []
+  },
+  "partial_schema_inventory": {
+    "source": "remote generated types only",
+    "table_count": 66,
+    "view_count": 5,
+    "function_count": 15,
+    "required_tables_present": {
+      "pick_candidates": true,
+      "model_registry": true,
+      "system_runs": true,
+      "experiment_ledger": true,
+      "provider_offers": true,
+      "provider_offer_current": true,
+      "provider_offer_history": true
+    },
+    "ownership_columns_absent_in_remote_types": {
+      "pick_candidates.model_registry_id": true,
+      "pick_candidates.scoring_run_id": true,
+      "pick_candidates.ownership_timestamp": true,
+      "model_registry.registry_entity_type": true,
+      "model_registry.source_type_compatibility": true,
+      "model_registry.active_state": true
+    }
+  },
+  "drift_classification": {
+    "status": "incomplete",
+    "reason": "Authoritative inventory of indexes, constraints, triggers, RLS policies, enums, and full view/function definitions could not be collected reliably.",
+    "locally_covered_count": null,
+    "remote_only_count": null,
+    "unknown_drift_count": null,
+    "ownership_pending_count": 6,
+    "unknown_drift_objects": []
+  },
+  "case_classification": "D4",
+  "anomalies": [
+    {
+      "kind": "connectivity",
+      "detail": "Direct DB host introspection through SUPABASE_DB_URL still fails DNS resolution for db.zfzdnfwdarxucxtaojxm.supabase.co."
+    },
+    {
+      "kind": "tooling",
+      "detail": "Read-only `supabase db dump --linked --schema public --file ...` failed because local Docker Desktop / pg_dump path is unavailable."
+    },
+    {
+      "kind": "tooling",
+      "detail": "CLI `supabase inspect db table-stats` and `index-stats` timed out; `role-stats` failed during scan, preventing reliable catalog-level inventory."
+    },
+    {
+      "kind": "audit_limit",
+      "detail": "Without direct SQL execution or schema dump, unknown drift cannot be ruled in or out for indexes, constraints, triggers, RLS policies, enums, and function/view definitions."
+    }
+  ],
+  "operator_action_required": "Restore a trustworthy read-only schema inspection path before baseline reconciliation. Acceptable paths include Supabase MCP execute_sql, working psql/pg_dump access through the pooler, or a Docker-backed Supabase schema dump workflow.",
+  "writes_executed": false
+}

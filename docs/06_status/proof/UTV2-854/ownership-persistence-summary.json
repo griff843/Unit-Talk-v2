@@ -1,32 +1,32 @@
 {
   "issue_id": "UTV2-854",
-  "generated_at": "2026-05-07T21:58:12.702Z",
+  "generated_at": "2026-05-08T15:11:44.527Z",
   "migration_file_present": true,
   "schema_probe": {
-    "pick_candidates_model_registry_id": false,
-    "pick_candidates_scoring_run_id": false,
-    "pick_candidates_ownership_timestamp": false,
-    "model_registry_registry_entity_type": false,
-    "model_registry_source_type_compatibility": false,
-    "model_registry_active_state": false
+    "pick_candidates_model_registry_id": true,
+    "pick_candidates_scoring_run_id": true,
+    "pick_candidates_ownership_timestamp": true,
+    "model_registry_registry_entity_type": true,
+    "model_registry_source_type_compatibility": true,
+    "model_registry_active_state": true
   },
   "counts": {
-    "picks_total": 4204,
+    "picks_total": 4340,
     "candidates_total": 19792,
-    "scored_candidates_total": 6889,
+    "scored_candidates_total": 6978,
     "registry_total": 6
   },
   "metrics": {
     "model_attributed_pct": 0,
     "model_generated_pct": 0,
-    "heuristic_pct": 90.03,
-    "manual_pct": 9.92,
+    "heuristic_pct": 90.35,
+    "manual_pct": 9.61,
     "unknown_pct": 0.05,
     "ownership_write_success_pct": 0,
     "ownership_write_failure_pct": 100
   },
   "quarantines": {
-    "null_ownership": 6889,
+    "null_ownership": 6978,
     "degraded_ownership": 0
   },
   "enforcement": {

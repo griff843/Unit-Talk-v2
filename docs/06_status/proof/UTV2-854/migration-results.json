@@ -1,15 +1,15 @@
 {
   "issue_id": "UTV2-854",
-  "generated_at": "2026-05-07T21:58:12.704Z",
+  "generated_at": "2026-05-08T15:11:44.530Z",
   "migration_file_present": true,
   "migration_file": "C:\\Dev\\Unit-Talk-v2-main\\supabase\\migrations\\202605070002_utv2_854_model_ownership_persistence.sql",
   "schema_probe": {
-    "pick_candidates_model_registry_id": false,
-    "pick_candidates_scoring_run_id": false,
-    "pick_candidates_ownership_timestamp": false,
-    "model_registry_registry_entity_type": false,
-    "model_registry_source_type_compatibility": false,
-    "model_registry_active_state": false
+    "pick_candidates_model_registry_id": true,
+    "pick_candidates_scoring_run_id": true,
+    "pick_candidates_ownership_timestamp": true,
+    "model_registry_registry_entity_type": true,
+    "model_registry_source_type_compatibility": true,
+    "model_registry_active_state": true
   },
-  "live_schema_ready": false
+  "live_schema_ready": true
 }

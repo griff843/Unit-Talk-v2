@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-853",
+  "generated_at": "2026-05-07T20:55:20.0105315Z",
+  "scope": "read_only_investigation_and_migration_planning",
+  "baseline_truth": {
+    "existing_picks_permanently_unknown": 4202,
+    "model_attribution_pct": 0,
+    "pick_candidates_model_registry_id_exists": false,
+    "historical_backfill_allowed": false,
+    "runtime_behavior_changed": false,
+    "migration_applied": false
+  },
+  "model_score_write_path": {
+    "orchestration_file": "apps/api/src/index.ts",
+    "orchestration_lines": "132-150",
+    "service_file": "apps/api/src/candidate-scoring-service.ts",
+    "service_function": "CandidateScoringService.run",
+    "service_lines": "103-307",
+    "repository_interface_file": "packages/db/src/repositories.ts",
+    "repository_interface": "IPickCandidateRepository.updateModelScoreBatch",
+    "repository_interface_lines": "1018-1060",
+    "database_repository_file": "packages/db/src/runtime-repositories.ts",
+    "database_repository_method": "DatabasePickCandidateRepository.updateModelScoreBatch",
+    "database_repository_lines": "7841-7857",
+    "in_memory_repository_method": "InMemoryPickCandidateRepository.updateModelScoreBatch",
+    "in_memory_repository_lines": "7698-7713",
+    "db_table": "pick_candidates",
+    "db_write_operation": "UPDATE",
+    "db_write_shape": [
+      "model_score",
+      "model_tier",
+      "model_confidence",
+      "updated_at"
+    ],
+    "transaction_boundary": "No explicit application transaction is present. CandidateScoringService batches updates in memory, but DatabasePickCandidateRepository loops and sends one Supabase UPDATE per candidate id. Each row update is its own DB request/transaction boundary.",
+    "candidate_scoring_batched": true,
+    "batching_details": "CandidateScoringService.run accumulates ModelScoreUpdate rows and flushes when updates.length >= batchSize; default batchSize is 200. The repository method name is batch-oriented, but the database implementation performs per-row UPDATE calls in a loop.",
+    "writes_insert_upsert_or_update": "update",
+    "model_score_can_be_null": true,
+    "model_score_null_details": "pick_candidates.model_score is numeric NULL in migration 202604090002; service loads candidates where model_score === null and writes only scored rows.",
+    "scoring_run_metadata_exists": {
+      "pick_candidates_scan_run_id": "exists as text and is written during candidate upsert/materialization, not candidate scoring",
+      "system_runs_table": "exists with uuid id, but candidate scoring does not currently attach a system_runs.id to score writes",
+      "experiment_ledger": "exists and is used for shadow comparison records after scoring, but it is not the candidate scoring run identifier"
+    }
+  },
+  "insertion_point": {
+    "primary_file": "apps/api/src/candidate-scoring-service.ts",
+    "primary_lines": "259-264",
+    "description": "Add model_registry_id, scoring_run_id, and ownership_timestamp to each ModelScoreUpdate when pushing the score update, using the champion.id resolved at lines 176-178 and validated before scoring continues.",
+    "repository_contract_file": "packages/db/src/repositories.ts",
+    "repository_contract_lines": "1018-1023",
+    "repository_change": "Extend ModelScoreUpdate with model_registry_id, scoring_run_id, and ownership_timestamp.",
+    "database_write_file": "packages/db/src/runtime-repositories.ts",
+    "database_write_lines": "7844-7850",
+    "database_write_change": "Write model_registry_id, scoring_run_id, and ownership_timestamp in the same UPDATE payload as model_score/model_tier/model_confidence."
+  },
+  "registry_lookup_path": {
+    "current_service_method": "CandidateScoringService.resolveChampion",
+    "current_service_lines": "405-422",
+    "current_repository_method": "DatabaseModelRegistryRepository.findChampion",
+    "current_repository_lines": "6805-6822",
+    "current_lookup_predicate": {
+      "sport": "model_registry.sport = market_universe.sport_key",
+      "market_family": "model_registry.market_family = deriveMarketFamily(market_universe.market_type_id)",
+      "status": "model_registry.status = champion"
+    },
+    "future_lookup_predicate": {
+      "sport": "model_registry.sport = candidate market universe sport",
+      "market_family": "model_registry.market_family = derived candidate market family",
+      "registry_entity_type": "in champion_model, challenger_model, shadow_model as appropriate for scoring mode",
+      "source_type_compatibility": "contains system-pick-scanner or board-construction ownership source",
+      "active_state_or_status": "must be active scoring state; disabled and retired rejected"
+    },
+    "current_schema": {
+      "columns": [
+        "id",
+        "model_name",
+        "version",
+        "sport",
+        "market_family",
+        "status",
+        "champion_since",
+        "created_at",
+        "updated_at",
+        "metadata"
+      ],
+      "registry_entity_type_exists": false,
+      "active_state_exists": false,
+      "sport_exists": true,
+      "market_family_exists": true,
+      "source_type_compatibility_exists": false,
+      "status_values_allowed_by_migration": [
+        "champion",
+        "challenger",
+        "staged",
+        "archived"
+      ],
+      "status_values_seen_in_UTV2_850_proof": [
+        "champion"
+      ],
+      "disabled_retired_statuses_exist": false
+    }
+  },
+  "migration_plan": {
+    "operator_approval_required": true,
+    "backfill_existing_picks": false,
+    "estimated_historical_rows_mutated": 0,
+    "files": [
+      "docs/06_status/proof/UTV2-853/migration-plan.sql"
+    ]
+  },
+  "runtime_change_plan": {
+    "files": [
+      "apps/api/src/candidate-scoring-service.ts",
+      "packages/db/src/repositories.ts",
+      "packages/db/src/runtime-repositories.ts",
+      "packages/db/src/types.ts",
+      "apps/api/src/candidate-scoring-service.test.ts",
+      "packages/db/src/model-registry.test.ts",
+      "packages/db/src/database-smoke or equivalent DB contract test"
+    ],
+    "summary": "Resolve the scoring owner before score calculation, reject disabled/retired or missing owner, and write model_registry_id/scoring_run_id/ownership_timestamp atomically with model_score."
+  },
+  "read_only_policy": {
+    "no_migration_run": true,
+    "no_runtime_write_behavior_changed": true,
+    "no_production_data_mutated": true,
+    "no_historical_ownership_fabricated": true
+  }
+}

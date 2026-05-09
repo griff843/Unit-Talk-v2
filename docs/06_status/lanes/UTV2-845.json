@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-845",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-845-stake-units-integrity",
+  "branch": "codex/utv2-845-stake-units-integrity",
+  "base_branch": "main",
+  "commit_sha": "0cf75351685d2555ef35c1ceb0c22344f9f721ba",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/593",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/handlers/submit-pick.ts",
+    "apps/api/src/model-performance-service.test.ts",
+    "apps/api/src/model-performance-service.ts",
+    "apps/api/src/recap-service.test.ts",
+    "apps/api/src/recap-service.ts",
+    "apps/api/src/settlement-service.test.ts",
+    "apps/api/src/settlement-service.ts",
+    "apps/api/src/submission-service.test.ts",
+    "packages/contracts/src/picks.ts",
+    "packages/contracts/src/submission.ts",
+    "packages/db/src/database.types.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-845/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-07T04:11:51.482Z",
+  "heartbeat_at": "2026-05-07T06:36:09.228Z",
+  "closed_at": "2026-05-07T06:36:09.228Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-845-stake-units-integrity.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-07T06:35:56.876Z",
+      "verdict": "pass",
+      "merge_sha": "0cf75351685d2555ef35c1ceb0c22344f9f721ba",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-07T06:36:07.204Z",
+      "verdict": "pass",
+      "merge_sha": "0cf75351685d2555ef35c1ceb0c22344f9f721ba",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": []
+}

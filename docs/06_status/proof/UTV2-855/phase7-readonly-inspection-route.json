@@ -1,0 +1,49 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 7,
+  "generated_at": "2026-05-08T08:48:43.9504214-04:00",
+  "mode": "read_only_route_restoration",
+  "goal": "Restore one trustworthy read-only route for authoritative Supabase schema inspection.",
+  "route_checks": {
+    "supabase_mcp_execute_sql": {
+      "available": false,
+      "works": false,
+      "failure_reason": "No callable Supabase execute_sql MCP tool is present in the active toolset or deferred tool discovery results."
+    },
+    "pooler_read_only_connectivity": {
+      "host": "aws-1-us-west-2.pooler.supabase.com",
+      "port": 5432,
+      "dns_or_tcp_probe": "tcp_reachable",
+      "works": false,
+      "failure_reason": "TCP connectivity to the Supabase pooler succeeds, but no local read-only SQL client path is currently available to execute `select current_database(), current_schema(), now();`. `psql` and `pg_dump` are not installed locally, and direct DB-host access via SUPABASE_DB_URL still fails DNS resolution on db.zfzdnfwdarxucxtaojxm.supabase.co."
+    },
+    "docker_backed_supabase_db_dump": {
+      "available": true,
+      "works": true,
+      "proof": {
+        "docker_server_version": "29.3.1",
+        "read_only_sql_result": "postgres|public|2026-05-08 12:48:04.715258+00",
+        "schema_dump_path": "C:\\Dev\\Unit-Talk-v2-main\\.temp\\utv2-855-phase7-public-schema.sql",
+        "schema_dump_size_bytes": 511968,
+        "dumped_from": "PostgreSQL 17.6",
+        "dumped_by": "pg_dump 17.9"
+      }
+    }
+  },
+  "working_route": "docker_backed_read_only_postgres_client_via_pooler",
+  "working_route_summary": "A trustworthy read-only schema inspection route is now restored by using Docker to run a disposable PostgreSQL client against the Supabase pooler, validating harmless SELECT access and producing a schema-only dump.",
+  "failed_routes": [
+    {
+      "route": "Supabase MCP execute_sql",
+      "reason": "Not available in session."
+    },
+    {
+      "route": "Pooler-based read-only SQL access",
+      "reason": "The host route is still incomplete because no local `psql` or `pg_dump` binary is installed, but the underlying network path is healthy and is now usable through Docker."
+    }
+  ],
+  "phase6_rerun_ready": true,
+  "phase6_rerun_reason": "Phase 6 can be rerun using the restored Docker-backed PostgreSQL client route, which has already executed a harmless read-only query and produced an authoritative public-schema dump through the Supabase pooler.",
+  "recommended_next_operator_action": "Rerun Phase 6 using the restored Docker-backed read-only route and perform the 14 inventory checks against the remote schema.",
+  "no_writes_performed": true
+}

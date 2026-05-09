@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-847",
-  "merge_sha": "PENDING_MERGE_SHA",
-  "generated_at": "2026-05-07T13:15:00.000Z",
+  "merge_sha": "cf5facf266028143bb067d85dbadfb0cdd6a1325",
+  "generated_at": "2026-05-07T14:18:00.000Z",
   "verifier": {
     "identity": "operator"
   },
-  "captured_at": "2026-05-07T13:15:00.000Z",
+  "captured_at": "2026-05-07T14:18:00.000Z",
   "static_proof": {
     "commands": [
       "pnpm exec tsx --test scripts/evidence-truthworthiness/run-scoring.test.ts",
