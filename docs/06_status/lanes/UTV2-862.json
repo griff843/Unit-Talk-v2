@@ -6,7 +6,7 @@
   "worktree_path": ".",
   "branch": "claude/utv2-862-review-provider-history-migration",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "592bd869532e5624714803f22eafb9c4ef505b79",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/607",
   "files_changed": [
     "docs/06_status/proof/UTV2-862-provider-history-audit.md",
@@ -19,10 +19,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-862-provider-history-audit.md"
   ],
-  "status": "pr_open",
+  "status": "closed",
   "started_at": "2026-05-09T15:15:00.000Z",
-  "heartbeat_at": "2026-05-09T15:15:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-09T15:50:00.000Z",
+  "closed_at": "2026-05-09T15:50:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

@@ -194,7 +194,41 @@ With 8.29M rows and 100K/night max batch, the drain timeline is long. After writ
 
 ---
 
-## 10. Unblocks
+## 10. PM Decisions (2026-05-09)
+
+### PR #607 — APPROVED + MERGED
+Merge SHA: `592bd869532e5624714803f22eafb9c4ef505b79`
+
+PM rationale: additive operational fix, low-risk cron correction, governance-approved, closes a verified live operational gap, no destructive mutation risk, preserves historical integrity.
+
+### PM-Approved Apply Sequence (formal execution path)
+
+1. Merge PR #607 ✅ done
+2. Apply migration `202605090001` to live Supabase
+3. Wait one successful nightly cron cycle
+4. Verify summarize → drop ordering executed correctly in cron logs
+5. **Only then** enable `merge_provider_offer_staging_cycle` in the ingestor
+
+### Ghost Migration `202604300003` — PM Guidance
+
+**Classification:** Historical migration integrity uncertainty — not a nuisance.
+
+**Prohibited actions:**
+- Migration repair
+- Ledger deletion
+- Fake reconciliation
+
+**Required approach:** Operator governance decision involving:
+- Determine origin of the apply
+- Determine whether it represented a real schema change
+- Determine whether the local file was lost or never committed
+- Determine whether forward-fix ledger reconciliation is required
+
+**Tracking:** New issue created (see UTV2-866 or successor) for ghost migration investigation.
+
+---
+
+## 11. Unblocks
 
 Completing this audit unblocks:
 - **UTV2-860** (Reconcile D3 live schema gap) — can now proceed with full D3 ledger alignment
