@@ -1290,7 +1290,11 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
     for (const offer of offers) {
       const existing = this.offers.get(offer.idempotencyKey);
       const next = existing
-        ? mapProviderOfferInsertToRecord(offer, existing.id ?? undefined, existing.created_at ?? undefined)
+        ? mapProviderOfferInsertToRecord(
+            offer,
+            existing.id ?? undefined,
+            existing.created_at ?? undefined,
+          )
         : mapProviderOfferInsertToRecord(offer);
       if (existing) {
         this.offers.set(offer.idempotencyKey, next);
@@ -1420,7 +1424,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   async listByProvider(providerKey: string): Promise<ProviderOfferRecord[]> {
     return Array.from(this.offers.values())
       .filter((offer) => offer.provider_key === providerKey)
-      .sort((left, right) => (right.snapshot_at ?? '').localeCompare(left.snapshot_at ?? ''));
+      .sort((left, right) =>
+        compareProviderOfferRecordsDescending(left, right),
+      );
   }
 
   async findLatestByMarketKey(
@@ -1437,13 +1443,15 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             ? true
             : (o.provider_participant_id ?? null) === providerParticipantId),
       )
-      .sort((a, b) => (b.snapshot_at ?? '').localeCompare(a.snapshot_at ?? ''));
+      .sort((left, right) =>
+        compareProviderOfferRecordsDescending(left, right),
+      );
     return matches[0] ?? null;
   }
 
   async listAll(): Promise<ProviderOfferRecord[]> {
     return Array.from(this.offers.values()).sort((left, right) =>
-      (right.snapshot_at ?? '').localeCompare(left.snapshot_at ?? ''),
+      compareProviderOfferRecordsDescending(left, right),
     );
   }
 
@@ -1453,7 +1461,12 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
   ): Promise<ProviderOfferRecord[]> {
     return Array.from(this.offers.values())
       .filter((offer) => (offer.snapshot_at ?? '') >= since)
-      .sort((left, right) => (right.snapshot_at ?? '').localeCompare(left.snapshot_at ?? ''))
+      .sort(
+        (left, right) =>
+          textSortValue(right.snapshot_at).localeCompare(
+            textSortValue(left.snapshot_at),
+          ),
+      )
       .slice(0, limit);
   }
 
@@ -1482,9 +1495,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             (criteria.bookmakerKey === undefined ||
               offer.bookmaker_key === criteria.bookmakerKey),
         )
-        .sort((left, right) =>
-          (right.snapshot_at ?? '').localeCompare(left.snapshot_at ?? ''),
-        )[0] ?? null
+        .sort((left, right) => compareProviderOfferRecordsDescending(left, right))[0] ?? null
     );
   }
 
@@ -1507,9 +1518,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
             (criteria.bookmakerKey === undefined ||
               offer.bookmaker_key === criteria.bookmakerKey),
         )
-        .sort((left, right) =>
-          (left.snapshot_at ?? '').localeCompare(right.snapshot_at ?? ''),
-        )[0] ?? null
+        .sort((left, right) => compareProviderOfferRecordsAscending(left, right))[0] ?? null
     );
   }
 
@@ -1567,7 +1576,10 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
           ? `${offer.provider_key}:${offer.provider_market_key}:${participantKey}:${bookmakerKey}`
           : `${offer.provider_key}:${offer.provider_market_key}:${participantKey}`;
         const existing = latestByKey.get(key);
-        if (!existing || (offer.snapshot_at ?? '') > (existing.snapshot_at ?? '')) {
+        if (
+          !existing ||
+          compareProviderOfferRecordsDescending(offer, existing) < 0
+        ) {
           latestByKey.set(key, offer);
         }
       }
@@ -1622,7 +1634,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
       .filter(
         (o) =>
           o.is_opening === true &&
-          new Date(o.snapshot_at ?? '').getTime() >= sinceMs &&
+          new Date(o.snapshot_at ?? 0).getTime() >= sinceMs &&
           o.over_odds != null &&
           o.under_odds != null &&
           o.line != null &&
@@ -1642,7 +1654,7 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
         (o) =>
           o.provider_key === provider &&
           o.is_opening === true &&
-          new Date(o.snapshot_at ?? '').getTime() >= sinceMs &&
+          new Date(o.snapshot_at ?? 0).getTime() >= sinceMs &&
           o.over_odds != null &&
           o.under_odds != null &&
           o.line != null &&
@@ -8231,24 +8243,32 @@ function compareSettlementRecordsDescending(
   left: SettlementRecord,
   right: SettlementRecord,
 ) {
-  const createdAtComparison = right.created_at.localeCompare(left.created_at);
+  const createdAtComparison = textSortValue(right.created_at).localeCompare(
+    textSortValue(left.created_at),
+  );
   if (createdAtComparison !== 0) {
     return createdAtComparison;
   }
 
-  return right.id.localeCompare(left.id);
+  return textSortValue(right.id).localeCompare(textSortValue(left.id));
 }
 
 function compareModelHealthSnapshotsDescending(
   left: ModelHealthSnapshotRecord,
   right: ModelHealthSnapshotRecord,
 ) {
-  const snapshotComparison = right.snapshot_at.localeCompare(left.snapshot_at);
+  const snapshotComparison = textSortValue(right.snapshot_at).localeCompare(
+    textSortValue(left.snapshot_at),
+  );
   if (snapshotComparison !== 0) {
     return snapshotComparison;
   }
 
-  return right.id.localeCompare(left.id);
+  return textSortValue(right.id).localeCompare(textSortValue(left.id));
+}
+
+function textSortValue(value: string | null | undefined): string {
+  return value ?? '';
 }
 
 function mapProviderOfferInsertToRecord(
@@ -8308,16 +8328,16 @@ function mapProviderOfferInsertToHistoryRow(
 }
 
 function buildProviderOfferCurrentIdentityKey(offer: {
-  providerKey: string;
-  providerEventId: string;
-  providerMarketKey: string;
+  providerKey: string | null;
+  providerEventId: string | null;
+  providerMarketKey: string | null;
   providerParticipantId: string | null;
   bookmakerKey: string | null;
 }) {
   return [
-    offer.providerKey,
-    offer.providerEventId,
-    offer.providerMarketKey,
+    offer.providerKey ?? '',
+    offer.providerEventId ?? '',
+    offer.providerMarketKey ?? '',
     offer.providerParticipantId ?? '',
     offer.bookmakerKey ?? '',
   ].join(':');
@@ -8327,12 +8347,32 @@ function compareProviderOfferRecords(
   left: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at'>,
   right: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at'>,
 ) {
-  const snapshotComparison = (left.snapshot_at ?? '').localeCompare(right.snapshot_at ?? '');
+  const snapshotComparison = textSortValue(left.snapshot_at).localeCompare(
+    textSortValue(right.snapshot_at),
+  );
   if (snapshotComparison !== 0) {
     return snapshotComparison;
   }
 
-  return (left.created_at ?? '').localeCompare(right.created_at ?? '');
+  return textSortValue(left.created_at).localeCompare(
+    textSortValue(right.created_at),
+  );
+  // id (random UUID) is intentionally NOT used as a tiebreaker — it would make
+  // same-millisecond inserts non-deterministic. Stable sort handles tied pairs.
+}
+
+function compareProviderOfferRecordsDescending(
+  left: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at'>,
+  right: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at'>,
+) {
+  return compareProviderOfferRecords(right, left);
+}
+
+function compareProviderOfferRecordsAscending(
+  left: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at'>,
+  right: Pick<ProviderOfferRecord, 'snapshot_at' | 'created_at'>,
+) {
+  return compareProviderOfferRecords(left, right);
 }
 
 function buildProviderOfferCurrentRows(

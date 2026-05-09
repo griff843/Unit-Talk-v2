@@ -207,6 +207,10 @@ When documents conflict:
 | `docs/05_operations/t1_recap_stats_consumer_closeout.md` | Recap stats consumer closeout proof | historical |
 | `docs/05_operations/SUPABASE_CONNECTION_STRATEGY.md` | Supabase connection strategy | Platform |
 | `docs/05_operations/supabase_setup.md` | Supabase setup runbook | Platform |
+| `docs/05_operations/DB_MIGRATION_WORKFLOW.md` | **Active** — canonical migration workflow, DB authority model, operator approval requirements, CI discipline (UTV2-856) | Platform |
+| `docs/05_operations/DB_ENVIRONMENT_OPERATOR_POLICY.md` | **Active** — environment model (local/preview/production), human vs. agent execution boundaries, unsafe action prohibition list (UTV2-858) | Platform |
+| `docs/05_operations/DB_ROLLBACK_RUNBOOK.md` | **Active** — rollback and forward-fix runbook, migration failure handling, PITR escalation matrix (UTV2-866) | Platform |
+| `docs/05_operations/SUPABASE_BRANCH_COST_POLICY.md` | **Active** — Supabase branch governance, cost controls, environment lifecycle, resource ownership (UTV2-867) | Platform |
 | `docs/05_operations/EVENT_IDENTITY_CONTRACT.md` | Event identity resolution contract | active |
 | `docs/05_operations/SYSTEM_PICK_CONTRACT.md` | System-generated pick contract | active |
 | `docs/05_operations/MEMBER_TIER_MODEL_CONTRACT.md` | Member tier model — `member_tiers` table + Discord role sync | UTV2-149 |
