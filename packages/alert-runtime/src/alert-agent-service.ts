@@ -73,6 +73,13 @@ export interface AlertSignal extends LineMovementDetection {
   tier: AlertDetectionTier;
 }
 
+type AlertComparableOffer = ProviderOfferRecord & {
+  provider_event_id: string;
+  provider_market_key: string;
+  provider_key: string;
+  snapshot_at: string;
+};
+
 export interface AlertAgentConfig {
   enabled: boolean;
   lookbackMinutes: number;
@@ -157,6 +164,10 @@ export function detectLineMovement(
   currentOffer: ProviderOfferRecord,
   baselineOffer: ProviderOfferRecord,
 ): LineMovementDetection | null {
+  if (!isAlertComparableOffer(currentOffer) || !isAlertComparableOffer(baselineOffer)) {
+    return null;
+  }
+
   if (
     currentOffer.provider_event_id !== baselineOffer.provider_event_id ||
     currentOffer.provider_market_key !== baselineOffer.provider_market_key ||
@@ -538,6 +549,10 @@ function groupOffersByTuple(offers: ProviderOfferRecord[]) {
   const groups = new Map<string, ProviderOfferRecord[]>();
 
   for (const offer of offers) {
+    if (!isAlertComparableOffer(offer)) {
+      continue;
+    }
+
     const key = [
       offer.provider_event_id,
       offer.provider_market_key,
@@ -554,13 +569,14 @@ function groupOffersByTuple(offers: ProviderOfferRecord[]) {
 
 function selectCurrentOffer(offers: ProviderOfferRecord[], nowIso: string) {
   return [...offers]
+    .filter(isAlertComparableOffer)
     .filter((offer) => offer.snapshot_at <= nowIso)
     .sort((left, right) => right.snapshot_at.localeCompare(left.snapshot_at))[0] ?? null;
 }
 
 function selectBaselineOffer(
   offers: ProviderOfferRecord[],
-  currentOffer: ProviderOfferRecord,
+  currentOffer: AlertComparableOffer,
   lookbackMinutes: number,
 ) {
   const lowerBound = new Date(
@@ -569,11 +585,25 @@ function selectBaselineOffer(
 
   return (
     [...offers]
+      .filter(isAlertComparableOffer)
       .filter(
         (offer) =>
           offer.snapshot_at >= lowerBound && offer.snapshot_at < currentOffer.snapshot_at,
       )
       .sort((left, right) => left.snapshot_at.localeCompare(right.snapshot_at))[0] ?? null
+  );
+}
+
+function isAlertComparableOffer(offer: ProviderOfferRecord): offer is AlertComparableOffer {
+  return (
+    typeof offer.provider_event_id === 'string' &&
+    offer.provider_event_id.length > 0 &&
+    typeof offer.provider_market_key === 'string' &&
+    offer.provider_market_key.length > 0 &&
+    typeof offer.provider_key === 'string' &&
+    offer.provider_key.length > 0 &&
+    typeof offer.snapshot_at === 'string' &&
+    offer.snapshot_at.length > 0
   );
 }
 

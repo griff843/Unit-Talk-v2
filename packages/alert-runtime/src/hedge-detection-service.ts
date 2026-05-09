@@ -3,12 +3,14 @@ import type {
   EventRepository,
   HedgeOpportunityRecord,
   ParticipantRepository,
+  ProviderOfferRecord,
   RepositoryBundle,
 } from '@unit-talk/db';
 import {
   detectHedgeOpportunities,
   HEDGE_DETECTION_THRESHOLDS,
   type HedgeOpportunity,
+  type ProviderOfferLike,
 } from '@unit-talk/domain';
 
 const IDENTITY_BUCKET_MS = 5 * 60 * 1000;
@@ -29,6 +31,8 @@ export interface RunHedgeDetectionPassResult {
   unresolvedEvents: number;
   persistedOpportunities: HedgeOpportunityRecord[];
 }
+
+type HedgeComparableOffer = ProviderOfferRecord & ProviderOfferLike;
 
 export function loadHedgeAgentConfig(
   env: NodeJS.ProcessEnv = process.env,
@@ -70,7 +74,11 @@ export async function runHedgeDetectionPass(
   const cutoff = new Date(Date.parse(now) - resolved.lookbackMinutes * 60 * 1000);
   const sinceIso = cutoff.toISOString();
   const offers = await repositories.providerOffers.listRecentOffers(sinceIso);
-  const filteredOffers = offers.filter((offer) => {
+  const filteredOffers = offers.filter((offer): offer is HedgeComparableOffer => {
+    if (!isHedgeComparableOffer(offer)) {
+      return false;
+    }
+
     const snapshot = Date.parse(offer.snapshot_at);
     return Number.isFinite(snapshot) && snapshot <= Date.parse(now);
   });
@@ -222,6 +230,23 @@ function countOpportunityGroups(offers: Array<{ provider_event_id: string; provi
   );
 
   return groups.size;
+}
+
+function isHedgeComparableOffer(offer: ProviderOfferRecord): offer is HedgeComparableOffer {
+  return (
+    typeof offer.id === 'string' &&
+    offer.id.length > 0 &&
+    typeof offer.provider_key === 'string' &&
+    offer.provider_key.length > 0 &&
+    typeof offer.provider_event_id === 'string' &&
+    offer.provider_event_id.length > 0 &&
+    typeof offer.provider_market_key === 'string' &&
+    offer.provider_market_key.length > 0 &&
+    typeof offer.snapshot_at === 'string' &&
+    offer.snapshot_at.length > 0 &&
+    typeof offer.created_at === 'string' &&
+    offer.created_at.length > 0
+  );
 }
 
 function normalizePositiveInteger(value: string | undefined, fallback: number): number {

@@ -21,6 +21,7 @@ import type {
   IMarketUniverseRepository,
   MarketUniverseUpsertInput,
   ParticipantRepository,
+  ProviderOfferCurrentRow,
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
@@ -41,6 +42,13 @@ export interface SystemPickScanResult {
   skipped: number;
   errors: number;
 }
+
+type MaterializableCurrentOffer = ProviderOfferCurrentRow & {
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  snapshot_at: string;
+};
 
 export function loadSystemPickScannerConfig(env: Pick<
   AppEnv,
@@ -126,6 +134,11 @@ export async function runSystemPickScan(
 
   for (const offer of offers) {
     try {
+      if (!isMaterializableCurrentOffer(offer)) {
+        skipped++;
+        continue;
+      }
+
       if (offer.provider_health_state === 'fail') {
         skipped++;
         continue;
@@ -281,4 +294,19 @@ function buildMarketUniverseKey(row: Pick<
     row.provider_market_key,
     row.provider_participant_id ?? '',
   ].join(':');
+}
+
+function isMaterializableCurrentOffer(
+  offer: ProviderOfferCurrentRow,
+): offer is MaterializableCurrentOffer {
+  return (
+    typeof offer.provider_key === 'string' &&
+    offer.provider_key.length > 0 &&
+    typeof offer.provider_event_id === 'string' &&
+    offer.provider_event_id.length > 0 &&
+    typeof offer.provider_market_key === 'string' &&
+    offer.provider_market_key.length > 0 &&
+    typeof offer.snapshot_at === 'string' &&
+    offer.snapshot_at.length > 0
+  );
 }
