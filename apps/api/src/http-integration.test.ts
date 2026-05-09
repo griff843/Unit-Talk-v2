@@ -12,6 +12,7 @@ import {
   createApiServer,
   type ApiRuntimeDependencies,
 } from './server.js';
+import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
 
 test('createApiRuntimeDependencies fails closed when database config is unavailable', () => {
   assert.throws(
@@ -408,6 +409,7 @@ function createTestRuntime(
     errorTracker: createErrorTracker({ service: 'api' }),
     now: Date.now,
     metricsCollector: createMetricsCollector(),
+    versionInfo: readRuntimeVersionInfoFromProcessEnv(),
     rateLimitStore: {
       consume(key, limit, now) {
         const bucket = testRateLimitBuckets.get(key);

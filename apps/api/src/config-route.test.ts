@@ -11,6 +11,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import type { IncomingMessage } from 'node:http';
 import { handleHealthConfig } from './routes/config.js';
+import { handleRuntimeVersion } from './routes/runtime-version.js';
 import { createInMemoryRepositoryBundle } from '@unit-talk/db';
 import type { ApiRuntimeDependencies } from './server.js';
 import type { ProviderOfferRecord } from '@unit-talk/db';
@@ -64,6 +65,16 @@ function makeRuntime(
     persistenceMode,
     runtimeMode: 'test',
     authConfig,
+    versionInfo: {
+      gitSha: '1234567890abcdef1234567890abcdef12345678',
+      gitShaShort: '1234567890ab',
+      buildTimestamp: '2026-05-09T22:00:00.000Z',
+      deploymentIdentifier: 'deploy-utv2-869',
+      scorerRuntimeVersion: 'candidate-scoring-ownership-v1',
+      runtimeInstance: 'test-host',
+      metadataComplete: true,
+      missingFields: [],
+    },
   } as unknown as ApiRuntimeDependencies;
 }
 
@@ -96,6 +107,29 @@ test('GET /api/health/config returns 200 with valid operator key', async () => {
   assert.equal(res.statusCode, 200);
   const b = res.body as { service: string };
   assert.equal(b.service, 'api');
+});
+
+test('GET /api/health/runtime returns 401 with no auth header', async () => {
+  const req = makeRequest();
+  const res = makeResponse();
+  await handleRuntimeVersion(req, res, makeRuntime());
+  assert.equal(res.statusCode, 401);
+});
+
+test('GET /api/health/runtime returns build metadata for operators', async () => {
+  const req = makeRequest('Bearer op-key');
+  const res = makeResponse();
+  await handleRuntimeVersion(req, res, makeRuntime());
+  assert.equal(res.statusCode, 200);
+  const b = res.body as {
+    build: { gitShaShort: string; deploymentIdentifier: string; metadataComplete: boolean };
+    scorer: { runtimeVersion: string; systemRunType: string };
+  };
+  assert.equal(b.build.gitShaShort, '1234567890ab');
+  assert.equal(b.build.deploymentIdentifier, 'deploy-utv2-869');
+  assert.equal(b.build.metadataComplete, true);
+  assert.equal(b.scorer.runtimeVersion, 'candidate-scoring-ownership-v1');
+  assert.equal(b.scorer.systemRunType, 'candidate.scoring');
 });
 
 // ─── Feature availability — in-memory mode ────────────────────────────────────

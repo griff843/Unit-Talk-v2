@@ -37,5 +37,11 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
     persistenceMode: runtime.persistenceMode,
     runtimeMode: runtime.runtimeMode,
     dbReachable,
+    version: {
+      gitShaShort: runtime.versionInfo.gitShaShort,
+      deploymentIdentifier: runtime.versionInfo.deploymentIdentifier,
+      scorerRuntimeVersion: runtime.versionInfo.scorerRuntimeVersion,
+      metadataComplete: runtime.versionInfo.metadataComplete,
+    },
   } satisfies ApiHealthResponse);
 }

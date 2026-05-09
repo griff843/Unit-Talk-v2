@@ -15,6 +15,7 @@ import { runModelHealthScan } from './model-health-scanner.js';
 import { runClosingLineRecovery } from './closing-line-recovery-service.js';
 import { runBoardPickWriter, shouldScheduleBoardPickWriter } from './board-pick-writer.js';
 import { runCandidatePickScan } from './candidate-pick-scanner.js';
+import { toRuntimeVersionLogFields } from './runtime-version.js';
 
 const SYSTEM_PICK_SCANNER_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
 const CANDIDATE_PICK_SCANNER_INTERVAL_MS = 60 * 1000; // 60 seconds
@@ -250,6 +251,7 @@ server.listen(port, () => {
         port,
         routes: [
           'GET /health',
+          'GET /api/health/runtime',
           'GET /api/alerts/recent',
           'GET /api/alerts/status',
           'GET /api/shadow-models/summary',
@@ -259,6 +261,7 @@ server.listen(port, () => {
         ],
         persistenceMode: runtime.persistenceMode,
         runtimeMode: runtime.runtimeMode,
+        version: toRuntimeVersionLogFields(runtime.versionInfo),
       },
       null,
       2,

@@ -25,6 +25,12 @@ test('GET /health returns degraded 503 when using in-memory repositories', async
       persistenceMode: string;
       runtimeMode: string;
       dbReachable: boolean;
+      version: {
+        gitShaShort: string | null;
+        deploymentIdentifier: string | null;
+        scorerRuntimeVersion: string;
+        metadataComplete: boolean;
+      };
     };
 
     assert.equal(response.status, 503);
@@ -32,6 +38,7 @@ test('GET /health returns degraded 503 when using in-memory repositories', async
     assert.equal(body.service, 'api');
     assert.equal(body.persistenceMode, 'in_memory');
     assert.equal(body.dbReachable, false);
+    assert.equal(typeof body.version.scorerRuntimeVersion, 'string');
   } finally {
     server.close();
   }
@@ -55,8 +62,61 @@ test('GET /health response body includes persistence mode indicators', async () 
     assert.ok('persistenceMode' in body, 'response must include persistenceMode');
     assert.ok('dbReachable' in body, 'response must include dbReachable');
     assert.ok('runtimeMode' in body, 'response must include runtimeMode');
+    assert.ok('version' in body, 'response must include version');
   } finally {
     server.close();
+  }
+});
+
+test('GET /api/health/runtime returns runtime metadata for operator auth', async () => {
+  const previousOperatorKey = process.env.UNIT_TALK_API_KEY_OPERATOR;
+  const previousGitSha = process.env.UNIT_TALK_GIT_SHA;
+  const previousBuildTimestamp = process.env.UNIT_TALK_BUILD_TIMESTAMP;
+  const previousDeploymentId = process.env.UNIT_TALK_DEPLOYMENT_ID;
+
+  process.env.UNIT_TALK_API_KEY_OPERATOR = 'op-runtime-test-key';
+  process.env.UNIT_TALK_GIT_SHA = '1234567890abcdef1234567890abcdef12345678';
+  process.env.UNIT_TALK_BUILD_TIMESTAMP = '2026-05-09T22:00:00.000Z';
+  process.env.UNIT_TALK_DEPLOYMENT_ID = 'deploy-utv2-869';
+
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/health/runtime`, {
+      headers: {
+        authorization: 'Bearer op-runtime-test-key',
+      },
+    });
+    const body = (await response.json()) as {
+      build: {
+        gitShaShort: string | null;
+        deploymentIdentifier: string | null;
+        metadataComplete: boolean;
+      };
+      scorer: {
+        runtimeVersion: string;
+        systemRunType: string;
+      };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.build.gitShaShort, '1234567890ab');
+    assert.equal(body.build.deploymentIdentifier, 'deploy-utv2-869');
+    assert.equal(body.build.metadataComplete, true);
+    assert.equal(body.scorer.runtimeVersion, 'candidate-scoring-ownership-v1');
+    assert.equal(body.scorer.systemRunType, 'candidate.scoring');
+  } finally {
+    server.close();
+    restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
+    restoreEnv('UNIT_TALK_GIT_SHA', previousGitSha);
+    restoreEnv('UNIT_TALK_BUILD_TIMESTAMP', previousBuildTimestamp);
+    restoreEnv('UNIT_TALK_DEPLOYMENT_ID', previousDeploymentId);
   }
 });
 
@@ -91,6 +151,15 @@ test('GET /health uses a valid UUID probe when persistenceMode is database', asy
     server.close();
   }
 });
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
 
 test('POST /api/submissions returns created submission payload', async () => {
   const server = createApiServer({
@@ -1356,15 +1425,6 @@ function buildYesterdayMiddayIso(now: Date = new Date()) {
   return new Date(
     Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0, 0),
   ).toISOString();
-}
-
-function restoreEnv(name: string, value: string | undefined) {
-  if (value === undefined) {
-    delete process.env[name];
-    return;
-  }
-
-  process.env[name] = value;
 }
 
 // --- Pick query endpoint ---

@@ -36,6 +36,7 @@ import type {
   ParticipantRow,
   SystemRunRepository,
 } from '@unit-talk/db';
+import { readRuntimeVersionInfoFromProcessEnv, toRuntimeVersionLogFields } from './runtime-version.js';
 
 export interface ScoringResult {
   scored: number;
@@ -84,6 +85,7 @@ const MAX_TRUST_ADJUSTMENT = 0.05;
 const DEFAULT_CHAMPION_CONFIDENCE = 0.75;
 
 const SCORING_SOURCE_TYPE = 'board-construction';
+const scoringRuntimeVersion = readRuntimeVersionInfoFromProcessEnv();
 
 /**
  * Derive the market family from a market_type_id.
@@ -133,7 +135,11 @@ export class CandidateScoringService {
     }
 
     if (candidates.length === 0) {
-      logger?.info?.(JSON.stringify({ service: 'candidate-scoring', event: 'no_unscored_candidates' }));
+      logger?.info?.(JSON.stringify({
+        service: 'candidate-scoring',
+        event: 'no_unscored_candidates',
+        runtimeVersion: toRuntimeVersionLogFields(scoringRuntimeVersion),
+      }));
       return makeEmptyResult({ durationMs: Date.now() - startMs });
     }
 
@@ -168,6 +174,14 @@ export class CandidateScoringService {
         durationMs: Date.now() - startMs,
       });
     }
+
+    logger?.info?.(JSON.stringify({
+      service: 'candidate-scoring',
+      event: 'run.started',
+      candidateCount: candidates.length,
+      statuses: normalizeCandidateStatuses(options.statuses),
+      runtimeVersion: toRuntimeVersionLogFields(scoringRuntimeVersion),
+    }));
 
     const updates: ModelScoreUpdate[] = [];
     let skipped = 0;
@@ -378,6 +392,7 @@ export class CandidateScoringService {
       trustAdjusted, championResolved, noChampionSkipped, shadowRecorded,
       availabilityAdjusted, availabilityNoDataSkipped, availabilitySuppressed,
       calibration,
+      runtimeVersion: toRuntimeVersionLogFields(scoringRuntimeVersion),
       durationMs: Date.now() - startMs,
     }));
 
@@ -495,6 +510,7 @@ export class CandidateScoringService {
           candidateCount,
           sourceType: SCORING_SOURCE_TYPE,
           statuses,
+          runtimeVersion: toRuntimeVersionLogFields(scoringRuntimeVersion),
         },
       });
       return {
@@ -504,7 +520,10 @@ export class CandidateScoringService {
             await this.repos.runs?.completeRun({
               runId: run.id,
               status,
-              details,
+              details: {
+                ...details,
+                runtimeVersion: toRuntimeVersionLogFields(scoringRuntimeVersion),
+              },
             });
           } catch (err) {
             logger?.error?.(JSON.stringify({

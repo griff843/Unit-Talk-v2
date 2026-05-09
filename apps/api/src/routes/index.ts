@@ -28,6 +28,7 @@ export { handlePicksQuery } from './picks-query.js';
 export { handleSettlementsRecent } from './settlements-query.js';
 export { handleShadowModelSummaries, handleShadowComparison } from './shadow-models.js';
 export { handleHealthConfig } from './config.js';
+export { handleRuntimeVersion } from './runtime-version.js';
 export { handleBoardWritePicks, handleBoardRunTuning } from './board.js';
 export { handlePromotionScores } from './promotion-scores.js';
 export { handleBuildCandidates } from './candidates.js';

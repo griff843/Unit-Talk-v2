@@ -56,6 +56,10 @@ export interface AppEnv {
   UNIT_TALK_SIMULATION_MODE?: string | undefined;
   UNIT_TALK_INGESTOR_RUNTIME_MODE?: string | undefined;
   UNIT_TALK_API_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_GIT_SHA?: string | undefined;
+  UNIT_TALK_BUILD_TIMESTAMP?: string | undefined;
+  UNIT_TALK_DEPLOYMENT_ID?: string | undefined;
+  UNIT_TALK_SCORER_RUNTIME_VERSION?: string | undefined;
   UNIT_TALK_API_MAX_BODY_BYTES?: string | undefined;
   UNIT_TALK_API_BODY_LIMIT_BYTES?: string | undefined;
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX?: string | undefined;
@@ -210,6 +214,10 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_SIMULATION_MODE: optionalEnv('UNIT_TALK_SIMULATION_MODE', merged),
     UNIT_TALK_INGESTOR_RUNTIME_MODE: optionalEnv('UNIT_TALK_INGESTOR_RUNTIME_MODE', merged),
     UNIT_TALK_API_RUNTIME_MODE: optionalEnv('UNIT_TALK_API_RUNTIME_MODE', merged),
+    UNIT_TALK_GIT_SHA: optionalEnv('UNIT_TALK_GIT_SHA', merged),
+    UNIT_TALK_BUILD_TIMESTAMP: optionalEnv('UNIT_TALK_BUILD_TIMESTAMP', merged),
+    UNIT_TALK_DEPLOYMENT_ID: optionalEnv('UNIT_TALK_DEPLOYMENT_ID', merged),
+    UNIT_TALK_SCORER_RUNTIME_VERSION: optionalEnv('UNIT_TALK_SCORER_RUNTIME_VERSION', merged),
     UNIT_TALK_API_MAX_BODY_BYTES: optionalEnv('UNIT_TALK_API_MAX_BODY_BYTES', merged),
     UNIT_TALK_API_BODY_LIMIT_BYTES: optionalEnv('UNIT_TALK_API_BODY_LIMIT_BYTES', merged),
     UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX: optionalEnv(

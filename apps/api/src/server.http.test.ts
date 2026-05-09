@@ -15,6 +15,7 @@ import { createInMemoryRepositoryBundle } from './persistence.js';
 import { createErrorTracker, createMetricsCollector } from '@unit-talk/observability';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
+import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -159,6 +160,7 @@ test('POST /api/submissions with oversized body returns 413', async () => {
       errorTracker: createErrorTracker({ service: 'api' }),
       now: Date.now,
       metricsCollector: createMetricsCollector(),
+      versionInfo: readRuntimeVersionInfoFromProcessEnv(),
       rateLimitStore: {
         consume(_key, limit, now) {
           return {

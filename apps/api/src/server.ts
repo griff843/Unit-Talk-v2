@@ -23,6 +23,7 @@ import { setCorsHeaders, writeJson } from './http-utils.js';
 import { authenticateRequest, authorizeRoute, loadAuthConfig, type AuthConfig, type AuthContext } from './auth.js';
 import {
   handleHealth,
+  handleRuntimeVersion,
   handleAlertsRecent,
   handleAlertSignalQuality,
   handleAlertsStatus,
@@ -61,6 +62,7 @@ import {
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
 import { handleModelHealthAlerts, handleModelHealthDecision } from './routes/model-health.js';
+import { readRuntimeVersionInfo, type RuntimeVersionInfo, toRuntimeVersionLogFields } from './runtime-version.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -91,6 +93,7 @@ export interface ApiRuntimeDependencies {
   now: () => number;
   rateLimitStore: ApiRateLimitStore;
   metricsCollector: MetricsCollector;
+  versionInfo: RuntimeVersionInfo;
 }
 
 export type ApiHealthStatus = 'healthy' | 'degraded';
@@ -101,6 +104,12 @@ export interface ApiHealthResponse {
   persistenceMode: ApiRuntimeDependencies['persistenceMode'];
   runtimeMode: ApiRuntimeMode;
   dbReachable: boolean;
+  version: {
+    gitShaShort: string | null;
+    deploymentIdentifier: string | null;
+    scorerRuntimeVersion: string;
+    metadataComplete: boolean;
+  };
 }
 
 export interface ApiRateLimitResult {
@@ -129,6 +138,7 @@ export function createApiRuntimeDependencies(
   const runtimeMode = readApiRuntimeMode(environment);
   const authConfig = loadAuthConfig(process.env as Record<string, string | undefined>);
   const metricsCollector = createMetricsCollector();
+  const versionInfo = readRuntimeVersionInfo(environment);
   const lokiUrl = process.env.LOKI_URL?.trim();
   const writer = lokiUrl
     ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
@@ -137,7 +147,7 @@ export function createApiRuntimeDependencies(
     options.logger ??
     createLogger({
       service: 'api',
-      fields: { runtimeMode },
+      fields: { runtimeMode, ...toRuntimeVersionLogFields(versionInfo) },
       ...(writer ? { writer } : {}),
     });
   const errorTracker = options.errorTracker ?? createErrorTracker({ service: 'api', logger });
@@ -155,6 +165,7 @@ export function createApiRuntimeDependencies(
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
+      versionInfo,
     };
   }
 
@@ -173,6 +184,7 @@ export function createApiRuntimeDependencies(
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
+      versionInfo,
     };
   } catch (error) {
     if (runtimeMode === 'fail_closed') {
@@ -199,6 +211,7 @@ export function createApiRuntimeDependencies(
       now: options.now ?? Date.now,
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
+      versionInfo,
     };
   }
 }
@@ -402,6 +415,10 @@ export async function routeRequest(
 
   if (method === 'GET' && url.pathname === '/api/health/config') {
     return handleHealthConfig(request, response, runtime);
+  }
+
+  if (method === 'GET' && url.pathname === '/api/health/runtime') {
+    return handleRuntimeVersion(request, response, runtime);
   }
 
   // UTV2-798: model performance calibration analytics

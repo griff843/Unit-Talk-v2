@@ -41,6 +41,10 @@ RUN pnpm build
 FROM node:22-alpine AS api
 WORKDIR /repo
 
+ARG UNIT_TALK_GIT_SHA=unknown
+ARG UNIT_TALK_BUILD_TIMESTAMP=unknown
+ARG UNIT_TALK_SCORER_RUNTIME_VERSION=candidate-scoring-ownership-v1
+
 COPY --from=builder /repo/node_modules           ./node_modules
 COPY --from=builder /repo/packages               ./packages
 COPY --from=builder /repo/apps/api               ./apps/api
@@ -51,6 +55,11 @@ COPY --from=builder /repo/package.json           ./package.json
 # via tsx. tsx is in /repo/node_modules/.bin/tsx (copied from builder).
 
 ENV NODE_ENV=production
+ENV UNIT_TALK_GIT_SHA=${UNIT_TALK_GIT_SHA}
+ENV UNIT_TALK_BUILD_TIMESTAMP=${UNIT_TALK_BUILD_TIMESTAMP}
+ENV UNIT_TALK_SCORER_RUNTIME_VERSION=${UNIT_TALK_SCORER_RUNTIME_VERSION}
+LABEL org.opencontainers.image.revision=${UNIT_TALK_GIT_SHA}
+LABEL org.opencontainers.image.created=${UNIT_TALK_BUILD_TIMESTAMP}
 EXPOSE 4000
 
 HEALTHCHECK --interval=10s --timeout=5s --start-period=20s --retries=5 \

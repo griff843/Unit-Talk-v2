@@ -21,6 +21,7 @@ import {
   InMemoryMarketFamilyTrustRepository,
   InMemoryModelRegistryRepository,
   InMemoryParticipantRepository,
+  InMemorySystemRunRepository,
 } from '@unit-talk/db';
 import type { MarketUniverseRow, ParticipantRow, PickCandidateRow } from '@unit-talk/db';
 
@@ -175,6 +176,7 @@ test('scores one qualified candidate with valid fair probs', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const pickCandidates = new InMemoryPickCandidateRepository();
   const modelRegistry = new InMemoryModelRegistryRepository();
+  const runs = new InMemorySystemRunRepository();
   await seedChampion(modelRegistry);
 
   const universeRow = makeUniverseRow({ id: 'universe-1', fair_over_prob: 0.56, fair_under_prob: 0.44, is_stale: false });
@@ -183,7 +185,7 @@ test('scores one qualified candidate with valid fair probs', async () => {
   const candidate = makeCandidate({ id: 'candidate-1', universe_id: 'universe-1', status: 'qualified', model_score: null });
   seedCandidateRows(pickCandidates, [candidate]);
 
-  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry, runs });
 
   assert.equal(result.scored, 1);
   assert.equal(result.skipped, 0);
@@ -200,6 +202,11 @@ test('scores one qualified candidate with valid fair probs', async () => {
   assert.ok(updated!.model_registry_id, 'model_registry_id should be set');
   assert.ok(updated!.scoring_run_id, 'scoring_run_id should be set');
   assert.ok(updated!.ownership_timestamp, 'ownership_timestamp should be set');
+
+  const scoringRuns = await runs.listByType('candidate.scoring');
+  assert.equal(scoringRuns.length, 1);
+  const runtimeVersion = (scoringRuns[0]?.details as { runtimeVersion?: { scorerRuntimeVersion?: string } })?.runtimeVersion;
+  assert.equal(runtimeVersion?.scorerRuntimeVersion, 'candidate-scoring-ownership-v1');
 });
 
 test('scores rejected candidates only when explicitly included for shadow proof', async () => {
