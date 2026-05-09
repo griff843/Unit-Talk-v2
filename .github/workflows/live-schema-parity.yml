@@ -1,0 +1,111 @@
+name: Live Schema Parity
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/ops/compare-databases.ts'
+      - '.github/workflows/live-schema-parity.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'supabase/migrations/**'
+      - 'scripts/ops/compare-databases.ts'
+      - '.github/workflows/live-schema-parity.yml'
+      - 'package.json'
+      - 'pnpm-lock.yaml'
+  schedule:
+    - cron: '17 9 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  schema-parity:
+    name: Live Schema Parity
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_DB: unit_talk_schema_parity
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d unit_talk_schema_parity"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      EXPECTED_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/unit_talk_schema_parity
+      ACTUAL_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate live DB URL secret
+        if: env.ACTUAL_DATABASE_URL == ''
+        run: |
+          echo "::error title=Missing secret::SUPABASE_DB_URL must be configured for live schema parity verification."
+          exit 1
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Wait for scratch Postgres
+        run: |
+          for attempt in $(seq 1 20); do
+            if pg_isready --dbname "$EXPECTED_DATABASE_URL"; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "::error title=Scratch database unavailable::Postgres service did not become ready."
+          exit 1
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Apply repo migrations to scratch database
+        run: supabase db push --db-url "$EXPECTED_DATABASE_URL"
+
+      - name: Compare scratch schema to live schema
+        run: >
+          pnpm db:compare --
+          --expected-db-url "$EXPECTED_DATABASE_URL"
+          --actual-db-url "$ACTUAL_DATABASE_URL"
+          --expected-label repo-migrations
+          --actual-label supabase-live
+          --output artifacts/schema-parity/live-schema-parity.json
+          --pretty
+
+      - name: Upload schema parity artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-schema-parity
+          path: artifacts/schema-parity/live-schema-parity.json
+          retention-days: 30
+          if-no-files-found: error
