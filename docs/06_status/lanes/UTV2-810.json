@@ -1,23 +1,45 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-810",
-  "lane_type": "codex",
+  "lane_type": "codex-cli",
   "tier": "T3",
   "worktree_path": "C:/Dev/utv2-810-fix",
   "branch": "codex/utv2-810-kelly-overfair-guard",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": ["apps/api/src/submission-service.ts"],
-  "file_scope_lock": ["apps/api/src/submission-service.ts"],
+  "commit_sha": "2f31954838a53abde05f2eff5df9d8a743635124",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/523",
+  "files_changed": [
+    "apps/api/src/submission-service.ts"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/submission-service.ts"
+  ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-01T11:46:30Z",
-  "heartbeat_at": "2026-05-01T11:46:30Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-07T04:03:40.000Z",
+  "closed_at": "2026-05-07T04:03:40.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
-  "reopen_history": []
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-07T04:02:57.608Z",
+      "verdict": "reopen",
+      "merge_sha": "2f31954838a53abde05f2eff5df9d8a743635124",
+      "failures": [
+        "G5"
+      ],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-07T04:02:57.608Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: 6181d8e5266160f9963ba343179103bac5d2fe95"
+      ],
+      "detected_by": "ops:lane:close"
+    }
+  ]
 }

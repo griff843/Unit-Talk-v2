@@ -1,91 +1,137 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-853",
-  "merge_sha": "8057388",
-  "generated_at": "2026-05-07T19:25:00.000Z",
-  "verifier": {
-    "identity": "operator"
-  },
-  "captured_at": "2026-05-07T19:25:00.000Z",
-  "lane_type": "claude-governance",
-  "tier": "T2",
-  "static_proof": {
-    "commands": [],
-    "results": {
-      "governance_doc_written": "pass",
-      "grounded_in_849_850_findings": "pass",
-      "ownership_propagation_model_defined": "pass",
-      "lifecycle_chain_defined": "pass",
-      "migration_plan_documented": "pass",
-      "codex_packet_included": "pass"
-    },
-    "notes": "Governance-only lane. No code changes. Grounded in UTV2-849 (source_separated_pct=100%, picks_source_has_check_constraint=true, model_generated_pct=0%) and UTV2-850 (6 champion registry entries: MLB/NBA/NHL × game_line/player_prop; pick_candidates has model_score/model_tier/model_confidence but no model_registry_id; 4202 picks with 0% model attribution)."
-  },
-  "runtime_proof": null,
-  "grounded_in": {
-    "utv2_849_findings": {
-      "source_separated_pct": 100,
-      "model_generated_pct": 0,
-      "heuristic_pct": 90.03,
-      "picks_source_has_check_constraint": true,
-      "legacy_source_pct": 96.17
-    },
-    "utv2_850_findings": {
-      "registry_entries": 6,
-      "all_status_champion": true,
-      "sports": ["MLB", "NBA", "NHL"],
-      "market_families": ["game_line", "player_prop"],
-      "pick_candidates_model_columns_exist": ["model_score", "model_tier", "model_confidence"],
-      "pick_candidates_model_registry_id_exists": false,
-      "model_attributed_pct": 0,
-      "total_picks_analyzed": 4202
-    }
-  },
-  "deliverable": {
-    "path": "docs/06_status/model_ownership_persistence_standard.md",
-    "sections": [
-      "Verified pre-conditions (grounded in 849+850 findings)",
-      "1. Purpose",
-      "2. Ownership Persistence Contract (origin, storage, immutability, propagation)",
-      "3. Required Ownership Fields",
-      "4. Ownership Lifecycle (full candidate→recap chain)",
-      "5. Runtime Enforcement Semantics",
-      "6. Historical Policy",
-      "7. Relationship to Existing Governance",
-      "8. Future Implications",
-      "9. Codex Implementation Packet"
+  "generated_at": "2026-05-07T20:55:20.0105315Z",
+  "branch": "codex/utv2-853-ownership-persistence-plan",
+  "artifact_paths": [
+    "docs/06_status/proof/UTV2-853/ownership-persistence-plan.json",
+    "docs/06_status/proof/UTV2-853/model-score-write-path.csv",
+    "docs/06_status/proof/UTV2-853/schema-gaps.json",
+    "docs/06_status/proof/UTV2-853/migration-plan.sql",
+    "docs/06_status/proof/UTV2-853/runtime-change-plan.md",
+    "docs/06_status/proof/UTV2-853/enforcement-plan.json",
+    "docs/06_status/proof/UTV2-853/README.md",
+    "docs/06_status/proof/UTV2-853/evidence.json"
+  ],
+  "standards_read": [
+    "docs/06_status/model_ownership_persistence_standard.md",
+    "docs/06_status/champion_model_registry_standard.md",
+    "docs/06_status/provenance_contract_standard.md",
+    "docs/06_status/source_separated_pick_ledger_standard.md"
+  ],
+  "proof_inputs_read": [
+    "docs/06_status/proof/UTV2-850/evidence.json",
+    "docs/06_status/proof/UTV2-850/schema-gaps.json",
+    "docs/06_status/proof/UTV2-849/evidence.json",
+    "docs/06_status/proof/UTV2-848/evidence.json",
+    "docs/06_status/proof/UTV2-848/schema-gaps.json"
+  ],
+  "code_evidence": {
+    "model_score_write_path": [
+      {
+        "file": "apps/api/src/index.ts",
+        "line_range": "132-150",
+        "finding": "candidate scoring scheduled on interval with runtime repositories"
+      },
+      {
+        "file": "apps/api/src/candidate-scoring-service.ts",
+        "line_range": "103-307",
+        "finding": "loads unscored candidates, computes model_score/model_tier/model_confidence, queues batch updates"
+      },
+      {
+        "file": "apps/api/src/candidate-scoring-service.ts",
+        "line_range": "176-178",
+        "finding": "resolves champion registry record by sport and derived market family"
+      },
+      {
+        "file": "apps/api/src/candidate-scoring-service.ts",
+        "line_range": "259-264",
+        "finding": "recommended insertion point for model_registry_id/scoring_run_id/ownership_timestamp in ModelScoreUpdate"
+      },
+      {
+        "file": "packages/db/src/runtime-repositories.ts",
+        "line_range": "7841-7857",
+        "finding": "database write updates model_score/model_tier/model_confidence only"
+      }
     ],
-    "key_findings": {
-      "exact_gap": "pick_candidates.model_registry_id FK is never written at candidate scoring time, despite model_score being written",
-      "ownership_origin": "candidate scoring — atomic write with model_score",
-      "ownership_propagation": "join chain: picks → pick_candidates → model_registry (no FK duplication across tables)",
-      "minimal_migration_1": "ADD COLUMN pick_candidates.model_registry_id UUID REFERENCES model_registry(id), scoring_run_id UUID, ownership_timestamp TIMESTAMPTZ",
-      "minimal_migration_2": "ADD COLUMN model_registry.registry_entity_type, source_type_compatibility, owner, training_window_*, validation_metrics, calibration_metadata, promotion_approved_*",
-      "code_change": "At model_score write time, look up model_registry.id for sport+market_family+champion and write it atomically",
-      "historical_rows_permanently_unknown": true,
-      "migrations_deferred_pending_operator_approval": true
-    }
-  },
-  "summary": {
-    "root_cause": "Scoring already runs — model_score, model_tier, model_confidence are written to pick_candidates. The 6 champion registry entries exist and cover the relevant sports/markets. The gap is exactly one missing atomic write: model_registry_id is never persisted alongside model_score. This is a single FK column addition + one code change to the scanner write path.",
-    "resolution": "Model ownership persistence standard written. Full lifecycle chain defined from candidate scoring through recap/reporting. Ownership propagates via join (not duplicated columns). Minimal migration set documented. Codex investigation + planning packet included. No migrations added in this pass.",
-    "unblocks": [
-      "Codex investigation pass to find scanner write path",
-      "Operator approval of migration_1 (pick_candidates FK) and migration_2 (model_registry additions)",
-      "Implementation lane that adds the FK and code change",
-      "UTV2-851 (unsupported-market quarantine) — can proceed in parallel"
+    "registry_lookup_path": [
+      {
+        "file": "apps/api/src/candidate-scoring-service.ts",
+        "line_range": "405-422",
+        "finding": "resolveChampion uses repository findChampion with cache"
+      },
+      {
+        "file": "packages/db/src/runtime-repositories.ts",
+        "line_range": "6805-6822",
+        "finding": "findChampion filters sport, market_family, status = champion"
+      }
+    ],
+    "schema_sources": [
+      {
+        "file": "supabase/migrations/202604090002_utv2_460_pick_candidates.sql",
+        "finding": "pick_candidates has nullable model_score/model_tier/model_confidence and nullable text scan_run_id; ownership columns absent"
+      },
+      {
+        "file": "supabase/migrations/202604030001_model_registry.sql",
+        "finding": "model_registry has status check champion/challenger/staged/archived; ownership metadata columns absent"
+      }
     ]
   },
-  "checklist": {
-    "all_9_sections_present": true,
-    "ownership_propagation_model_defined": true,
-    "lifecycle_chain_complete": true,
-    "runtime_enforcement_defined": true,
-    "historical_unknown_policy_defined": true,
-    "migration_plan_documented_not_executed": true,
-    "codex_packet_written": true,
-    "no_fabricated_attribution": true,
-    "no_runtime_changes": true,
-    "no_migration_added": true
-  }
+  "policy_assertions": {
+    "read_only": true,
+    "migration_applied": false,
+    "runtime_behavior_changed": false,
+    "production_data_mutated": false,
+    "historical_ownership_fabricated": false,
+    "historical_picks_backfilled": false
+  },
+  "verification": {
+    "pnpm_type_check": {
+      "status": "pass",
+      "classification": "clean",
+      "command": "pnpm type-check",
+      "tail": [
+        "> @unit-talk/v2@0.1.0 type-check C:\\Dev\\Unit-Talk-v2-main",
+        "> pnpm exec tsc -b tsconfig.json"
+      ]
+    },
+    "pnpm_test_db": {
+      "status": "pass",
+      "classification": "clean",
+      "command": "pnpm test:db",
+      "tail": [
+        "✔ database repository bundle persists a submission and settlement when Supabase is configured (44363.3619ms)",
+        "ℹ pass 1",
+        "ℹ fail 0"
+      ],
+      "note": "Required live DB smoke test passed. UTV2-853 did not apply migrations, alter ownership columns, or backfill historical picks."
+    },
+    "pnpm_verify": {
+      "status": "pass",
+      "classification": "clean",
+      "command": "pnpm verify",
+      "tail": [
+        "[command-manifest] Verified 14 command definition(s) against C:\\Dev\\Unit-Talk-v2-main\\apps\\discord-bot\\command-manifest.json",
+        "[check-migration-versions] 98 migration file(s) verified — no duplicate versions.",
+        "[lint-migrations] 98 migration file(s) checked — no findings."
+      ]
+    },
+    "pnpm_pipeline_health": {
+      "status": "warn",
+      "classification": "environmental_existing_backlog_outside_worker_targets",
+      "command": "pnpm pipeline:health",
+      "tail": [
+        "Worker verdict: HEALTHY — heartbeat fresh, no eligible distribution rows processed",
+        "VERDICT: WARN (1): 5 pending row(s) outside worker targets"
+      ],
+      "lane_caused": false
+    }
+  },
+  "implementation_migration_lane_ready_for_operator_approval": true,
+  "remaining_blockers": [
+    "Operator approval required before migration.",
+    "Current registry lacks registry_entity_type/source_type_compatibility/active_state and lifecycle metadata.",
+    "Current score repository does not use an explicit multi-row transaction.",
+    "Candidate scoring does not currently bind to a system_runs.id."
+  ]
 }

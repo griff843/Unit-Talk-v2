@@ -786,6 +786,17 @@ async function resolveDeviggingResult(
       return null;
     }
 
+    if (
+      typeof matchingOffer.provider_key !== 'string' ||
+      matchingOffer.provider_key.length === 0 ||
+      typeof matchingOffer.provider_market_key !== 'string' ||
+      matchingOffer.provider_market_key.length === 0 ||
+      typeof matchingOffer.snapshot_at !== 'string' ||
+      matchingOffer.snapshot_at.length === 0
+    ) {
+      return null;
+    }
+
     return {
       providerKey: matchingOffer.provider_key,
       providerMarketKey: matchingOffer.provider_market_key,

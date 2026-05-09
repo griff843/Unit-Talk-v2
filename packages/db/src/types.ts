@@ -105,18 +105,14 @@ export type PlayerRow = Tables<'players'>;
 export type PlayerTeamAssignmentRow = Tables<'player_team_assignments'>;
 export type GradeResultRow = Tables<'game_results'>;
 export type MemberTierRow = Tables<'member_tiers'>;
-export interface ModelRegistryRow extends Tables<'model_registry'> {
-  registry_entity_type?: string | null;
-  source_type_compatibility?: string[] | null;
-  owner?: string | null;
-  training_window_start?: string | null;
-  training_window_end?: string | null;
-  validation_metrics?: Record<string, unknown> | null;
-  calibration_metadata?: Record<string, unknown> | null;
-  promotion_approved_by?: string | null;
-  promotion_approved_at?: string | null;
-  active_state?: string | null;
-}
+export type ModelRegistryRow = Omit<
+  Tables<'model_registry'>,
+  'validation_metrics' | 'calibration_metadata' | 'source_type_compatibility'
+> & {
+  validation_metrics: Record<string, unknown> | null;
+  calibration_metadata: Record<string, unknown> | null;
+  source_type_compatibility: string[] | null;
+};
 export type ExperimentLedgerRow = Tables<'experiment_ledger'>;
 export type ModelHealthSnapshotRow = Tables<'model_health_snapshots'>;
 

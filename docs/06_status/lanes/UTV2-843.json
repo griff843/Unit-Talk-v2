@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-843",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-843-worker-rca",
+  "branch": "codex/utv2-843-worker-rca",
+  "base_branch": "main",
+  "commit_sha": "78b025d8d95dd1ed3a260d69c418ee2ae9d34fd1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/590",
+  "files_changed": [
+    "apps/worker/src/runner.ts",
+    "docs/06_status/proof/UTV2-843/evidence.json",
+    "scripts/runtime-health.ts",
+    "scripts/worker-alert-check.ts"
+  ],
+  "file_scope_lock": [
+    "apps/worker/src/circuit-breaker.ts",
+    "apps/worker/src/delivery-alerting.test.ts",
+    "apps/worker/src/delivery-alerting.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/runner.ts",
+    "apps/worker/src/runtime.ts",
+    "scripts/pipeline-health.ts",
+    "scripts/runtime-health.ts",
+    "scripts/worker-alert-check.ts",
+    "scripts/worker-supervisor.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-843/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-06T18:52:10.736Z",
+  "heartbeat_at": "2026-05-06T19:41:14.033Z",
+  "closed_at": "2026-05-06T19:41:14.033Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-843-worker-rca.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-06T19:39:35.486Z",
+      "verdict": "fail",
+      "merge_sha": "78b025d8d95dd1ed3a260d69c418ee2ae9d34fd1",
+      "failures": [
+        "G4",
+        "L5",
+        "P3",
+        "P6",
+        "P7",
+        "P9",
+        "P10"
+      ],
+      "runner": "ops:lane:close"
+    },
+    {
+      "checked_at": "2026-05-06T19:41:12.399Z",
+      "verdict": "pass",
+      "merge_sha": "78b025d8d95dd1ed3a260d69c418ee2ae9d34fd1",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": []
+}

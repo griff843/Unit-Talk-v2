@@ -1,0 +1,125 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-853",
+  "generated_at": "2026-05-07T20:55:20.0105315Z",
+  "evidence_sources": [
+    "docs/06_status/proof/UTV2-848/evidence.json",
+    "docs/06_status/proof/UTV2-848/schema-gaps.json",
+    "docs/06_status/proof/UTV2-849/evidence.json",
+    "docs/06_status/proof/UTV2-850/evidence.json",
+    "docs/06_status/proof/UTV2-850/schema-gaps.json",
+    "supabase/migrations/202604030001_model_registry.sql",
+    "supabase/migrations/202604090002_utv2_460_pick_candidates.sql"
+  ],
+  "pick_candidates": {
+    "table_exists": true,
+    "required_existing_columns_confirmed": {
+      "id": true,
+      "pick_id": true,
+      "universe_id": true,
+      "scan_run_id": true,
+      "provenance": true,
+      "model_score": true,
+      "model_tier": true,
+      "model_confidence": true,
+      "shadow_mode": true,
+      "is_board_candidate": true
+    },
+    "ownership_columns": {
+      "model_registry_id": false,
+      "scoring_run_id": false,
+      "ownership_timestamp": false
+    },
+    "model_score_nullable": true,
+    "scan_run_id_type": "text nullable",
+    "required_gap": "No FK from pick_candidates to model_registry exists; model ownership cannot be persisted at scoring time until migration is approved."
+  },
+  "model_registry": {
+    "table_exists": true,
+    "columns_present": [
+      "id",
+      "model_name",
+      "version",
+      "sport",
+      "market_family",
+      "status",
+      "champion_since",
+      "created_at",
+      "updated_at",
+      "metadata"
+    ],
+    "columns_missing": [
+      "registry_entity_type",
+      "source_type_compatibility",
+      "owner",
+      "training_window_start",
+      "training_window_end",
+      "validation_metrics",
+      "calibration_metadata",
+      "promotion_approved_by",
+      "promotion_approved_at",
+      "active_state"
+    ],
+    "sport_exists": true,
+    "market_family_exists": true,
+    "status_exists": true,
+    "active_state_exists": false,
+    "registry_entity_type_exists": false,
+    "source_type_compatibility_exists": false,
+    "existing_status_values": [
+      "champion"
+    ],
+    "status_values_allowed_by_current_constraint": [
+      "champion",
+      "challenger",
+      "staged",
+      "archived"
+    ],
+    "required_gap": "Current registry can identify a champion by sport and market_family, but cannot express entity type, source compatibility, disabled/retired active state, owner, training window, calibration, validation, or promotion approval metadata."
+  },
+  "system_runs": {
+    "table_exists_by_migration": true,
+    "id_type": "uuid",
+    "current_candidate_link": "pick_candidates.scan_run_id is text and not declared as FK to system_runs(id)",
+    "migration_implication": "scoring_run_id can be UUID REFERENCES system_runs(id) if the scoring runtime creates or receives a system_runs.id; otherwise the implementation lane must either add that runtime linkage first or keep scoring_run_id UUID nullable until available."
+  },
+  "picks": {
+    "source_check_constraint_exists": true,
+    "source_values_seen": [
+      {
+        "source": "system-pick-scanner",
+        "count": 3622
+      },
+      {
+        "source": "smart-form",
+        "count": 386
+      },
+      {
+        "source": "board-construction",
+        "count": 161
+      },
+      {
+        "source": "api",
+        "count": 28
+      },
+      {
+        "source": "human",
+        "count": 3
+      },
+      {
+        "source": "canary-proof",
+        "count": 2
+      }
+    ]
+  },
+  "go_no_go": {
+    "migration_lane_ready_for_operator_review": true,
+    "implementation_ready_without_schema_approval": false,
+    "blockers": [
+      "Operator approval required before adding pick_candidates ownership columns.",
+      "Operator approval required before extending model_registry metadata columns.",
+      "Runtime scoring cannot hard fail on missing model_registry_id until the column exists.",
+      "Disabled/retired rejection cannot be implemented exactly until registry lifecycle semantics are added or mapped."
+    ]
+  }
+}

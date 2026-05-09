@@ -5,6 +5,7 @@
   "tier": "T1",
   "branch": "codex/utv2-778-disk-growth-alerts",
   "base_branch": "main",
+  "file_scope_lock": [],
   "status": "started",
   "started_at": "2026-05-03T05:00:00.000Z",
   "heartbeat_at": "2026-05-03T05:00:00.000Z",

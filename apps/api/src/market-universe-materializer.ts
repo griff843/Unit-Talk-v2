@@ -24,6 +24,7 @@ import type {
   EventRepository,
   IMarketUniverseRepository,
   MarketUniverseUpsertInput,
+  ProviderOfferRecord,
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
@@ -42,6 +43,13 @@ const PARTICIPANT_FORBIDDEN_MARKET_TYPE_IDS = new Set([
   '1h_total_ou',
   '2h_total_ou',
 ]);
+
+type MaterializableOffer = ProviderOfferRecord & {
+  provider_key: string;
+  provider_event_id: string;
+  provider_market_key: string;
+  snapshot_at: string;
+};
 
 export interface MaterializerResult {
   upserted: number;
@@ -105,9 +113,17 @@ export class MarketUniverseMaterializer {
     }
 
     const offerById = new Map<string, (typeof offers)[0]>();
-    for (const o of offers) offerById.set(o.id, o);
-    for (const o of closingOffers) offerById.set(o.id, o);
-    const allOffers = Array.from(offerById.values());
+    for (const o of offers) {
+      if (typeof o.id === 'string' && o.id.length > 0) {
+        offerById.set(o.id, o);
+      }
+    }
+    for (const o of closingOffers) {
+      if (typeof o.id === 'string' && o.id.length > 0) {
+        offerById.set(o.id, o);
+      }
+    }
+    const allOffers = Array.from(offerById.values()).filter(isMaterializableOffer);
 
     if (allOffers.length === 0) {
       logger?.info?.(
@@ -163,9 +179,9 @@ export class MarketUniverseMaterializer {
     // Group offers by natural key to find opening, closing, and current (latest) per group
     type NaturalKey = string;
     interface GroupedOffers {
-      opening: (typeof offers)[0] | null;  // earliest is_opening=true by snapshot_at ASC
-      closing: (typeof offers)[0] | null;  // earliest is_closing=true by snapshot_at ASC
-      latest: (typeof offers)[0];          // most recent snapshot_at
+      opening: MaterializableOffer | null;  // earliest is_opening=true by snapshot_at ASC
+      closing: MaterializableOffer | null;  // earliest is_closing=true by snapshot_at ASC
+      latest: MaterializableOffer;          // most recent snapshot_at
     }
 
     const groups = new Map<NaturalKey, GroupedOffers>();
@@ -366,6 +382,19 @@ export async function runMarketUniverseMaterializer(
   options: MaterializerOptions = {},
 ): Promise<MaterializerResult> {
   return new MarketUniverseMaterializer(repos).run(options);
+}
+
+function isMaterializableOffer(offer: ProviderOfferRecord): offer is MaterializableOffer {
+  return (
+    typeof offer.provider_key === 'string' &&
+    offer.provider_key.length > 0 &&
+    typeof offer.provider_event_id === 'string' &&
+    offer.provider_event_id.length > 0 &&
+    typeof offer.provider_market_key === 'string' &&
+    offer.provider_market_key.length > 0 &&
+    typeof offer.snapshot_at === 'string' &&
+    offer.snapshot_at.length > 0
+  );
 }
 
 async function resolveEventIdsByProviderEventId(

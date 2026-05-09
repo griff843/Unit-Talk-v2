@@ -1,0 +1,84 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-846",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-846-board-scan-schema-cache-drift",
+  "branch": "codex/utv2-846-board-scan-schema-cache-drift",
+  "base_branch": "main",
+  "commit_sha": "2844dce57d90985a7cbea4e46c009ce5ff859bc4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/592",
+  "files_changed": [
+    "apps/api/src/board-scan-service.test.ts",
+    "apps/api/src/board-scan-service.ts",
+    "apps/api/src/t1-proof-utv2-846.test.ts",
+    "docs/06_status/proof/UTV2-846/evidence.json",
+    "packages/db/src/database.types.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/board-scan-service.test.ts",
+    "apps/api/src/board-scan-service.ts",
+    "apps/api/src/t1-proof-utv2-846.test.ts",
+    "packages/db/src/database.types.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "supabase/migrations/202605020001_utv2_725_pick_candidates_sport_key.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-846/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-07T00:20:20.287Z",
+  "heartbeat_at": "2026-05-07T03:57:58.867Z",
+  "closed_at": "2026-05-07T03:57:58.867Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-846-board-scan-schema-cache-drift.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-07T03:56:20.210Z",
+      "verdict": "fail",
+      "merge_sha": "2844dce57d90985a7cbea4e46c009ce5ff859bc4",
+      "failures": [
+        "G3",
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "S1"
+      ],
+      "runner": "ops:lane:close"
+    },
+    {
+      "checked_at": "2026-05-07T03:57:06.419Z",
+      "verdict": "reopen",
+      "merge_sha": "2844dce57d90985a7cbea4e46c009ce5ff859bc4",
+      "failures": [
+        "P7",
+        "P9",
+        "P10",
+        "G5"
+      ],
+      "runner": "ops:lane:close"
+    },
+    {
+      "checked_at": "2026-05-07T03:57:56.592Z",
+      "verdict": "pass",
+      "merge_sha": "2844dce57d90985a7cbea4e46c009ce5ff859bc4",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-07T03:57:06.419Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: e5561e50450736e2a4e3ceda40ea475e97b332b3"
+      ],
+      "detected_by": "ops:lane:close"
+    }
+  ]
+}

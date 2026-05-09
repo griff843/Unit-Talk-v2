@@ -1,0 +1,189 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 4,
+  "generated_at": "2026-05-07T22:31:14.8237327-04:00",
+  "mode": "read_only_recovery",
+  "writes_to_live_system_approved": false,
+  "search_summary": {
+    "sources_read": [
+      "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\proof\\UTV2-855\\phase2-readonly-diagnosis.json",
+      "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\proof\\UTV2-855\\phase2-readonly-diagnosis.md",
+      "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\proof\\UTV2-855\\case-d-reconciliation-plan.md",
+      "C:\\Dev\\Unit-Talk-v2-main\\docs\\06_status\\proof\\UTV2-855\\case-d-reconciliation-plan.json"
+    ],
+    "locations_checked": [
+      "git log --all --name-only",
+      "git rev-list --all --objects",
+      "git grep across refs (attempted, timed out before full completion)",
+      "local branches via all-ref history traversal",
+      "git worktree roots from `git worktree list --porcelain`",
+      "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees",
+      "git stash refs via `git stash list` and `git grep` on stash refs",
+      "workspace docs and proof bundles",
+      "C:\\Dev\\Unit-Talk-v2-main\\.git\\logs",
+      "C:\\Dev\\Unit-Talk-v2-main\\.git\\refs",
+      "C:\\Dev\\Unit-Talk-v2-main\\.git\\packed-refs",
+      "C:\\Dev\\Unit-Talk-v2-main\\supabase\\.temp",
+      "C:\\Dev\\Unit-Talk-v2-main\\supabase\\config.toml",
+      "C:\\Dev\\Unit-Talk-v2-main\\supabase\\local.env",
+      "selected sibling clones/worktrees under C:\\Dev"
+    ],
+    "high_level_finding": "No SQL body or migration filename was recovered for any remote-only version from the currently available local read-only sources. Hits were limited to the existing UTV2-855 Phase 2/3 proof files that list the versions.",
+    "git_grep_all_refs_status": "attempted_but_timed_out",
+    "stash_search_status": "completed_no_matches",
+    "supabase_local_metadata_status": "completed_no_matches"
+  },
+  "results": [
+    {
+      "missing_version": "20260424202018",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    },
+    {
+      "missing_version": "20260425030626",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    },
+    {
+      "missing_version": "20260425030656",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    },
+    {
+      "missing_version": "20260425132920",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    },
+    {
+      "missing_version": "20260427045252",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    },
+    {
+      "missing_version": "20260427182229",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    },
+    {
+      "missing_version": "202604300003",
+      "search_locations_checked": [
+        "git log --all --name-only",
+        "git rev-list --all --objects",
+        "git grep across refs (partial attempt)",
+        "local branches and worktrees",
+        ".out/worktrees",
+        "git stash refs",
+        "docs/proof bundles",
+        ".git logs/refs/packed-refs",
+        "supabase local metadata/config",
+        "selected sibling clones/worktrees under C:\\Dev"
+      ],
+      "result": "requires_manual_remote_audit",
+      "recovered_file_path": null,
+      "confidence": "high",
+      "recommended_next_action": "No local SQL body was found. Proceed to operator-approved manual remote audit or external artifact recovery beyond this clone."
+    }
+  ],
+  "overall_assessment": {
+    "recovered_versions": [],
+    "not_found_versions": [],
+    "requires_manual_remote_audit_versions": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "option_a_still_viable": true,
+    "option_a_viability_reason": "Option A remains viable only if operator-approved external artifact recovery is allowed beyond the current local clone.",
+    "option_d_manual_remote_audit_required_now": true,
+    "option_d_reason": "The currently available local read-only search surfaces did not yield any recoverable SQL bodies or filenames for the remote-only migration versions."
+  },
+  "no_live_writes_performed": true
+}

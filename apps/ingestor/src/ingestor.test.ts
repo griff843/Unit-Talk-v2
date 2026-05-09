@@ -1915,9 +1915,16 @@ test('ingestLeague marks latest pre-commence SGO snapshot as closing', async () 
   const rows = await repositories.providerOffers.listByProvider('sgo');
   const targetRows = rows
     .filter(
-      (row) =>
+      (
+        row,
+      ): row is typeof row & {
+        snapshot_at: string;
+        provider_event_id: string;
+        provider_market_key: string;
+      } =>
         row.provider_event_id === 'evt-entity-1' &&
         row.provider_market_key === 'points-all-game-ou' &&
+        typeof row.snapshot_at === 'string' &&
         row.provider_participant_id === 'JALEN_BRUNSON_1_NBA' &&
         row.bookmaker_key === null,
     )
@@ -2939,13 +2946,17 @@ test('ingestLeague persists game-line ML offers with -home/-away market keys', a
   // Moneyline and spread both paired: 2 offers
   assert.equal(offers.length, 2);
 
-  const mlOffer = offers.find((o) => o.provider_market_key.includes('game-ml'));
+  const mlOffer = offers.find(
+    (o) => typeof o.provider_market_key === 'string' && o.provider_market_key.includes('game-ml'),
+  );
   assert.ok(mlOffer, 'moneyline offer should be stored');
   assert.equal(mlOffer.over_odds, -140);
   assert.equal(mlOffer.under_odds, 120);
   assert.equal(mlOffer.provider_participant_id, null);
 
-  const spOffer = offers.find((o) => o.provider_market_key.includes('game-sp'));
+  const spOffer = offers.find(
+    (o) => typeof o.provider_market_key === 'string' && o.provider_market_key.includes('game-sp'),
+  );
   assert.ok(spOffer, 'spread offer should be stored');
   assert.equal(spOffer.line, -3.5);
   assert.equal(spOffer.over_odds, -110);

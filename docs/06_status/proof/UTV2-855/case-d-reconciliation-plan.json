@@ -1,0 +1,143 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 3,
+  "generated_at": "2026-05-07",
+  "mode": "planning_only",
+  "writes_approved": false,
+  "current_state": {
+    "ownership_migration_local": "202605070002_utv2_854_model_ownership_persistence.sql",
+    "ownership_migration_recorded_remotely": false,
+    "remote_only_versions": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "missing_live_columns": [
+      "pick_candidates.model_registry_id",
+      "pick_candidates.scoring_run_id",
+      "pick_candidates.ownership_timestamp",
+      "model_registry.registry_entity_type",
+      "model_registry.source_type_compatibility",
+      "model_registry.active_state"
+    ],
+    "direct_db_dns_issue_present": true,
+    "management_api_reads_succeeded": true,
+    "repo_search_evidence": {
+      "git_rev_list_all_objects_match_found": false,
+      "git_log_all_name_only_match_found": false,
+      "workspace_rg_match_found_outside_phase2_proof": false
+    }
+  },
+  "why_normal_apply_is_unsafe": [
+    "remote migration ledger contains versions not present in the local migrations directory",
+    "supabase db push --dry-run is already blocked by remote-only versions",
+    "applying new migrations on top of unknown remote ledger state can normalize broken history and hide missing SQL"
+  ],
+  "remote_only_recovery_plan": [
+    {
+      "version": "20260424202018",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    },
+    {
+      "version": "20260425030626",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    },
+    {
+      "version": "20260425030656",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    },
+    {
+      "version": "20260425132920",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    },
+    {
+      "version": "20260427045252",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    },
+    {
+      "version": "20260427182229",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    },
+    {
+      "version": "202604300003",
+      "exists_in_local_git_history": false,
+      "exists_in_current_clone_branches_or_worktrees": false,
+      "supabase_sql_body_exposure_proven": false,
+      "classification": "unknown"
+    }
+  ],
+  "non_destructive_options": {
+    "option_a": {
+      "name": "recover_missing_migration_files_locally",
+      "preferred": true,
+      "use_when": "exact SQL bodies can be recovered",
+      "risk": "low_to_medium"
+    },
+    "option_b": {
+      "name": "create_schema_equivalent_placeholder_files",
+      "preferred": false,
+      "use_when": "original SQL cannot be recovered but schema intent is operator-proven",
+      "risk": "high"
+    },
+    "option_c": {
+      "name": "repair_migration_history_with_operator_approval",
+      "preferred": false,
+      "use_when": "operator explicitly chooses ledger repair after recovery attempts",
+      "risk": "high"
+    },
+    "option_d": {
+      "name": "stop_and_manually_audit_remote_schema",
+      "preferred": true,
+      "use_when": "recovery fails or remains ambiguous",
+      "risk": "medium"
+    }
+  },
+  "recommended_path": {
+    "summary": "Option A first, Option D if Option A fails; do not use Options B or C without explicit operator approval",
+    "write_action_approved": false,
+    "codex_can_start_read_only_recovery_search": true
+  },
+  "operator_approval_checkpoints": [
+    "before searching outside the current clone or archived local artifacts",
+    "before trusting any recovered SQL body as authoritative",
+    "before restoring any recovered or reconstructed migration file locally",
+    "before any placeholder migration strategy",
+    "before any migration repair command",
+    "before any normal migration apply"
+  ],
+  "phase4_prompt": {
+    "mode": "read_only_recovery_search",
+    "goal": "inspect git history for missing migration versions, search branches/worktrees, compare local schema expectations, and produce a recovered SQL candidate list without writes"
+  },
+  "forbidden_commands": [
+    "supabase db push",
+    "supabase migration repair",
+    "supabase db reset",
+    "drop or recreate workflows",
+    "direct ALTER TABLE on live DB",
+    "paid preview branch creation",
+    "manual mutation of migration ledger tables"
+  ]
+}

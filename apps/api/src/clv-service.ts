@@ -5,6 +5,7 @@ import type {
   IMarketUniverseRepository,
   ParticipantRepository,
   PickRecord,
+  ProviderOfferRecord,
   ProviderOfferRepository,
 } from '@unit-talk/db';
 
@@ -16,6 +17,12 @@ interface ClosingLineLike {
   snapshot_at: string;
   provider_key: string;
 }
+
+type ClvComparableOffer = ProviderOfferRecord & {
+  provider_event_id: string;
+  provider_market_key: string;
+  snapshot_at: string;
+};
 
 export interface CLVResult {
   pickOdds: number;
@@ -219,12 +226,16 @@ export async function computeCLVOutcome(
   };
 
   // Prefer Pinnacle closing line for highest-quality CLV; fall back to consensus
-  let closingLine: ClosingLineLike | null = await repositories.providerOffers.findClosingLine({
-    ...baseLineCriteria,
-    bookmakerKey: 'pinnacle',
-  });
+  let closingLine: ClosingLineLike | null = asClosingLineLike(
+    await repositories.providerOffers.findClosingLine({
+      ...baseLineCriteria,
+      bookmakerKey: 'pinnacle',
+    }),
+  );
   if (!closingLine) {
-    closingLine = await repositories.providerOffers.findClosingLine(baseLineCriteria);
+    closingLine = asClosingLineLike(
+      await repositories.providerOffers.findClosingLine(baseLineCriteria),
+    );
   }
 
   // Fallback: use SGO opening line as CLV proxy when no closing line is available.
@@ -232,7 +243,9 @@ export async function computeCLVOutcome(
   // directionally-valid CLV even when the Odds API is down or hasn't ingested yet.
   let isOpeningFallback = false;
   if (!closingLine) {
-    closingLine = await repositories.providerOffers.findOpeningLine(baseLineCriteria);
+    closingLine = asClosingLineLike(
+      await repositories.providerOffers.findOpeningLine(baseLineCriteria),
+    );
     if (closingLine) {
       isOpeningFallback = true;
     }
@@ -563,7 +576,8 @@ async function logMarketMismatchIfNeeded(
 ): Promise<string[]> {
   const offers = await providerOffers.listByProvider('sgo');
   const relatedOffers = offers.filter(
-    (offer) =>
+    (offer): offer is ClvComparableOffer =>
+      isClvComparableOffer(offer) &&
       offer.provider_event_id === eventContext.providerEventId &&
       offer.snapshot_at <= eventContext.eventStartTime &&
       offer.provider_participant_id === eventContext.participantExternalId,
@@ -578,6 +592,37 @@ async function logMarketMismatchIfNeeded(
     `CLV market mismatch for pick ${pick.id}: pick.market="${pick.market}" available=${availableMarkets.join(', ')}`,
   );
   return availableMarkets;
+}
+
+function asClosingLineLike(offer: ProviderOfferRecord | null): ClosingLineLike | null {
+  if (
+    !offer ||
+    typeof offer.snapshot_at !== 'string' ||
+    offer.snapshot_at.length === 0 ||
+    typeof offer.provider_key !== 'string' ||
+    offer.provider_key.length === 0
+  ) {
+    return null;
+  }
+
+  return {
+    line: offer.line,
+    over_odds: offer.over_odds,
+    under_odds: offer.under_odds,
+    snapshot_at: offer.snapshot_at,
+    provider_key: offer.provider_key,
+  };
+}
+
+function isClvComparableOffer(offer: ProviderOfferRecord): offer is ClvComparableOffer {
+  return (
+    typeof offer.provider_event_id === 'string' &&
+    offer.provider_event_id.length > 0 &&
+    typeof offer.provider_market_key === 'string' &&
+    offer.provider_market_key.length > 0 &&
+    typeof offer.snapshot_at === 'string' &&
+    offer.snapshot_at.length > 0
+  );
 }
 
 /**

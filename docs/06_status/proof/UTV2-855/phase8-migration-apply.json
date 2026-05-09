@@ -1,0 +1,149 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 8,
+  "generated_at": "2026-05-08T15:25:00Z",
+  "mode": "live_migration_apply_and_verification",
+  "precondition": {
+    "phase6_initial_classification": "D3",
+    "execution_basis": "Operator-approved manual reconciliation order was executed before ownership apply.",
+    "deferred_migration": "202605020002_utv2_725_backfill_pick_candidates_pick_id.sql"
+  },
+  "applied_sequence": [
+    {
+      "order": 1,
+      "migration_version": "202605020001",
+      "migration_file": "supabase/migrations/202605020001_utv2_725_pick_candidates_sport_key.sql",
+      "result": "applied",
+      "live_confirmation": [
+        "public.pick_candidates.sport_key exists",
+        "public.idx_pick_candidates_sport_key exists"
+      ]
+    },
+    {
+      "order": 2,
+      "migration_version": "202605070001",
+      "migration_file": "supabase/migrations/202605070001_utv2_845_stake_units_integrity_guard.sql",
+      "result": "applied",
+      "live_confirmation": [
+        "public.picks.picks_stake_units_canonical_check exists",
+        "constraint remains NOT VALID as designed"
+      ]
+    },
+    {
+      "order": 3,
+      "migration_version": "202605030001",
+      "migration_file": "supabase/migrations/202605030001_utv2_772_provider_offer_history_partition_retention.sql",
+      "result": "applied",
+      "live_confirmation": [
+        "public.drop_old_provider_offer_history_partitions(integer) exists"
+      ]
+    },
+    {
+      "order": 4,
+      "migration_version": "202605030002",
+      "migration_file": "supabase/migrations/202605030002_utv2_772_provider_offer_line_snapshots.sql",
+      "result": "applied",
+      "live_confirmation": [
+        "public.provider_offer_line_snapshots exists",
+        "public.summarize_provider_offer_history_partition(date) exists",
+        "nightly-retention-prune cron body includes provider_offer_line_snapshots retention work"
+      ]
+    },
+    {
+      "order": 5,
+      "migration_version": "202605070002",
+      "migration_file": "supabase/migrations/202605070002_utv2_854_model_ownership_persistence.sql",
+      "result": "applied",
+      "live_confirmation": [
+        "public.pick_candidates.model_registry_id exists",
+        "public.pick_candidates.scoring_run_id exists",
+        "public.pick_candidates.ownership_timestamp exists",
+        "public.model_registry.registry_entity_type exists",
+        "public.model_registry.source_type_compatibility exists",
+        "public.model_registry.active_state exists"
+      ],
+      "apply_notes": [
+        "Migration execution reported UPDATE 6 against public.model_registry.",
+        "Ownership indexes were created live."
+      ]
+    }
+  ],
+  "ownership_schema_confirmation": {
+    "pick_candidates": {
+      "model_registry_id": true,
+      "scoring_run_id": true,
+      "ownership_timestamp": true
+    },
+    "model_registry": {
+      "registry_entity_type": true,
+      "source_type_compatibility": true,
+      "active_state": true
+    },
+    "supporting_indexes": [
+      "pick_candidates_model_registry_id_idx",
+      "pick_candidates_scoring_run_id_idx",
+      "pick_candidates_ownership_timestamp_idx",
+      "pick_candidates_pick_ownership_idx",
+      "model_registry_entity_scope_idx",
+      "model_registry_active_scope_idx",
+      "model_registry_source_type_compatibility_idx"
+    ]
+  },
+  "type_generation": {
+    "command": "pnpm supabase:types",
+    "result": "passed",
+    "artifacts_updated": [
+      "packages/db/src/database.types.ts"
+    ]
+  },
+  "repo_followup_changes": [
+    {
+      "file": "packages/db/src/types.ts",
+      "reason": "Aligned ModelRegistryRow with regenerated live schema types and ownership fields."
+    },
+    {
+      "file": "packages/db/src/runtime-repositories.ts",
+      "reason": "Adjusted in-memory repository nullability and ordering behavior to match regenerated DB types without regressing runtime tests."
+    }
+  ],
+  "verification": {
+    "pnpm_type_check": "passed",
+    "pnpm_test_db": "passed",
+    "pnpm_verify": "passed"
+  },
+  "ownership_proof": {
+    "command": "npx tsx scripts/model-ownership/run-ownership-persistence-proof.ts",
+    "result": "passed",
+    "summary_source": "docs/06_status/proof/UTV2-854/ownership-persistence-summary.json",
+    "schema_probe": {
+      "pick_candidates_model_registry_id": true,
+      "pick_candidates_scoring_run_id": true,
+      "pick_candidates_ownership_timestamp": true,
+      "model_registry_registry_entity_type": true,
+      "model_registry_source_type_compatibility": true,
+      "model_registry_active_state": true
+    },
+    "metrics": {
+      "model_attributed_pct": 0,
+      "model_generated_pct": 0,
+      "ownership_write_success_pct": 0,
+      "ownership_write_failure_pct": 100
+    },
+    "reporting_findings": {
+      "any_model_generated_today": false,
+      "true_model_generated_inventory_exists": false,
+      "historical_unknown_rows_preserved": true
+    }
+  },
+  "first_legitimate_model_attributed_candidate_exists": false,
+  "migration_result": "success",
+  "live_schema_confirmation": true,
+  "migration_apply_can_be_considered_complete": true,
+  "forbidden_actions_not_performed": [
+    "supabase migration repair",
+    "supabase db push",
+    "preview branch creation",
+    "historical ownership backfill",
+    "202605020002 pick_candidates pick_id backfill"
+  ]
+}

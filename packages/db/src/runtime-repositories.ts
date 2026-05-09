@@ -1224,6 +1224,7 @@ export class InMemorySettlementRepository implements SettlementRepository {
       corrects_id: input.correctsId ?? null,
       payload: toJsonObject(input.payload),
       created_at: input.settledAt,
+      stake_units: null,
     };
 
     this.settlements.push(record);
@@ -1689,9 +1690,9 @@ export class InMemoryProviderOfferRepository implements ProviderOfferRepository 
 
   private upsertCurrentOffer(offer: ProviderOfferRecord) {
     const identityKey = buildProviderOfferCurrentIdentityKey({
-      providerKey: offer.provider_key,
-      providerEventId: offer.provider_event_id,
-      providerMarketKey: offer.provider_market_key,
+      providerKey: offer.provider_key ?? '',
+      providerEventId: offer.provider_event_id ?? '',
+      providerMarketKey: offer.provider_market_key ?? '',
       providerParticipantId: offer.provider_participant_id,
       bookmakerKey: offer.bookmaker_key,
     });

@@ -1,0 +1,132 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-845",
+  "merge_sha": "0cf75351685d2555ef35c1ceb0c22344f9f721ba",
+  "generated_at": "2026-05-07T06:36:30.000Z",
+  "verifier": {
+    "identity": "operator"
+  },
+  "captured_at": "2026-05-07T06:18:41.000Z",
+  "static_proof": {
+    "commands": [
+      "pnpm exec tsx --test apps/api/src/submission-service.test.ts",
+      "pnpm exec tsx --test apps/api/src/recap-service.test.ts",
+      "pnpm exec tsx --test apps/api/src/settlement-service.test.ts",
+      "pnpm exec tsx --test apps/api/src/golden-regression.test.ts",
+      "pnpm exec tsx --test apps/api/src/grading-service.test.ts",
+      "pnpm exec tsx --test apps/api/src/server.test.ts",
+      "pnpm exec tsx --test apps/api/src/http-integration.test.ts",
+      "pnpm exec tsx --test apps/api/src/database-smoke.test.ts",
+      "pnpm exec tsx --test apps/api/src/t1-proof-utv2-845.test.ts",
+      "pnpm test:db",
+      "pnpm verify"
+    ],
+    "results": {
+      "targeted_tests": "pass",
+      "t1_proof_test": "pass",
+      "test_db": "pass",
+      "verify": "pass"
+    }
+  },
+  "runtime_proof": {
+    "queries": [
+      "live T1 proof submission: POST /api/submissions with source=api and stake_units=2.5",
+      "live T1 proof submission: POST /api/submissions with source=board-construction and omitted stake units",
+      "live T1 proof settlement: POST /api/picks/:id/settle for canonical stake preservation",
+      "daily recap readback for deterministic known-stake ROI",
+      "historical sample scan for settled rows with null stake_units"
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "slice": "proof human submission",
+        "stake_units": 2.5,
+        "stake_units_source": "explicit_human_submission"
+      },
+      {
+        "table": "picks",
+        "slice": "proof machine submission",
+        "stake_units": 1,
+        "stake_units_source": "system_default_flat_1u"
+      },
+      {
+        "table": "picks",
+        "slice": "recent historical settled sample",
+        "settled_count": 394,
+        "settled_null_stake_count": 10
+      }
+    ],
+    "receipts": [
+      {
+        "proof_run_id": "utv2-845-3c5b9f23-de2c-4cc2-b1cf-bd1c7bb0be7a",
+        "human_pick_stake_units": 2.5,
+        "machine_pick_stake_units": 1
+      },
+      {
+        "settlement": {
+          "stake_units_status": "canonical",
+          "profit_loss_units": 2.27
+        }
+      },
+      {
+        "recap": {
+          "known_stake_count": 1,
+          "unknown_stake_count": 0,
+          "total_risked_units": 2.5,
+          "roi_percent": 90.8
+        }
+      }
+    ]
+  },
+  "summary": {
+    "root_cause": "Submission and downstream reporting paths allowed stake_units to be omitted or silently treated as flat 1u, which made ROI and bankroll analytics nondeterministic and obscured whether a row carried canonical stake sizing.",
+    "resolution": "Human submissions now fail closed when stake sizing is absent or non-positive, machine-generated submission paths explicitly persist 1u with provenance, settlement/reporting preserve stake integrity metadata, and historical unknown stake rows are classified instead of backfilled.",
+    "trust_mode": "future_canonical_historical_unknown_explicit"
+  },
+  "proof": {
+    "human_submission": {
+      "source": "api",
+      "stake_units": 2.5,
+      "accepted_snake_case_input": true
+    },
+    "machine_submission": {
+      "source": "board-construction",
+      "stake_units": 1,
+      "stake_units_source": "system_default_flat_1u"
+    },
+    "settlement": {
+      "stake_units_status": "canonical",
+      "profit_loss_units": 2.27,
+      "fake_flat_default_applied": false
+    },
+    "recap": {
+      "known_stake_count": 1,
+      "unknown_stake_count": 0,
+      "roi_percent": 90.8,
+      "uses_only_known_stake_rows_for_roi": true
+    },
+    "historical_unknowns": {
+      "classified_explicitly": true,
+      "silent_backfill_performed": false
+    }
+  },
+  "commands": [
+    "pnpm exec tsx --test apps/api/src/t1-proof-utv2-845.test.ts",
+    "pnpm test:db",
+    "pnpm verify"
+  ],
+  "checklist": {
+    "new_picks_always_persist_canonical_stake_units": true,
+    "lifecycle_and_reporting_preserve_stake_values": true,
+    "future_roi_samples_are_deterministic": true,
+    "historical_unknowns_are_classified_explicitly": true,
+    "no_fake_historical_backfill_performed": true,
+    "pnpm_verify_passes": true
+  },
+  "remaining_blockers": {
+    "in_scope": [],
+    "out_of_scope": [
+      "Historical settled rows with null stake_units remain intentionally unbackfilled; they are now surfaced as historical_unknown instead of being masked by a flat-stake fallback."
+    ]
+  }
+}

@@ -1,0 +1,131 @@
+{
+  "issue_id": "UTV2-855",
+  "phase": 5,
+  "generated_at": "2026-05-07",
+  "mode": "planning_only",
+  "writes_approved": false,
+
+  "current_state": {
+    "local_migration_recovery_failed": true,
+    "unrecovered_remote_only_versions": [
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604300003"
+    ],
+    "missing_live_ownership_columns": [
+      "pick_candidates.model_registry_id",
+      "pick_candidates.scoring_run_id",
+      "pick_candidates.ownership_timestamp",
+      "model_registry.registry_entity_type",
+      "model_registry.source_type_compatibility",
+      "model_registry.active_state"
+    ],
+    "ownership_rollout_blocked": true,
+    "case_d_confirmed": true
+  },
+
+  "audit_objective": "Determine whether the remote schema can be safely treated as the ground truth baseline for the seven unrecovered historical migrations, enabling the ownership migration (202605070002) to be applied on top.",
+
+  "required_remote_schema_inventory": {
+    "tables": true,
+    "columns": true,
+    "indexes": true,
+    "constraints": true,
+    "triggers": true,
+    "functions": true,
+    "rls_policies": true,
+    "enums": true,
+    "views": true,
+    "migration_ledger": true,
+    "extensions": true,
+    "priority_targets": [
+      "pick_candidates",
+      "model_registry",
+      "system_runs",
+      "experiment_ledger",
+      "provider_offer_current",
+      "provider_offer_history"
+    ],
+    "queries_defined_in_section_3": true,
+    "query_count": 14,
+    "all_queries_read_only": true
+  },
+
+  "comparison_method": {
+    "layer_a": "live remote schema from Section 3 queries",
+    "layer_b": "local supabase/migrations/ (99 files, 202603200001 through 202605070002)",
+    "layer_c": "packages/db/src/database.types.ts generated types",
+    "layer_d": "app code column expectations from runtime-repositories.ts and candidate-scoring-service.ts",
+    "drift_classes": [
+      "locally-covered",
+      "remote-only",
+      "unknown-drift",
+      "ownership-pending"
+    ],
+    "required_outputs": [
+      "objects present remotely and locally",
+      "objects present remotely but not locally (with full DDL)",
+      "objects expected by app code but missing remotely",
+      "objects with type or definition mismatch",
+      "risk classification per unknown-drift object"
+    ]
+  },
+
+  "decision_tree": {
+    "D1": {
+      "condition": "Remote schema matches app expectations in all material ways; all unrecovered drift is explained by the seven remote-only versions; no unknown-drift objects; ownership columns correctly absent",
+      "safe_action": "Operator approves baseline marker migration + ownership migration apply",
+      "codex_may_execute": true,
+      "operator_approval_required": true,
+      "forbidden_actions": ["migration repair without operator approval"]
+    },
+    "D2": {
+      "condition": "Remote schema contains intentional objects missing locally; objects are recognizable and safe; no conflicting types",
+      "safe_action": "Draft baseline reconciliation migration; operator approves; migration repair --status applied only after explicit in-session operator approval",
+      "codex_may_execute": "draft SQL only — no migration repair without operator approval",
+      "operator_approval_required": true,
+      "forbidden_actions": ["migration repair before operator review", "db push with unresolved drift"]
+    },
+    "D3": {
+      "condition": "Remote schema contains unknown or risky drift: type conflicts, unexpected constraints, ownership columns partially present, unknown triggers or RLS policies",
+      "safe_action": "Stop. Record anomalies. Escalate to operator. No migration actions.",
+      "codex_may_execute": false,
+      "operator_approval_required": true,
+      "forbidden_actions": ["any write action", "migration repair", "db push", "ALTER TABLE"]
+    },
+    "D4": {
+      "condition": "Remote schema cannot be inspected because connectivity/tooling remains broken",
+      "safe_action": "Resolve connectivity first. Rerun audit once inspectable.",
+      "codex_may_execute": "connectivity diagnosis only",
+      "operator_approval_required": true,
+      "forbidden_actions": ["inferring schema state from DNS errors", "applying migrations while connectivity is broken"]
+    }
+  },
+
+  "forbidden_actions": [
+    "supabase migration repair (any form)",
+    "supabase db push (any form)",
+    "live ALTER TABLE via execute_sql",
+    "supabase db reset",
+    "preview branch creation",
+    "manual INSERT/DELETE/UPDATE on supabase_migrations.schema_migrations",
+    "UPDATE pick_candidates SET model_registry_id = ... (historical ownership fabrication)",
+    "treating audit output as proof of schema correctness without operator review"
+  ],
+
+  "phase6_codex_packet": {
+    "mode": "read_only_remote_schema_audit",
+    "goal": "Inspect remote schema via Supabase MCP, dump full schema metadata, compare against local migrations and app expectations, classify D1/D2/D3/D4, produce audit artifact at docs/06_status/proof/UTV2-855/phase6-remote-schema-audit.json",
+    "writes_permitted": false,
+    "stop_condition": "After producing audit artifact and written report — operator must approve before Phase 7",
+    "output_artifact": "docs/06_status/proof/UTV2-855/phase6-remote-schema-audit.json"
+  },
+
+  "codex_can_proceed_to_read_only_remote_schema_audit": true,
+  "codex_may_write_migrations_or_alter_schema": false,
+  "operator_must_review_audit_before_phase7": true
+}

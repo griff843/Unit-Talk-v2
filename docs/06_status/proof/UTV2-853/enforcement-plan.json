@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-853",
+  "generated_at": "2026-05-07T20:55:20.0105315Z",
+  "enforcement_boundary": {
+    "required": true,
+    "storage_recommendation": "Record the UTV2-853 enforcement timestamp in a migration record or system configuration table before hard-fail rules become active.",
+    "historical_policy": "Rows created before enforcement remain permanently UNKNOWN if model_registry_id is null."
+  },
+  "hard_fail_rules": [
+    {
+      "id": "score_without_owner",
+      "condition": "Candidate scoring attempts to write model_score without model_registry_id after ownership columns exist and enforcement is active.",
+      "action": "Fail the scoring write; do not commit partial ownership."
+    },
+    {
+      "id": "missing_registry_entry",
+      "condition": "model_registry_id does not reference an existing model_registry row.",
+      "action": "Fail via FK or repository validation."
+    },
+    {
+      "id": "disabled_or_retired_owner",
+      "condition": "Resolved registry owner is disabled or retired at scoring time.",
+      "action": "Reject scoring for that candidate; log ownership resolution failure."
+    },
+    {
+      "id": "model_generated_conversion_without_owner",
+      "condition": "pick_candidates.pick_id is set for a post-enforcement scanner/board candidate whose model_registry_id is null.",
+      "action": "Reject pick conversion or block model_generated classification, depending on future operator-approved enforcement boundary."
+    }
+  ],
+  "quarantine_rules": [
+    {
+      "id": "post_enforcement_null_owner",
+      "condition": "A post-enforcement candidate-linked pick has null model_registry_id.",
+      "action": "Classify ownership as UNKNOWN, quarantine from model-edge and syndicate analytics, count in attribution gaps."
+    },
+    {
+      "id": "missing_candidate_link",
+      "condition": "system-pick-scanner or board-construction pick has no pick_candidates join.",
+      "action": "Classify ownership as UNKNOWN and quarantine from model-edge."
+    },
+    {
+      "id": "degraded_owner",
+      "condition": "Registry owner is degraded at scoring time.",
+      "action": "Allow only if future standard permits degraded scoring; flag degraded-model-pick and exclude from syndicate."
+    }
+  ],
+  "warn_only_rules": [
+    {
+      "id": "pre_migration_registry_metadata_absent",
+      "condition": "registry_entity_type, source_type_compatibility, active_state, or ownership metadata columns are absent before migration.",
+      "action": "Warn and classify model ownership as UNKNOWN; do not fabricate a model entity type."
+    },
+    {
+      "id": "scoring_run_missing_pre_rollout",
+      "condition": "scoring_run_id is null before runtime support for system_runs linkage exists.",
+      "action": "Warn and record schema/runtime gap."
+    },
+    {
+      "id": "ownership_timestamp_missing_pre_rollout",
+      "condition": "ownership_timestamp is null before runtime support exists.",
+      "action": "Warn and use candidate created_at only as a reporting proxy, not as ownership proof."
+    }
+  ],
+  "analytics_policy": {
+    "historical_unknowns_preserved": true,
+    "post_enforcement_null_ownership": "UNKNOWN/quarantined",
+    "model_edge_requires_registry_join": true,
+    "no_backfill": true,
+    "no_downstream_duplication": true,
+    "canonical_join_chain": "picks.id -> pick_candidates.pick_id -> pick_candidates.model_registry_id -> model_registry.*"
+  },
+  "implementation_prerequisites": [
+    "Operator approval for migration SQL.",
+    "pick_candidates.model_registry_id column exists.",
+    "model_registry registry_entity_type/source_type_compatibility/owner metadata exists or warn-only compatibility behavior is explicitly accepted.",
+    "Runtime scoring write path updated to persist ownership with score fields.",
+    "Tests prove historical null ownership is preserved and post-enforcement null ownership is blocked or quarantined."
+  ]
+}
