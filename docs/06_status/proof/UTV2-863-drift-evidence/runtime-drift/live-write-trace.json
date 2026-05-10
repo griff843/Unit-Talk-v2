@@ -1,0 +1,119 @@
+{
+  "issue": "UTV2-869",
+  "trace_window": {
+    "start": "2026-05-09T01:34:19Z",
+    "end": "2026-05-09T01:34:31Z"
+  },
+  "summary": {
+    "candidate_rows_examined_in_window": 1000,
+    "system_runs_examined_in_window": 183,
+    "candidate_scoring_runs_found": 0,
+    "distinct_run_types_found": [
+      "worker.heartbeat"
+    ]
+  },
+  "sample_scored_rows": [
+    {
+      "id": "5de6ce87-201d-44d9-be5c-e45a94e8b8f0",
+      "status": "qualified",
+      "created_at": "2026-04-28T12:33:27.466562+00:00",
+      "updated_at": "2026-05-09T01:34:28.005+00:00",
+      "model_score": 0.6608394,
+      "model_tier": "B",
+      "model_confidence": 0.7,
+      "model_registry_id": null,
+      "scoring_run_id": null,
+      "ownership_timestamp": null
+    },
+    {
+      "id": "f879bbe1-f87c-4b27-ac08-8e86e4e844fc",
+      "status": "qualified",
+      "created_at": "2026-04-27T04:15:33.051708+00:00",
+      "updated_at": "2026-05-09T01:34:29.781+00:00",
+      "model_score": 0.5150322,
+      "model_tier": "C",
+      "model_confidence": 0.7,
+      "model_registry_id": null,
+      "scoring_run_id": null,
+      "ownership_timestamp": null
+    },
+    {
+      "id": "1c1decd9-05c1-4697-acf0-5c22a559f4e5",
+      "status": "qualified",
+      "created_at": "2026-04-24T04:55:48.906203+00:00",
+      "updated_at": "2026-05-09T01:34:30.847+00:00",
+      "model_score": 0.44999999999999996,
+      "model_tier": "SUPPRESS",
+      "model_confidence": 0.7,
+      "model_registry_id": null,
+      "scoring_run_id": null,
+      "ownership_timestamp": null
+    }
+  ],
+  "sample_rejected_rows_touched_same_window": [
+    {
+      "id": "6fb8344d-9ce7-449c-b6ce-b1667f3263b6",
+      "status": "rejected",
+      "created_at": "2026-04-26T13:13:35.90462+00:00",
+      "updated_at": "2026-05-09T01:34:19.992+00:00",
+      "model_score": null,
+      "model_tier": null,
+      "model_confidence": null,
+      "model_registry_id": null,
+      "scoring_run_id": null,
+      "ownership_timestamp": null
+    },
+    {
+      "id": "9cc4965d-1dab-4207-8d40-e3f5724adf75",
+      "status": "rejected",
+      "created_at": "2026-04-26T03:23:35.215757+00:00",
+      "updated_at": "2026-05-09T01:34:19.992+00:00",
+      "model_score": 0.4570938,
+      "model_tier": "SUPPRESS",
+      "model_confidence": 0.7,
+      "model_registry_id": null,
+      "scoring_run_id": null,
+      "ownership_timestamp": null
+    },
+    {
+      "id": "5d729d81-267c-46ff-9967-543199e437a0",
+      "status": "rejected",
+      "created_at": "2026-04-24T03:00:48.736537+00:00",
+      "updated_at": "2026-05-09T01:34:19.992+00:00",
+      "model_score": 0.8604126000000001,
+      "model_tier": "A+",
+      "model_confidence": 0.7,
+      "model_registry_id": null,
+      "scoring_run_id": null,
+      "ownership_timestamp": null
+    }
+  ],
+  "system_runs_near_write_burst": [
+    {
+      "run_type": "worker.heartbeat",
+      "actor": "worker-dev",
+      "status": "succeeded",
+      "started_at": "2026-05-09T01:34:28.064703+00:00",
+      "finished_at": "2026-05-09T01:34:28.613575+00:00"
+    },
+    {
+      "run_type": "worker.heartbeat",
+      "actor": "worker-dev",
+      "status": "succeeded",
+      "started_at": "2026-05-09T01:34:29.364846+00:00",
+      "finished_at": "2026-05-09T01:34:29.925093+00:00"
+    },
+    {
+      "run_type": "worker.heartbeat",
+      "actor": "worker-dev",
+      "status": "succeeded",
+      "started_at": "2026-05-09T01:34:30.024806+00:00",
+      "finished_at": "2026-05-09T01:34:30.561915+00:00"
+    }
+  ],
+  "inferences": [
+    "The rows were updated in a short burst on 2026-05-09 between 01:34:28Z and 01:34:30Z.",
+    "No candidate.scoring system_runs row exists in the same window or anywhere in live system_runs.",
+    "The active writer in the observed window was not the current repo's CandidateScoringService instrumentation path."
+  ]
+}

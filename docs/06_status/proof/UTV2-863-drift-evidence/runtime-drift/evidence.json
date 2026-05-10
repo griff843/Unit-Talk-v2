@@ -1,0 +1,87 @@
+{
+  "issue": "UTV2-869",
+  "generated_at": "2026-05-09T17:10:00Z",
+  "repo_head_sha": "17c396644036516e7bec797acefe678a313744e4",
+  "scope": "live runtime drift investigation for ownership persistence bypass on pick_candidates scoring writes",
+  "verdict": {
+    "runtime_drift_proven": true,
+    "current_repo_code_deployed": false,
+    "candidate_scoring_system_runs_present": false,
+    "exact_host_image_sha_proven": false
+  },
+  "root_cause": {
+    "classification": "stale_or_alternate_pre_UTV2_854_scoring_runtime",
+    "summary": "Live scoring writes match the pre-UTV2-854 CandidateScoringService -> DatabasePickCandidateRepository.updateModelScoreBatch contract that only persisted model_score, model_tier, and model_confidence. The current repo contract requires ownership fields and would hard-fail before issuing the DB update."
+  },
+  "live_db_evidence": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "ownership_schema_present": true,
+    "migration_202605070002_expected_live": true,
+    "scored_candidates_total": 7051,
+    "scored_candidates_without_ownership": 7051,
+    "qualified_scored_without_ownership": 4855,
+    "rejected_scored_without_ownership": 2196,
+    "qualified_unscored": 552,
+    "recent_qualified_unscored_created_since_2026_05_01": 0,
+    "candidate_scoring_system_runs_total": 0,
+    "viable_live_qualified_unscored_candidates": 0,
+    "reason_viable_count_zero": "all 552 qualified unscored candidates map to market_universe rows where is_stale=true"
+  },
+  "may_9_write_burst": {
+    "window_start": "2026-05-09T01:34:19Z",
+    "window_end": "2026-05-09T01:34:31Z",
+    "row_count_in_window": 1000,
+    "scored_rows_sample_window_start": "2026-05-09T01:34:28.005+00:00",
+    "scored_rows_sample_window_end": "2026-05-09T01:34:30.847+00:00",
+    "ownership_fields_on_scored_rows": "all null",
+    "system_runs_seen_in_same_window": [
+      "worker.heartbeat"
+    ],
+    "candidate_scoring_run_seen": false
+  },
+  "repo_evidence": {
+    "ownership_api_commit": "38392b5a",
+    "ownership_repo_commit": "30b88e46",
+    "pre_ownership_contract": {
+      "model_score_update_fields": [
+        "id",
+        "model_score",
+        "model_tier",
+        "model_confidence"
+      ]
+    },
+    "current_contract_requires": [
+      "model_registry_id",
+      "scoring_run_id",
+      "ownership_timestamp"
+    ],
+    "current_runtime_guard": "assertValidModelScoreUpdate() throws if any ownership field is missing before DB update"
+  },
+  "deployment_observability": {
+    "github_deploy_workflow_name": "Deploy",
+    "github_deploy_workflow_runs_found": 0,
+    "github_deployments_found": 0,
+    "host_release_file_repo_reference": ".unit-talk-release",
+    "host_release_file_remote_accessible_from_lane": false,
+    "why_exact_sha_unproven": "No executed GitHub Deploy workflow runs, no GitHub deployments, no runtime build stamp exposed through the DB or observed API surface, and no host-side access to inspect .unit-talk-release on the deploy target."
+  },
+  "commands_executed": [
+    "pnpm ops:brief",
+    "git status --short --branch",
+    "git log --oneline -- apps/api/src/candidate-scoring-service.ts packages/db/src/repositories.ts packages/db/src/runtime-repositories.ts",
+    "git log -S \"scoring_run_id\" --oneline -- apps/api/src/candidate-scoring-service.ts packages/db/src/repositories.ts packages/db/src/runtime-repositories.ts",
+    "git show 38392b5a^:packages/db/src/repositories.ts",
+    "git show 38392b5a^:apps/api/src/candidate-scoring-service.ts",
+    "gh run list --limit 20 --json databaseId,workflowName,headSha,headBranch,status,conclusion,createdAt,updatedAt,displayTitle,event",
+    "gh api repos/griff843/Unit-Talk-v2/actions/workflows/264341920/runs?per_page=20",
+    "gh api repos/griff843/Unit-Talk-v2/deployments?per_page=20",
+    "pnpm exec tsx live Supabase queries against pick_candidates, market_universe, system_runs, and model_registry"
+  ],
+  "safety": {
+    "historical_backfill_performed": false,
+    "migration_repair_performed": false,
+    "unsafe_migration_operations_performed": false,
+    "runtime_write_fix_applied": false,
+    "ownership_proof_row_generated": false
+  }
+}
