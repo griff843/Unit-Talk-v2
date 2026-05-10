@@ -146,7 +146,7 @@ const SEMANTIC_CHECKS = {
   'db-query': (text) => {
     const f = [];
     if (!/```(?:sql|SQL)/m.test(text)) f.push('sql-fence');
-    if (!/feownrheeefbcsehtsiw|branch:/m.test(text)) f.push('project-ref');
+    if (!/zfzdnfwdarxucxtaojxm|branch:/m.test(text)) f.push('project-ref');
     if (!/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/m.test(text)) f.push('timestamp');
     return f;
   },

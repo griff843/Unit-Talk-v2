@@ -12,7 +12,7 @@ const env = Object.fromEntries(
 );
 
 const sb = createClient(
-  `https://feownrheeefbcsehtsiw.supabase.co`,
+  `https://zfzdnfwdarxucxtaojxm.supabase.co`,
   env.SUPABASE_SERVICE_ROLE_KEY,
 );
 

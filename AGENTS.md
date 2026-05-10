@@ -135,7 +135,7 @@ Get these wrong and tests will fail or data will corrupt:
 - No dotenv package — `@unit-talk/config` parses env files directly
 - `local.env` and `.env` are gitignored (contain real credentials)
 - `.env.example` is the template — add new env vars here when you add them to the app
-- Supabase project ref: `feownrheeefbcsehtsiw`
+- Supabase project ref: `zfzdnfwdarxucxtaojxm`
 
 ---
 

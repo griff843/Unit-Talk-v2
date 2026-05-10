@@ -114,7 +114,7 @@ This document is updated:
 - When a champion is demoted (update row to `unsupported`)
 - At each monthly model review cadence (verify table matches `model_registry` runtime state)
 
-**Runtime truth source:** `model_registry` table in Supabase (project ref: `feownrheeefbcsehtsiw`).
+**Runtime truth source:** `model_registry` table in Supabase (project ref: `zfzdnfwdarxucxtaojxm`).
 
 This document must match runtime truth. If they diverge, runtime wins and this doc must be corrected.
 

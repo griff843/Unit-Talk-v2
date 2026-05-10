@@ -4,7 +4,7 @@
 
 ## Rule
 
-All database migrations must merge to `main` before being applied to the live Supabase project (`feownrheeefbcsehtsiw`).
+All database migrations must merge to `main` before being applied to the live Supabase project (`zfzdnfwdarxucxtaojxm`).
 
 Direct application of migrations via the Supabase Management API from developer machines against the main project is prohibited.
 

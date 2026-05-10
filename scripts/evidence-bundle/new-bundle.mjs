@@ -116,7 +116,7 @@ function buildBundleSkeleton(issueId, verifier, date, commitSha) {
 
 | # | Assertion | Evidence Type | Source | Result | Evidence Ref |
 |---|---|---|---|---|---|
-| 1 | <assertion text> | db-query | live DB \`feownrheeefbcsehtsiw\` | PASS | [E1](#e1-first-assertion) |
+| 1 | <assertion text> | db-query | live DB \`zfzdnfwdarxucxtaojxm\` | PASS | [E1](#e1-first-assertion) |
 
 ---
 
@@ -125,7 +125,7 @@ function buildBundleSkeleton(issueId, verifier, date, commitSha) {
 ### E1 First assertion
 
 **DB-query evidence**
-Project ref: \`feownrheeefbcsehtsiw\`
+Project ref: \`zfzdnfwdarxucxtaojxm\`
 Run at: ${date}T00:00:00Z
 Query:
 \`\`\`sql
