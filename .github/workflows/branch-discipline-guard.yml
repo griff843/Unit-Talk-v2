@@ -13,6 +13,7 @@ jobs:
   enforce:
     name: Require sync metadata
     runs-on: ubuntu-latest
+    if: ${{ vars.FIBERY_API_URL != '' }}
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
