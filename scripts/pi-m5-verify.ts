@@ -48,7 +48,7 @@ function fail(ac: string, name: string, detail: string): void {
 async function main(): Promise<void> {
   console.log(`\n╔══ PI-M5 Platform Readiness Gate (UTV2-356) ═════════════════`);
   console.log(`  ${new Date().toISOString()}`);
-  console.log(`  Project: feownrheeefbcsehtsiw\n`);
+  console.log(`  Project: zfzdnfwdarxucxtaojxm\n`);
 
   // ── AC1: CI pipeline green on main ────────────────────────────────────────
   // Verified externally via GitHub run 24062213123 (success). Record as passed.

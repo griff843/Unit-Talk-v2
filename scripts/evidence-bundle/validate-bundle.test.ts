@@ -228,7 +228,7 @@ function semanticBundle(): string {
 
 | # | Assertion | Evidence Type | Source | Result | Evidence Ref |
 |---|---|---|---|---|---|
-| 1 | db query works | db-query | live DB \`feownrheeefbcsehtsiw\` | PASS | [E1](#e1) |
+| 1 | db query works | db-query | live DB \`zfzdnfwdarxucxtaojxm\` | PASS | [E1](#e1) |
 | 2 | test passes | test | scripts/foo.test.ts | PASS | [E2](#e2) |
 | 3 | fixture valid | fixture | data/snap.json | PASS | [E3](#e3) |
 | 4 | http call ok | http | api endpoint | PASS | [E4](#e4) |
@@ -238,7 +238,7 @@ function semanticBundle(): string {
 
 ### E1 db query works
 
-Project ref: \`feownrheeefbcsehtsiw\`
+Project ref: \`zfzdnfwdarxucxtaojxm\`
 Run at: 2026-04-13T10:30:00Z
 \`\`\`sql
 SELECT count(*) FROM picks;
@@ -308,7 +308,7 @@ test('strict: db-query missing sql fence is flagged', () => {
 test('strict: db-query missing project ref is flagged', () => {
   // Replace only the evidence block project ref, not the one in the assertions table
   const broken = semanticBundle().replace(
-    'Project ref: `feownrheeefbcsehtsiw`',
+    'Project ref: `zfzdnfwdarxucxtaojxm`',
     'Project ref: `some-other-project`',
   );
   const findings = validateBundle(broken, { strict: true });

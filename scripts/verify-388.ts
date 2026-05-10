@@ -11,7 +11,7 @@ const env = Object.fromEntries(
     }),
 );
 
-const sb = createClient(`https://feownrheeefbcsehtsiw.supabase.co`, env.SUPABASE_SERVICE_ROLE_KEY);
+const sb = createClient(`https://zfzdnfwdarxucxtaojxm.supabase.co`, env.SUPABASE_SERVICE_ROLE_KEY);
 
 async function main() {
   const { data: mt } = await sb

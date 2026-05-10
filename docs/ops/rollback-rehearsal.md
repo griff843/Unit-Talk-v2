@@ -340,7 +340,7 @@ Use this posture after the Hetzner cutover succeeds, while keeping Supabase warm
 7. End read-only posture only after the validation window passes and the production cutover owner approves decommissioning.
 8. Decommission Supabase by exporting a final backup, disabling runtime secrets, and recording the decommission timestamp.
    ```powershell
-   supabase db dump --project-ref feownrheeefbcsehtsiw --file backups/supabase-final-UTV2-784.sql
+   supabase db dump --project-ref zfzdnfwdarxucxtaojxm --file backups/supabase-final-UTV2-784.sql
    ```
 
 ## 6. Rehearsal Log Template

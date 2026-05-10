@@ -99,7 +99,7 @@ A table with one row per assertion. Column order matters — the validator parse
 
 | # | Assertion | Evidence Type | Source | Result | Evidence Ref |
 |---|---|---|---|---|---|
-| 1 | <assertion text> | db-query | live DB `feownrheeefbcsehtsiw` | PASS | [E1](#e1-first-assertion) |
+| 1 | <assertion text> | db-query | live DB `zfzdnfwdarxucxtaojxm` | PASS | [E1](#e1-first-assertion) |
 | 2 | <assertion text> | test | `apps/api/src/foo.test.ts::bar` | PASS | [E2](#e2-second-assertion) |
 | 3 | <assertion text> | fixture | `__fixtures__/golden.json` | WAIVED | approved by: PM (date) — see [E3](#e3-third-assertion) |
 ```
@@ -146,7 +146,7 @@ A SQL query, the Supabase project ref, a run timestamp, and the raw result rows.
 
 ```markdown
 **DB-query evidence**
-Project ref: `feownrheeefbcsehtsiw`
+Project ref: `zfzdnfwdarxucxtaojxm`
 Run at: 2026-04-11T14:22:00Z
 Query:
 ```sql
