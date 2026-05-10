@@ -27,7 +27,7 @@ async function runProof(): Promise<void> {
   // 1. Verify summarize function is callable
   const { error: summarizeErr } = await client.rpc(
     'summarize_provider_offer_history_partition',
-    { p_cutoff_date: new Date().toISOString().slice(0, 10) },
+    { p_date: new Date().toISOString().slice(0, 10) },
   );
   if (summarizeErr) {
     throw new Error(`summarize_provider_offer_history_partition failed: ${summarizeErr.message}`);

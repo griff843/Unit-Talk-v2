@@ -1,0 +1,56 @@
+{
+  "generated_at": "2026-05-09T20:59:28.7481068-04:00",
+  "project_ref": "zfzdnfwdarxucxtaojxm",
+  "issue_id": "UTV2-870",
+  "scope": {
+    "migration": "supabase/migrations/202605090002_utv2_870_provider_offer_history_summarize_fix.sql",
+    "related_files": [
+      "apps/ingestor/src/scripts/utv2-772-retention-proof.ts",
+      "scripts/provider-offer-history-retention-summarize.test.ts"
+    ]
+  },
+  "workspace_state": {
+    "is_clean": false,
+    "intentional_870_871_dirty_paths": [
+      "apps/ingestor/src/scripts/utv2-772-retention-proof.ts",
+      "scripts/provider-offer-history-retention-summarize.test.ts",
+      "scripts/provider-offers-quarantine-prune-fix.test.ts",
+      "supabase/migrations/202605090002_utv2_870_provider_offer_history_summarize_fix.sql",
+      "supabase/migrations/202605090003_utv2_871_provider_offers_quarantine_prune_fix.sql"
+    ],
+    "unrelated_dirty_path_count": 34,
+    "note": "Workspace recovery left unrelated modified and untracked files outside the 870/871 slice. Those files were not edited during this closeout."
+  },
+  "verification": {
+    "targeted_tests": [
+      {
+        "command": "node node_modules/tsx/dist/cli.mjs --test scripts/provider-offer-history-retention-summarize.test.ts",
+        "status": "PASS",
+        "assertions": [
+          "migration replaces the ambiguous snapshot_date alias with snap_dt",
+          "retention proof script calls summarize_provider_offer_history_partition with { p_date }"
+        ]
+      }
+    ],
+    "db_smoke": {
+      "command": "pnpm test:db",
+      "status": "PASS"
+    },
+    "repo_gate": {
+      "command": "pnpm verify",
+      "status": "PASS"
+    }
+  },
+  "constraints_observed": {
+    "live_db_modified": false,
+    "migrations_reapplied": false,
+    "operator_approval_required_for_reapply": true
+  },
+  "conclusion": {
+    "verification_green": true,
+    "safe_to_move_ready_to_close": true,
+    "remaining_blockers": [
+      "Workspace is not git-clean; 34 unrelated dirty paths remain outside the 870/871 scope."
+    ]
+  }
+}
