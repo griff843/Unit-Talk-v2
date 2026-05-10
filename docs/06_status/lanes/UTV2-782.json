@@ -3,7 +3,7 @@
   "issue_id": "UTV2-782",
   "lane_type": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-782-walpitr-restore-proof",
   "base_branch": "main",
   "commit_sha": "7df45c1adeb58e9db6483eb35b3bd5d87f474c9d",

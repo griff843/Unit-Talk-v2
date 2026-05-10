@@ -3,7 +3,7 @@
   "issue_id": "UTV2-822",
   "lane_type": "codex",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "fix/utv2-822-clean",
   "base_branch": "main",
   "commit_sha": "56214a57b23e0bd8e4e0b375698f86add1fcd60a",
@@ -30,8 +30,16 @@
       "verdict": "pass",
       "exit_code": 0,
       "checks": [
-        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA 56214a5" },
-        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 544 merged at 56214a5" }
+        {
+          "id": "CI_GREEN",
+          "status": "pass",
+          "detail": "all PR checks green on merge SHA 56214a5"
+        },
+        {
+          "id": "MERGE_SHA_TIED",
+          "status": "pass",
+          "detail": "PR 544 merged at 56214a5"
+        }
       ],
       "note": "T1 bundle SHA check added to evidence-bundle-validate.yml."
     }

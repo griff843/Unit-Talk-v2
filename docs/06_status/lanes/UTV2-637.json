@@ -3,7 +3,7 @@
   "issue_id": "UTV2-637",
   "lane_type": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-637-execution-map",
   "base_branch": "main",
   "commit_sha": null,

@@ -3,7 +3,7 @@
   "issue_id": "UTV2-631",
   "lane_type": "claude",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-631-bankroll-aware-sizing",
   "base_branch": "main",
   "commit_sha": "b78d7a0e87f9651a13e9ec9960a5ea96a847d26b",

@@ -3,7 +3,7 @@
   "issue_id": "UTV2-804",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-804-grading-service-hardening",
   "base_branch": "main",
   "commit_sha": "045aba0084c734b77e0e2d24f055587fda7551a5",
@@ -29,8 +29,16 @@
       "verdict": "pass",
       "exit_code": 0,
       "checks": [
-        { "id": "CI_GREEN", "status": "pass", "detail": "verify + Merge Gate green on merge SHA 045aba0" },
-        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 538 merged at 045aba0 — code batches UTV2-804/806/808" }
+        {
+          "id": "CI_GREEN",
+          "status": "pass",
+          "detail": "verify + Merge Gate green on merge SHA 045aba0"
+        },
+        {
+          "id": "MERGE_SHA_TIED",
+          "status": "pass",
+          "detail": "PR 538 merged at 045aba0 \u00e2\u20ac\u201d code batches UTV2-804/806/808"
+        }
       ],
       "note": "Closed manually: post-merge-lane-close failed due to -- arg-parse bug in workflow (fixed in UTV2-833 PR 537)"
     }

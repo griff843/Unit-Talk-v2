@@ -3,7 +3,7 @@
   "issue_id": "UTV2-701",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-701-ncaab-period-half-market-types",
   "base_branch": "main",
   "commit_sha": "24b347d",

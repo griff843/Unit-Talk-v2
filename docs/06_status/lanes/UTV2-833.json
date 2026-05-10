@@ -3,7 +3,7 @@
   "issue_id": "UTV2-833",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-833-fix-merge-cycle-friction",
   "base_branch": "main",
   "commit_sha": "6a1c72783cac0fe71f5367212f074119f22ef724",
@@ -31,8 +31,16 @@
       "verdict": "pass",
       "exit_code": 0,
       "checks": [
-        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA 6a1c727" },
-        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 537 merged at 6a1c727" }
+        {
+          "id": "CI_GREEN",
+          "status": "pass",
+          "detail": "all PR checks green on merge SHA 6a1c727"
+        },
+        {
+          "id": "MERGE_SHA_TIED",
+          "status": "pass",
+          "detail": "PR 537 merged at 6a1c727"
+        }
       ],
       "note": "Closed manually: post-merge-lane-close YAML syntax error prevented auto-close (heredoc at col 0 in run: | block). Fixed in this same PR."
     }

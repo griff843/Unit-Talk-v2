@@ -13,7 +13,7 @@ jobs:
   fibery-sync:
     name: Append PR sync to Fibery
     runs-on: ubuntu-latest
-    if: ${{ !contains(github.event.pull_request.labels.*.name, 'fibery-sync-bypass-approved') }}
+    if: ${{ !contains(github.event.pull_request.labels.*.name, 'fibery-sync-bypass-approved') && vars.FIBERY_API_URL != '' && secrets.FIBERY_API_TOKEN != '' }}
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
