@@ -6,8 +6,8 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-868-ghost-migration-investigation",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e2d0b5cc88d78d47587829d0dd46d0e7a280876a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/619",
   "files_changed": [
     "supabase/migrations/202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql"
   ],
@@ -15,10 +15,10 @@
     "supabase/migrations/202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-10T15:55:00.000Z",
-  "heartbeat_at": "2026-05-10T15:55:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-10T17:01:09.000Z",
+  "closed_at": "2026-05-10T17:01:09.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-board-auto",
   "created_by": "claude",
