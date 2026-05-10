@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-871-quarantine-prune-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b92dbd58acb8d0920658fc1b51c7f4192b532849",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/616",
   "files_changed": [
     "docs/06_status/proof/UTV2-871-prune-fix-verification.json",
     "scripts/provider-offers-quarantine-prune-fix.test.ts",
@@ -21,9 +21,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-871-prune-fix-verification.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-10T13:35:00.000Z",
-  "heartbeat_at": "2026-05-10T13:35:00.000Z",
+  "heartbeat_at": "2026-05-10T14:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "audit-issue-UTV2-876-track",

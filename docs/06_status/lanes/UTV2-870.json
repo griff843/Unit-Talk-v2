@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-870-summarize-fix",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "110011df0334eaa713e14f9a711aaf8c56e4840e",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/615",
   "files_changed": [
     "apps/ingestor/src/scripts/utv2-772-retention-proof.ts",
     "docs/06_status/proof/UTV2-870-summarize-fix-verification.json",
@@ -23,9 +23,9 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-870-summarize-fix-verification.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-10T13:30:00.000Z",
-  "heartbeat_at": "2026-05-10T13:30:00.000Z",
+  "heartbeat_at": "2026-05-10T14:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "audit-issue-UTV2-876-track",
