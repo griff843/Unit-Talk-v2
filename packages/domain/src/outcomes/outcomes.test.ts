@@ -11,6 +11,7 @@ import {
   bridgeOutcomeToEvaluation,
   bridgeBatchToEvaluation,
 } from './outcome-bridge.js';
+import { classifyMarket, buildQuarantineSummary } from '../market-quarantine.js';
 import type { ScoredOutcome } from './types.js';
 
 // ── Stat Resolver ───────────────────────────────────────────────────────────
@@ -147,6 +148,44 @@ describe('bridgeBatchToEvaluation', () => {
   });
 });
 
+// ── Market Quarantine ───────────────────────────────────────────────────────
+
+describe('classifyMarket', () => {
+  it('classifies trusted when market_type_key is present', () => {
+    const r = makeScoredOutcome({ market_type_key: 'player_points_ou' });
+    assert.equal(classifyMarket(r), 'trusted');
+  });
+
+  it('classifies unsupported when market_type_key is absent', () => {
+    const r = makeScoredOutcome();
+    assert.equal(classifyMarket(r), 'unsupported');
+  });
+});
+
+describe('buildQuarantineSummary', () => {
+  it('returns zero counts for all-trusted records', () => {
+    const records = [
+      makeScoredOutcome({ market_type_key: 'player_points_ou', market_type_id: 1 }),
+      makeScoredOutcome({ market_type_key: 'player_assists_ou', market_type_id: 2 }),
+    ];
+    const summary = buildQuarantineSummary(records);
+    assert.equal(summary.unsupported_count, 0);
+    assert.deepEqual(summary.unsupported_market_type_ids, []);
+  });
+
+  it('counts unsupported records and deduplicates market_type_ids', () => {
+    const records = [
+      makeScoredOutcome({ market_type_key: 'player_points_ou', market_type_id: 1 }),
+      makeScoredOutcome({ market_type_id: 99 }),
+      makeScoredOutcome({ market_type_id: 99 }),
+      makeScoredOutcome({ market_type_id: 42 }),
+    ];
+    const summary = buildQuarantineSummary(records);
+    assert.equal(summary.unsupported_count, 3);
+    assert.deepEqual(summary.unsupported_market_type_ids, [42, 99]);
+  });
+});
+
 // ── Performance Report ──────────────────────────────────────────────────────
 
 describe('generatePerformanceReport', () => {
@@ -154,13 +193,14 @@ describe('generatePerformanceReport', () => {
     const report = generatePerformanceReport([]);
     assert.equal(report.overall.total, 0);
     assert.equal(report.overall.wins, 0);
+    assert.equal(report.quarantined_markets.unsupported_count, 0);
   });
 
   it('computes hit rate correctly', () => {
     const records = [
-      makeScoredOutcome({ outcome: 'WIN' }),
-      makeScoredOutcome({ outcome: 'WIN' }),
-      makeScoredOutcome({ outcome: 'LOSS' }),
+      makeScoredOutcome({ outcome: 'WIN', market_type_key: 'player_points_ou' }),
+      makeScoredOutcome({ outcome: 'WIN', market_type_key: 'player_points_ou' }),
+      makeScoredOutcome({ outcome: 'LOSS', market_type_key: 'player_points_ou' }),
     ];
     const report = generatePerformanceReport(records);
     assert.equal(report.overall.total, 3);
@@ -170,11 +210,24 @@ describe('generatePerformanceReport', () => {
     assert.ok(report.overall.hit_rate_pct > 66 && report.overall.hit_rate_pct < 67);
   });
 
+  it('excludes unsupported markets from overall totals', () => {
+    const records = [
+      makeScoredOutcome({ outcome: 'WIN', market_type_key: 'player_points_ou', market_type_id: 1 }),
+      makeScoredOutcome({ outcome: 'WIN', market_type_id: 99 }),
+      makeScoredOutcome({ outcome: 'LOSS', market_type_id: 99 }),
+    ];
+    const report = generatePerformanceReport(records);
+    assert.equal(report.overall.total, 1);
+    assert.equal(report.overall.wins, 1);
+    assert.equal(report.quarantined_markets.unsupported_count, 2);
+    assert.deepEqual(report.quarantined_markets.unsupported_market_type_ids, [99]);
+  });
+
   it('groups by p_final bin', () => {
     const records = [
-      makeScoredOutcome({ p_final: 0.52, outcome: 'WIN' }),
-      makeScoredOutcome({ p_final: 0.58, outcome: 'LOSS' }),
-      makeScoredOutcome({ p_final: 0.72, outcome: 'WIN' }),
+      makeScoredOutcome({ p_final: 0.52, outcome: 'WIN', market_type_key: 'player_points_ou' }),
+      makeScoredOutcome({ p_final: 0.58, outcome: 'LOSS', market_type_key: 'player_points_ou' }),
+      makeScoredOutcome({ p_final: 0.72, outcome: 'WIN', market_type_key: 'player_points_ou' }),
     ];
     const report = generatePerformanceReport(records);
     assert.ok(report.by_p_final_bin.length > 0);

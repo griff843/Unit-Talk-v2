@@ -30,6 +30,13 @@ export interface PerformanceBucket {
   roi_pct: number;
 }
 
+export interface QuarantinedMarketSummary {
+  /** Count of records excluded from analytics due to unresolved market_type_key. */
+  unsupported_count: number;
+  /** Unique market_type_ids that had no canonical key mapping. */
+  unsupported_market_type_ids: number[];
+}
+
 export interface PerformanceReport {
   overall: {
     total: number;
@@ -43,6 +50,8 @@ export interface PerformanceReport {
   by_market_type: PerformanceBucket[];
   by_p_final_bin: PerformanceBucket[];
   by_edge_quartile: PerformanceBucket[];
+  /** Records excluded from the report because their market type is unresolved. */
+  quarantined_markets: QuarantinedMarketSummary;
 }
 
 // ── Joined Record (shadow_score + outcome) ──────────────────────────────────

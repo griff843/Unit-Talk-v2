@@ -75,6 +75,8 @@ export interface ModelPerformanceReport {
   generatedAt: string;
   totalPostedPicks: number;
   totalSettledPicks: number;
+  /** Picks whose market string is empty and cannot be classified. Excluded from breakdown buckets. */
+  unknownMarketPickCount: number;
   filters: {
     sport: string | null;
     tier: string | null;
@@ -201,6 +203,7 @@ export async function getModelPerformanceReport(
 
   const totalPostedPicks = filteredPicks.length;
   let totalSettledPicks = 0;
+  let unknownMarketPickCount = 0;
 
   const enriched: EnrichedRow[] = filteredPicks.map((pick) => {
     const metadata = asRecord(pick.metadata);
@@ -211,6 +214,7 @@ export async function getModelPerformanceReport(
     const dataFreshness = readString(metadata['data_freshness']);
     const isStale = dataFreshness === 'stale';
     const market = typeof pick.market === 'string' ? pick.market : '';
+    if (market === '') unknownMarketPickCount++;
     const marketFamily = deriveMarketFamily(market);
 
     const settlement = settlementMap.get(pick.id) ?? null;
@@ -284,11 +288,11 @@ export async function getModelPerformanceReport(
     return (a.tier ?? '').localeCompare(b.tier ?? '');
   });
 
-  // 5. Sport / market family breakdown
+  // 5. Sport / market family breakdown (exclude picks with no market string)
   type SportMarketKey = `${string}::${string}`;
   const sportMarketMap = new Map<SportMarketKey, EnrichedRow[]>();
 
-  for (const row of enriched) {
+  for (const row of enriched.filter((r) => r.market !== '')) {
     const sportKey = row.sport ?? 'unknown';
     const key: SportMarketKey = `${sportKey}::${row.marketFamily}`;
     if (!sportMarketMap.has(key)) sportMarketMap.set(key, []);
@@ -371,6 +375,7 @@ export async function getModelPerformanceReport(
     generatedAt: new Date().toISOString(),
     totalPostedPicks,
     totalSettledPicks,
+    unknownMarketPickCount,
     filters: {
       sport: filterSport,
       tier: filterTier,
