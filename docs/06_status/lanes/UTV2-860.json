@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-860-retro-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "19e3ad1b17c4d3c6410cea8ab84b086b4bb0b0e5",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/609",
   "files_changed": [
     "docs/06_status/proof/UTV2-860-phase9-ledger-reconciliation.json"
   ],
@@ -17,10 +17,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-860-phase9-ledger-reconciliation.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-10T13:05:00.000Z",
-  "heartbeat_at": "2026-05-10T13:05:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-10T13:46:00.000Z",
+  "closed_at": "2026-05-10T13:46:00.000Z",
   "blocked_by": [],
   "preflight_token": "retro-proof-backfill",
   "created_by": "claude",

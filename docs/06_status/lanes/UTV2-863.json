@@ -6,8 +6,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-863-drift-evidence",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "3fd0b17227f8c12fe9e55b4648878987c2c7fdd6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/613",
   "files_changed": [
     "docs/06_status/proof/UTV2-863-drift-evidence/README.md",
     "docs/06_status/proof/UTV2-863-drift-evidence/runtime-drift/evidence.json",
@@ -29,7 +29,7 @@
   ],
   "status": "in_progress",
   "started_at": "2026-05-10T13:20:00.000Z",
-  "heartbeat_at": "2026-05-10T13:20:00.000Z",
+  "heartbeat_at": "2026-05-10T13:46:00.000Z",
   "closed_at": null,
   "blocked_by": [
     "deploy-secrets",
