@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-865",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "claude/utv2-865-schema-drift-gate-backfill",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    ".github/workflows/live-schema-parity.yml",
+    "package.json",
+    "scripts/ci/live-schema-parity-workflow.test.ts",
+    "scripts/ci/schema-drift-gate.test.ts",
+    "scripts/ci/schema-drift-gate.ts",
+    "scripts/utv2-phase9-schema-reconciliation.test.ts",
+    "scripts/utv2-phase9-schema-reconciliation.ts"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/live-schema-parity.yml",
+    "package.json",
+    "scripts/ci/",
+    "scripts/utv2-phase9-schema-reconciliation.ts",
+    "scripts/utv2-phase9-schema-reconciliation.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-05-10T13:00:00.000Z",
+  "heartbeat_at": "2026-05-10T13:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "retro-proof-backfill",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "Retroactive lane backfill. Linear marked UTV2-865 Done on 2026-05-09 via the final-board-audit pass. Implementation files were left uncommitted; this lane lands them on main with a tied lane manifest. Updates commit_sha post-merge."
+}
