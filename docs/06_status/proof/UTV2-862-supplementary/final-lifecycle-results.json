@@ -1,0 +1,135 @@
+{
+  "generated_at": "2026-05-10T03:39:38.596Z",
+  "verification_date_local": "2026-05-09T23:40:15.8535391-04:00",
+  "issue_id": "UTV2-862",
+  "branch": "main",
+  "executor": "Codex",
+  "requested_sequence": [
+    "summarize_provider_offer_history_partition('2026-04-29')",
+    "drop_old_provider_offer_history_partitions(7)",
+    "prune_provider_offers_bounded(7,5000,20)"
+  ],
+  "runtime_observability_deploy": {
+    "issue_id": "UTV2-869",
+    "pushed_sha": "f3cb05195b9028d077fbd4d7fd0ef2be97bf0928",
+    "push_status": "PUSHED",
+    "deploy_workflow_run_id": 25618823962,
+    "deploy_workflow_url": "https://github.com/griff843/Unit-Talk-v2/actions/runs/25618823962",
+    "deploy_status": "FAILED",
+    "deploy_blocker": "Deploy check failed because GitHub Actions secret SUPABASE_URL resolved empty."
+  },
+  "visibility_limits": {
+    "cron_schema_exposed_via_postgrest": false,
+    "partition_catalog_exposed_via_postgrest": false,
+    "note": "This workstation can run the lifecycle RPCs and verify public-table state through the live service-role API surface, but it cannot query cron.job, cron.job_run_details, or pg_inherits from here."
+  },
+  "baseline": {
+    "provider_offer_history_count": 0,
+    "provider_offer_line_snapshots_count": 0,
+    "provider_offer_line_snapshots_for_target_date": 0,
+    "provider_offers_count": 8191206,
+    "provider_offers_oldest_created_at": "2026-04-23T02:30:56.97176+00:00",
+    "provider_offers_newest_created_at": "2026-04-29T13:05:01.15842+00:00",
+    "provider_offers_legacy_quarantine_count": 8191206,
+    "provider_offers_legacy_quarantine_oldest_created_at": "2026-04-23T02:30:56.97176+00:00",
+    "provider_offers_legacy_quarantine_newest_created_at": "2026-04-29T13:05:01.15842+00:00"
+  },
+  "sequence": [
+    {
+      "step": 1,
+      "function": "summarize_provider_offer_history_partition",
+      "args": {
+        "p_date": "2026-04-29"
+      },
+      "started_at": "2026-05-10T03:39:41.611Z",
+      "finished_at": "2026-05-10T03:39:41.726Z",
+      "status": "PASS",
+      "result": [
+        {
+          "rows_summarized": 0,
+          "snapshot_date": "2026-04-29"
+        }
+      ]
+    },
+    {
+      "step": 2,
+      "function": "drop_old_provider_offer_history_partitions",
+      "args": {
+        "p_retention_days": 7
+      },
+      "started_at": "2026-05-10T03:39:41.726Z",
+      "finished_at": "2026-05-10T03:39:41.846Z",
+      "status": "FAIL",
+      "error": {
+        "message": "must be owner of table provider_offer_history_p20260502",
+        "code": "42501"
+      }
+    },
+    {
+      "step": 3,
+      "function": "prune_provider_offers_bounded",
+      "args": {
+        "p_retention_days": 7,
+        "p_batch_size": 5000,
+        "p_max_batches": 20
+      },
+      "started_at": "2026-05-10T03:39:41.846Z",
+      "finished_at": "2026-05-10T03:39:49.965Z",
+      "status": "FAIL",
+      "error": {
+        "message": "canceling statement due to statement timeout",
+        "code": "57014"
+      }
+    }
+  ],
+  "post_state": {
+    "provider_offer_history_count": 0,
+    "provider_offer_line_snapshots_count": 0,
+    "provider_offer_line_snapshots_for_target_date": 0,
+    "provider_offers_count": 8191206,
+    "provider_offers_oldest_created_at": "2026-04-23T02:30:56.97176+00:00",
+    "provider_offers_newest_created_at": "2026-04-29T13:05:01.15842+00:00",
+    "provider_offers_legacy_quarantine_count": 8191206,
+    "provider_offers_legacy_quarantine_oldest_created_at": "2026-04-23T02:30:56.97176+00:00",
+    "provider_offers_legacy_quarantine_newest_created_at": "2026-04-29T13:05:01.15842+00:00"
+  },
+  "verification_checks": {
+    "summarize_succeeds": true,
+    "drop_succeeds": false,
+    "prune_succeeds": false,
+    "summarize_before_drop": true,
+    "no_unexpected_partition_loss": true,
+    "no_unexpected_row_loss": true,
+    "no_timeout": false,
+    "no_sql_errors": false,
+    "retention_corruption": false
+  },
+  "follow_up_issues": [
+    {
+      "title": "Provider-history retention drop RPC cannot drop partitions due to live ownership mismatch",
+      "severity": "blocking",
+      "observed_failure": "drop_old_provider_offer_history_partitions(7) returns SQLSTATE 42501: must be owner of table provider_offer_history_p20260502",
+      "impact": "The lifecycle cannot clear the merge_provider_offer_staging_cycle gate because the partition-drop phase fails on live.",
+      "next_action": "Align ownership or SECURITY DEFINER semantics so the retention function can drop eligible provider_offer_history partitions in production."
+    },
+    {
+      "title": "Provider-offers bounded prune still times out under the required 7/5000/20 contract on live",
+      "severity": "blocking",
+      "observed_failure": "prune_provider_offers_bounded(7,5000,20) returns SQLSTATE 57014: canceling statement due to statement timeout",
+      "impact": "The lifecycle cannot clear the merge_provider_offer_staging_cycle gate because the prune phase does not complete on live.",
+      "next_action": "Verify the live prune implementation and runtime timeout budget so the required batch contract completes without timeout."
+    },
+    {
+      "title": "UTV2-869 runtime observability deploy blocked by missing GitHub Actions secret",
+      "severity": "deployment-blocker",
+      "observed_failure": "Deploy workflow run 25618823962 failed Deploy check because SUPABASE_URL was empty in GitHub Actions.",
+      "impact": "UTV2-869 is pushed to origin/main but not deployed.",
+      "next_action": "Populate or repair the GitHub Actions SUPABASE_URL secret, then re-run the Deploy workflow."
+    }
+  ],
+  "gate_recommendation": {
+    "gate": "merge_provider_offer_staging_cycle",
+    "action": "DO_NOT_CLEAR",
+    "reason": "The required live lifecycle does not pass end-to-end: summarize succeeds, but drop fails on ownership and prune fails on timeout."
+  }
+}
