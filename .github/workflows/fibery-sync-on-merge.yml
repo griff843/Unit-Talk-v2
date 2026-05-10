@@ -13,7 +13,7 @@ jobs:
   fibery-sync:
     name: Append merge sync to Fibery
     runs-on: ubuntu-latest
-    if: ${{ github.event.pull_request.merged == true && !contains(github.event.pull_request.labels.*.name, 'fibery-sync-bypass-approved') }}
+    if: ${{ github.event.pull_request.merged == true && !contains(github.event.pull_request.labels.*.name, 'fibery-sync-bypass-approved') && vars.FIBERY_API_URL != '' && secrets.FIBERY_API_TOKEN != '' }}
     steps:
       - name: Checkout merged head
         uses: actions/checkout@v4

@@ -21,7 +21,11 @@ pnpm type-check        # TypeScript project-references build check
 pnpm build             # compile all packages and apps
 pnpm lint              # ESLint
 pnpm verify            # env:check + lint + type-check + build + test
+pnpm verify:quick      # fast pre-flight: sync-check + env + lint + type-check only
 pnpm supabase:types    # regenerate database.types.ts after a migration
+pnpm ops:brief         # current system state: lanes, Linear queue, runtime status
+pnpm ops:digest        # daily dispatch digest — surfaces executable candidates
+pnpm ops:truth-check   # done-gate for a lane (pass UTV2-### as argument)
 
 # Run a single test file
 tsx --test apps/api/src/submission-service.test.ts
@@ -131,17 +135,22 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 
 | Skill | When to use |
 |---|---|
+| `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
+| `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
+| `/three-brain` | executor routing decision for any issue (Claude / Codex / Gemini / QA / Griff) |
 | `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |
 | `/lane-management` | starting, progressing, blocking, closing any lane |
 | `/verification` | before any merge claim or `ops:truth-check` call |
 | `/code-structure` | touching package/app boundaries, imports, or generated files |
 | `/betting-domain` | touching CanonicalPick, scoring, promotion, lifecycle, CLV, grading |
 | `/outbox-worker` | touching outbox polling, delivery adapter, retry, circuit breaker |
-| `/system-state-loader` | session start or after `/clear` |
+| `/system-state-loader` | forced state reload after `/clear` or when hook data is suspected stale |
 | `/t1-proof` | assembling a T1 evidence bundle |
 | `/linear-sync` | updating Linear state |
 | `/db-verify` | live DB verification |
 | `/systematic-debugging` | structured debugging when a fix resists quick diagnosis |
+| `/verify-pick` | verify a specific pick end-to-end against live data |
+| `/pm-packet` | generate a PM decision packet for escalation or plan approval |
 
 All skills live in `.claude/commands/`. Add new skills there; do not expand this file.
 
@@ -151,7 +160,7 @@ All skills live in `.claude/commands/`. Add new skills there; do not expand this
 
 - Before any work, run `git fetch origin && git pull --ff-only origin main` to ensure local main matches remote. Stale local state produces false premises.
 - Run `/clear` at major task boundaries.
-- After `/clear`, re-read this file and invoke `/system-state-loader`.
+- After `/clear`, re-read this file. The `UserPromptSubmit` hook auto-injects system state — invoke `/system-state-loader` only if the hook data appears stale or missing.
 - If context degrades, clear immediately.
 - Never self-certify Done. The done-gate is `ops:truth-check`, not narrative.
 - PM reviews artifacts, not narrative summaries. T1 approval is a GitHub label, not a chat message.

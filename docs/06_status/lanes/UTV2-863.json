@@ -3,7 +3,7 @@
   "issue_id": "UTV2-863",
   "lane_type": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-863-drift-evidence",
   "base_branch": "main",
   "commit_sha": "3fd0b17227f8c12fe9e55b4648878987c2c7fdd6",
@@ -39,5 +39,5 @@
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "Lane stays Blocked Internal. This commit only lands pre-fix drift evidence; it does not close the lane. Lane closes after runtime SHA convergence (🆕 B), fresh viable candidates (🆕 E), and a green ownership-persistence rerun show ownership_write_success_pct > 0 against a deployed runtime ≥ fcd4ce4e."
+  "notes": "Lane stays Blocked Internal. This commit only lands pre-fix drift evidence; it does not close the lane. Lane closes after runtime SHA convergence (\u00f0\u0178\u2020\u2022 B), fresh viable candidates (\u00f0\u0178\u2020\u2022 E), and a green ownership-persistence rerun show ownership_write_success_pct > 0 against a deployed runtime \u00e2\u2030\u00a5 fcd4ce4e."
 }

@@ -3,7 +3,7 @@
   "issue_id": "UTV2-870",
   "lane_type": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-870-summarize-fix",
   "base_branch": "main",
   "commit_sha": "110011df0334eaa713e14f9a711aaf8c56e4840e",

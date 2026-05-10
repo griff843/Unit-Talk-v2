@@ -3,7 +3,7 @@
   "issue_id": "UTV2-811",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-811-scanner-skip-logging",
   "base_branch": "main",
   "commit_sha": "c4c2e340a79408dfc464cb14c48eac8e234a31a8",

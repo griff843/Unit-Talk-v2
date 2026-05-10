@@ -3,7 +3,7 @@
   "issue_id": "UTV2-715",
   "lane_type": "claude",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-715-clv-moneyline-inferselectionside",
   "base_branch": "main",
   "commit_sha": "46d10197c4ef407bee1019b7c33f3781bba94702",

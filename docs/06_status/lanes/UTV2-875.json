@@ -3,7 +3,7 @@
   "issue_id": "UTV2-875",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-875-canonical-project-ref",
   "base_branch": "main",
   "commit_sha": "d3c551e85e6acbbd0792cb1a913ebc40b5dafec8",
@@ -40,5 +40,5 @@
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "T3 chore: mechanical rename of feownrheeefbcsehtsiw → zfzdnfwdarxucxtaojxm to match the canonical Supabase project ref declared in CLAUDE.md. No DB touch, no logic change, no migration. Frozen historical evidence bundles under docs/06_status/proof/UTV2-*/ are not touched."
+  "notes": "T3 chore: mechanical rename of feownrheeefbcsehtsiw \u00e2\u2020\u2019 zfzdnfwdarxucxtaojxm to match the canonical Supabase project ref declared in CLAUDE.md. No DB touch, no logic change, no migration. Frozen historical evidence bundles under docs/06_status/proof/UTV2-*/ are not touched."
 }

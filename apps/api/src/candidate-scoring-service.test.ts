@@ -305,14 +305,13 @@ test('never sets pick_id or shadow_mode=false on any row', async () => {
   }
 });
 
-test('skips already-scored candidates (model_score not null)', async () => {
+test('skips candidates that already have ownership attribution (model_registry_id not null)', async () => {
   const marketUniverse = new InMemoryMarketUniverseRepository();
   const pickCandidates = new InMemoryPickCandidateRepository();
 
   const universeRow = makeUniverseRow({ id: 'universe-1', fair_over_prob: 0.6, fair_under_prob: 0.4, is_stale: false });
   seedUniverseRows(marketUniverse, [universeRow]);
 
-  // Already scored candidate
   const candidate = makeCandidate({
     id: 'candidate-1',
     universe_id: 'universe-1',
@@ -320,6 +319,9 @@ test('skips already-scored candidates (model_score not null)', async () => {
     model_score: 0.65,
     model_tier: 'B',
     model_confidence: 0.8,
+    model_registry_id: 'existing-registry-id',
+    scoring_run_id: 'existing-run-id',
+    ownership_timestamp: new Date().toISOString(),
   });
   seedCandidateRows(pickCandidates, [candidate]);
 
@@ -328,6 +330,39 @@ test('skips already-scored candidates (model_score not null)', async () => {
   assert.equal(result.scored, 0);
   assert.equal(result.skipped, 0);
   assert.equal(result.errors, 0);
+});
+
+test('re-scores pre-scored candidates that lack ownership attribution', async () => {
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  const runs = new InMemorySystemRunRepository();
+  await seedChampion(modelRegistry);
+
+  const universeRow = makeUniverseRow({ id: 'universe-1', fair_over_prob: 0.6, fair_under_prob: 0.4, is_stale: false });
+  seedUniverseRows(marketUniverse, [universeRow]);
+
+  const candidate = makeCandidate({
+    id: 'candidate-1',
+    universe_id: 'universe-1',
+    status: 'qualified',
+    model_score: 0.65,
+    model_tier: 'B',
+    model_confidence: 0.8,
+    model_registry_id: null,
+    scoring_run_id: null,
+    ownership_timestamp: null,
+  });
+  seedCandidateRows(pickCandidates, [candidate]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry, runs });
+
+  assert.equal(result.scored, 1, 'pre-scored candidate without ownership should be attributed');
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  const updated = rows.get('universe-1');
+  assert.ok(updated?.model_registry_id !== null, 'model_registry_id should be set');
+  assert.ok(updated?.scoring_run_id !== null, 'scoring_run_id should be set');
+  assert.ok(updated?.ownership_timestamp !== null, 'ownership_timestamp should be set');
 });
 
 // ---------------------------------------------------------------------------

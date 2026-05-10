@@ -3,7 +3,7 @@
   "issue_id": "UTV2-860",
   "lane_type": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-860-retro-proof",
   "base_branch": "main",
   "commit_sha": "19e3ad1b17c4d3c6410cea8ab84b086b4bb0b0e5",

@@ -64,7 +64,7 @@ async function main(): Promise<void> {
 
 async function listIssues(): Promise<void> {
   const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
-  const stateNames = parseCsv(readOption('states') ?? 'Ready,In Progress,In Review');
+  const stateNames = parseCsv(readOption('states') ?? 'Ready,Ready for Claude,Ready for Codex,In Progress,In Review,In Claude,In Codex,Triage,Backlog,Blocked Internal');
   const limit = Number.parseInt(readOption('limit') ?? '50', 10);
   const json = hasFlag('json');
   const teamId = await resolveTeamId(teamKey);
@@ -138,7 +138,7 @@ async function listIssues(): Promise<void> {
 
 async function listExecutableWork(): Promise<void> {
   const teamKey = readOption('team') ?? env.LINEAR_TEAM_KEY;
-  const stateNames = parseCsv(readOption('states') ?? 'Ready,In Progress,In Review');
+  const stateNames = parseCsv(readOption('states') ?? 'Ready,Ready for Claude,Ready for Codex,In Progress,In Review,In Claude,In Codex,Triage');
   const limit = Number.parseInt(readOption('limit') ?? '25', 10);
   const teamId = await resolveTeamId(teamKey);
 

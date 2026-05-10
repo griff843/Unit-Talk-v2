@@ -124,7 +124,7 @@ export class CandidateScoringService {
         statuses.map((status) => this.repos.pickCandidates.findByStatus(status)),
       );
       const all = rowsByStatus.flat();
-      candidates = all.filter(c => c.model_score === null);
+      candidates = all.filter(c => c.model_registry_id === null);
     } catch (err) {
       logger?.error?.(JSON.stringify({
         service: 'candidate-scoring',

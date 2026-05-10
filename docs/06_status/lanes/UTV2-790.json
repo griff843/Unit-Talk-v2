@@ -3,7 +3,7 @@
   "issue_id": "UTV2-790",
   "lane_type": "codex",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-790-secrets-management-policy",
   "base_branch": "main",
   "commit_sha": null,

@@ -3,7 +3,7 @@
   "issue_id": "UTV2-706",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-706-nrfi-gap-documented",
   "base_branch": "main",
   "commit_sha": "cbf66ae",

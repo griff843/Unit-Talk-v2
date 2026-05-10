@@ -3,7 +3,7 @@
   "issue_id": "UTV2-812",
   "lane_type": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-812-settlement-empty-records-log",
   "base_branch": "main",
   "commit_sha": "9cc9443",
@@ -26,7 +26,7 @@
     {
       "checked_at": "2026-05-02T17:30:00.000Z",
       "result": "done",
-      "note": "stale-data freshness contract + settlement tests shipped via PR #535 (9cc9443). settlement-service.ts itself was not modified — scope correction applied."
+      "note": "stale-data freshness contract + settlement tests shipped via PR #535 (9cc9443). settlement-service.ts itself was not modified \u00e2\u20ac\u201d scope correction applied."
     }
   ],
   "reopen_history": []

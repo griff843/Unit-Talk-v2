@@ -3,7 +3,7 @@
   "issue_id": "UTV2-719",
   "lane_type": "claude",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-719-team-external-id-fix",
   "base_branch": "main",
   "commit_sha": "a3da1d6fd0bb576938ac54dd2ca5df0d48a1a967",
@@ -27,7 +27,11 @@
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [
-    {"timestamp": "2026-04-23T02:37:00Z", "result": "PASS", "notes": "124/124 teams fixed, 200/200 player→team joins, 100/100 event→team joins, CI green, PR #446 merged SHA a3da1d6"}
+    {
+      "timestamp": "2026-04-23T02:37:00Z",
+      "result": "PASS",
+      "notes": "124/124 teams fixed, 200/200 player\u00e2\u2020\u2019team joins, 100/100 event\u00e2\u2020\u2019team joins, CI green, PR #446 merged SHA a3da1d6"
+    }
   ],
   "reopen_history": []
 }

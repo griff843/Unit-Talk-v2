@@ -3,7 +3,7 @@
   "issue_id": "UTV2-829",
   "lane_type": "codex",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-829-qa-agent-linear-reporter",
   "base_branch": "main",
   "commit_sha": "c0471398f59236b2afc52f19b3d5f3bd3d7860a7",
@@ -29,8 +29,16 @@
       "verdict": "pass",
       "exit_code": 0,
       "checks": [
-        { "id": "CI_GREEN", "status": "pass", "detail": "all PR checks green on merge SHA c047139" },
-        { "id": "MERGE_SHA_TIED", "status": "pass", "detail": "PR 540 merged at c047139" }
+        {
+          "id": "CI_GREEN",
+          "status": "pass",
+          "detail": "all PR checks green on merge SHA c047139"
+        },
+        {
+          "id": "MERGE_SHA_TIED",
+          "status": "pass",
+          "detail": "PR 540 merged at c047139"
+        }
       ],
       "note": "QA agent issue-reporter wired to post Linear comment on CI failure."
     }
