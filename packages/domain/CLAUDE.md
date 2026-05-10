@@ -29,10 +29,11 @@ Pure business logic and computation. Scoring, probability, devigging, promotion 
 - `clv-weight-tuner.ts` — `analyzeWeightEffectiveness()`, Pearson correlation per component
 - `execution-quality.ts` — delivery latency and line freshness metrics
 - `shadow-mode.ts` — `parseShadowModeEnv()`, `isShadowEnabled()`
+- `market-quarantine.ts` — `classifyMarket()`, `buildQuarantineSummary()` — excludes unsupported markets from edge analytics (UTV2-851)
 
 **Sub-modules (directory-based):**
 - `probability/` — `proportionalDevig()`, `computeConsensus()`, `computeProbabilityLayer()`, calibration metrics
-- `outcomes/` — `resolveOutcome()`, `classifyLoss()`, `computeFlatBetROI()`, performance reports
+- `outcomes/` — `resolveOutcome()`, `classifyLoss()`, `computeFlatBetROI()`, performance reports; `PerformanceReport` includes `quarantined_markets: QuarantinedMarketSummary`
 - `bands/` — band assignment (A+/A/B/C/SUPPRESS), edge/uncertainty thresholds, downgrade logic
 - `scoring/` — sport-specific weight configs (NBA, NFL, MLB, NHL), weight validation
 - `features/` — player form extraction, game context, opportunity, efficiency

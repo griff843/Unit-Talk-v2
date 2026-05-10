@@ -69,7 +69,7 @@ Re-seed when:
 | `free_user` | free | `smart_form` or `discord` | `personas/unit-talk-free_user.json` |
 | `vip_user` | vip | `discord` | `personas/unit-talk-vip_user.json` |
 
-**Currently committed:** `unit-talk-operator.json` (real auth state, not to be committed to git). `unit-talk-capper.example.json` is a reference only.
+**Gitignored:** `personas/*.json` (real auth state — excluded via `.gitignore`). Only `*.example.json` files are tracked. `unit-talk-capper.example.json` is a reference only. Run `pnpm qa:auth` to seed locally.
 
 ---
 

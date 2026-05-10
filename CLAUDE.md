@@ -65,12 +65,12 @@ Higher ranks win unconditionally. Full spec: `docs/05_operations/EXECUTION_TRUTH
 
 ---
 
-## Active build — Phase 7A: Governance Brake
+## Build status — Phase 7A: Governance Brake (SHIPPED)
 
-**Charter:** `docs/06_status/PHASE7_PLAN_DRAFT.md`
 **Ratification:** `docs/06_status/PHASE7R_RATIFICATION.md`
+**Execution plan:** `docs/06_status/PHASE7E_EXECUTION_PLAN.md`
 
-Phase 7A focus: `awaiting_approval` lifecycle state + governance brake on autonomous sources. Phases 1–6 closed; their boundary rules are shipped and no longer load-bearing in governance.
+Phase 7A shipped: `awaiting_approval` lifecycle state + governance brake on autonomous sources. Phases 1–7A closed; boundary rules are in production. Current focus: system hardening, live-proof gating, and infrastructure provisioning (Hetzner, SGO).
 
 ---
 
@@ -99,7 +99,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Tier | Verification | Proof | Merge Authority |
 |---|---|---|---|
 | T1 | type-check + test + test:db + runtime proof | Evidence bundle v1, SHA-tied | PM `t1-approved` label |
-| T2 | type-check + test + issue-specific | Diff summary + verification log | Orchestrator on green |
+| T2 | type-check + test + issue-specific | Diff summary + verification log | Orchestrator on green (no PM_VERDICT) |
 | T3 | type-check + test | Green CI on merge SHA | Orchestrator on green |
 
 **Static proof** alone is never sufficient for T1. **Runtime proof** must run against real Supabase, not in-memory repos. Details: `/verification` skill.
@@ -121,7 +121,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Docs authority map | `docs/05_operations/docs_authority_map.md` |
 | Program status | `docs/06_status/PROGRAM_STATUS.md` |
 | Codebase guide (architecture reference) | `docs/CODEBASE_GUIDE.md` |
-| Phase 7 charter | `docs/06_status/PHASE7_PLAN_DRAFT.md` |
+| Phase 7 ratification + execution plan | `docs/06_status/PHASE7R_RATIFICATION.md`, `docs/06_status/PHASE7E_EXECUTION_PLAN.md` |
 | SGO / provider knowledge | `docs/05_operations/PROVIDER_KNOWLEDGE_BASE.md` |
 | Known debt | `docs/06_status/KNOWN_DEBT.md` |
 | Governed loop (PR schemas + gates) | `docs/05_operations/GOVERNED_LOOP_SPEC.md` |

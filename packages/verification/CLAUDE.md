@@ -70,9 +70,9 @@ Gap: engine layer (shadow, fault, strategy) has no dedicated tests. Logic is com
 
 ## Known Drift or Cautions
 
-- Type errors exist in `shadow-pipeline-runner.ts` and `divergence-classifier.ts` (pre-existing, not blocking)
-- `shadow-runner.ts` has `exactOptionalPropertyTypes` issues with `from`/`to` date fields
-- Low test coverage relative to complexity — engine assertions need expansion
+- Type errors exist in `shadow-pipeline-runner.ts` and `divergence-classifier.ts` (pre-existing, not blocking) — tracked in KNOWN_DEBT as DEBT-014
+- `shadow-runner.ts` has `exactOptionalPropertyTypes` issues with `from`/`to` date fields — tracked in KNOWN_DEBT as DEBT-014
+- Low test coverage relative to complexity — engine assertions need expansion — tracked in KNOWN_DEBT as DEBT-015
 
 
 ---

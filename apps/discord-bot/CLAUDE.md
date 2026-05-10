@@ -1,6 +1,6 @@
 # App: apps/discord-bot
 
-Discord slash command bot. 9 commands, 2 event handlers, role-based authorization. Reads from API, does not write to DB.
+Discord slash command bot. 14 commands, 2 event handlers, role-based authorization. Reads from API, does not write to DB.
 
 ## Role in Unit Talk V2
 

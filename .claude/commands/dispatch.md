@@ -72,12 +72,28 @@ For each validated target:
    This script junctions root + per-app node_modules from the main repo and copies `local.env`
    so `pnpm verify` works without a full `pnpm install`.
 4. Update Linear issue state to "In Claude" or "In Codex" via MCP
-5. Create the lane manifest and commit it to the branch:
+5. Create the lane manifest and write sync.yml, then commit both to the branch:
    ```bash
    # Write docs/06_status/lanes/UTV2-{number}.json (from template below)
-   git add docs/06_status/lanes/UTV2-{number}.json
-   git commit -m "chore(lanes): add UTV2-{number} lane manifest"
+   # Write .ops/sync.yml (auto-generated from lane manifest — see schema below)
+   git add docs/06_status/lanes/UTV2-{number}.json .ops/sync.yml
+   git commit -m "chore(lanes): UTV2-{number} lane manifest and sync metadata"
    ```
+
+   **sync.yml schema (auto-generate at lane-open):**
+   ```yaml
+   version: 1
+   approval:
+     allow_multiple_issues: true
+     skip_sync_required: false
+   entities:
+     issues:
+       - UTV2-{number}          # always: from branch pattern
+     findings: []
+     controls: []
+     proofs: []                 # populate from manifest.expected_proof_paths if non-empty
+   ```
+   If `expected_proof_paths` is non-empty in the manifest, each path becomes an entry under `entities.proofs`.
 
 ### Phase 4: Execute
 

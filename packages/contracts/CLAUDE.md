@@ -64,8 +64,8 @@ None. Pure types and stateless functions.
 
 ## Known Drift or Cautions
 
-- `picks.ts` imports from `./index.js` (re-export cycle) — safe because types-only, but fragile if values are added
-- `promotion_target_check` constraint in Postgres must be kept in sync with `promotionTargets` array manually
+- `picks.ts` imports from `./index.js` (re-export cycle) — safe because types-only, but fragile if values are added — tracked in KNOWN_DEBT as DEBT-016
+- `promotion_target_check` constraint in Postgres must be kept in sync with `promotionTargets` array manually — tracked in KNOWN_DEBT as DEBT-017
 
 
 ---

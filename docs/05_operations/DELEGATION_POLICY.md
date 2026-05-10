@@ -24,7 +24,7 @@ The three authorization tiers in this policy map onto — but do not replace —
 | Sprint tier | Default authorization tier | Notes |
 |---|---|---|
 | T3 (pure-computation, docs, test coverage, no-behavior refactors) | **Tier A** if file scope is in Tier A allow-list; otherwise **Tier B** | T3 + Tier A = merge on green |
-| T2 (service wrappers, cross-package integration, bounded refactors) | **Tier B** by default | Even T2 with passing tests requires PM merge touchpoint |
+| T2 (service wrappers, cross-package integration, bounded refactors) | **Tier B** by default | T2 clear-scope (Codex lane): Claude diff-review is sole merge gate, no PM_VERDICT required. T2 with migrations/contracts: Claude-executed, no PM_VERDICT required. |
 | T1 (migrations, routing, settlement, lifecycle, shared contracts) | **Tier C** always | Plan approval and merge approval required |
 
 Tier label overrides file-scope eligibility. A T1 Linear issue is Tier C even if it happens to touch only `scripts/**` — because T1 classification signals PM has flagged runtime risk.

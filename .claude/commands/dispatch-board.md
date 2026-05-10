@@ -20,6 +20,8 @@ You are notified at exactly two points:
 1. **T1 plan gate** — before any T1 implementation starts (PM plan approval required)
 2. **T1 merge gate** — after T1 implementation, before merge (PM_VERDICT required)
 
+**T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT required.**
+
 Everything else — routing, lane creation, execution, verification, CI monitoring, merging, Linear updates, lane closes, and next-issue dispatch — runs without interruption.
 
 **This skill owns the loop. `/dispatch` owns the lane.** Never re-implement `/dispatch` logic here — call it.
@@ -47,6 +49,12 @@ Everything else — routing, lane creation, execution, verification, CI monitori
    - Issues whose file scope overlaps any active lane's `file_scope_lock`
    - Issues missing `tier:T1`, `tier:T2`, or `tier:T3` label
    - Issues with unresolved blocking issues (linked blockers not in Done state)
+   - Issues with any of these external-gate labels (auto-skip, no qualification needed):
+     - `needs:operator-action` — requires human operator action (e.g. populate secrets, buy hardware)
+     - `needs:live-data` — requires live SGO or external feed currently unavailable
+     - `needs:hetzner` — requires server provisioning not yet complete
+     - Log each skip: `[dispatch-board] SKIP UTV2-### — {label}: {title}`
+     - Surface in end-of-cycle report under "Deferred (external gate)"
 
 5. If `--milestone <id>`: call `mcp__claude_ai_Linear__get_milestone` and filter candidates to that milestone only.
 
@@ -68,7 +76,7 @@ Apply routing rules to each candidate (first match wins):
 |---|---|---|---|
 | T1 | `tier:T1` label | Claude | **T1 plan gate — stop and notify (Phase 3)** |
 | Sensitive path | Touches `supabase/migrations/**`, `packages/contracts/src/**`, `packages/domain/src/**`, `packages/db/src/lifecycle.ts`, `packages/db/src/repositories.ts`, `apps/api/src/auth.ts`, `apps/worker/**` | Claude | Griff gate |
-| T2 clear-scope | `tier:T2`, not sensitive path, Codex healthy | Codex | None |
+| T2 clear-scope | `tier:T2`, not sensitive path, Codex healthy | Codex | Claude diff-review |
 | T2 with migration/contract | `tier:T2`, touches migrations or shared contracts | Claude | None |
 | T3 | `tier:T3` | Claude | None |
 | Codex unavailable | Codex health = false | Claude fallback | None |
@@ -149,7 +157,13 @@ After implementation and PR open:
 1. Confirm CI is green on the PR
 2. Run `/verification` checklist (tier-appropriate)
 3. Run `ops:truth-check UTV2-###`
-4. On PASS:
+4. Pre-merge conflict check:
+   ```bash
+   gh pr view <number> --json mergeable --jq .mergeable
+   ```
+   If `CONFLICTING`: `git rebase origin/main && git push --force-with-lease` then re-check.
+   (Root cause: sister PR merged to main after this branch diverged — standard rebase resolves it.)
+5. On PASS:
    - Merge the PR: `gh pr merge <number> --squash`
    - Update Linear to Done via MCP
    - Close lane manifest (`status: done`)
@@ -178,13 +192,19 @@ When a Codex PR is available for review:
    - No scope bleed into other packages
    - `pnpm verify` output is in the PR description and is green
    - R-level compliance section is present and passing
-2. On clean review:
+2. Pre-merge conflict check:
+   ```bash
+   gh pr view <number> --json mergeable --jq .mergeable
+   ```
+   If `CONFLICTING`: checkout the Codex branch, rebase onto `origin/main`, force-push, then continue.
+3. **T2 clear-scope merge gate: Claude diff-review is the sole gate. No PM_VERDICT required.**
+   On clean review:
    - Approve the PR: `gh pr review <number> --approve`
    - Merge: `gh pr merge <number> --squash`
    - Update Linear to Done via MCP
    - Close lane manifest
    - Free the slot → dispatch next Codex candidate
-3. On scope bleed or verify failure:
+4. On scope bleed or verify failure:
    - Leave PR open
    - Mark lane blocked with specific reason
    - Free the slot → dispatch next Codex candidate from unblocked pool
@@ -237,7 +257,21 @@ Deferred (not dispatched):
   — UTV2-876 missing tier label
   — UTV2-877 blocked by UTV2-873 (not Done)
 
-Board: 2 merged, 1 awaiting PM, 2 blocked, 2 deferred
+Deferred (external gate):
+  — UTV2-878 [needs:live-data] — SGO unavailable
+  — UTV2-879 [needs:operator-action] — GitHub secrets unpopulated
+
+Board: 2 merged, 1 awaiting PM, 2 blocked, 2 deferred, 2 external-gate
+```
+
+After all merges in the cycle, reset sync.yml and commit:
+```bash
+# Reset sync.yml to neutral after last merge of the cycle
+git checkout main && git pull --ff-only
+# Edit .ops/sync.yml → entities.issues: []
+git add .ops/sync.yml
+git commit -m "ops: reset sync.yml to neutral after merge [skip ci]"
+git push origin main
 ```
 
 If issues remain after the cycle: summarize what's needed to unblock each one.
@@ -248,6 +282,8 @@ If issues remain after the cycle: summarize what's needed to unblock each one.
 
 - **Never start T1 without PM plan approval.** T1 lanes hold at `pending_pm_approval` until you say "approved UTV2-###".
 - **Never merge T1 without PM_VERDICT on the PR.** The comment must be on the PR, not in chat.
+- **T2 clear-scope (Codex): Claude diff-review is the sole gate.** No PM_VERDICT required. `gh pr review --approve` then merge.
+- **Auto-skip external-gate labels.** `needs:operator-action`, `needs:live-data`, `needs:hetzner` → skip silently, surface in report. No user qualifier needed.
 - **Max 1 Claude lane at a time.** Queue — never stack.
 - **Max 2 Codex lanes at a time.** Per executor routing defaults.
 - **Call `/dispatch`, don't re-implement it.** This skill owns the loop; `/dispatch` owns the lane.

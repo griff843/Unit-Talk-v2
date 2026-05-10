@@ -111,8 +111,12 @@ As of 2026-04-11 (UTV2-531 initial backfill). Sorted by impact, then area.
 
 | DEBT-012 | operational | Stale lane manifests with no heartbeat activity — UTV2-575, UTV2-580, UTV2-622, UTV2-624, UTV2-625 show `status: started` but heartbeat >8h stale as of 2026-04-15. These represent lanes that were opened but not actively worked or formally closed. Each needs a decision: close or restart. | Medium | UTV2-585 | `pnpm proof:check` output 2026-04-15; `docs/06_status/lanes/*.json` heartbeat_at fields | open |
 | DEBT-013 | cross-app | Smart-form UI only supports 5 market types (player-prop, moneyline, spread, total, team-total). Period/half/quarter/inning market types added to catalog in UTV2-700 (2026-04-20) are NOT accessible from smart-form — `form-schema.ts` MARKET_TYPE_IDS must be extended and offer-loading validated per period market. No false completion claims found in git history. | Medium | none — no Linear issue yet; extend smart-form UI when period markets have confirmed offer coverage for target sports | `apps/smart-form/lib/form-schema.ts` MARKET_TYPE_IDS; UTV2-700 (#398); UTV2-699 audit 2026-04-21 | open |
+| DEBT-014 | type-safety | Pre-existing type errors in `packages/verification/src/shadow-pipeline-runner.ts` and `divergence-classifier.ts`; `shadow-runner.ts` has `exactOptionalPropertyTypes` violations on `from`/`to` date fields. Not blocking CI (errors are in non-built paths). | Medium | none — no Linear issue yet; open one when verification package is next touched | `packages/verification/CLAUDE.md` Known Drift | open |
+| DEBT-015 | test-coverage | `packages/verification` has low test coverage relative to its complexity. Shadow pipeline, divergence classifier, and fault injection engine have minimal assertions. | Low | none — no Linear issue yet | `packages/verification/CLAUDE.md` Known Drift | open |
+| DEBT-016 | contracts | `packages/contracts/src/picks.ts` imports from `./index.js` (re-export cycle). Safe for type-only imports but fragile if runtime values are ever added to that barrel export. | Low | none — no incident; open if values are added | `packages/contracts/CLAUDE.md` Known Drift | open |
+| DEBT-017 | schema | `promotion_target_check` Postgres constraint must be kept in sync with `promotionTargets` array in `packages/contracts/src/picks.ts` manually. No lint or migration check enforces this. | Medium | none — no Linear issue yet; open when contracts are next extended | `packages/contracts/CLAUDE.md` Known Drift | open |
 
-Current max ID: `DEBT-013`. Next insertion uses `DEBT-014`.
+Current max ID: `DEBT-017`. Next insertion uses `DEBT-018`.
 
 ## Closed Debt (audit trail)
 

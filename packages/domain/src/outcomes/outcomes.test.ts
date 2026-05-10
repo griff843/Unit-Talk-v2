@@ -73,6 +73,7 @@ describe('getSupportedMarketKeys', () => {
 
 // ── Outcome Bridge ──────────────────────────────────────────────────────────
 
+// Omit market_type_key entirely to get 'unsupported'; don't pass undefined (exactOptionalPropertyTypes)
 function makeScoredOutcome(overrides: Partial<ScoredOutcome> = {}): ScoredOutcome {
   return {
     market_key: 'player_points_ou',
@@ -206,8 +207,7 @@ describe('generatePerformanceReport', () => {
     assert.equal(report.overall.total, 3);
     assert.equal(report.overall.wins, 2);
     assert.equal(report.overall.losses, 1);
-    // 2/3 ~ 66.67%
-    assert.ok(report.overall.hit_rate_pct > 66 && report.overall.hit_rate_pct < 67);
+    assert.equal(report.overall.hit_rate_pct, 66.67);
   });
 
   it('excludes unsupported markets from overall totals', () => {

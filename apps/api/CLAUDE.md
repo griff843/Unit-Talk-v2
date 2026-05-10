@@ -48,6 +48,7 @@ All writes to the database go through this server. No other app writes directly.
 - `lifecycle-service.ts` — re-exports from `@unit-talk/db`
 - `player-enrichment-service.ts` — player data enrichment (6h interval)
 - `trial-expiry-service.ts` — trial membership expiration
+- `model-health-scanner.ts` — schema drift detection + PostgREST cache integrity (UTV2-852)
 
 **Scheduling (in index.ts):**
 - Recap scheduler (continuous)
@@ -94,7 +95,7 @@ All writes to the database go through this server. No other app writes directly.
 ## Known Drift or Cautions
 
 - Alert service modules in `apps/api/src/` are thin re-exports from `@unit-talk/alert-runtime` (UTV2-535)
-- 3 pre-existing test failures in `promotion-edge-integration.test.ts` on main
+- `promotion-edge-integration.test.ts` — 46 tests, 0 failures as of UTV2-851 merge (2026-05-10)
 - Rate limiting is in-memory, per-process — not distributed across instances
 
 

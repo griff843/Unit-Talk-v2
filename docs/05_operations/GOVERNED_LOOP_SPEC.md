@@ -612,10 +612,10 @@ jobs:
         #   Required: GitHub PR review approval from CODEOWNERS member
         #   → All three must be present
         #
-        # T2:
-        #   Required: PM_VERDICT: APPROVED comment from CODEOWNERS member
-        #   Required: GitHub PR review approval from CODEOWNERS member
-        #   → Both must be present
+        # T2 (clear-scope Codex lanes):
+        #   Required: GitHub PR review approval (Claude's `gh pr review --approve` satisfies this)
+        #   PM_VERDICT: NOT required — Claude diff-review is the sole merge gate
+        #   → Approve and merge on clean diff + green CI
         #
         # T3:
         #   Required: Executor Result Validation check = success
@@ -627,7 +627,8 @@ jobs:
       - name: Post merge gate result
         # Create check run "Merge Gate":
         #   T1 without t1-approved label → failure
-        #   T1/T2 without PM_VERDICT: APPROVED → failure
+        #   T1 without PM_VERDICT: APPROVED → failure
+        #   T2 without GitHub PR review approval → failure
         #   T3 without CI green → failure
         #   All conditions met → success
 ```
@@ -643,7 +644,7 @@ If no tier label exists on the PR, the merge gate posts a `neutral` check with m
 | Tier | CI Green | Executor Result Valid | PM Verdict: APPROVED | PR Review Approval | `t1-approved` Label |
 |---|---|---|---|---|---|
 | T1 | Required | Required | Required | Required | **Required** |
-| T2 | Required | Required | Required | Required | Not required |
+| T2 | Required | Required | Not required | Required (Claude `gh pr review --approve`) | Not required |
 | T3 | Required | Required | Not required | Not required | Not required |
 
 #### Branch Protection Requirement (MANDATORY — Non-Negotiable)
