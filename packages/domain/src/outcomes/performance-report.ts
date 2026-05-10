@@ -5,19 +5,25 @@
 import { isDirectionallyCorrect, computeFlatBetROI } from './outcome-resolver.js';
 
 import type { ScoredOutcome, PerformanceReport, PerformanceBucket } from './types.js';
+import { classifyMarket, buildQuarantineSummary } from '../market-quarantine.js';
 
 /**
  * Generate a full performance report from scored outcomes.
+ * Records with unresolved market_type_key are quarantined and excluded from
+ * all analytics buckets to prevent low-trust markets from polluting edge signals.
  */
 export function generatePerformanceReport(records: ScoredOutcome[]): PerformanceReport {
-  const wins = records.filter((r) => r.outcome === 'WIN').length;
-  const losses = records.filter((r) => r.outcome === 'LOSS').length;
-  const pushes = records.filter((r) => r.outcome === 'PUSH').length;
-  const nonPush = records.filter((r) => r.outcome !== 'PUSH');
+  const quarantined_markets = buildQuarantineSummary(records);
+  const trusted = records.filter((r) => classifyMarket(r) === 'trusted');
+
+  const wins = trusted.filter((r) => r.outcome === 'WIN').length;
+  const losses = trusted.filter((r) => r.outcome === 'LOSS').length;
+  const pushes = trusted.filter((r) => r.outcome === 'PUSH').length;
+  const nonPush = trusted.filter((r) => r.outcome !== 'PUSH');
 
   let directionalCorrect = 0;
   let directionalTotal = 0;
-  for (const r of records) {
+  for (const r of trusted) {
     const correct = isDirectionallyCorrect(r.p_final, r.outcome);
     if (correct !== null) {
       directionalTotal++;
@@ -25,10 +31,10 @@ export function generatePerformanceReport(records: ScoredOutcome[]): Performance
     }
   }
 
-  const flatBet = computeFlatBetROI(records.map((r) => r.outcome));
+  const flatBet = computeFlatBetROI(trusted.map((r) => r.outcome));
 
   const overall = {
-    total: records.length,
+    total: trusted.length,
     wins,
     losses,
     pushes,
@@ -38,11 +44,11 @@ export function generatePerformanceReport(records: ScoredOutcome[]): Performance
     flat_bet_roi_pct: round(flatBet.roi_pct, 3),
   };
 
-  // By market type
-  const by_market_type = buildBuckets(records, (r) => r.market_type_key ?? `mt_${r.market_type_id}`);
+  // By market type (trusted records only — market_type_key is always defined here)
+  const by_market_type = buildBuckets(trusted, (r) => r.market_type_key!);
 
   // By p_final bin
-  const by_p_final_bin = buildBuckets(records, (r) => {
+  const by_p_final_bin = buildBuckets(trusted, (r) => {
     const p = r.p_final;
     if (p < 0.5) return '<0.50';
     if (p < 0.55) return '0.50-0.55';
@@ -52,19 +58,19 @@ export function generatePerformanceReport(records: ScoredOutcome[]): Performance
   });
 
   // By edge quartile
-  const edges = records.map((r) => r.edge_final).sort((a, b) => a - b);
+  const edges = trusted.map((r) => r.edge_final).sort((a, b) => a - b);
   const q1 = edges[Math.floor(edges.length * 0.25)] ?? 0;
   const q2 = edges[Math.floor(edges.length * 0.5)] ?? 0;
   const q3 = edges[Math.floor(edges.length * 0.75)] ?? 0;
 
-  const by_edge_quartile = buildBuckets(records, (r) => {
+  const by_edge_quartile = buildBuckets(trusted, (r) => {
     if (r.edge_final <= q1) return `Q1 (≤${q1.toFixed(4)})`;
     if (r.edge_final <= q2) return `Q2 (≤${q2.toFixed(4)})`;
     if (r.edge_final <= q3) return `Q3 (≤${q3.toFixed(4)})`;
     return `Q4 (>${q3.toFixed(4)})`;
   });
 
-  return { overall, by_market_type, by_p_final_bin, by_edge_quartile };
+  return { overall, by_market_type, by_p_final_bin, by_edge_quartile, quarantined_markets };
 }
 
 function buildBuckets(

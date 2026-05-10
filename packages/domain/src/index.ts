@@ -44,3 +44,4 @@ export * from './portfolio/index.js';
 // import directly: import { computeAlphaEvaluation } from '@unit-talk/domain/evaluation'
 export * from './pick-narrative.js';
 export * from './stale-data.js';
+export * from './market-quarantine.js';

@@ -1,0 +1,38 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-851",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-851-market-quarantine",
+  "base_branch": "main",
+  "commit_sha": "f11ff938",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/620",
+  "files_changed": [
+    "packages/domain/src/market-quarantine.ts",
+    "packages/domain/src/outcomes/types.ts",
+    "packages/domain/src/outcomes/performance-report.ts",
+    "packages/domain/src/outcomes/outcomes.test.ts",
+    "packages/domain/src/index.ts",
+    "apps/api/src/model-performance-service.ts"
+  ],
+  "file_scope_lock": [
+    "packages/domain/src/market-quarantine.ts",
+    "packages/domain/src/outcomes/types.ts",
+    "packages/domain/src/outcomes/performance-report.ts",
+    "packages/domain/src/outcomes/outcomes.test.ts",
+    "packages/domain/src/index.ts",
+    "apps/api/src/model-performance-service.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_progress",
+  "started_at": "2026-05-10T17:30:00.000Z",
+  "heartbeat_at": "2026-05-10T17:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-board-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "T1 PM-approved. Quarantine unsupported/low-trust markets from edge analytics. No DB migration. market_type_key absence is the proxy for unsupported market. Excludes from PerformanceReport buckets, adds QuarantinedMarketSummary. API model-performance-service gains unknownMarketPickCount."
+}
