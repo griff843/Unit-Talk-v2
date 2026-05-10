@@ -5,6 +5,8 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'scripts/ops/compare-databases.ts'
+      - 'scripts/ci/schema-drift-gate.ts'
+      - 'scripts/db-inspect/**'
       - '.github/workflows/live-schema-parity.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -14,6 +16,8 @@ on:
     paths:
       - 'supabase/migrations/**'
       - 'scripts/ops/compare-databases.ts'
+      - 'scripts/ci/schema-drift-gate.ts'
+      - 'scripts/db-inspect/**'
       - '.github/workflows/live-schema-parity.yml'
       - 'package.json'
       - 'pnpm-lock.yaml'
@@ -92,6 +96,8 @@ jobs:
         run: supabase db push --db-url "$EXPECTED_DATABASE_URL"
 
       - name: Compare scratch schema to live schema
+        id: compare
+        continue-on-error: true
         run: >
           pnpm db:compare --
           --expected-db-url "$EXPECTED_DATABASE_URL"
@@ -101,11 +107,22 @@ jobs:
           --output artifacts/schema-parity/live-schema-parity.json
           --pretty
 
+      - name: Authorize schema drift gate
+        if: always()
+        run: >
+          pnpm ci:schema-drift-gate --
+          --report artifacts/schema-parity/live-schema-parity.json
+          --artifact-dir artifacts/schema-parity
+          --expected-db-url "$EXPECTED_DATABASE_URL"
+          --actual-db-url "$ACTUAL_DATABASE_URL"
+          --schema public
+          --inspect-limit 200
+
       - name: Upload schema parity artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: live-schema-parity
-          path: artifacts/schema-parity/live-schema-parity.json
+          path: artifacts/schema-parity/
           retention-days: 30
           if-no-files-found: error
