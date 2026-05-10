@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-877",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-877-scorer-filter-fix",
+  "base_branch": "main",
+  "commit_sha": "a9739c6b89bbb95087d447ea1309c0b4cefeafe1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/617",
+  "files_changed": [
+    "apps/api/src/candidate-scoring-service.ts",
+    "apps/api/src/candidate-scoring-service.test.ts",
+    ".ops/sync.yml",
+    "docs/06_status/lanes/UTV2-877.json"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/candidate-scoring-service.ts",
+    "apps/api/src/candidate-scoring-service.test.ts",
+    ".ops/sync.yml",
+    "docs/06_status/lanes/UTV2-877.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-864-ownership-proof.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-10T15:15:00.000Z",
+  "heartbeat_at": "2026-05-10T15:15:00.000Z",
+  "closed_at": null,
+  "blocked_by": []
+}
