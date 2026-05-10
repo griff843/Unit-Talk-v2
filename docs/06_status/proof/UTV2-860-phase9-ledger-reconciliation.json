@@ -1,0 +1,486 @@
+{
+  "generated_at": "2026-05-09T16:18:35.737Z",
+  "project_ref": "zfzdnfwdarxucxtaojxm",
+  "issue_ids": [
+    "UTV2-860",
+    "UTV2-861"
+  ],
+  "ledger_before": {
+    "total": 91,
+    "maxVersion": "20260509160906",
+    "appliedVersions": [
+      "202603200001",
+      "202603200002",
+      "202603200003",
+      "202603200004",
+      "202603200005",
+      "202603200006",
+      "202603200007",
+      "202603200008",
+      "202603200009",
+      "202603200010",
+      "202603200011",
+      "202603200012",
+      "202603200013",
+      "202603200014",
+      "202603200015",
+      "202603200016",
+      "202603200017",
+      "202603200018",
+      "202603310001",
+      "202603310002",
+      "202604010001",
+      "202604010002",
+      "202604010003",
+      "202604010004",
+      "202604010005",
+      "202604020001",
+      "202604020002",
+      "202604020003",
+      "202604020004",
+      "202604020005",
+      "202604030001",
+      "202604030002",
+      "202604040001",
+      "202604040002",
+      "202604040003",
+      "202604040004",
+      "202604050005",
+      "202604050006",
+      "202604050007",
+      "202604050008",
+      "202604050009",
+      "202604050010",
+      "202604070011",
+      "202604070012",
+      "202604070013",
+      "202604070014",
+      "202604080015",
+      "202604080016",
+      "202604090001",
+      "202604090002",
+      "202604090003",
+      "202604090004",
+      "202604090005",
+      "202604090006",
+      "202604090007",
+      "202604090008",
+      "202604100001",
+      "202604100002",
+      "202604100003",
+      "202604100004",
+      "202604100005",
+      "202604100006",
+      "202604110001",
+      "202604130001",
+      "202604150001",
+      "202604150002",
+      "202604170001",
+      "202604190001",
+      "202604200001",
+      "202604200002",
+      "202604210001",
+      "202604210002",
+      "202604210003",
+      "202604210004",
+      "202604210005",
+      "202604210006",
+      "202604230001",
+      "20260424202018",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "20260427045252",
+      "20260427182229",
+      "202604280001",
+      "202604290001",
+      "202604290002",
+      "202604290003",
+      "202604290004",
+      "202604290005",
+      "202604300003",
+      "20260509160906"
+    ]
+  },
+  "ledger_after": {
+    "total": 108,
+    "maxVersion": "20260509160906",
+    "appliedVersions": [
+      "202603200001",
+      "202603200002",
+      "202603200003",
+      "202603200004",
+      "202603200005",
+      "202603200006",
+      "202603200007",
+      "202603200008",
+      "202603200009",
+      "202603200010",
+      "202603200011",
+      "202603200012",
+      "202603200013",
+      "202603200014",
+      "202603200015",
+      "202603200016",
+      "202603200017",
+      "202603200018",
+      "202603310001",
+      "202603310002",
+      "202604010001",
+      "202604010002",
+      "202604010003",
+      "202604010004",
+      "202604010005",
+      "202604020001",
+      "202604020002",
+      "202604020003",
+      "202604020004",
+      "202604020005",
+      "202604030001",
+      "202604030002",
+      "202604040001",
+      "202604040002",
+      "202604040003",
+      "202604040004",
+      "202604050005",
+      "202604050006",
+      "202604050007",
+      "202604050008",
+      "202604050009",
+      "202604050010",
+      "202604070011",
+      "202604070012",
+      "202604070013",
+      "202604070014",
+      "202604080015",
+      "202604080016",
+      "202604090001",
+      "202604090002",
+      "202604090003",
+      "202604090004",
+      "202604090005",
+      "202604090006",
+      "202604090007",
+      "202604090008",
+      "202604100001",
+      "202604100002",
+      "202604100003",
+      "202604100004",
+      "202604100005",
+      "202604100006",
+      "202604110001",
+      "202604130001",
+      "202604150001",
+      "202604150002",
+      "202604170001",
+      "202604190001",
+      "202604200001",
+      "202604200002",
+      "202604210001",
+      "202604210002",
+      "202604210003",
+      "202604210004",
+      "202604210005",
+      "202604210006",
+      "202604230001",
+      "202604230002",
+      "20260424202018",
+      "202604250001",
+      "202604250002",
+      "202604250004",
+      "202604250005",
+      "20260425030626",
+      "20260425030656",
+      "20260425132920",
+      "202604270001",
+      "202604270002",
+      "20260427045252",
+      "20260427182229",
+      "202604280001",
+      "202604290001",
+      "202604290002",
+      "202604290003",
+      "202604290004",
+      "202604290005",
+      "202604291001",
+      "202604291002",
+      "202604291003",
+      "202604300003",
+      "202605020001",
+      "202605020002",
+      "202605030001",
+      "202605030002",
+      "202605070001",
+      "202605070002",
+      "202605090001",
+      "20260509160906"
+    ]
+  },
+  "missing_versions_before": [
+    "202604230002",
+    "202604250001",
+    "202604250002",
+    "202604250004",
+    "202604250005",
+    "202604270001",
+    "202604270002",
+    "202604291001",
+    "202604291002",
+    "202604291003",
+    "202605020001",
+    "202605020002",
+    "202605030001",
+    "202605030002",
+    "202605070001",
+    "202605070002",
+    "202605090001"
+  ],
+  "missing_versions_after": [],
+  "checks": [
+    {
+      "version": "202604230002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "apply-and-ledger",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "experiment_ledger_run_type_check exists live",
+        "definition=CHECK (run_type = ANY (ARRAY['training'::text, 'eval'::text, 'backtest'::text, 'calibration'::text, 'shadow_comparison'::text]))"
+      ]
+    },
+    {
+      "version": "202604250001",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "apply-and-ledger",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "market_universe closing backfill gaps=0",
+        "market_universe rows with closing evidence=30555"
+      ]
+    },
+    {
+      "version": "202604250002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "apply-and-ledger",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "sgo_replay_coverage view exists live"
+      ]
+    },
+    {
+      "version": "202604250004",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "apply-and-ledger",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "stale MLB alias rows=0",
+        "MLB game-total alias correct=true",
+        "MLB picks missing market_type_id=872",
+        "MLB missing market_type_id with known stake=0",
+        "MLB missing market_type_id with null stake=872"
+      ]
+    },
+    {
+      "version": "202604250005",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "settlement_records missing payload.profitLossUnits=0"
+      ]
+    },
+    {
+      "version": "202604270001",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "apply-and-ledger",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "market_universe canonical key gaps=0"
+      ]
+    },
+    {
+      "version": "202604270002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "closing materializer indexes=idx_market_universe_provider_event_id, idx_provider_offers_closing_snapshot_id_desc"
+      ]
+    },
+    {
+      "version": "202604291001",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "prune_provider_offers_bounded exists live"
+      ]
+    },
+    {
+      "version": "202604291002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "provider_offer_history exists live"
+      ]
+    },
+    {
+      "version": "202604291003",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "provider_offer_current exists live",
+        "merge_provider_offer_staging_cycle exists live",
+        "list_provider_offer_current_opening exists live"
+      ]
+    },
+    {
+      "version": "202605020001",
+      "issueIds": [
+        "UTV2-860",
+        "UTV2-861"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "pick_candidates.sport_key exists live",
+        "idx_pick_candidates_sport_key exists live"
+      ]
+    },
+    {
+      "version": "202605020002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "linked board-construction candidate rows=285",
+        "unresolved board-construction candidate links=0"
+      ]
+    },
+    {
+      "version": "202605030001",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "drop_old_provider_offer_history_partitions exists live"
+      ]
+    },
+    {
+      "version": "202605030002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "provider_offer_line_snapshots exists live",
+        "summarize_provider_offer_history_partition exists live",
+        "line snapshot indexes exist live"
+      ]
+    },
+    {
+      "version": "202605070001",
+      "issueIds": [
+        "UTV2-860",
+        "UTV2-861"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "picks_stake_units_canonical_check exists live",
+        "constraint remains NOT VALID as designed"
+      ]
+    },
+    {
+      "version": "202605070002",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "ledger-only",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "ownership columns exist live",
+        "ownership indexes exist live",
+        "ownership nulls: registry_entity_type=0, source_type_compatibility=0, active_state=0"
+      ]
+    },
+    {
+      "version": "202605090001",
+      "issueIds": [
+        "UTV2-860"
+      ],
+      "strategy": "apply-and-ledger",
+      "semanticallyLive": true,
+      "readyForLedger": true,
+      "reasons": [
+        "nightly-retention-prune includes summarize + partition-drop calls"
+      ]
+    }
+  ],
+  "actions": {
+    "applied_migration_versions": [
+      "202604270001"
+    ],
+    "inserted_ledger_versions": [
+      "202604230002",
+      "202604250001",
+      "202604250002",
+      "202604250004",
+      "202604250005",
+      "202604270001",
+      "202604270002",
+      "202604291001",
+      "202604291002",
+      "202604291003",
+      "202605020001",
+      "202605020002",
+      "202605030001",
+      "202605030002",
+      "202605070001",
+      "202605070002",
+      "202605090001"
+    ]
+  }
+}
