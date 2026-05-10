@@ -1,0 +1,135 @@
+{
+  "milestone": "UTV2-864",
+  "title": "First model-attributed pick_candidate ownership proof",
+  "generated_at": "2026-05-10T15:20:00Z",
+  "proof_type": "runtime",
+  "scorer_runtime_version": "candidate-scoring-ownership-v1",
+  "code_change_pr": "https://github.com/griff843/Unit-Talk-v2/pull/617",
+  "code_change_issue": "UTV2-877",
+  "merge_sha": "80d933562f38e38529bab8346935651cb4b0c7ab",
+  "supabase_project": "zfzdnfwdarxucxtaojxm",
+
+  "ownership_summary": {
+    "total_candidates_with_ownership": 194,
+    "distinct_champion_models": 5,
+    "distinct_scoring_runs": 4,
+    "first_ownership_at": "2026-05-10T14:47:58.318Z",
+    "last_ownership_at": "2026-05-10T15:13:08.424Z"
+  },
+
+  "ownership_by_model": [
+    {
+      "model_name": "baseline-nba-player-prop",
+      "sport": "NBA",
+      "market_family": "player_prop",
+      "active_state": "champion",
+      "candidates_owned": 87,
+      "first_owned": "2026-05-10T15:03:07.024Z",
+      "last_owned": "2026-05-10T15:13:08.424Z"
+    },
+    {
+      "model_name": "baseline-mlb-player-prop",
+      "sport": "MLB",
+      "market_family": "player_prop",
+      "active_state": "champion",
+      "candidates_owned": 67,
+      "first_owned": "2026-05-10T15:03:11.363Z",
+      "last_owned": "2026-05-10T15:13:07.974Z"
+    },
+    {
+      "model_name": "baseline-nhl-player-prop",
+      "sport": "NHL",
+      "market_family": "player_prop",
+      "active_state": "champion",
+      "candidates_owned": 19,
+      "first_owned": "2026-05-10T15:03:10.363Z",
+      "last_owned": "2026-05-10T15:08:07.844Z"
+    },
+    {
+      "model_name": "baseline-mlb-game-line",
+      "sport": "MLB",
+      "market_family": "game_line",
+      "active_state": "champion",
+      "candidates_owned": 13,
+      "first_owned": "2026-05-10T14:47:58.318Z",
+      "last_owned": "2026-05-10T15:13:07.744Z"
+    },
+    {
+      "model_name": "baseline-nba-game-line",
+      "sport": "NBA",
+      "market_family": "game_line",
+      "active_state": "champion",
+      "candidates_owned": 8,
+      "first_owned": "2026-05-10T15:03:06.453Z",
+      "last_owned": "2026-05-10T15:03:36.001Z"
+    }
+  ],
+
+  "scoring_runs": [
+    {
+      "run_id": "1cbaf93f-b8ad-48c9-a5bc-eda654b0bd8d",
+      "started_at": "2026-05-10T14:47:58.732Z",
+      "finished_at": "2026-05-10T14:47:59.300Z",
+      "status": "succeeded",
+      "scored": 1,
+      "skipped": 989,
+      "errors": 0,
+      "no_champion_skipped": 51,
+      "note": "First ever ownership row — old model_score=null filter, found one stale→fresh candidate"
+    },
+    {
+      "run_id": "ce6c0af4-90dc-409a-ba1d-bfa2d37bd82e",
+      "started_at": "2026-05-10T15:03:06.853Z",
+      "finished_at": "2026-05-10T15:04:03.469Z",
+      "status": "succeeded",
+      "scored": 169,
+      "skipped": 1831,
+      "errors": 0,
+      "no_champion_skipped": 49,
+      "note": "First run with UTV2-877 filter fix (model_registry_id=null), candidateCount=2000"
+    },
+    {
+      "run_id": "3200ef47-2418-4942-9d31-b93fd1ccfe76",
+      "started_at": "2026-05-10T15:08:07.677Z",
+      "finished_at": "2026-05-10T15:08:10.800Z",
+      "status": "succeeded",
+      "scored": 8,
+      "skipped": 1830,
+      "errors": 0,
+      "no_champion_skipped": 49
+    },
+    {
+      "run_id": "4fe5e86c-5eb6-4bf2-ab6f-5adbebba2f33",
+      "started_at": "2026-05-10T15:13:05.217Z",
+      "finished_at": "2026-05-10T15:13:11.034Z",
+      "status": "succeeded",
+      "scored": 16,
+      "skipped": 1851,
+      "errors": 0,
+      "no_champion_skipped": 48
+    }
+  ],
+
+  "ownership_fields_verified": {
+    "model_registry_id": "NOT NULL — valid FK to model_registry champion row",
+    "scoring_run_id": "NOT NULL — valid FK to system_runs record",
+    "ownership_timestamp": "NOT NULL — wall-clock time of attribution"
+  },
+
+  "root_cause_of_delay": {
+    "issue": "UTV2-877 scoring filter gap",
+    "description": "CandidateScoringService filtered on model_score===null, which excluded 2,026 pre-UTV2-854 candidates that had model_score set but no ownership triple. Changed to model_registry_id===null.",
+    "sgo_api_status": "Both SGO API keys inactive at time of proof — not a blocker for ownership attribution of existing candidates"
+  },
+
+  "proof_gates": {
+    "model_registry_id_not_null": true,
+    "scoring_run_id_not_null": true,
+    "ownership_timestamp_not_null": true,
+    "scorer_runtime_version_confirmed": "candidate-scoring-ownership-v1",
+    "multiple_sports_covered": true,
+    "zero_errors": true,
+    "verify_green": true,
+    "pr_open": "https://github.com/griff843/Unit-Talk-v2/pull/617"
+  }
+}

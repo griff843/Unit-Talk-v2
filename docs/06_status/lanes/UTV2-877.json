@@ -23,9 +23,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-864-ownership-proof.json"
   ],
-  "status": "in_review",
+  "status": "closed",
+  "merge_sha": "80d933562f38e38529bab8346935651cb4b0c7ab",
   "started_at": "2026-05-10T15:15:00.000Z",
-  "heartbeat_at": "2026-05-10T15:15:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-10T15:20:00.000Z",
+  "closed_at": "2026-05-10T15:20:00.000Z",
   "blocked_by": []
 }
