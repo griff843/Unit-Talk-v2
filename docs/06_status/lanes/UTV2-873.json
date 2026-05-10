@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-873",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "codex/utv2-873-docker-build-fix",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "Dockerfile",
+    "docker-compose*.yml",
+    ".dockerignore"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-10T15:52:00.000Z",
+  "heartbeat_at": "2026-05-10T15:52:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-board-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "Codex lane: fix stale COPY directive in Dockerfile referencing apps/operator-web/package.json which no longer exists."
+}
