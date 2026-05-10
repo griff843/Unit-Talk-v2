@@ -117,18 +117,20 @@ console.log(`  Last heartbeat: ${lastHeartbeat ? ageFmt(lastHeartbeat.started_at
 console.log(`  Stuck running (>5min): ${stuckRunning.length === 0 ? 'NONE' : stuckRunning.length}`)
 console.log(`  Last successful run: ${lastSuccessAge !== null ? lastSuccessAge + 'm ago' : 'NONE in last 10'}`)
 
+// ── 6. Backlog age ────────────────────────────────────────────────────────
+// Computed before verdict so idle-vs-DOWN distinction can use pending count.
+const pending = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending')
+
 // Worker verdict
 let workerVerdict = 'HEALTHY'
 if (heartbeatsInWindow.length === 0 && !lastRun) workerVerdict = 'DOWN — no runs or heartbeats found'
-else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0) workerVerdict = 'DOWN — no runs or heartbeats in health window'
+else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0 && pending.length > 0) workerVerdict = 'DOWN — no runs or heartbeats in health window (pending work exists)'
+else if (heartbeatsInWindow.length === 0 && runsInWindow.length === 0) workerVerdict = 'HEALTHY — idle, no eligible rows in queue'
 else if (lastRun?.status === 'failed') workerVerdict = 'DEGRADED — last run failed'
 else if (lastRun?.status === 'cancelled') workerVerdict = 'DEGRADED — last run cancelled'
 else if (stuckRunning.length > 0) workerVerdict = 'DEGRADED — stuck running row'
 else if (runsInWindow.length === 0) workerVerdict = 'HEALTHY — heartbeat fresh, no eligible distribution rows processed'
 console.log(`  Worker verdict: ${workerVerdict}`)
-
-// ── 6. Backlog age ────────────────────────────────────────────────────────
-const pending = rows.filter(r => workerTargets.includes(r.target) && r.status === 'pending')
 const oldestPending = pending.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())[0]
 
 console.log('\n╔══ BACKLOG AGE ══════════════════════════════════════════════')
