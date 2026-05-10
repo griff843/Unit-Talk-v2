@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-871",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-871-quarantine-prune-fix",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-871-prune-fix-verification.json",
+    "scripts/provider-offers-quarantine-prune-fix.test.ts",
+    "supabase/migrations/202605090003_utv2_871_provider_offers_quarantine_prune_fix.sql"
+  ],
+  "file_scope_lock": [
+    "supabase/migrations/202605090003_utv2_871_provider_offers_quarantine_prune_fix.sql",
+    "scripts/provider-offers-quarantine-prune-fix.test.ts",
+    "docs/06_status/proof/UTV2-871-prune-fix-verification.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-871-prune-fix-verification.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-10T13:35:00.000Z",
+  "heartbeat_at": "2026-05-10T13:35:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "audit-issue-UTV2-876-track",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "T1 migration. Lands the fix on main; live apply is operator-controlled per MERGE_DEPLOY_DISCIPLINE.md and is tracked under UTV2-876 (audit issue 🆕 F). Note: even after live apply, prune_provider_offers_bounded(7,5000,20) may still time out on the 8.2M-row legacy quarantine; tracked separately as audit issue 🆕 D."
+}
