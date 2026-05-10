@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-863",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-863-drift-evidence",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-863-drift-evidence/README.md",
+    "docs/06_status/proof/UTV2-863-drift-evidence/runtime-drift/evidence.json",
+    "docs/06_status/proof/UTV2-863-drift-evidence/runtime-drift/live-write-trace.json",
+    "docs/06_status/proof/UTV2-863-drift-evidence/runtime-drift/remediation.md",
+    "docs/06_status/proof/UTV2-863-drift-evidence/runtime-drift/runtime-path-analysis.md",
+    "docs/06_status/proof/UTV2-863-drift-evidence/UTV2-854-rerun-2026-05-09/evidence.json",
+    "docs/06_status/proof/UTV2-863-drift-evidence/UTV2-854-rerun-2026-05-09/migration-results.json",
+    "docs/06_status/proof/UTV2-863-drift-evidence/UTV2-854-rerun-2026-05-09/ownership-enforcement-results.csv",
+    "docs/06_status/proof/UTV2-863-drift-evidence/UTV2-854-rerun-2026-05-09/ownership-persistence-summary.json",
+    "docs/06_status/proof/UTV2-863-drift-evidence/UTV2-854-rerun-2026-05-09/ownership-quarantine-results.csv",
+    "docs/06_status/proof/UTV2-863-drift-evidence/UTV2-854-rerun-2026-05-09/ownership-write-results.csv"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-863-drift-evidence/"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-863-drift-evidence/"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-10T13:20:00.000Z",
+  "heartbeat_at": "2026-05-10T13:20:00.000Z",
+  "closed_at": null,
+  "blocked_by": [
+    "deploy-secrets",
+    "fresh-viable-candidates"
+  ],
+  "preflight_token": "drift-evidence-only",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "Lane stays Blocked Internal. This commit only lands pre-fix drift evidence; it does not close the lane. Lane closes after runtime SHA convergence (🆕 B), fresh viable candidates (🆕 E), and a green ownership-persistence rerun show ownership_write_success_pct > 0 against a deployed runtime ≥ fcd4ce4e."
+}
