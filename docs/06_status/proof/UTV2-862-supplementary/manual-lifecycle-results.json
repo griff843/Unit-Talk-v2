@@ -1,0 +1,113 @@
+{
+  "verification_date": "2026-05-09",
+  "branch": "main",
+  "merge_sha": "592bd869",
+  "executor": "Claude (orchestrator)",
+  "goal": "Controlled manual verification of provider-history retention lifecycle before 10pm cron window",
+
+  "baseline": {
+    "today": "2026-05-09",
+    "retention_cutoff_7d": "2026-05-02",
+    "eligible_partitions": ["p20260429", "p20260430", "p20260501"],
+    "eligible_partition_rows": {
+      "p20260429": 0,
+      "p20260430": 0,
+      "p20260501": 0
+    },
+    "provider_offer_history_parent_rows": 0,
+    "provider_offer_current_rows": 167498,
+    "provider_offer_staging_rows": 22824,
+    "provider_offers_legacy_quarantine_rows": 8291206
+  },
+
+  "steps": [
+    {
+      "step": 1,
+      "function": "summarize_provider_offer_history_partition",
+      "args": { "p_date": "2026-04-29" },
+      "status": "FAILED",
+      "error_code": "42702",
+      "error_message": "column reference \"snapshot_date\" is ambiguous",
+      "error_context": "PL/pgSQL function summarize_provider_offer_history_partition(date) line 30 at SQL statement",
+      "root_cause": "CTE column alias 'snapshot_date' in agg CTE collides with OUT parameter 'snapshot_date' in RETURNS TABLE definition",
+      "rows_summarized": null,
+      "snapshot_date": null
+    },
+    {
+      "step": 2,
+      "function": "drop_old_provider_offer_history_partitions",
+      "args": { "p_retention_days": 7 },
+      "status": "PASSED",
+      "result": {
+        "partitions_dropped": 3,
+        "cutoff_date": "2026-05-02"
+      },
+      "partitions_dropped": ["p20260429", "p20260430", "p20260501"],
+      "rows_lost": 0,
+      "note": "All three dropped partitions contained 0 rows"
+    },
+    {
+      "step": 3,
+      "function": "prune_provider_offers_bounded",
+      "args": { "p_retention_days": 7, "p_batch_size": 5000, "p_max_batches": 20 },
+      "status": "FAILED",
+      "error_code": "57014",
+      "error_message": "canceling statement due to statement timeout",
+      "error_context": "PL/pgSQL function prune_provider_offers_bounded(integer,integer,integer) line 26 at SQL statement",
+      "root_causes": [
+        "provider_offers is a VIEW over provider_offers_legacy_quarantine (8,291,206 rows)",
+        "No created_at index on provider_offers_legacy_quarantine; DELETE subquery performs full sequential scan",
+        "statement_timeout = 2min; first 5000-row batch cannot complete within limit"
+      ],
+      "batches_run": null,
+      "deleted_rows": null,
+      "remaining_rows": null
+    }
+  ],
+
+  "verification_checks": {
+    "summarize_executes_successfully": false,
+    "drop_executes_successfully": true,
+    "prune_executes_successfully": false,
+    "summarize_before_drop": false,
+    "no_unexpected_partition_loss": true,
+    "no_unexpected_row_loss": true,
+    "no_sql_errors": false,
+    "no_retention_corruption": true
+  },
+
+  "new_defects": [
+    {
+      "id": "bug-a",
+      "title": "summarize_provider_offer_history_partition: snapshot_date column reference ambiguous",
+      "severity": "blocking",
+      "type": "function-body-ddl",
+      "tier": "T3",
+      "fix": "Rename CTE column alias 'snapshot_date' to unambiguous name (e.g. snap_dt) in function body"
+    },
+    {
+      "id": "bug-b",
+      "title": "prune_provider_offers_bounded: targets view over 8.2M quarantine rows, missing created_at index",
+      "severity": "blocking",
+      "type": "missing-index + wrong-target",
+      "tier": "T2",
+      "fix": "Add CREATE INDEX ON provider_offers_legacy_quarantine (created_at ASC, id ASC); update function to DELETE from base table directly"
+    }
+  ],
+
+  "gate_recommendation": {
+    "gate": "merge_provider_offer_staging_cycle",
+    "action": "DO NOT CLEAR",
+    "reason": "Two blocking defects prevent the full lifecycle from executing. Drop step passes; summarize and prune both fail. Cron at 03:00 UTC will reproduce both failures."
+  },
+
+  "post_baseline": {
+    "remaining_partitions": [
+      "p20260502","p20260503","p20260504","p20260505","p20260506",
+      "p20260507","p20260508","p20260509","p20260510","p20260511",
+      "p20260512","p20260513","p20260514"
+    ],
+    "provider_offers_legacy_quarantine_rows_unchanged": 8291206,
+    "note": "prune did not execute; quarantine row count is unchanged from baseline"
+  }
+}
