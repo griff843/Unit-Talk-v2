@@ -6,8 +6,8 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-872-pipeline-health-anomaly",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "35f877ec8ffc478b0e16cf1c68a8925b650fb015",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/618",
   "files_changed": [
     "scripts/pipeline-health.ts"
   ],
@@ -15,10 +15,10 @@
     "scripts/pipeline-health.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-10T15:41:00.000Z",
-  "heartbeat_at": "2026-05-10T15:41:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-10T16:54:17.000Z",
+  "closed_at": "2026-05-10T16:54:17.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-board-auto",
   "created_by": "claude",
