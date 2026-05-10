@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-868",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-868-ghost-migration-investigation",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "supabase/migrations/202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql"
+  ],
+  "file_scope_lock": [
+    "supabase/migrations/202604300003_utv2_803_pick_offer_snapshots_posting_kind.sql"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-10T15:55:00.000Z",
+  "heartbeat_at": "2026-05-10T15:55:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-board-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "Origin: applied via Supabase dashboard/CLI for UTV2-803 without repo commit. Full SQL recovered from supabase_migrations.schema_migrations.statements. Decision: file recovered (not fake — exact SQL from live ledger). No repair needed — migration already live."
+}
