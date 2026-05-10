@@ -1,0 +1,371 @@
+{
+  "milestone": {
+    "id": "UTV2-864",
+    "title": "First legitimate model-attributed candidate proof",
+    "definition_of_done": {
+      "fields_required_non_null": [
+        "model_registry_id",
+        "scoring_run_id",
+        "ownership_timestamp"
+      ],
+      "source_constraints": [
+        "row written by deployed runtime",
+        "not manual fabrication",
+        "not historical backfill",
+        "not stale code",
+        "not local-only script"
+      ],
+      "provenance_required": [
+        "system_runs row of run_type='candidate.scoring' references the row's scoring_run_id",
+        "system_runs.metadata.runtime_version equals production /runtime-version SHA",
+        "proof bundle tied to merge SHA"
+      ]
+    }
+  },
+  "audit": {
+    "auditor": "Claude (orchestrator)",
+    "audit_date": "2026-05-10",
+    "repo_head_main": "fcd4ce4e82ea5136a2fe352a8098969f0d315fa7",
+    "working_tree_clean": false
+  },
+  "gates": [
+    {
+      "id": "G1",
+      "name": "DB / schema truth",
+      "status": "GREEN",
+      "evidence": [
+        "pick_candidates ownership columns + indexes live (UTV2-854 evidence.json)",
+        "migration 202605070002 semantically present on remote ledger"
+      ]
+    },
+    {
+      "id": "G2",
+      "name": "Migration / ledger truth",
+      "status": "YELLOW",
+      "evidence": [
+        "supabase/migrations/202605090002_utv2_870_provider_offer_history_summarize_fix.sql is uncommitted local-only",
+        "supabase/migrations/202605090003_utv2_871_provider_offers_quarantine_prune_fix.sql is uncommitted local-only",
+        "ghost migration 202604300003 (UTV2-868) still in Backlog"
+      ]
+    },
+    {
+      "id": "G3",
+      "name": "Runtime deploy truth",
+      "status": "RED",
+      "evidence": [
+        "Deploy run 25628794052 on fcd4ce4e: verify PASS, all 4 image builds PASS, deploy job FAILED at 'Validate deploy secrets'",
+        "Missing/empty secrets: UNIT_TALK_DEPLOY_HOST, UNIT_TALK_DEPLOY_USER, UNIT_TALK_DEPLOY_PATH, UNIT_TALK_DEPLOY_HEALTH_URL, UNIT_TALK_DEPLOY_SSH_KEY",
+        "Production host still runs pre-UTV2-854 binary"
+      ]
+    },
+    {
+      "id": "G4",
+      "name": "Scorer execution truth",
+      "status": "RED",
+      "evidence": [
+        "system_runs has 0 rows of run_type='candidate.scoring'",
+        "May 9 1000-row write burst had only worker.heartbeat in same window"
+      ]
+    },
+    {
+      "id": "G5",
+      "name": "Ownership persistence truth",
+      "status": "RED",
+      "evidence": [
+        "7051/7051 scored candidates have NULL ownership trio",
+        "ownership_write_success_pct = 0",
+        "ownership_write_failure_pct = 100",
+        "no partial-ownership rows (rules out post-write nulling)"
+      ]
+    },
+    {
+      "id": "G6",
+      "name": "Fresh candidate availability truth",
+      "status": "RED",
+      "evidence": [
+        "552 qualified unscored candidates exist",
+        "0 viable: all map to market_universe.is_stale = true",
+        "0 qualified-unscored created since 2026-05-01"
+      ]
+    },
+    {
+      "id": "G7",
+      "name": "Provider-history lifecycle truth",
+      "status": "RED",
+      "evidence": [
+        "UTV2-862 final live re-run: summarize PASS",
+        "drop_old_provider_offer_history_partitions(7) FAIL 42501 must be owner of table provider_offer_history_p20260502",
+        "prune_provider_offers_bounded(7,5000,20) FAIL 57014 statement timeout",
+        "UTV2-870 + UTV2-871 fixes not yet on main, not yet applied live"
+      ]
+    },
+    {
+      "id": "G8",
+      "name": "CI / repo verification truth",
+      "status": "YELLOW",
+      "evidence": [
+        "CI green on fcd4ce4e (verify + 4 image builds)",
+        "local working tree dirty (19 modified, 22+ untracked)",
+        "UTV2-870/871 self-reports pnpm verify + pnpm test:db green on the recovered slice"
+      ]
+    },
+    {
+      "id": "G9",
+      "name": "Final proof truth",
+      "status": "RED",
+      "evidence": [
+        "no fresh ownership-attributed pick_candidates row exists",
+        "no candidate.scoring system_runs row exists",
+        "no production runtime SHA fingerprint visible live"
+      ]
+    }
+  ],
+  "issues": [
+    { "id": "UTV2-855", "linear_status": "Backlog",            "truth_status": "Backlog",            "alignment": "match",     "tier": "T1", "delegate": null },
+    { "id": "UTV2-856", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T1", "delegate": "Claude" },
+    { "id": "UTV2-857", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T1", "delegate": "Codex" },
+    { "id": "UTV2-858", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T1", "delegate": "Claude" },
+    { "id": "UTV2-859", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T1", "delegate": "Codex" },
+    { "id": "UTV2-860", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T1", "delegate": "Codex" },
+    { "id": "UTV2-861", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T1", "delegate": "Codex" },
+    { "id": "UTV2-862", "linear_status": "Done",               "truth_status": "Premature",         "alignment": "linear_overstates", "tier": "T1", "delegate": "Claude", "note": "Audit done, but lifecycle gate merge_provider_offer_staging_cycle is not cleared. Two follow-up issues unfiled." },
+    { "id": "UTV2-863", "linear_status": "Blocked Internal",   "truth_status": "Blocked Internal",   "alignment": "match",     "tier": "T1", "delegate": "Codex" },
+    { "id": "UTV2-864", "linear_status": "Blocked Internal",   "truth_status": "Blocked Internal",   "alignment": "match",     "tier": "T1", "delegate": "Codex" },
+    { "id": "UTV2-865", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T2", "delegate": "Codex" },
+    { "id": "UTV2-866", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T2", "delegate": "Claude" },
+    { "id": "UTV2-867", "linear_status": "Done",               "truth_status": "Done",               "alignment": "match",     "tier": "T2", "delegate": "Claude" },
+    { "id": "UTV2-868", "linear_status": "Backlog",            "truth_status": "Backlog",            "alignment": "match",     "tier": "T2", "delegate": null, "note": "Ghost migration 202604300003 unresolved; not on UTV2-864 critical path." },
+    { "id": "UTV2-869", "linear_status": "Blocked Internal",   "truth_status": "Code shipped, deploy not released", "alignment": "description_stale", "tier": "T1", "delegate": "Codex", "note": "SUPABASE_URL fixed and Dockerfile fixed. Real residual blocker is missing deploy secrets — tracked separately by 🆕 A." },
+    { "id": "UTV2-870", "linear_status": "Ready to Close",     "truth_status": "Premature",         "alignment": "linear_overstates", "tier": "T2", "delegate": "Codex", "note": "Migration uncommitted; not applied live." },
+    { "id": "UTV2-871", "linear_status": "Ready to Close",     "truth_status": "Premature",         "alignment": "linear_overstates", "tier": "T1", "delegate": "Codex", "note": "Migration uncommitted; even after apply, live (7,5000,20) may still time out." },
+    { "id": "UTV2-873", "linear_status": "Ready for Codex",    "truth_status": "Already shipped",   "alignment": "linear_understates", "tier": "T1", "delegate": "Codex", "note": "Dockerfile work merged in fcd4ce4e; should move to Ready to Close once 🆕 A unblocks the deploy." }
+  ],
+  "blockers": [
+    {
+      "id": "B1",
+      "summary": "Five GitHub Actions deploy secrets are missing/empty, preventing release of fcd4ce4e to the production host.",
+      "first_blocked_run": 25628794052,
+      "missing_secrets": [
+        "UNIT_TALK_DEPLOY_HOST",
+        "UNIT_TALK_DEPLOY_USER",
+        "UNIT_TALK_DEPLOY_PATH",
+        "UNIT_TALK_DEPLOY_HEALTH_URL",
+        "UNIT_TALK_DEPLOY_SSH_KEY"
+      ],
+      "blocks": ["UTV2-869", "UTV2-863", "UTV2-864"]
+    },
+    {
+      "id": "B2",
+      "summary": "drop_old_provider_offer_history_partitions(7) fails live with SQLSTATE 42501 (partition ownership mismatch).",
+      "blocks": ["UTV2-862 lifecycle gate"]
+    },
+    {
+      "id": "B3",
+      "summary": "prune_provider_offers_bounded(7,5000,20) fails live with SQLSTATE 57014 (statement timeout).",
+      "blocks": ["UTV2-862 lifecycle gate"]
+    },
+    {
+      "id": "B4",
+      "summary": "All 552 qualified-unscored candidates map to market_universe.is_stale=true; deployed scorer would have nothing to attribute.",
+      "blocks": ["UTV2-863", "UTV2-864"]
+    },
+    {
+      "id": "B5",
+      "summary": "UTV2-870 and UTV2-871 migrations and proof artefacts exist only in local working tree; not on origin/main, not applied live.",
+      "blocks": ["UTV2-870 close", "UTV2-871 close", "UTV2-862 lifecycle gate"]
+    }
+  ],
+  "missing_issues": [
+    {
+      "ref": "A",
+      "title": "Operator: populate GitHub Actions deploy secrets and release UTV2-869 runtime",
+      "owner": "Operator",
+      "delegate": null,
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": "UTV2-864",
+      "priority": "Urgent",
+      "status": "Ready for Operator",
+      "tier": "T1",
+      "description": "Populate the 5 missing deploy secrets and re-run deploy.yml on fcd4ce4e until deploy job clears all steps and host /health returns 200.",
+      "acceptance_criteria": [
+        "all 5 secrets non-empty in a fresh Deploy run",
+        "Deploy run conclusion = success",
+        "host .unit-talk-release matches fcd4ce4e or later",
+        "/health returns 200"
+      ],
+      "dependencies": [],
+      "blocks": ["UTV2-869", "B-runtime-convergence", "UTV2-863", "UTV2-864"]
+    },
+    {
+      "ref": "B",
+      "title": "Verify production runtime SHA convergence",
+      "owner": "Codex",
+      "delegate": "Codex",
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": "UTV2-864",
+      "priority": "Urgent",
+      "status": "Ready for Codex (blocked by 🆕 A)",
+      "tier": "T1",
+      "description": "Hit production /runtime-version, capture SHA. Run scorer (or wait for tick). Assert at least one system_runs row of type candidate.scoring exists with metadata.runtime_version = that SHA. Capture proof under docs/06_status/proof/UTV2-869/runtime-convergence/.",
+      "acceptance_criteria": [
+        "/runtime-version returns SHA >= fcd4ce4e",
+        "system_runs candidate.scoring row exists with that SHA",
+        "proof artefact committed"
+      ],
+      "dependencies": ["A"],
+      "blocks": ["UTV2-863", "UTV2-864"]
+    },
+    {
+      "ref": "C",
+      "title": "Repair partition ownership for drop_old_provider_offer_history_partitions",
+      "owner": "Codex",
+      "delegate": "Codex",
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": null,
+      "priority": "Urgent",
+      "status": "Ready for Codex",
+      "tier": "T1",
+      "description": "Reassign partition ownership, mark function SECURITY DEFINER with proper owner, or change the partition-creation path so future partitions are owned by the correct role. Apply via canonical migration workflow.",
+      "acceptance_criteria": [
+        "migration on main and applied live",
+        "drop_old_provider_offer_history_partitions(7) succeeds live with no 42501",
+        "verification proof committed"
+      ],
+      "dependencies": [],
+      "blocks": ["UTV2-862 lifecycle gate"],
+      "blocks_milestone": false
+    },
+    {
+      "ref": "D",
+      "title": "Make prune_provider_offers_bounded(7,5000,20) complete live within statement_timeout",
+      "owner": "Codex",
+      "delegate": "Codex",
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": null,
+      "priority": "Urgent",
+      "status": "Ready for Codex (blocked by F)",
+      "tier": "T1",
+      "description": "After F applies UTV2-871 live, re-run the contract. If still timing out on the 8.2M-row legacy quarantine, lower p_batch_size, raise per-function statement_timeout, or split into multiple scheduled invocations. Document the chosen approach.",
+      "acceptance_criteria": [
+        "live (7,5000,20) completes without 57014",
+        "returns sane (batches_run, deleted_rows, cutoff, remaining_rows)",
+        "verification proof committed"
+      ],
+      "dependencies": ["F"],
+      "blocks": ["UTV2-862 lifecycle gate"],
+      "blocks_milestone": false
+    },
+    {
+      "ref": "E",
+      "title": "Restore fresh viable scoring-eligible candidate pool",
+      "owner": "Codex",
+      "delegate": "Codex",
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": "UTV2-864",
+      "priority": "Urgent",
+      "status": "Ready for Codex (blocked by B)",
+      "tier": "T1",
+      "description": "Investigate why all market_universe rows mapped from current qualified-unscored candidates are stale. Restore freshness for at least one active sport's slate or document an operator-approved manufacture path consistent with fail-closed.",
+      "acceptance_criteria": [
+        "at least one pick_candidates row with status=qualified, model_score IS NULL, non-stale mapped market_universe row",
+        "stale-universe rationale documented",
+        "proof committed"
+      ],
+      "dependencies": ["B"],
+      "blocks": ["UTV2-863", "UTV2-864"]
+    },
+    {
+      "ref": "F",
+      "title": "Land UTV2-870 + UTV2-871 migrations on main and apply live",
+      "owner": "Claude or Codex (lane owner)",
+      "delegate": "Codex",
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": null,
+      "priority": "Urgent",
+      "status": "Ready",
+      "tier": "T1",
+      "description": "Commit + push the two migration files, related test files, and proof JSONs. Open PRs through canonical workflow. Operator-approved live apply. Record live SHAs and post-apply behaviour. Then close UTV2-870 and UTV2-871.",
+      "acceptance_criteria": [
+        "both migration files merged to main",
+        "both applied live with ledger entries",
+        "live summarize re-run still PASSES",
+        "live prune re-run captured (handed off to D if still timing out)",
+        "UTV2-870 + UTV2-871 closed Done with merge SHAs and live-apply proof"
+      ],
+      "dependencies": [],
+      "blocks": ["D", "UTV2-870 close", "UTV2-871 close"],
+      "blocks_milestone": false
+    },
+    {
+      "ref": "G",
+      "title": "UTV2-864 final proof bundle (refresh exit criteria)",
+      "owner": "Codex",
+      "delegate": "Codex",
+      "project": "System Wire",
+      "parent": "UTV2-855",
+      "milestone": "UTV2-864",
+      "priority": "Urgent",
+      "status": "Blocked Internal",
+      "tier": "T1",
+      "description": "Update UTV2-864 description with the explicit artefact list (live row id, ownership trio values, system_runs row id, runtime-version SHA, ownership-persistence summary regenerated, proof tied to merge SHA). Generate the bundle once A → E land.",
+      "acceptance_criteria": [
+        "matches definition of done in §2 of audit MD"
+      ],
+      "dependencies": ["A", "B", "E", "UTV2-863 reopen + green"],
+      "blocks": ["milestone close"]
+    }
+  ],
+  "execution_order": {
+    "critical_path_to_UTV2_864": [
+      "🆕 A — populate deploy secrets and release fcd4ce4e (Operator)",
+      "🆕 B — verify production runtime SHA convergence (Codex)",
+      "UTV2-869 close-out — refresh description, Ready to Close, PM close",
+      "🆕 E — restore fresh viable candidate (Codex)",
+      "UTV2-863 reopen — run scorer, prove ownership trio populated, regenerate ownership-persistence proof",
+      "🆕 G / UTV2-864 — assemble proof bundle and close milestone"
+    ],
+    "parallel_lifecycle_track_for_UTV2_862": [
+      "🆕 F — commit and push 870/871 migrations, apply live",
+      "🆕 C — fix partition ownership; live re-run drop_old_provider_offer_history_partitions(7)",
+      "🆕 D — live re-run prune; further remediation if needed",
+      "UTV2-862 close — only when full lifecycle passes live in one sequence"
+    ],
+    "housekeeping": [
+      "UTV2-873 → Ready to Close once 🆕 A unblocks deploy (work already shipped in fcd4ce4e)",
+      "UTV2-870 + UTV2-871 → keep at Ready to Close, do not mark Done until 🆕 F lands",
+      "UTV2-868 (ghost migration) — keep in Backlog, not on either critical path"
+    ]
+  },
+  "answers": {
+    "can_UTV2_863_reopen_now": false,
+    "can_UTV2_864_start_now": false,
+    "blocking_chain_for_milestone": [
+      "🆕 A (deploy secrets)",
+      "🆕 B (runtime SHA convergence)",
+      "🆕 E (fresh viable candidate)",
+      "UTV2-863 reopen",
+      "UTV2-864 proof bundle"
+    ],
+    "what_to_do_next_single_action": "🆕 A — Operator populates the 5 missing GitHub Actions deploy secrets and re-runs deploy.yml on fcd4ce4e."
+  },
+  "final_recommendation": {
+    "milestone_status": "BLOCKED",
+    "earliest_realistic_close": "after 🆕 A → 🆕 B → 🆕 E → UTV2-863 reopen → UTV2-864 proof bundle",
+    "do_not_do": [
+      "do not fabricate UTV2-864 proof from existing 7051 ownership-NULL rows",
+      "do not mark UTV2-870 / UTV2-871 Done before live apply",
+      "do not mark UTV2-862 Done before lifecycle gate clears",
+      "do not retry deploys before populating the missing secrets",
+      "do not weaken the (7,5000,20) prune contract; address timeout via implementation",
+      "do not use mcp apply_migration as a shortcut around canonical workflow",
+      "do not edit unrelated dirty files as part of this audit",
+      "do not parallelize UTV2-863 reopen with UTV2-864 proof — strictly sequential"
+    ]
+  }
+}
