@@ -9,7 +9,7 @@
 # or missing approval = no merge.
 #
 # T1: requires t1-approved label + PM_VERDICT: APPROVED from CODEOWNERS
-# T2: requires PM_VERDICT: APPROVED from CODEOWNERS
+# T2: requires GitHub PR review approval (Claude `gh pr review --approve` satisfies this — no PM_VERDICT)
 # T3: passes automatically (CI + executor-result-validator are separate gates)
 #
 # governance:pause label on PR = hard block regardless of tier.
@@ -138,89 +138,94 @@ jobs:
                 return;
               }
 
-              // ── 6. T1/T2: Find PM verdict ──────────────────────────
-              const { data: comments } = await github.rest.issues.listComments({
-                owner, repo, issue_number: prNumber, per_page: 100
-              });
-
-              function parseVerdict(body) {
-                if (!body) return null;
-                // Normalize: unescape literal \n from clients that escape newlines,
-                // then strip any leading $ that some clients prepend to the verdict line.
-                const normalized = body.replace(/\\n/g, '\n');
-                const lines = normalized.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-                if (lines.length < 3) return null;
-                const verdictMatch = lines[0].replace(/^\$/, '').match(
-                  /^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i
-                );
-                if (!verdictMatch) return null;
-                if (lines[1] !== 'schema: pm-verdict/v1') return null;
-                const issueMatch = lines[2].match(
-                  /^Issue:\s+((?:UTV2|UNI)-\d+)$/i
-                );
-                if (!issueMatch) return null;
-                return {
-                  verdict: verdictMatch[1].toUpperCase(),
-                  issueId: issueMatch[1],
-                };
-              }
-
-              // Find the MOST RECENT valid verdict from an authorized user
-              const verdicts = comments
-                .map(c => ({
-                  user: c.user?.login,
-                  userType: c.user?.type,
-                  parsed: parseVerdict(c.body),
-                  createdAt: c.created_at,
-                }))
-                .filter(v => v.parsed !== null);
-
-              if (verdicts.length === 0) {
-                errors.push(
-                  'No valid pm-verdict/v1 comment found. PM must post a structured verdict.'
-                );
-              } else {
-                const latest = verdicts[verdicts.length - 1];
-
-                // Verify author is authorized (not a bot, in CODEOWNERS)
-                if (latest.userType === 'Bot') {
+              // ── 6. T2: GitHub PR review approval (no PM_VERDICT required) ──
+              if (tier === 'T2') {
+                const { data: reviews } = await github.rest.pulls.listReviews({
+                  owner, repo, pull_number: prNumber, per_page: 100
+                });
+                const approvals = reviews.filter(r => r.state === 'APPROVED');
+                if (approvals.length === 0) {
                   errors.push(
-                    `PM verdict from bot account "${latest.user}" is not authorized. Must be a human CODEOWNERS member.`
-                  );
-                } else if (!AUTHORIZED_REVIEWERS.has(latest.user)) {
-                  errors.push(
-                    `PM verdict author "${latest.user}" is not in CODEOWNERS. Authorized: ${[...AUTHORIZED_REVIEWERS].join(', ')}.`
-                  );
-                }
-
-                // Must be APPROVED
-                if (latest.parsed.verdict !== 'APPROVED') {
-                  errors.push(
-                    `Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`
+                    'T2 requires at least one GitHub PR review approval. ' +
+                    'Executor must run `gh pr review <number> --approve` after diff review.'
                   );
                 }
               }
 
-              // ── 7. T1: require t1-approved label ───────────────────
-              // PM verdict comment is the human gate for T1/T2.
-              // No separate GitHub PR review required — that would
-              // force the solo operator to double-approve.
+              // ── 7. T1: PM verdict + t1-approved label ──────────────
               if (tier === 'T1') {
+                const { data: comments } = await github.rest.issues.listComments({
+                  owner, repo, issue_number: prNumber, per_page: 100
+                });
+
+                function parseVerdict(body) {
+                  if (!body) return null;
+                  const normalized = body.replace(/\\n/g, '\n');
+                  const lines = normalized.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                  if (lines.length < 3) return null;
+                  const verdictMatch = lines[0].replace(/^\$/, '').match(
+                    /^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i
+                  );
+                  if (!verdictMatch) return null;
+                  if (lines[1] !== 'schema: pm-verdict/v1') return null;
+                  const issueMatch = lines[2].match(
+                    /^Issue:\s+((?:UTV2|UNI)-\d+)$/i
+                  );
+                  if (!issueMatch) return null;
+                  return {
+                    verdict: verdictMatch[1].toUpperCase(),
+                    issueId: issueMatch[1],
+                  };
+                }
+
+                const verdicts = comments
+                  .map(c => ({
+                    user: c.user?.login,
+                    userType: c.user?.type,
+                    parsed: parseVerdict(c.body),
+                    createdAt: c.created_at,
+                  }))
+                  .filter(v => v.parsed !== null);
+
+                if (verdicts.length === 0) {
+                  errors.push(
+                    'T1 requires a valid pm-verdict/v1 comment. PM must post a structured verdict.'
+                  );
+                } else {
+                  const latest = verdicts[verdicts.length - 1];
+
+                  if (latest.userType === 'Bot') {
+                    errors.push(
+                      `PM verdict from bot account "${latest.user}" is not authorized. Must be a human CODEOWNERS member.`
+                    );
+                  } else if (!AUTHORIZED_REVIEWERS.has(latest.user)) {
+                    errors.push(
+                      `PM verdict author "${latest.user}" is not in CODEOWNERS. Authorized: ${[...AUTHORIZED_REVIEWERS].join(', ')}.`
+                    );
+                  }
+
+                  if (latest.parsed.verdict !== 'APPROVED') {
+                    errors.push(
+                      `Most recent PM verdict is "${latest.parsed.verdict}", not "APPROVED".`
+                    );
+                  }
+
+                  // Bounce limit check
+                  const changesRequested = verdicts.filter(
+                    v => v.parsed.verdict === 'CHANGES_REQUIRED'
+                  );
+                  if (changesRequested.length >= 3) {
+                    errors.push(
+                      `Bounce limit exceeded (${changesRequested.length} CHANGES_REQUIRED verdicts). Issue should be moved to Failed for PM triage.`
+                    );
+                  }
+                }
+
                 if (!labels.includes('t1-approved')) {
                   errors.push(
                     'T1 requires "t1-approved" label on the PR. PM must apply this label after review.'
                   );
                 }
-              }
-
-              // ── 9. Bounce limit check (advisory) ──────────────────
-              const changesRequested = verdicts.filter(
-                v => v.parsed.verdict === 'CHANGES_REQUIRED'
-              );
-              if (changesRequested.length >= 3) {
-                errors.push(
-                  `Bounce limit exceeded (${changesRequested.length} CHANGES_REQUIRED verdicts). Issue should be moved to Failed for PM triage.`
-                );
               }
 
             } catch (e) {

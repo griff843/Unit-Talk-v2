@@ -123,17 +123,17 @@ jobs:
                 const r = parsed[parsed.length - 1];
 
                 // ── 5. Validate schema fields ──────────────────────────
-                if (!r.issueId || !/^UTV2-\d+$/.test(r.issueId)) {
-                  errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN.`);
+                if (!r.issueId || !/^(UTV2|UNI)-\d+$/i.test(r.issueId)) {
+                  errors.push(`Invalid Issue ID: "${r.issueId || '<missing>'}". Must match UTV2-NNN or UNI-NNN.`);
                 }
 
                 if (!r.lane || !['claude', 'codex'].includes(r.lane.toLowerCase())) {
                   errors.push(`Invalid Lane: "${r.lane || '<missing>'}". Must be "claude" or "codex".`);
                 }
 
-                const branchRe = /^(claude|codex)\/utv2-\d+/i;
+                const branchRe = /^(claude|codex)\/(utv2|uni)-\d+/i;
                 if (!r.branch || !branchRe.test(r.branch)) {
-                  errors.push(`Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-* or codex/utv2-NNN-*.`);
+                  errors.push(`Invalid branch: "${r.branch || '<missing>'}". Must match claude/utv2-NNN-*, codex/utv2-NNN-*, claude/uni-NNN-*, or codex/uni-NNN-*.`);
                 }
                 if (r.branch && r.branch !== headRef) {
                   errors.push(`Branch mismatch: comment declares "${r.branch}", PR head is "${headRef}".`);
