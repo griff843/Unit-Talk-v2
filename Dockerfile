@@ -26,7 +26,6 @@ COPY apps/ingestor/package.json              apps/ingestor/
 COPY apps/discord-bot/package.json           apps/discord-bot/
 COPY apps/alert-agent/package.json           apps/alert-agent/
 COPY apps/command-center/package.json        apps/command-center/
-COPY apps/operator-web/package.json          apps/operator-web/
 COPY apps/smart-form/package.json            apps/smart-form/
 
 RUN pnpm install --frozen-lockfile
@@ -35,7 +34,6 @@ RUN pnpm install --frozen-lockfile
 # the full workspace present even for apps not being containerized.
 COPY . .
 
-RUN pnpm build
 
 # ── Stage 2: api ─────────────────────────────────────────────────────────────
 FROM node:22-alpine AS api
