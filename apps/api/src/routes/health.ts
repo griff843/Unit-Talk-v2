@@ -48,10 +48,18 @@ interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
 
 export async function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): Promise<void> {
   const dbReachable = await probeDbConnectivity(runtime);
-  const schemaDrift =
-    runtime.persistenceMode === 'database' && dbReachable
-      ? await checkSchemaDrift({ logger: runtime.logger })
-      : null;
+  const schemaDrift = await (async () => {
+    if (runtime.persistenceMode !== 'database' || !dbReachable) return null;
+    try {
+      return await checkSchemaDrift({ logger: runtime.logger });
+    } catch (err: unknown) {
+      // Supabase credentials unavailable in this environment — skip drift check.
+      runtime.logger.warn(
+        JSON.stringify({ event: 'schema_drift_check_skipped', reason: String(err) }),
+      );
+      return null;
+    }
+  })();
 
   const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
   const status: ApiHealthStatus = isDurable ? 'healthy' : 'degraded';
