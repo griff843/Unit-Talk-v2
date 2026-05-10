@@ -23,14 +23,14 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-870-summarize-fix-verification.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-10T13:30:00.000Z",
   "heartbeat_at": "2026-05-10T14:00:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-10T14:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "audit-issue-UTV2-876-track",
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "T1 migration. Lands the fix on main; live apply is operator-controlled per MERGE_DEPLOY_DISCIPLINE.md and is tracked under UTV2-876 (audit issue 🆕 F). Lane closes after merge SHA pinned and live-apply proof captured."
+  "notes": "T1 migration. Repo-side merged via PR #615; live apply on zfzdnfwdarxucxtaojxm was already completed by Codex prior to merge per the Linear issue description (`summarize_provider_offer_history_partition('2026-04-29')` returned rows_summarized=0, snapshot_date=2026-04-29 live). Lane closed."
 }

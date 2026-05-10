@@ -21,14 +21,14 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-871-prune-fix-verification.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-10T13:35:00.000Z",
   "heartbeat_at": "2026-05-10T14:00:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-10T14:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "audit-issue-UTV2-876-track",
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "T1 migration. Lands the fix on main; live apply is operator-controlled per MERGE_DEPLOY_DISCIPLINE.md and is tracked under UTV2-876 (audit issue 🆕 F). Note: even after live apply, prune_provider_offers_bounded(7,5000,20) may still time out on the 8.2M-row legacy quarantine; tracked separately as audit issue 🆕 D."
+  "notes": "T1 migration. Repo-side merged via PR #616; live apply on zfzdnfwdarxucxtaojxm was already completed by Codex prior to merge per the Linear issue description (function body deployed live, CONCURRENTLY index built via temporary pg_cron job, prune_provider_offers_bounded(7,5000,20) returned batches_run=20, deleted_rows=100000, remaining_rows=8191206, no timeout). Lane closed."
 }
