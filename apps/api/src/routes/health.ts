@@ -1,6 +1,7 @@
 import type { ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -24,12 +25,38 @@ async function probeDbConnectivity(runtime: ApiRuntimeDependencies): Promise<boo
   }
 }
 
+interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
+  warnings: string[];
+  schemaDrift:
+    | {
+        status: 'not_applicable';
+        checkedAt: null;
+        materializationStatus: 'safe';
+        unreachableTables: 0;
+        warnings: [];
+        remediation: null;
+      }
+    | {
+        status: SchemaDriftCheckResult['status'];
+        checkedAt: string;
+        materializationStatus: SchemaDriftCheckResult['materializationStatus'];
+        unreachableTables: number;
+        warnings: string[];
+        remediation: string;
+      };
+}
+
 export async function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): Promise<void> {
   const dbReachable = await probeDbConnectivity(runtime);
+  const schemaDrift =
+    runtime.persistenceMode === 'database' && dbReachable
+      ? await checkSchemaDrift({ logger: runtime.logger })
+      : null;
 
-  const isDurable = runtime.persistenceMode === 'database' && dbReachable;
+  const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
   const status: ApiHealthStatus = isDurable ? 'healthy' : 'degraded';
   const httpStatus = isDurable ? 200 : 503;
+  const warnings = schemaDrift?.warnings ?? [];
 
   writeJson(response, httpStatus, {
     status,
@@ -43,5 +70,23 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
       scorerRuntimeVersion: runtime.versionInfo.scorerRuntimeVersion,
       metadataComplete: runtime.versionInfo.metadataComplete,
     },
-  } satisfies ApiHealthResponse);
+    warnings,
+    schemaDrift: schemaDrift
+      ? {
+          status: schemaDrift.status,
+          checkedAt: schemaDrift.checkedAt,
+          materializationStatus: schemaDrift.materializationStatus,
+          unreachableTables: schemaDrift.unreachableTables,
+          warnings: schemaDrift.warnings,
+          remediation: schemaDrift.remediation,
+        }
+      : {
+          status: 'not_applicable',
+          checkedAt: null,
+          materializationStatus: 'safe',
+          unreachableTables: 0,
+          warnings: [],
+          remediation: null,
+        },
+  } satisfies ApiHealthResponseWithSchemaDrift);
 }
