@@ -3,6 +3,7 @@ import type { AlertLevel, ModelHealthSnapshotCreateInput, ModelHealthSnapshotRec
 import type { ApiRuntimeDependencies } from '../server.js';
 import { readJsonBody } from '../server.js';
 import { writeJson } from '../http-utils.js';
+import { checkSchemaDrift } from '../model-health-scanner.js';
 
 type ModelHealthDecisionAction = 'acknowledge' | 'demote' | 'retire';
 
@@ -34,7 +35,31 @@ export async function handleModelHealthAlerts(
   }
 
   const records = await snapshots.listAlerted();
-  writeJson(response, 200, records);
+  const schemaDrift =
+    runtime.persistenceMode === 'database'
+      ? await checkSchemaDrift({ logger: runtime.logger })
+      : null;
+
+  writeJson(response, 200, {
+    alerts: records,
+    schemaDrift: schemaDrift
+      ? {
+          status: schemaDrift.status,
+          checkedAt: schemaDrift.checkedAt,
+          materializationStatus: schemaDrift.materializationStatus,
+          unreachableTables: schemaDrift.unreachableTables,
+          warnings: schemaDrift.warnings,
+          remediation: schemaDrift.remediation,
+        }
+      : {
+          status: 'not_applicable',
+          checkedAt: null,
+          materializationStatus: 'safe',
+          unreachableTables: 0,
+          warnings: [],
+          remediation: null,
+        },
+  });
 }
 
 export async function handleModelHealthDecision(
@@ -56,7 +81,7 @@ export async function handleModelHealthDecision(
 
   const body = await readJsonBody(request, runtime.bodyLimitBytes);
   const payload = readDecisionPayload(body);
-  if (!payload.ok) {
+  if (payload.ok === false) {
     writeJson(response, 400, {
       ok: false,
       error: {

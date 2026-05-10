@@ -17,7 +17,14 @@ import type {
   ModelHealthSnapshotRepository,
   ModelHealthSnapshotRecord,
   AlertLevel,
+  UnitTalkSupabaseClient,
 } from '@unit-talk/db';
+import {
+  canonicalTables,
+  createDatabaseClientFromConnection,
+  createServiceRoleDatabaseConnectionConfig,
+} from '@unit-talk/db';
+import { loadEnvironment } from '@unit-talk/config';
 
 export interface ModelHealthScannerDeps {
   modelRegistry: ModelRegistryRepository;
@@ -56,8 +63,131 @@ export interface ModelHealthScanResult {
   durationMs: number;
 }
 
+export interface SchemaDriftTableStatus {
+  table: string;
+  reachable: boolean;
+  rowCount: number | null;
+  status: 'ok' | 'unreachable';
+  errorCode: string | null;
+  errorMessage: string | null;
+}
+
+export interface SchemaDriftProbeResult {
+  count: number | null;
+  error?: {
+    code?: string;
+    message: string;
+  } | null;
+}
+
+export interface SchemaDriftCheckOptions {
+  canonicalTableNames?: readonly string[];
+  client?: UnitTalkSupabaseClient;
+  logger?: Pick<Console, 'warn' | 'error'>;
+  probeTableCount?: (table: string) => Promise<SchemaDriftProbeResult>;
+}
+
+export interface SchemaDriftCheckResult {
+  checkedAt: string;
+  status: 'healthy' | 'drift';
+  totalTables: number;
+  reachableTables: number;
+  unreachableTables: number;
+  materializationStatus: 'safe' | 'blocked';
+  warnings: string[];
+  remediation: string;
+  unreachableTableNames: string[];
+  tables: SchemaDriftTableStatus[];
+}
+
 // Default sports to scan when no explicit slices are provided.
 const DEFAULT_SPORTS = ['NBA', 'NFL', 'MLB', 'NHL'] as const;
+
+const SCHEMA_DRIFT_REMEDIATION =
+  'Reload the PostgREST schema cache before re-enabling candidate materialization. If the drift persists, verify the canonical table still exists and the service-role key can query it.';
+
+function createSchemaDriftProbe(client: UnitTalkSupabaseClient): (table: string) => Promise<SchemaDriftProbeResult> {
+  return async (table: string) => {
+    const { count, error } = await client.from(table).select('*', { count: 'exact', head: true });
+    return {
+      count: count ?? null,
+      error: error ? { code: error.code, message: error.message } : null,
+    };
+  };
+}
+
+export async function checkSchemaDrift(options: SchemaDriftCheckOptions = {}): Promise<SchemaDriftCheckResult> {
+  const logger = options.logger ?? console;
+  const tableNames = options.canonicalTableNames ?? canonicalTables;
+  const probeTableCount =
+    options.probeTableCount ??
+    createSchemaDriftProbe(
+      options.client ??
+        createDatabaseClientFromConnection(createServiceRoleDatabaseConnectionConfig(loadEnvironment())),
+    );
+  const tables: SchemaDriftTableStatus[] = [];
+
+  for (const table of tableNames) {
+    try {
+      const probe = await probeTableCount(table);
+      const error = probe.error ?? null;
+
+      tables.push({
+        table,
+        reachable: error === null,
+        rowCount: error === null ? probe.count ?? 0 : null,
+        status: error === null ? 'ok' : 'unreachable',
+        errorCode: error?.code ?? null,
+        errorMessage: error?.message ?? null,
+      });
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      tables.push({
+        table,
+        reachable: false,
+        rowCount: null,
+        status: 'unreachable',
+        errorCode: null,
+        errorMessage,
+      });
+    }
+  }
+
+  const unreachableTables = tables.filter((table) => !table.reachable);
+  const warnings =
+    unreachableTables.length === 0
+      ? []
+      : [
+          `PostgREST schema drift detected: ${unreachableTables.length}/${tableNames.length} canonical tables are unreachable.`,
+          `Unreachable tables: ${unreachableTables.map((table) => table.table).join(', ')}`,
+        ];
+
+  if (unreachableTables.length > 0) {
+    logger.warn(
+      JSON.stringify({
+        event: 'schema_drift_detected',
+        unreachableTables: unreachableTables.map((table) => ({
+          table: table.table,
+          errorCode: table.errorCode,
+          errorMessage: table.errorMessage,
+        })),
+      }),
+    );
+  }
+
+  return {
+    checkedAt: new Date().toISOString(),
+    status: unreachableTables.length === 0 ? 'healthy' : 'drift',
+    totalTables: tableNames.length,
+    reachableTables: tables.length - unreachableTables.length,
+    unreachableTables: unreachableTables.length,
+    materializationStatus: unreachableTables.length === 0 ? 'safe' : 'blocked',
+    warnings,
+    remediation: SCHEMA_DRIFT_REMEDIATION,
+    unreachableTableNames: unreachableTables.map((table) => table.table),
+    tables,
+  };
+}
 
 export async function runModelHealthScan(
   deps: ModelHealthScannerDeps,
