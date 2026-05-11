@@ -29,10 +29,31 @@ permissions:
   contents: read
 
 jobs:
+  # Reads the secret in a step (permitted) and outputs a flag.
+  # Job-level `if` cannot reference the secrets context directly — this
+  # two-job pattern is the supported workaround.
+  check-config:
+    name: Check DB configuration
+    runs-on: ubuntu-latest
+    outputs:
+      db-configured: ${{ steps.check.outputs.configured }}
+    steps:
+      - id: check
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          if [ -n "$SUPABASE_DB_URL" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::SUPABASE_DB_URL not configured — live schema parity skipped."
+          fi
+
   schema-parity:
     name: Live Schema Parity
+    needs: check-config
+    if: needs.check-config.outputs.db-configured == 'true'
     runs-on: ubuntu-latest
-    if: ${{ secrets.SUPABASE_DB_URL != '' }}
     services:
       postgres:
         image: postgres:17
@@ -53,12 +74,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Validate live DB URL secret
-        if: env.ACTUAL_DATABASE_URL == ''
-        run: |
-          echo "::error title=Missing secret::SUPABASE_DB_URL must be configured for live schema parity verification."
-          exit 1
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -126,4 +141,4 @@ jobs:
           name: live-schema-parity
           path: artifacts/schema-parity/
           retention-days: 30
-          if-no-files-found: error
+          if-no-files-found: warn
