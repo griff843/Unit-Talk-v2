@@ -61,7 +61,7 @@ test('computePortfolioCorrelation: different sport → zero correlation coeffici
 
 // ─── Same sport, same market family ──────────────────────────────────────────
 
-test('computePortfolioCorrelation: same sport + same game-line family → moderate correlation', () => {
+test('computePortfolioCorrelation: same sport + same game-line family → low correlation (different games)', () => {
   const board = [
     makeSlot({ pickId: 'b1', sport: 'NBA', marketFamily: 'game-line', participantId: null, teamId: 'LAL' }),
   ];
@@ -75,7 +75,8 @@ test('computePortfolioCorrelation: same sport + same game-line family → modera
 
   const result = computePortfolioCorrelation(board, candidate);
 
-  assert.equal(result.maxCorrelation, 0.4);
+  // Game-lines on same sport but different games are nearly independent (UTV2-902)
+  assert.equal(result.maxCorrelation, 0.1);
   assert.equal(result.correlatedCount, 1);
   assert.ok(result.portfolioCorrelationPenalty < 1.0);
 });
@@ -90,7 +91,7 @@ test('computePortfolioCorrelation: same sport, different market family → low c
 
   const result = computePortfolioCorrelation(board, candidate);
 
-  assert.equal(result.maxCorrelation, 0.2);
+  assert.equal(result.maxCorrelation, 0.1);
   assert.equal(result.correlatedCount, 1);
 });
 
@@ -134,13 +135,37 @@ test('computePortfolioCorrelation: multiple correlated picks compound penalty', 
 
   const result = computePortfolioCorrelation(board, candidate);
 
-  // 3 NBA game-line picks correlated at 0.4 each; 1 NFL pick at 0
+  // 3 NBA game-line picks correlated at 0.1 each; 1 NFL pick at 0
   assert.equal(result.correlatedCount, 3);
-  assert.equal(result.maxCorrelation, 0.4);
-  // correlationMass = 3 * 0.4 = 1.2; penaltyAmount = min(0.9, 1.2*0.15) = 0.18
-  // penalty factor = 1 - 0.18 = 0.82
+  assert.equal(result.maxCorrelation, 0.1);
+  // correlationMass = 3 * 0.1 = 0.3; penaltyAmount = min(0.9, 0.3*0.15) = 0.045
+  // penalty factor = 1 - 0.045 = 0.955
   assert.ok(result.portfolioCorrelationPenalty < 1.0);
-  assert.equal(result.portfolioCorrelationPenalty, 0.82);
+  assert.equal(result.portfolioCorrelationPenalty, 0.955);
+});
+
+// ─── UTV2-902 regression: active board should not floor at 10 ─────────────────
+
+test('computePortfolioCorrelation: 15 same-sport game-line picks do NOT floor penalty (UTV2-902)', () => {
+  // Pre-fix: 15 * 0.4 * 0.15 = 0.9 → penalty floor hit, score = 10 for every new NBA pick
+  // Post-fix: 15 * 0.1 * 0.15 = 0.225 → penalty factor = 0.775, score ≈ 77
+  const board = Array.from({ length: 15 }, (_, i) =>
+    makeSlot({ pickId: `b${i}`, sport: 'NBA', marketFamily: 'game-line', participantId: null, teamId: `team-${i}` }),
+  );
+  const candidate = makeSlot({
+    pickId: 'c1',
+    sport: 'NBA',
+    marketFamily: 'game-line',
+    participantId: null,
+    teamId: 'team-new',
+  });
+
+  const result = computePortfolioCorrelation(board, candidate);
+
+  // correlationMass = 15 * 0.1 = 1.5; penaltyAmount = 1.5 * 0.15 = 0.225
+  // penalty factor = 1 - 0.225 = 0.775 (well above the 0.1 floor)
+  assert.ok(result.portfolioCorrelationPenalty > 0.5, `penalty ${result.portfolioCorrelationPenalty} should be > 0.5 (not floored)`);
+  assert.ok(Math.abs(result.portfolioCorrelationPenalty - 0.775) < 1e-9, `expected ~0.775, got ${result.portfolioCorrelationPenalty}`);
 });
 
 // ─── Self-pick exclusion ──────────────────────────────────────────────────────

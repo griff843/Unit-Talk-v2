@@ -62,21 +62,27 @@ function classifyCoefficient(
     return 0.0;
   }
 
-  // Same sport from here on:
+  // Same sport from here on.
+  // Game-lines and player-props on the same sport but different games are nearly
+  // independent (e.g., Celtics-Nets and Lakers-Warriors). A low coefficient
+  // prevents the floor from being hit prematurely on an active board — the
+  // 0.4 value caused boardFit to floor at 10 with only 15 same-sport picks
+  // (UTV2-902). Same-game correlation cannot be detected without an event key
+  // on PortfolioSlot; 0.1 is the safe sport-level baseline until that is added.
   if (board.marketFamily === candidate.marketFamily) {
-    // Game-lines and team-props on same sport are moderately correlated
+    // Game-lines and team-props on same sport: low coefficient (different games)
     if (
       candidate.marketFamily === 'game-line' ||
       candidate.marketFamily === 'team-prop'
     ) {
-      return 0.4;
+      return 0.1;
     }
-    // Player-props on same sport but different player → low-medium
-    return 0.3;
+    // Player-props on same sport but different player → low correlation
+    return 0.1;
   }
 
-  // Same sport, different market family → low correlation
-  return 0.2;
+  // Same sport, different market family → very low correlation
+  return 0.1;
 }
 
 /**

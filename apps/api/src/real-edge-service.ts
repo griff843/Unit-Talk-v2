@@ -66,9 +66,17 @@ export async function computeRealEdge(
 ): Promise<RealEdgeResult> {
   const { confidence, marketKey, selection, submittedOdds, providerOffers } = options;
 
+  // Translate canonical market key to SGO provider-native format once. The DB
+  // stores provider-format keys (e.g., 'player-points-game-ou'); canonical keys
+  // (e.g., 'player.points-all-game-ou') miss every row. For InMemory test repos
+  // that store canonical keys, resolveProviderMarketKey returns null and the
+  // canonical key is used as-is (preserving existing test behaviour).
+  const sgoProviderKey = await providerOffers.resolveProviderMarketKey(marketKey, 'sgo');
+  const resolvedKey = sgoProviderKey ?? marketKey;
+
   // Try Pinnacle first (sharpest line)
   const pinnacleEdge = await tryProviderEdge(
-    confidence, marketKey, selection, 'odds-api:pinnacle', providerOffers,
+    confidence, resolvedKey, selection, 'odds-api:pinnacle', providerOffers,
   );
   if (pinnacleEdge) {
     const marketSource = 'pinnacle' as const;
@@ -78,7 +86,7 @@ export async function computeRealEdge(
 
   // Try multi-book consensus
   const consensusEdge = await tryConsensusEdge(
-    confidence, marketKey, selection, providerOffers,
+    confidence, resolvedKey, selection, providerOffers,
   );
   if (consensusEdge) {
     const contrarySignal = classifyContrarianism(consensusEdge.modelProbability, consensusEdge.marketProbability, consensusEdge.marketSource);
@@ -87,7 +95,7 @@ export async function computeRealEdge(
 
   // Try SGO (existing single provider)
   const sgoEdge = await tryProviderEdge(
-    confidence, marketKey, selection, 'sgo', providerOffers,
+    confidence, resolvedKey, selection, 'sgo', providerOffers,
   );
   if (sgoEdge) {
     const marketSource = 'sgo' as const;
@@ -100,7 +108,7 @@ export async function computeRealEdge(
   // lookup only checked Pinnacle/SGO directly. Use that book before falling
   // back to self-reported confidence delta.
   const singleBookEdge = await tryProviderEdge(
-    confidence, marketKey, selection, undefined, providerOffers,
+    confidence, resolvedKey, selection, undefined, providerOffers,
   );
   if (singleBookEdge) {
     const marketSource = 'single-book' as const;

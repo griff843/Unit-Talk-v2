@@ -824,17 +824,22 @@ async function findLatestMatchingOffer(
   const participantKey =
     normalizedMarketKey === 'moneyline' ? normalizeSelectionParticipantKey(selection) : undefined;
 
-  // Use indexed query instead of full table scan (UTV2-205).
-  // Tries SGO first (has results data), falls back to any provider.
-  const sgoOffer = await providerOffers.findLatestByMarketKey(
-    normalizedMarketKey,
-    'sgo',
-    participantKey,
-  );
+  // Translate canonical key to SGO provider-native format (e.g., 'player.points-all-game-ou'
+  // → 'player-points-game-ou'). The DB stores provider format; canonical keys miss every row.
+  // Falls back to canonical key when no alias exists (InMemory test data uses canonical format).
+  const sgoProviderKey = await providerOffers.resolveProviderMarketKey(normalizedMarketKey, 'sgo');
+  const sgoLookupKey = sgoProviderKey ?? normalizedMarketKey;
+
+  const sgoOffer = await providerOffers.findLatestByMarketKey(sgoLookupKey, 'sgo', participantKey);
   if (sgoOffer) return sgoOffer;
 
-  // Fall back to any provider (Odds API, etc.)
-  return providerOffers.findLatestByMarketKey(normalizedMarketKey, undefined, participantKey);
+  // Fall back to any provider using resolved key, then canonical key.
+  const anyOffer = await providerOffers.findLatestByMarketKey(sgoLookupKey, undefined, participantKey);
+  if (anyOffer) return anyOffer;
+  if (sgoProviderKey) {
+    return providerOffers.findLatestByMarketKey(normalizedMarketKey, undefined, participantKey);
+  }
+  return null;
 }
 
 function normalizeSelectionParticipantKey(selection: string): string | null {
