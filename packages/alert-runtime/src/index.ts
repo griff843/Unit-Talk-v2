@@ -62,3 +62,10 @@ export {
   buildInjuryEmbed,
   resolveInjuryChannelId,
 } from './injury-notification-service.js';
+
+export {
+  runInjuryNotificationPass,
+  type InjuryNotificationPassOptions,
+  type InjuryNotificationPassResult,
+  type InjuryNotificationRepo,
+} from './injury-notification-pass.js';
