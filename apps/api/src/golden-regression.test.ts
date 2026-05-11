@@ -112,6 +112,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.510834,
         hasRealEdge: true,
         realEdgeBookCount: 1,
+        band: 'C',
         contrarySignal: {
           contrarianism: 'strongly-contrarian',
           divergence: 0.139166,
@@ -168,6 +169,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         eventName: 'Dodgers vs Padres',
         promotionScores: { edge: 78, trust: 79, readiness: 88, uniqueness: 82, boardFit: 90 },
         kellySizing: null,
+        band: 'C',
       },
     },
     expectedSettlements: [
@@ -233,6 +235,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.75,
         hasRealEdge: false,
         realEdgeBookCount: 0,
+        band: 'SUPPRESS',
         contrarySignal: {
           contrarianism: 'consensus-fade',
           divergence: 0.15,
@@ -290,6 +293,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         eventName: 'Rangers vs Bruins',
         promotionScores: { trust: 90, readiness: 88, uniqueness: 84, boardFit: 89 },
         kellySizing: null,
+        band: 'C',
       },
     },
     expectedSettlements: [

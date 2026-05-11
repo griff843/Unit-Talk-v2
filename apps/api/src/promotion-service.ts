@@ -14,8 +14,14 @@ import {
   type ExposureGateConfig,
   resolveExposureGateConfig,
 } from '@unit-talk/contracts';
-import { evaluatePromotionEligibility, computeBoardFitScore, generatePickNarrative } from '@unit-talk/domain';
-import type { PortfolioSlot } from '@unit-talk/domain';
+import {
+  applyBandDowngrades,
+  computeBoardFitScore,
+  evaluatePromotionEligibility,
+  generatePickNarrative,
+  initialBandAssignment,
+} from '@unit-talk/domain';
+import type { BandInput, PortfolioSlot } from '@unit-talk/domain';
 import type {
   AuditLogRecord,
   AuditLogRepository,
@@ -174,7 +180,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
           promotionDecidedAt: decidedAt,
           promotionDecidedBy: actor,
           overrideAction: null,
-          payload: { staleDataBlock: true, code: 'STALE_DATA_AT_PROMOTION', universeId },
+          metadataPatch: { band: 'SUPPRESS' },
+          payload: { staleDataBlock: true, code: 'STALE_DATA_AT_PROMOTION', universeId, band: 'SUPPRESS' },
         });
 
         return {
@@ -285,6 +292,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     ? winnerPolicy.target
     : null;
   const winnerReason = summarizePromotionReason(winnerDecision);
+  const winnerBand = resolvePromotionBand(canonicalPick, scoreInputs, winnerDecision);
 
   const makeSnapshot = (
     policy: PromotionPolicy,
@@ -344,7 +352,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
     promotionDecidedAt: winnerDecision.decidedAt,
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: null,
+    metadataPatch: { band: winnerBand },
     payload: {
+      band: winnerBand,
       ...winnerSnapshot,
       explanation: winnerDecision.explanation,
       policy: winnerPolicy,
@@ -392,6 +402,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
       const boardState = boardStates[index]!;
       const historyReason = summarizePromotionReason(decision);
       const nonWinnerSnapshot = makeSnapshot(policy, boardState);
+      const historyBand = resolvePromotionBand(canonicalPick, scoreInputs, decision);
       const history = await pickRepository.insertPromotionHistoryRow({
         pickId,
         target: policy.target,
@@ -403,6 +414,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
         promotionDecidedBy: decision.decidedBy,
         overrideAction: null,
         payload: {
+          band: historyBand,
           ...nonWinnerSnapshot,
           explanation: decision.explanation,
           policy,
@@ -596,6 +608,7 @@ async function buildSmartFormQualifiedResult(
 
   const winnerDecision = decisions[bestBetsIndex]!;
   const winnerBoardState = boardStates[bestBetsIndex]!;
+  const winnerBand = resolvePromotionBand(canonicalPick, scoreInputs, winnerDecision);
   const winnerSnapshot = makeSnapshot(bestBetsPolicy, winnerBoardState, {
     forcePromote: true,
     reason: 'smart-form submissions route directly to best-bets',
@@ -614,7 +627,9 @@ async function buildSmartFormQualifiedResult(
     promotionDecidedAt: winnerDecision.decidedAt,
     promotionDecidedBy: winnerDecision.decidedBy,
     overrideAction: 'force_promote',
+    metadataPatch: { band: winnerBand },
     payload: {
+      band: winnerBand,
       ...winnerSnapshot,
       explanation: winnerDecision.explanation,
       policy: bestBetsPolicy,
@@ -646,6 +661,7 @@ async function buildSmartFormQualifiedResult(
       const policy = policies[index]!;
       const decision = decisions[index]!;
       const boardState = boardStates[index]!;
+      const historyBand = resolvePromotionBand(canonicalPick, scoreInputs, decision);
       const history = await pickRepository.insertPromotionHistoryRow({
         pickId: canonicalPick.id,
         target: policy.target,
@@ -657,6 +673,7 @@ async function buildSmartFormQualifiedResult(
         promotionDecidedBy: decision.decidedBy,
         overrideAction: null,
         payload: {
+          band: historyBand,
           ...makeSnapshot(policy, boardState, {
             suppress: true,
             reason: 'smart-form submissions route directly to best-bets',
@@ -821,7 +838,9 @@ async function persistPromotionDecisionForPick(
   }, policy);
 
   const reason = summarizePromotionReason(decision);
+  const band = resolvePromotionBand(canonicalPick, scoreInputs, decision);
   const snapshot: PromotionDecisionSnapshot = {
+    band,
     scoringProfile: activeScoringProfile.name,
     policyVersion: policy.version,
     scoreInputs: {
@@ -874,6 +893,7 @@ async function persistPromotionDecisionForPick(
     promotionDecidedAt: decision.decidedAt,
     promotionDecidedBy: decision.decidedBy,
     overrideAction: override?.action ?? null,
+    metadataPatch: { band },
     payload: {
       ...snapshot,
       explanation: decision.explanation,
@@ -933,6 +953,31 @@ function mapPickRecordToCanonicalPick(pick: PickRecord): CanonicalPick {
 
 function hasRequiredFields(pick: CanonicalPick) {
   return Boolean(pick.market && pick.selection && pick.source);
+}
+
+function resolvePromotionBand(
+  pick: CanonicalPick,
+  scoreInputs: Awaited<ReturnType<typeof readPromotionScoreInputs>>,
+  decision: BoardPromotionDecision,
+) {
+  const existingBand = readMetadataString(pick.metadata, 'band');
+  if (existingBand) {
+    return existingBand;
+  }
+
+  const modelTier = readMetadataString(pick.metadata, 'modelTier')
+    ?? readMetadataString(pick.metadata, 'model_tier');
+  if (modelTier) {
+    return modelTier;
+  }
+
+  if (!decision.qualified) {
+    return 'SUPPRESS';
+  }
+
+  const bandInput = buildBandInput(pick, scoreInputs, decision);
+  const initial = initialBandAssignment(bandInput);
+  return applyBandDowngrades(bandInput, initial.band).finalBand;
 }
 
 async function readPromotionScoreInputs(
@@ -1371,6 +1416,11 @@ function readMetadataString(metadata: Record<string, unknown>, key: string) {
   return typeof value === 'string' ? value : undefined;
 }
 
+function readMetadataNumber(metadata: Record<string, unknown>, key: string) {
+  const value = metadata[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+}
+
 function readNestedRecord(metadata: Record<string, unknown>, key: string) {
   const value = metadata[key];
   return isRecord(value) ? value : undefined;
@@ -1378,6 +1428,55 @@ function readNestedRecord(metadata: Record<string, unknown>, key: string) {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function buildBandInput(
+  pick: CanonicalPick,
+  scoreInputs: Awaited<ReturnType<typeof readPromotionScoreInputs>>,
+  decision: BoardPromotionDecision,
+): BandInput {
+  const domainAnalysis = readNestedRecord(pick.metadata, 'domainAnalysis') ?? {};
+  const liquidityTier = readMetadataString(pick.metadata, 'liquidityTier')
+    ?? readMetadataString(domainAnalysis, 'liquidityTier')
+    ?? 'unknown';
+  const riskDecision = readMetadataString(pick.metadata, 'riskDecision')
+    ?? readMetadataString(domainAnalysis, 'riskDecision');
+  const riskThrottleReasonCodes = pick.metadata['riskThrottleReasonCodes']
+    ?? domainAnalysis['riskThrottleReasonCodes'];
+  const normalizedLiquidityTier =
+    liquidityTier === 'high' || liquidityTier === 'medium' || liquidityTier === 'low' || liquidityTier === 'unknown'
+      ? liquidityTier
+      : 'unknown';
+  const normalizedRiskDecision =
+    riskDecision === 'allow' || riskDecision === 'reduce' || riskDecision === 'reject'
+      ? riskDecision
+      : undefined;
+  const normalizedReasonCodes =
+    Array.isArray(riskThrottleReasonCodes) && riskThrottleReasonCodes.every((entry) => typeof entry === 'string')
+      ? riskThrottleReasonCodes
+      : undefined;
+
+  return {
+    edge: normalizeBandEdge(scoreInputs.edge),
+    uncertainty: readMetadataNumber(pick.metadata, 'uncertainty')
+      ?? readMetadataNumber(domainAnalysis, 'uncertainty')
+      ?? Math.max(0, Math.min(1, 1 - (pick.confidence ?? 0.75))),
+    clvForecast: readMetadataNumber(pick.metadata, 'clvForecast')
+      ?? readMetadataNumber(domainAnalysis, 'clvForecast')
+      ?? 0,
+    liquidityTier: normalizedLiquidityTier,
+    marketResistance: readMetadataNumber(pick.metadata, 'marketResistance')
+      ?? readMetadataNumber(domainAnalysis, 'marketResistance')
+      ?? null,
+    selectionDecision: decision.qualified ? 'select' : 'hold',
+    selectionScore: decision.score,
+    ...(normalizedRiskDecision ? { riskDecision: normalizedRiskDecision } : {}),
+    ...(normalizedReasonCodes ? { riskThrottleReasonCodes: normalizedReasonCodes } : {}),
+  };
+}
+
+function normalizeBandEdge(score: number) {
+  return Math.max(-1, Math.min(1, (score - 50) / 100));
 }
 
 function resolvePromotionPolicyForTarget(target: PromotionTarget): PromotionPolicy {

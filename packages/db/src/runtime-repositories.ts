@@ -440,6 +440,11 @@ export class InMemoryPickRepository implements PickRepository {
       throw new Error(`Pick not found: ${input.pickId}`);
     }
 
+    const nextMetadata = {
+      ...asJsonObjectRecord(existing.metadata),
+      ...(input.metadataPatch ?? {}),
+    };
+
     const updated: PickRecord = {
       ...existing,
       approval_status: input.approvalStatus,
@@ -450,6 +455,7 @@ export class InMemoryPickRepository implements PickRepository {
       promotion_version: input.promotionVersion,
       promotion_decided_at: input.promotionDecidedAt,
       promotion_decided_by: input.promotionDecidedBy,
+      metadata: toJsonObject(nextMetadata),
       updated_at: new Date().toISOString(),
     };
 
@@ -2981,6 +2987,16 @@ export class DatabasePickRepository implements PickRepository {
   async persistPromotionDecision(
     input: PromotionDecisionPersistenceInput,
   ): Promise<PromotionPersistenceResult> {
+    const existingPick = await this.findPickById(input.pickId);
+    if (!existingPick) {
+      throw new Error(`Failed to persist promotion state: pick not found (${input.pickId})`);
+    }
+
+    const mergedMetadata = {
+      ...asJsonObjectRecord(existingPick.metadata),
+      ...(input.metadataPatch ?? {}),
+    };
+
     const { data: pick, error: pickError } = await this.client
       .from('picks')
       .update({
@@ -2992,6 +3008,7 @@ export class DatabasePickRepository implements PickRepository {
         promotion_version: input.promotionVersion,
         promotion_decided_at: input.promotionDecidedAt,
         promotion_decided_by: input.promotionDecidedBy,
+        metadata: toJsonObject(mergedMetadata),
       })
       .eq('id', input.pickId)
       .select()
@@ -3027,6 +3044,7 @@ export class DatabasePickRepository implements PickRepository {
       await this.client
         .from('picks')
         .update({
+          metadata: existingPick.metadata,
           promotion_status: null,
           promotion_target: null,
           promotion_score: null,
