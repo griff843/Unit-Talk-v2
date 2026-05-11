@@ -84,6 +84,9 @@ const MAX_TRUST_ADJUSTMENT = 0.05;
 /** Default confidence when champion model has no explicit confidence metadata. */
 const DEFAULT_CHAMPION_CONFIDENCE = 0.75;
 
+// Intentional: all candidates processed here are board-construction sourced.
+// Champion entries in model_registry are scoped to source_type_compatibility: ['board-construction'].
+// Capper and model-driven picks are not routed through this service.
 const SCORING_SOURCE_TYPE = 'board-construction';
 const scoringRuntimeVersion = readRuntimeVersionInfoFromProcessEnv();
 
@@ -551,8 +554,11 @@ export class CandidateScoringService {
     sourceType: string,
     cache: Map<string, ModelRegistryRecord | null>,
   ): Promise<OwnershipResolution> {
-    if (!this.repos.modelRegistry || !marketFamily) {
-      return { kind: 'missing', reason: 'ownership_lookup_unavailable' };
+    if (!this.repos.modelRegistry) {
+      return { kind: 'missing', reason: 'no_registry' };
+    }
+    if (!marketFamily) {
+      return { kind: 'missing', reason: 'market_type_id_null' };
     }
     const cacheKey = `${sport}:${marketFamily}:${sourceType}`;
     if (cache.has(cacheKey)) {

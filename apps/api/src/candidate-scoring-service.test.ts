@@ -660,3 +660,57 @@ test('persists ownership but quarantines degraded registry ownership', async () 
   const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
   assert.ok(rows.get('universe-1')?.model_registry_id);
 });
+
+// ---------------------------------------------------------------------------
+// UTV2-905 regression — champion lookup path (source_type + marketFamily guards)
+// ---------------------------------------------------------------------------
+
+test('candidate is skipped when universe has null market_type_id (market_type_id_null path)', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry);
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow({ market_type_id: null })]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+
+  assert.equal(result.scored, 0);
+  assert.equal(result.skipped, 1);
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  assert.equal(rows.get('universe-1')?.model_registry_id, null);
+});
+
+test('candidate is skipped when no champion exists for sport+marketFamily (missing_registry_owner path)', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow({ sport_key: 'mlb', market_type_id: 'player_hits_ou' })]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+
+  assert.equal(result.scored, 0);
+  assert.equal(result.skipped, 1);
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  assert.equal(rows.get('universe-1')?.model_registry_id, null);
+});
+
+test('board-construction champion is matched for nba player_prop (source_type gate confirms intentional)', async () => {
+  const pickCandidates = new InMemoryPickCandidateRepository();
+  const marketUniverse = new InMemoryMarketUniverseRepository();
+  const modelRegistry = new InMemoryModelRegistryRepository();
+  await seedChampion(modelRegistry, 'nba', 'player_prop');
+
+  seedUniverseRows(marketUniverse, [makeUniverseRow()]);
+  seedCandidateRows(pickCandidates, [makeCandidate()]);
+
+  const result = await runCandidateScoring({ pickCandidates, marketUniverse, modelRegistry });
+
+  assert.equal(result.scored, 1);
+  assert.equal(result.skipped, 0);
+  const rows = (pickCandidates as unknown as { rows: Map<string, PickCandidateRow> }).rows;
+  assert.ok(rows.get('universe-1')?.model_registry_id, 'model_registry_id should be set when board-construction champion exists');
+});
