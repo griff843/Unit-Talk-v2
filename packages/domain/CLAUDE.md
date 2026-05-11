@@ -87,7 +87,6 @@ None. All functions are stateless and deterministic. No database access, no HTTP
 
 - `americanToDecimal` exists in both `risk/kelly-sizer.ts` and `probability/devig.ts` — name collision is why `risk/` and `strategy/` are excluded from the barrel export
 - `computeBrierScore`/`computeLogLoss` also collide between `probability/calibration` and `evaluation/` — use direct imports
-- Uniqueness score input is hardcoded to 50 in the API service, not here — domain has no signal wired for it yet
 
 
 ---

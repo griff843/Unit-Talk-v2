@@ -17,6 +17,7 @@ import {
 import {
   applyBandDowngrades,
   computeBoardFitScore,
+  computeUniquenessScore,
   evaluatePromotionEligibility,
   generatePickNarrative,
   initialBandAssignment,
@@ -1070,13 +1071,25 @@ async function readPromotionScoreInputs(
     boardFit = 75;
   }
 
+  const explicitUniqueness =
+    typeof configured?.['uniqueness'] === 'number' && Number.isFinite(configured['uniqueness'] as number)
+      ? (configured['uniqueness'] as number)
+      : null;
+
+  const uniqueness =
+    explicitUniqueness !== null
+      ? explicitUniqueness
+      : computeUniquenessScore({
+          activeSameSportMarketCount: openPicks?.filter(
+            p => p.id !== pick.id && p.market === pick.market,
+          ).length,
+        });
+
   return {
     edge: readScore(configured, 'edge', edgeFallback),
     trust,
     readiness: readScore(configured, 'readiness', readinessFallback),
-    // Uniqueness: no real signal wired yet — uses neutral default.
-    // Weight should be minimal until a market saturation signal exists.
-    uniqueness: readScore(configured, 'uniqueness', 50),
+    uniqueness,
     boardFit,
     /** Source of the edge component — used in decision snapshot for auditability. */
     edgeSource,
