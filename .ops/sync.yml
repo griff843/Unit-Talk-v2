@@ -3,7 +3,9 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues: []
+  issues:
+    - UTV2-904
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - PROOF-UTV2-904

@@ -851,3 +851,46 @@ test('smart-form submission payload includes submittedBy from capper field', asy
   assert.equal(result.submissionRecord.submitted_by, 'griff843', 'submitted_by must be persisted on the submission record');
   assert.equal(result.pick.source, 'smart-form');
 });
+
+test('promotion history payload includes breakdown, qualified, and score (UTV2-904)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'api',
+      market: 'NBA points',
+      selection: 'Player Over 22.5',
+      odds: -110,
+      confidence: 0.65,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Lakers vs Warriors',
+        promotionScores: { edge: 72, trust: 70, readiness: 70, uniqueness: 70, boardFit: 70 },
+      },
+    },
+    repositories,
+  );
+
+  const evalResult = await evaluateAndPersistBestBetsPromotion(
+    result.pick.id,
+    'test:utv2-904',
+    repositories.picks,
+    repositories.audit,
+  );
+
+  const payload = evalResult.history.payload as Record<string, unknown>;
+  assert.ok('breakdown' in payload, 'payload must include breakdown');
+  assert.ok('qualified' in payload, 'payload must include qualified');
+  assert.ok('score' in payload, 'payload must include score');
+
+  const breakdown = payload.breakdown as Record<string, number>;
+  assert.equal(typeof breakdown.edge, 'number', 'breakdown.edge must be a number');
+  assert.equal(typeof breakdown.trust, 'number', 'breakdown.trust must be a number');
+  assert.equal(typeof breakdown.readiness, 'number', 'breakdown.readiness must be a number');
+  assert.equal(typeof breakdown.uniqueness, 'number', 'breakdown.uniqueness must be a number');
+  assert.equal(typeof breakdown.boardFit, 'number', 'breakdown.boardFit must be a number');
+  assert.equal(typeof breakdown.total, 'number', 'breakdown.total must be a number');
+  assert.equal(typeof payload.qualified, 'boolean', 'payload.qualified must be a boolean');
+  assert.equal(typeof payload.score, 'number', 'payload.score must be a number');
+  assert.equal(payload.score, evalResult.decision.score, 'payload.score must match decision.score');
+  assert.equal(payload.qualified, evalResult.decision.qualified, 'payload.qualified must match decision.qualified');
+});
