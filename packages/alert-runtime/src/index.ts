@@ -58,3 +58,7 @@ export * from './injury-types.js';
 export * from './injury-detector.js';
 export * from './injury-staleness-guard.js';
 export * from './injury-cooldown.js';
+export {
+  buildInjuryEmbed,
+  resolveInjuryChannelId,
+} from './injury-notification-service.js';
