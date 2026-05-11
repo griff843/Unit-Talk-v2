@@ -1,7 +1,13 @@
-import type { CatalogData, MarketTypeId } from './catalog';
+import type { CatalogData } from './catalog';
 import type { EventOfferBrowseResult } from './api-client';
 import type { BetFormValues } from './form-schema';
 import type { SubmitPickPayload } from './api-client';
+import {
+  getMarketTypeFamily,
+  getSupportedMarketTypesForSport,
+  isMarketTypeId,
+  type MarketTypeId,
+} from './market-types';
 
 export interface SubmissionContext {
   submissionMode?: 'live-offer' | 'manual';
@@ -20,7 +26,7 @@ export function getMarketTypesForSport(
   sportId: string,
 ): MarketTypeId[] {
   const sport = catalog.sports.find((s) => s.id === sportId);
-  return (sport?.marketTypes ?? []) as MarketTypeId[];
+  return getSupportedMarketTypesForSport(sportId, sport?.marketTypes ?? []);
 }
 
 export function getStatTypesForSport(
@@ -44,29 +50,30 @@ export function calcPayout(units: number, odds: number): number | null {
 
 export function buildSelectionString(values: BetFormValues): string {
   const { marketType, playerName, statType, direction, line, team } = values;
+  const marketFamily = getMarketTypeFamily(marketType);
 
-  if (marketType === 'player-prop') {
+  if (marketFamily === 'player-prop') {
     const dirLabel = direction === 'over' ? 'O' : direction === 'under' ? 'U' : '';
     const parts = [playerName, statType, dirLabel, line !== undefined ? String(line) : ''];
     return parts.filter(Boolean).join(' ');
   }
 
-  if (marketType === 'moneyline') {
+  if (marketFamily === 'moneyline') {
     return team ?? '';
   }
 
-  if (marketType === 'spread') {
+  if (marketFamily === 'spread') {
     const parts = [team, line !== undefined ? (line > 0 ? `+${line}` : String(line)) : ''];
     return parts.filter(Boolean).join(' ');
   }
 
-  if (marketType === 'team-total') {
+  if (marketFamily === 'team-total') {
     const dirLabel = direction === 'over' ? 'Over' : direction === 'under' ? 'Under' : '';
     const parts = [team, dirLabel, line !== undefined ? String(line) : ''];
     return parts.filter(Boolean).join(' ');
   }
 
-  if (marketType === 'total') {
+  if (marketFamily === 'total') {
     const dirLabel = values.direction === 'over' ? 'O' : values.direction === 'under' ? 'U' : '';
     return [dirLabel, line !== undefined ? String(line) : ''].filter(Boolean).join(' ');
   }
@@ -76,6 +83,9 @@ export function buildSelectionString(values: BetFormValues): string {
 
 export function mapOfferToFormMarketType(offer: Pick<EventOfferBrowseResult, 'marketTypeId' | 'participantId' | 'providerParticipantId'>): MarketTypeId {
   const marketTypeId = offer.marketTypeId?.toLowerCase() ?? '';
+  if (isMarketTypeId(marketTypeId)) {
+    return marketTypeId;
+  }
   if (marketTypeId === 'moneyline') {
     return 'moneyline';
   }
@@ -347,16 +357,21 @@ function resolveSubmissionMarketKey(
     return context.canonicalMarketTypeId;
   }
 
-  if (values.marketType === 'moneyline') {
+  const marketFamily = getMarketTypeFamily(values.marketType);
+  if (isMarketTypeId(values.marketType) && values.marketType.includes('_')) {
+    return values.marketType;
+  }
+
+  if (marketFamily === 'moneyline') {
     return 'moneyline';
   }
-  if (values.marketType === 'spread') {
+  if (marketFamily === 'spread') {
     return 'spread';
   }
-  if (values.marketType === 'total') {
+  if (marketFamily === 'total') {
     return 'game_total_ou';
   }
-  if (values.marketType === 'team-total') {
+  if (marketFamily === 'team-total') {
     return 'team_total_ou';
   }
 

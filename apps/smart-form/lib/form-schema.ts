@@ -1,22 +1,12 @@
 import { z } from 'zod';
-
-export const MARKET_TYPE_IDS = [
-  'player-prop',
-  'moneyline',
-  'spread',
-  'total',
-  'team-total',
-] as const;
-
-export type MarketTypeId = (typeof MARKET_TYPE_IDS)[number];
-
-export const MARKET_TYPE_LABELS: Record<MarketTypeId, string> = {
-  'player-prop': 'Player Prop',
-  moneyline: 'Moneyline',
-  spread: 'Spread',
-  total: 'Total',
-  'team-total': 'Team Total',
-};
+import {
+  getMarketTypeFamily,
+  MARKET_TYPE_IDS,
+  MARKET_TYPE_LABELS,
+  type MarketTypeId,
+} from './market-types';
+export { MARKET_TYPE_IDS, MARKET_TYPE_LABELS };
+export type { MarketTypeId };
 
 export const betFormSchema = z
   .object({
@@ -52,7 +42,9 @@ export const betFormSchema = z
     gameDate: z.string().min(1, 'Date is required'),
   })
   .superRefine((data, ctx) => {
-    if (data.marketType === 'player-prop') {
+    const marketFamily = getMarketTypeFamily(data.marketType);
+
+    if (marketFamily === 'player-prop') {
       if (!data.playerName?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Player name is required', path: ['playerName'] });
       }
@@ -69,7 +61,7 @@ export const betFormSchema = z
       }
     }
 
-    if (data.marketType === 'spread') {
+    if (marketFamily === 'spread') {
       if (!data.team?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Team is required', path: ['team'] });
       }
@@ -80,7 +72,7 @@ export const betFormSchema = z
       }
     }
 
-    if (data.marketType === 'total') {
+    if (marketFamily === 'total') {
       if (!data.direction) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Direction (over/under) is required', path: ['direction'] });
       }
@@ -91,7 +83,7 @@ export const betFormSchema = z
       }
     }
 
-    if (data.marketType === 'team-total') {
+    if (marketFamily === 'team-total') {
       if (!data.team?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Team is required', path: ['team'] });
       }
@@ -105,7 +97,7 @@ export const betFormSchema = z
       }
     }
 
-    if (data.marketType === 'moneyline') {
+    if (marketFamily === 'moneyline') {
       if (!data.team?.trim()) {
         ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Team is required', path: ['team'] });
       }

@@ -1,0 +1,90 @@
+{
+  "schema": "experience-qa/v1",
+  "runId": "2026-05-11T00-30-00-utv2-882",
+  "product": "unit-talk",
+  "surface": "smart_form",
+  "persona": "operator",
+  "flow": "submit_pick",
+  "environment": "local",
+  "headSha": "b24fe7d2",
+  "timestamp": "2026-05-11T04:30:00.000Z",
+  "mode": "fast",
+  "status": "NEEDS_REVIEW",
+  "verdictReason": "Smart-form period-market regression tests passed, but the Playwright qa:experience runner could not execute in this workspace because the playwright package is unavailable.",
+  "preflightResults": [
+    {
+      "id": "smart_form_unit_regressions",
+      "status": "passed",
+      "required": true,
+      "message": "Focused smart-form regression tests for schema and payload handling passed.",
+      "evidence": {
+        "commands": [
+          "tsx --test apps/smart-form/test/form-schema.test.ts",
+          "tsx --test apps/smart-form/test/form-utils.test.ts",
+          "tsx --test apps/api/src/submission-service.test.ts"
+        ]
+      }
+    },
+    {
+      "id": "playwright_runner_available",
+      "status": "failed",
+      "required": false,
+      "message": "pnpm qa:experience --regression --mode fast could not run because the playwright package is not installed in this workspace.",
+      "evidence": {
+        "command": "pnpm qa:experience --regression --mode fast",
+        "errorCode": "ERR_MODULE_NOT_FOUND",
+        "missingPackage": "playwright"
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "Validate smart-form schema accepts canonical period market submissions",
+      "status": "pass"
+    },
+    {
+      "step": "Validate submission payload preserves canonical period market ids",
+      "status": "pass"
+    },
+    {
+      "step": "Validate API submission-service regression remains green with smart-form period market payloads",
+      "status": "pass"
+    },
+    {
+      "step": "Attempt browser regression runner",
+      "status": "needs_review"
+    }
+  ],
+  "expectationResults": [
+    {
+      "id": "period_market_schema_coverage",
+      "status": "passed",
+      "severity": "critical",
+      "message": "New period spread, total, and moneyline market variants are accepted by the smart-form schema.",
+      "hard": true
+    },
+    {
+      "id": "period_market_payload_preservation",
+      "status": "passed",
+      "severity": "critical",
+      "message": "Canonical period market ids survive payload building without lossy remapping.",
+      "hard": true
+    },
+    {
+      "id": "browser_regression_runner",
+      "status": "needs_review",
+      "severity": "medium",
+      "message": "Browser-based experience regression is blocked by missing Playwright runtime in this workspace.",
+      "hard": false
+    }
+  ],
+  "observations": [
+    "Manual and unit-level regression coverage for smart-form period markets is green.",
+    "A full browser artifact should be regenerated once Playwright is available in the workspace again."
+  ],
+  "selectorResults": [],
+  "screenshots": [],
+  "consoleErrors": [],
+  "networkErrors": [],
+  "networkObservations": []
+}
