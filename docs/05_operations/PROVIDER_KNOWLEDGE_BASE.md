@@ -609,6 +609,16 @@ Chronological record of capabilities discovered. Each entry = something that cha
 
 ---
 
+### 2026-05-11: SGO has no player injury/status endpoint — confirmed gap
+
+**Source:** MCP `get_players` schema inspection + docs search (2026-05-11). Verified during UTV2-890 / UTV2-897 pre-check.  
+**Finding:** SGO does not provide player injury status, availability, or health data. The `GET /v2/players` (MCP: `get_players`) endpoint returns roster/identity data only: `playerID`, `names`, `position`, `jerseyNumber`, `aliases`, `teamID`, `leagueID`, `playerTeams`. No `availability`, `injuryStatus`, `status`, or health fields exist in the schema. SGO docs search returned "no indexed docs." This is a platform-level gap, not a plan-tier restriction.  
+**Impact:** The injury notification chain (UTV2-878, UTV2-897, UTV2-898, UTV2-899, UTV2-900) cannot be built on SGO alone. An alternative data source (FantasyData, SportsDataIO, RapidAPI sports feeds, or manual feed) is required for player health status.  
+**Action required:** PM decision on alternative data source before any injury notification code is written. Do not use `participant.metadata.availability` as a workaround — this field has no write path from any current provider.  
+**Affected issues:** UTV2-897 blocked on PM data-source decision.
+
+---
+
 ### Future unlocks to investigate
 
 | Item | Where to look | Why it matters |
@@ -619,6 +629,7 @@ Chronological record of capabilities discovered. Each entry = something that cha
 | SGO historical `finalized` event access | Live trial test | Confirm we can fetch past finalized events for backfill grading |
 | Odds API player prop structure | Docs | Understand description matching for prop canonicalization |
 | SGO NRFI dedicated key | SGO support / changelog | Unlock boolean 1st-inning market without line constraint workaround |
+| Injury data source | FantasyData / SportsDataIO / RapidAPI | SGO confirmed gap — need alternative for UTV2-878 injury notifications |
 
 ---
 

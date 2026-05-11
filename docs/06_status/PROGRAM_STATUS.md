@@ -7,15 +7,16 @@
 
 ## Last Updated
 
-2026-05-01 — **Worker/API hardening Wave 2 dispatched. T1 ops PRs approved. Provider-offer architecture cut over. Command-center pipeline pages merged.**
+2026-05-11 — **System audit complete. Functional completeness + Model Edge Proof Program launched. Stranded picks cleared. Codex wiring lanes active.**
 
-- **Wave 2 T3 hardening in review:** UTV2-805 (delivery-adapter logging), UTV2-807 (watchdogMs bounds), UTV2-809 (CLV null guard), UTV2-810 (Kelly overFair guard) — PRs #520–#523 all pass `pnpm verify`.
-- **T1 ops PRs approved and ready:** PR #514 (UTV2-782 WAL/PITR runbook) + PR #515 (UTV2-789 least-privilege Postgres roles) — both have `t1-approved` labels, awaiting PM merge.
-- **Provider-offer architecture cut over:** PR #513 merged (compact architecture + legacy quarantine). UTV2-803 disk-growth incident partially resolved — 7-day retention in place, `provider_offers` at ~7.47 GB but bounded.
-- **Command-center UNI pages merged:** UNI-101 (Agents/Intelligence/Ops), UNI-138 (Events live stream), UNI-137 (Pipeline page) all merged to main on 2026-05-01.
-- **T1 replay proof shipped:** UTV2-781 freshness-gated scanner + real provider-offer replay proof (PR #507, merged 2026-04-29).
-- **UTV2-433 remains open.** MLB production-readiness gate requires fresh post-fix MLB settlements with `clvBackedOutcomeCount >= 10`.
-- **Recent completed work since April 26:** UTV2-761 QA trust layer, UTV2-762 Fibery guardrail, UTV2-764 operator-web data layer extract, UTV2-766 command-center DB rewire, UTV2-769 operator-web teardown, UTV2-781 replay proof, UTV2-787/773/774/793/796/797 provider ingestion health.
+- **UTV2-877 scorer fix merged 2026-05-10** — post-fix settlement window now open. Data gate for CLV/ROI scripts: 2026-05-17 (7-day window).
+- **System audit complete (2026-05-11):** Promotion score audit (N=12,043) revealed 3 of 5 score inputs materially broken — domainAnalysis gap (UTV2-903), Kelly sizing gap (UTV2-901), boardFit floor bug (UTV2-902). Band persistence never wired (UTV2-906 / DEBT-018). Model registry is 6 provisional baselines with no validation metrics, NFL missing.
+- **27-issue execution plan active** across two Linear projects: Functional Completeness & Trust Hardening (M1/M2/M3) + Model Edge Proof Program (M1/M2).
+- **Stranded picks cleared:** 1,047 awaiting_approval picks voided 2026-05-11 (UTV2-887 / DEBT-002 closed). Root cause: system-pick-scanner re-enabled 2026-04-26 without lifecycle brake completing before suppression.
+- **Stale lane manifests closed:** UTV2-575/580/622/624/625 all confirmed done, UTV2-888 / DEBT-012 closed.
+- **Codex lanes active:** UTV2-879 (uniqueness score wiring, job bql89c46j), UTV2-897 (injury change detector, agent ad0d1f598e33e8347).
+- **Scripts pre-built for May 17 data gate:** `scripts/clv-analysis.ts` (UTV2-891), `scripts/roi-by-sport.ts` (UTV2-893), `scripts/band-accuracy.ts` (UTV2-892 — blocked on UTV2-906).
+- **SGO confirmed: no injury endpoint.** PM approved multi-source injury strategy. UTV2-897 dispatched to Codex for participant.metadata.availability-based detector.
 
 ---
 
@@ -24,28 +25,30 @@
 | Field | Value |
 |---|---|
 | Platform | Unit Talk V2 — sports betting pick lifecycle platform |
-| Active operating mode | Worker/API hardening (Wave 2 T3s) + T1 ops infrastructure merge |
-| Static baseline | `pnpm verify` PASS on main; all Wave 2 PRs (#520–#524) verified green |
-| Runtime health | Provider-offer architecture cut over; 7-day retention bounded; disk alert reduced but not cleared |
+| Active operating mode | Functional completeness + model edge proof (27-issue program, post-UTV2-877) |
+| Static baseline | `pnpm verify` PASS on main |
+| Runtime health | SGO Pro active; 7-day provider_offers retention bounded; 0 awaiting_approval picks in production |
 | Provider | SGO Pro active; closing-line truth is `provider_offers WHERE is_closing = true`; `market_universe` is canonical persistence |
-| Current active PRs | **#520–#524** — Wave 2 T3 hardening + cleanup (In Review); **#514, #515** — T1 ops (t1-approved, awaiting merge) |
-| Current active Linear lanes | UTV2-805, 807, 809, 810 (In Review); UTV2-768 (In Review) |
-| Main readiness gate still open | **UTV2-433** — MLB production-readiness gate (needs fresh post-fix settlements) |
+| Active Codex lanes | UTV2-879 (uniqueness signal — job bql89c46j), UTV2-897 (injury detector — agent ad0d1f598e33e8347) |
+| Data gate | 2026-05-17 — run CLV/ROI scripts for 7-day post-877 window |
+| MLB production-readiness gate | **UTV2-433 / UTV2-895** — needs 30+ post-877 MLB settlements with CLV data. Earliest: June 1. |
 | Phase | Phase 7A — Governance Brake active |
 
 ---
 
 ## Active Work Queue
 
-| Priority | Issue / PR | Status | PM Direction |
-|---:|---|---|---|
-| 1 | **PR #514 / UTV2-782** | t1-approved, open | WAL/PITR runbook + backup alerts — merge when ready |
-| 2 | **PR #515 / UTV2-789** | t1-approved, open | Least-privilege Postgres roles — merge when ready |
-| 3 | **PRs #520–#523** | In Review (T3) | Wave 2 worker/API hardening — merge on green |
-| 4 | **PR #519 / UTV2-768** | In Review (T3) | Grading alias fix — merge on green |
-| 5 | **PR #524** | In Review (T3) | Cleanup wave 1 (worktree-setup + orphaned CC files) |
-| 6 | **UTV2-433** | In Progress | Wait for fresh post-fix MLB settlement evidence |
-| 7 | **Wave 3 T3 hardening** | Backlog | UTV2-811/812/813 — system-pick-scanner + settlement-service hardening |
+| Priority | Issue | Status | Executor | Notes |
+|---:|---|---|---|---|
+| 1 | **UTV2-879** — uniqueness score wiring | In Codex (bql89c46j) | Codex | Wire computeUniquenessScore() to promotion-service.ts |
+| 2 | **UTV2-897** — injury change detector | In Codex (ad0d1f598e33e8347) | Codex | participant.metadata.availability source |
+| 3 | **UTV2-906** — band persistence | Backlog (dispatch when slot opens) | Codex | Write band to picks.metadata + pick_promotion_history; blocks UTV2-892/896 |
+| 4 | **UTV2-881** — InMemory constraint enforcement | Backlog (dispatch when slot opens) | Codex | Re-dispatch: previous agent did not complete |
+| 5 | **UTV2-882** — smart-form period markets | Backlog (dispatch when slot opens) | Codex | Re-dispatch: previous agent did not complete |
+| 6 | **UTV2-891/893** — CLV + ROI scripts | In Proof (data-gated) | Claude | Run on 2026-05-17 |
+| 7 | **UTV2-894** — CLV gap root cause | Blocked on UTV2-891 | Claude | After May 17 run |
+| 8 | **UTV2-895** — MLB readiness proof | Data-gated (June 1) | Claude | 30+ MLB settlements needed |
+| 9 | **UTV2-883** — participant consolidation | PM/T1 gate | Griff | Do not start — T1 plan required first |
 
 ---
 
