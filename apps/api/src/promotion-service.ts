@@ -181,7 +181,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
           promotionDecidedBy: actor,
           overrideAction: null,
           metadataPatch: { band: 'SUPPRESS' },
-          payload: { staleDataBlock: true, code: 'STALE_DATA_AT_PROMOTION', universeId, band: 'SUPPRESS' },
+          payload: { staleDataBlock: true, code: 'STALE_DATA_AT_PROMOTION', universeId, band: 'SUPPRESS', qualified: false, score: 0 },
         });
 
         return {
@@ -357,6 +357,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
       band: winnerBand,
       ...winnerSnapshot,
       explanation: winnerDecision.explanation,
+      qualified: winnerDecision.qualified,
+      score: winnerDecision.score,
+      breakdown: winnerDecision.breakdown,
       policy: winnerPolicy,
       narrative: generatePickNarrative({
         qualified: winnerDecision.qualified,
@@ -417,6 +420,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
           band: historyBand,
           ...nonWinnerSnapshot,
           explanation: decision.explanation,
+          qualified: decision.qualified,
+          score: decision.score,
+          breakdown: decision.breakdown,
           policy,
         },
       });
@@ -632,6 +638,9 @@ async function buildSmartFormQualifiedResult(
       band: winnerBand,
       ...winnerSnapshot,
       explanation: winnerDecision.explanation,
+      qualified: winnerDecision.qualified,
+      score: winnerDecision.score,
+      breakdown: winnerDecision.breakdown,
       policy: bestBetsPolicy,
     },
   });
@@ -679,6 +688,9 @@ async function buildSmartFormQualifiedResult(
             reason: 'smart-form submissions route directly to best-bets',
           }),
           explanation: decision.explanation,
+          qualified: decision.qualified,
+          score: decision.score,
+          breakdown: decision.breakdown,
           policy,
         },
       });
@@ -897,6 +909,9 @@ async function persistPromotionDecisionForPick(
     payload: {
       ...snapshot,
       explanation: decision.explanation,
+      qualified: decision.qualified,
+      score: decision.score,
+      breakdown: decision.breakdown,
       policy,
     },
   });
@@ -1571,7 +1586,7 @@ async function buildExposureSuppressedResult(
     promotionDecidedAt: decidedAt,
     promotionDecidedBy: actor,
     overrideAction: null,
-    payload: { exposureGateRejection: reason },
+    payload: { exposureGateRejection: reason, qualified: false, score: 0 },
   });
 
   await auditLogRepository.record({
@@ -1603,7 +1618,7 @@ async function buildExposureSuppressedResult(
       promotionDecidedAt: decidedAt,
       promotionDecidedBy: decision.decidedBy,
       overrideAction: null,
-      payload: { exposureGateRejection: reason },
+      payload: { exposureGateRejection: reason, qualified: false, score: 0 },
     });
 
     await auditLogRepository.record({
