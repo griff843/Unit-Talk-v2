@@ -2,16 +2,11 @@
 
 import { useState } from 'react';
 import { cn } from '@/lib/utils';
-import type { MarketTypeId } from '@/lib/form-schema';
-import { MARKET_TYPE_LABELS } from '@/lib/form-schema';
-
-const MARKET_ABBR: Record<MarketTypeId, string> = {
-  'player-prop': 'PROP',
-  moneyline: 'ML',
-  spread: 'SPR',
-  total: 'TOT',
-  'team-total': 'T-TOT',
-};
+import {
+  getMarketTypeAbbreviation,
+  getMarketTypeLabel,
+  type MarketTypeId,
+} from '@/lib/market-types';
 
 const MLB_SPREAD_OVERRIDES = { abbr: 'RL', label: 'Run Line' };
 
@@ -39,8 +34,8 @@ export function MarketTypeGrid({ availableTypes, selected, onSelect, sportId }: 
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
         {visibleTypes.map((type) => {
           const isSelected = selected === type;
-          const abbr = isMLB && type === 'spread' ? MLB_SPREAD_OVERRIDES.abbr : MARKET_ABBR[type];
-          const label = isMLB && type === 'spread' ? MLB_SPREAD_OVERRIDES.label : MARKET_TYPE_LABELS[type];
+          const abbr = isMLB && type === 'spread' ? MLB_SPREAD_OVERRIDES.abbr : getMarketTypeAbbreviation(type);
+          const label = isMLB && type === 'spread' ? MLB_SPREAD_OVERRIDES.label : getMarketTypeLabel(type);
 
         return (
           <button

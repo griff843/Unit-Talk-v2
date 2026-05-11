@@ -122,6 +122,24 @@ describe('valid submissions parse successfully', () => {
       }),
     );
   });
+
+  test('valid 1st-half spread parses with spread requirements', () => {
+    assert.ok(
+      passes({
+        sport: 'NBA',
+        marketType: '1h_spread',
+        eventName: 'Knicks vs Heat',
+        team: 'Knicks',
+        sportsbook: 'FanDuel',
+        line: -4.5,
+        odds: -110,
+        units: 1.0,
+        capperConviction: 8,
+        capper: 'griff843',
+        gameDate: '2026-03-22',
+      }),
+    );
+  });
 });
 
 // --- Units contract guardrail ---
@@ -426,6 +444,14 @@ describe('spread conditional fields', () => {
     const fields = errorFields(validSpread({ line: 1000 }));
     assert.ok(fields.includes('line'), `Expected line error, got: ${fields.join(', ')}`);
   });
+
+  test('period spread also requires team and line', () => {
+    const missingTeam = errorFields(validSpread({ marketType: '1h_spread', team: '' }));
+    const missingLine = errorFields(validSpread({ marketType: '1h_spread', line: undefined }));
+
+    assert.ok(missingTeam.includes('team'), `Expected team error, got: ${missingTeam.join(', ')}`);
+    assert.ok(missingLine.includes('line'), `Expected line error, got: ${missingLine.join(', ')}`);
+  });
 });
 
 // --- Total conditional fields ---
@@ -460,6 +486,14 @@ describe('total conditional fields', () => {
     delete (data as Record<string, unknown>)['line'];
     const fields = errorFields(data);
     assert.ok(fields.includes('line'), `Expected line error, got: ${fields.join(', ')}`);
+  });
+
+  test('period total also requires direction and line', () => {
+    const missingDirection = errorFields(validTotal({ marketType: '1q_total_ou', direction: undefined }));
+    const missingLine = errorFields(validTotal({ marketType: '1q_total_ou', line: undefined }));
+
+    assert.ok(missingDirection.includes('direction'), `Expected direction error, got: ${missingDirection.join(', ')}`);
+    assert.ok(missingLine.includes('line'), `Expected line error, got: ${missingLine.join(', ')}`);
   });
 });
 
@@ -509,6 +543,11 @@ describe('team-total conditional fields', () => {
 describe('moneyline conditional fields', () => {
   test('moneyline requires team', () => {
     const fields = errorFields(validMoneyline({ team: '' }));
+    assert.ok(fields.includes('team'), `Expected team error, got: ${fields.join(', ')}`);
+  });
+
+  test('period moneyline also requires team', () => {
+    const fields = errorFields(validMoneyline({ marketType: '1p_moneyline', team: '' }));
     assert.ok(fields.includes('team'), `Expected team error, got: ${fields.join(', ')}`);
   });
 });

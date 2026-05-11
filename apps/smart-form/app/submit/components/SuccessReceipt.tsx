@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import type { SubmitPickResult } from '@/lib/api-client';
 import type { BetFormValues } from '@/lib/form-schema';
-import { MARKET_TYPE_LABELS } from '@/lib/form-schema';
 import { buildSelectionString } from '@/lib/form-utils';
+import { getMarketTypeLabel } from '@/lib/market-types';
 
 interface SuccessReceiptProps {
   result: SubmitPickResult;
@@ -25,7 +25,7 @@ function Row({ label, value }: { label: string; value: string }) {
 export function SuccessReceipt({ result, submittedValues, onSubmitAnother }: SuccessReceiptProps) {
   const v = submittedValues;
   const selection = buildSelectionString(v);
-  const marketLabel = MARKET_TYPE_LABELS[v.marketType];
+  const marketLabel = getMarketTypeLabel(v.marketType);
   const oddsDisplay = v.odds > 0 ? `+${v.odds}` : String(v.odds);
   const unitsDisplay = `${v.units}u`;
 

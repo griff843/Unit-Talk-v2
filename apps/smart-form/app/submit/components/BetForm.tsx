@@ -34,6 +34,12 @@ import {
   resolveSportsbookId,
 } from '@/lib/form-utils';
 import { betFormSchema, type BetFormValues, type MarketTypeId } from '@/lib/form-schema';
+import {
+  getMarketTypeLabel,
+  isMoneylineMarketType,
+  isSpreadMarketType,
+  isTotalMarketType,
+} from '@/lib/market-types';
 import { Button } from '@/components/ui/button';
 import {
   Form,
@@ -992,13 +998,13 @@ export function BetForm() {
     return offers;
   }, [eventBrowse, filteredOffers, selectedMarketType]);
   const spreadOffers = useMemo(
-    () => selectedMarketType === 'spread'
+    () => isSpreadMarketType(selectedMarketType)
       ? filteredOffers.filter((offer) => offer.overOdds != null)
       : [],
     [filteredOffers, selectedMarketType],
   );
   const totalOffers = useMemo(
-    () => selectedMarketType === 'total' ? filteredOffers : [],
+    () => isTotalMarketType(selectedMarketType) ? filteredOffers : [],
     [filteredOffers, selectedMarketType],
   );
   const availablePlayerPropStatTypes = useMemo(() => {
@@ -1033,13 +1039,14 @@ export function BetForm() {
   const offerStatus = buildOfferStatus(eventBrowse, filteredOffers.length);
   const latestOfferSnapshotAt = getLatestOfferSnapshotAt(eventBrowse);
   const isLatestOfferSnapshotStale = isOfferSnapshotStale(latestOfferSnapshotAt);
+  const selectedMarketLabel = selectedMarketType ? getMarketTypeLabel(selectedMarketType) : null;
   const hasInlineGuidedMarket =
     browseMode === 'live-offer' &&
     Boolean(selectedMatchup) &&
     (
-      selectedMarketType === 'moneyline' ||
+      isMoneylineMarketType(selectedMarketType) ||
       selectedMarketType === 'player-prop' ||
-      ((selectedMarketType === 'spread' || selectedMarketType === 'total') && filteredOffers.length > 0)
+      ((isSpreadMarketType(selectedMarketType) || isTotalMarketType(selectedMarketType)) && filteredOffers.length > 0)
     );
   const hasSelectedBrowseMatchup = browseMode === 'live-offer' && Boolean(selectedMatchup);
   const shouldShowManualFallback =
@@ -1580,7 +1587,7 @@ export function BetForm() {
       return;
     }
 
-    if (derivedMarketType === 'moneyline' || derivedMarketType === 'spread' || derivedMarketType === 'team-total') {
+    if (isMoneylineMarketType(derivedMarketType) || isSpreadMarketType(derivedMarketType) || derivedMarketType === 'team-total') {
       form.setValue('team', offer.participantName ?? '', {
         shouldDirty: true,
         shouldTouch: true,
@@ -2139,11 +2146,11 @@ export function BetForm() {
                   </div>
                 ) : null}
 
-                {selectedMarketType === 'moneyline' && matchupTeams.length > 0 ? (
+                {isMoneylineMarketType(selectedMarketType) && matchupTeams.length > 0 ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Team to Win
+                        {selectedMarketLabel ?? 'Team to Win'}
                       </p>
                       <span className="text-xs text-muted-foreground">
                         {selectedSportsbookValue ? 'Odds filtered by sportsbook' : 'Select a sportsbook to lock odds'}
@@ -2183,11 +2190,11 @@ export function BetForm() {
                   </div>
                 ) : null}
 
-                {selectedMarketType === 'spread' && spreadOffers.length > 0 ? (
+                {isSpreadMarketType(selectedMarketType) && spreadOffers.length > 0 ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Spread
+                        {selectedMarketLabel ?? 'Spread'}
                       </p>
                       <span className="text-xs text-muted-foreground">
                         Tap the side to preload line and odds
@@ -2232,11 +2239,11 @@ export function BetForm() {
                   </div>
                 ) : null}
 
-                {selectedMarketType === 'total' && totalOffers.length > 0 ? (
+                {isTotalMarketType(selectedMarketType) && totalOffers.length > 0 ? (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                        Total
+                        {selectedMarketLabel ?? 'Total'}
                       </p>
                       <span className="text-xs text-muted-foreground">
                         Tap over or under to preload the total
@@ -2250,7 +2257,7 @@ export function BetForm() {
                         >
                           <div className="mb-3 flex items-center justify-between gap-3">
                             <div>
-                              <p className="font-semibold text-foreground">Game Total</p>
+                              <p className="font-semibold text-foreground">{selectedMarketLabel ?? 'Game Total'}</p>
                               <p className="text-xs text-muted-foreground">
                                 {offer.sportsbookName ?? (selectedSportsbookValue ? watchedValues.sportsbook : 'Live offer')}
                               </p>
@@ -2421,7 +2428,7 @@ export function BetForm() {
                           </div>
                         ) : null}
                       </div>
-                    ) : selectedMarketType === 'moneyline' || selectedMarketType === 'spread' || selectedMarketType === 'total' || selectedMarketType === 'player-prop' ? null : (
+                    ) : isMoneylineMarketType(selectedMarketType) || isSpreadMarketType(selectedMarketType) || isTotalMarketType(selectedMarketType) || selectedMarketType === 'player-prop' ? null : (
                       <div className="max-h-[28rem] space-y-3 overflow-y-auto pr-1">
                         {filteredOffers.map((offer) => {
                           const offerAgeMinutes = getOfferAgeMinutes(offer.snapshotAt);
@@ -2688,7 +2695,7 @@ export function BetForm() {
       );
     }
 
-    if (selectedMarketType === 'moneyline') {
+    if (isMoneylineMarketType(selectedMarketType)) {
       return (
         <div className="space-y-4">
           {selectedMatchup ? (
@@ -2761,7 +2768,7 @@ export function BetForm() {
       );
     }
 
-    if (selectedMarketType === 'spread') {
+    if (isSpreadMarketType(selectedMarketType)) {
       return (
         <div className="space-y-4">
           {selectedMatchup ? (
@@ -2802,7 +2809,7 @@ export function BetForm() {
                             <div>
                               <p className="font-semibold text-foreground">{team.displayName}</p>
                               <p className="text-xs text-muted-foreground">
-                                {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual spread entry'}
+                                {selectedSportsbookValue ? watchedValues.sportsbook : `Manual ${(selectedMarketLabel ?? 'spread').toLowerCase()} entry`}
                               </p>
                             </div>
                             <span
@@ -2840,11 +2847,11 @@ export function BetForm() {
                   <div>
                     <p className="text-sm font-semibold text-foreground">
                       {selectedTeamId
-                        ? `${matchupTeams.find((team) => (team.teamId ?? team.participantId) === selectedTeamId)?.displayName ?? 'Selected team'} spread`
-                        : 'Spread ticket'}
+                        ? `${matchupTeams.find((team) => (team.teamId ?? team.participantId) === selectedTeamId)?.displayName ?? 'Selected team'} ${(selectedMarketLabel ?? 'Spread').toLowerCase()}`
+                        : `${selectedMarketLabel ?? 'Spread'} ticket`}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Pick a side above, then enter the spread line to finish the ticket.
+                      Pick a side above, then enter the line to finish the ticket.
                     </p>
                   </div>
                   <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
@@ -2857,7 +2864,7 @@ export function BetForm() {
                     name="line"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Spread</FormLabel>
+                        <FormLabel>{selectedMarketLabel ?? 'Spread'}</FormLabel>
                         <FormControl>
                           <Input
                             type="text"
@@ -2920,7 +2927,7 @@ export function BetForm() {
                   name="line"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Spread</FormLabel>
+                      <FormLabel>{selectedMarketLabel ?? 'Spread'}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
@@ -2942,7 +2949,7 @@ export function BetForm() {
       );
     }
 
-    if (selectedMarketType === 'total') {
+    if (isTotalMarketType(selectedMarketType)) {
       return (
         <div className="space-y-4">
           {selectedMatchup ? (
@@ -2982,7 +2989,7 @@ export function BetForm() {
                               {direction === 'over' ? 'Over' : 'Under'}
                             </p>
                             <p className="text-xs text-muted-foreground">
-                              {selectedSportsbookValue ? watchedValues.sportsbook : 'Manual total entry'}
+                              {selectedSportsbookValue ? watchedValues.sportsbook : `Manual ${(selectedMarketLabel ?? 'total').toLowerCase()} entry`}
                             </p>
                           </div>
                           <span
@@ -3007,10 +3014,10 @@ export function BetForm() {
                     <p className="text-sm font-semibold text-foreground">
                       {watchedValues.direction
                         ? `${watchedValues.direction === 'over' ? 'Over' : 'Under'} total`
-                        : 'Game total ticket'}
+                        : `${selectedMarketLabel ?? 'Game total'} ticket`}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      Pick a side above, then enter the total line to finish the ticket.
+                      Pick a side above, then enter the line to finish the ticket.
                     </p>
                   </div>
                   <span className="rounded-full border border-border px-2.5 py-1 text-xs font-semibold text-muted-foreground">
@@ -3023,7 +3030,7 @@ export function BetForm() {
                     name="line"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Total</FormLabel>
+                        <FormLabel>{selectedMarketLabel ?? 'Total'}</FormLabel>
                         <FormControl>
                           <Input
                             type="number"
@@ -3083,7 +3090,7 @@ export function BetForm() {
                   name="line"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Total</FormLabel>
+                      <FormLabel>{selectedMarketLabel ?? 'Total'}</FormLabel>
                       <FormControl>
                         <Input
                           type="number"
