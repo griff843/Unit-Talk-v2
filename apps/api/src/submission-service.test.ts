@@ -536,6 +536,59 @@ test('processSubmission attaches deviggingResult when a matching market offer ex
   assert.equal(deviggingResult?.overround, 1.04762);
 });
 
+test('processSubmission resolves deviggingResult via SGO alias when canonical key differs from provider format (UTV2-903)', async () => {
+  // Simulates the production case where pick.market = 'player_assists_ou' (canonical)
+  // but provider_offers stores 'player-assists-game-ou' (SGO format).
+  // resolveProviderMarketKey is stubbed to return the SGO key.
+  const repositories = createInMemoryRepositoryBundle();
+
+  const originalResolve = repositories.providerOffers.resolveProviderMarketKey.bind(repositories.providerOffers);
+  repositories.providerOffers.resolveProviderMarketKey = async (canonicalKey: string, provider: string) => {
+    if (canonicalKey === 'player_assists_ou' && provider === 'sgo') return 'player-assists-game-ou';
+    return originalResolve(canonicalKey, provider);
+  };
+
+  await repositories.providerOffers.upsertBatch([
+    {
+      providerKey: 'sgo',
+      providerEventId: 'evt-alias-sub',
+      providerMarketKey: 'player-assists-game-ou', // SGO provider format
+      providerParticipantId: null,
+      sportKey: 'NBA',
+      line: 6.5,
+      overOdds: -110,
+      underOdds: -110,
+      devigMode: 'PAIRED',
+      isOpening: false,
+      isClosing: false,
+      snapshotAt: '2026-04-15T16:00:00.000Z',
+      idempotencyKey: 'alias-offer-1',
+      bookmakerKey: null,
+    },
+  ]);
+
+  const result = await processSubmission(
+    {
+      source: 'api',
+      market: 'player_assists_ou', // canonical — must be resolved via alias
+      selection: 'Player Over 6.5',
+      odds: 150, // positive odds → positive Kelly edge so has_edge=true
+      confidence: 0.6,
+    },
+    repositories,
+  );
+
+  const metadata = result.pick.metadata as Record<string, unknown>;
+  const deviggingResult = metadata.deviggingResult as Record<string, unknown> | undefined;
+  assert.ok(deviggingResult, 'deviggingResult should be populated when alias translation finds SGO offer');
+  assert.equal(deviggingResult?.providerMarketKey, 'player-assists-game-ou');
+
+  // Kelly sizing must also be populated when deviggingResult and odds are present (UTV2-901)
+  const kellySizing = metadata.kellySizing as Record<string, unknown> | undefined;
+  assert.ok(kellySizing, 'kellySizing should be computed when deviggingResult and odds are present');
+  assert.ok(typeof kellySizing?.recommended_fraction === 'number', 'recommended_fraction should be a number');
+});
+
 test('processSubmission matches moneyline provider offers by canonical market key and selection team', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await repositories.providerOffers.upsertBatch([
