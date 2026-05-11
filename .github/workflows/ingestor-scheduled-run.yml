@@ -1,0 +1,68 @@
+name: Ingestor Scheduled Run
+
+# Bridge workflow: runs one ingestor cycle every 25 minutes while the
+# persistent daemon host (Hetzner, UTV2-770) is not yet provisioned.
+# Remove or disable this workflow once the daemon is running on Hetzner.
+
+on:
+  schedule:
+    - cron: '*/25 * * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-config:
+    name: Check ingestor secrets
+    runs-on: ubuntu-latest
+    outputs:
+      sgo-configured: ${{ steps.check.outputs.sgo-configured }}
+    steps:
+      - id: check
+        env:
+          SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+        run: |
+          if [ -n "$SGO_API_KEY" ]; then
+            echo "sgo-configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "sgo-configured=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::SGO_API_KEY secret not configured — ingestor cycle skipped. Add the secret to GitHub repository secrets to enable scheduled ingestion."
+          fi
+
+  run-cycle:
+    name: Run ingestor cycle
+    needs: check-config
+    if: needs.check-config.outputs.sgo-configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+      SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+      UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
+      UNIT_TALK_INGESTOR_AUTORUN: 'true'
+      UNIT_TALK_INGESTOR_MAX_CYCLES: '1'
+      UNIT_TALK_INGESTOR_POLL_MS: '1000'
+      UNIT_TALK_APP_ENV: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run ingestor cycle
+        run: npx tsx apps/ingestor/src/index.ts
