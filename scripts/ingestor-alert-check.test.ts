@@ -58,7 +58,7 @@ test('ingestor alert threshold parser rejects invalid values', () => {
   assert.equal(parseThreshold('31', 30), 31);
 });
 
-test('ingestor alert finding trips when latest provider snapshot exceeds threshold', () => {
+test('ingestor alert finding trips when latest merged cycle timestamp exceeds threshold', () => {
   const now = new Date('2026-04-21T16:00:00.000Z');
   const finding = evaluateAgeFinding(
     'offers',

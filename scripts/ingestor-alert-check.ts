@@ -146,7 +146,7 @@ async function main() {
 
   const [
     { data: cycleRows },
-    { data: offerRows },
+    { data: mergedCycleRows },
     { data: resultRows },
     { data: cycleStatusRows },
   ] = await Promise.all([
@@ -156,10 +156,13 @@ async function main() {
       .eq('run_type', 'ingestor.cycle')
       .order('started_at', { ascending: false })
       .limit(1),
+    // Use provider_cycle_status.updated_at (stage_status='merged') as the offers freshness signal.
+    // provider_offers.snapshot_at is SGO's provider-side timestamp and does not update with each ingestor cycle.
     db
-      .from('provider_offers')
-      .select('snapshot_at')
-      .order('snapshot_at', { ascending: false })
+      .from('provider_cycle_status')
+      .select('updated_at')
+      .eq('stage_status', 'merged')
+      .order('updated_at', { ascending: false })
       .limit(1),
     db
       .from('game_results')
@@ -174,7 +177,7 @@ async function main() {
   ]);
 
   const lastCycle = cycleRows?.[0] ?? null;
-  const lastOffer = offerRows?.[0] ?? null;
+  const lastMergedCycle = mergedCycleRows?.[0] ?? null;
   const lastResult = resultRows?.[0] ?? null;
   const latestCycleStatus = cycleStatusRows?.[0] ?? null;
   const productionCadence = process.argv.includes('--production-cadence') || env.UNIT_TALK_APP_ENV === 'production';
@@ -182,7 +185,7 @@ async function main() {
 
   const findings = [
     evaluateAgeFinding('cycle', lastCycle?.started_at ?? null, thresholds.cycle, lastCycle?.status ?? null),
-    evaluateAgeFinding('offers', lastOffer?.snapshot_at ?? null, thresholds.offers, null),
+    evaluateAgeFinding('offers', lastMergedCycle?.updated_at ?? null, thresholds.offers, null),
     evaluateAgeFinding('results', lastResult?.created_at ?? null, thresholds.results, null),
   ];
 
