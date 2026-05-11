@@ -7,4 +7,5 @@ entities:
     - UTV2-879
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - PROOF-UTV2-879
