@@ -154,6 +154,11 @@ import {
   InMemoryMarketFamilyTrustRepository,
   DatabaseMarketFamilyTrustRepository,
 } from './market-family-trust-repository.js';
+import {
+  assertNonEmptySubmissionEventName,
+  assertSettlementCorrectionReference,
+  assertValidPickStatus,
+} from './constraint-guards.js';
 export {
   InMemoryMarketFamilyTrustRepository,
   DatabaseMarketFamilyTrustRepository,
@@ -187,6 +192,8 @@ function mapPickToRecord(
   pick: CanonicalPick,
   idempotencyKey?: string | null,
 ): PickRecord {
+  assertValidPickStatus(pick.lifecycleState, `pick ${pick.id}`);
+
   const foreignKeyCandidates = derivePickForeignKeyCandidates(pick);
   return {
     id: pick.id,
@@ -222,6 +229,17 @@ function mapPickToRecord(
 }
 
 function mapLifecycleEventToRecord(event: LifecycleEvent): PickLifecycleRecord {
+  assertValidPickStatus(
+    event.toState,
+    `pick_lifecycle.to_state for pick ${event.pickId}`,
+  );
+  if (event.fromState) {
+    assertValidPickStatus(
+      event.fromState,
+      `pick_lifecycle.from_state for pick ${event.pickId}`,
+    );
+  }
+
   return {
     id: `${event.pickId}_${event.toState}_${event.createdAt}`,
     pick_id: event.pickId,
@@ -304,6 +322,8 @@ export class InMemorySubmissionRepository implements SubmissionRepository {
   async saveSubmissionEvent(
     input: SubmissionEventCreateInput,
   ): Promise<SubmissionEventRecord> {
+    assertNonEmptySubmissionEventName(input.eventName);
+
     const event: SubmissionEventRecord = {
       id: `${input.submissionId}_${this.submissionEvents.length + 1}`,
       submission_id: input.submissionId,
@@ -355,6 +375,8 @@ export class InMemoryPickRepository implements PickRepository {
     if (!existing) {
       throw new Error(`Pick not found: ${pickId}`);
     }
+
+    assertValidPickStatus(lifecycleState, `pick ${pickId}`);
 
     const updated: PickRecord = {
       ...existing,
@@ -540,6 +562,8 @@ export class InMemoryPickRepository implements PickRepository {
     fromState: string,
     toState: string,
   ): Promise<{ claimed: boolean }> {
+    assertValidPickStatus(toState, `pick ${pickId}`);
+
     const existing = this.picks.get(pickId);
     if (!existing || existing.status !== fromState) {
       return { claimed: false };
@@ -1215,8 +1239,15 @@ export class InMemorySettlementRepository implements SettlementRepository {
   private readonly settlements: SettlementRecord[] = [];
 
   async record(input: SettlementCreateInput): Promise<SettlementRecord> {
+    const nextSettlementId = `settlement_${this.settlements.length + 1}`;
+    assertSettlementCorrectionReference(
+      this.settlements,
+      input.correctsId,
+      nextSettlementId,
+    );
+
     const record: SettlementRecord = {
-      id: `settlement_${this.settlements.length + 1}`,
+      id: nextSettlementId,
       pick_id: input.pickId,
       status: input.status,
       result: input.result ?? null,

@@ -8,6 +8,7 @@ export const submissionStatuses = [
 export const pickStatuses = [
   'draft',
   'validated',
+  'awaiting_approval',
   'queued',
   'posted',
   'settled',
