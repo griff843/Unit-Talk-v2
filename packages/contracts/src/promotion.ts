@@ -311,6 +311,8 @@ export function resolveScoringProfile(name: string | undefined): ScoringProfile 
  * deterministically reproduced by replayPromotion() in @unit-talk/domain.
  */
 export interface PromotionDecisionSnapshot {
+  /** Persisted final band at decision time for downstream analytics. */
+  band?: string | undefined;
   /** Scoring profile name used at decision time (from UTV2-136). */
   scoringProfile: string;
   /** Policy version used at decision time (e.g. 'best-bets-v2'). */
