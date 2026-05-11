@@ -23,6 +23,7 @@ import {
   processShadowSubmission,
   processSubmission,
 } from './submission-service.js';
+import { recordPickSettlement } from './settlement-service.js';
 import type { SubmitPickControllerResult } from './controllers/submit-pick-controller.js';
 
 // ─── Enqueue-gap fix tests ────────────────────────────────────────────────────
@@ -1801,6 +1802,72 @@ test('settled best-bets picks do not consume board capacity', async () => {
   assert.equal(boardState.sameSportCount, 1);
   assert.equal(boardState.sameGameCount, 1);
   assert.equal(boardState.duplicateCount, 1);
+});
+
+test('settled pick keeps persisted band in metadata and promotion history payload', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const created = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'NBA assists',
+      selection: 'Player Over 8.5',
+      confidence: 0.9,
+      odds: -110,
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Band Proof Game',
+        promotionScores: {
+          edge: 78,
+          trust: 79,
+          readiness: 88,
+          uniqueness: 82,
+          boardFit: 90,
+        },
+      },
+    },
+    repositories,
+  );
+
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'band persistence proof queued',
+  );
+
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'posted',
+    'band persistence proof posted',
+  );
+
+  await recordPickSettlement(
+    created.pick.id,
+    {
+      status: 'settled',
+      result: 'win',
+      source: 'operator',
+      confidence: 'confirmed',
+      evidenceRef: 'proof://utv2-906',
+      settledBy: 'operator',
+    },
+    repositories,
+  );
+
+  const settledPick = await repositories.picks.findPickById(created.pick.id);
+  const metadata = (settledPick?.metadata ?? {}) as Record<string, unknown>;
+  assert.equal(typeof metadata['band'], 'string');
+  assert.notEqual(metadata['band'], '');
+
+  const promotionHistory = (repositories.picks as { promotionHistory?: Array<{ pick_id: string; payload: unknown }> })
+    .promotionHistory
+    ?.filter((row) => row.pick_id === created.pick.id) ?? [];
+  assert.ok(promotionHistory.length > 0, 'expected promotion history rows for settled pick');
+
+  const payloadBands = promotionHistory.map((row) => (row.payload as Record<string, unknown>)['band']);
+  assert.ok(payloadBands.every((band) => typeof band === 'string' && band.length > 0));
+  assert.ok(payloadBands.includes(metadata['band']));
 });
 
 test('duplicate suppression blocks repeated best-bets thesis', async () => {

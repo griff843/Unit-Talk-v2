@@ -2,13 +2,9 @@
  * Type definitions for the reference-data catalog.
  * Live data is fetched from GET /api/reference-data/catalog — do not add static data here.
  */
+import type { MarketTypeId } from './market-types';
 
-export type MarketTypeId =
-  | 'player-prop'
-  | 'moneyline'
-  | 'spread'
-  | 'total'
-  | 'team-total';
+export type { MarketTypeId };
 
 export interface SportDefinition {
   id: string;

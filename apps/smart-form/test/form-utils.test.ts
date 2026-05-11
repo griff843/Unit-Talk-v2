@@ -4,6 +4,7 @@ import {
   buildSelectionString,
   buildSubmissionPayload,
   calcPayout,
+  getMarketTypesForSport,
   inferStatTypeFromMarketTypeId,
   mapOfferToFormMarketType,
   resolveSportsbookId,
@@ -31,7 +32,22 @@ function buildBaseValues(overrides: Partial<BetFormValues> = {}): BetFormValues 
 }
 
 const catalog: CatalogData = {
-  sports: [],
+  sports: [
+    {
+      id: 'NBA',
+      name: 'NBA',
+      marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+      statTypes: [],
+      teams: [],
+    },
+    {
+      id: 'MLB',
+      name: 'MLB',
+      marketTypes: ['player-prop', 'moneyline', 'spread', 'total', 'team-total'],
+      statTypes: [],
+      teams: [],
+    },
+  ],
   sportsbooks: [
     { id: 'fanatics', name: 'Fanatics' },
     { id: 'draftkings', name: 'DraftKings' },
@@ -113,6 +129,38 @@ test('mapOfferToFormMarketType falls back to providerParticipantId for player pr
   assert.equal(
     mapOfferToFormMarketType({ marketTypeId: null, participantId: null, providerParticipantId: 'sgo-player-789' }),
     'player-prop',
+  );
+});
+
+test('getMarketTypesForSport appends canonical period markets by sport', () => {
+  assert.deepEqual(
+    getMarketTypesForSport(catalog, 'NBA').slice(0, 11),
+    [
+      'player-prop',
+      'moneyline',
+      'spread',
+      'total',
+      'team-total',
+      '1h_moneyline',
+      '1h_spread',
+      '1h_total_ou',
+      '2h_moneyline',
+      '2h_spread',
+      '2h_total_ou',
+    ],
+  );
+
+  assert.ok(getMarketTypesForSport(catalog, 'MLB').includes('f5_total_ou'));
+});
+
+test('mapOfferToFormMarketType preserves canonical period market ids', () => {
+  assert.equal(
+    mapOfferToFormMarketType({ marketTypeId: '1h_spread', participantId: 'team-1', providerParticipantId: null }),
+    '1h_spread',
+  );
+  assert.equal(
+    mapOfferToFormMarketType({ marketTypeId: 'f5_total_ou', participantId: null, providerParticipantId: null }),
+    'f5_total_ou',
   );
 });
 
@@ -305,6 +353,23 @@ test('buildSubmissionPayload uses normalized manual market keys instead of lossy
 
   assert.equal(totalPayload.market, 'game_total_ou');
   assert.equal(propPayload.market, 'player.points_assists');
+});
+
+test('buildSubmissionPayload keeps canonical period market ids unchanged', () => {
+  const payload = buildSubmissionPayload(
+    buildBaseValues({
+      sport: 'NBA',
+      marketType: '1h_spread',
+      playerName: undefined,
+      statType: undefined,
+      direction: undefined,
+      team: 'Nuggets',
+      line: -4.5,
+    }),
+  );
+
+  assert.equal(payload.market, '1h_spread');
+  assert.equal(payload.selection, 'Nuggets -4.5');
 });
 
 test('buildSubmissionPayload records sportsbook manual override metadata when book is typed', () => {

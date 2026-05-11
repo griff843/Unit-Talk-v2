@@ -190,6 +190,7 @@ export interface PromotionDecisionPersistenceInput {
   promotionDecidedAt: string;
   promotionDecidedBy: string;
   overrideAction?: PromotionOverrideAction | null | undefined;
+  metadataPatch?: Record<string, unknown> | undefined;
   payload: Record<string, unknown>;
 }
 

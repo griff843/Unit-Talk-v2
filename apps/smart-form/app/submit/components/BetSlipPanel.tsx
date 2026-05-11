@@ -4,9 +4,9 @@ import { cn } from '@/lib/utils';
 import { Separator } from '@/components/ui/separator';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
-import type { BetFormValues, MarketTypeId } from '@/lib/form-schema';
-import { MARKET_TYPE_LABELS } from '@/lib/form-schema';
+import type { BetFormValues } from '@/lib/form-schema';
 import { calcPayout, buildSelectionString } from '@/lib/form-utils';
+import { getMarketTypeLabel, type MarketTypeId } from '@/lib/market-types';
 
 interface BetSlipPanelProps {
   values: Partial<BetFormValues>;
@@ -25,7 +25,7 @@ function LineItem({ label, value }: { label: string; value?: string | number | n
 }
 
 export function BetSlipPanel({ values, isSubmitting, onSubmit }: BetSlipPanelProps) {
-  const marketLabel = values.marketType ? MARKET_TYPE_LABELS[values.marketType as MarketTypeId] : null;
+  const marketLabel = values.marketType ? getMarketTypeLabel(values.marketType as MarketTypeId) : null;
   const selection = values.marketType && values.sport
     ? buildSelectionString(values as BetFormValues)
     : null;
