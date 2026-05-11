@@ -1,0 +1,24 @@
+UTV2-909 Verification Log
+merge_sha: 5e089e770f2706ffe2c6f9ee1274bc4303c50812
+verified_at: 2026-05-11T19:07:00.000Z
+
+--- pnpm type-check ---
+PASS (clean, no errors)
+
+--- pnpm test (scripts/ingestor-alert-check.test.ts) ---
+✔ ingestor alert thresholds prefer canonical provider-offer staleness env (1.3ms)
+✔ production cadence thresholds fail above the five minute provider-offer cadence (0.3ms)
+✔ ingestor alert threshold parser rejects invalid values (0.1ms)
+✔ ingestor alert finding trips when latest merged cycle timestamp exceeds threshold (0.1ms)
+tests 4, pass 4, fail 0
+
+--- pnpm verify (pre-push hook, branch head 90e26091) ---
+pnpm ops:sync-check          PASS
+pnpm env:check               PASS
+pnpm lint                    PASS
+pnpm type-check              PASS
+pnpm build                   PASS
+pnpm test (full suite)       PASS
+pnpm verify:commands         PASS
+
+All checks passed. Push proceeded.

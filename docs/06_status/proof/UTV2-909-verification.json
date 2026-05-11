@@ -1,0 +1,26 @@
+{
+  "schema": "verification-log/v1",
+  "issue_id": "UTV2-909",
+  "merge_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/637",
+  "verified_at": "2026-05-11T19:15:00.000Z",
+  "verdict": "PASS",
+  "checks": {
+    "unit_tests": {
+      "result": "pass",
+      "detail": "4/4 tests pass in scripts/ingestor-alert-check.test.ts"
+    },
+    "type_check": {
+      "result": "pass",
+      "detail": "pnpm type-check clean"
+    },
+    "pnpm_verify": {
+      "result": "pass",
+      "detail": "pnpm verify green (lint + type-check + build + test)"
+    },
+    "root_cause": {
+      "result": "confirmed",
+      "detail": "provider_offers.snapshot_at is SGO's provider-side field stuck at 2026-04-29. Fix uses provider_cycle_status.updated_at (stage_status=merged) which updates on every successful ingestor cycle."
+    }
+  }
+}

@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-909",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "fix/utv2-909-offers-freshness-check",
+  "base_branch": "main",
+  "commit_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+  "merge_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/637",
+  "files_changed": [
+    "scripts/ingestor-alert-check.ts",
+    "scripts/ingestor-alert-check.test.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/ingestor-alert-check.ts",
+    "scripts/ingestor-alert-check.test.ts",
+    "docs/06_status/lanes/UTV2-909.json",
+    "docs/06_status/proof/UTV2-909/"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-909/diff-summary.md",
+    "docs/06_status/proof/UTV2-909/verification.txt"
+  ],
+  "status": "done",
+  "started_at": "2026-05-11T19:00:00.000Z",
+  "heartbeat_at": "2026-05-11T19:16:00.000Z",
+  "closed_at": "2026-05-11T19:16:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-board-auto",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-11T19:10:36.581Z",
+      "verdict": "reopen",
+      "merge_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+      "failures": [
+        "G4",
+        "P11",
+        "P12",
+        "S1",
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-11T19:12:27.298Z",
+      "verdict": "reopen",
+      "merge_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+      "failures": [
+        "G4",
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-11T19:13:12.051Z",
+      "verdict": "reopen",
+      "merge_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+      "failures": [
+        "G4",
+        "S1",
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-11T19:14:42.278Z",
+      "verdict": "fail",
+      "merge_sha": "5e089e770f2706ffe2c6f9ee1274bc4303c50812",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-11T19:10:36.581Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: edf7c044352ad0ec3063c9633a02e1a535e6f20f"
+      ],
+      "detected_by": "manual"
+    },
+    {
+      "timestamp": "2026-05-11T19:12:27.298Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: edf7c044352ad0ec3063c9633a02e1a535e6f20f"
+      ],
+      "detected_by": "manual"
+    },
+    {
+      "timestamp": "2026-05-11T19:13:12.051Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: edf7c044352ad0ec3063c9633a02e1a535e6f20f"
+      ],
+      "detected_by": "manual"
+    }
+  ],
+  "notes": "Fix offers freshness signal: provider_offers.snapshot_at is SGO's provider-side timestamp (stuck at April 29), not our ingestor's write time. Switch to provider_cycle_status.updated_at (stage_status=merged) which reflects when the ingestor last successfully merged offers."
+}
