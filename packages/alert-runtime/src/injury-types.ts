@@ -3,6 +3,7 @@ export type InjuryStatus =
   | 'doubtful'
   | 'questionable'
   | 'probable'
+  | 'confirmed'
   | 'available'
   | 'unknown';
 
@@ -36,6 +37,8 @@ export interface InjuryChange {
   reportedAt: string;
   fetchedAt: string;
   affectedPickIds: string[];
+  injuryNote?: string;
+  source?: string;
 }
 
 export interface InjuryDetectionResult {
