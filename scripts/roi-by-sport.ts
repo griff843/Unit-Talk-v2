@@ -153,7 +153,6 @@ function printReport(rows: PickRow[], afterDate: string) {
   if (hasOdds) {
     const oddsRows = rows.filter(r => r.submission_odds != null && r.result !== 'push');
     const winsWithOdds = oddsRows.filter(r => r.result === 'win');
-    const lossesWithOdds = oddsRows.filter(r => r.result === 'loss');
     const totalPayout = winsWithOdds.reduce((sum, r) => sum + americanToDecimal(r.submission_odds!), 0);
     const trueROI = ((totalPayout - oddsRows.length) / oddsRows.length) * 100;
     console.log(`| ROI (actual odds) | ${trueROI >= 0 ? '+' : ''}${trueROI.toFixed(2)}% |`);
