@@ -3,13 +3,7 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues:
-    - UTV2-901
-    - UTV2-902
-    - UTV2-903
+  issues: []
   findings: []
   controls: []
-  proofs:
-    - PROOF-UTV2-902
-    - PROOF-UTV2-903
-    - PROOF-UTV2-901
+  proofs: []
