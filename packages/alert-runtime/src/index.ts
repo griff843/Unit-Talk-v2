@@ -53,3 +53,6 @@ export {
   type HedgeNotificationPassResult,
   type HedgeNotificationPassOptions,
 } from './hedge-notification-service.js';
+
+export * from './injury-types.js';
+export * from './injury-detector.js';
