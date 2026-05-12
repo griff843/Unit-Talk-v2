@@ -56,7 +56,54 @@
     "preflight_token": { "type": "string" },
     "created_by": { "enum": ["claude", "codex-cli", "pm"] },
     "truth_check_history": { "type": "array" },
-    "reopen_history": { "type": "array" }
+    "reopen_history": { "type": "array" },
+    "p0_protocol": {
+      "type": "object",
+      "description": "P0 Runtime Hardening merge protocol fields (UTV2-948). Set when the lane's issue is in the P0 project. Truth-check H-checks consume these fields.",
+      "required": ["required"],
+      "properties": {
+        "required": { "type": "boolean" },
+        "codex_implementation": {
+          "type": "object",
+          "properties": {
+            "recorded": { "type": "boolean" },
+            "pr_url": { "type": "string" }
+          },
+          "required": ["recorded"],
+          "additionalProperties": false
+        },
+        "claude_critique": {
+          "type": "object",
+          "properties": {
+            "recorded": { "type": "boolean" },
+            "artifact_path": { "type": "string" }
+          },
+          "required": ["recorded"],
+          "additionalProperties": false
+        },
+        "human_approval": {
+          "type": "object",
+          "properties": {
+            "recorded": { "type": "boolean" },
+            "pm_verdict_url": { "type": "string" }
+          },
+          "required": ["recorded"],
+          "additionalProperties": false
+        },
+        "runtime_verification": {
+          "type": "object",
+          "properties": {
+            "recorded": { "type": "boolean" },
+            "artifact_path": { "type": "string" },
+            "result": { "enum": ["pass", "fail"] }
+          },
+          "required": ["recorded"],
+          "additionalProperties": false
+        },
+        "merge_type": { "enum": ["manual", "auto", null] }
+      },
+      "additionalProperties": false
+    }
   },
   "additionalProperties": true
 }

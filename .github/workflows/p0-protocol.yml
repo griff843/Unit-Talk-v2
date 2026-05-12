@@ -1,0 +1,157 @@
+# P0 Protocol Gate
+#
+# Mechanical enforcement of the P0 Runtime Hardening merge protocol (UTV2-948).
+#
+# For any PR whose Linear issue is in the Runtime Hardening P0 project
+# (id 46229dc4-c7c1-4ccb-af0d-dedaf8147a97), this gate requires:
+#
+#   1. claude-critique.md artifact present in docs/06_status/proof/<UTV2-###>/
+#   2. runtime-verification.md artifact present in same directory
+#   3. runtime-verification.md has `result: pass` and no FAIL/SKIPPED items
+#   4. claude-critique.md is non-empty
+#   5. PR does NOT carry an automerge/auto-merge label
+#
+# Non-P0 PRs auto-pass (skip).
+#
+# Spec: docs/05_operations/P0_PROTOCOL_SPEC.md
+# Linear: UTV2-948
+
+name: P0 Protocol
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  p0-protocol:
+    name: P0 Protocol
+    runs-on: ubuntu-latest
+    concurrency:
+      group: p0-protocol-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 1
+
+      - name: Resolve issue id from PR
+        id: issue
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const pr = context.payload.pull_request;
+            const title = pr.title || '';
+            const body = pr.body || '';
+            const branch = pr.head?.ref || '';
+            const pattern = /(?:UTV2|UNI)-\d+/i;
+            const match =
+              title.match(pattern) ||
+              body.match(pattern) ||
+              branch.match(pattern);
+            if (!match) {
+              core.setOutput('issue_id', '');
+              core.info('No UTV2-### / UNI-### identifier found in PR title, body, or branch — treating as non-P0.');
+              return;
+            }
+            const issueId = match[0].toUpperCase();
+            core.setOutput('issue_id', issueId);
+            core.info(`Resolved issue id: ${issueId}`);
+
+      - name: Detect P0 status
+        id: detect
+        if: steps.issue.outputs.issue_id != ''
+        env:
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          ISSUE_ID: ${{ steps.issue.outputs.issue_id }}
+        run: |
+          set -e
+          if [ -z "${LINEAR_API_TOKEN:-}" ]; then
+            echo "::error::LINEAR_API_TOKEN secret is required for P0 detection"
+            exit 1
+          fi
+          response=$(curl -sS -X POST https://api.linear.app/graphql \
+            -H "Authorization: ${LINEAR_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg id "$ISSUE_ID" '{query: "query($id: String!){issue(id:$id){identifier project{id name}}}", variables: {id: $id}}')")
+          project_id=$(echo "$response" | jq -r '.data.issue.project.id // ""')
+          project_name=$(echo "$response" | jq -r '.data.issue.project.name // ""')
+          echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
+          echo "project_name=$project_name" >> "$GITHUB_OUTPUT"
+          if [ "$project_id" = "46229dc4-c7c1-4ccb-af0d-dedaf8147a97" ]; then
+            echo "is_p0=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$ISSUE_ID IS P0 (project: $project_name)"
+          else
+            echo "is_p0=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::$ISSUE_ID is not P0 (project: ${project_name:-none})"
+          fi
+
+      - name: Verify P0 protocol artifacts
+        if: steps.detect.outputs.is_p0 == 'true'
+        env:
+          ISSUE_ID: ${{ steps.issue.outputs.issue_id }}
+        run: |
+          set -e
+          errors=()
+
+          # 1. Reject automerge labels for P0
+          AUTO_LABELS=$(jq -r '.pull_request.labels[]?.name // empty' "$GITHUB_EVENT_PATH" \
+            | grep -Ei '^(automerge|auto-merge|auto_merge)$' || true)
+          if [ -n "$AUTO_LABELS" ]; then
+            errors+=("automerge labels present on P0 PR: $AUTO_LABELS. P0 forbids auto-merge.")
+          fi
+
+          # 2. Required artifacts exist in PR
+          PROOF_DIR="docs/06_status/proof/${ISSUE_ID}"
+          CRITIQUE="${PROOF_DIR}/claude-critique.md"
+          VERIFY="${PROOF_DIR}/runtime-verification.md"
+
+          if [ ! -f "$CRITIQUE" ]; then
+            errors+=("missing required artifact: $CRITIQUE")
+          elif [ ! -s "$CRITIQUE" ]; then
+            errors+=("required artifact is empty: $CRITIQUE")
+          fi
+
+          if [ ! -f "$VERIFY" ]; then
+            errors+=("missing required artifact: $VERIFY")
+          elif [ ! -s "$VERIFY" ]; then
+            errors+=("required artifact is empty: $VERIFY")
+          else
+            # 3. runtime-verification must declare `result: pass`
+            if ! grep -Eqi '^result:\s*pass\s*$' "$VERIFY"; then
+              errors+=("$VERIFY does not contain 'result: pass'")
+            fi
+            # 4. no FAIL/SKIP items in the checklist
+            if grep -Eq '^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\b' "$VERIFY"; then
+              errors+=("$VERIFY contains a FAIL/SKIP item — P0 requires all checks pass")
+            fi
+          fi
+
+          if [ ${#errors[@]} -gt 0 ]; then
+            {
+              echo "## P0 Protocol: BLOCKED"
+              echo ""
+              echo "PR for $ISSUE_ID is in the Runtime Hardening P0 project but does not satisfy the P0 merge protocol (UTV2-948)."
+              echo ""
+              for err in "${errors[@]}"; do
+                echo "- $err"
+              done
+              echo ""
+              echo "See: docs/05_operations/P0_PROTOCOL_SPEC.md"
+            } | tee "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "## P0 Protocol: OK" | tee "$GITHUB_STEP_SUMMARY"
+          echo "All P0 protocol artifacts present and well-formed."
+
+      - name: Non-P0 — auto-pass
+        if: steps.detect.outputs.is_p0 != 'true'
+        run: |
+          echo "## P0 Protocol: SKIP (non-P0 lane)" | tee "$GITHUB_STEP_SUMMARY"

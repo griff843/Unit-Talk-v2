@@ -37,7 +37,10 @@ interface LinearIssueRecord {
   state?: { name: string } | null;
   labels?: { nodes: Array<{ name: string }> } | null;
   attachments?: { nodes: Array<{ title?: string | null; url?: string | null }> } | null;
+  project?: { id: string; name: string } | null;
 }
+
+const P0_PROJECT_ID = '46229dc4-c7c1-4ccb-af0d-dedaf8147a97';
 
 export interface EvidenceBundleV1 {
   schema_version: number;
@@ -499,6 +502,130 @@ export async function runTruthCheck(
       addCheck('G5', 'pass', 'no finalized files_changed entries to inspect');
     }
 
+    const linearProjectIsP0 = linearIssue.project?.id === P0_PROJECT_ID;
+    const manifestP0 = manifest.p0_protocol;
+    const manifestSaysP0 = manifestP0?.required === true;
+
+    if (!linearProjectIsP0 && !manifestSaysP0) {
+      addCheck('H1', 'skip', 'lane is not P0 — protocol checks not applicable');
+      addCheck('H2', 'skip', 'lane is not P0 — protocol checks not applicable');
+      addCheck('H3', 'skip', 'lane is not P0 — protocol checks not applicable');
+      addCheck('H4', 'skip', 'lane is not P0 — protocol checks not applicable');
+      addCheck('H5', 'skip', 'lane is not P0 — protocol checks not applicable');
+    } else {
+      if (linearProjectIsP0 && !manifestSaysP0) {
+        addCheck(
+          'H1',
+          'fail',
+          `Linear places ${issueId} in P0 project but manifest.p0_protocol.required is not true`,
+        );
+      } else if (!linearProjectIsP0 && manifestSaysP0) {
+        addCheck(
+          'H1',
+          'fail',
+          `manifest declares P0 but Linear project (${linearIssue.project?.name ?? 'none'}) is not the P0 project`,
+        );
+      } else {
+        addCheck('H1', 'pass', 'P0 detection is consistent between Linear and manifest');
+      }
+
+      const critique = manifestP0?.claude_critique;
+      if (!critique?.recorded || !critique.artifact_path) {
+        addCheck('H2', 'fail', 'p0_protocol.claude_critique not recorded or missing artifact_path');
+      } else {
+        const critiquePath = path.join(ROOT, critique.artifact_path);
+        if (!fs.existsSync(critiquePath)) {
+          addCheck('H2', 'fail', `claude-critique artifact missing: ${critique.artifact_path}`);
+        } else {
+          const body = safeRead(critiquePath).trim();
+          if (body.length === 0) {
+            addCheck('H2', 'fail', `claude-critique artifact is empty: ${critique.artifact_path}`);
+          } else if (mergeSha && !body.includes(mergeSha)) {
+            addCheck('H2', 'fail', `claude-critique artifact missing merge SHA reference: ${critique.artifact_path}`);
+          } else {
+            addCheck('H2', 'pass', `claude-critique recorded at ${critique.artifact_path}`);
+          }
+        }
+      }
+
+      const verification = manifestP0?.runtime_verification;
+      if (!verification?.recorded || !verification.artifact_path) {
+        addCheck('H3', 'fail', 'p0_protocol.runtime_verification not recorded or missing artifact_path');
+      } else {
+        const verifyPath = path.join(ROOT, verification.artifact_path);
+        if (!fs.existsSync(verifyPath)) {
+          addCheck('H3', 'fail', `runtime-verification artifact missing: ${verification.artifact_path}`);
+        } else {
+          const body = safeRead(verifyPath);
+          if (body.trim().length === 0) {
+            addCheck('H3', 'fail', `runtime-verification artifact is empty: ${verification.artifact_path}`);
+          } else if (RUNTIME_VERIFY_FAIL_PATTERN.test(body)) {
+            addCheck('H3', 'fail', `runtime-verification contains a FAIL/SKIP item: ${verification.artifact_path}`);
+          } else {
+            const resultLine = body.match(RUNTIME_VERIFY_RESULT_PATTERN);
+            if (!resultLine || resultLine[1].toLowerCase() !== 'pass') {
+              addCheck(
+                'H3',
+                'fail',
+                `runtime-verification missing 'result: pass' line: ${verification.artifact_path}`,
+              );
+            } else if (verification.result !== 'pass') {
+              addCheck('H3', 'fail', 'p0_protocol.runtime_verification.result is not "pass"');
+            } else {
+              addCheck('H3', 'pass', `runtime-verification recorded with result: pass at ${verification.artifact_path}`);
+            }
+          }
+        }
+      }
+
+      if (prUrl && githubToken) {
+        try {
+          const prRefForH4 = parsePullRequestUrl(prUrl);
+          const comments = await fetchGitHubPullRequestComments(
+            prRefForH4.owner,
+            prRefForH4.repo,
+            prRefForH4.number,
+            githubToken,
+          );
+          const latest = findLatestPmVerdict(comments, issueId);
+          if (!latest) {
+            addCheck(
+              'H4',
+              'fail',
+              'no pm-verdict/v1 APPROVED comment from a CODEOWNERS member found on the PR',
+            );
+          } else if (latest.verdict !== 'APPROVED') {
+            addCheck('H4', 'fail', `latest PM verdict is ${latest.verdict}, not APPROVED`);
+          } else {
+            addCheck(
+              'H4',
+              'pass',
+              `PM verdict APPROVED recorded by ${latest.comment.user?.login ?? 'unknown'}`,
+            );
+          }
+        } catch (error) {
+          addCheck(
+            'H4',
+            'fail',
+            `failed to verify PM approval: ${error instanceof Error ? error.message : String(error)}`,
+          );
+        }
+      } else if (!prUrl) {
+        addCheck('H4', 'fail', 'cannot verify PM approval without pr_url');
+      } else {
+        addCheck('H4', 'fail', 'cannot verify PM approval without GITHUB_TOKEN');
+      }
+
+      const mergeType = manifestP0?.merge_type;
+      if (mergeType === 'auto') {
+        addCheck('H5', 'fail', 'p0_protocol.merge_type is "auto" — P0 lanes must be merged manually');
+      } else if (mergeType === 'manual') {
+        addCheck('H5', 'pass', 'p0_protocol.merge_type is manual');
+      } else {
+        addCheck('H5', 'fail', 'p0_protocol.merge_type is not set');
+      }
+    }
+
     const exitCode = determineExitCode(checks, manifest.status);
     const verdict = determineVerdict(exitCode);
     return finalizeWithManifest({
@@ -727,6 +854,7 @@ async function fetchLinearIssue(issueId: string, token: string): Promise<LinearI
             state { name }
             labels(first: 20) { nodes { name } }
             attachments(first: 20) { nodes { title url } }
+            project { id name }
           }
         }
       `,
@@ -768,11 +896,73 @@ async function fetchGitHubPullRequest(
   merge_commit_sha: string | null;
   head?: { sha?: string | null } | null;
   labels: Array<{ name?: string }>;
+  user?: { login?: string; type?: string } | null;
+  auto_merge?: { merge_method?: string } | null;
 }> {
   return fetchJson(`https://api.github.com/repos/${owner}/${repo}/pulls/${number}`, {
     headers: githubHeaders(token),
   });
 }
+
+interface GitHubIssueComment {
+  body?: string;
+  user?: { login?: string; type?: string } | null;
+  html_url?: string;
+  created_at?: string;
+}
+
+async function fetchGitHubPullRequestComments(
+  owner: string,
+  repo: string,
+  number: number,
+  token: string,
+): Promise<GitHubIssueComment[]> {
+  return fetchJson<GitHubIssueComment[]>(
+    `https://api.github.com/repos/${owner}/${repo}/issues/${number}/comments?per_page=100`,
+    { headers: githubHeaders(token) },
+  );
+}
+
+const PM_VERDICT_CODEOWNERS = new Set(['griff843']);
+
+interface PmVerdictMatch {
+  verdict: 'APPROVED' | 'CHANGES_REQUIRED';
+  issueId: string;
+  comment: GitHubIssueComment;
+}
+
+function findLatestPmVerdict(
+  comments: GitHubIssueComment[],
+  issueId: string,
+): PmVerdictMatch | null {
+  const matches: PmVerdictMatch[] = [];
+  for (const comment of comments) {
+    const body = comment.body?.replace(/\\n/g, '\n');
+    if (!body) continue;
+    const lines = body.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+    if (lines.length < 3) continue;
+    const verdict = lines[0].replace(/^\$/, '').match(
+      /^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i,
+    );
+    if (!verdict) continue;
+    if (lines[1] !== 'schema: pm-verdict/v1') continue;
+    const issueMatch = lines[2].match(/^Issue:\s+((?:UTV2|UNI)-\d+)$/i);
+    if (!issueMatch) continue;
+    if (issueMatch[1].toUpperCase() !== issueId.toUpperCase()) continue;
+    if (comment.user?.type === 'Bot') continue;
+    if (!comment.user?.login || !PM_VERDICT_CODEOWNERS.has(comment.user.login)) continue;
+    matches.push({
+      verdict: verdict[1].toUpperCase() as 'APPROVED' | 'CHANGES_REQUIRED',
+      issueId: issueMatch[1].toUpperCase(),
+      comment,
+    });
+  }
+  if (matches.length === 0) return null;
+  return matches[matches.length - 1];
+}
+
+const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\b/m;
+const RUNTIME_VERIFY_RESULT_PATTERN = /^result:\s*(pass|fail)\s*$/im;
 
 async function fetchRequiredChecks(
   owner: string,
