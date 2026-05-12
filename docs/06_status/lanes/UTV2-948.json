@@ -6,8 +6,8 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "griffadavi/utv2-948-p0-protocol-enforcement",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "0cb5ea39015c70e89b0fac28e10711b5cb3caa1d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/641",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/p0-detect.ts",
@@ -32,32 +32,35 @@
     "docs/06_status/proof/UTV2-948/claude-critique.md",
     "docs/06_status/proof/UTV2-948/runtime-verification.md"
   ],
-  "status": "in_progress",
+  "status": "merged",
   "started_at": "2026-05-12T14:30:00.000Z",
-  "heartbeat_at": "2026-05-12T15:30:00.000Z",
+  "heartbeat_at": "2026-05-12T18:05:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "manual-dogfood-utv2-948",
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "UTV2-948 is bootstrap for the P0 Runtime Hardening Merge Protocol. Ships through its own protocol — Claude implementation + Claude critique + PM approval + runtime verification + manual merge. Dogfood: this manifest's p0_protocol block is populated as artifacts are produced.",
+  "notes": "UTV2-948 is bootstrap for the P0 Runtime Hardening Merge Protocol. Ships through its own protocol \u00e2\u20ac\u201d Claude implementation + Claude critique + PM approval + runtime verification + manual merge. Dogfood: this manifest's p0_protocol block is populated as artifacts are produced.",
   "p0_protocol": {
     "required": true,
     "codex_implementation": {
-      "recorded": false
+      "recorded": true,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/641"
     },
     "claude_critique": {
       "recorded": true,
       "artifact_path": "docs/06_status/proof/UTV2-948/claude-critique.md"
     },
     "human_approval": {
-      "recorded": false
+      "recorded": true,
+      "pm_verdict_url": "https://github.com/griff843/Unit-Talk-v2/pull/641#issuecomment-4432708505"
     },
     "runtime_verification": {
       "recorded": true,
-      "artifact_path": "docs/06_status/proof/UTV2-948/runtime-verification.md"
+      "artifact_path": "docs/06_status/proof/UTV2-948/runtime-verification.md",
+      "result": "pass"
     },
-    "merge_type": null
+    "merge_type": "manual"
   }
 }
