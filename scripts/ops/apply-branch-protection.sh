@@ -29,8 +29,9 @@ fi
 echo "Applying branch protection to ${REPO}:${BRANCH}..."
 
 # Update required status checks to include P0 Protocol alongside the existing trio.
+# `-F` sends typed fields (boolean for strict=true); `-f` sends strings (used for array entries).
 gh api -X PATCH "repos/${REPO}/branches/${BRANCH}/protection/required_status_checks" \
-  -f strict=true \
+  -F strict=true \
   -f 'contexts[]=verify' \
   -f 'contexts[]=Executor Result Validation' \
   -f 'contexts[]=Merge Gate' \
