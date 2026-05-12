@@ -4,7 +4,10 @@ import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { createApiRuntimeDependencies, createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
-import { processShadowSubmission, processSubmission } from './submission-service.js';
+import {
+  processShadowSubmission,
+  processSubmission,
+} from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
 
@@ -59,7 +62,10 @@ test('GET /health response body includes persistence mode indicators', async () 
 
     // All required persistence indicators must be present
     assert.ok('status' in body, 'response must include status');
-    assert.ok('persistenceMode' in body, 'response must include persistenceMode');
+    assert.ok(
+      'persistenceMode' in body,
+      'response must include persistenceMode',
+    );
     assert.ok('dbReachable' in body, 'response must include dbReachable');
     assert.ok('runtimeMode' in body, 'response must include runtimeMode');
     assert.ok('version' in body, 'response must include version');
@@ -88,11 +94,14 @@ test('GET /api/health/runtime returns runtime metadata for operator auth', async
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/health/runtime`, {
-      headers: {
-        authorization: 'Bearer op-runtime-test-key',
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/health/runtime`,
+      {
+        headers: {
+          authorization: 'Bearer op-runtime-test-key',
+        },
       },
-    });
+    );
     const body = (await response.json()) as {
       build: {
         gitShaShort: string | null;
@@ -121,6 +130,13 @@ test('GET /api/health/runtime returns runtime metadata for operator auth', async
 });
 
 test('GET /health uses a valid UUID probe when persistenceMode is database', async () => {
+  const previousSupabaseUrl = process.env.SUPABASE_URL;
+  const previousSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const previousSupabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'not-a-url';
+  process.env.SUPABASE_ANON_KEY = 'anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
   const repositories = createInMemoryRepositoryBundle();
   let probedPickId: string | null = null;
   repositories.picks.findPickById = async (pickId: string) => {
@@ -149,6 +165,9 @@ test('GET /health uses a valid UUID probe when persistenceMode is database', asy
     assert.equal(probedPickId, '00000000-0000-0000-0000-000000000000');
   } finally {
     server.close();
+    restoreEnv('SUPABASE_URL', previousSupabaseUrl);
+    restoreEnv('SUPABASE_ANON_KEY', previousSupabaseAnonKey);
+    restoreEnv('SUPABASE_SERVICE_ROLE_KEY', previousSupabaseServiceRoleKey);
   }
 });
 
@@ -171,18 +190,21 @@ test('POST /api/submissions returns created submission payload', async () => {
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/submissions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/submissions`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: 'api',
+          market: 'NBA points',
+          selection: 'Player Over 18.5',
+          stakeUnits: 1,
+        }),
       },
-      body: JSON.stringify({
-        source: 'api',
-        market: 'NBA points',
-        selection: 'Player Over 18.5',
-        stakeUnits: 1,
-      }),
-    });
+    );
     const body = (await response.json()) as {
       ok: boolean;
       data?: {
@@ -210,7 +232,9 @@ test('GET /api/alerts/recent returns empty state when no detections exist', asyn
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/recent`);
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/alerts/recent`,
+    );
     const body = (await response.json()) as {
       detections: unknown[];
       total: number;
@@ -229,7 +253,9 @@ test('GET /api/alerts/recent returns empty state when no detections exist', asyn
 test('GET /api/alerts/status returns env-backed status and recent counts', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const currentSnapshotAt = new Date().toISOString();
-  const baselineSnapshotAt = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  const baselineSnapshotAt = new Date(
+    Date.now() - 30 * 60 * 1000,
+  ).toISOString();
   await repositories.alertDetections.saveDetection({
     idempotencyKey: 'status-notable',
     eventId: 'event-1',
@@ -303,7 +329,9 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/status`);
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/alerts/status`,
+    );
     const body = (await response.json()) as {
       enabled: boolean;
       dryRun: boolean;
@@ -332,7 +360,11 @@ test('GET /api/alerts/status returns env-backed status and recent counts', async
     assert.equal(body.minTier, 'alert-worthy');
     assert.equal(body.lookbackMinutes, 120);
     assert.deepEqual(body.activeSports, ['NBA', 'NHL', 'MLB']);
-    assert.deepEqual(body.systemPickEligibleMarketTypes, ['moneyline', 'spread', 'total']);
+    assert.deepEqual(body.systemPickEligibleMarketTypes, [
+      'moneyline',
+      'spread',
+      'total',
+    ]);
     assert.deepEqual(body.systemPickBlockedMarketTypes, ['player_prop']);
     assert.equal(body.last1h.notable, 1);
     assert.equal(body.last1h.alertWorthy, 1);
@@ -360,9 +392,19 @@ test('GET /api/alerts/signal-quality returns insufficient-data empty state when 
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/signal-quality`);
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/alerts/signal-quality`,
+    );
     const body = (await response.json()) as {
-      periods: Record<string, { count: number; sufficientSample: boolean; avgClvPct: number | null; winRate: number | null }>;
+      periods: Record<
+        string,
+        {
+          count: number;
+          sufficientSample: boolean;
+          avgClvPct: number | null;
+          winRate: number | null;
+        }
+      >;
       bySport: Record<string, unknown>;
       insufficientData: boolean;
       minimumSampleRequired: number;
@@ -393,7 +435,9 @@ test('GET /api/alerts/signal-quality returns aggregated alert-agent CLV and bySp
     await createSettledAlertAgentPick(repositories, {
       selection: `NBA signal ${index}`,
       sport: 'NBA',
-      settledAt: new Date(now - (index + 2) * 24 * 60 * 60 * 1000).toISOString(),
+      settledAt: new Date(
+        now - (index + 2) * 24 * 60 * 60 * 1000,
+      ).toISOString(),
       result: index < 7 ? 'win' : 'loss',
       clvPercent: 2,
     });
@@ -412,10 +456,23 @@ test('GET /api/alerts/signal-quality returns aggregated alert-agent CLV and bySp
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/alerts/signal-quality`);
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/alerts/signal-quality`,
+    );
     const body = (await response.json()) as {
-      periods: Record<string, { count: number; avgClvPct: number | null; winRate: number | null; sufficientSample: boolean }>;
-      bySport: Record<string, { count: number; avgClvPct: number | null; winRate: number | null }>;
+      periods: Record<
+        string,
+        {
+          count: number;
+          avgClvPct: number | null;
+          winRate: number | null;
+          sufficientSample: boolean;
+        }
+      >;
+      bySport: Record<
+        string,
+        { count: number; avgClvPct: number | null; winRate: number | null }
+      >;
       insufficientData: boolean;
     };
 
@@ -479,7 +536,9 @@ test('GET /api/shadow-models/summary returns grouped model-driven shadow outcome
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/shadow-models/summary`);
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/shadow-models/summary`,
+    );
     const body = (await response.json()) as {
       summaries: Array<{
         modelName: string;
@@ -511,7 +570,12 @@ test('POST /api/picks/:id/settle settles a posted pick', async () => {
     },
     repositories,
   );
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
   await transitionPickLifecycle(
     repositories.picks,
     created.pick.id,
@@ -579,26 +643,42 @@ test('GET /api/reference-data/catalog returns full catalog', async () => {
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/reference-data/catalog`);
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/reference-data/catalog`,
+    );
     const body = (await response.json()) as {
       ok: boolean;
-        data?: {
-          sports: { id: string; name: string; marketTypes: string[]; statTypes: string[]; teams: string[] }[];
-          sportsbooks: { id: string; name: string }[];
-          cappers: { id: string; displayName: string }[];
-          ticketTypes: { id: string; name: string; enabled: boolean }[];
-        };
+      data?: {
+        sports: {
+          id: string;
+          name: string;
+          marketTypes: string[];
+          statTypes: string[];
+          teams: string[];
+        }[];
+        sportsbooks: { id: string; name: string }[];
+        cappers: { id: string; displayName: string }[];
+        ticketTypes: { id: string; name: string; enabled: boolean }[];
       };
+    };
 
     assert.equal(response.status, 200);
-      assert.equal(body.ok, true);
-      assert.ok(body.data);
-      assert.equal(body.data.sports.length, 9);
-      assert.equal(body.data.sportsbooks.length, 10);
-      assert.ok(body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'fanatics'));
-      assert.ok(!body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'williamhill'));
-      assert.ok(!body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'sgo'));
-      assert.ok(body.data.cappers.some((capper) => capper.id === 'griff843'));
+    assert.equal(body.ok, true);
+    assert.ok(body.data);
+    assert.equal(body.data.sports.length, 9);
+    assert.equal(body.data.sportsbooks.length, 10);
+    assert.ok(
+      body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'fanatics'),
+    );
+    assert.ok(
+      !body.data.sportsbooks.some(
+        (sportsbook) => sportsbook.id === 'williamhill',
+      ),
+    );
+    assert.ok(
+      !body.data.sportsbooks.some((sportsbook) => sportsbook.id === 'sgo'),
+    );
+    assert.ok(body.data.cappers.some((capper) => capper.id === 'griff843'));
 
     const nba = body.data.sports.find((s) => s.id === 'NBA');
     assert.ok(nba);
@@ -666,11 +746,16 @@ test('GET /api/reference-data/leagues returns canonical leagues for a sport', as
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/reference-data/leagues?sport=NBA`,
     );
-    const body = (await response.json()) as { ok: boolean; data?: Array<{ id: string; sportId: string }> };
+    const body = (await response.json()) as {
+      ok: boolean;
+      data?: Array<{ id: string; sportId: string }>;
+    };
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
-    assert.deepEqual(body.data, [{ id: 'nba', sportId: 'NBA', displayName: 'NBA' }]);
+    assert.deepEqual(body.data, [
+      { id: 'nba', sportId: 'NBA', displayName: 'NBA' },
+    ]);
   } finally {
     server.close();
   }
@@ -698,8 +783,18 @@ test('GET /api/reference-data/matchups returns canonical matchup browse rows', a
           sportId: 'NBA',
           leagueId: 'nba',
           teams: [
-            { participantId: 'team-uta', teamId: 'nba:jazz', displayName: 'Jazz', role: 'home' as const },
-            { participantId: 'team-den', teamId: 'nba:nuggets', displayName: 'Nuggets', role: 'away' as const },
+            {
+              participantId: 'team-uta',
+              teamId: 'nba:jazz',
+              displayName: 'Jazz',
+              role: 'home' as const,
+            },
+            {
+              participantId: 'team-den',
+              teamId: 'nba:nuggets',
+              displayName: 'Nuggets',
+              role: 'away' as const,
+            },
           ],
         },
       ];
@@ -721,7 +816,10 @@ test('GET /api/reference-data/matchups returns canonical matchup browse rows', a
     );
     const body = (await response.json()) as {
       ok: boolean;
-      data?: Array<{ eventId: string; teams: Array<{ teamId: string | null; role: string }> }>;
+      data?: Array<{
+        eventId: string;
+        teams: Array<{ teamId: string | null; role: string }>;
+      }>;
     };
 
     assert.equal(response.status, 200);
@@ -803,7 +901,11 @@ test('GET /api/reference-data/events/:id/browse returns grouped live offers with
       ok: boolean;
       data?: {
         participants: Array<{ canonicalId: string | null }>;
-        offers: Array<{ sportsbookId: string | null; marketTypeId: string | null; participantName: string | null }>;
+        offers: Array<{
+          sportsbookId: string | null;
+          marketTypeId: string | null;
+          participantName: string | null;
+        }>;
       };
     };
 
@@ -845,8 +947,18 @@ test('GET /api/reference-data/search returns canonical browse search results wit
             sportId: 'NBA',
             leagueId: 'nba',
             teams: [
-              { participantId: 'team-uta', teamId: 'nba:jazz', displayName: 'Jazz', role: 'away' as const },
-              { participantId: 'team-den', teamId: 'nba:nuggets', displayName: 'Nuggets', role: 'home' as const },
+              {
+                participantId: 'team-uta',
+                teamId: 'nba:jazz',
+                displayName: 'Jazz',
+                role: 'away' as const,
+              },
+              {
+                participantId: 'team-den',
+                teamId: 'nba:nuggets',
+                displayName: 'Nuggets',
+                role: 'home' as const,
+              },
             ],
           },
         },
@@ -866,7 +978,11 @@ test('GET /api/reference-data/search returns canonical browse search results wit
     );
     const body = (await response.json()) as {
       ok: boolean;
-      data?: Array<{ resultType: string; displayName: string; matchup: { eventId: string } }>;
+      data?: Array<{
+        resultType: string;
+        displayName: string;
+        matchup: { eventId: string };
+      }>;
     };
 
     assert.equal(response.status, 200);
@@ -892,7 +1008,10 @@ test('GET /api/reference-data/search/teams returns 400 without sport param', asy
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/reference-data/search/teams?q=Kni`,
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 400);
     assert.equal(body.ok, false);
@@ -915,7 +1034,10 @@ test('GET /api/reference-data/search/teams returns 400 for short query', async (
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/reference-data/search/teams?sport=NBA&q=K`,
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 400);
     assert.equal(body.ok, false);
@@ -943,7 +1065,12 @@ test('POST /api/picks/:id/settle returns downstream loss attribution when inputs
     },
     repositories,
   );
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
   await transitionPickLifecycle(
     repositories.picks,
     created.pick.id,
@@ -1012,7 +1139,10 @@ test('POST /api/picks/:id/requeue returns 404 when pick does not exist', async (
       `http://127.0.0.1:${address.port}/api/picks/missing-pick/requeue`,
       { method: 'POST' },
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 404);
     assert.equal(body.ok, false);
@@ -1044,7 +1174,10 @@ test('POST /api/picks/:id/requeue returns 422 when pick is not qualified', async
       `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
       { method: 'POST' },
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 422);
     assert.equal(body.ok, false);
@@ -1078,7 +1211,10 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already queued in out
       `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
       { method: 'POST' },
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 409);
     assert.equal(body.ok, false);
@@ -1091,8 +1227,19 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already queued in out
 test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'posted',
+    'posted',
+    'poster',
+  );
   await transitionPickLifecycle(
     repositories.picks,
     created.pick.id,
@@ -1112,7 +1259,10 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', as
       `http://127.0.0.1:${address.port}/api/picks/${created.pick.id}/requeue`,
       { method: 'POST' },
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 409);
     assert.equal(body.ok, false);
@@ -1148,7 +1298,10 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
     assert.equal(body.data?.target, 'discord:best-bets');
     assert.ok(body.data?.outboxId);
 
-    const claimed = await repositories.outbox.claimNext('discord:best-bets', 'requeue-test');
+    const claimed = await repositories.outbox.claimNext(
+      'discord:best-bets',
+      'requeue-test',
+    );
     assert.ok(claimed, 'expected requeued outbox record');
     assert.equal(claimed?.pick_id, created.pick.id);
   } finally {
@@ -1192,13 +1345,16 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await previousFetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await previousFetch(
+      `http://127.0.0.1:${address.port}/api/recap/post`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ period: 'daily' }),
       },
-      body: JSON.stringify({ period: 'daily' }),
-    });
+    );
     const body = (await response.json()) as {
       ok: boolean;
       postsCount?: number;
@@ -1215,11 +1371,19 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
     );
 
     const payload = JSON.parse(capturedBody) as {
-      embeds?: Array<{ title?: string; fields?: Array<{ name: string; value: string }> }>;
+      embeds?: Array<{
+        title?: string;
+        fields?: Array<{ name: string; value: string }>;
+      }>;
     };
-    assert.equal(payload.embeds?.[0]?.title?.startsWith('Daily Recap - '), true);
+    assert.equal(
+      payload.embeds?.[0]?.title?.startsWith('Daily Recap - '),
+      true,
+    );
     assert.ok(
-      payload.embeds?.[0]?.fields?.some((field) => field.name === 'Record' && field.value === '1-0-0'),
+      payload.embeds?.[0]?.fields?.some(
+        (field) => field.name === 'Record' && field.value === '1-0-0',
+      ),
     );
   } finally {
     server.close();
@@ -1247,13 +1411,16 @@ test('POST /api/recap/post returns no settled picks reason when the requested wi
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/recap/post`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ period: 'daily' }),
       },
-      body: JSON.stringify({ period: 'daily' }),
-    });
+    );
     const body = (await response.json()) as { ok: boolean; reason?: string };
 
     assert.equal(response.status, 200);
@@ -1289,13 +1456,16 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
 
   const address = server.address() as AddressInfo;
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/recap/post`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({ period: 'daily' }),
       },
-      body: JSON.stringify({ period: 'daily' }),
-    });
+    );
     const body = (await response.json()) as { ok: boolean; reason?: string };
 
     assert.equal(response.status, 200);
@@ -1423,7 +1593,15 @@ async function createSettledRecapPick(
 
 function buildYesterdayMiddayIso(now: Date = new Date()) {
   return new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 12, 0, 0, 0),
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate() - 1,
+      12,
+      0,
+      0,
+      0,
+    ),
   ).toISOString();
 }
 
@@ -1440,7 +1618,10 @@ test('GET /api/picks returns 400 without status param', async () => {
   const address = server.address() as AddressInfo;
   try {
     const response = await fetch(`http://127.0.0.1:${address.port}/api/picks`);
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 400);
     assert.equal(body.error.code, 'MISSING_STATUS');
@@ -1466,7 +1647,11 @@ test('GET /api/picks?status=validated returns picks in that state', async () => 
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/picks?status=validated`,
     );
-    const body = (await response.json()) as { ok: boolean; picks: unknown[]; count: number };
+    const body = (await response.json()) as {
+      ok: boolean;
+      picks: unknown[];
+      count: number;
+    };
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
@@ -1494,7 +1679,11 @@ test('GET /api/picks?status=settled returns empty when no settled picks', async 
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/picks?status=settled`,
     );
-    const body = (await response.json()) as { ok: boolean; picks: unknown[]; count: number };
+    const body = (await response.json()) as {
+      ok: boolean;
+      picks: unknown[];
+      count: number;
+    };
 
     assert.equal(response.status, 200);
     assert.equal(body.count, 0);
@@ -1518,7 +1707,13 @@ test('GET /api/picks/:id/trace returns the full pick lifecycle aggregate', async
   );
   const [outboxEntry] = await repositories.outbox.listByPickId(created.pick.id);
   assert.ok(outboxEntry, 'expected trace seed outbox entry');
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'posted', 'posted', 'poster');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'posted',
+    'posted',
+    'poster',
+  );
 
   await repositories.receipts.record({
     outboxId: outboxEntry.id,
@@ -1541,7 +1736,13 @@ test('GET /api/picks/:id/trace returns the full pick lifecycle aggregate', async
     settledAt: new Date().toISOString(),
     payload: {},
   });
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'settled', 'settled', 'settler');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'settled',
+    'settled',
+    'settler',
+  );
   await repositories.audit.record({
     entityType: 'trace_seed',
     entityId: 'trace-seed-1',
@@ -1578,14 +1779,25 @@ test('GET /api/picks/:id/trace returns the full pick lifecycle aggregate', async
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
     assert.equal(body.data?.pick.id, created.pick.id);
-    assert.equal(body.data?.submissionEvents[0]?.submission_id, created.submission.id);
+    assert.equal(
+      body.data?.submissionEvents[0]?.submission_id,
+      created.submission.id,
+    );
     assert.equal(body.data?.promotionHistory[0]?.pick_id, created.pick.id);
     assert.equal(body.data?.outboxEntries[0]?.pick_id, created.pick.id);
     assert.equal(body.data?.distributionReceipts[0]?.outbox_id, outboxEntry.id);
     assert.equal(body.data?.settlementRecords[0]?.pick_id, created.pick.id);
-    assert.ok(body.data?.auditLogEntries.some((entry) => entry.entity_ref === created.pick.id));
-    assert.ok(body.data?.lifecycleEvents.some((entry) => entry.to_state === 'queued'));
-    assert.ok(body.data?.lifecycleEvents.some((entry) => entry.to_state === 'settled'));
+    assert.ok(
+      body.data?.auditLogEntries.some(
+        (entry) => entry.entity_ref === created.pick.id,
+      ),
+    );
+    assert.ok(
+      body.data?.lifecycleEvents.some((entry) => entry.to_state === 'queued'),
+    );
+    assert.ok(
+      body.data?.lifecycleEvents.some((entry) => entry.to_state === 'settled'),
+    );
   } finally {
     server.close();
   }
@@ -1604,7 +1816,10 @@ test('GET /api/picks/:id/trace returns 404 for unknown pick', async () => {
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/picks/missing-pick/trace`,
     );
-    const body = (await response.json()) as { ok: boolean; error: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
 
     assert.equal(response.status, 404);
     assert.equal(body.ok, false);
@@ -1653,9 +1868,19 @@ test('GET /api/picks/:id/routing-preview returns live promotion and outbox routi
     assert.equal(body.data.pickId, created.pick.id);
     assert.equal(body.data.promotionTarget, 'best-bets');
     assert.equal(body.data.distributionTarget, 'discord:best-bets');
-    assert.match(body.data.outboxStatus, /pending|processing|sent|failed|dead_letter/);
-    assert.ok(typeof body.data.routingExplanation === 'string' && body.data.routingExplanation.length > 0, 'routingExplanation should be a non-empty string');
-    assert.ok(Array.isArray(body.data.gateChecks), 'gateChecks should be an array');
+    assert.match(
+      body.data.outboxStatus,
+      /pending|processing|sent|failed|dead_letter/,
+    );
+    assert.ok(
+      typeof body.data.routingExplanation === 'string' &&
+        body.data.routingExplanation.length > 0,
+      'routingExplanation should be a non-empty string',
+    );
+    assert.ok(
+      Array.isArray(body.data.gateChecks),
+      'gateChecks should be an array',
+    );
   } finally {
     server.close();
   }
@@ -1712,7 +1937,11 @@ test('GET /api/settlements/recent returns empty array when no settlements', asyn
     const response = await fetch(
       `http://127.0.0.1:${address.port}/api/settlements/recent`,
     );
-    const body = (await response.json()) as { ok: boolean; settlements: unknown[]; count: number };
+    const body = (await response.json()) as {
+      ok: boolean;
+      settlements: unknown[];
+      count: number;
+    };
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);

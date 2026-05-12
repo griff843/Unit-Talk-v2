@@ -3,7 +3,12 @@ import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import type { AppEnv } from '@unit-talk/config';
-import { createErrorTracker, createLogger, createMetricsCollector, type StructuredLogEntry } from '@unit-talk/observability';
+import {
+  createErrorTracker,
+  createLogger,
+  createMetricsCollector,
+  type StructuredLogEntry,
+} from '@unit-talk/observability';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
@@ -12,6 +17,7 @@ import {
   createApiServer,
   type ApiRuntimeDependencies,
 } from './server.js';
+import { loadAuthConfig } from './auth.js';
 import { readRuntimeVersionInfoFromProcessEnv } from './runtime-version.js';
 
 test('createApiRuntimeDependencies fails closed when database config is unavailable', () => {
@@ -41,20 +47,26 @@ test('POST /api/submissions rejects request bodies larger than the configured ca
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/submissions`, {
-      method: 'POST',
-      headers: {
-        'content-type': 'application/json',
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/submissions`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify({
+          source: 'api',
+          market: 'NBA points',
+          selection: 'Player Over 18.5',
+          stakeUnits: 1,
+          notes: 'x'.repeat(512),
+        }),
       },
-      body: JSON.stringify({
-        source: 'api',
-        market: 'NBA points',
-        selection: 'Player Over 18.5',
-        stakeUnits: 1,
-        notes: 'x'.repeat(512),
-      }),
-    });
-    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(response.status, 413);
     assert.equal(body.ok, false);
@@ -90,7 +102,10 @@ test('POST /api/submissions rate limits repeat callers and exposes reset metadat
     const second = await submitTestPick(address.port, {
       'x-forwarded-for': '203.0.113.5',
     });
-    const body = (await second.json()) as { ok: boolean; error?: { code: string } };
+    const body = (await second.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(second.status, 429);
     assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
@@ -146,24 +161,43 @@ test('POST /api/submissions keys rate limit by Discord user ID from body when pr
 
   try {
     // First Discord user uses one bucket
-    const firstUserFirst = await submitTestPickWithDiscordId(address.port, 'user-alice');
+    const firstUserFirst = await submitTestPickWithDiscordId(
+      address.port,
+      'user-alice',
+    );
     assert.equal(firstUserFirst.status, 201);
     assert.equal(firstUserFirst.headers.get('x-ratelimit-remaining'), '0');
 
     now += 1_000;
 
     // Second Discord user gets a separate bucket — should not be rate limited
-    const secondUserFirst = await submitTestPickWithDiscordId(address.port, 'user-bob');
-    assert.equal(secondUserFirst.status, 201, 'different Discord user ID should get a fresh bucket');
+    const secondUserFirst = await submitTestPickWithDiscordId(
+      address.port,
+      'user-bob',
+    );
+    assert.equal(
+      secondUserFirst.status,
+      201,
+      'different Discord user ID should get a fresh bucket',
+    );
 
     now += 1_000;
 
     // First user is now rate-limited
-    const firstUserSecond = await submitTestPickWithDiscordId(address.port, 'user-alice');
-    const body = (await firstUserSecond.json()) as { ok: boolean; error?: { code: string } };
+    const firstUserSecond = await submitTestPickWithDiscordId(
+      address.port,
+      'user-alice',
+    );
+    const body = (await firstUserSecond.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
     assert.equal(firstUserSecond.status, 429);
     assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
-    assert.ok(firstUserSecond.headers.get('retry-after'), 'Retry-After header should be set');
+    assert.ok(
+      firstUserSecond.headers.get('retry-after'),
+      'Retry-After header should be set',
+    );
   } finally {
     server.close();
   }
@@ -185,22 +219,38 @@ test('POST /api/submissions keys rate limit by submittedBy when discordUserId ab
   const address = server.address() as AddressInfo;
 
   try {
-    const firstRequest = await submitTestPickWithSubmittedBy(address.port, 'capper-griff');
+    const firstRequest = await submitTestPickWithSubmittedBy(
+      address.port,
+      'capper-griff',
+    );
     assert.equal(firstRequest.status, 201);
 
     now += 1_000;
 
     // Same submittedBy — should be rate-limited
-    const secondRequest = await submitTestPickWithSubmittedBy(address.port, 'capper-griff');
-    const body = (await secondRequest.json()) as { ok: boolean; error?: { code: string } };
+    const secondRequest = await submitTestPickWithSubmittedBy(
+      address.port,
+      'capper-griff',
+    );
+    const body = (await secondRequest.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
     assert.equal(secondRequest.status, 429);
     assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
 
     now += 1_000;
 
     // Different submittedBy — separate bucket
-    const otherCapper = await submitTestPickWithSubmittedBy(address.port, 'capper-dalton');
-    assert.equal(otherCapper.status, 201, 'different submittedBy should get a fresh bucket');
+    const otherCapper = await submitTestPickWithSubmittedBy(
+      address.port,
+      'capper-dalton',
+    );
+    assert.equal(
+      otherCapper.status,
+      201,
+      'different submittedBy should get a fresh bucket',
+    );
   } finally {
     server.close();
   }
@@ -234,7 +284,8 @@ test('API requests preserve inbound correlation ids in response headers and logs
     assert.equal(
       entries.some(
         (entry) =>
-          entry.correlationId === 'corr-http-test' && entry.message === 'request completed',
+          entry.correlationId === 'corr-http-test' &&
+          entry.message === 'request completed',
       ),
       true,
     );
@@ -252,16 +303,19 @@ test('POST /api/submissions accepts a body within the configured cap', async () 
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/submissions`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        source: 'api',
-        market: 'NBA points',
-        selection: 'Player Over 18.5',
-        stakeUnits: 1,
-      }),
-    });
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/submissions`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          source: 'api',
+          market: 'NBA points',
+          selection: 'Player Over 18.5',
+          stakeUnits: 1,
+        }),
+      },
+    );
 
     assert.equal(response.status, 201);
     const body = (await response.json()) as { ok: boolean };
@@ -274,10 +328,20 @@ test('POST /api/submissions accepts a body within the configured cap', async () 
 test('POST /api/picks/:id/settle rejects bodies exceeding the configured cap', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await processSubmission(
-    { source: 'api', market: 'NBA rebounds', selection: 'Player Over 10.5', stakeUnits: 1 },
+    {
+      source: 'api',
+      market: 'NBA rebounds',
+      selection: 'Player Over 10.5',
+      stakeUnits: 1,
+    },
     repositories,
   );
-  await transitionPickLifecycle(repositories.picks, created.pick.id, 'queued', 'queued');
+  await transitionPickLifecycle(
+    repositories.picks,
+    created.pick.id,
+    'queued',
+    'queued',
+  );
   await transitionPickLifecycle(
     repositories.picks,
     created.pick.id,
@@ -310,7 +374,10 @@ test('POST /api/picks/:id/settle rejects bodies exceeding the configured cap', a
         }),
       },
     );
-    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(response.status, 413);
     assert.equal(body.ok, false);
@@ -329,12 +396,18 @@ test('POST /api/recap/post rejects bodies exceeding the configured cap', async (
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/recap/post`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ period: 'daily', notes: 'x'.repeat(256) }),
-    });
-    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/recap/post`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ period: 'daily', notes: 'x'.repeat(256) }),
+      },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(response.status, 413);
     assert.equal(body.ok, false);
@@ -353,18 +426,24 @@ test('POST /api/member-tiers rejects bodies exceeding the configured cap', async
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        discord_id: 'user-123',
-        tier: 'vip',
-        action: 'activate',
-        source: 'api',
-        notes: 'x'.repeat(256),
-      }),
-    });
-    const body = (await response.json()) as { ok: boolean; error?: { code: string } };
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/member-tiers`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          discord_id: 'user-123',
+          tier: 'vip',
+          action: 'activate',
+          source: 'api',
+          notes: 'x'.repeat(256),
+        }),
+      },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
 
     assert.equal(response.status, 413);
     assert.equal(body.ok, false);
@@ -389,6 +468,89 @@ test('UNIT_TALK_API_MAX_BODY_BYTES env var sets the body limit on createApiRunti
     } else {
       process.env.UNIT_TALK_API_MAX_BODY_BYTES = previousValue;
     }
+  }
+});
+
+test('POST /api/qa/seed-pick requires operator auth before QA seed guard', async () => {
+  const previousQaSeedEnabled = process.env.UNIT_TALK_QA_SEED_ENABLED;
+  process.env.UNIT_TALK_QA_SEED_ENABLED = 'false';
+
+  const entries: StructuredLogEntry[] = [];
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      authConfig: loadAuthConfig({
+        UNIT_TALK_API_KEY_OPERATOR: 'operator-key',
+        UNIT_TALK_API_KEY_SUBMITTER: 'submitter-key',
+      }),
+      logger: createLogger({
+        service: 'api',
+        writer: {
+          write(_level, entry) {
+            entries.push(entry);
+          },
+        },
+      }),
+    }),
+  });
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const unauthorized = await fetch(
+      `http://127.0.0.1:${address.port}/api/qa/seed-pick`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+      },
+    );
+    const unauthorizedBody = (await unauthorized.json()) as {
+      error?: { code?: string };
+    };
+
+    assert.equal(unauthorized.status, 401);
+    assert.equal(unauthorizedBody.error?.code, 'UNAUTHORIZED');
+
+    const forbidden = await fetch(
+      `http://127.0.0.1:${address.port}/api/qa/seed-pick`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer submitter-key',
+        },
+      },
+    );
+    const forbiddenBody = (await forbidden.json()) as {
+      error?: { code?: string };
+    };
+
+    assert.equal(forbidden.status, 403);
+    assert.equal(forbiddenBody.error?.code, 'FORBIDDEN');
+
+    const authorized = await fetch(
+      `http://127.0.0.1:${address.port}/api/qa/seed-pick`,
+      {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer operator-key',
+        },
+      },
+    );
+
+    assert.equal(authorized.status, 501);
+    assert.equal(
+      entries.some(
+        (entry) =>
+          entry.message === 'api privileged action authorized' &&
+          entry.actor === 'operator:operator' &&
+          entry.route === '/api/qa/seed-pick',
+      ),
+      true,
+    );
+  } finally {
+    server.close();
+    restoreEnv('UNIT_TALK_QA_SEED_ENABLED', previousQaSeedEnabled);
   }
 });
 
@@ -437,7 +599,10 @@ function createTestRuntime(
   };
 }
 
-const testRateLimitBuckets = new Map<string, { count: number; resetAt: number }>();
+const testRateLimitBuckets = new Map<
+  string,
+  { count: number; resetAt: number }
+>();
 
 function createTestEnvironment(overrides: Partial<AppEnv> = {}): AppEnv {
   return {
@@ -451,6 +616,15 @@ function createTestEnvironment(overrides: Partial<AppEnv> = {}): AppEnv {
     SLACK_WORKSPACE_NAME: 'Unit Talk',
     ...overrides,
   };
+}
+
+function restoreEnv(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
 }
 
 async function submitTestPick(port: number, headers: Record<string, string>) {
@@ -469,7 +643,10 @@ async function submitTestPick(port: number, headers: Record<string, string>) {
   });
 }
 
-async function submitTestPickWithDiscordId(port: number, discordUserId: string) {
+async function submitTestPickWithDiscordId(
+  port: number,
+  discordUserId: string,
+) {
   return fetch(`http://127.0.0.1:${port}/api/submissions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -483,7 +660,10 @@ async function submitTestPickWithDiscordId(port: number, discordUserId: string) 
   });
 }
 
-async function submitTestPickWithSubmittedBy(port: number, submittedBy: string) {
+async function submitTestPickWithSubmittedBy(
+  port: number,
+  submittedBy: string,
+) {
   return fetch(`http://127.0.0.1:${port}/api/submissions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
@@ -513,17 +693,24 @@ test('POST /api/member-tiers activates a valid tier and returns 200', async () =
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        discord_id: 'user-123',
-        tier: 'vip',
-        action: 'activate',
-        source: 'api',
-      }),
-    });
-    const body = (await response.json()) as { ok: boolean; tier: string; action: string };
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/member-tiers`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          discord_id: 'user-123',
+          tier: 'vip',
+          action: 'activate',
+          source: 'api',
+        }),
+      },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      tier: string;
+      action: string;
+    };
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
@@ -540,17 +727,24 @@ test('POST /api/member-tiers deactivates a valid tier and returns 200', async ()
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        discord_id: 'user-456',
-        tier: 'trial',
-        action: 'deactivate',
-        source: 'api',
-      }),
-    });
-    const body = (await response.json()) as { ok: boolean; tier: string; action: string };
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/member-tiers`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          discord_id: 'user-456',
+          tier: 'trial',
+          action: 'deactivate',
+          source: 'api',
+        }),
+      },
+    );
+    const body = (await response.json()) as {
+      ok: boolean;
+      tier: string;
+      action: string;
+    };
 
     assert.equal(response.status, 200);
     assert.equal(body.ok, true);
@@ -566,16 +760,19 @@ test('POST /api/member-tiers returns 400 for invalid tier', async () => {
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        discord_id: 'user-789',
-        tier: 'super-premium-tier',
-        action: 'activate',
-        source: 'api',
-      }),
-    });
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/member-tiers`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          discord_id: 'user-789',
+          tier: 'super-premium-tier',
+          action: 'activate',
+          source: 'api',
+        }),
+      },
+    );
     const body = (await response.json()) as { error: string };
 
     assert.equal(response.status, 400);
@@ -591,16 +788,19 @@ test('POST /api/member-tiers returns 400 for invalid action', async () => {
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        discord_id: 'user-789',
-        tier: 'vip',
-        action: 'grant',
-        source: 'api',
-      }),
-    });
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/member-tiers`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          discord_id: 'user-789',
+          tier: 'vip',
+          action: 'grant',
+          source: 'api',
+        }),
+      },
+    );
     const body = (await response.json()) as { error: string };
 
     assert.equal(response.status, 400);
@@ -616,15 +816,18 @@ test('POST /api/member-tiers returns 400 when discord_id is missing', async () =
   const address = server.address() as AddressInfo;
 
   try {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/member-tiers`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({
-        tier: 'vip',
-        action: 'activate',
-        source: 'api',
-      }),
-    });
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/member-tiers`,
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          tier: 'vip',
+          action: 'activate',
+          source: 'api',
+        }),
+      },
+    );
     const body = (await response.json()) as { error: string };
 
     assert.equal(response.status, 400);

@@ -20,7 +20,13 @@ import {
   type MetricsCollector,
 } from '@unit-talk/observability';
 import { setCorsHeaders, writeJson } from './http-utils.js';
-import { authenticateRequest, authorizeRoute, loadAuthConfig, type AuthConfig, type AuthContext } from './auth.js';
+import {
+  authenticateRequest,
+  authorizeRoute,
+  loadAuthConfig,
+  type AuthConfig,
+  type AuthContext,
+} from './auth.js';
 import {
   handleHealth,
   handleRuntimeVersion,
@@ -61,8 +67,15 @@ import {
   handleQaPickStatus,
 } from './routes/index.js';
 import { handleTracePickRoute } from './routes/picks.js';
-import { handleModelHealthAlerts, handleModelHealthDecision } from './routes/model-health.js';
-import { readRuntimeVersionInfo, type RuntimeVersionInfo, toRuntimeVersionLogFields } from './runtime-version.js';
+import {
+  handleModelHealthAlerts,
+  handleModelHealthDecision,
+} from './routes/model-health.js';
+import {
+  readRuntimeVersionInfo,
+  type RuntimeVersionInfo,
+  toRuntimeVersionLogFields,
+} from './runtime-version.js';
 
 export interface ApiServerOptions {
   repositories?: RepositoryBundle;
@@ -136,12 +149,15 @@ export function createApiRuntimeDependencies(
 ): ApiRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
   const runtimeMode = readApiRuntimeMode(environment);
-  const authConfig = loadAuthConfig(process.env as Record<string, string | undefined>);
+  const authConfig = loadAuthConfig(createAuthConfigEnv(environment));
   const metricsCollector = createMetricsCollector();
   const versionInfo = readRuntimeVersionInfo(environment);
   const lokiUrl = process.env.LOKI_URL?.trim();
   const writer = lokiUrl
-    ? createDualLogWriter(createConsoleLogWriter(), createLokiLogWriter({ url: lokiUrl }))
+    ? createDualLogWriter(
+        createConsoleLogWriter(),
+        createLokiLogWriter({ url: lokiUrl }),
+      )
     : undefined;
   const logger =
     options.logger ??
@@ -150,7 +166,8 @@ export function createApiRuntimeDependencies(
       fields: { runtimeMode, ...toRuntimeVersionLogFields(versionInfo) },
       ...(writer ? { writer } : {}),
     });
-  const errorTracker = options.errorTracker ?? createErrorTracker({ service: 'api', logger });
+  const errorTracker =
+    options.errorTracker ?? createErrorTracker({ service: 'api', logger });
 
   if (options.repositories) {
     return {
@@ -237,14 +254,31 @@ export function createApiServer(options: ApiServerOptions = {}) {
 
     response.setHeader('X-Correlation-Id', correlationId);
 
-    runtime.metricsCollector.increment('api_requests_total', { method, path: url.pathname });
+    runtime.metricsCollector.increment('api_requests_total', {
+      method,
+      path: url.pathname,
+    });
 
     try {
-      await routeRequest(request, response, runtime, requestLogger);
+      await routeRequest(
+        request,
+        response,
+        runtime,
+        requestLogger,
+        correlationId,
+      );
       const durationMs = Math.max(runtime.now() - startedAt, 0);
-      runtime.metricsCollector.histogram('api_request_duration_ms', durationMs, { method, path: url.pathname });
+      runtime.metricsCollector.histogram(
+        'api_request_duration_ms',
+        durationMs,
+        { method, path: url.pathname },
+      );
       if (response.statusCode >= 400) {
-        runtime.metricsCollector.increment('api_errors_total', { method, path: url.pathname, status: String(response.statusCode) });
+        runtime.metricsCollector.increment('api_errors_total', {
+          method,
+          path: url.pathname,
+          status: String(response.statusCode),
+        });
       }
       requestLogger.info('request completed', {
         statusCode: response.statusCode,
@@ -253,8 +287,16 @@ export function createApiServer(options: ApiServerOptions = {}) {
     } catch (error) {
       const failure = toApiFailure(error);
       const durationMs = Math.max(runtime.now() - startedAt, 0);
-      runtime.metricsCollector.histogram('api_request_duration_ms', durationMs, { method, path: url.pathname });
-      runtime.metricsCollector.increment('api_errors_total', { method, path: url.pathname, status: String(failure.status) });
+      runtime.metricsCollector.histogram(
+        'api_request_duration_ms',
+        durationMs,
+        { method, path: url.pathname },
+      );
+      runtime.metricsCollector.increment('api_errors_total', {
+        method,
+        path: url.pathname,
+        status: String(failure.status),
+      });
       if (failure.status >= 500) {
         await runtime.errorTracker.captureException({
           operation: `${method} ${url.pathname}`,
@@ -285,6 +327,7 @@ export async function routeRequest(
   response: ServerResponse,
   runtime: ApiRuntimeDependencies,
   requestLogger: Logger = runtime.logger,
+  requestId = getOrCreateCorrelationId(request.headers),
 ) {
   const method = request.method ?? 'GET';
   const url = new URL(request.url ?? '/', 'http://127.0.0.1');
@@ -302,7 +345,10 @@ export async function routeRequest(
   }
 
   if (method === 'GET' && url.pathname === '/metrics') {
-    runtime.metricsCollector.gauge('uptime_seconds', Math.floor(process.uptime()));
+    runtime.metricsCollector.gauge(
+      'uptime_seconds',
+      Math.floor(process.uptime()),
+    );
     return writeJson(response, 200, runtime.metricsCollector.snapshot());
   }
 
@@ -322,7 +368,10 @@ export async function routeRequest(
     return handleReferenceDataSearchTeams(request, response, runtime);
   }
 
-  if (method === 'GET' && url.pathname === '/api/reference-data/search/players') {
+  if (
+    method === 'GET' &&
+    url.pathname === '/api/reference-data/search/players'
+  ) {
     return handleReferenceDataSearchPlayers(request, response, runtime);
   }
 
@@ -370,7 +419,12 @@ export async function routeRequest(
       : null;
 
   if (traceMatch) {
-    return handleTracePickRoute(request, response, runtime, traceMatch[1] ?? '');
+    return handleTracePickRoute(
+      request,
+      response,
+      runtime,
+      traceMatch[1] ?? '',
+    );
   }
 
   const routingPreviewMatch =
@@ -379,7 +433,12 @@ export async function routeRequest(
       : null;
 
   if (routingPreviewMatch) {
-    return handleRoutingPreviewRoute(request, response, runtime, routingPreviewMatch[1] ?? '');
+    return handleRoutingPreviewRoute(
+      request,
+      response,
+      runtime,
+      routingPreviewMatch[1] ?? '',
+    );
   }
 
   const promotionPreviewMatch =
@@ -388,7 +447,12 @@ export async function routeRequest(
       : null;
 
   if (promotionPreviewMatch) {
-    return handlePromotionPreviewRoute(request, response, runtime, promotionPreviewMatch[1] ?? '');
+    return handlePromotionPreviewRoute(
+      request,
+      response,
+      runtime,
+      promotionPreviewMatch[1] ?? '',
+    );
   }
 
   if (method === 'GET' && url.pathname === '/api/settlements/recent') {
@@ -432,26 +496,40 @@ export async function routeRequest(
       : null;
 
   if (qaPickStatusMatch) {
-    return handleQaPickStatus(request, response, runtime, qaPickStatusMatch[1] ?? '');
-  }
-
-  if (method === 'POST' && url.pathname === '/api/qa/seed-pick') {
-    return handleQaSeedPick(request, response, runtime);
+    return handleQaPickStatus(
+      request,
+      response,
+      runtime,
+      qaPickStatusMatch[1] ?? '',
+    );
   }
 
   // --- Auth gate: all POST routes require authentication ---
   if (method === 'POST') {
     const auth = await authenticateRequest(request, runtime.authConfig);
     if (!auth) {
+      requestLogger.warn('api auth denied', {
+        authOutcome: 'missing_or_invalid',
+        route: url.pathname,
+        requestId,
+      });
       return writeJson(response, 401, {
         ok: false,
         error: {
           code: 'UNAUTHORIZED',
-          message: 'Missing or invalid Authorization header. Use: Authorization: Bearer <api-key>',
+          message:
+            'Missing or invalid Authorization header. Use: Authorization: Bearer <api-key>',
         },
       });
     }
     if (!authorizeRoute(auth, url.pathname)) {
+      requestLogger.warn('api auth forbidden', {
+        authOutcome: 'role_denied',
+        actor: auth.identity,
+        role: auth.role,
+        route: url.pathname,
+        requestId,
+      });
       return writeJson(response, 403, {
         ok: false,
         error: {
@@ -460,12 +538,25 @@ export async function routeRequest(
         },
       });
     }
+    if (runtime.authConfig.enabled) {
+      requestLogger.info('api privileged action authorized', {
+        actor: auth.identity,
+        role: auth.role,
+        route: url.pathname,
+        requestId,
+      });
+    }
     // Attach auth context to request for downstream use
     (request as IncomingMessage & { auth?: AuthContext }).auth = auth;
   }
 
+  if (method === 'POST' && url.pathname === '/api/qa/seed-pick') {
+    return handleQaSeedPick(request, response, runtime);
+  }
+
   if (method === 'POST' && url.pathname === '/api/submissions') {
-    const auth = (request as IncomingMessage & { auth?: AuthContext }).auth ?? null;
+    const auth =
+      (request as IncomingMessage & { auth?: AuthContext }).auth ?? null;
     return handleSubmissions(request, response, runtime, requestLogger, auth);
   }
 
@@ -475,7 +566,12 @@ export async function routeRequest(
       : null;
 
   if (settleMatch) {
-    return handleSettlePickRoute(request, response, runtime, settleMatch[1] ?? '');
+    return handleSettlePickRoute(
+      request,
+      response,
+      runtime,
+      settleMatch[1] ?? '',
+    );
   }
 
   const reviewMatch =
@@ -484,7 +580,12 @@ export async function routeRequest(
       : null;
 
   if (reviewMatch) {
-    return handleReviewPickRoute(request, response, runtime, reviewMatch[1] ?? '');
+    return handleReviewPickRoute(
+      request,
+      response,
+      runtime,
+      reviewMatch[1] ?? '',
+    );
   }
 
   const retryDeliveryMatch =
@@ -493,7 +594,12 @@ export async function routeRequest(
       : null;
 
   if (retryDeliveryMatch) {
-    return handleRetryDeliveryRoute(request, response, runtime, retryDeliveryMatch[1] ?? '');
+    return handleRetryDeliveryRoute(
+      request,
+      response,
+      runtime,
+      retryDeliveryMatch[1] ?? '',
+    );
   }
 
   const rerunPromotionMatch =
@@ -502,7 +608,12 @@ export async function routeRequest(
       : null;
 
   if (rerunPromotionMatch) {
-    return handleRerunPromotionRoute(request, response, runtime, rerunPromotionMatch[1] ?? '');
+    return handleRerunPromotionRoute(
+      request,
+      response,
+      runtime,
+      rerunPromotionMatch[1] ?? '',
+    );
   }
 
   const overridePromotionMatch =
@@ -511,7 +622,12 @@ export async function routeRequest(
       : null;
 
   if (overridePromotionMatch) {
-    return handleOverridePromotionRoute(request, response, runtime, overridePromotionMatch[1] ?? '');
+    return handleOverridePromotionRoute(
+      request,
+      response,
+      runtime,
+      overridePromotionMatch[1] ?? '',
+    );
   }
 
   const requeueMatch =
@@ -564,8 +680,14 @@ export async function readJsonBody(
   request: IncomingMessage,
   bodyLimitBytes = DEFAULT_BODY_LIMIT_BYTES,
 ) {
-  const declaredContentLength = Number.parseInt(request.headers['content-length'] ?? '', 10);
-  if (Number.isFinite(declaredContentLength) && declaredContentLength > bodyLimitBytes) {
+  const declaredContentLength = Number.parseInt(
+    request.headers['content-length'] ?? '',
+    10,
+  );
+  if (
+    Number.isFinite(declaredContentLength) &&
+    declaredContentLength > bodyLimitBytes
+  ) {
     throw new ApiRequestError(
       413,
       'REQUEST_BODY_TOO_LARGE',
@@ -599,13 +721,17 @@ export async function readJsonBody(
   try {
     return JSON.parse(rawBody) as Record<string, unknown>;
   } catch {
-    throw new ApiRequestError(400, 'INVALID_JSON_BODY', 'Request body must be valid JSON.');
+    throw new ApiRequestError(
+      400,
+      'INVALID_JSON_BODY',
+      'Request body must be valid JSON.',
+    );
   }
 }
 
-
 function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
-  const configured = environment.UNIT_TALK_API_RUNTIME_MODE?.trim().toLowerCase();
+  const configured =
+    environment.UNIT_TALK_API_RUNTIME_MODE?.trim().toLowerCase();
 
   if (configured === 'fail_closed') {
     return 'fail_closed';
@@ -615,14 +741,33 @@ function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
     return 'fail_open';
   }
 
-  return environment.UNIT_TALK_APP_ENV === 'local' ? 'fail_open' : 'fail_closed';
+  return environment.UNIT_TALK_APP_ENV === 'local'
+    ? 'fail_open'
+    : 'fail_closed';
+}
+
+function createAuthConfigEnv(
+  environment: AppEnv,
+): Record<string, string | undefined> {
+  return {
+    ...process.env,
+    NODE_ENV: environment.NODE_ENV,
+    UNIT_TALK_APP_ENV: environment.UNIT_TALK_APP_ENV,
+    UNIT_TALK_API_RUNTIME_MODE: environment.UNIT_TALK_API_RUNTIME_MODE,
+    UNIT_TALK_API_KEY_SUBMITTER: environment.UNIT_TALK_API_KEY_SUBMITTER,
+  };
 }
 
 function readBodyLimitBytes(environment: AppEnv) {
   // UNIT_TALK_API_MAX_BODY_BYTES is the canonical name; UNIT_TALK_API_BODY_LIMIT_BYTES is the legacy alias.
-  const raw = environment.UNIT_TALK_API_MAX_BODY_BYTES ?? environment.UNIT_TALK_API_BODY_LIMIT_BYTES ?? '';
+  const raw =
+    environment.UNIT_TALK_API_MAX_BODY_BYTES ??
+    environment.UNIT_TALK_API_BODY_LIMIT_BYTES ??
+    '';
   const parsed = Number.parseInt(raw, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_BODY_LIMIT_BYTES;
+  return Number.isFinite(parsed) && parsed > 0
+    ? parsed
+    : DEFAULT_BODY_LIMIT_BYTES;
 }
 
 function readSubmissionRateLimit(environment: AppEnv): ApiSubmissionRateLimit {
@@ -641,19 +786,20 @@ function readSubmissionRateLimit(environment: AppEnv): ApiSubmissionRateLimit {
     10,
   );
 
-  const maxRequests = Number.isFinite(maxRequestsOverride) && maxRequestsOverride > 0
-    ? maxRequestsOverride
-    : Number.isFinite(perMinute) && perMinute > 0
-      ? perMinute
-      : DEFAULT_RATE_LIMIT_MAX_REQUESTS;
+  const maxRequests =
+    Number.isFinite(maxRequestsOverride) && maxRequestsOverride > 0
+      ? maxRequestsOverride
+      : Number.isFinite(perMinute) && perMinute > 0
+        ? perMinute
+        : DEFAULT_RATE_LIMIT_MAX_REQUESTS;
 
-  const windowMs = Number.isFinite(windowMsOverride) && windowMsOverride > 0
-    ? windowMsOverride
-    : DEFAULT_RATE_LIMIT_WINDOW_MS;
+  const windowMs =
+    Number.isFinite(windowMsOverride) && windowMsOverride > 0
+      ? windowMsOverride
+      : DEFAULT_RATE_LIMIT_WINDOW_MS;
 
   return { maxRequests, windowMs };
 }
-
 
 function toApiFailure(error: unknown) {
   if (error instanceof ApiRequestError) {
@@ -695,7 +841,11 @@ class ApiRequestError extends Error {
 class InMemoryApiRateLimitStore implements ApiRateLimitStore {
   #buckets = new Map<string, { count: number; resetAt: number }>();
 
-  consume(key: string, limit: ApiSubmissionRateLimit, now: number): ApiRateLimitResult {
+  consume(
+    key: string,
+    limit: ApiSubmissionRateLimit,
+    now: number,
+  ): ApiRateLimitResult {
     const existing = this.#buckets.get(key);
     const bucket =
       existing && existing.resetAt > now

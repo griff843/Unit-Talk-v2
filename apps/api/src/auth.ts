@@ -19,7 +19,13 @@
 import type { IncomingMessage } from 'node:http';
 import { jwtVerify, SignJWT } from 'jose';
 
-export type AuthRole = 'operator' | 'submitter' | 'settler' | 'poster' | 'worker' | 'capper';
+export type AuthRole =
+  | 'operator'
+  | 'submitter'
+  | 'settler'
+  | 'poster'
+  | 'worker'
+  | 'capper';
 
 export interface AuthContext {
   /** Authenticated role */
@@ -35,6 +41,8 @@ export interface AuthContext {
 export interface AuthConfig {
   /** True when at least one API key is configured */
   enabled: boolean;
+  /** True when missing API auth must deny/fail startup rather than bypass */
+  failClosed?: boolean | undefined;
   /** Map of raw API key → auth context */
   keys: Map<string, AuthContext>;
   /** HS256 secret for verifying capper JWTs (UNIT_TALK_JWT_SECRET) */
@@ -45,8 +53,14 @@ export interface AuthConfig {
  * Route authorization: which roles are allowed on each POST route pattern.
  * 'operator' is always allowed on every write endpoint.
  */
-const ROUTE_ROLES: ReadonlyArray<{ pattern: RegExp; roles: readonly AuthRole[] }> = [
-  { pattern: /^\/api\/submissions$/, roles: ['submitter', 'operator', 'capper'] },
+const ROUTE_ROLES: ReadonlyArray<{
+  pattern: RegExp;
+  roles: readonly AuthRole[];
+}> = [
+  {
+    pattern: /^\/api\/submissions$/,
+    roles: ['submitter', 'operator', 'capper'],
+  },
   { pattern: /^\/api\/picks\/[^/]+\/settle$/, roles: ['settler', 'operator'] },
   { pattern: /^\/api\/picks\/[^/]+\/review$/, roles: ['operator'] },
   { pattern: /^\/api\/picks\/[^/]+\/retry-delivery$/, roles: ['operator'] },
@@ -59,10 +73,15 @@ const ROUTE_ROLES: ReadonlyArray<{ pattern: RegExp; roles: readonly AuthRole[] }
   { pattern: /^\/api\/board\/write-picks$/, roles: ['operator'] },
   { pattern: /^\/api\/board\/run-tuning$/, roles: ['operator'] },
   { pattern: /^\/api\/candidates\/build$/, roles: ['operator'] },
+  { pattern: /^\/api\/model-health\/decision$/, roles: ['operator'] },
+  { pattern: /^\/api\/qa\/seed-pick$/, roles: ['operator'] },
 ];
 
 /** The context returned when auth is disabled (fail_open + no keys). */
-const BYPASS_CONTEXT: AuthContext = { role: 'operator', identity: 'anonymous:auth-bypass' };
+const BYPASS_CONTEXT: AuthContext = {
+  role: 'operator',
+  identity: 'anonymous:auth-bypass',
+};
 
 /** True if a string looks like a JWT (three base64url segments separated by dots). */
 function looksLikeJwt(token: string): boolean {
@@ -81,13 +100,19 @@ export async function validateCapperToken(
   if (!secret) return null;
   try {
     const secretBytes = new TextEncoder().encode(secret);
-    const { payload } = await jwtVerify(token, secretBytes, { algorithms: ['HS256'] });
+    const { payload } = await jwtVerify(token, secretBytes, {
+      algorithms: ['HS256'],
+    });
     if (payload['role'] !== 'capper') return null;
-    const capperId = typeof payload['capperId'] === 'string' && payload['capperId'].trim()
-      ? payload['capperId'].trim()
-      : null;
+    const capperId =
+      typeof payload['capperId'] === 'string' && payload['capperId'].trim()
+        ? payload['capperId'].trim()
+        : null;
     if (!capperId) return null;
-    const displayName = typeof payload['displayName'] === 'string' ? payload['displayName'].trim() : capperId;
+    const displayName =
+      typeof payload['displayName'] === 'string'
+        ? payload['displayName'].trim()
+        : capperId;
     const sub = typeof payload.sub === 'string' ? payload.sub : capperId;
     return {
       role: 'capper',
@@ -104,12 +129,19 @@ export async function validateCapperToken(
  * Sign a capper JWT for issuance (utility — call from admin scripts or token-issuance endpoint).
  */
 export async function signCapperToken(
-  claims: { sub: string; capperId: string; displayName?: string; email?: string },
+  claims: {
+    sub: string;
+    capperId: string;
+    displayName?: string;
+    email?: string;
+  },
   secret: string,
   expiresIn?: string,
 ): Promise<string> {
   const secretBytes = new TextEncoder().encode(secret);
-  let jwt = new SignJWT({ ...claims, role: 'capper' }).setProtectedHeader({ alg: 'HS256' }).setIssuedAt();
+  let jwt = new SignJWT({ ...claims, role: 'capper' })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setIssuedAt();
   if (expiresIn) jwt = jwt.setExpirationTime(expiresIn);
   return jwt.sign(secretBytes);
 }
@@ -120,29 +152,48 @@ export async function signCapperToken(
  * Env var format: UNIT_TALK_API_KEY_{ROLE}=<secret>
  * Example: UNIT_TALK_API_KEY_OPERATOR=sk-op-abc123
  */
-export function loadAuthConfig(env: Record<string, string | undefined>): AuthConfig {
+export function loadAuthConfig(
+  env: Record<string, string | undefined>,
+): AuthConfig {
   const keys = new Map<string, AuthContext>();
 
-  const roleMap: ReadonlyArray<{ envSuffix: string; role: AuthRole }> = [
-    { envSuffix: 'OPERATOR', role: 'operator' },
-    { envSuffix: 'SUBMITTER', role: 'submitter' },
-    { envSuffix: 'SETTLER', role: 'settler' },
-    { envSuffix: 'POSTER', role: 'poster' },
-    { envSuffix: 'WORKER', role: 'worker' },
+  const keySources: ReadonlyArray<{
+    envName: string;
+    role: AuthRole;
+    identityPrefix?: string;
+  }> = [
+    { envName: 'UNIT_TALK_API_KEY_OPERATOR', role: 'operator' },
+    { envName: 'UNIT_TALK_API_KEY_SUBMITTER', role: 'submitter' },
+    { envName: 'UNIT_TALK_API_KEY_SETTLER', role: 'settler' },
+    { envName: 'UNIT_TALK_API_KEY_POSTER', role: 'poster' },
+    { envName: 'UNIT_TALK_API_KEY_WORKER', role: 'worker' },
+    {
+      envName: 'UNIT_TALK_CC_API_KEY',
+      role: 'operator',
+      identityPrefix: 'operator:command-center',
+    },
   ];
 
-  for (const { envSuffix, role } of roleMap) {
-    const key = env[`UNIT_TALK_API_KEY_${envSuffix}`]?.trim();
+  for (const { envName, role, identityPrefix } of keySources) {
+    const key = env[envName]?.trim();
     if (key && key.length > 0) {
       keys.set(key, {
         role,
-        identity: `${role}:${key.slice(0, 8)}`,
+        identity: `${identityPrefix ?? role}:${key.slice(0, 8)}`,
       });
     }
   }
 
   const jwtSecret = env['UNIT_TALK_JWT_SECRET']?.trim() || undefined;
-  return { enabled: keys.size > 0, keys, jwtSecret };
+  const failClosed = isApiAuthFailClosed(env);
+
+  if (failClosed && keys.size === 0) {
+    throw new Error(
+      'API auth is fail_closed but no API keys are configured. Configure at least one UNIT_TALK_API_KEY_* value or UNIT_TALK_CC_API_KEY.',
+    );
+  }
+
+  return { enabled: keys.size > 0, failClosed, keys, jwtSecret };
 }
 
 /**
@@ -170,6 +221,9 @@ export async function authenticateRequest(
   authConfig: AuthConfig,
 ): Promise<AuthContext | null> {
   if (!authConfig.enabled) {
+    if (authConfig.failClosed) {
+      return null;
+    }
     return BYPASS_CONTEXT;
   }
 
@@ -199,4 +253,24 @@ export function authorizeRoute(auth: AuthContext, pathname: string): boolean {
   // No matching route pattern found — this shouldn't happen for POST routes
   // that reach this point, but deny by default.
   return false;
+}
+
+export function routeAllowsRole(role: AuthRole, pathname: string): boolean {
+  return authorizeRoute({ role, identity: `${role}:route-check` }, pathname);
+}
+
+function isApiAuthFailClosed(env: Record<string, string | undefined>): boolean {
+  const explicitMode = env['UNIT_TALK_API_RUNTIME_MODE']?.trim().toLowerCase();
+  if (explicitMode === 'fail_closed') {
+    return true;
+  }
+  if (explicitMode === 'fail_open') {
+    return false;
+  }
+
+  const appEnv = env['UNIT_TALK_APP_ENV']?.trim().toLowerCase();
+  const nodeEnv = env['NODE_ENV']?.trim().toLowerCase();
+  return (
+    appEnv === 'production' || appEnv === 'staging' || nodeEnv === 'production'
+  );
 }
