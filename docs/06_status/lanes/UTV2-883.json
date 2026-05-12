@@ -3,10 +3,10 @@
   "issue_id": "UTV2-883",
   "lane_type": "claude",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-883-dual-participant-consolidation",
   "base_branch": "main",
-  "commit_sha": "b240ca1b",
+  "commit_sha": "55a58c9d86a128a0503dbdaa33c76f9bfa8c856f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/638",
   "files_changed": [
     ".ops/sync.yml",
@@ -17,14 +17,18 @@
     "supabase/migrations/202605120001_utv2_883_link_market_universe_participant_ids.sql"
   ],
   "file_scope_lock": [
-    "supabase/migrations/**",
-    "apps/api/src/**"
+    "supabase/migrations/202605120001_utv2_883_link_market_universe_participant_ids.sql",
+    "apps/api/src/market-universe-materializer.ts",
+    "apps/api/src/index.ts",
+    "apps/api/src/database-smoke.test.ts"
   ],
-  "expected_proof_paths": [],
-  "status": "in_review",
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-883-proof.md"
+  ],
+  "status": "done",
   "started_at": "2026-05-12T05:25:45.620Z",
-  "heartbeat_at": "2026-05-12T05:25:45.620Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-12T06:30:00.000Z",
+  "closed_at": "2026-05-12T06:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
