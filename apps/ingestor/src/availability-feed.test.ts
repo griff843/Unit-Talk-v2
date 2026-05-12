@@ -51,6 +51,10 @@ class FakeRunRepository {
       .filter((run) => run.run_type === runType)
       .slice(0, limit);
   }
+
+  async reapStaleRuns(_input: { runType: string; staleAfterMs: number }): Promise<number> {
+    return 0;
+  }
 }
 
 test('applyAvailabilityFeedRecords writes provider availability into participant metadata', async () => {

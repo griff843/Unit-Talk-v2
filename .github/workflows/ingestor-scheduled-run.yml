@@ -6,7 +6,7 @@ name: Ingestor Scheduled Run
 
 on:
   schedule:
-    - cron: '*/25 * * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 permissions:
@@ -45,8 +45,11 @@ jobs:
       SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
       UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
       UNIT_TALK_INGESTOR_AUTORUN: 'true'
-      UNIT_TALK_INGESTOR_MAX_CYCLES: '1'
+      UNIT_TALK_INGESTOR_MAX_CYCLES: '8'
       UNIT_TALK_INGESTOR_POLL_MS: '1000'
+      UNIT_TALK_INGESTOR_SCHEDULING_ENABLED: 'true'
+      UNIT_TALK_INGESTOR_PEAK_POLL_MS: '30000'
+      UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS: '55000'
       UNIT_TALK_APP_ENV: production
     steps:
       - name: Checkout

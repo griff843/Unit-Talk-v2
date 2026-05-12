@@ -102,6 +102,7 @@ import type {
   SystemRunCompleteInput,
   SystemRunRepository,
   SystemRunStartInput,
+  ReapStaleRunsInput,
   TeamSearchResult,
   PickReviewCreateInput,
   PickReviewRepository,
@@ -2024,6 +2025,20 @@ export class InMemorySystemRunRepository implements SystemRunRepository {
       .filter((row) => row.run_type === runType)
       .sort((a, b) => b.started_at.localeCompare(a.started_at))
       .slice(0, limit);
+  }
+
+  async reapStaleRuns(input: ReapStaleRunsInput): Promise<number> {
+    const cutoff = new Date(Date.now() - input.staleAfterMs).toISOString();
+    const now = new Date().toISOString();
+    let count = 0;
+    for (const run of this.runs.values()) {
+      if (run.run_type === input.runType && run.status === 'running' && run.started_at < cutoff) {
+        run.status = 'failed';
+        run.finished_at = now;
+        count++;
+      }
+    }
+    return count;
   }
 }
 
@@ -4472,6 +4487,23 @@ export class DatabaseSystemRunRepository implements SystemRunRepository {
     }
 
     return data ?? [];
+  }
+
+  async reapStaleRuns(input: ReapStaleRunsInput): Promise<number> {
+    const cutoff = new Date(Date.now() - input.staleAfterMs).toISOString();
+    const { data, error } = await this.client
+      .from('system_runs')
+      .update({ status: 'failed', finished_at: new Date().toISOString() })
+      .eq('run_type', input.runType)
+      .eq('status', 'running')
+      .lt('started_at', cutoff)
+      .select('id');
+
+    if (error) {
+      throw new Error(`Failed to reap stale system runs: ${error.message}`);
+    }
+
+    return data?.length ?? 0;
   }
 }
 

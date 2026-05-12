@@ -529,10 +529,16 @@ export interface SystemRunCompleteInput {
   details?: Record<string, unknown> | undefined;
 }
 
+export interface ReapStaleRunsInput {
+  runType: string;
+  staleAfterMs: number;
+}
+
 export interface SystemRunRepository {
   startRun(input: SystemRunStartInput): Promise<SystemRunRecord>;
   completeRun(input: SystemRunCompleteInput): Promise<SystemRunRecord>;
   listByType(runType: string, limit?: number): Promise<SystemRunRecord[]>;
+  reapStaleRuns(input: ReapStaleRunsInput): Promise<number>;
 }
 
 export type ProviderOfferUpsertInput = ProviderOfferInsert;
