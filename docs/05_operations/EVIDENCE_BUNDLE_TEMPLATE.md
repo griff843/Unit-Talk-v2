@@ -321,6 +321,40 @@ The validator is a doc-shape checker, not a semantic proof engine. It cannot tel
 
 ---
 
+## Discord delivery proof (delivery surface changes)
+
+Any T1 or T2 issue that touches a delivery surface (Discord bot, outbox adapter, distribution worker, or channel routing) must include a Discord delivery proof artifact in addition to the standard assertions.
+
+**Required artifact:** Run `pnpm smoke:discord` against the QA sandbox and include the output in the evidence bundle under an additional `## Discord Delivery Proof` section.
+
+Minimum content:
+- Pick ID seeded
+- Outbox ID
+- Discord message ID confirmed in `#qa-pick-delivery`
+- End-to-end latency
+- VIP/free visibility matrix result
+
+```markdown
+## Discord Delivery Proof
+
+Command: `pnpm smoke:discord`
+Result: PASS / FAIL
+Pick ID: <uuid>
+Outbox ID: <uuid>
+Discord message ID: <snowflake>
+Latency: <ms>
+Visibility matrix: VIP sees #vip-picks ✓, Free blocked from #vip-picks ✓, Free sees #free-picks ✓
+```
+
+**Delivery surface files (trigger this requirement):**
+- `apps/worker/src/delivery-adapters.ts`
+- `apps/worker/src/distribution-worker.ts`
+- `apps/discord-bot/src/**`
+- `apps/api/src/alert-notification-service.ts`
+- `apps/api/src/recap-service.ts`
+
+---
+
 ## Related artifacts
 
 - Generator: `scripts/evidence-bundle/new-bundle.mjs` (`pnpm evidence:new UTV2-XXX`)

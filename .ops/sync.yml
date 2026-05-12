@@ -3,7 +3,9 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues: []
+  issues:
+    - UTV2-886
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-886-proof.md
