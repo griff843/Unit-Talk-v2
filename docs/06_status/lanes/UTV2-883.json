@@ -3,7 +3,7 @@
   "issue_id": "UTV2-883",
   "lane_type": "claude",
   "tier": "T2",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-883-dual-participant-consolidation",
   "base_branch": "main",
   "commit_sha": "b240ca1b",
@@ -17,8 +17,10 @@
     "supabase/migrations/202605120001_utv2_883_link_market_universe_participant_ids.sql"
   ],
   "file_scope_lock": [
-    "supabase/migrations/**",
-    "apps/api/src/**"
+    "supabase/migrations/202605120001_utv2_883_link_market_universe_participant_ids.sql",
+    "apps/api/src/market-universe-materializer.ts",
+    "apps/api/src/index.ts",
+    "apps/api/src/database-smoke.test.ts"
   ],
   "expected_proof_paths": [],
   "status": "in_review",
