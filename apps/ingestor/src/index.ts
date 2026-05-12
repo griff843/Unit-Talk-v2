@@ -174,6 +174,16 @@ async function postOpsAlert(webhookUrl: string, message: string): Promise<void> 
 
 if (runtime.autorun) {
   resolveActiveSgoApiKey(runtime.sgoApiKeys)
+    .then(async (sgoSelection) => {
+      const reaped = await runtime.repositories.runs.reapStaleRuns({
+        runType: 'ingestor.cycle',
+        staleAfterMs: 15 * 60 * 1000,
+      });
+      if (reaped > 0) {
+        logger.warn('reaped stale ingestor runs', { count: reaped });
+      }
+      return sgoSelection;
+    })
     .then(async (sgoSelection) => ({
       sgoSelection,
       cycles: await runIngestorCycles({
