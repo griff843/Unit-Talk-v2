@@ -128,7 +128,9 @@ jobs:
               errors+=("$VERIFY does not contain 'result: pass'")
             fi
             # 4. no FAIL/SKIP items in the checklist
-            if grep -Eq '^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\b' "$VERIFY"; then
+            #    Anchor at end-of-line so narrative mentions like
+            #    "synthetic PR with `: FAIL` in foo.md" do not match.
+            if grep -Eq '^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\s*$' "$VERIFY"; then
               errors+=("$VERIFY contains a FAIL/SKIP item — P0 requires all checks pass")
             fi
           fi

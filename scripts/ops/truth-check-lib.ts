@@ -961,7 +961,7 @@ function findLatestPmVerdict(
   return matches[matches.length - 1];
 }
 
-const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\b/m;
+const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\s*$/m;
 const RUNTIME_VERIFY_RESULT_PATTERN = /^result:\s*(pass|fail)\s*$/im;
 
 async function fetchRequiredChecks(

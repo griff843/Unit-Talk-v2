@@ -15,7 +15,7 @@ test('P0_PROJECT_NAME matches the Linear project name verbatim', () => {
 // they verify the regex / grep predicates the workflow uses, so a regression
 // in the predicate is caught locally before CI sees it.
 
-const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\b/m;
+const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\s*$/m;
 const RUNTIME_VERIFY_RESULT_PATTERN = /^result:\s*(pass|fail)\s*$/im;
 const AUTOMERGE_LABEL_PATTERN = /^(automerge|auto-merge|auto_merge)$/i;
 const PM_VERDICT_HEAD_PATTERN = /^PM_VERDICT:\s+(APPROVED|CHANGES_REQUIRED)$/i;
@@ -41,6 +41,15 @@ test('runtime-verification FAIL detector does not match all-PASS body', () => {
   const body = [
     '- [x] type-check: PASS',
     '- [x] db connectivity: PASS',
+    'result: pass',
+  ].join('\n');
+  assert.ok(!RUNTIME_VERIFY_FAIL_PATTERN.test(body));
+});
+
+test('runtime-verification FAIL detector does NOT match narrative mention of `: FAIL`', () => {
+  const body = [
+    '- [x] type-check: PASS',
+    '- [ ] synthetic PR with `: FAIL` in runtime-verification.md is rejected — deferred',
     'result: pass',
   ].join('\n');
   assert.ok(!RUNTIME_VERIFY_FAIL_PATTERN.test(body));
