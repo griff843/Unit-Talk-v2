@@ -102,6 +102,7 @@ server.listen(port, () => {
     providerOffers: runtime.repositories.providerOffers,
     marketUniverse: runtime.repositories.marketUniverse,
     events: runtime.repositories.events,
+    participants: runtime.repositories.participants,
   };
   runMarketUniverseMaterializer(materializerDeps, { logger: console }).catch(() => {});
   marketUniverseMaterializerTimer = setInterval(() => {

@@ -24,6 +24,7 @@ import type {
   EventRepository,
   IMarketUniverseRepository,
   MarketUniverseUpsertInput,
+  ParticipantRepository,
   ProviderOfferRecord,
   ProviderOfferRepository,
 } from '@unit-talk/db';
@@ -69,6 +70,7 @@ export class MarketUniverseMaterializer {
       providerOffers: ProviderOfferRepository;
       marketUniverse: IMarketUniverseRepository;
       events: EventRepository;
+      participants?: ParticipantRepository;
     },
   ) {}
 
@@ -174,6 +176,22 @@ export class MarketUniverseMaterializer {
       }
     } catch {
       // Participant alias load failure is non-fatal — materializer continues without resolution
+    }
+
+    // UTV2-883: fallback — participants created by entity-resolver have external_id matching
+    // provider_participant_id but may not have a provider_entity_aliases row yet. Fill the
+    // gap so market_universe.participant_id is set for all resolvable rows.
+    if (this.repos.participants) {
+      try {
+        const allPlayers = await this.repos.participants.listByType('player');
+        for (const row of allPlayers) {
+          if (row.external_id && !participantMap.has(row.external_id)) {
+            participantMap.set(row.external_id, row.id);
+          }
+        }
+      } catch {
+        // Non-fatal — fallback gap fill skipped if participants repo is unavailable
+      }
     }
 
     // Group offers by natural key to find opening, closing, and current (latest) per group
@@ -378,6 +396,7 @@ export async function runMarketUniverseMaterializer(
     providerOffers: ProviderOfferRepository;
     marketUniverse: IMarketUniverseRepository;
     events: EventRepository;
+    participants?: ParticipantRepository;
   },
   options: MaterializerOptions = {},
 ): Promise<MaterializerResult> {

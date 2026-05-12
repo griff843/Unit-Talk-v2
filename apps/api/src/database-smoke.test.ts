@@ -11,6 +11,17 @@ import { processSubmission } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { recordPickSettlement } from './settlement-service.js';
 
+function smokeSkip() {
+  try {
+    const env = loadEnvironment();
+    return (env.SUPABASE_URL && env.SUPABASE_ANON_KEY && env.SUPABASE_SERVICE_ROLE_KEY)
+      ? false
+      : 'SUPABASE_URL / SUPABASE_ANON_KEY / SUPABASE_SERVICE_ROLE_KEY not configured';
+  } catch {
+    return 'environment load failed';
+  }
+}
+
 function hasSupabaseSmokeEnvironment() {
   try {
     const env = loadEnvironment();
@@ -95,3 +106,32 @@ test(
     }
   },
 );
+
+test(
+  'UTV2-883: no duplicate participants for the same external_id and sport',
+  { skip: smokeSkip() },
+  async () => {
+    const environment = loadEnvironment();
+    const repositories = createDatabaseRepositoryBundle(
+      createServiceRoleDatabaseConnectionConfig(environment),
+    );
+    const allPlayers = await repositories.participants.listByType('player');
+    const seen = new Map<string, string>();
+    const duplicates: string[] = [];
+    for (const row of allPlayers) {
+      if (!row.external_id) continue;
+      const key = `${row.external_id}:${row.sport}:${row.participant_type}`;
+      if (seen.has(key)) {
+        duplicates.push(key);
+      } else {
+        seen.set(key, row.id);
+      }
+    }
+    assert.equal(
+      duplicates.length,
+      0,
+      `Duplicate participants found: ${duplicates.slice(0, 5).join(', ')} — UTV2-883 invariant violated`,
+    );
+  },
+);
+
