@@ -6,9 +6,15 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-886-discord-delivery-smoke-test",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "650c0101a651ae877b9becfae58786da8a7663a1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/639",
+  "files_changed": [
+    "package.json",
+    "docs/06_status/proof/UTV2-886-proof.md",
+    "docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md",
+    "docs/06_status/lanes/UTV2-886.json",
+    ".ops/sync.yml"
+  ],
   "file_scope_lock": [
     "package.json",
     "docs/06_status/proof/UTV2-886-proof.md",
@@ -17,10 +23,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-886-proof.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-12T06:43:00.000Z",
-  "heartbeat_at": "2026-05-12T06:43:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-12T07:00:00.000Z",
+  "closed_at": "2026-05-12T07:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
