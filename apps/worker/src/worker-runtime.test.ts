@@ -567,6 +567,23 @@ class FakeSystemRunRepository implements SystemRunRepository {
     const filtered = this.records.filter((r) => r.run_type === runType);
     return limit !== undefined ? filtered.slice(0, limit) : filtered;
   }
+
+  async reapStaleRuns(input: { runType: string; staleAfterMs: number }): Promise<number> {
+    const cutoff = Date.now() - input.staleAfterMs;
+    let reaped = 0;
+    for (const record of this.records) {
+      if (
+        record.run_type === input.runType &&
+        record.status === 'running' &&
+        new Date(record.started_at).getTime() < cutoff
+      ) {
+        record.status = 'failed';
+        record.finished_at = new Date().toISOString();
+        reaped += 1;
+      }
+    }
+    return reaped;
+  }
 }
 
 class FakeAuditLogRepository implements AuditLogRepository {
