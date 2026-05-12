@@ -25,4 +25,4 @@ pnpm linear:close -- <issue-id> --comment "<closeout>"
 
 ## Reference
 
-- [`.claude/commands/linear-sync.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/linear-sync.md)
+- [`.claude/commands/dispatch-board.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/dispatch-board.md) — autonomous board loop (supersedes the old linear-sync flow)

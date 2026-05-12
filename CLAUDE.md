@@ -146,11 +146,9 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | `/outbox-worker` | touching outbox polling, delivery adapter, retry, circuit breaker |
 | `/system-state-loader` | forced state reload after `/clear` or when hook data is suspected stale |
 | `/t1-proof` | assembling a T1 evidence bundle |
-| `/linear-sync` | updating Linear state |
 | `/db-verify` | live DB verification |
 | `/systematic-debugging` | structured debugging when a fix resists quick diagnosis |
 | `/verify-pick` | verify a specific pick end-to-end against live data |
-| `/pm-packet` | generate a PM decision packet for escalation or plan approval |
 
 All skills live in `.claude/commands/`. Add new skills there; do not expand this file.
 

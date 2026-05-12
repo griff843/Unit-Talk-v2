@@ -27,11 +27,20 @@ description: |
 
 ## Routing Rules (apply in order — first match wins)
 
-### Rule 1 — T1: always Claude
+### Rule 1 — T1: Claude by default; Codex permitted under guardrails
 
-Issue has label `tier:T1` → executor = **Claude**, escalate_to_griff = **true** (plan + merge).
+Issue has label `tier:T1` → executor = **Claude** by default, escalate_to_griff = **true** (plan + merge).
 
-T1 is Tier C under the Delegation Policy. Codex never runs T1 work.
+**Codex is permitted for T1** when ALL of the following apply (per executor routing memory + P0 merge policy):
+- Human review required before merge (no auto-merge — ever)
+- Claude critique pass on the returned diff
+- Domain invariant check passes (`/betting-domain`, `/pick-lifecycle`, or `/outbox-worker` as scope dictates)
+- Runtime verification (`pnpm test:db` + evidence bundle, SHA-tied)
+- Routed through `/dispatch` lane system (never raw `codex exec`)
+
+P0 Runtime Hardening work follows this same Codex-with-guardrails path by default.
+
+When choosing Claude vs Codex for a T1: prefer Claude for ambiguous scope, novel architecture, or work that requires synthesizing multiple files. Prefer Codex for bounded, mechanically-verifiable changes inside a single package even when tier is T1.
 
 ### Rule 2 — Sensitive path: Claude + mandatory Griff gate
 

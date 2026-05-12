@@ -34,4 +34,4 @@ pnpm github:checks -- <pr>
 
 - [`.claude/commands/t1-proof.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/t1-proof.md)
 - [`.claude/commands/verify-pick.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/verify-pick.md)
-- [`.claude/commands/sprint-close.md`](C:/Dev/Unit-Talk-v2-main/.claude/commands/sprint-close.md)
+- Closing a lane: `ops:lane:close <UTV2-###>` (wraps `ops:truth-check`); see `.claude/commands/lane-management.md`
