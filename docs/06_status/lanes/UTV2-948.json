@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-948",
+  "lane_type": "claude",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "griffadavi/utv2-948-p0-protocol-enforcement",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/p0-detect.ts",
+    "scripts/ops/p0-detect.test.ts",
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/shared.ts",
+    "scripts/ops/apply-branch-protection.sh",
+    ".github/workflows/p0-protocol.yml",
+    "docs/05_operations/P0_PROTOCOL_SPEC.md",
+    "docs/05_operations/schemas/lane_manifest_v1.schema.json",
+    "docs/06_status/lanes/UTV2-948.json",
+    "docs/06_status/proof/UTV2-948/claude-critique.md",
+    "docs/06_status/proof/UTV2-948/runtime-verification.md",
+    "docs/06_status/proof/UTV2-948/proof.md",
+    ".claude/commands/dispatch-board.md",
+    "package.json",
+    ".ops/sync.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-948/proof.md",
+    "docs/06_status/proof/UTV2-948/claude-critique.md",
+    "docs/06_status/proof/UTV2-948/runtime-verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-12T14:30:00.000Z",
+  "heartbeat_at": "2026-05-12T15:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "manual-dogfood-utv2-948",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "UTV2-948 is bootstrap for the P0 Runtime Hardening Merge Protocol. Ships through its own protocol — Claude implementation + Claude critique + PM approval + runtime verification + manual merge. Dogfood: this manifest's p0_protocol block is populated as artifacts are produced.",
+  "p0_protocol": {
+    "required": true,
+    "codex_implementation": {
+      "recorded": false
+    },
+    "claude_critique": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-948/claude-critique.md"
+    },
+    "human_approval": {
+      "recorded": false
+    },
+    "runtime_verification": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-948/runtime-verification.md"
+    },
+    "merge_type": null
+  }
+}

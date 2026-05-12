@@ -28,6 +28,19 @@ export interface ReopenHistoryEntry {
   detected_by: string;
 }
 
+export interface P0ProtocolBlock {
+  required: boolean;
+  codex_implementation?: { recorded: boolean; pr_url?: string };
+  claude_critique?: { recorded: boolean; artifact_path?: string };
+  human_approval?: { recorded: boolean; pm_verdict_url?: string };
+  runtime_verification?: {
+    recorded: boolean;
+    artifact_path?: string;
+    result?: 'pass' | 'fail';
+  };
+  merge_type?: 'manual' | 'auto' | null;
+}
+
 export interface LaneManifest {
   schema_version: 1;
   issue_id: string;
@@ -60,6 +73,7 @@ export interface LaneManifest {
   parent_lane?: string;
   task_packet_hash?: string;
   notes?: string;
+  p0_protocol?: P0ProtocolBlock;
 }
 
 export interface PreflightToken {
