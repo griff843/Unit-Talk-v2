@@ -4,7 +4,7 @@
   "lane_type": "claude",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
-  "branch": "griffadavi/utv2-948-ut-p0-011-enforce-p0-runtime-hardening-merge-protocol",
+  "branch": "griffadavi/utv2-948-p0-protocol-enforcement",
   "base_branch": "main",
   "commit_sha": null,
   "pr_url": null,
@@ -24,7 +24,8 @@
     "docs/06_status/proof/UTV2-948/runtime-verification.md",
     "docs/06_status/proof/UTV2-948/proof.md",
     ".claude/commands/dispatch-board.md",
-    "package.json"
+    "package.json",
+    ".ops/sync.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-948/proof.md",
