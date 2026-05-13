@@ -1,0 +1,37 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-916",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-916-worker-target-drift",
+  "branch": "codex/utv2-916-worker-target-drift",
+  "base_branch": "main",
+  "commit_sha": "31c78211ef0aee81bd85bc81df2ac5cb874c0fca",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/656",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/distribution-service.test.ts",
+    "apps/api/src/distribution-service.ts",
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "apps/api/src/promotion-service.ts",
+    "apps/api/src/run-audit-service.test.ts",
+    "apps/api/src/run-audit-service.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/worker/src/runtime.ts",
+    "apps/worker/src/worker-runtime.test.ts",
+    "packages/contracts/src/promotion.test.ts",
+    "packages/contracts/src/promotion.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-916/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-13T13:08:51.968Z",
+  "heartbeat_at": "2026-05-13T13:29:51.913Z",
+  "closed_at": "2026-05-13T14:40:35Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-916-worker-target-drift.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}

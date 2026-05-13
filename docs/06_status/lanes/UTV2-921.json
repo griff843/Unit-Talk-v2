@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-921",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-921-audit-immutability",
+  "branch": "codex/utv2-921-audit-immutability",
+  "base_branch": "main",
+  "commit_sha": "9e71fa5398e24c7121262f929088eeea026af46c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/655",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/lint-migrations.mjs",
+    "scripts/ops/workflow-hardening.test.ts",
+    "supabase/migrations/202604080016_utv2_439_pg_cron_retention.sql",
+    "supabase/migrations/202604291001_utv2_772_bounded_provider_offers_retention.sql",
+    "supabase/migrations/202605030002_utv2_772_provider_offer_line_snapshots.sql",
+    "supabase/migrations/202605090001_utv2_862_cron_fix_partition_lifecycle.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-921/evidence.json"
+  ],
+  "status": "done",
+  "started_at": "2026-05-13T12:49:58.810Z",
+  "heartbeat_at": "2026-05-13T13:03:57.534Z",
+  "closed_at": "2026-05-13T14:40:05Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-921-audit-immutability.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
