@@ -56,6 +56,9 @@ export interface AppEnv {
   UNIT_TALK_SIMULATION_MODE?: string | undefined;
   UNIT_TALK_INGESTOR_RUNTIME_MODE?: string | undefined;
   UNIT_TALK_API_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_WORKER_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_DISCORD_BOT_RUNTIME_MODE?: string | undefined;
+  UNIT_TALK_ALERT_AGENT_RUNTIME_MODE?: string | undefined;
   UNIT_TALK_GIT_SHA?: string | undefined;
   UNIT_TALK_BUILD_TIMESTAMP?: string | undefined;
   UNIT_TALK_DEPLOYMENT_ID?: string | undefined;
@@ -90,6 +93,10 @@ export interface AppEnv {
   NOTION_TOKEN?: string | undefined;
   SLACK_BOT_TOKEN?: string | undefined;
   SLACK_SIGNING_SECRET?: string | undefined;
+  ALERT_AGENT_ENABLED?: string | undefined;
+  ALERT_DRY_RUN?: string | undefined;
+  HEDGE_AGENT_ENABLED?: string | undefined;
+  HEDGE_DRY_RUN?: string | undefined;
   SYSTEM_PICK_SCANNER_ENABLED?: string | undefined;
   SYSTEM_PICK_SCANNER_LOOKBACK_HOURS?: string | undefined;
   SYSTEM_PICK_SCANNER_MAX_PICKS?: string | undefined;
@@ -214,6 +221,15 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_SIMULATION_MODE: optionalEnv('UNIT_TALK_SIMULATION_MODE', merged),
     UNIT_TALK_INGESTOR_RUNTIME_MODE: optionalEnv('UNIT_TALK_INGESTOR_RUNTIME_MODE', merged),
     UNIT_TALK_API_RUNTIME_MODE: optionalEnv('UNIT_TALK_API_RUNTIME_MODE', merged),
+    UNIT_TALK_WORKER_RUNTIME_MODE: optionalEnv('UNIT_TALK_WORKER_RUNTIME_MODE', merged),
+    UNIT_TALK_DISCORD_BOT_RUNTIME_MODE: optionalEnv(
+      'UNIT_TALK_DISCORD_BOT_RUNTIME_MODE',
+      merged,
+    ),
+    UNIT_TALK_ALERT_AGENT_RUNTIME_MODE: optionalEnv(
+      'UNIT_TALK_ALERT_AGENT_RUNTIME_MODE',
+      merged,
+    ),
     UNIT_TALK_GIT_SHA: optionalEnv('UNIT_TALK_GIT_SHA', merged),
     UNIT_TALK_BUILD_TIMESTAMP: optionalEnv('UNIT_TALK_BUILD_TIMESTAMP', merged),
     UNIT_TALK_DEPLOYMENT_ID: optionalEnv('UNIT_TALK_DEPLOYMENT_ID', merged),
@@ -256,6 +272,10 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     NOTION_TOKEN: optionalEnv('NOTION_TOKEN', merged),
     SLACK_BOT_TOKEN: optionalEnv('SLACK_BOT_TOKEN', merged),
     SLACK_SIGNING_SECRET: optionalEnv('SLACK_SIGNING_SECRET', merged),
+    ALERT_AGENT_ENABLED: optionalEnv('ALERT_AGENT_ENABLED', merged),
+    ALERT_DRY_RUN: optionalEnv('ALERT_DRY_RUN', merged),
+    HEDGE_AGENT_ENABLED: optionalEnv('HEDGE_AGENT_ENABLED', merged),
+    HEDGE_DRY_RUN: optionalEnv('HEDGE_DRY_RUN', merged),
     SYSTEM_PICK_SCANNER_ENABLED: optionalEnv('SYSTEM_PICK_SCANNER_ENABLED', merged),
     SYSTEM_PICK_SCANNER_LOOKBACK_HOURS: optionalEnv('SYSTEM_PICK_SCANNER_LOOKBACK_HOURS', merged),
     SYSTEM_PICK_SCANNER_MAX_PICKS: optionalEnv('SYSTEM_PICK_SCANNER_MAX_PICKS', merged),
@@ -280,6 +300,230 @@ export function requireSupabaseEnvironment(env: AppEnv) {
     anonKey: env.SUPABASE_ANON_KEY,
     serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
   };
+}
+
+export type RuntimeMode = 'fail_open' | 'fail_closed';
+export type RuntimePersistenceMode =
+  | 'database'
+  | 'in_memory'
+  | 'in-memory'
+  | 'not_applicable';
+
+export type RuntimeConfigErrorCode =
+  | 'RUNTIME_MODE_REQUIRED'
+  | 'RUNTIME_MODE_INVALID'
+  | 'RUNTIME_MODE_MUST_FAIL_CLOSED'
+  | 'RUNTIME_REQUIRED_ENV_MISSING'
+  | 'RUNTIME_REQUIRED_ENV_GROUP_MISSING'
+  | 'RUNTIME_IN_MEMORY_FORBIDDEN'
+  | 'RUNTIME_DRY_RUN_FORBIDDEN';
+
+export interface RuntimeRequiredKeyGroup {
+  name: string;
+  keys: readonly string[];
+}
+
+export interface AssertProductionRuntimeConfigOptions {
+  service: string;
+  runtimeModeKey: string;
+  requiredKeys?: readonly string[] | undefined;
+  requiredKeyGroups?: readonly RuntimeRequiredKeyGroup[] | undefined;
+  persistenceMode?: RuntimePersistenceMode | undefined;
+  dryRun?: boolean | undefined;
+  workerTargets?: readonly string[] | undefined;
+  appVersion?: string | undefined;
+  defaultRuntimeMode?: RuntimeMode | undefined;
+  prohibitDryRunInProduction?: boolean | undefined;
+}
+
+export interface RuntimeStartupLogFields {
+  service: string;
+  runtimeMode: RuntimeMode;
+  persistenceMode: RuntimePersistenceMode;
+  dryRun: boolean;
+  workerTargets: string[];
+  appVersion: string;
+  productionLike: boolean;
+}
+
+export interface RuntimeConfigValidationResult
+  extends RuntimeStartupLogFields {
+  runtimeModeKey: string;
+}
+
+export class RuntimeConfigError extends Error {
+  readonly code: RuntimeConfigErrorCode;
+  readonly service: string;
+  readonly missingKeys: string[];
+
+  constructor(input: {
+    code: RuntimeConfigErrorCode;
+    service: string;
+    message: string;
+    missingKeys?: readonly string[] | undefined;
+  }) {
+    super(input.message);
+    this.name = 'RuntimeConfigError';
+    this.code = input.code;
+    this.service = input.service;
+    this.missingKeys = [...(input.missingKeys ?? [])];
+  }
+}
+
+export function assertProductionRuntimeConfig(
+  env: AppEnv,
+  options: AssertProductionRuntimeConfigOptions,
+): RuntimeConfigValidationResult {
+  const productionLike = isProductionLikeRuntime(env);
+  const runtimeMode = resolveRuntimeMode(env, options, productionLike);
+  const persistenceMode = options.persistenceMode ?? 'not_applicable';
+  const dryRun = options.dryRun ?? false;
+  const workerTargets = [...(options.workerTargets ?? [])];
+  const appVersion = options.appVersion ?? resolveAppVersion(env);
+
+  if (!productionLike) {
+    return {
+      service: options.service,
+      runtimeMode,
+      runtimeModeKey: options.runtimeModeKey,
+      persistenceMode,
+      dryRun,
+      workerTargets,
+      appVersion,
+      productionLike,
+    };
+  }
+
+  if (runtimeMode !== 'fail_closed') {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_MODE_MUST_FAIL_CLOSED',
+      service: options.service,
+      message: `${options.service} production runtime requires ${options.runtimeModeKey}=fail_closed.`,
+    });
+  }
+
+  const missingRequiredKeys = collectMissingRequiredKeys(
+    env,
+    options.requiredKeys ?? [],
+  );
+  if (missingRequiredKeys.length > 0) {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_REQUIRED_ENV_MISSING',
+      service: options.service,
+      missingKeys: missingRequiredKeys,
+      message: `${options.service} production runtime is missing required env vars: ${missingRequiredKeys.join(', ')}.`,
+    });
+  }
+
+  for (const group of options.requiredKeyGroups ?? []) {
+    if (!hasAnyEnvValue(env, group.keys)) {
+      throw new RuntimeConfigError({
+        code: 'RUNTIME_REQUIRED_ENV_GROUP_MISSING',
+        service: options.service,
+        missingKeys: group.keys,
+        message: `${options.service} production runtime requires at least one ${group.name} env var: ${group.keys.join(', ')}.`,
+      });
+    }
+  }
+
+  if (persistenceMode === 'in_memory' || persistenceMode === 'in-memory') {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_IN_MEMORY_FORBIDDEN',
+      service: options.service,
+      message: `${options.service} production runtime cannot use in-memory persistence.`,
+    });
+  }
+
+  if (dryRun && options.prohibitDryRunInProduction !== false) {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_DRY_RUN_FORBIDDEN',
+      service: options.service,
+      message: `${options.service} production runtime cannot start in dry-run mode.`,
+    });
+  }
+
+  return {
+    service: options.service,
+    runtimeMode,
+    runtimeModeKey: options.runtimeModeKey,
+    persistenceMode,
+    dryRun,
+    workerTargets,
+    appVersion,
+    productionLike,
+  };
+}
+
+export function isProductionLikeRuntime(env: Pick<AppEnv, 'NODE_ENV' | 'UNIT_TALK_APP_ENV'>) {
+  return (
+    env.UNIT_TALK_APP_ENV === 'production' ||
+    env.UNIT_TALK_APP_ENV === 'staging' ||
+    env.NODE_ENV === 'production'
+  );
+}
+
+export function resolveAppVersion(
+  env: Pick<
+    AppEnv,
+    | 'UNIT_TALK_DEPLOYMENT_ID'
+    | 'UNIT_TALK_GIT_SHA'
+    | 'UNIT_TALK_SCORER_RUNTIME_VERSION'
+  >,
+) {
+  return (
+    env.UNIT_TALK_DEPLOYMENT_ID?.trim() ||
+    env.UNIT_TALK_GIT_SHA?.trim() ||
+    env.UNIT_TALK_SCORER_RUNTIME_VERSION?.trim() ||
+    'unknown'
+  );
+}
+
+function resolveRuntimeMode(
+  env: AppEnv,
+  options: AssertProductionRuntimeConfigOptions,
+  productionLike: boolean,
+): RuntimeMode {
+  const configured = readEnvString(env, options.runtimeModeKey)?.trim().toLowerCase();
+
+  if (!configured) {
+    if (productionLike) {
+      throw new RuntimeConfigError({
+        code: 'RUNTIME_MODE_REQUIRED',
+        service: options.service,
+        missingKeys: [options.runtimeModeKey],
+        message: `${options.service} production runtime requires explicit ${options.runtimeModeKey}=fail_closed.`,
+      });
+    }
+
+    return options.defaultRuntimeMode ?? 'fail_open';
+  }
+
+  if (configured === 'fail_closed' || configured === 'fail_open') {
+    return configured;
+  }
+
+  throw new RuntimeConfigError({
+    code: 'RUNTIME_MODE_INVALID',
+    service: options.service,
+    message: `${options.service} runtime mode ${options.runtimeModeKey} must be fail_open or fail_closed.`,
+  });
+}
+
+function collectMissingRequiredKeys(env: AppEnv, keys: readonly string[]) {
+  return keys.filter((key) => !readEnvString(env, key)?.trim());
+}
+
+function hasAnyEnvValue(env: AppEnv, keys: readonly string[]) {
+  return keys.some((key) => Boolean(readEnvString(env, key)?.trim()));
+}
+
+function readEnvString(env: AppEnv, key: string) {
+  const value = (env as unknown as Record<string, string | string[] | undefined>)[key];
+  if (Array.isArray(value)) {
+    return value.length > 0 ? value.join(',') : undefined;
+  }
+
+  return value;
 }
 
 function requireEnv(key: string, merged: Map<string, string>) {

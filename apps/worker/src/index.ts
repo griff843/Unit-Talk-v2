@@ -26,6 +26,10 @@ export function createWorkerRuntimeSummary() {
     service: 'worker',
     status: 'ready',
     persistenceMode: runtime.persistenceMode,
+    runtimeMode: runtime.runtimeMode,
+    dryRun: runtime.dryRun,
+    workerTargets: runtime.distributionTargets,
+    appVersion: runtime.appVersion,
     workerId: runtime.workerId,
     distributionTargets: runtime.distributionTargets,
     adapterKind: runtime.adapterKind,
@@ -34,7 +38,6 @@ export function createWorkerRuntimeSummary() {
     staleClaimMs: runtime.staleClaimMs,
     heartbeatMs: runtime.heartbeatMs,
     watchdogMs: runtime.watchdogMs,
-    dryRun: runtime.dryRun,
     autorun: runtime.autorun,
     simulationMode: runtime.simulationMode,
     nextStep: runtime.autorun

@@ -451,7 +451,11 @@ describe('STEP 6 — Fail-closed (UTV2-217)', () => {
         environment: failClosedEnvironment,
       }),
       (err: Error) => {
-        assert.ok(err.message.includes('fail_closed'));
+        assert.ok(
+          err.message.includes('fail_closed') ||
+            err.message.includes('missing required env vars'),
+          `expected fail-closed startup rejection, got: ${err.message}`,
+        );
         return true;
       },
     );

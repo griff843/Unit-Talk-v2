@@ -1,4 +1,10 @@
-import { loadEnvironment, type AppEnv } from '@unit-talk/config';
+import {
+  RuntimeConfigError,
+  assertProductionRuntimeConfig,
+  loadEnvironment,
+  type AppEnv,
+  type RuntimeMode,
+} from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
   createInMemoryRepositoryBundle,
@@ -9,6 +15,8 @@ import {
 export interface WorkerRuntimeDependencies {
   repositories: RepositoryBundle;
   persistenceMode: 'database' | 'in_memory';
+  runtimeMode: RuntimeMode;
+  appVersion: string;
   workerId: string;
   distributionTargets: string[];
   adapterKind: 'stub' | 'discord';
@@ -27,21 +35,60 @@ export function createWorkerRuntimeDependencies(
   options: { environment?: AppEnv } = {},
 ): WorkerRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
+  const distributionTargets = readDistributionTargets(environment);
+  const adapterKind = readAdapterKind(environment);
+  const dryRun = readDryRun(environment);
+  const persistenceMode = hasDatabaseEnvironment(environment)
+    ? 'database'
+    : 'in_memory';
+  const startupConfig = assertProductionRuntimeConfig(environment, {
+    service: 'worker',
+    runtimeModeKey: 'UNIT_TALK_WORKER_RUNTIME_MODE',
+    requiredKeys: [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'UNIT_TALK_WORKER_ID',
+      'UNIT_TALK_WORKER_ADAPTER',
+      'UNIT_TALK_DISTRIBUTION_TARGETS',
+      'DISCORD_BOT_TOKEN',
+      'UNIT_TALK_DISCORD_TARGET_MAP',
+    ],
+    persistenceMode,
+    dryRun,
+    workerTargets: distributionTargets,
+  });
 
-  if (!hasDatabaseEnvironment(environment)) {
+  if (startupConfig.productionLike && adapterKind !== 'discord') {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_REQUIRED_ENV_MISSING',
+      service: 'worker',
+      missingKeys: ['UNIT_TALK_WORKER_ADAPTER'],
+      message:
+        'worker production runtime requires UNIT_TALK_WORKER_ADAPTER=discord.',
+    });
+  }
+
+  if (startupConfig.productionLike) {
+    assertDiscordTargetMapCoversTargets(environment, distributionTargets);
+  }
+
+  if (persistenceMode === 'in_memory') {
     return {
       repositories: createInMemoryRepositoryBundle(),
       persistenceMode: 'in_memory',
+      runtimeMode: startupConfig.runtimeMode,
+      appVersion: startupConfig.appVersion,
       workerId: readWorkerId(environment),
-      distributionTargets: readDistributionTargets(environment),
-      adapterKind: readAdapterKind(environment),
+      distributionTargets,
+      adapterKind,
       pollIntervalMs: readPollIntervalMs(environment),
       maxCyclesPerRun: readMaxCyclesPerRun(environment),
       staleClaimMs: readStaleClaimMs(environment),
       heartbeatMs: readHeartbeatMs(environment),
       watchdogMs: readWatchdogMs(environment),
       workerHeartbeatIntervalMs: readWorkerHeartbeatIntervalMs(environment),
-      dryRun: readDryRun(environment),
+      dryRun,
       autorun: readAutorun(environment),
       simulationMode: readSimulationMode(environment),
     };
@@ -52,16 +99,18 @@ export function createWorkerRuntimeDependencies(
   return {
     repositories: createDatabaseRepositoryBundle(connection),
     persistenceMode: 'database',
+    runtimeMode: startupConfig.runtimeMode,
+    appVersion: startupConfig.appVersion,
     workerId: readWorkerId(environment),
-    distributionTargets: readDistributionTargets(environment),
-    adapterKind: readAdapterKind(environment),
+    distributionTargets,
+    adapterKind,
     pollIntervalMs: readPollIntervalMs(environment),
     maxCyclesPerRun: readMaxCyclesPerRun(environment),
     staleClaimMs: readStaleClaimMs(environment),
     heartbeatMs: readHeartbeatMs(environment),
     watchdogMs: readWatchdogMs(environment),
     workerHeartbeatIntervalMs: readWorkerHeartbeatIntervalMs(environment),
-    dryRun: readDryRun(environment),
+    dryRun,
     autorun: readAutorun(environment),
     simulationMode: readSimulationMode(environment),
   };
@@ -86,6 +135,39 @@ function readDistributionTargets(environment: AppEnv) {
     .split(',')
     .map((target) => target.trim())
     .filter((target) => target.length > 0);
+}
+
+function assertDiscordTargetMapCoversTargets(
+  environment: AppEnv,
+  distributionTargets: readonly string[],
+) {
+  const targetMap = readDiscordTargetMap(environment.UNIT_TALK_DISCORD_TARGET_MAP);
+  const missingTargets = distributionTargets.filter(
+    (target) => !targetMap[target] && !/^discord:\d+$/.test(target),
+  );
+
+  if (missingTargets.length > 0) {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_REQUIRED_ENV_MISSING',
+      service: 'worker',
+      missingKeys: ['UNIT_TALK_DISCORD_TARGET_MAP'],
+      message: `worker production runtime is missing Discord channel mappings for targets: ${missingTargets.join(', ')}.`,
+    });
+  }
+}
+
+function readDiscordTargetMap(rawValue: string | undefined) {
+  const raw = rawValue?.trim();
+  if (!raw) {
+    return {} as Record<string, string>;
+  }
+
+  const parsed = JSON.parse(raw) as unknown;
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('UNIT_TALK_DISCORD_TARGET_MAP must be a JSON object.');
+  }
+
+  return parsed as Record<string, string>;
 }
 
 function readPollIntervalMs(environment: AppEnv) {

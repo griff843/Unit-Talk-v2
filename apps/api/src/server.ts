@@ -1,5 +1,10 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
-import { loadEnvironment, type AppEnv } from '@unit-talk/config';
+import {
+  assertProductionRuntimeConfig,
+  loadEnvironment,
+  type AppEnv,
+  type RuntimeMode,
+} from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
   createInMemoryRepositoryBundle,
@@ -87,7 +92,7 @@ export interface ApiServerOptions {
   rateLimitStore?: ApiRateLimitStore;
 }
 
-export type ApiRuntimeMode = 'fail_open' | 'fail_closed';
+export type ApiRuntimeMode = RuntimeMode;
 
 export interface ApiSubmissionRateLimit {
   maxRequests: number;
@@ -143,12 +148,37 @@ export interface ApiRateLimitStore {
 const DEFAULT_BODY_LIMIT_BYTES = 64 * 1024;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 10;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+const SUPABASE_REQUIRED_KEYS = [
+  'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
+  'SUPABASE_SERVICE_ROLE_KEY',
+] as const;
+const API_AUTH_KEYS = [
+  'UNIT_TALK_API_KEY_OPERATOR',
+  'UNIT_TALK_API_KEY_SUBMITTER',
+  'UNIT_TALK_API_KEY_SETTLER',
+  'UNIT_TALK_API_KEY_POSTER',
+  'UNIT_TALK_API_KEY_WORKER',
+  'UNIT_TALK_CC_API_KEY',
+] as const;
 
 export function createApiRuntimeDependencies(
   options: ApiServerOptions = {},
 ): ApiRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
-  const runtimeMode = readApiRuntimeMode(environment);
+  const startupConfig = assertProductionRuntimeConfig(environment, {
+    service: 'api',
+    runtimeModeKey: 'UNIT_TALK_API_RUNTIME_MODE',
+    requiredKeys: SUPABASE_REQUIRED_KEYS,
+    requiredKeyGroups: [{ name: 'API auth', keys: API_AUTH_KEYS }],
+    persistenceMode: options.repositories
+      ? 'in_memory'
+      : hasDatabaseEnvironment(environment)
+        ? 'database'
+        : 'in_memory',
+    dryRun: false,
+  });
+  const runtimeMode = startupConfig.runtimeMode;
   const authConfig = loadAuthConfig(createAuthConfigEnv(environment));
   const metricsCollector = createMetricsCollector();
   const versionInfo = readRuntimeVersionInfo(environment);
@@ -729,21 +759,12 @@ export async function readJsonBody(
   }
 }
 
-function readApiRuntimeMode(environment: AppEnv): ApiRuntimeMode {
-  const configured =
-    environment.UNIT_TALK_API_RUNTIME_MODE?.trim().toLowerCase();
-
-  if (configured === 'fail_closed') {
-    return 'fail_closed';
-  }
-
-  if (configured === 'fail_open') {
-    return 'fail_open';
-  }
-
-  return environment.UNIT_TALK_APP_ENV === 'local'
-    ? 'fail_open'
-    : 'fail_closed';
+function hasDatabaseEnvironment(environment: AppEnv) {
+  return Boolean(
+    environment.SUPABASE_URL &&
+      environment.SUPABASE_ANON_KEY &&
+      environment.SUPABASE_SERVICE_ROLE_KEY,
+  );
 }
 
 function createAuthConfigEnv(
