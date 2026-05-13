@@ -60,6 +60,39 @@ test('loadEnvironment exposes provider-offer staging mode from env files', () =>
   fs.rmSync(rootDir, { recursive: true, force: true });
 });
 
+test('loadEnvironment exposes promotion target runtime env vars', () => {
+  const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-env-targets-'));
+
+  fs.writeFileSync(
+    path.join(rootDir, '.env.example'),
+    [
+      'UNIT_TALK_LEGACY_WORKSPACE=C:\\\\dev\\\\unit-talk-production',
+      'LINEAR_TEAM_KEY=UTV2',
+      'LINEAR_TEAM_NAME=unit-talk-v2',
+      'NOTION_WORKSPACE_NAME=unit-talk-v2',
+      'SLACK_WORKSPACE_NAME=unit-talk-v2',
+      'UNIT_TALK_DISTRIBUTION_TARGETS=discord:canary',
+      'UNIT_TALK_ENABLED_TARGETS=best-bets',
+    ].join('\n'),
+  );
+  fs.writeFileSync(
+    path.join(rootDir, 'local.env'),
+    [
+      'UNIT_TALK_DISTRIBUTION_TARGETS=discord:best-bets,discord:trader-insights',
+      'UNIT_TALK_ENABLED_TARGETS=best-bets,trader-insights',
+      'UNIT_TALK_ROLLOUT_CONFIG={"best-bets":{"rolloutPct":50}}',
+    ].join('\n'),
+  );
+
+  const env = loadEnvironment(rootDir);
+
+  assert.equal(env.UNIT_TALK_DISTRIBUTION_TARGETS, 'discord:best-bets,discord:trader-insights');
+  assert.equal(env.UNIT_TALK_ENABLED_TARGETS, 'best-bets,trader-insights');
+  assert.equal(env.UNIT_TALK_ROLLOUT_CONFIG, '{"best-bets":{"rolloutPct":50}}');
+
+  fs.rmSync(rootDir, { recursive: true, force: true });
+});
+
 test('loadEnvironment exposes provider ingestion DB and archive policy env vars', () => {
   const rootDir = fs.mkdtempSync(path.join(os.tmpdir(), 'unit-talk-env-provider-policy-'));
 

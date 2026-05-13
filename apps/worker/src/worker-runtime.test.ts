@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import type { AppEnv } from '@unit-talk/config';
 import type {
   PromotionBoardStateSnapshot,
   PromotionDecisionPersistenceInput,
@@ -1126,6 +1127,32 @@ test('createWorkerRuntimeDependencies reads worker config from loaded environmen
   assert.equal(runtime.watchdogMs, 9000);
   assert.equal(runtime.workerHeartbeatIntervalMs, 45000);
   assert.equal(runtime.simulationMode, true);
+  assert.deepEqual(runtime.targetCoverage.configuredWorkerTargets, ['discord:canary', 'discord:best-bets']);
+});
+
+test('createWorkerRuntimeDependencies fails closed in production when enabled targets lack workers', () => {
+  assert.throws(
+    () =>
+      createWorkerRuntimeDependencies({
+        environment: makeProductionWorkerEnvironment({
+          UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets',
+        }),
+      }),
+    /trader-insights requires discord:trader-insights/,
+  );
+});
+
+test('createWorkerRuntimeDependencies exposes target coverage when production targets align', () => {
+  const runtime = createWorkerRuntimeDependencies({
+    environment: makeProductionWorkerEnvironment({
+      UNIT_TALK_ENABLED_TARGETS: 'best-bets',
+      UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets',
+    }),
+  });
+
+  assert.equal(runtime.targetCoverage.ok, true);
+  assert.deepEqual(runtime.targetCoverage.enabledPromotionTargets, ['best-bets']);
+  assert.equal(runtime.targetCoverage.rejectedTargetMismatchCount, 0);
 });
 
 test('createWorkerRuntimeDependencies defaults workerHeartbeatIntervalMs to 30000', () => {
@@ -1144,6 +1171,35 @@ test('createWorkerRuntimeDependencies defaults workerHeartbeatIntervalMs to 3000
 
   assert.equal(runtime.workerHeartbeatIntervalMs, 30000);
 });
+
+function makeProductionWorkerEnvironment(
+  overrides: Record<string, string> = {},
+): AppEnv {
+  return {
+    NODE_ENV: 'production',
+    UNIT_TALK_APP_ENV: 'production',
+    UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+    UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+    LINEAR_TEAM_KEY: 'UTV2',
+    LINEAR_TEAM_NAME: 'unit-talk-v2',
+    NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+    SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    UNIT_TALK_WORKER_ID: 'worker-prod',
+    UNIT_TALK_WORKER_RUNTIME_MODE: 'fail_closed',
+    UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets,discord:trader-insights',
+    UNIT_TALK_WORKER_ADAPTER: 'discord',
+    UNIT_TALK_WORKER_DRY_RUN: 'false',
+    UNIT_TALK_DISCORD_TARGET_MAP: JSON.stringify({
+      'discord:best-bets': '1288613037539852329',
+      'discord:trader-insights': '1356613995175481405',
+    }),
+    DISCORD_BOT_TOKEN: 'test-bot-token',
+    ...overrides,
+  };
+}
 
 test('worker runtime helper readers honor loaded environment values', () => {
   const environment = {

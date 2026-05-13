@@ -41,6 +41,8 @@ export interface AppEnv {
   INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES?: string | undefined;
   UNIT_TALK_WORKER_ID?: string | undefined;
   UNIT_TALK_DISTRIBUTION_TARGETS?: string | undefined;
+  UNIT_TALK_ENABLED_TARGETS?: string | undefined;
+  UNIT_TALK_ROLLOUT_CONFIG?: string | undefined;
   UNIT_TALK_DISCORD_TARGET_MAP?: string | undefined;
   UNIT_TALK_WORKER_ADAPTER?: string | undefined;
   UNIT_TALK_WORKER_POLL_MS?: string | undefined;
@@ -202,6 +204,8 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES: optionalEnv('INGESTOR_ALERT_CYCLE_THRESHOLD_MINUTES', merged),
     UNIT_TALK_WORKER_ID: optionalEnv('UNIT_TALK_WORKER_ID', merged),
     UNIT_TALK_DISTRIBUTION_TARGETS: optionalEnv('UNIT_TALK_DISTRIBUTION_TARGETS', merged),
+    UNIT_TALK_ENABLED_TARGETS: optionalEnv('UNIT_TALK_ENABLED_TARGETS', merged),
+    UNIT_TALK_ROLLOUT_CONFIG: optionalEnv('UNIT_TALK_ROLLOUT_CONFIG', merged),
     UNIT_TALK_DISCORD_TARGET_MAP: optionalEnv('UNIT_TALK_DISCORD_TARGET_MAP', merged),
     UNIT_TALK_WORKER_ADAPTER: optionalEnv('UNIT_TALK_WORKER_ADAPTER', merged),
     UNIT_TALK_WORKER_POLL_MS: optionalEnv('UNIT_TALK_WORKER_POLL_MS', merged),
