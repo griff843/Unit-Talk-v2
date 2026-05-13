@@ -1,0 +1,81 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-915",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main",
+  "branch": "griffadavi/utv2-915-ut-p0-002-enforce-fail-closed-runtime-config",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    ".ops/sync.yml",
+    "apps/api/src/index.ts",
+    "apps/api/src/qa-seed.test.ts",
+    "apps/api/src/server.ts",
+    "apps/api/src/t1-proof-atomicity.test.ts",
+    "apps/discord-bot/src/main.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/runtime.ts",
+    "docs/06_status/UTV2-915-EVIDENCE-BUNDLE.md",
+    "docs/06_status/lanes/UTV2-915.json",
+    "docs/06_status/proof/UTV2-915/claude-critique.md",
+    "docs/06_status/proof/UTV2-915/proof.md",
+    "docs/06_status/proof/UTV2-915/runtime-verification.md",
+    "packages/config/src/env.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync.yml",
+    "apps/api/src/index.ts",
+    "apps/api/src/qa-seed.test.ts",
+    "apps/api/src/server.ts",
+    "apps/api/src/t1-proof-atomicity.test.ts",
+    "apps/discord-bot/src/main.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/runtime.ts",
+    "docs/06_status/UTV2-915-EVIDENCE-BUNDLE.md",
+    "docs/06_status/lanes/UTV2-915.json",
+    "docs/06_status/proof/UTV2-915/claude-critique.md",
+    "docs/06_status/proof/UTV2-915/proof.md",
+    "docs/06_status/proof/UTV2-915/runtime-verification.md",
+    "packages/config/src/env.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-915/evidence.json",
+    "docs/06_status/proof/UTV2-915/claude-critique.md",
+    "docs/06_status/proof/UTV2-915/runtime-verification.md",
+    "docs/06_status/proof/UTV2-915/proof.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-13T01:13:21.800Z",
+  "heartbeat_at": "2026-05-13T03:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-915-ut-p0-002-enforce-fail-closed-runtime-config.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "p0_protocol": {
+    "required": true,
+    "codex_implementation": {
+      "recorded": true,
+      "pr_url": null
+    },
+    "claude_critique": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-915/claude-critique.md"
+    },
+    "human_approval": {
+      "recorded": false
+    },
+    "runtime_verification": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-915/runtime-verification.md",
+      "result": "pass"
+    },
+    "merge_type": "manual"
+  },
+  "notes": "Wave 1 P0 lane. Codex implementation under P0 protocol (UTV2-948). Fail-closed runtime config across API, worker, ingestor, discord-bot via assertProductionRuntimeConfig in packages/config. Two test-only companion fixes (qa-seed.test.ts, t1-proof-atomicity.test.ts) to align with the new validator. Two scope gaps (.env.example, apps/alert-agent/src/main.ts) deferred to follow-up issues. Lane was originally dispatched in a worktree; worktree was abandoned because workspace junctions back to main's packages caused the in-worktree apps to build against pre-change package code. Patch was preserved at .out/recovery/utv2-915-full.patch and applied on the main checkout in a fresh session."
+}

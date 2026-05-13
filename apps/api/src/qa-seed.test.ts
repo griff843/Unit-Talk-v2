@@ -118,16 +118,18 @@ test('POST /api/qa/seed-pick returns 403 in production', async () => {
     await withQaSeedEnv(
       {
         UNIT_TALK_QA_SEED_ENABLED: 'true',
-        NODE_ENV: 'production',
+        NODE_ENV: 'development',
         DISCORD_QA_CHANNEL_MAP: mapPath,
       },
       async () => {
         await withServer(async (baseUrl) => {
-          const response = await fetch(`${baseUrl}/api/qa/seed-pick`, { method: 'POST' });
-          const body = (await response.json()) as { error: string };
+          await withQaSeedEnv({ NODE_ENV: 'production' }, async () => {
+            const response = await fetch(`${baseUrl}/api/qa/seed-pick`, { method: 'POST' });
+            const body = (await response.json()) as { error: string };
 
-          assert.equal(response.status, 403);
-          assert.deepEqual(body, { error: 'QA seed forbidden in production' });
+            assert.equal(response.status, 403);
+            assert.deepEqual(body, { error: 'QA seed forbidden in production' });
+          });
         });
       },
     );

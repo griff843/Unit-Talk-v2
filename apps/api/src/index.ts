@@ -262,6 +262,12 @@ server.listen(port, () => {
         ],
         persistenceMode: runtime.persistenceMode,
         runtimeMode: runtime.runtimeMode,
+        dryRun: false,
+        workerTargets: [],
+        appVersion:
+          runtime.versionInfo.deploymentIdentifier ??
+          runtime.versionInfo.gitShaShort ??
+          runtime.versionInfo.scorerRuntimeVersion,
         version: toRuntimeVersionLogFields(runtime.versionInfo),
       },
       null,

@@ -1,4 +1,9 @@
-import { loadEnvironment } from '@unit-talk/config';
+import {
+  assertProductionRuntimeConfig,
+  loadEnvironment,
+  type AppEnv,
+  type RuntimeMode,
+} from '@unit-talk/config';
 import {
   createDatabaseIngestorRepositoryBundle,
   createInMemoryIngestorRepositoryBundle,
@@ -33,8 +38,8 @@ const logger = createLogger({
 });
 const errorTracker = createErrorTracker({ service: 'ingestor', logger });
 
-function createIngestorRuntimeDependencies() {
-  const env = loadEnvironment();
+function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {}) {
+  const env = options.environment ?? loadEnvironment();
   const leagues = parseConfiguredLeagues(env.UNIT_TALK_INGESTOR_LEAGUES);
   const pollIntervalMs = parsePositiveInt(env.UNIT_TALK_INGESTOR_POLL_MS, 300_000);
   const configuredMaxCycles = parsePositiveInt(env.UNIT_TALK_INGESTOR_MAX_CYCLES, 1);
@@ -53,7 +58,22 @@ function createIngestorRuntimeDependencies() {
   const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
 
-  const runtimeMode = readIngestorRuntimeMode(env);
+  const startupConfig = assertProductionRuntimeConfig(env, {
+    service: 'ingestor',
+    runtimeModeKey: 'UNIT_TALK_INGESTOR_RUNTIME_MODE',
+    requiredKeys: [
+      'SUPABASE_URL',
+      'SUPABASE_ANON_KEY',
+      'SUPABASE_SERVICE_ROLE_KEY',
+      'UNIT_TALK_API_URL',
+    ],
+    requiredKeyGroups: [
+      { name: 'provider auth', keys: ['SGO_API_KEY', 'SGO_API_KEY_FALLBACK', 'ODDS_API_KEY'] },
+    ],
+    persistenceMode: hasDatabaseEnvironment(env) ? 'database' : 'in-memory',
+    dryRun: false,
+  });
+  const runtimeMode = startupConfig.runtimeMode;
   const providerOfferStagingMode = parseProviderOfferStagingMode(
     env.UNIT_TALK_PROVIDER_OFFER_STAGING_MODE,
   );
@@ -65,6 +85,7 @@ function createIngestorRuntimeDependencies() {
     return {
       persistenceMode: 'database' as const,
       runtimeMode,
+      appVersion: startupConfig.appVersion,
       repositories: createDatabaseIngestorRepositoryBundle(connection),
       retentionConnection: connection,
       leagues,
@@ -99,6 +120,7 @@ function createIngestorRuntimeDependencies() {
     return {
       persistenceMode: 'in-memory' as const,
       runtimeMode,
+      appVersion: startupConfig.appVersion,
       repositories: createInMemoryIngestorRepositoryBundle(),
       leagues,
       pollIntervalMs,
@@ -125,6 +147,9 @@ export function createIngestorRuntimeSummary() {
     status: 'ready',
     persistenceMode: runtime.persistenceMode,
     runtimeMode: runtime.runtimeMode,
+    dryRun: false,
+    workerTargets: [],
+    appVersion: runtime.appVersion,
     providers: {
       sgo: runtime.sgoApiKeys.length > 0 ? 'configured' : 'missing',
       oddsApi: runtime.oddsApiKey ? 'configured' : 'missing',
@@ -260,16 +285,14 @@ if (runtime.autorun) {
   console.log(JSON.stringify(createIngestorRuntimeSummary(), null, 2));
 }
 
-type IngestorRuntimeMode = 'fail_open' | 'fail_closed';
+type _IngestorRuntimeMode = RuntimeMode;
 
-function readIngestorRuntimeMode(env: {
-  UNIT_TALK_INGESTOR_RUNTIME_MODE?: string | undefined;
-  UNIT_TALK_APP_ENV?: string | undefined;
-}): IngestorRuntimeMode {
-  const configured = env.UNIT_TALK_INGESTOR_RUNTIME_MODE?.trim().toLowerCase();
-  if (configured === 'fail_closed') return 'fail_closed';
-  if (configured === 'fail_open') return 'fail_open';
-  return env.UNIT_TALK_APP_ENV === 'local' ? 'fail_open' : 'fail_closed';
+function hasDatabaseEnvironment(environment: AppEnv) {
+  return Boolean(
+    environment.SUPABASE_URL &&
+      environment.SUPABASE_ANON_KEY &&
+      environment.SUPABASE_SERVICE_ROLE_KEY,
+  );
 }
 
 function parsePositiveInt(value: string | undefined, fallback: number) {
