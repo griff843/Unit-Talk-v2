@@ -1,20 +1,20 @@
-# System State — 2026-05-11 04:57
+# System State — 2026-05-13 00:03
 
 ## Branch
-codex/utv2-879-uniqueness-signal
+
 
 ## Active Milestone
 Phase 7A 
 
 ## Active Lanes
-  none
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
 
 ## Working Tree
 Clean
 
 ## Recent Commits
-cb48618a chore(ops): sync.yml — declare UTV2-879 for CI metadata gate
-d1d7ee48 feat(domain): UTV2-879 wire uniqueness score signal from market saturation
-80931b31 fix(lint): remove unused lossesWithOdds var in roi-by-sport.ts
-735d6fb3 chore(ops): UTV2-880 close DEBT-005/DEBT-013 + partial DEBT-004/DEBT-008
-1964e74f Merge remote-tracking branch 'origin/main'
+01bfbfe ops: reset sync.yml to neutral after merge [skip ci]
+014099e chore(UTV2-948): post-merge enforcement proof + apply-branch-protection script fix (#647)
+2dd1c85 ops: reset sync.yml to neutral after merge [skip ci]
+0cb5ea3 UTV2-948 — Enforce P0 Runtime Hardening Merge Protocol (#641)
+98f4785 ops: reset sync.yml to neutral after merge [skip ci]
