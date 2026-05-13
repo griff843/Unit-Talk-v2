@@ -9,6 +9,7 @@
  *   D1  DROP TABLE without -- lint-override: drop-table
  *   D2  DROP COLUMN without -- lint-override: drop-column
  *   D3  TRUNCATE without -- lint-override: truncate
+ *   A1  UPDATE/DELETE/TRUNCATE against audit_log (never allowed)
  *   C1  ADD CONSTRAINT ... CHECK without DROP CONSTRAINT for same name
  *       (sibling-constraint drift — the UTV2-519 breach class)
  *   C2  NOT NULL column addition without DEFAULT
@@ -26,9 +27,9 @@
 import { readdir, readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { execSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 
 const MIGRATIONS_DIR = join(process.cwd(), 'supabase', 'migrations');
-const changedOnly = process.argv.includes('--changed-only');
 
 const rules = [
   {
@@ -49,8 +50,15 @@ const rules = [
     id: 'D3',
     name: 'TRUNCATE without override',
     pattern: /\bTRUNCATE\b/i,
+    check: (_match, _fileContent, line) => !/\baudit_log\b/i.test(line),
     override: 'truncate',
     message: 'TRUNCATE detected. Add `-- lint-override: truncate` if intentional.',
+  },
+  {
+    id: 'A1',
+    name: 'audit_log mutation',
+    pattern: /\b(?:DELETE\s+FROM|UPDATE|TRUNCATE(?:\s+TABLE)?)\s+(?:ONLY\s+)?(?:public\.)?audit_log\b/i,
+    message: 'audit_log is immutable. UPDATE, DELETE, and TRUNCATE are not permitted in migrations.',
   },
   {
     id: 'C1',
@@ -107,7 +115,7 @@ async function getAllMigrations() {
     .map(e => join(MIGRATIONS_DIR, e.name));
 }
 
-function hasOverride(lines, lineIndex, overrideKey) {
+export function hasOverride(lines, lineIndex, overrideKey) {
   const currentLine = lines[lineIndex] ?? '';
   const prevLine = lineIndex > 0 ? lines[lineIndex - 1] ?? '' : '';
   const overridePattern = `lint-override:\\s*${overrideKey}`;
@@ -115,11 +123,9 @@ function hasOverride(lines, lineIndex, overrideKey) {
   return regex.test(currentLine) || regex.test(prevLine);
 }
 
-async function lintFile(filePath) {
-  const content = await readFile(filePath, 'utf8');
+export function lintMigrationContent(content, fileName = '(inline)') {
   const lines = content.split('\n');
   const findings = [];
-  const fileName = filePath.split(/[/\\]/).pop();
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
@@ -142,7 +148,7 @@ async function lintFile(filePath) {
         rule: rule.id,
         name: rule.name,
         message: rule.message,
-        snippet: line.trim().substring(0, 120),
+        statement: line.trim().substring(0, 160),
       });
     }
   }
@@ -150,36 +156,50 @@ async function lintFile(filePath) {
   return findings;
 }
 
-// Main
-const files = changedOnly ? await getChangedMigrations() : await getAllMigrations();
-
-if (files.length === 0) {
-  console.log('[lint-migrations] No migration files to lint.');
-  process.exit(0);
+export async function lintFile(filePath) {
+  const content = await readFile(filePath, 'utf8');
+  const fileName = filePath.split(/[/\\]/).pop();
+  return lintMigrationContent(content, fileName);
 }
 
-let totalFindings = 0;
-const allFindings = [];
+export async function main(argv = process.argv.slice(2)) {
+  const changedOnly = argv.includes('--changed-only');
+  const files = changedOnly ? await getChangedMigrations() : await getAllMigrations();
 
-for (const file of files) {
-  const findings = await lintFile(file);
-  if (findings.length > 0) {
-    allFindings.push(...findings);
-    totalFindings += findings.length;
+  if (files.length === 0) {
+    console.log('[lint-migrations] No migration files to lint.');
+    return 0;
   }
-}
 
-if (totalFindings > 0) {
-  console.error(`[lint-migrations] ${totalFindings} finding(s) in ${files.length} file(s):\n`);
-  for (const f of allFindings) {
-    console.error(`  ${f.file}:${f.line} [${f.rule}] ${f.name}`);
-    console.error(`    ${f.message}`);
-    console.error(`    > ${f.snippet}`);
-    console.error('');
+  let totalFindings = 0;
+  const allFindings = [];
+
+  for (const file of files) {
+    const findings = await lintFile(file);
+    if (findings.length > 0) {
+      allFindings.push(...findings);
+      totalFindings += findings.length;
+    }
   }
-  console.error(`Override: add \`-- lint-override: <rule-id>\` on the same line or the line above.`);
-  console.error(`Rules: D1 (drop-table), D2 (drop-column), D3 (truncate), C1 (sibling-constraint), C2 (not-null-no-default), H1 (hardcoded-uuid)`);
-  process.exit(1);
-} else {
+
+  if (totalFindings > 0) {
+    console.error(`[lint-migrations] ${totalFindings} finding(s) in ${files.length} file(s):\n`);
+    for (const f of allFindings) {
+      console.error(`  ${f.file}:${f.line} [${f.rule}] ${f.name}`);
+      console.error(`    ${f.message}`);
+      console.error(`    > ${f.statement}`);
+      console.error('');
+    }
+    console.error('Override: add `-- lint-override: <rule-id>` on the same line or the line above.');
+    console.error('Rules: D1 (drop-table), D2 (drop-column), D3 (truncate), A1 (audit-log-mutation), C1 (sibling-constraint), C2 (not-null-no-default), H1 (hardcoded-uuid)');
+    return 1;
+  }
+
   console.log(`[lint-migrations] ${files.length} migration file(s) checked — no findings.`);
+  return 0;
+}
+
+const invokedPath = process.argv[1] ? fileURLToPath(import.meta.url) === process.argv[1] : false;
+if (invokedPath) {
+  process.exitCode = await main();
 }

@@ -1,12 +1,7 @@
--- UTV2-862
--- Purpose: fix nightly-retention-prune cron body which was missing the
--- summarize + partition-drop calls from migration 202605030001/202605030002.
--- The cron was rescheduled by 202605030002 but that migration omitted both
--- calls, leaving the partition lifecycle incomplete.
--- This migration adds them in the correct order:
---   1. summarize the day about to be dropped BEFORE dropping it
---   2. drop old partitions (>7 days)
---   3. existing retention calls unchanged
+-- UTV2-921
+-- Purpose: reschedule nightly retention without pruning audit_log. The table is
+-- append-only and protected by trigger; retention must not attempt destructive
+-- operations against it.
 
 SELECT cron.unschedule('nightly-retention-prune')
 WHERE EXISTS (
