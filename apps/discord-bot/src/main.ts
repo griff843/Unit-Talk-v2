@@ -64,7 +64,7 @@ async function main() {
 
   const client = createDiscordClient();
   const registry = await loadCommandRegistry(repoRoot);
-  const apiClient = createApiClient(config.apiUrl);
+  const apiClient = createApiClient(config.apiUrl, config.apiKey);
 
   client.once('ready', (readyClient) => {
     console.log(`[discord-bot] Ready as ${readyClient.user.tag}`);

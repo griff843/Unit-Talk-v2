@@ -117,14 +117,19 @@ export class ApiClientError extends Error {
 
 /**
  * Creates an ApiClient bound to the given base URL.
- * Accepts an optional fetchImpl for testing (defaults to global fetch).
+ * Accepts an optional service API key and fetchImpl for testing.
  */
-export function createApiClient(baseUrl: string, fetchImpl: FetchImpl = fetch): ApiClient {
+export function createApiClient(baseUrl: string, apiKey?: string, fetchImpl: FetchImpl = fetch): ApiClient {
   const normalizedBase = baseUrl.replace(/\/$/u, '');
 
   async function request<T>(path: string, init?: RequestInit): Promise<T> {
     const url = `${normalizedBase}${path}`;
-    const resp = await fetchImpl(url, init);
+    const authHeader = apiKey ? { 'Authorization': `Bearer ${apiKey}` } : {};
+    const merged: RequestInit = {
+      ...init,
+      headers: { ...authHeader, ...(init?.headers as Record<string, string> | undefined) },
+    };
+    const resp = await fetchImpl(url, merged);
 
     if (!resp.ok) {
       const text = await resp.text().catch(() => '');

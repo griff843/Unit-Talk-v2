@@ -488,7 +488,7 @@ test('createApiClient.getPicksByStatus calls GET /api/picks with status and limi
     });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch);
   const result = await client.getPicksByStatus?.(['validated', 'queued'], 25);
 
   assert.equal(
@@ -508,7 +508,7 @@ test('createApiClient.getRecentSettlements calls GET /api/settlements/recent wit
     });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch);
   const result = await client.getRecentSettlements?.(15);
 
   assert.equal(
@@ -1723,7 +1723,7 @@ test('createApiClient.get constructs correct URL and returns JSON', async () => 
     });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch as typeof fetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
   const result = await client.get<{ ok: boolean }>('/health');
 
   assert.equal(capturedUrl, 'http://localhost:4000/health');
@@ -1740,7 +1740,7 @@ test('createApiClient.get strips trailing slash from base URL', async () => {
     });
   };
 
-  const client = createApiClient('http://localhost:4000/', mockFetch as typeof fetch);
+  const client = createApiClient('http://localhost:4000/', undefined, mockFetch as typeof fetch);
   await client.get('/api/health');
 
   assert.equal(capturedUrl, 'http://localhost:4000/api/health');
@@ -1758,7 +1758,7 @@ test('createApiClient.post sends POST with JSON body', async () => {
     });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch as typeof fetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
   const result = await client.post<{ id: string }>('/api/submissions', { market: 'NBA points' });
 
   assert.equal(capturedMethod, 'POST');
@@ -1766,12 +1766,44 @@ test('createApiClient.post sends POST with JSON body', async () => {
   assert.equal(result.id, 'abc');
 });
 
+test('createApiClient sends Authorization header when apiKey provided', async () => {
+  let capturedHeaders: Record<string, string> = {};
+  const mockFetch = async (url: string | URL | Request, init?: RequestInit) => {
+    capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const client = createApiClient('http://localhost:4000', 'bot-api-key', mockFetch as typeof fetch);
+  await client.get('/api/picks');
+
+  assert.equal(capturedHeaders['Authorization'], 'Bearer bot-api-key');
+});
+
+test('createApiClient omits Authorization header when no apiKey', async () => {
+  let capturedHeaders: Record<string, string> = {};
+  const mockFetch = async (url: string | URL | Request, init?: RequestInit) => {
+    capturedHeaders = (init?.headers ?? {}) as Record<string, string>;
+    return new Response(JSON.stringify({}), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
+  await client.get('/api/picks');
+
+  assert.equal(capturedHeaders['Authorization'], undefined);
+});
+
 test('createApiClient.get throws on non-200 response', async () => {
   const mockFetch = async () => {
     return new Response('Not found', { status: 404 });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch as typeof fetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
 
   await assert.rejects(
     () => client.get('/api/missing'),
@@ -1788,7 +1820,7 @@ test('createApiClient.post throws on non-200 response', async () => {
     return new Response('Bad request', { status: 400 });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch as typeof fetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch as typeof fetch);
 
   await assert.rejects(
     () => client.post('/api/submissions', {}),
@@ -2138,7 +2170,7 @@ test('createApiClient.syncMemberTier calls POST /api/member-tiers with correct b
     });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch);
   await client.syncMemberTier?.({
     discord_id: 'user-123',
     tier: 'vip',
@@ -2163,7 +2195,7 @@ test('createApiClient.syncMemberTier swallows errors and does not throw', async 
     });
   };
 
-  const client = createApiClient('http://localhost:4000', mockFetch);
+  const client = createApiClient('http://localhost:4000', undefined, mockFetch);
   await assert.doesNotReject(async () => {
     await client.syncMemberTier?.({
       discord_id: 'user-123',

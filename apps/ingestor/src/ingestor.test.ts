@@ -3839,3 +3839,31 @@ test('findClosingLine filters by bookmakerKey when specified', async () => {
   });
   assert.equal(missing, null);
 });
+
+import { triggerGradingRun } from './ingestor-runner.js';
+
+test('triggerGradingRun sends Authorization header when apiKey provided', async () => {
+  let capturedInit: RequestInit | undefined;
+  const mockFetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
+    capturedInit = init;
+    return new Response(null, { status: 200 });
+  };
+
+  await triggerGradingRun('http://localhost:4000', 'test-ingestor-key', mockFetch as typeof fetch);
+
+  const authHeader = (capturedInit?.headers as Record<string, string>)?.['Authorization'];
+  assert.equal(authHeader, 'Bearer test-ingestor-key');
+});
+
+test('triggerGradingRun omits Authorization header when no apiKey', async () => {
+  let capturedInit: RequestInit | undefined;
+  const mockFetch = async (url: unknown, init?: RequestInit): Promise<Response> => {
+    capturedInit = init;
+    return new Response(null, { status: 200 });
+  };
+
+  await triggerGradingRun('http://localhost:4000', undefined, mockFetch as typeof fetch);
+
+  const authHeader = (capturedInit?.headers as Record<string, string>)?.['Authorization'];
+  assert.equal(authHeader, undefined);
+});

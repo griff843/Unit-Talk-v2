@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-919",
+  "lane_type": "codex",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "griffadavi/utv2-919-ut-p0-006-enforce-service-to-service-authentication",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/auth.ts",
+    "apps/api/src/auth.test.ts",
+    "apps/discord-bot/src/api-client.ts",
+    "apps/discord-bot/src/config.ts",
+    "apps/discord-bot/src/commands/alerts-setup.ts",
+    "apps/discord-bot/src/commands/heat-signal.ts",
+    "apps/discord-bot/src/commands/leaderboard.ts",
+    "apps/discord-bot/src/commands/live.ts",
+    "apps/discord-bot/src/commands/pick.ts",
+    "apps/discord-bot/src/discord-bot-foundation.test.ts",
+    "apps/ingestor/src/ingestor-runner.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/command-center/src/lib/server-api.ts",
+    ".env.example",
+    "docs/06_status/lanes/UTV2-919.json",
+    "docs/06_status/proof/UTV2-919/claude-critique.md",
+    "docs/06_status/proof/UTV2-919/runtime-verification.md",
+    "docs/06_status/proof/UTV2-919/proof.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-919/proof.md",
+    "docs/06_status/proof/UTV2-919/claude-critique.md",
+    "docs/06_status/proof/UTV2-919/runtime-verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-13T00:00:00.000Z",
+  "heartbeat_at": "2026-05-13T00:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-approval-2026-05-13",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "T1 P0 service-to-service auth. Codex implements; Claude critique required; PM approval required; runtime auth-flow verification required; no auto-merge. Blockers UTV2-948 + UTV2-915 shipped. Gap: ingestor triggerGradingRun() and discord-bot createApiClient() send no auth headers; command-center already wired.",
+  "p0_protocol": {
+    "required": true,
+    "codex_implementation": {
+      "recorded": false,
+      "pr_url": null
+    },
+    "claude_critique": {
+      "recorded": false,
+      "artifact_path": "docs/06_status/proof/UTV2-919/claude-critique.md"
+    },
+    "human_approval": {
+      "recorded": false,
+      "pm_verdict_url": null
+    },
+    "runtime_verification": {
+      "recorded": false,
+      "artifact_path": "docs/06_status/proof/UTV2-919/runtime-verification.md",
+      "result": null
+    },
+    "merge_type": "manual"
+  }
+}

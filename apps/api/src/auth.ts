@@ -172,6 +172,16 @@ export function loadAuthConfig(
       role: 'operator',
       identityPrefix: 'operator:command-center',
     },
+    {
+      envName: 'UNIT_TALK_INGESTOR_API_KEY',
+      role: 'settler',
+      identityPrefix: 'settler:ingestor',
+    },
+    {
+      envName: 'UNIT_TALK_BOT_API_KEY',
+      role: 'submitter',
+      identityPrefix: 'submitter:discord-bot',
+    },
   ];
 
   for (const { envName, role, identityPrefix } of keySources) {

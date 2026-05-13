@@ -160,6 +160,8 @@ const API_AUTH_KEYS = [
   'UNIT_TALK_API_KEY_POSTER',
   'UNIT_TALK_API_KEY_WORKER',
   'UNIT_TALK_CC_API_KEY',
+  'UNIT_TALK_INGESTOR_API_KEY',
+  'UNIT_TALK_BOT_API_KEY',
 ] as const;
 
 export function createApiRuntimeDependencies(
@@ -776,6 +778,8 @@ function createAuthConfigEnv(
     UNIT_TALK_APP_ENV: environment.UNIT_TALK_APP_ENV,
     UNIT_TALK_API_RUNTIME_MODE: environment.UNIT_TALK_API_RUNTIME_MODE,
     UNIT_TALK_API_KEY_SUBMITTER: environment.UNIT_TALK_API_KEY_SUBMITTER,
+    UNIT_TALK_INGESTOR_API_KEY: environment.UNIT_TALK_INGESTOR_API_KEY,
+    UNIT_TALK_BOT_API_KEY: environment.UNIT_TALK_BOT_API_KEY,
   };
 }
 

@@ -87,7 +87,7 @@ export function buildAlertsSetupEmbed(status: AlertStatusResponse): EmbedBuilder
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
   return createAlertsSetupCommand(
-    createApiClient(config.apiUrl),
+    createApiClient(config.apiUrl, config.apiKey),
     requireOperatorRole(config),
   );
 }

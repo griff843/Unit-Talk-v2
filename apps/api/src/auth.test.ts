@@ -244,3 +244,31 @@ test('operator-only Command Center mutation routes deny non-operator roles', () 
     assert.equal(routeAllowsRole('submitter', route), false, route);
   }
 });
+
+test('loadAuthConfig treats UNIT_TALK_INGESTOR_API_KEY as a settler key', () => {
+  const config = loadAuthConfig({
+    NODE_ENV: 'production',
+    UNIT_TALK_APP_ENV: 'production',
+    UNIT_TALK_INGESTOR_API_KEY: 'ingestor-secret',
+  });
+
+  const auth = config.keys.get('ingestor-secret');
+  assert.equal(config.enabled, true);
+  assert.equal(config.failClosed, true);
+  assert.equal(auth?.role, 'settler');
+  assert.equal(auth?.identity.startsWith('settler:ingestor:'), true);
+});
+
+test('loadAuthConfig treats UNIT_TALK_BOT_API_KEY as a submitter key', () => {
+  const config = loadAuthConfig({
+    NODE_ENV: 'production',
+    UNIT_TALK_APP_ENV: 'production',
+    UNIT_TALK_BOT_API_KEY: 'bot-secret',
+  });
+
+  const auth = config.keys.get('bot-secret');
+  assert.equal(config.enabled, true);
+  assert.equal(config.failClosed, true);
+  assert.equal(auth?.role, 'submitter');
+  assert.equal(auth?.identity.startsWith('submitter:discord-bot:'), true);
+});

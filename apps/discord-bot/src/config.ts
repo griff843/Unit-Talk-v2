@@ -14,6 +14,7 @@ export interface BotConfig {
   capperChannelId: string;
   operatorRoleId?: string | undefined;
   apiUrl: string;
+  apiKey?: string | undefined;
   appEnv: AppEnv['UNIT_TALK_APP_ENV'];
 }
 
@@ -121,6 +122,7 @@ export function parseBotConfig(env: AppEnv): BotConfig {
     capperChannelId: capperChannelId!,
     operatorRoleId,
     apiUrl: apiUrl!,
+    apiKey: env.UNIT_TALK_BOT_API_KEY,
     appEnv: env.UNIT_TALK_APP_ENV,
   };
 }
@@ -163,6 +165,7 @@ export function parseQaBotConfig(env: AppEnv, qaMap: QaDiscordMap): BotConfig {
     capperChannelId: capperChannelId!,
     operatorRoleId,
     apiUrl: apiUrl!,
+    apiKey: env.UNIT_TALK_BOT_API_KEY,
     appEnv: env.UNIT_TALK_APP_ENV,
   };
 }
