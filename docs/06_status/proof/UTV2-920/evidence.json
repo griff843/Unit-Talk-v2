@@ -1,0 +1,26 @@
+{
+  "timestamp": "2026-05-13T15:20:43.458Z",
+  "issueId": "UTV2-920",
+  "change": "Fail closed atomic delivery and settlement RPCs when owning pick transitions are rejected",
+  "gitHead": "2731d1d7dd5f4bd7fc5c569402d84684d4496b22",
+  "verify": {
+    "ok": true,
+    "exitCode": 0,
+    "tail": "PASS buildSubmissionPayload populates metadata.player from playerName for participant resolution (0.0682ms)\nPASS conviction=9 maps to trust=90 and confidence=0.9 (0.0947ms)\nPASS conviction=4 maps to trust=40 and confidence=0.4 (0.0882ms)\nPASS buildSubmissionPayload throws for unknown player-prop stat type (0.3495ms)\nPASS buildSubmissionPayload resolves NHL stat types to canonical keys (0.0853ms)\ninfo tests 113\ninfo suites 13\ninfo pass 113\ninfo fail 0\ninfo cancelled 0\ninfo skipped 0\ninfo todo 0\ninfo duration_ms 857.6822\n> @unit-talk/v2@0.1.0 verify:commands C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-920-db-invariant-rpc-guards\n> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs\n> @unit-talk/discord-bot@0.1.0 command-manifest:check C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-920-db-invariant-rpc-guards\\apps\\discord-bot\n> tsx scripts/sync-command-manifest.ts --check\n[command-manifest] Verified 14 command definition(s) against C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-920-db-invariant-rpc-guards\\apps\\discord-bot\\command-manifest.json\n[check-migration-versions] 106 migration file(s) verified - no duplicate versions.\n[lint-migrations] 106 migration file(s) checked - no findings."
+  },
+  "pipeline": {
+    "counts": {
+      "sent": 405,
+      "pending": 6
+    },
+    "latestRunStatus": "succeeded",
+    "latestRunAt": "2026-04-30T17:46:18.801694+00:00",
+    "latestSuccessfulRunAt": "2026-04-30T17:46:18.801694+00:00",
+    "staleProcessingCount": 0,
+    "stalePendingCount": 0,
+    "deferredPendingCount": 6,
+    "workerVerdict": "HEALTHY"
+  },
+  "picks": [],
+  "verdict": "PARTIAL"
+}
