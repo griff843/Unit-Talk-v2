@@ -389,6 +389,13 @@ export interface TargetRegistryEntry {
   sportFilter?: string[];
 }
 
+export const blockedDiscordTargets = [
+  'discord:exclusive-insights',
+  'discord:game-threads',
+  'discord:strategy-room',
+] as const;
+export type BlockedDiscordTarget = (typeof blockedDiscordTargets)[number];
+
 export const defaultTargetRegistry: TargetRegistryEntry[] = [
   { target: 'best-bets', enabled: true, rolloutPct: 100 },
   { target: 'trader-insights', enabled: true, rolloutPct: 100 },
@@ -399,6 +406,83 @@ export const defaultTargetRegistry: TargetRegistryEntry[] = [
     rolloutPct: 100,
   },
 ];
+
+export interface WorkerTargetCoverageReport {
+  configuredWorkerTargets: string[];
+  enabledPromotionTargets: PromotionTarget[];
+  missingWorkerTargets: Array<{
+    target: PromotionTarget;
+    requiredWorkerTarget: string;
+  }>;
+  blockedWorkerTargets: string[];
+  rejectedTargetMismatchCount: number;
+  ok: boolean;
+}
+
+export function isBlockedDiscordTarget(target: string): target is BlockedDiscordTarget {
+  return (blockedDiscordTargets as readonly string[]).includes(target);
+}
+
+export function deliveryTargetForPromotionTarget(
+  target: PromotionTarget,
+  appEnv?: string | undefined,
+): string {
+  return appEnv === 'local' ? 'discord:canary' : `discord:${target}`;
+}
+
+export function parsePromotionTargetFromDeliveryTarget(
+  target: string,
+): PromotionTarget | null {
+  if (!target.startsWith('discord:')) {
+    return null;
+  }
+
+  const candidate = target.slice('discord:'.length);
+  return promotionTargets.includes(candidate as PromotionTarget)
+    ? candidate as PromotionTarget
+    : null;
+}
+
+export function isPromotionTargetBlocked(target: PromotionTarget): boolean {
+  return isBlockedDiscordTarget(deliveryTargetForPromotionTarget(target, 'production'));
+}
+
+export function evaluateWorkerTargetCoverage(input: {
+  registry: readonly TargetRegistryEntry[];
+  workerTargets: readonly string[];
+  appEnv?: string | undefined;
+}): WorkerTargetCoverageReport {
+  const configuredWorkerTargets = [...new Set(input.workerTargets.map((target) => target.trim()).filter(Boolean))];
+  const configuredSet = new Set(configuredWorkerTargets);
+  const blockedWorkerTargets = configuredWorkerTargets.filter(isBlockedDiscordTarget);
+  const enabledPromotionTargets = input.registry
+    .filter((entry) => entry.enabled && !isPromotionTargetBlocked(entry.target))
+    .map((entry) => entry.target);
+  const missingWorkerTargets = enabledPromotionTargets
+    .map((target) => ({
+      target,
+      requiredWorkerTarget: deliveryTargetForPromotionTarget(target, input.appEnv),
+    }))
+    .filter((entry) => !configuredSet.has(entry.requiredWorkerTarget));
+  const rejectedTargetMismatchCount = missingWorkerTargets.length + blockedWorkerTargets.length;
+
+  return {
+    configuredWorkerTargets,
+    enabledPromotionTargets,
+    missingWorkerTargets,
+    blockedWorkerTargets,
+    rejectedTargetMismatchCount,
+    ok: rejectedTargetMismatchCount === 0,
+  };
+}
+
+export function formatWorkerTargetCoverageError(report: WorkerTargetCoverageReport): string {
+  const missing = report.missingWorkerTargets.map(
+    (entry) => `${entry.target} requires ${entry.requiredWorkerTarget}`,
+  );
+  const blocked = report.blockedWorkerTargets.map((target) => `${target} is blocked`);
+  return [...missing, ...blocked].join('; ');
+}
 
 /**
  * Rollout config override shape parsed from UNIT_TALK_ROLLOUT_CONFIG env var.
@@ -414,7 +498,7 @@ export interface RolloutConfigOverride {
  * Returns an empty record when the env var is absent or unparseable.
  */
 export function resolveRolloutConfig(
-  env: { UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env as Record<string, string | undefined>,
+  env: { UNIT_TALK_ROLLOUT_CONFIG?: string | undefined } = process.env as Record<string, string | undefined>,
 ): Record<string, RolloutConfigOverride> {
   const raw = env.UNIT_TALK_ROLLOUT_CONFIG;
   if (!raw) return {};
@@ -444,7 +528,10 @@ export function resolveRolloutConfig(
 }
 
 export function resolveTargetRegistry(
-  env: { UNIT_TALK_ENABLED_TARGETS?: string; UNIT_TALK_ROLLOUT_CONFIG?: string } = process.env as Record<string, string | undefined>,
+  env: {
+    UNIT_TALK_ENABLED_TARGETS?: string | undefined;
+    UNIT_TALK_ROLLOUT_CONFIG?: string | undefined;
+  } = process.env as Record<string, string | undefined>,
 ): TargetRegistryEntry[] {
   const raw = env.UNIT_TALK_ENABLED_TARGETS;
   let registry: TargetRegistryEntry[];
@@ -471,6 +558,12 @@ export function resolveTargetRegistry(
   // Merge rollout config overrides
   const rolloutConfig = resolveRolloutConfig(env);
   for (const entry of registry) {
+    if (isPromotionTargetBlocked(entry.target)) {
+      entry.enabled = false;
+      entry.disabledReason = 'Activation contract required before live delivery';
+      continue;
+    }
+
     const override = rolloutConfig[entry.target];
     if (!override) continue;
     if (override.rolloutPct !== undefined) {
@@ -489,6 +582,9 @@ export function isTargetEnabled(
   registry: TargetRegistryEntry[],
 ): boolean {
   const entry = registry.find((e) => e.target === target);
+  if (entry && isPromotionTargetBlocked(entry.target)) {
+    return false;
+  }
   return entry?.enabled ?? false;
 }
 

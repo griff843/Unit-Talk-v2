@@ -4,8 +4,13 @@ import {
   resolveRolloutConfig,
   resolveTargetRegistry,
   checkRolloutControls,
+  deliveryTargetForPromotionTarget,
+  evaluateWorkerTargetCoverage,
   fnv1aHash,
   defaultTargetRegistry,
+  isBlockedDiscordTarget,
+  isTargetEnabled,
+  parsePromotionTargetFromDeliveryTarget,
   resolveExposureGateConfig,
   defaultExposureGateConfig,
   type TargetRegistryEntry,
@@ -84,6 +89,76 @@ describe('rollout controls', () => {
       assert.ok(bestBets);
       assert.equal(bestBets.enabled, true);
       assert.equal(bestBets.rolloutPct, 50);
+    });
+
+    test('keeps blocked promotion targets disabled even when explicitly listed', () => {
+      const registry = resolveTargetRegistry({
+        UNIT_TALK_ENABLED_TARGETS: 'best-bets,exclusive-insights',
+      });
+
+      assert.equal(registry.find((e) => e.target === 'best-bets')?.enabled, true);
+      assert.equal(registry.find((e) => e.target === 'exclusive-insights')?.enabled, false);
+      assert.equal(isTargetEnabled('exclusive-insights', registry), false);
+      assert.match(
+        registry.find((e) => e.target === 'exclusive-insights')?.disabledReason ?? '',
+        /Activation contract required/i,
+      );
+    });
+  });
+
+  describe('worker target coverage', () => {
+    test('maps governed promotion targets to Discord worker targets', () => {
+      assert.equal(deliveryTargetForPromotionTarget('best-bets', 'production'), 'discord:best-bets');
+      assert.equal(deliveryTargetForPromotionTarget('trader-insights', 'staging'), 'discord:trader-insights');
+      assert.equal(deliveryTargetForPromotionTarget('best-bets', 'local'), 'discord:canary');
+      assert.equal(parsePromotionTargetFromDeliveryTarget('discord:best-bets'), 'best-bets');
+      assert.equal(parsePromotionTargetFromDeliveryTarget('discord:canary'), null);
+    });
+
+    test('reports enabled promotion targets missing worker coverage', () => {
+      const report = evaluateWorkerTargetCoverage({
+        registry: [
+          { target: 'best-bets', enabled: true, rolloutPct: 100 },
+          { target: 'trader-insights', enabled: true, rolloutPct: 100 },
+          { target: 'exclusive-insights', enabled: false, rolloutPct: 100 },
+        ],
+        workerTargets: ['discord:best-bets'],
+        appEnv: 'production',
+      });
+
+      assert.equal(report.ok, false);
+      assert.deepEqual(report.enabledPromotionTargets, ['best-bets', 'trader-insights']);
+      assert.deepEqual(report.missingWorkerTargets, [
+        { target: 'trader-insights', requiredWorkerTarget: 'discord:trader-insights' },
+      ]);
+      assert.equal(report.rejectedTargetMismatchCount, 1);
+    });
+
+    test('treats local canary as processable for governed promotion targets', () => {
+      const report = evaluateWorkerTargetCoverage({
+        registry: [
+          { target: 'best-bets', enabled: true, rolloutPct: 100 },
+          { target: 'trader-insights', enabled: true, rolloutPct: 100 },
+        ],
+        workerTargets: ['discord:canary'],
+        appEnv: 'local',
+      });
+
+      assert.equal(report.ok, true);
+      assert.equal(report.rejectedTargetMismatchCount, 0);
+    });
+
+    test('reports blocked Discord worker targets', () => {
+      const report = evaluateWorkerTargetCoverage({
+        registry: [{ target: 'best-bets', enabled: true, rolloutPct: 100 }],
+        workerTargets: ['discord:best-bets', 'discord:exclusive-insights'],
+        appEnv: 'production',
+      });
+
+      assert.equal(isBlockedDiscordTarget('discord:exclusive-insights'), true);
+      assert.equal(report.ok, false);
+      assert.deepEqual(report.blockedWorkerTargets, ['discord:exclusive-insights']);
+      assert.equal(report.rejectedTargetMismatchCount, 1);
     });
   });
 

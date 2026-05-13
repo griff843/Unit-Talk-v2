@@ -16,6 +16,7 @@ import {
 import {
   AwaitingApprovalBrakeError,
   enqueueDistributionWork,
+  evaluateDistributionTargetGate,
   resolveDeliveryTarget,
   type DistributionEnqueueResult,
 } from './distribution-service.js';
@@ -106,6 +107,23 @@ export async function enqueueDistributionWithRunTracking(
             )
           ).pick
         : pick;
+    const targetGate = evaluateDistributionTargetGate(target);
+    if (!targetGate.ok) {
+      const completedRun = await systemRunRepository.completeRun({
+        runId: run.id,
+        status: 'succeeded',
+        details: { target: resolvedTarget, reason: targetGate.reason },
+      });
+      const audit = await auditLogRepository.record({
+        entityType: 'distribution_outbox',
+        entityId: run.id,
+        action: 'distribution.enqueue',
+        actor,
+        payload: { pickId: pick.id, target: resolvedTarget, skipped: true, reason: targetGate.reason },
+      });
+      return { run: completedRun, audit, target: resolvedTarget, pickId: pick.id };
+    }
+
     // Try atomic path (lifecycle + outbox in single Postgres transaction),
     // fall back to sequential for InMemory mode.
     let outboxRecord: OutboxRecord;

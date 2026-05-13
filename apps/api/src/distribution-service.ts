@@ -1,7 +1,16 @@
 import type { CanonicalPick, PickSource } from '@unit-talk/contracts';
 import type { OutboxRecord, OutboxRepository } from '@unit-talk/db';
 import { buildDistributionWorkItem } from '@unit-talk/domain';
-import { isTargetEnabled, resolveTargetRegistry, type TargetRegistryEntry } from '@unit-talk/contracts';
+import {
+  evaluateWorkerTargetCoverage,
+  formatWorkerTargetCoverageError,
+  isTargetEnabled,
+  parsePromotionTargetFromDeliveryTarget,
+  resolveTargetRegistry,
+  type PromotionTarget,
+  type TargetRegistryEntry,
+  type WorkerTargetCoverageReport,
+} from '@unit-talk/contracts';
 
 export interface DistributionEnqueueResult {
   pickId: string;
@@ -14,6 +23,47 @@ export interface DistributionSkippedResult {
   reason: 'target-disabled' | 'duplicate-pending';
   target: string;
   existingOutboxId?: string;
+}
+
+export interface DistributionTargetGateAllowed {
+  ok: true;
+  requestedPromotionTarget: PromotionTarget | null;
+  resolvedTarget: string;
+}
+
+export interface DistributionTargetGateSkipped {
+  ok: false;
+  reason: 'target-disabled';
+  requestedPromotionTarget: PromotionTarget;
+  resolvedTarget: string;
+}
+
+export type DistributionTargetGate =
+  | DistributionTargetGateAllowed
+  | DistributionTargetGateSkipped;
+
+export interface DistributionTargetValidationStats {
+  rejectedTargetMismatchCount: number;
+}
+
+let rejectedTargetMismatchCount = 0;
+
+export class DistributionTargetMismatchError extends Error {
+  public readonly report: WorkerTargetCoverageReport;
+
+  constructor(report: WorkerTargetCoverageReport) {
+    super(`Distribution target mismatch: ${formatWorkerTargetCoverageError(report)}`);
+    this.name = 'DistributionTargetMismatchError';
+    this.report = report;
+  }
+}
+
+export function getDistributionTargetValidationStats(): DistributionTargetValidationStats {
+  return { rejectedTargetMismatchCount };
+}
+
+export function resetDistributionTargetValidationStats(): void {
+  rejectedTargetMismatchCount = 0;
 }
 
 /**
@@ -71,7 +121,7 @@ const ACTIVE_OUTBOX_STATUSES = ['pending', 'processing'] as const;
 
 export function resolveDeliveryTarget(
   target: string,
-  env: { UNIT_TALK_APP_ENV?: string } = process.env,
+  env: { UNIT_TALK_APP_ENV?: string | undefined } = process.env,
 ) {
   // In local/dev execution we preserve business truth on picks.promotion_target, but
   // delivery itself must fail-closed to discord:canary so nothing reaches a live lane.
@@ -86,6 +136,50 @@ export function resolveDeliveryTarget(
   return target;
 }
 
+export function evaluateDistributionTargetGate(
+  target: string,
+  targetRegistry?: TargetRegistryEntry[],
+  env: {
+    UNIT_TALK_APP_ENV?: string | undefined;
+    UNIT_TALK_DISTRIBUTION_TARGETS?: string | undefined;
+    UNIT_TALK_ENABLED_TARGETS?: string | undefined;
+    UNIT_TALK_ROLLOUT_CONFIG?: string | undefined;
+  } = process.env,
+): DistributionTargetGate {
+  const registry = targetRegistry ?? resolveTargetRegistry(env);
+  const requestedPromotionTarget = parsePromotionTargetFromDeliveryTarget(target);
+  const resolvedTarget = resolveDeliveryTarget(target, env);
+
+  if (!requestedPromotionTarget) {
+    return { ok: true, requestedPromotionTarget, resolvedTarget };
+  }
+
+  if (!isTargetEnabled(requestedPromotionTarget, registry)) {
+    return {
+      ok: false,
+      reason: 'target-disabled',
+      requestedPromotionTarget,
+      resolvedTarget,
+    };
+  }
+
+  const configuredWorkerTargets = readConfiguredWorkerTargets(env);
+  if (configuredWorkerTargets !== undefined) {
+    const report = evaluateWorkerTargetCoverage({
+      registry,
+      workerTargets: configuredWorkerTargets,
+      appEnv: env.UNIT_TALK_APP_ENV,
+    });
+
+    if (!report.ok) {
+      rejectedTargetMismatchCount += report.rejectedTargetMismatchCount;
+      throw new DistributionTargetMismatchError(report);
+    }
+  }
+
+  return { ok: true, requestedPromotionTarget, resolvedTarget };
+}
+
 export async function enqueueDistributionWork(
   pick: CanonicalPick,
   outboxRepository: OutboxRepository,
@@ -93,8 +187,9 @@ export async function enqueueDistributionWork(
   targetRegistry?: TargetRegistryEntry[],
 ): Promise<DistributionEnqueueResult | DistributionSkippedResult> {
   const registry = targetRegistry ?? resolveTargetRegistry();
-  const requestedPromotionTarget = parseGovernedPromotionTarget(target);
-  const resolvedTarget = resolveDeliveryTarget(target);
+  const targetGate = evaluateDistributionTargetGate(target, registry);
+  const requestedPromotionTarget = targetGate.requestedPromotionTarget;
+  const resolvedTarget = targetGate.resolvedTarget;
 
   // Phase 7A governance brake: refuse to enqueue picks that are currently
   // parked in `awaiting_approval`. Defense-in-depth — the primary brake is
@@ -103,7 +198,7 @@ export async function enqueueDistributionWork(
     throw new AwaitingApprovalBrakeError(pick.id, target);
   }
 
-  if (requestedPromotionTarget && !isTargetEnabled(requestedPromotionTarget, registry)) {
+  if (!targetGate.ok) {
     return { enqueued: false, reason: 'target-disabled', target };
   }
 
@@ -153,21 +248,15 @@ export async function enqueueDistributionWork(
   };
 }
 
-function parseGovernedPromotionTarget(target: string) {
-  if (!target.startsWith('discord:')) {
-    return null;
+function readConfiguredWorkerTargets(env: { UNIT_TALK_DISTRIBUTION_TARGETS?: string | undefined }) {
+  if (!Object.prototype.hasOwnProperty.call(env, 'UNIT_TALK_DISTRIBUTION_TARGETS')) {
+    return undefined;
   }
 
-  const channelTarget = target.slice('discord:'.length);
-  if (
-    channelTarget === 'best-bets' ||
-    channelTarget === 'trader-insights' ||
-    channelTarget === 'exclusive-insights'
-  ) {
-    return channelTarget;
-  }
-
-  return null;
+  return (env.UNIT_TALK_DISTRIBUTION_TARGETS ?? '')
+    .split(',')
+    .map((target) => target.trim())
+    .filter((target) => target.length > 0);
 }
 
 function formatTargetLabel(target: 'best-bets' | 'trader-insights' | 'exclusive-insights') {

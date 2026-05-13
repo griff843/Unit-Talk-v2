@@ -2202,7 +2202,7 @@ test('exclusive-insights outranks trader-insights in eager evaluation', async ()
   );
 });
 
-test('distribution gate accepts discord:exclusive-insights for qualified picks', async () => {
+test('distribution gate rejects blocked discord:exclusive-insights even for qualified picks', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
     {
@@ -2235,19 +2235,15 @@ test('distribution gate accepts discord:exclusive-insights for qualified picks',
       { target: 'exclusive-insights', enabled: true, rolloutPct: 100 },
     ],
   );
-  assert.ok(!('enqueued' in tracked), 'expected DistributionEnqueueResult');
 
   assert.equal(result.pick.promotionTarget, 'exclusive-insights');
   assert.equal(result.pick.promotionStatus, 'qualified');
-  assert.equal(tracked.target, 'discord:exclusive-insights');
-
-  const claimed = await claimDistributionWork(
-    repositories.outbox,
-    'discord:exclusive-insights',
-    'test-worker-exclusive',
-  );
-  assert.ok(claimed.outboxRecord);
-  assert.equal(claimed.outboxRecord?.pick_id, result.pick.id);
+  assert.deepEqual(tracked, {
+    enqueued: false,
+    reason: 'target-disabled',
+    target: 'discord:exclusive-insights',
+  });
+  assert.deepEqual(await repositories.outbox.listByPickId(result.pick.id), []);
 });
 
 // A3: best-bets with absent/null edge+trust scores still qualifies (thresholds are 0)

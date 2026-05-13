@@ -11,6 +11,12 @@ import {
   createServiceRoleDatabaseConnectionConfig,
   type RepositoryBundle,
 } from '@unit-talk/db';
+import {
+  evaluateWorkerTargetCoverage,
+  formatWorkerTargetCoverageError,
+  resolveTargetRegistry,
+  type WorkerTargetCoverageReport,
+} from '@unit-talk/contracts';
 
 export interface WorkerRuntimeDependencies {
   repositories: RepositoryBundle;
@@ -29,6 +35,7 @@ export interface WorkerRuntimeDependencies {
   dryRun: boolean;
   autorun: boolean;
   simulationMode: boolean;
+  targetCoverage: WorkerTargetCoverageReport;
 }
 
 export function createWorkerRuntimeDependencies(
@@ -58,6 +65,22 @@ export function createWorkerRuntimeDependencies(
     dryRun,
     workerTargets: distributionTargets,
   });
+  const targetCoverage = evaluateWorkerTargetCoverage({
+    registry: resolveTargetRegistry(environment),
+    workerTargets: distributionTargets,
+    appEnv: environment.UNIT_TALK_APP_ENV,
+  });
+
+  if (startupConfig.productionLike && !targetCoverage.ok) {
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_REQUIRED_ENV_MISSING',
+      service: 'worker',
+      missingKeys: ['UNIT_TALK_DISTRIBUTION_TARGETS'],
+      message:
+        `worker target configuration does not cover enabled promotion targets: ` +
+        formatWorkerTargetCoverageError(targetCoverage),
+    });
+  }
 
   if (startupConfig.productionLike && adapterKind !== 'discord') {
     throw new RuntimeConfigError({
@@ -91,6 +114,7 @@ export function createWorkerRuntimeDependencies(
       dryRun,
       autorun: readAutorun(environment),
       simulationMode: readSimulationMode(environment),
+      targetCoverage,
     };
   }
 
@@ -113,6 +137,7 @@ export function createWorkerRuntimeDependencies(
     dryRun,
     autorun: readAutorun(environment),
     simulationMode: readSimulationMode(environment),
+    targetCoverage,
   };
 }
 

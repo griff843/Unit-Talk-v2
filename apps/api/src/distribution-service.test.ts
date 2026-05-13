@@ -4,8 +4,12 @@ import type { CanonicalPick } from '@unit-talk/contracts';
 import { InMemoryOutboxRepository } from '@unit-talk/db';
 import {
   AwaitingApprovalBrakeError,
+  DistributionTargetMismatchError,
   enqueueDistributionWork,
+  evaluateDistributionTargetGate,
+  getDistributionTargetValidationStats,
   isGovernanceBrakeSource,
+  resetDistributionTargetValidationStats,
   resolveDeliveryTarget,
   type DistributionSkippedResult,
 } from './distribution-service.js';
@@ -130,6 +134,73 @@ test('enqueueDistributionWork rewrites governed discord targets to canary in loc
       process.env.UNIT_TALK_APP_ENV = previousAppEnv;
     }
   }
+});
+
+test('evaluateDistributionTargetGate rejects enabled promotion targets without worker coverage', () => {
+  resetDistributionTargetValidationStats();
+
+  assert.throws(
+    () =>
+      evaluateDistributionTargetGate(
+        'discord:best-bets',
+        [
+          { target: 'best-bets', enabled: true, rolloutPct: 100 },
+          { target: 'trader-insights', enabled: false, rolloutPct: 100 },
+          { target: 'exclusive-insights', enabled: false, rolloutPct: 100 },
+        ],
+        {
+          UNIT_TALK_APP_ENV: 'production',
+          UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:canary',
+        },
+      ),
+    DistributionTargetMismatchError,
+  );
+
+  assert.equal(getDistributionTargetValidationStats().rejectedTargetMismatchCount, 1);
+});
+
+test('evaluateDistributionTargetGate allows enabled promotion targets with worker coverage', () => {
+  const gate = evaluateDistributionTargetGate(
+    'discord:best-bets',
+    [
+      { target: 'best-bets', enabled: true, rolloutPct: 100 },
+      { target: 'trader-insights', enabled: false, rolloutPct: 100 },
+      { target: 'exclusive-insights', enabled: false, rolloutPct: 100 },
+    ],
+    {
+      UNIT_TALK_APP_ENV: 'production',
+      UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets',
+    },
+  );
+
+  assert.equal(gate.ok, true);
+  assert.equal(gate.resolvedTarget, 'discord:best-bets');
+});
+
+test('enqueueDistributionWork rejects blocked promotion targets even with explicit registry', async () => {
+  const outbox = new InMemoryOutboxRepository();
+  const pick = makePick({
+    promotionTarget: 'exclusive-insights',
+    promotionStatus: 'qualified',
+  });
+
+  const result = await enqueueDistributionWork(
+    pick,
+    outbox,
+    'discord:exclusive-insights',
+    [
+      { target: 'best-bets', enabled: true, rolloutPct: 100 },
+      { target: 'trader-insights', enabled: true, rolloutPct: 100 },
+      { target: 'exclusive-insights', enabled: true, rolloutPct: 100 },
+    ],
+  );
+
+  assert.deepEqual(result, {
+    enqueued: false,
+    reason: 'target-disabled',
+    target: 'discord:exclusive-insights',
+  });
+  assert.deepEqual(await outbox.listByPickId(pick.id), []);
 });
 
 test('enqueueDistributionWork: duplicate enqueue for same pick+target is rejected when pending row exists', async () => {

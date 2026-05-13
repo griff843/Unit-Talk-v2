@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import type { CanonicalPick } from '@unit-talk/contracts';
 
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
-import { AwaitingApprovalBrakeError } from './distribution-service.js';
+import { AwaitingApprovalBrakeError, DistributionTargetMismatchError } from './distribution-service.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 
 // ---------------------------------------------------------------------------
@@ -108,3 +108,64 @@ test('enqueueDistributionWithRunTracking: re-fetches DB state and blocks even if
   const outboxRows = await repositories.outbox.listByPickId(stalePickObject.id);
   assert.equal(outboxRows.length, 0);
 });
+
+test('enqueueDistributionWithRunTracking: blocks target drift before atomic enqueue', async () => {
+  const previousEnv = {
+    UNIT_TALK_APP_ENV: process.env.UNIT_TALK_APP_ENV,
+    UNIT_TALK_DISTRIBUTION_TARGETS: process.env.UNIT_TALK_DISTRIBUTION_TARGETS,
+    UNIT_TALK_ENABLED_TARGETS: process.env.UNIT_TALK_ENABLED_TARGETS,
+  };
+  process.env.UNIT_TALK_APP_ENV = 'production';
+  process.env.UNIT_TALK_DISTRIBUTION_TARGETS = 'discord:canary';
+  process.env.UNIT_TALK_ENABLED_TARGETS = 'best-bets';
+
+  try {
+    const repositories = createInMemoryRepositoryBundle();
+    const pick = makeParkedPick({
+      id: 'pick-target-drift-1',
+      source: 'api',
+      approvalStatus: 'approved',
+      lifecycleState: 'validated',
+      promotionStatus: 'qualified',
+      promotionTarget: 'best-bets',
+    });
+    await repositories.picks.savePick(pick);
+
+    let atomicCalled = false;
+    repositories.outbox.enqueueDistributionAtomic = async () => {
+      atomicCalled = true;
+      throw new Error('atomic enqueue should not run when target coverage fails');
+    };
+
+    await assert.rejects(
+      () =>
+        enqueueDistributionWithRunTracking(
+          pick,
+          'discord:best-bets',
+          'test-actor',
+          repositories.picks,
+          repositories.outbox,
+          repositories.runs,
+          repositories.audit,
+        ),
+      DistributionTargetMismatchError,
+    );
+
+    assert.equal(atomicCalled, false, 'target drift gate must run before atomic enqueue');
+    assert.equal((await repositories.outbox.listByPickId(pick.id)).length, 0);
+    assert.equal((await repositories.picks.findPickById(pick.id))?.status, 'validated');
+  } finally {
+    restoreEnvValue('UNIT_TALK_APP_ENV', previousEnv.UNIT_TALK_APP_ENV);
+    restoreEnvValue('UNIT_TALK_DISTRIBUTION_TARGETS', previousEnv.UNIT_TALK_DISTRIBUTION_TARGETS);
+    restoreEnvValue('UNIT_TALK_ENABLED_TARGETS', previousEnv.UNIT_TALK_ENABLED_TARGETS);
+  }
+});
+
+function restoreEnvValue(name: string, value: string | undefined) {
+  if (value === undefined) {
+    delete process.env[name];
+    return;
+  }
+
+  process.env[name] = value;
+}
