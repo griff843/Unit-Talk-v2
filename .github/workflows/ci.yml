@@ -50,6 +50,9 @@ jobs:
       - name: Verify environment
         run: pnpm env:check
 
+      - name: Audit production dependencies
+        run: pnpm audit --prod --audit-level high
+
       - name: Lint
         run: pnpm lint
 

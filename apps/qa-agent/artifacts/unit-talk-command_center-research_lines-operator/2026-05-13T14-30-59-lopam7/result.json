@@ -1,0 +1,210 @@
+{
+  "schema": "experience-qa/v1",
+  "runId": "2026-05-13T14-30-59-lopam7",
+  "product": "unit-talk",
+  "surface": "command_center",
+  "persona": "operator",
+  "flow": "research_lines",
+  "environment": "local",
+  "headSha": "f51a5bf1",
+  "timestamp": "2026-05-13T14:30:59.054Z",
+  "mode": "fast",
+  "status": "FAIL",
+  "verdictReason": "Browser steps finished with FAIL.",
+  "severity": "high",
+  "preflightResults": [
+    {
+      "id": "command_center_research_lines_route_reachable",
+      "status": "passed",
+      "required": true,
+      "message": "Command Center /research/lines returned HTTP 200.",
+      "evidence": {
+        "url": "http://localhost:4300/research/lines",
+        "status": 200,
+        "location": null
+      }
+    }
+  ],
+  "steps": [
+    {
+      "step": "Navigate to /research/lines",
+      "status": "pass",
+      "timestamp": "2026-05-13T14:31:03.444Z",
+      "durationMs": 201
+    },
+    {
+      "step": "Wait for research lines content to render",
+      "status": "fail",
+      "detail": "page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('main, form, table, h1, body > *:not(script)') to be visible\u001b[22m\n\u001b[2m    5 × locator resolved to 7 elements. Proceeding with the first one: <div hidden=\"\">…</div>\u001b[22m\n\u001b[2m    19 × locator resolved to 8 elements. Proceeding with the first one: <div hidden=\"\">…</div>\u001b[22m\n",
+      "timestamp": "2026-05-13T14:31:13.459Z",
+      "durationMs": 10015
+    },
+    {
+      "step": "Check for line-shopper signal",
+      "status": "pass",
+      "timestamp": "2026-05-13T14:31:13.570Z",
+      "durationMs": 11
+    },
+    {
+      "step": "Check for filter/search controls",
+      "status": "pass",
+      "timestamp": "2026-05-13T14:31:13.573Z",
+      "durationMs": 3
+    },
+    {
+      "step": "Check for table or intentional empty state",
+      "status": "pass",
+      "timestamp": "2026-05-13T14:31:13.700Z",
+      "durationMs": 14
+    },
+    {
+      "step": "No critical JS errors on research lines page",
+      "status": "pass",
+      "timestamp": "2026-05-13T14:31:13.700Z",
+      "durationMs": 0
+    }
+  ],
+  "expectationResults": [
+    {
+      "id": "command_center_research_lines_no_5xx_network_responses",
+      "status": "passed",
+      "severity": "critical",
+      "message": "No HTTP 5xx network responses observed.",
+      "evidence": [],
+      "hard": true
+    },
+    {
+      "id": "command_center_research_lines_page_renders",
+      "status": "passed",
+      "severity": "critical",
+      "message": "Research lines page rendered without a crash state.",
+      "evidence": {
+        "pageUrl": "http://localhost:4300/research/lines"
+      },
+      "hard": true
+    },
+    {
+      "id": "command_center_research_lines_table_or_empty_state_visible",
+      "status": "passed",
+      "severity": "medium",
+      "message": "Research lines table or empty state was visible.",
+      "evidence": [
+        {
+          "key": "linesTable",
+          "preferred": "[data-testid=\"research-lines-table\"]",
+          "preferredFound": false,
+          "fallbackUsed": "text=/lines|spread|total|moneyline/i",
+          "found": true,
+          "recommendation": "Add stable selector [data-testid=\"research-lines-table\"] for linesTable; fallback text=/lines|spread|total|moneyline/i worked."
+        },
+        {
+          "key": "emptyState",
+          "preferred": "[data-testid=\"research-lines-empty-state\"]",
+          "preferredFound": false,
+          "fallbackUsed": "text=/enter a participant|no offers found|unable to load line data/i",
+          "found": true,
+          "recommendation": "Add stable selector [data-testid=\"research-lines-empty-state\"] for emptyState; fallback text=/enter a participant|no offers found|unable to load line data/i worked."
+        }
+      ],
+      "hard": false
+    }
+  ],
+  "observations": [],
+  "selectorResults": [
+    {
+      "key": "linesTable",
+      "preferred": "[data-testid=\"research-lines-table\"]",
+      "preferredFound": false,
+      "fallbackUsed": "text=/lines|spread|total|moneyline/i",
+      "found": true,
+      "recommendation": "Add stable selector [data-testid=\"research-lines-table\"] for linesTable; fallback text=/lines|spread|total|moneyline/i worked."
+    },
+    {
+      "key": "filters",
+      "preferred": "form input, form select, form button",
+      "preferredFound": true,
+      "found": true
+    },
+    {
+      "key": "emptyState",
+      "preferred": "[data-testid=\"research-lines-empty-state\"]",
+      "preferredFound": false,
+      "fallbackUsed": "text=/enter a participant|no offers found|unable to load line data/i",
+      "found": true,
+      "recommendation": "Add stable selector [data-testid=\"research-lines-empty-state\"] for emptyState; fallback text=/enter a participant|no offers found|unable to load line data/i worked."
+    }
+  ],
+  "screenshots": [
+    "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-918-patch-high-severity-deps\\apps\\qa-agent\\artifacts\\unit-talk-command_center-research_lines-operator\\2026-05-13T14-30-59-lopam7\\01-research-lines-loaded.png",
+    "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-918-patch-high-severity-deps\\apps\\qa-agent\\artifacts\\unit-talk-command_center-research_lines-operator\\2026-05-13T14-30-59-lopam7\\02-research-lines-controls.png",
+    "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-918-patch-high-severity-deps\\apps\\qa-agent\\artifacts\\unit-talk-command_center-research_lines-operator\\2026-05-13T14-30-59-lopam7\\03-research-lines-final-state.png"
+  ],
+  "consoleErrors": [],
+  "networkErrors": [],
+  "networkObservations": [
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/research/lines",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/_next/static/css/app/layout.css?v=1778682663293",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/_next/static/chunks/app/layout.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/_next/static/chunks/app-pages-internals.js",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/_next/static/chunks/webpack.js?v=1778682663293",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/_next/static/chunks/main-app.js?v=1778682663293",
+      "status": 200
+    },
+    {
+      "method": "GET",
+      "url": "http://localhost:4300/_next/static/chunks/_app-pages-browser_node_modules_pnpm_next_15_5_18__babel_core_7__4f28611e879e9843b2c943555ad1-b7822b.js",
+      "status": 200
+    }
+  ],
+  "uxFriction": [],
+  "issueRecommendation": {
+    "title": "[QA] Command Center research lines fails at: Wait for research lines content to render",
+    "severity": "high",
+    "product": "unit-talk",
+    "surface": "command_center",
+    "description": "Research lines flow failed. Step: \"Wait for research lines content to render\". Detail: page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('main, form, table, h1, body > *:not(script)') to be visible\u001b[22m\n\u001b[2m    5 × locator resolved to 7 elements. Proceeding with the first one: <div hidden=\"\">…</div>\u001b[22m\n\u001b[2m    19 × locator resolved to 8 elements. Proceeding with the first one: <div hidden=\"\">…</div>\u001b[22m\n",
+    "stepsToReproduce": [
+      "Open Command Center at http://localhost:4300/research/lines",
+      "Wait for the research lines page to load",
+      "Check for filter/search controls and line table or empty state"
+    ],
+    "expectedBehavior": "Research lines page loads without errors and shows filters plus table or empty state",
+    "actualBehavior": "page.waitForSelector: Timeout 10000ms exceeded.\nCall log:\n\u001b[2m  - waiting for locator('main, form, table, h1, body > *:not(script)') to be visible\u001b[22m\n\u001b[2m    5 × locator resolved to 7 elements. Proceeding with the first one: <div hidden=\"\">…</div>\u001b[22m\n\u001b[2m    19 × locator resolved to 8 elements. Proceeding with the first one: <div hidden=\"\">…</div>\u001b[22m\n",
+    "screenshotPaths": [],
+    "labels": [
+      "qa-agent",
+      "unit-talk",
+      "command_center",
+      "research_lines",
+      "severity-high"
+    ]
+  },
+  "regressionRecommendation": "Add stable selector [data-testid=\"research-lines-table\"] for linesTable; fallback text=/lines|spread|total|moneyline/i worked.",
+  "regressionRecommendations": [
+    "Add stable selector [data-testid=\"research-lines-table\"] for linesTable; fallback text=/lines|spread|total|moneyline/i worked.",
+    "Add stable selector [data-testid=\"research-lines-empty-state\"] for emptyState; fallback text=/enter a participant|no offers found|unable to load line data/i worked."
+  ],
+  "durationMs": 15805
+}
