@@ -7,4 +7,5 @@ entities:
     - UTV2-915
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - utv2-915-fail-closed-runtime-proof
