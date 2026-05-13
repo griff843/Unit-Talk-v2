@@ -3,11 +3,10 @@
 -- Supabase Pro tier includes pg_cron. This migration:
 --   1. Enables the pg_cron extension (no-op if already enabled)
 --   2. Removes any stale job with the same name (idempotent)
---   3. Schedules a nightly 3am UTC retention sweep across all high-volume tables
+--   3. Schedules a nightly 3am UTC retention sweep across high-volume mutable tables
 --
 -- Retention policy per DB_SCALING_STRATEGY.md:
 --   provider_offers   — 30 days
---   audit_log         — 90 days (created_at index added in 202604080015)
 --   alert_detections  — 30 days
 --   submission_events — 90 days
 --   distribution_outbox (delivered rows) — 7 days
@@ -27,9 +26,6 @@ SELECT cron.schedule(
   $$
     DELETE FROM public.provider_offers
       WHERE created_at < NOW() - INTERVAL '30 days';
-
-    DELETE FROM public.audit_log
-      WHERE created_at < NOW() - INTERVAL '90 days';
 
     DELETE FROM public.alert_detections
       WHERE created_at < NOW() - INTERVAL '30 days';

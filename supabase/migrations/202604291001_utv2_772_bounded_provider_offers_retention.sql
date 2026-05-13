@@ -81,9 +81,6 @@ SELECT cron.schedule(
   $$
     SELECT * FROM public.prune_provider_offers_bounded(7, 5000, 20);
 
-    DELETE FROM public.audit_log
-      WHERE created_at < NOW() - INTERVAL '90 days';
-
     DELETE FROM public.alert_detections
       WHERE created_at < NOW() - INTERVAL '30 days';
 

@@ -4,6 +4,49 @@ import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
 import { evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
 import { buildFiberyPayloads } from './fibery-update-scaffold.js';
 
+test('migration linter flags destructive audit_log statements with file and statement context', async () => {
+  const { lintMigrationContent } = await import('../lint-migrations.mjs');
+
+  const findings = lintMigrationContent(
+    [
+      '-- DELETE FROM public.audit_log is mentioned in a comment only',
+      'DELETE FROM public.audit_log',
+      "  WHERE created_at < NOW() - INTERVAL '90 days';",
+      'UPDATE audit_log SET action = action;',
+      'TRUNCATE TABLE public.audit_log;',
+    ].join('\n'),
+    'future_bad_migration.sql',
+  );
+
+  assert.deepStrictEqual(
+    findings.map((finding: { rule: string }) => finding.rule),
+    ['A1', 'A1', 'A1'],
+  );
+  assert.deepStrictEqual(
+    findings.map((finding: { file: string }) => finding.file),
+    ['future_bad_migration.sql', 'future_bad_migration.sql', 'future_bad_migration.sql'],
+  );
+  assert.match(findings[0].statement, /DELETE FROM public\.audit_log/i);
+  assert.match(findings[1].statement, /UPDATE audit_log/i);
+  assert.match(findings[2].statement, /TRUNCATE TABLE public\.audit_log/i);
+});
+
+test('migration linter allows audit_log inserts and immutability triggers', async () => {
+  const { lintMigrationContent } = await import('../lint-migrations.mjs');
+
+  const findings = lintMigrationContent(
+    [
+      'insert into public.audit_log (id, entity_type) values (gen_random_uuid(), \'pick\');',
+      'create trigger audit_log_immutable',
+      '  before update or delete on public.audit_log',
+      '  for each row execute function public.prevent_audit_log_mutation();',
+    ].join('\n'),
+    'audit_safe_migration.sql',
+  );
+
+  assert.deepStrictEqual(findings, []);
+});
+
 test('clean-scripts only keeps untracked files under scripts', () => {
   assert.deepStrictEqual(
     normalizeUntrackedScriptFiles(
