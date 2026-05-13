@@ -1236,3 +1236,33 @@ function githubHeaders(token: string): HeadersInit {
     'User-Agent': 'unit-talk-ops-truth-check',
   };
 }
+
+const P0_RUNBOOK = 'docs/05_operations/P0_PROTOCOL_SPEC.md';
+
+/**
+ * Format P0 protocol H-check failures from a TruthCheckResult as structured
+ * log lines for consistent operator-visible output (UTV2-949).
+ *
+ * Returns empty string when no H-check failures are present.
+ */
+export function formatP0Failures(result: TruthCheckResult): string {
+  const hFailures = result.checks.filter(
+    (c) => c.id.startsWith('H') && c.status === 'fail',
+  );
+
+  if (hFailures.length === 0) return '';
+
+  const lines: string[] = [];
+  for (const check of hFailures) {
+    const event = {
+      event: 'p0_protocol.h_check_failed',
+      check_id: check.id,
+      issue_id: result.issue_id,
+      block_reason: check.detail,
+      verdict: result.verdict,
+      runbook: P0_RUNBOOK,
+    };
+    lines.push(JSON.stringify(event));
+  }
+  return lines.join('\n');
+}

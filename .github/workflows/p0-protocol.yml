@@ -136,6 +136,28 @@ jobs:
           fi
 
           if [ ${#errors[@]} -gt 0 ]; then
+            # Determine primary block_reason from first error
+            BLOCK_REASON="${errors[0]}"
+
+            # Emit structured JSON failure event (UTV2-949)
+            ACTOR="${{ github.actor }}"
+            HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+            TIMESTAMP=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+            RUNBOOK="docs/05_operations/P0_PROTOCOL_SPEC.md"
+
+            mkdir -p /tmp/p0-event
+            jq -n \
+              --arg issue_id "$ISSUE_ID" \
+              --argjson pr "$PR_NUMBER" \
+              --arg head_sha "$HEAD_SHA" \
+              --arg block_reason "$BLOCK_REASON" \
+              --arg actor "$ACTOR" \
+              --arg timestamp "$TIMESTAMP" \
+              --arg runbook "$RUNBOOK" \
+              '{issue_id: $issue_id, pr: $pr, head_sha: $head_sha, block_reason: $block_reason, actor: $actor, timestamp: $timestamp, runbook: $runbook}' \
+              > /tmp/p0-event/p0-failure-event.json
+
             {
               echo "## P0 Protocol: BLOCKED"
               echo ""
@@ -145,13 +167,26 @@ jobs:
                 echo "- $err"
               done
               echo ""
-              echo "See: docs/05_operations/P0_PROTOCOL_SPEC.md"
+              echo "Runbook: $RUNBOOK"
+              echo ""
+              echo '```json'
+              cat /tmp/p0-event/p0-failure-event.json
+              echo '```'
             } | tee "$GITHUB_STEP_SUMMARY"
             exit 1
           fi
 
           echo "## P0 Protocol: OK" | tee "$GITHUB_STEP_SUMMARY"
           echo "All P0 protocol artifacts present and well-formed."
+
+      - name: Upload P0 failure event artifact
+        if: failure() && steps.detect.outputs.is_p0 == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: p0-failure-event
+          path: /tmp/p0-event/p0-failure-event.json
+          retention-days: 90
+          if-no-files-found: ignore
 
       - name: Non-P0 — auto-pass
         if: steps.detect.outputs.is_p0 != 'true'

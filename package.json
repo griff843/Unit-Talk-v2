@@ -91,6 +91,7 @@
     "ops:sync-check": "tsx scripts/ops/sync-check.ts",
     "ops:truth-check": "tsx scripts/ops/truth-check.ts",
     "ops:p0-detect": "tsx scripts/ops/p0-detect.ts",
+    "ops:p0-events": "tsx scripts/ops/p0-events.ts",
     "ops:update-record": "tsx scripts/ops/update-record.ts",
     "pi-m5:verify": "tsx scripts/pi-m5-verify.ts",
     "qa:experience": "tsx apps/qa-agent/src/cli.ts",

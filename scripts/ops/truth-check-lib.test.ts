@@ -5,9 +5,11 @@ import {
   evaluateRequiredChecksWithHeadFallback,
   evaluateTestRunLogEvidence,
   findPostMergeTouches,
+  formatP0Failures,
   hasRuntimeReferences,
   type CommitCheckResult,
 } from './truth-check-lib.js';
+import type { TruthCheckResult } from './shared.js';
 
 function resolveExitCode(
   manifestStatus: 'merged' | 'done',
@@ -172,4 +174,77 @@ test('R1 R2 R3 skip for T1 when phase contracts are not required', () => {
       ['R3', 'skip'],
     ],
   );
+});
+
+function makeResult(overrides: Partial<TruthCheckResult> = {}): TruthCheckResult {
+  return {
+    schema_version: 1,
+    issue_id: 'UTV2-949',
+    tier: 'T2',
+    verdict: 'fail',
+    exit_code: 1,
+    merge_sha: null,
+    pr_url: null,
+    checked_at: '2026-05-13T00:00:00.000Z',
+    checks: [],
+    failures: [],
+    reopen_reasons: [],
+    manifest_path: 'docs/06_status/lanes/UTV2-949.json',
+    ...overrides,
+  };
+}
+
+test('formatP0Failures returns empty string when no H-check failures', () => {
+  const result = makeResult({
+    checks: [
+      { id: 'G1', status: 'pass', detail: 'manifest present' },
+      { id: 'H1', status: 'pass', detail: 'claude-critique present' },
+    ],
+  });
+  assert.strictEqual(formatP0Failures(result), '');
+});
+
+test('formatP0Failures returns empty string when H-check is present but passed', () => {
+  const result = makeResult({
+    checks: [
+      { id: 'H2', status: 'pass', detail: 'runtime-verification present and passing' },
+    ],
+  });
+  assert.strictEqual(formatP0Failures(result), '');
+});
+
+test('formatP0Failures emits one JSON line per failing H-check', () => {
+  const result = makeResult({
+    issue_id: 'UTV2-949',
+    verdict: 'fail',
+    checks: [
+      { id: 'H2', status: 'fail', detail: 'missing required artifact: docs/06_status/proof/UTV2-949/runtime-verification.md' },
+      { id: 'H3', status: 'fail', detail: 'runtime-verification.md does not contain result: pass' },
+    ],
+  });
+  const output = formatP0Failures(result);
+  const lines = output.split('\n');
+  assert.strictEqual(lines.length, 2);
+
+  const first = JSON.parse(lines[0]!);
+  assert.strictEqual(first.event, 'p0_protocol.h_check_failed');
+  assert.strictEqual(first.check_id, 'H2');
+  assert.strictEqual(first.issue_id, 'UTV2-949');
+  assert.strictEqual(first.block_reason, 'missing required artifact: docs/06_status/proof/UTV2-949/runtime-verification.md');
+  assert.strictEqual(first.verdict, 'fail');
+  assert.strictEqual(first.runbook, 'docs/05_operations/P0_PROTOCOL_SPEC.md');
+
+  const second = JSON.parse(lines[1]!);
+  assert.strictEqual(second.check_id, 'H3');
+  assert.strictEqual(second.block_reason, 'runtime-verification.md does not contain result: pass');
+});
+
+test('formatP0Failures ignores non-H check failures', () => {
+  const result = makeResult({
+    checks: [
+      { id: 'G4', status: 'fail', detail: 'required checks missing' },
+      { id: 'P1', status: 'fail', detail: 'proof bundle missing' },
+    ],
+  });
+  assert.strictEqual(formatP0Failures(result), '');
 });
