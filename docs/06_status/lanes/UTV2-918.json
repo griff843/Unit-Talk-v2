@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-918",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-918-patch-high-severity-deps",
+  "branch": "codex/utv2-918-patch-high-severity-deps",
+  "base_branch": "main",
+  "commit_sha": "060537a6b149aa4a8cc61d00e07a3ac046cfb2b9",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/658",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/ci.yml",
+    "apps/command-center/package.json",
+    "apps/discord-bot/package.json",
+    "apps/smart-form/package.json",
+    "package.json",
+    "pnpm-lock.yaml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-918/diff-summary.md",
+    "docs/06_status/proof/UTV2-918/verification.log"
+  ],
+  "status": "done",
+  "started_at": "2026-05-13T14:12:54.040Z",
+  "heartbeat_at": "2026-05-13T14:40:51.998Z",
+  "closed_at": "2026-05-13T16:30:00Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-918-patch-high-severity-deps.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
