@@ -6,8 +6,8 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-914-ut-p0-001-protect-command-center",
   "branch": "griffadavi/utv2-914-ut-p0-001-protect-command-center",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "2411620800c43b8c4954174c56cc43050629c392",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/648",
   "files_changed": [
     ".env.example",
     ".ops/sync.yml",
@@ -56,10 +56,10 @@
     "docs/06_status/proof/UTV2-914/runtime-verification.md",
     "docs/06_status/proof/UTV2-914/proof.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-12T19:51:43.158Z",
-  "heartbeat_at": "2026-05-12T22:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-13T01:02:11.592Z",
+  "closed_at": "2026-05-13T01:02:11.593Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-914-ut-p0-001-protect-command-center.json",
   "created_by": "codex-cli",
@@ -69,21 +69,22 @@
     "required": true,
     "codex_implementation": {
       "recorded": true,
-      "pr_url": "TBD-on-pr-open"
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/648"
     },
     "claude_critique": {
       "recorded": true,
       "artifact_path": "docs/06_status/proof/UTV2-914/claude-critique.md"
     },
     "human_approval": {
-      "recorded": false
+      "recorded": true,
+      "pm_verdict_url": "https://github.com/griff843/Unit-Talk-v2/pull/648#issuecomment-4435590872"
     },
     "runtime_verification": {
       "recorded": true,
       "artifact_path": "docs/06_status/proof/UTV2-914/runtime-verification.md",
       "result": "pass"
     },
-    "merge_type": null
+    "merge_type": "manual"
   },
   "notes": "Wave 1 P0 lane. Codex implemented in worktree, Claude critique APPROVE. verify + test:db + test:command-center all green. PM verdict pending."
 }
