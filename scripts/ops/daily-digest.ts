@@ -511,10 +511,11 @@ function fetchP0EventsSummary(infraErrors: string[]): P0EventsSummary {
     };
     const topReason = parsed.histogram?.[0]?.block_reason ?? null;
     const misconfigCheck = parsed.misconfig_check;
+    const misconfigSkipped = misconfigCheck?.detail?.toLowerCase().includes('skipped') ?? false;
     return {
       total_failures: parsed.total_failures ?? 0,
       top_reason: topReason,
-      misconfig_warning: !(misconfigCheck?.p0_protocol_required ?? true),
+      misconfig_warning: !misconfigSkipped && !(misconfigCheck?.p0_protocol_required ?? true),
       misconfig_detail: misconfigCheck?.detail ?? '',
       skipped: false,
     };

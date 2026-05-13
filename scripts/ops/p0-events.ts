@@ -75,9 +75,9 @@ function parseArgs(): { lookbackDays: number; jsonMode: boolean } {
 }
 
 function resolveRepoSlug(): string {
-  const remote = git(['remote', 'get-url', 'origin']);
-  const match = remote.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
-  if (!match) throw new Error(`Cannot parse repo slug from remote: ${remote}`);
+  const result = git(['remote', 'get-url', 'origin']);
+  const match = result.stdout.match(/github\.com[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
+  if (!match) throw new Error(`Cannot parse repo slug from remote: ${result.stdout}`);
   return match[1]!;
 }
 
