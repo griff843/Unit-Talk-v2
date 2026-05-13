@@ -6,6 +6,7 @@
     "dev": "next dev --port 4300",
     "build": "next build",
     "start": "next start --port 4300",
+    "test": "tsx --test src/lib/server-api.test.ts src/lib/data/client.test.ts",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
