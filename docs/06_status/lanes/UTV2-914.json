@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-914",
+  "lane_type": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\griffadavi__utv2-914-ut-p0-001-protect-command-center",
+  "branch": "griffadavi/utv2-914-ut-p0-001-protect-command-center",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    ".env.example",
+    ".ops/sync.yml",
+    "apps/api/src/auth.test.ts",
+    "apps/api/src/auth.ts",
+    "apps/api/src/http-integration.test.ts",
+    "apps/api/src/server.test.ts",
+    "apps/api/src/server.ts",
+    "apps/command-center/.env.example",
+    "apps/command-center/src/lib/data/client.test.ts",
+    "apps/command-center/src/lib/data/client.ts",
+    "apps/command-center/src/lib/server-api.test.ts",
+    "apps/command-center/src/lib/server-api.ts",
+    "apps/command-center/src/middleware.ts",
+    "docs/06_status/UTV2-914-EVIDENCE-BUNDLE.md",
+    "docs/06_status/lanes/UTV2-914.json",
+    "docs/06_status/proof/UTV2-914/claude-critique.md",
+    "docs/06_status/proof/UTV2-914/proof.md",
+    "docs/06_status/proof/UTV2-914/runtime-verification.md",
+    "package.json"
+  ],
+  "file_scope_lock": [
+    ".env.example",
+    ".ops/sync.yml",
+    "apps/api/src/auth.test.ts",
+    "apps/api/src/auth.ts",
+    "apps/api/src/http-integration.test.ts",
+    "apps/api/src/server.test.ts",
+    "apps/api/src/server.ts",
+    "apps/command-center/.env.example",
+    "apps/command-center/src/lib/data/client.test.ts",
+    "apps/command-center/src/lib/data/client.ts",
+    "apps/command-center/src/lib/server-api.test.ts",
+    "apps/command-center/src/lib/server-api.ts",
+    "apps/command-center/src/middleware.ts",
+    "docs/06_status/UTV2-914-EVIDENCE-BUNDLE.md",
+    "docs/06_status/lanes/UTV2-914.json",
+    "docs/06_status/proof/UTV2-914/claude-critique.md",
+    "docs/06_status/proof/UTV2-914/proof.md",
+    "docs/06_status/proof/UTV2-914/runtime-verification.md",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-914/evidence.json",
+    "docs/06_status/proof/UTV2-914/claude-critique.md",
+    "docs/06_status/proof/UTV2-914/runtime-verification.md",
+    "docs/06_status/proof/UTV2-914/proof.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-12T19:51:43.158Z",
+  "heartbeat_at": "2026-05-12T22:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-914-ut-p0-001-protect-command-center.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "p0_protocol": {
+    "required": true,
+    "codex_implementation": {
+      "recorded": true,
+      "pr_url": "TBD-on-pr-open"
+    },
+    "claude_critique": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-914/claude-critique.md"
+    },
+    "human_approval": {
+      "recorded": false
+    },
+    "runtime_verification": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-914/runtime-verification.md",
+      "result": "pass"
+    },
+    "merge_type": null
+  },
+  "notes": "Wave 1 P0 lane. Codex implemented in worktree, Claude critique APPROVE. verify + test:db + test:command-center all green. PM verdict pending."
+}

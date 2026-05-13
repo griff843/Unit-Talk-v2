@@ -4,6 +4,7 @@ import {
   requireSupabaseEnvironment,
   type AppEnv,
 } from '../../../../../packages/config/dist/env.js';
+import { assertCommandCenterAuthConfig } from '../server-api';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -21,7 +22,14 @@ interface DatabaseClientOptions {
 let _client: SupabaseClient | null = null;
 
 function resolveWorkspaceRoot() {
-  return path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', '..');
+  return path.resolve(
+    path.dirname(fileURLToPath(import.meta.url)),
+    '..',
+    '..',
+    '..',
+    '..',
+    '..',
+  );
 }
 
 export function createDatabaseConnectionConfig(
@@ -30,6 +38,10 @@ export function createDatabaseConnectionConfig(
   const env = options.env ?? loadEnvironment(resolveWorkspaceRoot());
   const supabase = requireSupabaseEnvironment(env);
   const useServiceRole = options.useServiceRole ?? false;
+
+  if (useServiceRole) {
+    assertCommandCenterAuthConfig(toCommandCenterAuthEnv(env));
+  }
 
   return {
     url: supabase.url,
@@ -65,3 +77,12 @@ export function getDataClient(): SupabaseClient {
 }
 
 export const OUTBOX_HISTORY_CUTOFF = '2026-03-20T00:00:00.000Z';
+
+function toCommandCenterAuthEnv(env: AppEnv): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    NODE_ENV: env.NODE_ENV,
+    UNIT_TALK_APP_ENV: env.UNIT_TALK_APP_ENV,
+    UNIT_TALK_OPERATOR_RUNTIME_MODE: env.UNIT_TALK_OPERATOR_RUNTIME_MODE,
+  };
+}

@@ -5,6 +5,7 @@ import {
   loadAuthConfig,
   authenticateRequest,
   authorizeRoute,
+  routeAllowsRole,
   signCapperToken,
 } from './auth.js';
 
@@ -20,7 +21,9 @@ describe('loadAuthConfig', () => {
   });
 
   test('loads operator key from env', () => {
-    const config = loadAuthConfig({ UNIT_TALK_API_KEY_OPERATOR: 'sk-op-test123' });
+    const config = loadAuthConfig({
+      UNIT_TALK_API_KEY_OPERATOR: 'sk-op-test123',
+    });
     assert.equal(config.enabled, true);
     assert.equal(config.keys.size, 1);
     const ctx = config.keys.get('sk-op-test123');
@@ -51,6 +54,32 @@ describe('loadAuthConfig', () => {
   });
 });
 
+test('loadAuthConfig fails closed when production has no API keys', () => {
+  assert.throws(
+    () =>
+      loadAuthConfig({
+        NODE_ENV: 'production',
+        UNIT_TALK_APP_ENV: 'production',
+        UNIT_TALK_API_RUNTIME_MODE: 'fail_closed',
+      }),
+    /API auth is fail_closed/,
+  );
+});
+
+test('loadAuthConfig treats UNIT_TALK_CC_API_KEY as an operator key', () => {
+  const config = loadAuthConfig({
+    NODE_ENV: 'production',
+    UNIT_TALK_APP_ENV: 'production',
+    UNIT_TALK_CC_API_KEY: 'cc-secret',
+  });
+
+  const auth = config.keys.get('cc-secret');
+  assert.equal(config.enabled, true);
+  assert.equal(config.failClosed, true);
+  assert.equal(auth?.role, 'operator');
+  assert.equal(auth?.identity.startsWith('operator:command-center:'), true);
+});
+
 describe('authenticateRequest', () => {
   test('returns bypass context when auth is disabled', async () => {
     const config = loadAuthConfig({});
@@ -58,6 +87,15 @@ describe('authenticateRequest', () => {
     assert.ok(auth);
     assert.equal(auth.role, 'operator');
     assert.ok(auth.identity.includes('bypass'));
+  });
+
+  test('returns null when disabled auth config is explicitly fail-closed', async () => {
+    const auth = await authenticateRequest(fakeRequest(), {
+      enabled: false,
+      failClosed: true,
+      keys: new Map(),
+    });
+    assert.equal(auth, null);
   });
 
   test('returns null when auth enabled but no Authorization header', async () => {
@@ -186,4 +224,23 @@ describe('authorizeRoute', () => {
     const op = { role: 'submitter' as const, identity: 'test' };
     assert.equal(authorizeRoute(op, '/api/unknown'), false);
   });
+});
+
+test('operator-only Command Center mutation routes deny non-operator roles', () => {
+  const operatorRoutes = [
+    '/api/picks/pick-123/review',
+    '/api/picks/pick-123/retry-delivery',
+    '/api/picks/pick-123/rerun-promotion',
+    '/api/picks/pick-123/override-promotion',
+    '/api/picks/pick-123/requeue',
+    '/api/board/write-picks',
+    '/api/board/run-tuning',
+    '/api/model-health/decision',
+    '/api/qa/seed-pick',
+  ];
+
+  for (const route of operatorRoutes) {
+    assert.equal(routeAllowsRole('operator', route), true, route);
+    assert.equal(routeAllowsRole('submitter', route), false, route);
+  }
 });
