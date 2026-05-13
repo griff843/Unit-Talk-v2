@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
+import { evaluateQueueHealth } from '@unit-talk/observability';
 import { createApiRuntimeDependencies, createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
@@ -163,6 +164,65 @@ test('GET /health uses a valid UUID probe when persistenceMode is database', asy
     assert.equal(body.status, 'healthy');
     assert.equal(body.dbReachable, true);
     assert.equal(probedPickId, '00000000-0000-0000-0000-000000000000');
+  } finally {
+    server.close();
+    restoreEnv('SUPABASE_URL', previousSupabaseUrl);
+    restoreEnv('SUPABASE_ANON_KEY', previousSupabaseAnonKey);
+    restoreEnv('SUPABASE_SERVICE_ROLE_KEY', previousSupabaseServiceRoleKey);
+  }
+});
+
+test('GET /health exposes queue health and fails when pending work has no delivery truth', async () => {
+  const previousSupabaseUrl = process.env.SUPABASE_URL;
+  const previousSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const previousSupabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'not-a-url';
+  process.env.SUPABASE_ANON_KEY = 'anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const repositories = createInMemoryRepositoryBundle();
+  repositories.picks.findPickById = async () => null;
+
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.persistenceMode = 'database';
+  runtime.queueHealth = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    outboxRows: [
+      {
+        id: 'pending-without-delivery',
+        status: 'pending',
+        target: 'discord:best-bets',
+        createdAt: '2026-05-13T11:59:00.000Z',
+        updatedAt: '2026-05-13T11:59:00.000Z',
+      },
+    ],
+  });
+
+  const server = createApiServer({ runtime });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+    const body = (await response.json()) as {
+      status: string;
+      queueHealth: { status: string; pendingCount: number; alerts: Array<{ code: string }> };
+      warnings: string[];
+    };
+
+    assert.equal(response.status, 503);
+    assert.equal(body.status, 'down');
+    assert.equal(body.queueHealth.status, 'down');
+    assert.equal(body.queueHealth.pendingCount, 1);
+    assert.ok(body.queueHealth.alerts.some((alert) => alert.code === 'delivery_missing'));
+    assert.ok(body.warnings.some((warning) => warning.includes('no successful delivery')));
+    assert.equal(
+      runtime.metricsCollector.snapshot().gauges['distribution_outbox_pending_total']?.[0]?.value,
+      1,
+    );
   } finally {
     server.close();
     restoreEnv('SUPABASE_URL', previousSupabaseUrl);

@@ -10,11 +10,13 @@ import {
   createLokiLogWriter,
   createMemoryErrorTrackingSink,
   createMetricsCollector,
+  evaluateQueueHealth,
   createRequestLogFields,
   getOrCreateCorrelationId,
   MetricsCollector,
   normalizeCorrelationId,
   OBSERVABILITY_STACK_DECISION,
+  recordQueueHealthMetrics,
   serializeError,
   type LogLevel,
   type LogWriter,
@@ -129,6 +131,123 @@ test('observability stack decision names the production telemetry surfaces', () 
     errors: 'structured-error-events',
     dashboards: 'operator-web',
   });
+});
+
+test('evaluateQueueHealth returns healthy for an empty queue without trusting heartbeat alone', () => {
+  const health = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    outboxRows: [],
+  });
+
+  assert.equal(health.status, 'healthy');
+  assert.equal(health.pendingCount, 0);
+  assert.equal(health.lastSuccessfulDeliveryAt, null);
+  assert.deepEqual(health.alerts, []);
+});
+
+test('evaluateQueueHealth marks stale pending rows unhealthy with target detail', () => {
+  const health = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    lastSuccessfulDeliveryAt: '2026-05-13T11:55:00.000Z',
+    outboxRows: [
+      makeQueueRow({
+        id: 'old-pending',
+        target: 'discord:best-bets',
+        status: 'pending',
+        createdAt: '2026-05-13T09:30:00.000Z',
+      }),
+    ],
+  });
+
+  assert.equal(health.status, 'down');
+  assert.equal(health.oldestPendingTarget, 'discord:best-bets');
+  assert.equal(health.pendingByTarget['discord:best-bets'], 1);
+  assert.ok(health.alerts.some((alert) => alert.code === 'pending_stale'));
+});
+
+test('evaluateQueueHealth marks stale delivery unhealthy when pending work exists', () => {
+  const health = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    lastSuccessfulDeliveryAt: '2026-05-13T09:45:00.000Z',
+    outboxRows: [
+      makeQueueRow({
+        id: 'pending-with-stale-delivery',
+        target: 'discord:best-bets',
+        status: 'pending',
+        createdAt: '2026-05-13T11:58:00.000Z',
+      }),
+    ],
+  });
+
+  assert.equal(health.status, 'down');
+  assert.equal(health.lastSuccessfulDeliveryAgeMs, 135 * 60 * 1000);
+  assert.ok(health.alerts.some((alert) => alert.code === 'delivery_stale'));
+});
+
+test('evaluateQueueHealth marks dead-letter rows unhealthy', () => {
+  const health = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    outboxRows: [
+      makeQueueRow({
+        id: 'dead-letter',
+        target: 'discord:best-bets',
+        status: 'dead_letter',
+      }),
+    ],
+  });
+
+  assert.equal(health.status, 'down');
+  assert.equal(health.deadLetterCount, 1);
+  assert.ok(health.alerts.some((alert) => alert.code === 'dead_letter'));
+});
+
+test('evaluateQueueHealth marks target mismatch unhealthy', () => {
+  const health = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    lastSuccessfulDeliveryAt: '2026-05-13T11:59:00.000Z',
+    outboxRows: [
+      makeQueueRow({
+        id: 'wrong-target',
+        target: 'discord:trader-insights',
+        status: 'pending',
+      }),
+    ],
+  });
+
+  assert.equal(health.status, 'down');
+  assert.equal(health.targetMismatches.length, 1);
+  assert.equal(health.targetMismatches[0]?.reason, 'pending-outside-worker');
+  assert.ok(health.alerts.some((alert) => alert.code === 'target_mismatch'));
+});
+
+test('recordQueueHealthMetrics exposes queue depth, pending target, and delivery age', () => {
+  const collector = createMetricsCollector();
+  const health = evaluateQueueHealth({
+    observedAt: '2026-05-13T12:00:00.000Z',
+    workerTargets: ['discord:best-bets'],
+    lastSuccessfulDeliveryAt: '2026-05-13T11:59:00.000Z',
+    outboxRows: [
+      makeQueueRow({
+        id: 'pending',
+        target: 'discord:best-bets',
+        status: 'pending',
+      }),
+    ],
+  });
+
+  recordQueueHealthMetrics(collector, health);
+  const snapshot = collector.snapshot();
+
+  assert.equal(snapshot.gauges['distribution_outbox_depth']?.[0]?.value, 1);
+  assert.equal(snapshot.gauges['distribution_last_successful_delivery_age_ms']?.[0]?.value, 60_000);
+  assert.deepEqual(snapshot.gauges['distribution_outbox_pending_by_target'], [
+    { value: 1, labels: { target: 'discord:best-bets' } },
+  ]);
 });
 
 test('createErrorCaptureEvent serializes errors with operation and correlation context', () => {
@@ -362,3 +481,18 @@ describe('MetricsCollector', () => {
     assert.equal(Object.keys(h.buckets).length, 3);
   });
 });
+
+function makeQueueRow(overrides: {
+  id: string;
+  target: string;
+  status: string;
+  createdAt?: string;
+  updatedAt?: string;
+}) {
+  return {
+    createdAt: '2026-05-13T11:59:00.000Z',
+    updatedAt: '2026-05-13T11:59:00.000Z',
+    attemptCount: 0,
+    ...overrides,
+  };
+}

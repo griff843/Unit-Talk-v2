@@ -1,6 +1,13 @@
 import type { OutboxRecord, RepositoryBundle, SystemRunRecord } from '@unit-talk/db';
 import { isTargetEnabled, resolveTargetRegistry, type TargetRegistryEntry } from '@unit-talk/contracts';
 import {
+  queueHealthLogFields,
+  recordQueueHealthMetrics,
+  type Logger,
+  type MetricsCollector,
+  type QueueHealthEvaluation,
+} from '@unit-talk/observability';
+import {
   processNextDistributionWork,
   type DeliveryResult,
   type WorkerProcessResult,
@@ -63,6 +70,9 @@ export interface WorkerRunnerOptions {
   targetRegistry?: TargetRegistryEntry[] | undefined;
   /** Interval at which the runner writes a worker.heartbeat system_run per cycle. Pass 0 to disable. Default: 30000. */
   workerHeartbeatIntervalMs?: number | undefined;
+  metricsCollector?: MetricsCollector | undefined;
+  logger?: Logger | undefined;
+  queueHealthProvider?: (() => Promise<QueueHealthEvaluation | null>) | undefined;
   /**
    * Persistence mode controls atomic vs sequential claim/confirm paths.
    * - 'database': uses claimNextAtomic / confirmDeliveryAtomic (SELECT FOR UPDATE SKIP LOCKED).
@@ -232,6 +242,8 @@ export async function runWorkerCycles(
       results.push(result);
     }
 
+    await recordWorkerQueueHealth(options, cycle, results);
+
     summaries.push({
       cycle,
       reapedOutboxIds: reaped.map((row) => row.id),
@@ -256,6 +268,43 @@ export async function runWorkerCycles(
   }
 
   return summaries;
+}
+
+async function recordWorkerQueueHealth(
+  options: WorkerRunnerOptions,
+  cycle: number,
+  results: WorkerProcessResult[],
+) {
+  if (options.metricsCollector) {
+    options.metricsCollector.increment('worker_cycles_total', { workerId: options.workerId });
+    for (const result of results) {
+      options.metricsCollector.increment('worker_delivery_results_total', {
+        workerId: result.workerId,
+        target: result.target,
+        status: result.status,
+      });
+    }
+  }
+
+  if (!options.queueHealthProvider) {
+    return;
+  }
+
+  const queueHealth = await options.queueHealthProvider();
+  if (!queueHealth) {
+    return;
+  }
+
+  if (options.metricsCollector) {
+    recordQueueHealthMetrics(options.metricsCollector, queueHealth);
+  }
+
+  const fields = { cycle, workerId: options.workerId, ...queueHealthLogFields(queueHealth) };
+  if (queueHealth.status === 'healthy') {
+    options.logger?.info('worker queue health healthy', fields);
+  } else {
+    options.logger?.warn('worker queue health unhealthy', fields);
+  }
 }
 
 async function reapStaleClaims(

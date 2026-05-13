@@ -7,6 +7,272 @@ export interface HealthSignal {
   observedAt: string;
 }
 
+export type QueueHealthStatus = 'healthy' | 'degraded' | 'down';
+
+export interface QueueHealthThresholds {
+  pendingWarnMs: number;
+  pendingCriticalMs: number;
+  processingStaleMs: number;
+  deliveryStaleMs: number;
+}
+
+export interface QueueHealthOutboxRow {
+  id: string;
+  status: string;
+  target: string;
+  createdAt: string;
+  updatedAt?: string | null | undefined;
+  claimedAt?: string | null | undefined;
+  attemptCount?: number | null | undefined;
+}
+
+export interface QueueHealthTargetMismatch {
+  target: string;
+  requiredWorkerTarget?: string | undefined;
+  reason: 'missing-worker' | 'pending-outside-worker' | 'blocked-target';
+}
+
+export interface QueueHealthAlert {
+  level: 'warning' | 'critical';
+  code:
+    | 'pending_stale'
+    | 'processing_stale'
+    | 'dead_letter'
+    | 'failed_rows'
+    | 'delivery_stale'
+    | 'delivery_missing'
+    | 'target_mismatch';
+  message: string;
+  target?: string | undefined;
+  count?: number | undefined;
+  ageMs?: number | undefined;
+}
+
+export interface QueueHealthEvaluation {
+  status: QueueHealthStatus;
+  observedAt: string;
+  workerTargets: string[];
+  queueDepth: number;
+  pendingCount: number;
+  pendingByTarget: Record<string, number>;
+  failedCount: number;
+  deadLetterCount: number;
+  processingCount: number;
+  oldestPendingAt: string | null;
+  oldestPendingAgeMs: number | null;
+  oldestPendingTarget: string | null;
+  lastSuccessfulDeliveryAt: string | null;
+  lastSuccessfulDeliveryAgeMs: number | null;
+  targetMismatches: QueueHealthTargetMismatch[];
+  alerts: QueueHealthAlert[];
+  metrics: Record<string, number>;
+}
+
+export interface EvaluateQueueHealthInput {
+  observedAt: string;
+  workerTargets: readonly string[];
+  outboxRows: readonly QueueHealthOutboxRow[];
+  lastSuccessfulDeliveryAt?: string | null | undefined;
+  targetMismatches?: readonly QueueHealthTargetMismatch[] | undefined;
+  thresholds?: Partial<QueueHealthThresholds> | undefined;
+}
+
+export const defaultQueueHealthThresholds: QueueHealthThresholds = {
+  pendingWarnMs: 30 * 60 * 1000,
+  pendingCriticalMs: 120 * 60 * 1000,
+  processingStaleMs: 5 * 60 * 1000,
+  deliveryStaleMs: 60 * 60 * 1000,
+};
+
+export function evaluateQueueHealth(input: EvaluateQueueHealthInput): QueueHealthEvaluation {
+  const thresholds = { ...defaultQueueHealthThresholds, ...input.thresholds };
+  const observedAtMs = safeTime(input.observedAt);
+  const workerTargets = uniqueStrings(input.workerTargets);
+  const workerTargetSet = new Set(workerTargets);
+  const pendingRows = input.outboxRows.filter((row) => row.status === 'pending');
+  const processingRows = input.outboxRows.filter((row) => row.status === 'processing');
+  const failedRows = input.outboxRows.filter((row) => row.status === 'failed');
+  const deadLetterRows = input.outboxRows.filter((row) => row.status === 'dead_letter');
+  const pendingByTarget = countByTarget(pendingRows);
+  const oldestPending = oldestByTimestamp(pendingRows, (row) => row.createdAt);
+  const oldestPendingAgeMs = oldestPending ? ageMs(observedAtMs, oldestPending.createdAt) : null;
+  const inferredLastSuccessfulDeliveryAt =
+    input.lastSuccessfulDeliveryAt ?? newestSentTimestamp(input.outboxRows);
+  const lastSuccessfulDeliveryAgeMs = inferredLastSuccessfulDeliveryAt
+    ? ageMs(observedAtMs, inferredLastSuccessfulDeliveryAt)
+    : null;
+  const targetMismatches = [
+    ...(input.targetMismatches ?? []),
+    ...pendingRows
+      .filter((row) => workerTargets.length > 0 && !workerTargetSet.has(row.target))
+      .map((row) => ({
+        target: row.target,
+        reason: 'pending-outside-worker' as const,
+      })),
+  ];
+  const alerts: QueueHealthAlert[] = [];
+
+  if (targetMismatches.length > 0) {
+    alerts.push({
+      level: 'critical',
+      code: 'target_mismatch',
+      count: targetMismatches.length,
+      message: `${targetMismatches.length} target mismatch(es) can strand pending work`,
+    });
+  }
+
+  if (deadLetterRows.length > 0) {
+    alerts.push({
+      level: 'critical',
+      code: 'dead_letter',
+      count: deadLetterRows.length,
+      message: `${deadLetterRows.length} dead-letter row(s) require operator review`,
+    });
+  }
+
+  if (failedRows.length > 0) {
+    alerts.push({
+      level: 'warning',
+      code: 'failed_rows',
+      count: failedRows.length,
+      message: `${failedRows.length} failed row(s) are waiting for retry handling`,
+    });
+  }
+
+  const staleProcessing = processingRows.filter((row) => {
+    const reference = row.claimedAt ?? row.updatedAt ?? row.createdAt;
+    const currentAgeMs = ageMs(observedAtMs, reference);
+    return currentAgeMs !== null && currentAgeMs >= thresholds.processingStaleMs;
+  });
+  if (staleProcessing.length > 0) {
+    alerts.push({
+      level: 'critical',
+      code: 'processing_stale',
+      count: staleProcessing.length,
+      message: `${staleProcessing.length} processing row(s) exceeded the stale-claim threshold`,
+    });
+  }
+
+  if (oldestPending && oldestPendingAgeMs !== null) {
+    if (oldestPendingAgeMs >= thresholds.pendingCriticalMs) {
+      alerts.push({
+        level: 'critical',
+        code: 'pending_stale',
+        target: oldestPending.target,
+        ageMs: oldestPendingAgeMs,
+        message: `oldest pending row is ${formatAgeMinutes(oldestPendingAgeMs)} old`,
+      });
+    } else if (oldestPendingAgeMs >= thresholds.pendingWarnMs) {
+      alerts.push({
+        level: 'warning',
+        code: 'pending_stale',
+        target: oldestPending.target,
+        ageMs: oldestPendingAgeMs,
+        message: `oldest pending row is ${formatAgeMinutes(oldestPendingAgeMs)} old`,
+      });
+    }
+  }
+
+  if (pendingRows.length > 0) {
+    if (!inferredLastSuccessfulDeliveryAt) {
+      alerts.push({
+        level: 'critical',
+        code: 'delivery_missing',
+        message: 'pending work exists but no successful delivery timestamp is visible',
+      });
+    } else if (
+      lastSuccessfulDeliveryAgeMs !== null &&
+      lastSuccessfulDeliveryAgeMs >= thresholds.deliveryStaleMs
+    ) {
+      alerts.push({
+        level: 'critical',
+        code: 'delivery_stale',
+        ageMs: lastSuccessfulDeliveryAgeMs,
+        message: `last successful delivery is ${formatAgeMinutes(lastSuccessfulDeliveryAgeMs)} old`,
+      });
+    }
+  }
+
+  const status: QueueHealthStatus = alerts.some((alert) => alert.level === 'critical')
+    ? 'down'
+    : alerts.length > 0
+      ? 'degraded'
+      : 'healthy';
+
+  return {
+    status,
+    observedAt: input.observedAt,
+    workerTargets,
+    queueDepth: input.outboxRows.length,
+    pendingCount: pendingRows.length,
+    pendingByTarget,
+    failedCount: failedRows.length,
+    deadLetterCount: deadLetterRows.length,
+    processingCount: processingRows.length,
+    oldestPendingAt: oldestPending?.createdAt ?? null,
+    oldestPendingAgeMs,
+    oldestPendingTarget: oldestPending?.target ?? null,
+    lastSuccessfulDeliveryAt: inferredLastSuccessfulDeliveryAt ?? null,
+    lastSuccessfulDeliveryAgeMs,
+    targetMismatches,
+    alerts,
+    metrics: {
+      queueDepth: input.outboxRows.length,
+      pendingCount: pendingRows.length,
+      failedCount: failedRows.length,
+      deadLetterCount: deadLetterRows.length,
+      processingCount: processingRows.length,
+      oldestPendingAgeMs: oldestPendingAgeMs ?? 0,
+      lastSuccessfulDeliveryAgeMs: lastSuccessfulDeliveryAgeMs ?? -1,
+      targetMismatchCount: targetMismatches.length,
+    },
+  };
+}
+
+export function recordQueueHealthMetrics(
+  collector: Pick<MetricsCollector, 'gauge'>,
+  evaluation: QueueHealthEvaluation,
+): void {
+  collector.gauge('distribution_outbox_depth', evaluation.queueDepth);
+  collector.gauge('distribution_outbox_pending_total', evaluation.pendingCount);
+  collector.gauge('distribution_outbox_failed_total', evaluation.failedCount);
+  collector.gauge('distribution_outbox_dead_letter_total', evaluation.deadLetterCount);
+  collector.gauge('distribution_outbox_processing_total', evaluation.processingCount);
+  collector.gauge('distribution_outbox_oldest_pending_age_ms', evaluation.oldestPendingAgeMs ?? 0);
+  collector.gauge(
+    'distribution_last_successful_delivery_age_ms',
+    evaluation.lastSuccessfulDeliveryAgeMs ?? -1,
+  );
+  collector.gauge('distribution_target_mismatch_total', evaluation.targetMismatches.length);
+
+  for (const [target, count] of Object.entries(evaluation.pendingByTarget)) {
+    collector.gauge('distribution_outbox_pending_by_target', count, { target });
+  }
+}
+
+export function queueHealthLogFields(evaluation: QueueHealthEvaluation): LogFields {
+  return {
+    status: evaluation.status,
+    queueDepth: evaluation.queueDepth,
+    pendingCount: evaluation.pendingCount,
+    failedCount: evaluation.failedCount,
+    deadLetterCount: evaluation.deadLetterCount,
+    oldestPendingAgeMs: evaluation.oldestPendingAgeMs,
+    oldestPendingTarget: evaluation.oldestPendingTarget,
+    lastSuccessfulDeliveryAt: evaluation.lastSuccessfulDeliveryAt,
+    lastSuccessfulDeliveryAgeMs: evaluation.lastSuccessfulDeliveryAgeMs,
+    targetMismatchCount: evaluation.targetMismatches.length,
+    alerts: evaluation.alerts.map((alert) => ({
+      level: alert.level,
+      code: alert.code,
+      message: alert.message,
+      target: alert.target ?? null,
+      count: alert.count ?? null,
+      ageMs: alert.ageMs ?? null,
+    })),
+  };
+}
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type LogValue =
@@ -625,6 +891,68 @@ export class MetricsCollector {
 
 export function createMetricsCollector(buckets?: number[]): MetricsCollector {
   return new MetricsCollector(buckets);
+}
+
+function uniqueStrings(values: readonly string[]): string[] {
+  return [...new Set(values.map((value) => value.trim()).filter(Boolean))];
+}
+
+function countByTarget(rows: readonly QueueHealthOutboxRow[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const row of rows) {
+    counts[row.target] = (counts[row.target] ?? 0) + 1;
+  }
+  return counts;
+}
+
+function oldestByTimestamp<T>(rows: readonly T[], readTimestamp: (row: T) => string): T | null {
+  let oldest: T | null = null;
+  let oldestMs = Number.POSITIVE_INFINITY;
+  for (const row of rows) {
+    const ts = safeTime(readTimestamp(row));
+    if (ts !== null && ts < oldestMs) {
+      oldest = row;
+      oldestMs = ts;
+    }
+  }
+  return oldest;
+}
+
+function newestSentTimestamp(rows: readonly QueueHealthOutboxRow[]): string | null {
+  let newest: string | null = null;
+  let newestMs = Number.NEGATIVE_INFINITY;
+  for (const row of rows) {
+    if (row.status !== 'sent') {
+      continue;
+    }
+    const timestamp = row.updatedAt ?? row.createdAt;
+    const ts = safeTime(timestamp);
+    if (ts !== null && ts > newestMs) {
+      newest = timestamp;
+      newestMs = ts;
+    }
+  }
+  return newest;
+}
+
+function ageMs(observedAtMs: number | null, timestamp: string | null | undefined): number | null {
+  const ts = safeTime(timestamp);
+  if (observedAtMs === null || ts === null) {
+    return null;
+  }
+  return Math.max(observedAtMs - ts, 0);
+}
+
+function safeTime(timestamp: string | null | undefined): number | null {
+  if (!timestamp) {
+    return null;
+  }
+  const ts = Date.parse(timestamp);
+  return Number.isFinite(ts) ? ts : null;
+}
+
+function formatAgeMinutes(valueMs: number): string {
+  return `${Math.round(valueMs / 60000)}m`;
 }
 
 function readHeaderValue(

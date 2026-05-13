@@ -1,5 +1,7 @@
 // Pipeline health check — run with: tsx scripts/pipeline-health.ts [--output-json <path>]
 import { loadEnvironment } from '@unit-talk/config'
+import { resolveTargetRegistry } from '@unit-talk/contracts'
+import { evaluateQueueHealth, type QueueHealthOutboxRow } from '@unit-talk/observability'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
@@ -17,6 +19,14 @@ const workerTargets = (env.UNIT_TALK_DISTRIBUTION_TARGETS?.trim() || 'discord:ca
   .split(',')
   .map((target) => target.trim())
   .filter(Boolean)
+const targetMismatches = resolveTargetRegistry(env)
+  .filter((entry) => entry.enabled)
+  .map((entry) => ({
+    target: entry.target,
+    requiredWorkerTarget: env.UNIT_TALK_APP_ENV === 'local' ? 'discord:canary' : `discord:${entry.target}`,
+    reason: 'missing-worker' as const,
+  }))
+  .filter((entry) => !workerTargets.includes(entry.requiredWorkerTarget))
 
 async function main() {
 const now = new Date()
@@ -27,11 +37,26 @@ function ageFmt(ts: string) { const m = ageMin(ts); return m < 60 ? `${m}m` : `$
 // ── 1. Outbox queue state ─────────────────────────────────────────────────
 const { data: outbox, error: outboxErr } = await db
   .from('distribution_outbox')
-  .select('id, status, target, created_at, claimed_at, pick_id, attempt_count')
+  .select('id, status, target, created_at, updated_at, claimed_at, pick_id, attempt_count')
 
 if (outboxErr) { console.error('outbox query failed:', outboxErr.message); process.exit(1) }
 
 const rows = outbox ?? []
+const queueHealthRows: QueueHealthOutboxRow[] = rows.map((row) => ({
+  id: row.id,
+  status: row.status,
+  target: row.target,
+  createdAt: row.created_at,
+  updatedAt: row.updated_at,
+  claimedAt: row.claimed_at,
+  attemptCount: row.attempt_count,
+}))
+const queueHealth = evaluateQueueHealth({
+  observedAt: now.toISOString(),
+  workerTargets,
+  outboxRows: queueHealthRows,
+  targetMismatches,
+})
 const counts: Record<string, number> = {}
 for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1
 
@@ -116,6 +141,8 @@ console.log(`  Last run status: ${lastRun?.status ?? 'NONE'}`)
 console.log(`  Last heartbeat: ${lastHeartbeat ? ageFmt(lastHeartbeat.started_at) + ' ago (' + lastHeartbeat.status + ')' : 'NONE'}`)
 console.log(`  Stuck running (>5min): ${stuckRunning.length === 0 ? 'NONE' : stuckRunning.length}`)
 console.log(`  Last successful run: ${lastSuccessAge !== null ? lastSuccessAge + 'm ago' : 'NONE in last 10'}`)
+console.log(`  Queue health: ${queueHealth.status.toUpperCase()}`)
+console.log(`  Last successful delivery: ${queueHealth.lastSuccessfulDeliveryAt ? queueHealth.lastSuccessfulDeliveryAt + ' (' + Math.round((queueHealth.lastSuccessfulDeliveryAgeMs ?? 0) / 60000) + 'm ago)' : 'NONE'}`)
 
 // ── 6. Backlog age ────────────────────────────────────────────────────────
 // Computed before verdict so idle-vs-DOWN distinction can use pending count.
@@ -140,6 +167,11 @@ if (oldestPending) {
   console.log(`  Oldest eligible pending: ${ageFmt(oldestPending.created_at)} ago${flag}`)
 } else {
   console.log('  No pending rows for worker targets')
+}
+console.log(`  Pending by target: ${Object.entries(queueHealth.pendingByTarget).map(([target, count]) => `${target}=${count}`).join(', ') || 'NONE'}`)
+for (const alert of queueHealth.alerts) {
+  const label = alert.level === 'critical' ? 'CRITICAL' : 'WARN'
+  console.log(`  ${label}: ${alert.message}`)
 }
 
 // ── 7. Delivery truth (last 5 sent rows) ──────────────────────────────────
@@ -194,6 +226,10 @@ if (stuckPend.length > 0) warns.push(`${stuckPend.length} pending rows stuck >30
 if (deferredPend.length > 0) warns.push(`${deferredPend.length} pending row(s) outside worker targets`)
 if (badChannels.length) warns.push(`${badChannels.length} receipt(s) with non-live delivery targets/channels (historical pre-activation records)`)
 if (!workerVerdict.startsWith('HEALTHY')) (workerVerdict.startsWith('DOWN') ? criticals : warns).push(workerVerdict)
+for (const alert of queueHealth.alerts) {
+  if (alert.level === 'critical') criticals.push(alert.message)
+  else warns.push(alert.message)
+}
 
 if (criticals.length > 0) {
   console.log(`  CRITICAL (${criticals.length}):`)
@@ -214,15 +250,22 @@ if (outputJsonPath) {
     outbox_dead_letter_count: deadLetter.length,
     outbox_failed_count: failed.length,
     outbox_stuck_processing: stuckProc.length,
+    outbox_pending_by_target: queueHealth.pendingByTarget,
+    outbox_oldest_pending_age_ms: queueHealth.oldestPendingAgeMs,
+    last_successful_delivery_at: queueHealth.lastSuccessfulDeliveryAt,
+    last_successful_delivery_age_ms: queueHealth.lastSuccessfulDeliveryAgeMs,
+    queue_health_status: queueHealth.status,
+    queue_health_alerts: queueHealth.alerts,
     worker_verdict: workerVerdict,
     criticals,
     warns,
-    has_anomaly: criticals.length > 0 || deadLetter.length > 0,
+    has_anomaly: criticals.length > 0 || deadLetter.length > 0 || queueHealth.status !== 'healthy',
   }
   fs.mkdirSync(outputJsonPath.split('/').slice(0, -1).join('/') || '.', { recursive: true })
   fs.writeFileSync(outputJsonPath, JSON.stringify(report, null, 2) + '\n')
   console.log(`JSON report written to ${outputJsonPath}`)
 }
+if (queueHealth.status === 'down') process.exitCode = 1
 } // end main
 
 main().catch(e => { console.error(e); process.exit(1) })

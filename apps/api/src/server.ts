@@ -23,6 +23,7 @@ import {
   type ErrorTracker,
   type Logger,
   type MetricsCollector,
+  type QueueHealthEvaluation,
 } from '@unit-talk/observability';
 import { setCorsHeaders, writeJson } from './http-utils.js';
 import {
@@ -112,9 +113,10 @@ export interface ApiRuntimeDependencies {
   rateLimitStore: ApiRateLimitStore;
   metricsCollector: MetricsCollector;
   versionInfo: RuntimeVersionInfo;
+  queueHealth?: QueueHealthEvaluation | null | undefined;
 }
 
-export type ApiHealthStatus = 'healthy' | 'degraded';
+export type ApiHealthStatus = 'healthy' | 'degraded' | 'down';
 
 export interface ApiHealthResponse {
   status: ApiHealthStatus;

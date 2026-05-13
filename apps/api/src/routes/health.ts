@@ -2,6 +2,7 @@ import type { ServerResponse } from 'node:http';
 import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from '../server.js';
 import { writeJson } from '../http-utils.js';
 import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
+import { recordQueueHealthMetrics } from '@unit-talk/observability';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
 
@@ -27,6 +28,7 @@ async function probeDbConnectivity(runtime: ApiRuntimeDependencies): Promise<boo
 
 interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
   warnings: string[];
+  queueHealth: ApiRuntimeDependencies['queueHealth'];
   schemaDrift:
     | {
         status: 'not_applicable';
@@ -62,9 +64,23 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
   })();
 
   const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
-  const status: ApiHealthStatus = isDurable ? 'healthy' : 'degraded';
-  const httpStatus = isDurable ? 200 : 503;
-  const warnings = schemaDrift?.warnings ?? [];
+  const queueHealth = runtime.queueHealth ?? null;
+  if (queueHealth) {
+    recordQueueHealthMetrics(runtime.metricsCollector, queueHealth);
+  }
+  const queueUnhealthy = queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
+  const status: ApiHealthStatus = !isDurable
+    ? 'degraded'
+    : queueHealth?.status === 'down'
+      ? 'down'
+      : queueHealth?.status === 'degraded'
+        ? 'degraded'
+        : 'healthy';
+  const httpStatus = isDurable && !queueUnhealthy ? 200 : 503;
+  const warnings = [
+    ...(schemaDrift?.warnings ?? []),
+    ...(queueHealth?.alerts.map((alert) => alert.message) ?? []),
+  ];
 
   writeJson(response, httpStatus, {
     status,
@@ -79,6 +95,7 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
       metadataComplete: runtime.versionInfo.metadataComplete,
     },
     warnings,
+    queueHealth,
     schemaDrift: schemaDrift
       ? {
           status: schemaDrift.status,
