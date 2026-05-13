@@ -7,7 +7,7 @@
   "branch": "griffadavi/utv2-915-ut-p0-002-enforce-fail-closed-runtime-config",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/651",
   "files_changed": [
     ".ops/sync.yml",
     "apps/api/src/index.ts",
@@ -61,7 +61,7 @@
     "required": true,
     "codex_implementation": {
       "recorded": true,
-      "pr_url": null
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/651"
     },
     "claude_critique": {
       "recorded": true,
