@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-949",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "griffadavi/utv2-949-utv2-949-p0-protocol-failure-observability",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/p0-protocol.yml",
+    "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/p0-events.ts",
+    "scripts/ops/daily-digest.ts",
+    "package.json",
+    "docs/05_operations/P0_PROTOCOL_SPEC.md",
+    "docs/06_status/lanes/UTV2-949.json",
+    "docs/06_status/proof/UTV2-949/claude-critique.md",
+    "docs/06_status/proof/UTV2-949/runtime-verification.md",
+    "docs/06_status/proof/UTV2-949/proof.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-949/proof.md",
+    "docs/06_status/proof/UTV2-949/claude-critique.md",
+    "docs/06_status/proof/UTV2-949/runtime-verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-13T00:00:00.000Z",
+  "heartbeat_at": "2026-05-13T00:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-approval-2026-05-13",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "notes": "T2 P0 observability. Codex implements; Claude critique required; PM approval required; runtime verification via synthetic failing PR; no auto-merge. Blocker UTV2-948 shipped. Scope: p0-protocol.yml structured events + ops:p0-events script + daily-digest P0 section + formatP0Failures helper.",
+  "p0_protocol": {
+    "required": true,
+    "codex_implementation": {
+      "recorded": false,
+      "pr_url": null
+    },
+    "claude_critique": {
+      "recorded": false,
+      "artifact_path": "docs/06_status/proof/UTV2-949/claude-critique.md"
+    },
+    "human_approval": {
+      "recorded": false,
+      "pm_verdict_url": null
+    },
+    "runtime_verification": {
+      "recorded": false,
+      "artifact_path": "docs/06_status/proof/UTV2-949/runtime-verification.md",
+      "result": null
+    },
+    "merge_type": "manual"
+  }
+}

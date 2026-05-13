@@ -70,6 +70,15 @@ interface FiberyBlocker {
   name: string;
 }
 
+interface P0EventsSummary {
+  total_failures: number;
+  top_reason: string | null;
+  misconfig_warning: boolean;
+  misconfig_detail: string;
+  skipped: boolean;
+  error?: string;
+}
+
 interface DigestReport {
   schema_version: 1 | 2;
   run_at: string;
@@ -79,6 +88,7 @@ interface DigestReport {
   linear: LinearSummary;
   fibery_blockers: FiberyBlocker[];
   dispatch_candidates: DispatchCandidate[];
+  p0_events: P0EventsSummary;
   recommended_next: string[];
   infra_errors: string[];
   brief_text: string;
@@ -482,6 +492,41 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
   }
 }
 
+// ── Source 5: P0 events (last 7 days) ────────────────────────────────────
+
+function fetchP0EventsSummary(infraErrors: string[]): P0EventsSummary {
+  try {
+    const { stdout, ok } = runSubprocess('pnpm', ['ops:p0-events', '--', '--json']);
+    if (!ok && !stdout) {
+      return { total_failures: 0, top_reason: null, misconfig_warning: false, misconfig_detail: '', skipped: true, error: 'subprocess failed' };
+    }
+    const jsonStr = extractJson(stdout);
+    if (!jsonStr) {
+      return { total_failures: 0, top_reason: null, misconfig_warning: false, misconfig_detail: '', skipped: true, error: 'no JSON output' };
+    }
+    const parsed = JSON.parse(jsonStr) as {
+      total_failures?: number;
+      histogram?: Array<{ block_reason: string; count: number }>;
+      misconfig_check?: { p0_protocol_required: boolean; detail: string };
+    };
+    const topReason = parsed.histogram?.[0]?.block_reason ?? null;
+    const misconfigCheck = parsed.misconfig_check;
+    const misconfigSkipped = misconfigCheck?.detail?.toLowerCase().includes('skipped') ?? false;
+    return {
+      total_failures: parsed.total_failures ?? 0,
+      top_reason: topReason,
+      misconfig_warning: !misconfigSkipped && !(misconfigCheck?.p0_protocol_required ?? true),
+      misconfig_detail: misconfigCheck?.detail ?? '',
+      skipped: false,
+    };
+  } catch (err) {
+    infraErrors.push(
+      `p0-events subprocess failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+    return { total_failures: 0, top_reason: null, misconfig_warning: false, misconfig_detail: '', skipped: true, error: String(err) };
+  }
+}
+
 // ── ops:brief subprocess ───────────────────────────────────────────────────
 
 function runBriefText(): string {
@@ -500,6 +545,7 @@ function deriveRecommendedNext(
   ci_failures: string[],
   fibery_blockers: FiberyBlocker[],
   dispatch_candidates: DispatchCandidate[],
+  p0_events: P0EventsSummary,
 ): string[] {
   const recs: string[] = [];
   if (ci_failures.length > 0) {
@@ -510,6 +556,13 @@ function deriveRecommendedNext(
   }
   if (fibery_blockers.length > 0) {
     recs.push(`Review ${fibery_blockers.length} open Fibery control(s)`);
+  }
+  if (p0_events.misconfig_warning) {
+    recs.push(`ACTION REQUIRED: "P0 Protocol" check missing from branch protection — ${p0_events.misconfig_detail}`);
+  }
+  if (p0_events.total_failures > 0) {
+    const top = p0_events.top_reason ? ` (top: ${p0_events.top_reason})` : '';
+    recs.push(`P0 gate fired ${p0_events.total_failures}x in last 7d${top}`);
   }
   if (dispatch_candidates.length > 0) {
     const d = dispatch_candidates[0];
@@ -548,8 +601,9 @@ async function main(): Promise<void> {
   const linear = await fetchLinearSummary(infraErrors);
   const fibery_blockers = await fetchFiberyBlockers(infraErrors);
   const dispatch_candidates = await fetchDispatchCandidates(infraErrors);
+  const p0_events = fetchP0EventsSummary(infraErrors);
   const brief_text = runBriefText();
-  const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, fibery_blockers, dispatch_candidates);
+  const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, fibery_blockers, dispatch_candidates, p0_events);
 
   const report: DigestReport = {
     schema_version: 2,
@@ -560,6 +614,7 @@ async function main(): Promise<void> {
     linear,
     fibery_blockers,
     dispatch_candidates,
+    p0_events,
     recommended_next,
     infra_errors: infraErrors,
     brief_text,
@@ -581,6 +636,10 @@ async function main(): Promise<void> {
     console.log(`  active_lanes:   ${linear.active_lanes.length}${linear.skipped ? ' (skipped)' : ''}`);
     console.log(`  backlog_top3:   ${linear.backlog_top3.length}${linear.skipped ? ' (skipped)' : ''}`);
     console.log(`  fibery_blockers: ${fibery_blockers.length}`);
+    console.log(`  p0_failures_7d: ${p0_events.total_failures}${p0_events.skipped ? ' (skipped)' : ''}`);
+    if (p0_events.misconfig_warning) {
+      console.warn(`  p0_misconfig: ${p0_events.misconfig_detail}`);
+    }
     console.log(`  dispatch_candidates: ${dispatch_candidates.length}`);
     for (let i = 0; i < dispatch_candidates.length; i++) {
       const d = dispatch_candidates[i];
