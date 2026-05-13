@@ -3785,20 +3785,25 @@ test('findClosingLine filters by bookmakerKey when specified', async () => {
     snapshotAt: '2026-03-25T23:00:00.000Z',
   };
 
+  // Distinct snapshot_at per row so descending-sort by snapshot_at is
+  // deterministic across runtimes. Consensus snapshots are produced
+  // after individual bookmakers — match that ordering.
   await repository.upsertBatch([
     {
       ...base,
-      providerKey: 'sgo',
-      idempotencyKey: 'bk-consensus',
-      bookmakerKey: null,
-    },
-    {
-      ...base,
+      snapshotAt: '2026-03-25T23:00:00.000Z',
       providerKey: 'sgo',
       idempotencyKey: 'bk-pinnacle',
       bookmakerKey: 'pinnacle',
       overOdds: -115,
       underOdds: 105,
+    },
+    {
+      ...base,
+      snapshotAt: '2026-03-25T23:00:01.000Z',
+      providerKey: 'sgo',
+      idempotencyKey: 'bk-consensus',
+      bookmakerKey: null,
     },
   ]);
 
