@@ -119,5 +119,5 @@ function paginate<T>(items: T[], pageSize: number) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createTodayCommand(createApiClient(config.apiUrl));
+  return createTodayCommand(createApiClient(config.apiUrl, config.apiKey));
 }

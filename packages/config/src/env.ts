@@ -89,6 +89,8 @@ export interface AppEnv {
   UNIT_TALK_QA_API_URL?: string | undefined;
   UNIT_TALK_QA_SEED_ENABLED?: string | undefined;
   UNIT_TALK_API_KEY_SUBMITTER?: string | undefined;
+  UNIT_TALK_INGESTOR_API_KEY?: string | undefined;
+  UNIT_TALK_BOT_API_KEY?: string | undefined;
   OPENAI_API_KEY?: string | undefined;
   NOTION_TOKEN?: string | undefined;
   SLACK_BOT_TOKEN?: string | undefined;
@@ -268,6 +270,8 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     UNIT_TALK_QA_API_URL: optionalEnv('UNIT_TALK_QA_API_URL', merged),
     UNIT_TALK_QA_SEED_ENABLED: optionalEnv('UNIT_TALK_QA_SEED_ENABLED', merged),
     UNIT_TALK_API_KEY_SUBMITTER: optionalEnv('UNIT_TALK_API_KEY_SUBMITTER', merged),
+    UNIT_TALK_INGESTOR_API_KEY: optionalEnv('UNIT_TALK_INGESTOR_API_KEY', merged),
+    UNIT_TALK_BOT_API_KEY: optionalEnv('UNIT_TALK_BOT_API_KEY', merged),
     OPENAI_API_KEY: optionalEnv('OPENAI_API_KEY', merged),
     NOTION_TOKEN: optionalEnv('NOTION_TOKEN', merged),
     SLACK_BOT_TOKEN: optionalEnv('SLACK_BOT_TOKEN', merged),

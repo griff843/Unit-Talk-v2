@@ -169,5 +169,5 @@ function formatSettledAt(value: string) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createRecapCommand(createApiClient(config.apiUrl));
+  return createRecapCommand(createApiClient(config.apiUrl, config.apiKey));
 }

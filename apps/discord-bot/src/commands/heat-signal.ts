@@ -107,5 +107,5 @@ function formatLineValue(value: number) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createHeatSignalCommand(createApiClient(config.apiUrl));
+  return createHeatSignalCommand(createApiClient(config.apiUrl, config.apiKey));
 }

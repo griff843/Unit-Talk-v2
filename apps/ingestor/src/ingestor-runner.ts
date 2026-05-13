@@ -24,6 +24,8 @@ export interface IngestorRunnerOptions {
   apiKey?: string;
   oddsApiKey?: string;
   apiUrl?: string;
+  /** Bearer token for API service-to-service auth (UNIT_TALK_INGESTOR_API_KEY, role: settler). */
+  ingestorApiKey?: string;
   /** undefined = run indefinitely */
   maxCycles?: number;
   sleep?: (ms: number) => Promise<void>;
@@ -336,8 +338,12 @@ async function triggerGradingForCycle(
 
   const trigger = options.triggerGradingRun ?? triggerGradingRun;
 
+  if (options.apiUrl && !options.ingestorApiKey) {
+    options.logger?.warn?.('settler:ingestor.auth_missing — UNIT_TALK_INGESTOR_API_KEY not set; grading trigger will be rejected by API in fail_closed mode');
+  }
+
   try {
-    await trigger(options.apiUrl);
+    await trigger(options.apiUrl, options.ingestorApiKey);
     options.logger?.info?.(
       `Triggered grading after ingest cycle for ${results
         .map((summary) => summary.league)
@@ -363,13 +369,17 @@ async function triggerGradingForCycle(
 
 export async function triggerGradingRun(
   apiUrl: string,
+  apiKey?: string,
   fetchImpl: typeof fetch = fetch,
 ) {
+  const headers: Record<string, string> = { 'content-type': 'application/json' };
+  if (apiKey) {
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
+
   const response = await fetchImpl(new URL('/api/grading/run', apiUrl), {
     method: 'POST',
-    headers: {
-      'content-type': 'application/json',
-    },
+    headers,
     body: JSON.stringify({
       source: 'ingestor.cycle',
     }),

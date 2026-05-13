@@ -192,5 +192,5 @@ function normalizeOptionalString(value: string | null) {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createLeaderboardCommand(createApiClient(config.apiUrl));
+  return createLeaderboardCommand(createApiClient(config.apiUrl, config.apiKey));
 }

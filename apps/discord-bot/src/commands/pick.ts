@@ -339,5 +339,5 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createPickCommand(createApiClient(config.apiUrl), config.capperRoleId);
+  return createPickCommand(createApiClient(config.apiUrl, config.apiKey), config.capperRoleId);
 }

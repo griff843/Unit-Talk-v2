@@ -136,5 +136,5 @@ function asRecord(value: unknown): Record<string, unknown> | null {
 
 export function createDefaultCommand(rootDir?: string): CommandHandler {
   const config = loadBotConfig(rootDir);
-  return createLiveCommand(createApiClient(config.apiUrl));
+  return createLiveCommand(createApiClient(config.apiUrl, config.apiKey));
 }

@@ -101,6 +101,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       providerPayloadArchivePolicy,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
+      ingestorApiKey: env.UNIT_TALK_INGESTOR_API_KEY,
       apiUrl,
     };
   } catch (error) {
@@ -135,6 +136,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       providerPayloadArchivePolicy,
       sgoApiKeys,
       oddsApiKey: env.ODDS_API_KEY,
+      ingestorApiKey: env.UNIT_TALK_INGESTOR_API_KEY,
       apiUrl,
     };
   }
@@ -217,6 +219,7 @@ if (runtime.autorun) {
         ...(sgoSelection.active ? { apiKey: sgoSelection.active.apiKey } : {}),
         ...(runtime.oddsApiKey ? { oddsApiKey: runtime.oddsApiKey } : {}),
         ...(runtime.apiUrl ? { apiUrl: runtime.apiUrl } : {}),
+        ...(runtime.ingestorApiKey ? { ingestorApiKey: runtime.ingestorApiKey } : {}),
         maxCycles: runtime.maxCycles ?? Number.POSITIVE_INFINITY,
         skipResults: runtime.skipResults,
         resultsLookbackHours: runtime.resultsLookbackHours,
