@@ -457,8 +457,11 @@ async function recordInitialSettlement(
       finalLifecycleState: atomicResult.pick.status,
       downstream,
     };
-  } catch {
-    // Sequential fallback (InMemory mode or RPC not deployed).
+  } catch (err) {
+    if (!isInMemoryAtomicSettlementFallback(err)) {
+      throw err;
+    }
+    // Sequential fallback is only for InMemory mode.
   }
 
   let settlementRecord: SettlementRecord;
@@ -798,6 +801,11 @@ function isDuplicateSettlementError(err: unknown): boolean {
   const record = err as Record<string, unknown>;
   // Supabase/pg errors surface the code as `.code`
   return record['code'] === '23505';
+}
+
+function isInMemoryAtomicSettlementFallback(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return message.includes('settlePickAtomic is not supported in InMemory mode');
 }
 
 /**

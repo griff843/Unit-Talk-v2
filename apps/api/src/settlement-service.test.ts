@@ -165,6 +165,37 @@ test('recordPickSettlement rejects invalid settlement requests without writes', 
   assert.equal(settlements.length, 0);
 });
 
+test('recordPickSettlement rethrows atomic transition failures without sequential settlement fallback', async () => {
+  const { repositories, pick } = await createPostedPick();
+  repositories.settlements.settlePickAtomic = async () => {
+    throw new Error(
+      `settle_pick_atomic failed: INVALID_SETTLEMENT_TRANSITION pick_id=${pick.id} expected_state=posted actual_state=validated attempted_state=settled`,
+    );
+  };
+
+  await assert.rejects(
+    () =>
+      recordPickSettlement(
+        pick.id,
+        {
+          status: 'settled',
+          result: 'win',
+          source: 'operator',
+          confidence: 'confirmed',
+          evidenceRef: 'boxscore://atomic-rejection',
+          settledBy: 'operator',
+        },
+        repositories,
+      ),
+    /INVALID_SETTLEMENT_TRANSITION/,
+  );
+
+  const settlements = await repositories.settlements.listRecent();
+  const savedPick = await repositories.picks.findPickById(pick.id);
+  assert.equal(settlements.length, 0);
+  assert.equal(savedPick?.status, 'posted');
+});
+
 test('recordPickSettlement creates manual-review record for ambiguous settlement and keeps pick posted', async () => {
   const { repositories, pick } = await createPostedPick();
 
