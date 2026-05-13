@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-949",
-  "lane_type": "codex",
+  "lane_type": "codex-cli",
   "tier": "T2",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "griffadavi/utv2-949-utv2-949-p0-protocol-failure-observability",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "86a45f4a1df837bb9e6bc18317dd954ff1e4c031",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/653",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/p0-protocol.yml",
@@ -27,7 +27,7 @@
     "docs/06_status/proof/UTV2-949/claude-critique.md",
     "docs/06_status/proof/UTV2-949/runtime-verification.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-13T00:00:00.000Z",
   "heartbeat_at": "2026-05-13T00:00:00.000Z",
   "closed_at": null,

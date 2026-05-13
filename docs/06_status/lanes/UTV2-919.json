@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-919",
-  "lane_type": "codex",
+  "lane_type": "codex-cli",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "griffadavi/utv2-919-ut-p0-006-enforce-service-to-service-authentication",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "9915417b442c21098de58ed83c09c618de743bc0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/654",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/auth.ts",
@@ -34,7 +34,7 @@
     "docs/06_status/proof/UTV2-919/claude-critique.md",
     "docs/06_status/proof/UTV2-919/runtime-verification.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-13T00:00:00.000Z",
   "heartbeat_at": "2026-05-13T00:00:00.000Z",
   "closed_at": null,
