@@ -1,0 +1,50 @@
+{
+  "$schema": "https://unit-talk.dev/schemas/evidence_bundle_v1.schema.json",
+  "schema_version": 1,
+  "issue_id": "UTV2-915",
+  "tier": "T1",
+  "merge_sha": "1b6f3909f9226d9c0c10b915f42357408ef558c2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/651",
+  "merged_at": "2026-05-13T09:32:08Z",
+  "generated_at": "2026-05-13T09:35:00Z",
+  "verifier": {
+    "identity": "claude/utv2-915-orchestrator"
+  },
+  "bundle_markdown": "docs/06_status/UTV2-915-EVIDENCE-BUNDLE.md",
+  "static_proof": {
+    "claude_critique": "docs/06_status/proof/UTV2-915/claude-critique.md",
+    "proof": "docs/06_status/proof/UTV2-915/proof.md",
+    "verify_command": "pnpm verify",
+    "verify_result": "pass",
+    "r_level_check": "pass",
+    "r_level_advisory_missing": ["r4-fault-report"],
+    "r_scope_annotation": "additive-guard"
+  },
+  "runtime_proof": {
+    "runtime_verification": "docs/06_status/proof/UTV2-915/runtime-verification.md",
+    "result": "pass",
+    "test_db_command": "pnpm test:db",
+    "test_db_result": "2/2 pass",
+    "test_db_duration_ms": 43135,
+    "supabase_project_ref": "zfzdnfwdarxucxtaojxm",
+    "queries": [
+      {
+        "name": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "pass",
+        "duration_ms": 42024
+      },
+      {
+        "name": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "pass",
+        "duration_ms": 469
+      }
+    ]
+  },
+  "p0_protocol": {
+    "codex_implementation_pr": "https://github.com/griff843/Unit-Talk-v2/pull/651",
+    "claude_critique": "docs/06_status/proof/UTV2-915/claude-critique.md",
+    "runtime_verification": "docs/06_status/proof/UTV2-915/runtime-verification.md",
+    "human_approval": "https://github.com/griff843/Unit-Talk-v2/pull/651#issuecomment-4439336654",
+    "merge_type": "manual"
+  }
+}

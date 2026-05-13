@@ -1,5 +1,5 @@
 # PROOF: UTV2-915
-MERGE_SHA: TBD-on-merge
+MERGE_SHA: 1b6f3909f9226d9c0c10b915f42357408ef558c2
 
 ASSERTIONS:
 - [x] Production-like startup refuses to proceed without fail-closed runtime mode — verified at `packages/config/src/env.ts:397-403` (throws `RUNTIME_MODE_MUST_FAIL_CLOSED`), wired into all four services.

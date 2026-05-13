@@ -10,8 +10,8 @@
 | Owner | codex-cli/UTV2-915 (implementation), claude/orchestrator (critique + close-out) |
 | Date | 2026-05-13 |
 | Verifier Identity | claude/utv2-915-orchestrator |
-| Commit SHA(s) | TBD-on-merge |
-| Related PRs | TBD-on-PR-open |
+| Commit SHA(s) | `1b6f3909f9226d9c0c10b915f42357408ef558c2` (merge), `982dfae8` + `c980a570` + `3b9d3fec` (branch) |
+| Related PRs | [#651](https://github.com/griff843/Unit-Talk-v2/pull/651) |
 
 ## Scope
 

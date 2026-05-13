@@ -6,10 +6,9 @@
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main",
   "branch": "griffadavi/utv2-915-ut-p0-002-enforce-fail-closed-runtime-config",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "1b6f3909f9226d9c0c10b915f42357408ef558c2",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/651",
   "files_changed": [
-    ".ops/sync.yml",
     "apps/api/src/index.ts",
     "apps/api/src/qa-seed.test.ts",
     "apps/api/src/server.ts",
@@ -26,7 +25,6 @@
     "packages/config/src/env.ts"
   ],
   "file_scope_lock": [
-    ".ops/sync.yml",
     "apps/api/src/index.ts",
     "apps/api/src/qa-seed.test.ts",
     "apps/api/src/server.ts",
@@ -48,15 +46,45 @@
     "docs/06_status/proof/UTV2-915/runtime-verification.md",
     "docs/06_status/proof/UTV2-915/proof.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-13T01:13:21.800Z",
-  "heartbeat_at": "2026-05-13T03:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-13T09:38:35.474Z",
+  "closed_at": "2026-05-13T09:32:08.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-915-ut-p0-002-enforce-fail-closed-runtime-config.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
-  "reopen_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-13T09:35:21.993Z",
+      "verdict": "reopen",
+      "merge_sha": "1b6f3909f9226d9c0c10b915f42357408ef558c2",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "P5",
+        "G5"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-13T09:38:35.474Z",
+      "verdict": "pass",
+      "merge_sha": "1b6f3909f9226d9c0c10b915f42357408ef558c2",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [
+    {
+      "timestamp": "2026-05-13T09:35:21.993Z",
+      "reasons": [
+        "commits touched locked files after merge without linked follow-up issue: 36c360870cfe1a9fe65088b88fcdf4f2e725ccb3"
+      ],
+      "detected_by": "manual"
+    }
+  ],
   "p0_protocol": {
     "required": true,
     "codex_implementation": {
@@ -68,7 +96,8 @@
       "artifact_path": "docs/06_status/proof/UTV2-915/claude-critique.md"
     },
     "human_approval": {
-      "recorded": false
+      "recorded": true,
+      "pm_verdict_url": "https://github.com/griff843/Unit-Talk-v2/pull/651#issuecomment-4439336654"
     },
     "runtime_verification": {
       "recorded": true,

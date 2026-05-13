@@ -2,7 +2,7 @@
 
 **Issue:** UTV2-915 — UT-P0-002 Enforce Fail-Closed Runtime Config
 **Generated:** 2026-05-13
-**Merge SHA:** _TBD — added at merge time and verified by truth-check H3_
+**Merge SHA:** `1b6f3909f9226d9c0c10b915f42357408ef558c2`
 
 Per `docs/05_operations/P0_PROTOCOL_SPEC.md` §3. Every `: PASS` item below is backed by a real command run, executed by the orchestrator against the lane branch `griffadavi/utv2-915-ut-p0-002-enforce-fail-closed-runtime-config` checked out on the main path at `C:/Dev/Unit-Talk-v2-main`.
 
