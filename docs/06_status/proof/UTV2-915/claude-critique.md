@@ -4,7 +4,7 @@
 **Author of diff:** Codex (codex-cli 0.128.0)
 **Critique by:** Claude (independent review against the implemented diff)
 **Generated:** 2026-05-13
-**Merge SHA:** _TBD — added after merge, verified by truth-check H2_
+**Merge SHA:** `1b6f3909f9226d9c0c10b915f42357408ef558c2`
 
 Per `docs/05_operations/P0_PROTOCOL_SPEC.md` §3 schema.
 
