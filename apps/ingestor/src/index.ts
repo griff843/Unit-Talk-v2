@@ -10,11 +10,13 @@ import {
   createServiceRoleDatabaseConnectionConfig,
 } from '@unit-talk/db';
 import {
+  buildRuntimeTruthReport,
   createConsoleLogWriter,
   createDualLogWriter,
   createErrorTracker,
   createLogger,
   createLokiLogWriter,
+  type RuntimeTruthReport,
 } from '@unit-talk/observability';
 import { parseConfiguredLeagues, runIngestorCycles } from './ingestor-runner.js';
 import { parseSchedulerConfig, type SchedulerEnv } from './scheduler.js';
@@ -82,7 +84,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
 
   try {
     const connection = createServiceRoleDatabaseConnectionConfig(env);
-    return {
+    return withIngestorRuntimeTruth({
       persistenceMode: 'database' as const,
       runtimeMode,
       appVersion: startupConfig.appVersion,
@@ -103,7 +105,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       oddsApiKey: env.ODDS_API_KEY,
       ingestorApiKey: env.UNIT_TALK_INGESTOR_API_KEY,
       apiUrl,
-    };
+    });
   } catch (error) {
     if (runtimeMode === 'fail_closed') {
       throw new Error(
@@ -118,7 +120,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       reason: error instanceof Error ? error.message : String(error),
     });
 
-    return {
+    return withIngestorRuntimeTruth({
       persistenceMode: 'in-memory' as const,
       runtimeMode,
       appVersion: startupConfig.appVersion,
@@ -138,7 +140,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       oddsApiKey: env.ODDS_API_KEY,
       ingestorApiKey: env.UNIT_TALK_INGESTOR_API_KEY,
       apiUrl,
-    };
+    });
   }
 }
 
@@ -165,6 +167,7 @@ export function createIngestorRuntimeSummary() {
     providerOfferStagingMode: runtime.providerOfferStagingMode,
     providerDbWritePolicy: runtime.providerDbWritePolicy,
     providerPayloadArchivePolicy: runtime.providerPayloadArchivePolicy,
+    runtimeTruth: runtime.runtimeTruth,
     scheduler: {
       enabled: runtime.schedulerConfig.enabled,
       peakPollMs: runtime.schedulerConfig.peakPollMs,
@@ -181,6 +184,87 @@ export function createIngestorRuntimeSummary() {
       ? 'ingestor cycles will execute with the configured SGO provider settings'
       : 'set UNIT_TALK_INGESTOR_AUTORUN=true to execute ingestor cycles',
   };
+}
+
+function withIngestorRuntimeTruth<T extends {
+  persistenceMode: 'database' | 'in-memory';
+  runtimeMode: RuntimeMode;
+  appVersion: string;
+  leagues: string[];
+  pollIntervalMs: number;
+  maxCycles?: number | undefined;
+  autorun: boolean;
+  skipResults: boolean;
+  providerOfferStagingMode: string;
+  providerDbWritePolicy: unknown;
+  providerPayloadArchivePolicy: unknown;
+  schedulerConfig: { enabled: boolean };
+  sgoApiKeys: Array<unknown>;
+  oddsApiKey?: string | undefined;
+  ingestorApiKey?: string | undefined;
+  apiUrl?: string | undefined;
+}>(runtime: T): T & { runtimeTruth: RuntimeTruthReport } {
+  const doingRealWork =
+    runtime.persistenceMode === 'database' &&
+    runtime.autorun &&
+    (runtime.sgoApiKeys.length > 0 || Boolean(runtime.oddsApiKey));
+
+  return {
+    ...runtime,
+    runtimeTruth: buildRuntimeTruthReport({
+      service: 'ingestor',
+      observedAt: new Date().toISOString(),
+      runtimeMode: runtime.runtimeMode,
+      persistenceMode: runtime.persistenceMode,
+      appVersion: runtime.appVersion,
+      authEnabled: Boolean(runtime.ingestorApiKey),
+      workerTargets: [],
+      dryRun: false,
+      doingRealWork,
+      realWorkReason: buildIngestorRealWorkReason(runtime, doingRealWork),
+      lastWorkAt: null,
+      details: {
+        leagues: runtime.leagues,
+        pollIntervalMs: runtime.pollIntervalMs,
+        maxCyclesPerRun: runtime.maxCycles ?? 0,
+        autorun: runtime.autorun,
+        skipResults: runtime.skipResults,
+        providerOfferStagingMode: runtime.providerOfferStagingMode,
+        providerDbWritePolicy: runtime.providerDbWritePolicy,
+        providerPayloadArchivePolicy: runtime.providerPayloadArchivePolicy,
+        schedulerEnabled: runtime.schedulerConfig.enabled,
+        providers: {
+          sgo: runtime.sgoApiKeys.length > 0 ? 'configured' : 'missing',
+          oddsApi: runtime.oddsApiKey ? 'configured' : 'missing',
+        },
+        apiUrlConfigured: Boolean(runtime.apiUrl),
+      },
+    }),
+  };
+}
+
+function buildIngestorRealWorkReason(
+  runtime: {
+    persistenceMode: 'database' | 'in-memory';
+    autorun: boolean;
+    sgoApiKeys: Array<unknown>;
+    oddsApiKey?: string | undefined;
+  },
+  doingRealWork: boolean,
+): string {
+  if (doingRealWork) {
+    return 'autorun ingestor is using database persistence with provider credentials configured';
+  }
+  if (runtime.persistenceMode !== 'database') {
+    return 'in-memory persistence cannot write durable provider data';
+  }
+  if (!runtime.autorun) {
+    return 'autorun is disabled';
+  }
+  if (runtime.sgoApiKeys.length === 0 && !runtime.oddsApiKey) {
+    return 'provider credentials are missing';
+  }
+  return 'ingestor runtime is not configured for live provider work';
 }
 
 const runtime = createIngestorRuntimeDependencies();

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   authenticateCommandCenterRequest,
   assertCommandCenterAuthConfig,
+  fetchRuntimeTruth,
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
   resolveOperatorIdentity,
@@ -53,6 +54,50 @@ test('resolveCommandCenterApiHeaders includes bearer auth when configured', () =
     'X-Operator-Identity': 'ops-alice',
     Authorization: 'Bearer secret-token',
   });
+});
+
+test('fetchRuntimeTruth calls the authenticated runtime truth endpoint', async () => {
+  const calls: Array<{ input: string; init?: RequestInit }> = [];
+  const runtimeTruth = {
+    service: 'api',
+    observedAt: '2026-05-13T12:00:00.000Z',
+    runtimeMode: 'fail_closed',
+    persistenceMode: 'database',
+    appVersion: '0.1.0',
+    auth: { enabled: true, mode: 'enabled' },
+    work: {
+      doingRealWork: true,
+      dryRun: false,
+      lastWorkAt: null,
+      workerTargets: ['discord:best-bets'],
+      reason: 'database persistence is active for API writes',
+    },
+    details: {},
+    redaction: { secretsExposed: false, redactedKeys: [] },
+  };
+
+  const result = await fetchRuntimeTruth({
+    env: createEnv({
+      API_BASE_URL: 'http://api.test',
+      UNIT_TALK_CC_API_KEY: 'cc-secret',
+      COMMAND_CENTER_OPERATOR_IDENTITY: 'ops-alice',
+    }),
+    fetchImpl: async (input, init) => {
+      calls.push({ input: String(input), init });
+      return new Response(JSON.stringify(runtimeTruth), { status: 200 });
+    },
+  });
+
+  assert.deepEqual(result, runtimeTruth);
+  assert.equal(calls[0]?.input, 'http://api.test/api/runtime/truth');
+  assert.equal(
+    (calls[0]?.init?.headers as Record<string, string>).Authorization,
+    'Bearer cc-secret',
+  );
+  assert.equal(
+    (calls[0]?.init?.headers as Record<string, string>)['X-Operator-Identity'],
+    'ops-alice',
+  );
 });
 
 test('resolveCommandCenterApiHeaders fails closed in production without API key', () => {

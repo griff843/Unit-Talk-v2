@@ -12,6 +12,10 @@ import {
   type RepositoryBundle,
 } from '@unit-talk/db';
 import {
+  buildRuntimeTruthReport,
+  type RuntimeTruthReport,
+} from '@unit-talk/observability';
+import {
   evaluateWorkerTargetCoverage,
   formatWorkerTargetCoverageError,
   resolveTargetRegistry,
@@ -36,6 +40,7 @@ export interface WorkerRuntimeDependencies {
   autorun: boolean;
   simulationMode: boolean;
   targetCoverage: WorkerTargetCoverageReport;
+  runtimeTruth: RuntimeTruthReport;
 }
 
 export function createWorkerRuntimeDependencies(
@@ -97,7 +102,7 @@ export function createWorkerRuntimeDependencies(
   }
 
   if (persistenceMode === 'in_memory') {
-    return {
+    return withWorkerRuntimeTruth({
       repositories: createInMemoryRepositoryBundle(),
       persistenceMode: 'in_memory',
       runtimeMode: startupConfig.runtimeMode,
@@ -115,12 +120,12 @@ export function createWorkerRuntimeDependencies(
       autorun: readAutorun(environment),
       simulationMode: readSimulationMode(environment),
       targetCoverage,
-    };
+    });
   }
 
   const connection = createServiceRoleDatabaseConnectionConfig(environment);
 
-  return {
+  return withWorkerRuntimeTruth({
     repositories: createDatabaseRepositoryBundle(connection),
     persistenceMode: 'database',
     runtimeMode: startupConfig.runtimeMode,
@@ -138,7 +143,78 @@ export function createWorkerRuntimeDependencies(
     autorun: readAutorun(environment),
     simulationMode: readSimulationMode(environment),
     targetCoverage,
+  });
+}
+
+function withWorkerRuntimeTruth(
+  runtime: Omit<WorkerRuntimeDependencies, 'runtimeTruth'>,
+): WorkerRuntimeDependencies {
+  const doingRealWork =
+    runtime.persistenceMode === 'database' &&
+    runtime.autorun &&
+    !runtime.dryRun &&
+    !runtime.simulationMode &&
+    runtime.adapterKind === 'discord' &&
+    runtime.targetCoverage.ok;
+
+  return {
+    ...runtime,
+    runtimeTruth: buildRuntimeTruthReport({
+      service: 'worker',
+      observedAt: new Date().toISOString(),
+      runtimeMode: runtime.runtimeMode,
+      persistenceMode: runtime.persistenceMode,
+      appVersion: runtime.appVersion,
+      authEnabled: null,
+      workerTargets: runtime.distributionTargets,
+      dryRun: runtime.dryRun,
+      doingRealWork,
+      realWorkReason: buildWorkerRealWorkReason(runtime, doingRealWork),
+      lastWorkAt: null,
+      details: {
+        workerId: runtime.workerId,
+        adapterKind: runtime.adapterKind,
+        autorun: runtime.autorun,
+        simulationMode: runtime.simulationMode,
+        pollIntervalMs: runtime.pollIntervalMs,
+        maxCyclesPerRun: runtime.maxCyclesPerRun,
+        targetCoverage: {
+          ok: runtime.targetCoverage.ok,
+          enabledPromotionTargets: runtime.targetCoverage.enabledPromotionTargets,
+          configuredWorkerTargets: runtime.targetCoverage.configuredWorkerTargets,
+          rejectedTargetMismatchCount: runtime.targetCoverage.rejectedTargetMismatchCount,
+        },
+      },
+    }),
   };
+}
+
+function buildWorkerRealWorkReason(
+  runtime: Omit<WorkerRuntimeDependencies, 'runtimeTruth'>,
+  doingRealWork: boolean,
+): string {
+  if (doingRealWork) {
+    return 'autorun worker is using database persistence and the Discord adapter';
+  }
+  if (runtime.persistenceMode !== 'database') {
+    return 'in-memory persistence cannot deliver durable production work';
+  }
+  if (!runtime.autorun) {
+    return 'autorun is disabled';
+  }
+  if (runtime.dryRun) {
+    return 'dry-run mode prevents live delivery';
+  }
+  if (runtime.simulationMode) {
+    return 'simulation mode prevents live delivery';
+  }
+  if (runtime.adapterKind !== 'discord') {
+    return 'non-Discord adapter prevents live delivery';
+  }
+  if (!runtime.targetCoverage.ok) {
+    return 'worker target coverage does not match enabled promotion targets';
+  }
+  return 'worker runtime is not configured for live delivery';
 }
 
 function hasDatabaseEnvironment(environment: AppEnv) {
