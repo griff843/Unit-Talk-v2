@@ -88,6 +88,11 @@ export interface WorkerCycleSummary {
   results: WorkerProcessResult[];
 }
 
+interface ReapedClaimInfo {
+  row: OutboxRecord;
+  staleAgeMs: number | null;
+}
+
 export async function runWorkerCycles(
   options: WorkerRunnerOptions,
 ): Promise<WorkerCycleSummary[]> {
@@ -126,7 +131,7 @@ export async function runWorkerCycles(
 
     // Transient network errors during stale reaping are non-fatal — log and continue
     // with an empty reap list. The stale claim reaper will retry next cycle.
-    let reaped: OutboxRecord[] = [];
+    let reaped: ReapedClaimInfo[] = [];
     try {
       reaped = await reapStaleClaims(options.repositories, options.targets, options.workerId, staleClaimMs);
     } catch (reapError: unknown) {
@@ -142,6 +147,7 @@ export async function runWorkerCycles(
       }
     }
     const results: WorkerProcessResult[] = [];
+    const reapedById = new Map(reaped.map((entry) => [entry.row.id, entry]));
 
     for (const target of options.targets) {
       if (cb.isOpen(target)) {
@@ -239,6 +245,7 @@ export async function runWorkerCycles(
       }
       // 'idle' and 'skipped' do not affect circuit state
 
+      logWorkerResult(options, result, reapedById.get(getResultOutboxId(result) ?? ''));
       results.push(result);
     }
 
@@ -246,7 +253,7 @@ export async function runWorkerCycles(
 
     summaries.push({
       cycle,
-      reapedOutboxIds: reaped.map((row) => row.id),
+      reapedOutboxIds: reaped.map((entry) => entry.row.id),
       results,
     });
 
@@ -314,7 +321,7 @@ async function reapStaleClaims(
   staleClaimMs: number,
 ) {
   const staleBefore = new Date(Date.now() - staleClaimMs).toISOString();
-  const reaped: OutboxRecord[] = [];
+  const reaped: ReapedClaimInfo[] = [];
 
   for (const target of targets) {
     const rows = await repositories.outbox.reapStaleClaims(
@@ -324,7 +331,12 @@ async function reapStaleClaims(
     );
 
     for (const row of rows) {
-      reaped.push(row);
+      const claimedAtMs =
+        typeof row.claimed_at === 'string' && Number.isFinite(Date.parse(row.claimed_at))
+          ? Date.parse(row.claimed_at)
+          : null;
+      const staleAgeMs = claimedAtMs === null ? null : Math.max(0, Date.now() - claimedAtMs);
+      reaped.push({ row, staleAgeMs });
       await repositories.audit.record({
         entityType: 'distribution_outbox',
         entityId: row.id,
@@ -341,6 +353,64 @@ async function reapStaleClaims(
   }
 
   return reaped;
+}
+
+function getResultOutboxId(result: WorkerProcessResult): string | null {
+  if (!('outbox' in result)) {
+    return null;
+  }
+
+  return result.outbox.id;
+}
+
+function logWorkerResult(
+  options: WorkerRunnerOptions,
+  result: WorkerProcessResult,
+  reaped: ReapedClaimInfo | undefined,
+) {
+  if (!options.logger || !('outbox' in result)) {
+    return;
+  }
+
+  const recoveryAction = reaped ? describeRecoveryAction(result) : null;
+  const fields = {
+    workerId: result.workerId,
+    target: result.target,
+    outboxId: result.outbox.id,
+    attemptCount: result.outbox.attempt_count,
+    finalState: result.outbox.status,
+    deliveryStatus: result.status,
+    recoveredFromStaleClaim: reaped !== undefined,
+    staleAgeMs: reaped?.staleAgeMs ?? null,
+    recoveryAction,
+  };
+
+  if (result.status === 'failed' || reaped !== undefined) {
+    options.logger.warn('worker recovery result', fields);
+    return;
+  }
+
+  options.logger.info('worker recovery result', fields);
+}
+
+function describeRecoveryAction(result: WorkerProcessResult) {
+  if (!('outbox' in result)) {
+    return null;
+  }
+
+  if (result.outbox.status === 'sent') {
+    return 'reaped-and-sent';
+  }
+
+  if (result.outbox.status === 'dead_letter') {
+    return 'reaped-and-dead-lettered';
+  }
+
+  if (result.status === 'failed') {
+    return 'reaped-and-retried';
+  }
+
+  return 'reaped-and-processed';
 }
 
 function defaultSleep(ms: number) {
