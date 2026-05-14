@@ -273,6 +273,95 @@ export function queueHealthLogFields(evaluation: QueueHealthEvaluation): LogFiel
   };
 }
 
+export interface RuntimeTruthInput {
+  service: string;
+  observedAt: string;
+  runtimeMode: string;
+  persistenceMode: string;
+  appVersion?: string | null | undefined;
+  authEnabled?: boolean | null | undefined;
+  workerTargets?: readonly string[] | undefined;
+  dryRun: boolean;
+  doingRealWork: boolean;
+  realWorkReason: string;
+  lastWorkAt?: string | null | undefined;
+  details?: Record<string, unknown> | undefined;
+}
+
+export interface RuntimeTruthReport {
+  service: string;
+  observedAt: string;
+  runtimeMode: string;
+  persistenceMode: string;
+  appVersion: string | null;
+  auth: {
+    enabled: boolean | null;
+    mode: 'enabled' | 'disabled' | 'not_applicable';
+  };
+  work: {
+    doingRealWork: boolean;
+    dryRun: boolean;
+    lastWorkAt: string | null;
+    workerTargets: string[];
+    reason: string;
+  };
+  details: Record<string, LogValue>;
+  redaction: {
+    secretsExposed: false;
+    redactedKeys: string[];
+  };
+}
+
+export function buildRuntimeTruthReport(input: RuntimeTruthInput): RuntimeTruthReport {
+  const redactedKeys: string[] = [];
+  const details = sanitizeRuntimeTruthDetails(
+    input.details ?? {},
+    [],
+    redactedKeys,
+  ) as Record<string, LogValue>;
+  const authEnabled = input.authEnabled ?? null;
+
+  return {
+    service: input.service,
+    observedAt: input.observedAt,
+    runtimeMode: input.runtimeMode,
+    persistenceMode: input.persistenceMode,
+    appVersion: input.appVersion ?? null,
+    auth: {
+      enabled: authEnabled,
+      mode: authEnabled === null ? 'not_applicable' : authEnabled ? 'enabled' : 'disabled',
+    },
+    work: {
+      doingRealWork: input.doingRealWork,
+      dryRun: input.dryRun,
+      lastWorkAt: normalizeRuntimeTruthTimestamp(input.lastWorkAt),
+      workerTargets: uniqueStrings(input.workerTargets ?? []),
+      reason: input.realWorkReason,
+    },
+    details,
+    redaction: {
+      secretsExposed: false,
+      redactedKeys,
+    },
+  };
+}
+
+export function runtimeTruthLogFields(report: RuntimeTruthReport): LogFields {
+  return {
+    service: report.service,
+    runtimeMode: report.runtimeMode,
+    persistenceMode: report.persistenceMode,
+    appVersion: report.appVersion,
+    authMode: report.auth.mode,
+    doingRealWork: report.work.doingRealWork,
+    dryRun: report.work.dryRun,
+    lastWorkAt: report.work.lastWorkAt,
+    workerTargets: report.work.workerTargets,
+    realWorkReason: report.work.reason,
+    redactedKeys: report.redaction.redactedKeys,
+  };
+}
+
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type LogValue =
@@ -953,6 +1042,80 @@ function safeTime(timestamp: string | null | undefined): number | null {
 
 function formatAgeMinutes(valueMs: number): string {
   return `${Math.round(valueMs / 60000)}m`;
+}
+
+function normalizeRuntimeTruthTimestamp(value: string | null | undefined): string | null {
+  if (!value) {
+    return null;
+  }
+
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function sanitizeRuntimeTruthDetails(
+  value: unknown,
+  pathParts: string[],
+  redactedKeys: string[],
+): LogValue {
+  const key = pathParts[pathParts.length - 1] ?? '';
+  if (isSensitiveRuntimeTruthKey(key)) {
+    redactedKeys.push(pathParts.join('.'));
+    return '[redacted]';
+  }
+
+  if (
+    typeof value === 'string' ||
+    typeof value === 'number' ||
+    typeof value === 'boolean' ||
+    value === null
+  ) {
+    return value;
+  }
+
+  if (value === undefined) {
+    return null;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((entry, index) =>
+      sanitizeRuntimeTruthDetails(entry, [...pathParts, String(index)], redactedKeys),
+    );
+  }
+
+  if (typeof value === 'object') {
+    const sanitized: Record<string, LogValue> = {};
+    for (const [childKey, childValue] of Object.entries(value)) {
+      sanitized[childKey] = sanitizeRuntimeTruthDetails(
+        childValue,
+        [...pathParts, childKey],
+        redactedKeys,
+      );
+    }
+    return sanitized;
+  }
+
+  return String(value);
+}
+
+function isSensitiveRuntimeTruthKey(key: string): boolean {
+  const normalized = key.replace(/[^a-z0-9]/gi, '').toLowerCase();
+  return (
+    normalized.endsWith('apikey') ||
+    normalized.endsWith('apikeys') ||
+    normalized.endsWith('token') ||
+    normalized.endsWith('tokens') ||
+    normalized.endsWith('secret') ||
+    normalized.endsWith('secrets') ||
+    normalized.endsWith('password') ||
+    normalized.endsWith('authorization') ||
+    normalized.endsWith('servicerolekey') ||
+    normalized.endsWith('webhookurl')
+  );
 }
 
 function readHeaderValue(

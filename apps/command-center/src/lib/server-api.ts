@@ -1,3 +1,5 @@
+import type { RuntimeTruthReport } from '@unit-talk/observability';
+
 type EnvReader = Record<string, string | undefined>;
 
 export type CommandCenterAuthRole = 'operator';
@@ -72,6 +74,25 @@ export function resolveOperatorIdentity(env: NodeJS.ProcessEnv = process.env) {
     env['OPERATOR_IDENTITY']?.trim() ||
     'command-center'
   );
+}
+
+export async function fetchRuntimeTruth(input: {
+  env?: NodeJS.ProcessEnv | undefined;
+  fetchImpl?: typeof fetch | undefined;
+} = {}): Promise<RuntimeTruthReport> {
+  const env = input.env ?? process.env;
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(`${resolveApiBaseUrl(env)}/api/runtime/truth`, {
+    method: 'GET',
+    headers: resolveCommandCenterApiHeaders(env),
+    cache: 'no-store',
+  });
+
+  if (!response.ok) {
+    throw new Error(`Runtime truth request failed: ${response.status}`);
+  }
+
+  return (await response.json()) as RuntimeTruthReport;
 }
 
 export function resolveCommandCenterAccessConfig(

@@ -1128,6 +1128,15 @@ test('createWorkerRuntimeDependencies reads worker config from loaded environmen
   assert.equal(runtime.workerHeartbeatIntervalMs, 45000);
   assert.equal(runtime.simulationMode, true);
   assert.deepEqual(runtime.targetCoverage.configuredWorkerTargets, ['discord:canary', 'discord:best-bets']);
+  assert.equal(runtime.runtimeTruth.service, 'worker');
+  assert.equal(runtime.runtimeTruth.persistenceMode, 'in_memory');
+  assert.equal(runtime.runtimeTruth.work.doingRealWork, false);
+  assert.equal(runtime.runtimeTruth.work.dryRun, false);
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:canary', 'discord:best-bets']);
+  assert.equal(
+    runtime.runtimeTruth.work.reason,
+    'in-memory persistence cannot deliver durable production work',
+  );
 });
 
 test('createWorkerRuntimeDependencies fails closed in production when enabled targets lack workers', () => {
@@ -1153,6 +1162,29 @@ test('createWorkerRuntimeDependencies exposes target coverage when production ta
   assert.equal(runtime.targetCoverage.ok, true);
   assert.deepEqual(runtime.targetCoverage.enabledPromotionTargets, ['best-bets']);
   assert.equal(runtime.targetCoverage.rejectedTargetMismatchCount, 0);
+});
+
+test('createWorkerRuntimeDependencies reports live worker runtime truth without secrets', () => {
+  const runtime = createWorkerRuntimeDependencies({
+    environment: makeProductionWorkerEnvironment({
+      UNIT_TALK_ENABLED_TARGETS: 'best-bets',
+      UNIT_TALK_DISTRIBUTION_TARGETS: 'discord:best-bets',
+      UNIT_TALK_WORKER_AUTORUN: 'true',
+    }),
+  });
+
+  assert.equal(runtime.runtimeTruth.runtimeMode, 'fail_closed');
+  assert.equal(runtime.runtimeTruth.persistenceMode, 'database');
+  assert.equal(runtime.runtimeTruth.auth.mode, 'not_applicable');
+  assert.equal(runtime.runtimeTruth.work.doingRealWork, true);
+  assert.equal(runtime.runtimeTruth.work.dryRun, false);
+  assert.deepEqual(runtime.runtimeTruth.work.workerTargets, ['discord:best-bets']);
+  assert.equal(
+    runtime.runtimeTruth.work.reason,
+    'autorun worker is using database persistence and the Discord adapter',
+  );
+  assert.equal(JSON.stringify(runtime.runtimeTruth).includes('test-bot-token'), false);
+  assert.equal(JSON.stringify(runtime.runtimeTruth).includes('service-role-key'), false);
 });
 
 test('createWorkerRuntimeDependencies defaults workerHeartbeatIntervalMs to 30000', () => {

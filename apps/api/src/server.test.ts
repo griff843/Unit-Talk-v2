@@ -3,7 +3,7 @@ import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
 import { evaluateQueueHealth } from '@unit-talk/observability';
-import { createApiRuntimeDependencies, createApiServer } from './server.js';
+import { buildApiRuntimeTruth, createApiRuntimeDependencies, createApiServer } from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
   processShadowSubmission,
@@ -128,6 +128,85 @@ test('GET /api/health/runtime returns runtime metadata for operator auth', async
     restoreEnv('UNIT_TALK_BUILD_TIMESTAMP', previousBuildTimestamp);
     restoreEnv('UNIT_TALK_DEPLOYMENT_ID', previousDeploymentId);
   }
+});
+
+test('GET /api/runtime/truth returns redacted operator runtime truth', async () => {
+  const previousOperatorKey = process.env.UNIT_TALK_API_KEY_OPERATOR;
+  const previousGitSha = process.env.UNIT_TALK_GIT_SHA;
+  const previousDeploymentId = process.env.UNIT_TALK_DEPLOYMENT_ID;
+
+  process.env.UNIT_TALK_API_KEY_OPERATOR = 'op-runtime-truth-secret';
+  process.env.UNIT_TALK_GIT_SHA = 'abcdef1234567890abcdef1234567890abcdef12';
+  process.env.UNIT_TALK_DEPLOYMENT_ID = 'deploy-runtime-truth';
+
+  const server = createApiServer({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(
+      `http://127.0.0.1:${address.port}/api/runtime/truth`,
+      {
+        headers: {
+          authorization: 'Bearer op-runtime-truth-secret',
+        },
+      },
+    );
+    const body = (await response.json()) as {
+      service: string;
+      runtimeMode: string;
+      persistenceMode: string;
+      auth: { enabled: boolean; mode: string };
+      work: {
+        doingRealWork: boolean;
+        dryRun: boolean;
+        workerTargets: string[];
+        lastWorkAt: string | null;
+      };
+      details: {
+        build: { gitShaShort: string | null; deploymentIdentifier: string | null };
+        auth: { configuredKeyCount: number };
+      };
+      redaction: { secretsExposed: boolean };
+    };
+
+    assert.equal(response.status, 200);
+    assert.equal(body.service, 'api');
+    assert.equal(body.persistenceMode, 'in_memory');
+    assert.equal(body.auth.enabled, true);
+    assert.equal(body.auth.mode, 'enabled');
+    assert.deepEqual(body.work.workerTargets, []);
+    assert.equal(body.work.doingRealWork, false);
+    assert.equal(body.work.dryRun, false);
+    assert.equal(body.work.lastWorkAt, null);
+    assert.equal(body.details.build.gitShaShort, 'abcdef123456');
+    assert.equal(body.details.build.deploymentIdentifier, 'deploy-runtime-truth');
+    assert.equal(body.details.auth.configuredKeyCount >= 1, true);
+    assert.equal(body.redaction.secretsExposed, false);
+    assert.equal(JSON.stringify(body).includes('op-runtime-truth-secret'), false);
+  } finally {
+    server.close();
+    restoreEnv('UNIT_TALK_API_KEY_OPERATOR', previousOperatorKey);
+    restoreEnv('UNIT_TALK_GIT_SHA', previousGitSha);
+    restoreEnv('UNIT_TALK_DEPLOYMENT_ID', previousDeploymentId);
+  }
+});
+
+test('buildApiRuntimeTruth marks database persistence as real API work', () => {
+  const runtime = createApiRuntimeDependencies({
+    repositories: createInMemoryRepositoryBundle(),
+  });
+  runtime.persistenceMode = 'database';
+
+  const report = buildApiRuntimeTruth(runtime, '2026-05-13T12:00:00.000Z');
+
+  assert.equal(report.observedAt, '2026-05-13T12:00:00.000Z');
+  assert.equal(report.work.doingRealWork, true);
+  assert.equal(report.work.reason, 'database persistence is active for API writes');
 });
 
 test('GET /health uses a valid UUID probe when persistenceMode is database', async () => {

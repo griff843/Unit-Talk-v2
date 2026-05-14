@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { describe, it } from 'node:test';
 import {
+  buildRuntimeTruthReport,
   createCorrelationId,
   createDualLogWriter,
   createErrorCaptureEvent,
@@ -17,6 +18,7 @@ import {
   normalizeCorrelationId,
   OBSERVABILITY_STACK_DECISION,
   recordQueueHealthMetrics,
+  runtimeTruthLogFields,
   serializeError,
   type LogLevel,
   type LogWriter,
@@ -248,6 +250,76 @@ test('recordQueueHealthMetrics exposes queue depth, pending target, and delivery
   assert.deepEqual(snapshot.gauges['distribution_outbox_pending_by_target'], [
     { value: 1, labels: { target: 'discord:best-bets' } },
   ]);
+});
+
+test('buildRuntimeTruthReport serializes real-work state without leaking secrets', () => {
+  const report = buildRuntimeTruthReport({
+    service: 'api',
+    observedAt: '2026-05-13T12:00:00.000Z',
+    runtimeMode: 'fail_closed',
+    persistenceMode: 'database',
+    appVersion: '0.1.0',
+    authEnabled: true,
+    workerTargets: ['discord:best-bets', 'discord:best-bets', 'discord:canary'],
+    dryRun: false,
+    doingRealWork: true,
+    realWorkReason: 'database persistence and live delivery are configured',
+    lastWorkAt: '2026-05-13T11:59:00.000Z',
+    details: {
+      queueDepth: 3,
+      credentials: {
+        apiKey: 'super-secret-api-key',
+        serviceRoleKey: 'super-secret-service-role',
+      },
+      providers: [{ provider: 'sgo', status: 'configured' }],
+    },
+  });
+
+  assert.equal(report.auth.mode, 'enabled');
+  assert.equal(report.work.doingRealWork, true);
+  assert.deepEqual(report.work.workerTargets, ['discord:best-bets', 'discord:canary']);
+  assert.equal(
+    (report.details['credentials'] as { apiKey?: string }).apiKey,
+    '[redacted]',
+  );
+  assert.equal(
+    (report.details['credentials'] as { serviceRoleKey?: string }).serviceRoleKey,
+    '[redacted]',
+  );
+  assert.deepEqual(report.redaction.redactedKeys, [
+    'credentials.apiKey',
+    'credentials.serviceRoleKey',
+  ]);
+  assert.equal(JSON.stringify(report).includes('super-secret'), false);
+});
+
+test('runtimeTruthLogFields emits compact operator-safe startup fields', () => {
+  const report = buildRuntimeTruthReport({
+    service: 'worker',
+    observedAt: '2026-05-13T12:00:00.000Z',
+    runtimeMode: 'fail_open',
+    persistenceMode: 'in_memory',
+    authEnabled: null,
+    workerTargets: ['discord:canary'],
+    dryRun: true,
+    doingRealWork: false,
+    realWorkReason: 'dry-run mode prevents live delivery',
+    details: { adapterKind: 'stub' },
+  });
+
+  assert.deepEqual(runtimeTruthLogFields(report), {
+    service: 'worker',
+    runtimeMode: 'fail_open',
+    persistenceMode: 'in_memory',
+    appVersion: null,
+    authMode: 'not_applicable',
+    doingRealWork: false,
+    dryRun: true,
+    lastWorkAt: null,
+    workerTargets: ['discord:canary'],
+    realWorkReason: 'dry-run mode prevents live delivery',
+    redactedKeys: [],
+  });
 });
 
 test('createErrorCaptureEvent serializes errors with operation and correlation context', () => {

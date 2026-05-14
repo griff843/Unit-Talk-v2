@@ -12,6 +12,7 @@ import {
   type RepositoryBundle,
 } from '@unit-talk/db';
 import {
+  buildRuntimeTruthReport,
   createConsoleLogWriter,
   createDualLogWriter,
   createErrorTracker,
@@ -20,10 +21,12 @@ import {
   createMetricsCollector,
   createRequestLogFields,
   getOrCreateCorrelationId,
+  runtimeTruthLogFields,
   type ErrorTracker,
   type Logger,
   type MetricsCollector,
   type QueueHealthEvaluation,
+  type RuntimeTruthReport,
 } from '@unit-talk/observability';
 import { setCorsHeaders, writeJson } from './http-utils.js';
 import {
@@ -204,7 +207,7 @@ export function createApiRuntimeDependencies(
     options.errorTracker ?? createErrorTracker({ service: 'api', logger });
 
   if (options.repositories) {
-    return {
+    return withRuntimeTruthStartupLog({
       repositories: options.repositories,
       persistenceMode: 'in_memory',
       runtimeMode,
@@ -217,13 +220,13 @@ export function createApiRuntimeDependencies(
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
       versionInfo,
-    };
+    });
   }
 
   try {
     const connection = createServiceRoleDatabaseConnectionConfig(environment);
 
-    return {
+    return withRuntimeTruthStartupLog({
       repositories: createDatabaseRepositoryBundle(connection),
       persistenceMode: 'database',
       runtimeMode,
@@ -236,7 +239,7 @@ export function createApiRuntimeDependencies(
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
       versionInfo,
-    };
+    });
   } catch (error) {
     if (runtimeMode === 'fail_closed') {
       throw new Error(
@@ -250,7 +253,7 @@ export function createApiRuntimeDependencies(
       reason: error instanceof Error ? error.message : String(error),
     });
 
-    return {
+    return withRuntimeTruthStartupLog({
       repositories: createInMemoryRepositoryBundle(),
       persistenceMode: 'in_memory',
       runtimeMode,
@@ -263,7 +266,7 @@ export function createApiRuntimeDependencies(
       rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
       metricsCollector,
       versionInfo,
-    };
+    });
   }
 }
 
@@ -519,6 +522,10 @@ export async function routeRequest(
     return handleRuntimeVersion(request, response, runtime);
   }
 
+  if (method === 'GET' && url.pathname === '/api/runtime/truth') {
+    return handleRuntimeTruth(request, response, runtime);
+  }
+
   // UTV2-798: model performance calibration analytics
   if (method === 'GET' && url.pathname === '/api/model-performance') {
     return handleModelPerformance(request, response, runtime);
@@ -708,6 +715,79 @@ export async function routeRequest(
       message: `Route not found: ${method} ${url.pathname}`,
     },
   });
+}
+
+export function buildApiRuntimeTruth(
+  runtime: ApiRuntimeDependencies,
+  observedAt = new Date().toISOString(),
+): RuntimeTruthReport {
+  const queueHealth = runtime.queueHealth ?? null;
+  const doingRealWork = runtime.persistenceMode === 'database';
+
+  return buildRuntimeTruthReport({
+    service: 'api',
+    observedAt,
+    runtimeMode: runtime.runtimeMode,
+    persistenceMode: runtime.persistenceMode,
+    appVersion: runtime.versionInfo.scorerRuntimeVersion,
+    authEnabled: runtime.authConfig.enabled,
+    workerTargets: queueHealth?.workerTargets ?? [],
+    dryRun: false,
+    doingRealWork,
+    realWorkReason: doingRealWork
+      ? 'database persistence is active for API writes'
+      : 'in-memory persistence cannot represent production writes',
+    lastWorkAt: queueHealth?.lastSuccessfulDeliveryAt ?? null,
+    details: {
+      build: {
+        gitShaShort: runtime.versionInfo.gitShaShort,
+        deploymentIdentifier: runtime.versionInfo.deploymentIdentifier,
+        metadataComplete: runtime.versionInfo.metadataComplete,
+        missingFields: runtime.versionInfo.missingFields,
+      },
+      auth: {
+        failClosed: Boolean(runtime.authConfig.failClosed),
+        configuredKeyCount: runtime.authConfig.keys.size,
+      },
+      queueHealth: queueHealth
+        ? {
+            status: queueHealth.status,
+            pendingCount: queueHealth.pendingCount,
+            failedCount: queueHealth.failedCount,
+            deadLetterCount: queueHealth.deadLetterCount,
+            lastSuccessfulDeliveryAt: queueHealth.lastSuccessfulDeliveryAt,
+            alertCodes: queueHealth.alerts.map((alert) => alert.code),
+          }
+        : null,
+    },
+  });
+}
+
+async function handleRuntimeTruth(
+  request: IncomingMessage,
+  response: ServerResponse,
+  runtime: ApiRuntimeDependencies,
+): Promise<void> {
+  const auth = await authenticateRequest(request, runtime.authConfig);
+  if (!auth || auth.role !== 'operator') {
+    writeJson(response, 401, {
+      ok: false,
+      error: { code: 'UNAUTHORIZED', message: 'operator role required' },
+    });
+    return;
+  }
+
+  writeJson(response, 200, buildApiRuntimeTruth(runtime));
+}
+
+function withRuntimeTruthStartupLog(
+  runtime: ApiRuntimeDependencies,
+): ApiRuntimeDependencies {
+  runtime.logger.info(
+    'runtime truth',
+    runtimeTruthLogFields(buildApiRuntimeTruth(runtime)),
+  );
+  return runtime;
 }
 
 export async function readJsonBody(
