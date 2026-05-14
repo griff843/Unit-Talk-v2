@@ -27,10 +27,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-863-drift-evidence/"
   ],
-  "status": "in_progress",
+  "status": "cancelled",
   "started_at": "2026-05-10T13:20:00.000Z",
-  "heartbeat_at": "2026-05-10T13:46:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-14T13:54:00.000Z",
+  "closed_at": "2026-05-14T13:54:00.000Z",
   "blocked_by": [
     "deploy-secrets",
     "fresh-viable-candidates"
