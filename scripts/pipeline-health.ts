@@ -33,6 +33,14 @@ const now = new Date()
 
 function ageMin(ts: string) { return Math.round((now.getTime() - new Date(ts).getTime()) / 60000) }
 function ageFmt(ts: string) { const m = ageMin(ts); return m < 60 ? `${m}m` : `${Math.round(m/60*10)/10}h` }
+function alertDetail(alert: { target?: string; status?: string; ageMs?: number; remediation?: string }) {
+  const parts: string[] = []
+  if (alert.target) parts.push(`target=${alert.target}`)
+  if (alert.status) parts.push(`status=${alert.status}`)
+  if (typeof alert.ageMs === 'number') parts.push(`age=${Math.round(alert.ageMs / 60000)}m`)
+  if (alert.remediation) parts.push(`remediation=${alert.remediation}`)
+  return parts.length > 0 ? ` [${parts.join(' | ')}]` : ''
+}
 
 // ── 1. Outbox queue state ─────────────────────────────────────────────────
 const { data: outbox, error: outboxErr } = await db
@@ -171,7 +179,7 @@ if (oldestPending) {
 console.log(`  Pending by target: ${Object.entries(queueHealth.pendingByTarget).map(([target, count]) => `${target}=${count}`).join(', ') || 'NONE'}`)
 for (const alert of queueHealth.alerts) {
   const label = alert.level === 'critical' ? 'CRITICAL' : 'WARN'
-  console.log(`  ${label}: ${alert.message}`)
+  console.log(`  ${label}: ${alert.message}${alertDetail(alert)}`)
 }
 
 // ── 7. Delivery truth (last 5 sent rows) ──────────────────────────────────
@@ -227,8 +235,9 @@ if (deferredPend.length > 0) warns.push(`${deferredPend.length} pending row(s) o
 if (badChannels.length) warns.push(`${badChannels.length} receipt(s) with non-live delivery targets/channels (historical pre-activation records)`)
 if (!workerVerdict.startsWith('HEALTHY')) (workerVerdict.startsWith('DOWN') ? criticals : warns).push(workerVerdict)
 for (const alert of queueHealth.alerts) {
-  if (alert.level === 'critical') criticals.push(alert.message)
-  else warns.push(alert.message)
+  const detail = alertDetail(alert)
+  if (alert.level === 'critical') criticals.push(`${alert.message}${detail}`)
+  else warns.push(`${alert.message}${detail}`)
 }
 
 if (criticals.length > 0) {
@@ -255,17 +264,22 @@ if (outputJsonPath) {
     last_successful_delivery_at: queueHealth.lastSuccessfulDeliveryAt,
     last_successful_delivery_age_ms: queueHealth.lastSuccessfulDeliveryAgeMs,
     queue_health_status: queueHealth.status,
+    silent_stranding_risk: queueHealth.silentStrandingRisk,
     queue_health_alerts: queueHealth.alerts,
     worker_verdict: workerVerdict,
     criticals,
     warns,
-    has_anomaly: criticals.length > 0 || deadLetter.length > 0 || queueHealth.status !== 'healthy',
+    has_anomaly:
+      criticals.length > 0 ||
+      deadLetter.length > 0 ||
+      queueHealth.status !== 'healthy' ||
+      queueHealth.silentStrandingRisk,
   }
   fs.mkdirSync(outputJsonPath.split('/').slice(0, -1).join('/') || '.', { recursive: true })
   fs.writeFileSync(outputJsonPath, JSON.stringify(report, null, 2) + '\n')
   console.log(`JSON report written to ${outputJsonPath}`)
 }
-if (queueHealth.status === 'down') process.exitCode = 1
+if (queueHealth.status === 'down' || queueHealth.silentStrandingRisk) process.exitCode = 1
 } // end main
 
 main().catch(e => { console.error(e); process.exit(1) })
