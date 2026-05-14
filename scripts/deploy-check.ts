@@ -13,10 +13,16 @@ export interface CheckResult {
 
 const REQUIRED_ENV_VARS = [
   'SUPABASE_URL',
+  'SUPABASE_ANON_KEY',
   'SUPABASE_SERVICE_ROLE_KEY',
   'UNIT_TALK_API_RUNTIME_MODE',
+  'UNIT_TALK_WORKER_RUNTIME_MODE',
+  'UNIT_TALK_INGESTOR_RUNTIME_MODE',
+  'UNIT_TALK_DISCORD_BOT_RUNTIME_MODE',
   'UNIT_TALK_INGESTOR_AUTORUN',
   'UNIT_TALK_WORKER_AUTORUN',
+  'UNIT_TALK_INGESTOR_API_KEY',
+  'UNIT_TALK_BOT_API_KEY',
 ] as const;
 
 const REQUIRED_PACKAGE_SCRIPTS = [
@@ -53,6 +59,65 @@ export function collectDeployStaticChecks(
       value
         ? { name: `env ${varName}`, passed: true }
         : { name: `env ${varName}`, passed: false, detail: `${varName} is not set or empty` },
+    );
+  }
+
+  for (const runtimeModeName of [
+    'UNIT_TALK_API_RUNTIME_MODE',
+    'UNIT_TALK_WORKER_RUNTIME_MODE',
+    'UNIT_TALK_INGESTOR_RUNTIME_MODE',
+    'UNIT_TALK_DISCORD_BOT_RUNTIME_MODE',
+  ] as const) {
+    const value = environment[runtimeModeName]?.trim();
+    results.push(
+      value === 'fail_closed'
+        ? { name: `env ${runtimeModeName} fail-closed`, passed: true }
+        : {
+            name: `env ${runtimeModeName} fail-closed`,
+            passed: false,
+            detail: `${runtimeModeName} must be fail_closed in production`,
+          },
+    );
+  }
+
+  const workerDryRun = environment.UNIT_TALK_WORKER_DRY_RUN?.trim();
+  results.push(
+    workerDryRun === 'false'
+      ? { name: 'env UNIT_TALK_WORKER_DRY_RUN disabled', passed: true }
+      : {
+          name: 'env UNIT_TALK_WORKER_DRY_RUN disabled',
+          passed: false,
+          detail: 'UNIT_TALK_WORKER_DRY_RUN must be false in production',
+        },
+  );
+
+  for (const [service, key] of [
+    ['worker', 'UNIT_TALK_WORKER_MAX_CYCLES'],
+    ['ingestor', 'UNIT_TALK_INGESTOR_MAX_CYCLES'],
+  ] as const) {
+    const autorunKey = service === 'worker'
+      ? 'UNIT_TALK_WORKER_AUTORUN'
+      : 'UNIT_TALK_INGESTOR_AUTORUN';
+    const autorun = environment[autorunKey]?.trim() === 'true';
+    const maxCycles = environment[key]?.trim();
+    const explicitContinuousOrBounded =
+      service === 'worker'
+        ? maxCycles === undefined ||
+          maxCycles.length === 0 ||
+          (maxCycles !== '1' && Number.isFinite(Number(maxCycles)))
+        : maxCycles !== undefined &&
+          maxCycles.length > 0 &&
+          maxCycles !== '1' &&
+          Number.isFinite(Number(maxCycles));
+
+    results.push(
+      !autorun || explicitContinuousOrBounded
+        ? { name: `env ${key} avoids one-cycle ambiguity`, passed: true }
+        : {
+            name: `env ${key} avoids one-cycle ambiguity`,
+            passed: false,
+            detail: `${key}=1 is forbidden when ${autorunKey}=true`,
+          },
     );
   }
 

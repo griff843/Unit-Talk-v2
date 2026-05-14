@@ -319,6 +319,58 @@ function restoreEnv(name: string, value: string | undefined) {
   process.env[name] = value;
 }
 
+test('createApiRuntimeDependencies logs redacted database credential failures in production', () => {
+  const output = captureConsoleError(() => {
+    assert.throws(
+      () =>
+        createApiRuntimeDependencies({
+          environment: makeProductionApiEnvironment({
+            SUPABASE_URL: undefined,
+            SUPABASE_ANON_KEY: undefined,
+            SUPABASE_SERVICE_ROLE_KEY: 'service-role-secret',
+            UNIT_TALK_API_KEY_OPERATOR: 'operator-secret',
+          }),
+        }),
+      /missing required env vars: SUPABASE_URL, SUPABASE_ANON_KEY/i,
+    );
+  });
+
+  assert.match(output, /\[api\] Startup config invalid:/);
+  assert.match(output, /"category":"database_credentials"/);
+  assert.match(output, /"service":"api"/);
+  assert.match(output, /"runtimeMode":"fail_closed"/);
+  assert.match(output, /"missingKeys":\["SUPABASE_URL","SUPABASE_ANON_KEY"\]/);
+  assert.equal(output.includes('service-role-secret'), false);
+  assert.equal(output.includes('operator-secret'), false);
+});
+
+test('createApiRuntimeDependencies logs redacted service auth failures in production', () => {
+  const output = captureConsoleError(() => {
+    assert.throws(
+      () =>
+        createApiRuntimeDependencies({
+          environment: makeProductionApiEnvironment({
+            UNIT_TALK_API_KEY_OPERATOR: undefined,
+            UNIT_TALK_API_KEY_SUBMITTER: undefined,
+            UNIT_TALK_API_KEY_SETTLER: undefined,
+            UNIT_TALK_API_KEY_POSTER: undefined,
+            UNIT_TALK_API_KEY_WORKER: undefined,
+            UNIT_TALK_CC_API_KEY: undefined,
+            UNIT_TALK_INGESTOR_API_KEY: undefined,
+            UNIT_TALK_BOT_API_KEY: undefined,
+          }),
+        }),
+      /requires at least one API auth env var/i,
+    );
+  });
+
+  assert.match(output, /"category":"service_auth"/);
+  assert.match(output, /"service":"api"/);
+  assert.match(output, /"runtimeMode":"fail_closed"/);
+  assert.match(output, /"missingKeys":\["UNIT_TALK_API_KEY_OPERATOR"/);
+  assert.equal(output.includes('service-role-key'), false);
+});
+
 test('POST /api/submissions returns created submission payload', async () => {
   const server = createApiServer({
     repositories: createInMemoryRepositoryBundle(),
@@ -1742,6 +1794,43 @@ function buildYesterdayMiddayIso(now: Date = new Date()) {
       0,
     ),
   ).toISOString();
+}
+
+function captureConsoleError(callback: () => void) {
+  const original = console.error;
+  const messages: string[] = [];
+  console.error = (...args: unknown[]) => {
+    messages.push(args.map((value) => String(value)).join(' '));
+  };
+
+  try {
+    callback();
+  } finally {
+    console.error = original;
+  }
+
+  return messages.join('\n');
+}
+
+function makeProductionApiEnvironment(
+  overrides: Record<string, string | undefined> = {},
+) {
+  return {
+    NODE_ENV: 'production' as const,
+    UNIT_TALK_APP_ENV: 'production' as const,
+    UNIT_TALK_ACTIVE_WORKSPACE: 'C:\\dev\\unit-talk-v2',
+    UNIT_TALK_LEGACY_WORKSPACE: 'C:\\dev\\unit-talk-production',
+    LINEAR_TEAM_KEY: 'UTV2',
+    LINEAR_TEAM_NAME: 'unit-talk-v2',
+    NOTION_WORKSPACE_NAME: 'unit-talk-v2',
+    SLACK_WORKSPACE_NAME: 'unit-talk-v2',
+    SUPABASE_URL: 'https://example.supabase.co',
+    SUPABASE_ANON_KEY: 'anon-key',
+    SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+    UNIT_TALK_API_RUNTIME_MODE: 'fail_closed',
+    UNIT_TALK_API_KEY_OPERATOR: 'operator-key',
+    ...overrides,
+  };
 }
 
 // --- Pick query endpoint ---

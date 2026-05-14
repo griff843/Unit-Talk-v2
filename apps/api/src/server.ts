@@ -1,9 +1,11 @@
 import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import {
   assertProductionRuntimeConfig,
+  createRuntimeConfigFailureLogFields,
   loadEnvironment,
   type AppEnv,
   type RuntimeMode,
+  RuntimeConfigError,
 } from '@unit-talk/config';
 import {
   createDatabaseRepositoryBundle,
@@ -173,18 +175,37 @@ export function createApiRuntimeDependencies(
   options: ApiServerOptions = {},
 ): ApiRuntimeDependencies {
   const environment = options.environment ?? loadEnvironment();
-  const startupConfig = assertProductionRuntimeConfig(environment, {
+  const persistenceMode = options.repositories
+    ? 'in_memory'
+    : hasDatabaseEnvironment(environment)
+      ? 'database'
+      : 'in_memory';
+  const startupOptions = {
     service: 'api',
     runtimeModeKey: 'UNIT_TALK_API_RUNTIME_MODE',
     requiredKeys: SUPABASE_REQUIRED_KEYS,
     requiredKeyGroups: [{ name: 'API auth', keys: API_AUTH_KEYS }],
-    persistenceMode: options.repositories
-      ? 'in_memory'
-      : hasDatabaseEnvironment(environment)
-        ? 'database'
-        : 'in_memory',
+    persistenceMode,
     dryRun: false,
-  });
+  } as const;
+  let startupConfig;
+  try {
+    startupConfig = assertProductionRuntimeConfig(environment, startupOptions);
+  } catch (error) {
+    if (error instanceof RuntimeConfigError) {
+      console.error(
+        '[api] Startup config invalid:',
+        JSON.stringify(
+          createRuntimeConfigFailureLogFields(
+            environment,
+            startupOptions,
+            error,
+          ),
+        ),
+      );
+    }
+    throw error;
+  }
   const runtimeMode = startupConfig.runtimeMode;
   const authConfig = loadAuthConfig(createAuthConfigEnv(environment));
   const metricsCollector = createMetricsCollector();

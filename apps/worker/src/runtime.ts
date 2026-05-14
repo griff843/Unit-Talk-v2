@@ -1,6 +1,7 @@
 import {
   RuntimeConfigError,
   assertProductionRuntimeConfig,
+  createRuntimeConfigFailureLogFields,
   loadEnvironment,
   type AppEnv,
   type RuntimeMode,
@@ -50,10 +51,12 @@ export function createWorkerRuntimeDependencies(
   const distributionTargets = readDistributionTargets(environment);
   const adapterKind = readAdapterKind(environment);
   const dryRun = readDryRun(environment);
+  const autorun = readAutorun(environment);
+  const maxCyclesPerRun = readMaxCyclesPerRun(environment);
   const persistenceMode = hasDatabaseEnvironment(environment)
     ? 'database'
     : 'in_memory';
-  const startupConfig = assertProductionRuntimeConfig(environment, {
+  const startupOptions = {
     service: 'worker',
     runtimeModeKey: 'UNIT_TALK_WORKER_RUNTIME_MODE',
     requiredKeys: [
@@ -69,7 +72,29 @@ export function createWorkerRuntimeDependencies(
     persistenceMode,
     dryRun,
     workerTargets: distributionTargets,
-  });
+    autorun,
+    maxCyclesPerRun,
+    maxCyclesKey: 'UNIT_TALK_WORKER_MAX_CYCLES',
+    prohibitSingleCycleAutorunInProduction: true,
+  } as const;
+  let startupConfig;
+  try {
+    startupConfig = assertProductionRuntimeConfig(environment, startupOptions);
+  } catch (error) {
+    if (error instanceof RuntimeConfigError) {
+      console.error(
+        '[worker] Startup config invalid:',
+        JSON.stringify(
+          createRuntimeConfigFailureLogFields(
+            environment,
+            startupOptions,
+            error,
+          ),
+        ),
+      );
+    }
+    throw error;
+  }
   const targetCoverage = evaluateWorkerTargetCoverage({
     registry: resolveTargetRegistry(environment),
     workerTargets: distributionTargets,
@@ -111,13 +136,13 @@ export function createWorkerRuntimeDependencies(
       distributionTargets,
       adapterKind,
       pollIntervalMs: readPollIntervalMs(environment),
-      maxCyclesPerRun: readMaxCyclesPerRun(environment),
+      maxCyclesPerRun,
       staleClaimMs: readStaleClaimMs(environment),
       heartbeatMs: readHeartbeatMs(environment),
       watchdogMs: readWatchdogMs(environment),
       workerHeartbeatIntervalMs: readWorkerHeartbeatIntervalMs(environment),
       dryRun,
-      autorun: readAutorun(environment),
+      autorun,
       simulationMode: readSimulationMode(environment),
       targetCoverage,
     });
@@ -134,13 +159,13 @@ export function createWorkerRuntimeDependencies(
     distributionTargets,
     adapterKind,
     pollIntervalMs: readPollIntervalMs(environment),
-    maxCyclesPerRun: readMaxCyclesPerRun(environment),
+    maxCyclesPerRun,
     staleClaimMs: readStaleClaimMs(environment),
     heartbeatMs: readHeartbeatMs(environment),
     watchdogMs: readWatchdogMs(environment),
     workerHeartbeatIntervalMs: readWorkerHeartbeatIntervalMs(environment),
     dryRun,
-    autorun: readAutorun(environment),
+    autorun,
     simulationMode: readSimulationMode(environment),
     targetCoverage,
   });
