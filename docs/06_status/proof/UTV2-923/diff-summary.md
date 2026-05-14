@@ -1,5 +1,7 @@
 # UTV2-923 Diff Summary
 
+**Merge SHA:** 32a76705db9993f06d4b0dadf1c149b6d7d5f3df
+
 ## Runtime Truth Surface
 
 - Added a shared runtime truth serializer in `packages/observability/src/index.ts` with recursive production redaction, normalized worker targets, compact startup log fields, and tests covering serialization and secret scrubbing.
