@@ -33,6 +33,7 @@ import {
   createSimulationDeliveryAdapter,
   createStubDeliveryAdapter,
 } from './delivery-adapters.js';
+import { evaluateQueueHealth, type Logger } from '@unit-talk/observability';
 import {
   createWorkerRuntimeDependencies,
   readCircuitBreakerCooldownMs,
@@ -158,13 +159,14 @@ class FakeOutboxRepository implements OutboxRepository {
         continue;
       }
 
+      const snapshot: OutboxRecord = { ...entry };
       entry.status = 'pending';
       entry.attempt_count += 1;
       entry.last_error = reason;
       entry.next_attempt_at = null;
       entry.claimed_at = null;
       entry.claimed_by = null;
-      reaped.push(entry);
+      reaped.push(snapshot);
     }
 
     return reaped;
@@ -627,6 +629,27 @@ class FakeAuditLogRepository implements AuditLogRepository {
   }
 }
 
+class FakeLogger implements Logger {
+  readonly infoEntries: Array<{ message: string; fields?: Record<string, unknown> }> = [];
+  readonly warnEntries: Array<{ message: string; fields?: Record<string, unknown> }> = [];
+
+  child(): Logger {
+    return this;
+  }
+
+  debug(): void {}
+
+  info(message: string, fields?: Record<string, unknown>): void {
+    this.infoEntries.push(fields === undefined ? { message } : { message, fields });
+  }
+
+  warn(message: string, fields?: Record<string, unknown>): void {
+    this.warnEntries.push(fields === undefined ? { message } : { message, fields });
+  }
+
+  error(): void {}
+}
+
 function createWorkerTestRepositories(entries: OutboxRecord[]): {
   repositories: RepositoryBundle;
   picks: FakePickRepository;
@@ -705,6 +728,29 @@ function createOutboxRecord(
     created_at: now,
     updated_at: now,
   };
+}
+
+function createQueueHealthProvider(
+  entries: OutboxRecord[],
+  workerTargets: string[],
+  observedAt: () => string,
+  lastSuccessfulDeliveryAt?: string,
+) {
+  return async () =>
+    evaluateQueueHealth({
+      observedAt: observedAt(),
+      workerTargets,
+      outboxRows: entries.map((entry) => ({
+        id: entry.id,
+        status: entry.status,
+        target: entry.target,
+        createdAt: entry.created_at,
+        updatedAt: entry.updated_at,
+        claimedAt: entry.claimed_at,
+        attemptCount: entry.attempt_count,
+      })),
+      lastSuccessfulDeliveryAt,
+    });
 }
 
 test('processNextDistributionWork returns idle when no work is available', async () => {
@@ -1375,6 +1421,166 @@ test('runWorkerCycles reaps stale processing claims before claiming fresh work',
   assert.equal(cycles[0]?.reapedOutboxIds.includes(stale.id), true);
   assert.equal(cycles[0]?.results[0]?.status, 'sent');
   assert.equal(audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'), true);
+});
+
+test('runWorkerCycles crash simulation leaves work recoverable and health degraded until sent recovery completes', async () => {
+  const outbox = createOutboxRecord('discord:best-bets');
+  const { repositories, audit, receipts } = createWorkerTestRepositories([outbox]);
+  const crashError = new Error('simulated worker crash after claim');
+  const originalStartRun = repositories.runs.startRun.bind(repositories.runs);
+  let crashInjected = false;
+
+  repositories.runs.startRun = async (input) => {
+    if (!crashInjected && input.runType === 'distribution.process') {
+      crashInjected = true;
+      throw crashError;
+    }
+
+    return originalStartRun(input);
+  };
+
+  await assert.rejects(
+    runWorkerCycles({
+      repositories,
+      workerId: 'worker-crash',
+      targets: ['discord:best-bets'],
+      deliver: createStubDeliveryAdapter(),
+      maxCycles: 1,
+      sleep: async () => {},
+      persistenceMode: 'in_memory',
+      workerHeartbeatIntervalMs: 0,
+    }),
+    crashError,
+  );
+
+  assert.equal(outbox.status, 'processing');
+  assert.equal(outbox.claimed_by, 'worker-crash');
+  assert.equal(receipts.records.length, 0, 'crash before delivery must not record a receipt');
+  assert.equal(audit.records.length, 0, 'crash before recovery must not write audit evidence');
+
+  outbox.claimed_at = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const degradedLogger = new FakeLogger();
+  await runWorkerCycles({
+    repositories,
+    workerId: 'worker-health-probe',
+    targets: [],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    sleep: async () => {},
+    persistenceMode: 'in_memory',
+    workerHeartbeatIntervalMs: 0,
+    logger: degradedLogger,
+    queueHealthProvider: createQueueHealthProvider(
+      [outbox],
+      [],
+      () => new Date().toISOString(),
+      new Date().toISOString(),
+    ),
+  });
+
+  assert.equal(degradedLogger.warnEntries.length > 0, true, 'health probe must log degraded health');
+  assert.equal(degradedLogger.warnEntries[0]?.message, 'worker queue health unhealthy');
+  assert.equal(
+    degradedLogger.warnEntries[0]?.fields?.status === 'degraded' ||
+      degradedLogger.warnEntries[0]?.fields?.status === 'down',
+    true,
+    'pre-recovery health must be non-healthy until recovery completes',
+  );
+
+  const recoveryLogger = new FakeLogger();
+  const recoveryCycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-recovery',
+    targets: ['discord:best-bets'],
+    deliver: createStubDeliveryAdapter(),
+    maxCycles: 1,
+    staleClaimMs: 60_000,
+    sleep: async () => {},
+    persistenceMode: 'in_memory',
+    workerHeartbeatIntervalMs: 0,
+    logger: recoveryLogger,
+    queueHealthProvider: createQueueHealthProvider([outbox], ['discord:best-bets'], () => new Date().toISOString()),
+  });
+
+  assert.equal(recoveryCycles[0]?.reapedOutboxIds.includes(outbox.id), true);
+  assert.equal(recoveryCycles[0]?.results[0]?.status, 'sent');
+  assert.equal(outbox.status, 'sent');
+  assert.equal(
+    audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'),
+    true,
+  );
+  assert.equal(audit.records.some((record) => record.action === 'distribution.sent'), true);
+
+  const recoveryLog = recoveryLogger.warnEntries.find((entry) => entry.message === 'worker recovery result');
+  assert.ok(recoveryLog, 'recovery completion must be logged');
+  assert.equal(recoveryLog.fields?.outboxId, outbox.id);
+  assert.equal(recoveryLog.fields?.recoveredFromStaleClaim, true);
+  assert.equal(recoveryLog.fields?.recoveryAction, 'reaped-and-sent');
+  assert.equal(recoveryLog.fields?.finalState, 'sent');
+});
+
+test('runWorkerCycles crash recovery deterministically dead-letters exhausted work with audit evidence', async () => {
+  const outbox = createOutboxRecord('discord:trader-insights', { attempt_count: 2 });
+  const { repositories, audit } = createWorkerTestRepositories([outbox]);
+  const originalStartRun = repositories.runs.startRun.bind(repositories.runs);
+  let crashInjected = false;
+
+  repositories.runs.startRun = async (input) => {
+    if (!crashInjected && input.runType === 'distribution.process') {
+      crashInjected = true;
+      throw new Error('simulated worker crash after claim');
+    }
+
+    return originalStartRun(input);
+  };
+
+  await assert.rejects(
+    runWorkerCycles({
+      repositories,
+      workerId: 'worker-crash-dead-letter',
+      targets: ['discord:trader-insights'],
+      deliver: createStubDeliveryAdapter(),
+      maxCycles: 1,
+      sleep: async () => {},
+      persistenceMode: 'in_memory',
+      workerHeartbeatIntervalMs: 0,
+    }),
+  );
+
+  outbox.claimed_at = new Date(Date.now() - 10 * 60 * 1000).toISOString();
+  const recoveryLogger = new FakeLogger();
+  const recoveryCycles = await runWorkerCycles({
+    repositories,
+    workerId: 'worker-recovery-dead-letter',
+    targets: ['discord:trader-insights'],
+    deliver: async () => {
+      throw new Error('discord still unavailable');
+    },
+    maxCycles: 1,
+    staleClaimMs: 60_000,
+    sleep: async () => {},
+    persistenceMode: 'in_memory',
+    workerHeartbeatIntervalMs: 0,
+    logger: recoveryLogger,
+  });
+
+  assert.equal(recoveryCycles[0]?.reapedOutboxIds.includes(outbox.id), true);
+  assert.equal(recoveryCycles[0]?.results[0]?.status, 'failed');
+  assert.equal(outbox.status, 'dead_letter');
+  assert.equal(
+    audit.records.some((record) => record.action === 'distribution.reaped_stale_claim'),
+    true,
+  );
+  assert.equal(
+    audit.records.some((record) => record.action === 'distribution.dead_lettered'),
+    true,
+  );
+
+  const recoveryLog = recoveryLogger.warnEntries.find((entry) => entry.message === 'worker recovery result');
+  assert.ok(recoveryLog, 'dead-letter completion must be logged');
+  assert.equal(recoveryLog.fields?.outboxId, outbox.id);
+  assert.equal(recoveryLog.fields?.recoveryAction, 'reaped-and-dead-lettered');
+  assert.equal(recoveryLog.fields?.finalState, 'dead_letter');
 });
 
 test('processNextDistributionWork heartbeats active claims during long delivery', async () => {
