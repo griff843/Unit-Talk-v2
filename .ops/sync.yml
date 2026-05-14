@@ -1,9 +1,9 @@
-version: 1
-approval:
+﻿approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues: []
+  issues:
+    - UTV2-947
   findings: []
   controls: []
   proofs: []
