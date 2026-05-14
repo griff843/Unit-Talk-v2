@@ -240,7 +240,7 @@ function checkWorktrees(): HealthItem[] {
         items.push({
           severity: 'warn',
           category: 'Worktrees',
-          message: `[unregistered worktree] '${entry}': git-tracked but not in lane registry — run pnpm lane:cleanup`,
+          message: `[unregistered worktree] '${entry}': git-tracked but not in lane registry — run pnpm ops:branch-discipline`,
         });
       }
     }
