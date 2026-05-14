@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-947",
+  "lane_type": "codex",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-947-restore-drill",
+  "base_branch": "main",
+  "commit_sha": "4382e4da",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/669",
+  "files_changed": [
+    "scripts/backup/restore-drill.ts",
+    "scripts/backup/restore-drill.test.ts",
+    "package.json",
+    ".ops/sync.yml"
+  ],
+  "file_scope_lock": [
+    "scripts/backup/"
+  ],
+  "expected_proof_paths": [],
+  "status": "in-review",
+  "started_at": "2026-05-14T18:00:00.000Z",
+  "heartbeat_at": "2026-05-14T18:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": ["PM_VERDICT comment needed on PR #669"],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
