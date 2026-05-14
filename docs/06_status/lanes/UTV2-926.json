@@ -6,7 +6,7 @@
   "worktree_path": ".",
   "branch": "codex/utv2-926-backup-restore-verification",
   "base_branch": "main",
-  "commit_sha": "771ee7c35e1879f5281ff5716f9ee415cd3ecf73",
+  "commit_sha": "b8932975046010fc0ae523cda81b553851a7a50c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/665",
   "files_changed": [
     "scripts/backup/restore-verify.ts",
@@ -18,10 +18,10 @@
     "scripts/ops/"
   ],
   "expected_proof_paths": [],
-  "status": "in-review",
+  "status": "merged",
   "started_at": "2026-05-14T13:54:00.000Z",
   "heartbeat_at": "2026-05-14T15:35:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-14T17:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-944",
+  "lane_type": "codex",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "codex/utv2-944-rv-004-replay-failed-delivery",
+  "base_branch": "main",
+  "commit_sha": "a53655a31b847296a57e593d47450dc2ec38b70a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/666",
+  "files_changed": [
+    "apps/worker/src/replay-failed-delivery.ts",
+    "apps/worker/src/replay-failed-delivery.test.ts"
+  ],
+  "file_scope_lock": [
+    "apps/worker/src/"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-944-evidence.md"
+  ],
+  "status": "in-review",
+  "started_at": "2026-05-14T14:30:00.000Z",
+  "heartbeat_at": "2026-05-14T17:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
