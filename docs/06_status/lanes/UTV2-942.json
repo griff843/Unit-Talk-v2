@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-942",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-942-rv-002-worker-failure-recovery",
+  "branch": "codex/utv2-942-rv-002-worker-failure-recovery",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/663",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/worker/src/runner.ts",
+    "apps/worker/src/worker-runtime.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-942/diff-summary.md",
+    "docs/06_status/proof/UTV2-942/verification.log"
+  ],
+  "status": "merged",
+  "started_at": "2026-05-14T05:13:52.175Z",
+  "heartbeat_at": "2026-05-14T16:00:00.000Z",
+  "closed_at": "2026-05-14T16:00:00.000Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-942-rv-002-worker-failure-recovery.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}

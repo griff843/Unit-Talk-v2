@@ -22,10 +22,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-920/evidence.json"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-13T14:54:22.483Z",
-  "heartbeat_at": "2026-05-13T15:27:39.043Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-14T16:00:00.000Z",
+  "closed_at": "2026-05-14T16:00:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-920-db-invariant-rpc-guards.json",
   "created_by": "codex-cli",

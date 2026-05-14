@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-941",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-941-rv-001-outbox-silence-proof",
+  "branch": "codex/utv2-941-rv-001-outbox-silence-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/662",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/routes/health.ts",
+    "packages/observability/src/index.test.ts",
+    "packages/observability/src/index.ts",
+    "scripts/pipeline-health.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-941/diff-summary.md",
+    "docs/06_status/proof/UTV2-941/verification.log"
+  ],
+  "status": "merged",
+  "started_at": "2026-05-14T05:11:14.317Z",
+  "heartbeat_at": "2026-05-14T16:00:00.000Z",
+  "closed_at": "2026-05-14T16:00:00.000Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-941-rv-001-outbox-silence-proof.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
