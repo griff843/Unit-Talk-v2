@@ -1,4 +1,4 @@
-import { loadEnvironment } from '@unit-talk/config';
+﻿import { loadEnvironment } from '@unit-talk/config';
 import {
   createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
@@ -169,7 +169,6 @@ export async function replayFailedDeliveries(
     return selectedRows;
   }
 
-  const replayAt = now.toISOString();
   const errors: string[] = [];
   let replayed = 0;
 
