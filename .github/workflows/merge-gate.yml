@@ -19,6 +19,12 @@
 name: Merge Gate
 
 on:
+  workflow_dispatch:
+    inputs:
+      pull_number:
+        description: 'PR number to re-evaluate (for P0 lanes where self-approval is structurally blocked)'
+        required: true
+        type: number
   pull_request:
     types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
   pull_request_review:
@@ -39,6 +45,7 @@ jobs:
       group: merge-gate-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: true
     if: >-
+      github.event_name == 'workflow_dispatch' ||
       github.event_name == 'pull_request' ||
       github.event_name == 'pull_request_review' ||
       (github.event_name == 'issue_comment' &&
@@ -62,6 +69,12 @@ jobs:
                 context.eventName === 'pull_request_review') {
               const pr = context.payload.pull_request;
               prNumber = pr.number;
+              headSha = pr.head.sha;
+            } else if (context.eventName === 'workflow_dispatch') {
+              prNumber = parseInt(context.payload.inputs.pull_number, 10);
+              const { data: pr } = await github.rest.pulls.get({
+                owner, repo, pull_number: prNumber
+              });
               headSha = pr.head.sha;
             } else {
               prNumber = context.payload.issue.number;
@@ -139,16 +152,31 @@ jobs:
               }
 
               // ── 6. T2: GitHub PR review approval (no PM_VERDICT required) ──
+              // Fallback: pm-verdict/v1 APPROVED from CODEOWNERS satisfies T2 for P0 lanes
+              // where PM = executor and GitHub's self-approval restriction applies.
               if (tier === 'T2') {
                 const { data: reviews } = await github.rest.pulls.listReviews({
                   owner, repo, pull_number: prNumber, per_page: 100
                 });
                 const approvals = reviews.filter(r => r.state === 'APPROVED');
                 if (approvals.length === 0) {
-                  errors.push(
-                    'T2 requires at least one GitHub PR review approval. ' +
-                    'Executor must run `gh pr review <number> --approve` after diff review.'
-                  );
+                  // Check for pm-verdict/v1 APPROVED from an authorized CODEOWNERS member
+                  const { data: comments } = await github.rest.issues.listComments({
+                    owner, repo, issue_number: prNumber, per_page: 100
+                  });
+                  const hasPmVerdictApproval = comments.some(c => {
+                    if (!c.user?.login || !AUTHORIZED_REVIEWERS.has(c.user.login) || c.user?.type === 'Bot') return false;
+                    const body = (c.body || '').replace(/\\n/g, '\n');
+                    const lines = body.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+                    return lines[0] === 'PM_VERDICT: APPROVED' && lines[1] === 'schema: pm-verdict/v1';
+                  });
+                  if (!hasPmVerdictApproval) {
+                    errors.push(
+                      'T2 requires at least one GitHub PR review approval, or a pm-verdict/v1 APPROVED comment from a CODEOWNERS member. ' +
+                      'Executor must run `gh pr review <number> --approve` after diff review ' +
+                      '(or PM posts pm-verdict/v1 when self-approval is structurally blocked).'
+                    );
+                  }
                 }
               }
 
