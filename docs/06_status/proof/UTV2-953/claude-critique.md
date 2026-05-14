@@ -3,6 +3,7 @@
 **Issue:** UTV2-953 Runtime-mode env documentation — P0 follow-up  
 **Lane tier:** T3 (docs-only)  
 **Branch:** claude/utv2-953-runtime-mode-env-docs  
+**Merge SHA:** df82550f243ccb7a5b8b5b2c8a2175976362e825  
 **Reviewer:** Claude Sonnet 4.6  
 **Date:** 2026-05-14
 
