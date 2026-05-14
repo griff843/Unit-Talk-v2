@@ -136,6 +136,7 @@ When documents conflict:
 | `docs/05_operations/PICK_METADATA_CONTRACT.md` | Typed `PickMetadata` interface replacing untyped blob | UTV2-122 |
 | `docs/05_operations/ALERT_AGENT_EXTRACTION_CONTRACT.md` | Extract alert agent from API process | UTV2-125 |
 | `docs/05_operations/RUNTIME_MODE_CONTRACT.md` | Fail-closed startup mode + `getRuntimeMode()` | UTV2-147 |
+| `docs/05_operations/RUNTIME_MODE_REF.md` | **Active** — operator reference for all `*_RUNTIME_MODE` and `APP_ENV` vars: valid values, defaults, fail-closed triggers, production checklist | UTV2-953 |
 
 ### Wave 2 Hardening Contracts (ratified 2026-03-29, shipped)
 
