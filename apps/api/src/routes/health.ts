@@ -48,6 +48,17 @@ interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
       };
 }
 
+function formatQueueAlertWarning(alert: NonNullable<ApiRuntimeDependencies['queueHealth']>['alerts'][number]): string {
+  const detailParts = [
+    alert.target ? `target=${alert.target}` : null,
+    alert.status ? `status=${alert.status}` : null,
+    typeof alert.ageMs === 'number' ? `age=${Math.round(alert.ageMs / 60000)}m` : null,
+    alert.remediation ? `remediation=${alert.remediation}` : null,
+  ].filter((value): value is string => value !== null);
+
+  return detailParts.length > 0 ? `${alert.message} [${detailParts.join(' | ')}]` : alert.message;
+}
+
 export async function handleHealth(response: ServerResponse, runtime: ApiRuntimeDependencies): Promise<void> {
   const dbReachable = await probeDbConnectivity(runtime);
   const schemaDrift = await (async () => {
@@ -79,7 +90,7 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
   const httpStatus = isDurable && !queueUnhealthy ? 200 : 503;
   const warnings = [
     ...(schemaDrift?.warnings ?? []),
-    ...(queueHealth?.alerts.map((alert) => alert.message) ?? []),
+    ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ?? []),
   ];
 
   writeJson(response, httpStatus, {

@@ -46,6 +46,8 @@ export interface QueueHealthAlert {
   target?: string | undefined;
   count?: number | undefined;
   ageMs?: number | undefined;
+  status?: string | undefined;
+  remediation?: string | undefined;
 }
 
 export interface QueueHealthEvaluation {
@@ -64,6 +66,7 @@ export interface QueueHealthEvaluation {
   lastSuccessfulDeliveryAt: string | null;
   lastSuccessfulDeliveryAgeMs: number | null;
   targetMismatches: QueueHealthTargetMismatch[];
+  silentStrandingRisk: boolean;
   alerts: QueueHealthAlert[];
   metrics: Record<string, number>;
 }
@@ -111,12 +114,14 @@ export function evaluateQueueHealth(input: EvaluateQueueHealthInput): QueueHealt
       })),
   ];
   const alerts: QueueHealthAlert[] = [];
+  const silentStrandingAlerts: QueueHealthAlert[] = [];
 
   if (targetMismatches.length > 0) {
     alerts.push({
       level: 'critical',
       code: 'target_mismatch',
       count: targetMismatches.length,
+      remediation: 'Align worker targets with enabled delivery targets so pending rows are claimable.',
       message: `${targetMismatches.length} target mismatch(es) can strand pending work`,
     });
   }
@@ -149,27 +154,74 @@ export function evaluateQueueHealth(input: EvaluateQueueHealthInput): QueueHealt
       level: 'critical',
       code: 'processing_stale',
       count: staleProcessing.length,
+      remediation: 'Inspect worker claims, recover the stuck attempt, and requeue or dead-letter the affected row.',
       message: `${staleProcessing.length} processing row(s) exceeded the stale-claim threshold`,
+    });
+  }
+
+  const stalePendingRows = pendingRows
+    .map((row) => ({ row, currentAgeMs: ageMs(observedAtMs, row.createdAt) }))
+    .filter(
+      (entry): entry is { row: QueueHealthOutboxRow; currentAgeMs: number } =>
+        entry.currentAgeMs !== null && entry.currentAgeMs >= thresholds.pendingCriticalMs,
+    );
+  for (const { row, currentAgeMs } of stalePendingRows) {
+    silentStrandingAlerts.push({
+      level: 'critical',
+      code: 'pending_stale',
+      target: row.target,
+      status: row.status,
+      ageMs: currentAgeMs,
+      remediation:
+        workerTargetSet.has(row.target) || workerTargets.length === 0
+          ? 'Inspect worker liveness, then retry or dead-letter the stranded pending row.'
+          : 'Add the target to worker configuration or reroute/remove the unsupported pending row.',
+      message: `pending row for ${row.target} has remained pending for ${formatAgeMinutes(currentAgeMs)}`,
+    });
+  }
+  if (silentStrandingAlerts.length > 0) {
+    alerts.push({
+      level: 'critical',
+      code: 'pending_stale',
+      target: oldestPending?.target,
+      ageMs: oldestPendingAgeMs ?? undefined,
+      remediation: 'Inspect worker liveness and clear stranded pending rows before treating runtime as healthy.',
+      message: `${silentStrandingAlerts.length} pending row(s) exceeded the silent-stranding threshold`,
+    });
+    alerts.push(...silentStrandingAlerts);
+  } else if (oldestPending && oldestPendingAgeMs !== null && oldestPendingAgeMs >= thresholds.pendingWarnMs) {
+    alerts.push({
+      level: 'warning',
+      code: 'pending_stale',
+      target: oldestPending.target,
+      status: oldestPending.status,
+      ageMs: oldestPendingAgeMs,
+      remediation: 'Watch this queue age; if it crosses the critical threshold, investigate worker liveness.',
+      message: `oldest pending row is ${formatAgeMinutes(oldestPendingAgeMs)} old`,
+    });
+  }
+
+  const unsupportedPendingRows = pendingRows
+    .filter((row) => workerTargets.length > 0 && !workerTargetSet.has(row.target))
+    .map((row) => ({ row, currentAgeMs: ageMs(observedAtMs, row.createdAt) ?? 0 }));
+  for (const { row, currentAgeMs } of unsupportedPendingRows) {
+    alerts.push({
+      level: 'critical',
+      code: 'target_mismatch',
+      target: row.target,
+      status: row.status,
+      ageMs: currentAgeMs,
+      remediation:
+        'Add this target to UNIT_TALK_DISTRIBUTION_TARGETS or reroute/remove the pending row so it cannot strand silently.',
+      message: `pending row targets unsupported destination ${row.target}`,
     });
   }
 
   if (oldestPending && oldestPendingAgeMs !== null) {
     if (oldestPendingAgeMs >= thresholds.pendingCriticalMs) {
-      alerts.push({
-        level: 'critical',
-        code: 'pending_stale',
-        target: oldestPending.target,
-        ageMs: oldestPendingAgeMs,
-        message: `oldest pending row is ${formatAgeMinutes(oldestPendingAgeMs)} old`,
-      });
+      // Detailed critical row alerts above carry the operator detail. Keep this branch empty.
     } else if (oldestPendingAgeMs >= thresholds.pendingWarnMs) {
-      alerts.push({
-        level: 'warning',
-        code: 'pending_stale',
-        target: oldestPending.target,
-        ageMs: oldestPendingAgeMs,
-        message: `oldest pending row is ${formatAgeMinutes(oldestPendingAgeMs)} old`,
-      });
+      // Warning alert emitted above once no critical silent-stranding rows exist.
     }
   }
 
@@ -178,6 +230,7 @@ export function evaluateQueueHealth(input: EvaluateQueueHealthInput): QueueHealt
       alerts.push({
         level: 'critical',
         code: 'delivery_missing',
+        remediation: 'Confirm worker delivery is enabled and verify successful receipts are still being written.',
         message: 'pending work exists but no successful delivery timestamp is visible',
       });
     } else if (
@@ -188,6 +241,7 @@ export function evaluateQueueHealth(input: EvaluateQueueHealthInput): QueueHealt
         level: 'critical',
         code: 'delivery_stale',
         ageMs: lastSuccessfulDeliveryAgeMs,
+        remediation: 'Confirm the worker is still delivering and that recent receipts are arriving for live targets.',
         message: `last successful delivery is ${formatAgeMinutes(lastSuccessfulDeliveryAgeMs)} old`,
       });
     }
@@ -215,6 +269,7 @@ export function evaluateQueueHealth(input: EvaluateQueueHealthInput): QueueHealt
     lastSuccessfulDeliveryAt: inferredLastSuccessfulDeliveryAt ?? null,
     lastSuccessfulDeliveryAgeMs,
     targetMismatches,
+    silentStrandingRisk: silentStrandingAlerts.length > 0 || unsupportedPendingRows.length > 0,
     alerts,
     metrics: {
       queueDepth: input.outboxRows.length,
@@ -269,7 +324,10 @@ export function queueHealthLogFields(evaluation: QueueHealthEvaluation): LogFiel
       target: alert.target ?? null,
       count: alert.count ?? null,
       ageMs: alert.ageMs ?? null,
+      status: alert.status ?? null,
+      remediation: alert.remediation ?? null,
     })),
+    silentStrandingRisk: evaluation.silentStrandingRisk,
   };
 }
 
