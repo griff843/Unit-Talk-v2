@@ -6,7 +6,7 @@
   "worktree_path": ".",
   "branch": "codex/utv2-945-lifecycle-validator",
   "base_branch": "main",
-  "commit_sha": "fe018416",
+  "commit_sha": "00a1ee27",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/668",
   "files_changed": [
     "packages/domain/src/lifecycle-validator.ts",
@@ -19,10 +19,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-945-evidence.md"
   ],
-  "status": "in-review",
+  "status": "merged",
   "started_at": "2026-05-14T17:30:00.000Z",
   "heartbeat_at": "2026-05-14T18:15:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-14T19:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

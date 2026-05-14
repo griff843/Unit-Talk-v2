@@ -6,7 +6,7 @@
   "worktree_path": ".",
   "branch": "codex/utv2-943-rollback-validate",
   "base_branch": "main",
-  "commit_sha": "5ec2492b",
+  "commit_sha": "6d5b965d601fc03ee8a0da37146de1da59f12b88",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/667",
   "files_changed": [
     "scripts/backup/rollback-validate.ts",
@@ -18,11 +18,11 @@
     "scripts/backup/"
   ],
   "expected_proof_paths": [],
-  "status": "in-review",
+  "status": "merged",
   "started_at": "2026-05-14T17:00:00.000Z",
   "heartbeat_at": "2026-05-14T17:45:00.000Z",
-  "closed_at": null,
-  "blocked_by": ["PM_VERDICT comment needed on PR #667"],
+  "closed_at": "2026-05-14T19:00:00.000Z",
+  "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [],
