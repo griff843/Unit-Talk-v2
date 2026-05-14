@@ -2,9 +2,9 @@
 name: three-brain
 description: |
   Executor-selection layer for Unit Talk V2. Returns which executor
-  handles a given task: Claude, Codex, Gemini, QA Agent, or Griff.
+  handles a given task: Claude, Codex, Explore, QA Agent, or Griff.
   Called by /dispatch during Phase 1. QA Agent invokes it to request
-  Codex review or Gemini scans. Claude invokes it directly for failure
+  Codex review or Explore scans. Claude invokes it directly for failure
   rescue and codebase scans.
 
   This skill does NOT create lanes, open PRs, or update Linear.
@@ -19,7 +19,7 @@ description: |
 |---|---|
 | **Claude** | Orchestrator and driver. T1, T3, Tier C paths, fallback when Codex unavailable |
 | **Codex** | T2 clear-scope implementation lanes, failure rescue |
-| **Gemini** | Large-context codebase scans, cross-package architecture analysis |
+| **Explore** | Large-context codebase scans, cross-package architecture analysis (native Claude Code subagent) |
 | **QA Agent** | Playwright surface verification and regression (`pnpm qa:experience`) |
 | **Griff** | Scope authority, source-of-truth conflicts, product decisions, merge gates |
 
@@ -187,7 +187,7 @@ Stop and request PM presence when any of the following apply:
 [three-brain] escalating to Griff — {reason}. Stopping until PM responds.
 ```
 
-Never route Griff escalations to Codex or Gemini. Never continue implementation while waiting.
+Never route Griff escalations to Codex or the Explore subagent. Never continue implementation while waiting.
 
 ---
 
@@ -196,7 +196,7 @@ Never route Griff escalations to Codex or Gemini. Never continue implementation 
 Return a one-line routing decision:
 
 ```
-executor: claude | codex | gemini | qa-agent
+executor: claude | codex | explore | qa-agent
 announce: true | false
 escalate_to_griff: true | false
 reason: <one line>
@@ -223,7 +223,7 @@ executor: codex    announce: true   escalate: false  reason: failure rescue — 
 
 **Silent (no announcement) for:**
 - Normal T2 Codex routing — already surfaced in `/dispatch` Phase 6 report
-- Gemini codebase scan — Claude recon, synthesize before presenting
+- Explore subagent codebase scan — Claude recon, synthesize before presenting
 - T3 Claude routing — default, no announcement needed
 
 ---
@@ -243,7 +243,7 @@ QA Agent (`apps/qa-agent/`) may invoke this skill to request:
 | QA Agent need | Route |
 |---|---|
 | Implementation review of a surface diff | Rule 4 (Codex lane via /dispatch) |
-| Broad codebase coverage map | Rule 7 (Gemini silent scan) |
+| Broad codebase coverage map | Rule 7 (Explore silent scan) |
 | Product decision on a failed assertion | Rule 9 (Griff escalation) |
 | Rescue for 2× same surface failure | Rule 6 (Codex rescue via /dispatch) |
 
@@ -261,7 +261,7 @@ npx tsx scripts/ops/codex-health-check.ts --json
 If Codex unavailable, note once: `"Codex unavailable — T2 lanes will route to Claude until resolved."`
 Do not retry every turn.
 
-Gemini is available via `cc-gemini-plugin` — no separate CLI check needed.
+Explore subagent is native to Claude Code — no health check needed.
 
 ---
 
