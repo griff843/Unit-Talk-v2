@@ -59,12 +59,29 @@ For each validated target:
 
 1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
 2. Determine file scope from the issue description (look for file paths, package names, or area labels)
-3. Create the lane manifest:
+3. Create the lane manifest — evaluate worktree eligibility first:
+
+   **Worktree eligibility check** (per `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`):
+   ```typescript
+   const usesWorktree = (fileScope: string[]): boolean => {
+     const packageTouching = fileScope.some(f =>
+       f.startsWith('packages/') ||
+       f.startsWith('apps/api/') ||
+       f.startsWith('apps/worker/') ||
+       f.startsWith('apps/ingestor/')
+     );
+     return !packageTouching;
+   };
+   ```
+   - If `usesWorktree` returns **false** (touches packages or package-adjacent apps): use main checkout only — do NOT call `git worktree add`. Set `worktree_path: "."` in the lane manifest.
+   - All **Codex lanes** default to main checkout regardless of file scope (Rule 3 of Worktree Isolation Policy).
+   - Worktrees are only permitted for app-only lanes touching `apps/command-center/`, `apps/discord-bot/`, `apps/smart-form/`, `apps/qa-agent/`, `scripts/`, `docs/`, `.claude/`, `.github/`.
+
    ```bash
    git checkout main && git pull --ff-only origin main
    git checkout -b {branch}
    ```
-   For Codex lanes that need a separate worktree, create it inside the main repo (`.worktrees/` is gitignored, keeping all writes inside the Codex sandbox boundary):
+   If worktree is eligible (app-only Claude lane only):
    ```bash
    git worktree add .worktrees/utv2-{number}-fix {branch}
    pwsh scripts/ops/worktree-setup.ps1 .worktrees/utv2-{number}-fix
@@ -103,14 +120,21 @@ For each validated target:
 - Run `pnpm verify` after implementation
 
 **Before opening PR — required for all lanes:**
-1. `pnpm verify` — must be green
-2. `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules; fix any FAIL
-3. For each missing required artifact flagged by step 2, generate it:
-   - `r2-determinism`: run `tsx scripts/live-data-lab-runner.ts` (if it exists — skip if not found)
-   - `r3-shadow-report`: run `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (if it exists — skip if not found)
-   - `qa-experience-report`: run `pnpm qa:experience --regression --mode fast` (if it exists — skip if not found)
-4. Re-run step 2 to confirm PASS before opening PR
-5. Paste the step 2 PASS output into PR body under `## R-level compliance`
+
+**Batch A — run these two in parallel (single message, two Bash tool calls):**
+- `pnpm verify` — full pipeline (env:check + lint + type-check + build + test) — must exit 0
+- `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules
+
+If `pnpm verify` fails, fix and re-run. If R-level flags missing artifacts, generate them in **Batch B**:
+
+**Batch B — run in parallel only if needed (artifacts flagged by R-level):**
+- `r2-determinism`: `tsx scripts/live-data-lab-runner.ts` (skip if file not found)
+- `r3-shadow-report`: `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (skip if file not found)
+- `qa-experience-report`: `pnpm qa:experience --regression --mode fast` (skip if file not found)
+
+**Batch C — final confirmation:**
+Re-run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — must PASS.
+Paste the PASS output into PR body under `## R-level compliance`.
 
 **If lane tier is T1:**
 - Also run: `pnpm test:db`
@@ -131,14 +155,21 @@ For each validated target:
 - Codex must complete the following before opening the PR:
 
 **Before opening PR — required for all lanes:**
-1. `pnpm verify` — must be green
-2. `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules; fix any FAIL
-3. For each missing required artifact flagged by step 2, generate it:
-   - `r2-determinism`: run `tsx scripts/live-data-lab-runner.ts` (if it exists — skip if not found)
-   - `r3-shadow-report`: run `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (if it exists — skip if not found)
-   - `qa-experience-report`: run `pnpm qa:experience --regression --mode fast` (if it exists — skip if not found)
-4. Re-run step 2 to confirm PASS before opening PR
-5. Paste the step 2 PASS output into PR body under `## R-level compliance`
+
+**Batch A — run these two in parallel (single message, two Bash tool calls):**
+- `pnpm verify` — full pipeline (env:check + lint + type-check + build + test) — must exit 0
+- `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — note triggered rules
+
+If `pnpm verify` fails, fix and re-run. If R-level flags missing artifacts, generate them in **Batch B**:
+
+**Batch B — run in parallel only if needed (artifacts flagged by R-level):**
+- `r2-determinism`: `tsx scripts/live-data-lab-runner.ts` (skip if file not found)
+- `r3-shadow-report`: `tsx scripts/shadow-scoring-runner.ts --mode ci --output artifacts/shadow-report.json` (skip if file not found)
+- `qa-experience-report`: `pnpm qa:experience --regression --mode fast` (skip if file not found)
+
+**Batch C — final confirmation:**
+Re-run `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — must PASS.
+Paste the PASS output into PR body under `## R-level compliance`.
 
 - After Codex opens the PR, immediately apply the tier label:
   ```bash
@@ -151,9 +182,19 @@ For each validated target:
 
 When dispatching multiple lanes:
 1. Start Claude lane first (execute directly)
-2. Dispatch Codex lanes in background (they run in parallel)
-3. After Claude lane PR is open, check Codex status
-4. Review Codex results when they return
+2. Dispatch Codex lanes in background (they run in parallel) via `Agent({run_in_background: true})`
+3. After Claude lane PR is open, continue other work — you will be **automatically notified** when background Codex lanes complete
+4. On Codex completion notification: review diff, run critique, apply tier label, then use `PushNotification` to surface the result if the session needs a summary
+
+**Monitoring long-running shell commands:**
+When running `pnpm build`, `pnpm test`, or other slow Bash commands in background, use the `Monitor` tool to stream stdout in real time rather than waiting blind:
+```typescript
+// Launch long build in background
+Bash({ command: "pnpm build", run_in_background: true })
+// Then stream its output
+Monitor({ /* process reference */ })
+```
+Do not poll with sleep loops — Monitor receives each stdout line as a notification.
 
 ### Merge order declaration
 

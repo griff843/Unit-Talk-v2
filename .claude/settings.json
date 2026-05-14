@@ -29,6 +29,15 @@
             "command": "bash .claude/hooks/commit-msg-linear-check.sh"
           }
         ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/tier-c-path-guard.sh"
+          }
+        ]
       }
     ],
     "PostToolUse": [
@@ -42,6 +51,16 @@
           {
             "type": "command",
             "command": "bash .claude/hooks/suggest-test-group.sh"
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash .claude/hooks/post-compact-reinjector.sh"
           }
         ]
       }

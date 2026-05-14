@@ -9,6 +9,8 @@ This file is read by Codex before every task. Follow every rule here exactly.
 - Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
 - Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
 
+**Execution model:** All Codex lanes run on the **main checkout** (`C:\Dev\Unit-Talk-v2-main`). Do not expect a separate worktree directory — the branch is checked out directly on the main working tree. The `worktree_path` in your lane manifest will always be `"."`. This applies regardless of file scope (see `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`).
+
 ---
 
 ## Package Manager + Commands
@@ -157,6 +159,27 @@ Codex is the **implementation lane**. You own:
 - `PROGRAM_STATUS.md`, `ISSUE_QUEUE.md`, `status_source_of_truth.md` — Claude lane only
 - readiness decisions, closeout artifacts, proof templates
 - Linear / Notion syncing
+
+---
+
+## Tier C Paths — Stop and Report, Do Not Touch
+
+If your task requires modifying any path below, **stop immediately and report** what decision is needed. Do not proceed or make partial edits. Leave the working tree clean.
+
+These paths require PM plan approval + PM merge approval (Delegation Policy Tier C):
+
+| Path | Reason |
+|---|---|
+| `supabase/migrations/**` | Migrations — serial merge required, never two in one deploy |
+| `packages/contracts/src/**` | Cross-package contracts |
+| `packages/domain/src/**` | Pure domain logic — no I/O allowed |
+| `packages/db/src/lifecycle.ts` | Lifecycle FSM write authority |
+| `packages/db/src/repositories.ts` | Repository authority |
+| `packages/db/src/runtime-repositories.ts` | Runtime repository authority |
+| `apps/api/src/distribution-service.ts` | Routing, gating, GOVERNANCE_BRAKE_SOURCES |
+| `apps/api/src/auth.ts` | Auth/RBAC — always escalate |
+| `apps/worker/**` | Delivery adapters — one DeliveryOutcome per attempt |
+| `packages/db/src/database.types.ts` | Generated — never hand-edit; run pnpm supabase:types |
 
 ---
 

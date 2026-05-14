@@ -1,8 +1,17 @@
 name: Daily Ops Digest
 
+# Runs the ops digest every weekday morning (9:07am PT).
+# Surfaces dispatch candidates, stale lanes, and CI failures.
+# Discord alert fires automatically when stale_lanes or ci_failures are present
+# (handled inside daily-digest.ts via UNIT_TALK_OPS_ALERT_WEBHOOK_URL).
+#
+# This is the persistent visibility backbone — runs whether or not a Claude
+# Code session is open. In-session CronCreate handles actual dispatch execution.
+
 on:
   schedule:
-    - cron: '0 8 * * *'
+    # 9:07am PT (UTC-8 winter). Off-minute to avoid fleet congestion.
+    - cron: '7 17 * * 1-5'
   workflow_dispatch:
 
 permissions:
@@ -31,7 +40,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run daily digest
-        run: pnpm ops:digest -- --write-result --json > digest-result.json
+        run: pnpm ops:digest -- --write-result --json | tee /tmp/digest-output.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
@@ -40,9 +49,24 @@ jobs:
           FIBERY_API_TOKEN: ${{ secrets.FIBERY_API_TOKEN }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
 
+      - name: Post digest to step summary
+        if: always()
+        run: |
+          echo "## Daily Ops Digest — $(date -u '+%Y-%m-%d')" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo '```json' >> "$GITHUB_STEP_SUMMARY"
+          cat /tmp/digest-output.txt >> "$GITHUB_STEP_SUMMARY" || echo "(no output)" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "To dispatch a candidate: \`/dispatch UTV2-###\` in a Claude Code session." >> "$GITHUB_STEP_SUMMARY"
+
       - name: Upload digest report
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: digest-result.json
-          path: digest-result.json
-          retention-days: 30
+          name: digest-${{ github.run_id }}
+          path: |
+            /tmp/digest-output.txt
+            .out/ops/digest/
+          if-no-files-found: ignore
+          retention-days: 14

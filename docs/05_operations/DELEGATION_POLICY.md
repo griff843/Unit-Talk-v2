@@ -231,10 +231,13 @@ When the orchestrator dispatches work to a Codex CLI lane (via `pnpm codex:dispa
 
 The PM may grant standing authorizations that persist across sessions by documenting them here. Current standing authorizations:
 
-- *(none yet — add as granted)*
+- **T2 clear-scope Codex lane merges:** Orchestrator may merge PRs that satisfy ALL of the following without a PM_VERDICT comment or PM in-session: (1) PR carries `lane:codex` label, (2) PR carries `tier:T2` label, (3) PR touches no Tier C sensitive paths (see sensitive-path matrix), (4) CI is green on the merge SHA, (5) orchestrator diff review finds no out-of-scope files and no Tier C path touches. Orchestrator applies `gh pr review --approve` then merges. Granted 2026-05-14.
+
+- **Session housekeeping files:** Orchestrator may commit `docs/06_status/SYSTEM_STATE.md` and `.claude/.state-stamp` as session housekeeping without a lane, tier label, or proof. These are auto-generated operational files, not deliverables. Granted 2026-05-14.
+
+- **`docs/06_status/PROGRAM_STATUS.md` post-merge status entries:** Orchestrator may update this file with post-merge status entries up to 200 words and no new sections. Granted 2026-05-14.
 
 Examples of what a standing authorization might look like:
-- "Tier A may include updating `docs/06_status/PROGRAM_STATUS.md` with post-merge status entries, up to 200 words, no new sections."
 - "Tier A may include running `pnpm codex:receive` and merging any Codex return that passes verification and scope audit for issues tagged `kind:docs` or `kind:hardening`."
 
 Do not invent standing authorizations. They only exist if they are written here.

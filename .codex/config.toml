@@ -1,0 +1,17 @@
+# .codex/config.toml — Unit Talk V2
+# Codex CLI project configuration.
+# See: https://developers.openai.com/codex/config-reference
+
+# Increase file context ceiling from default 32 KiB.
+# The monorepo spans multiple packages with deep file trees.
+# 131072 (128 KiB) prevents silent context truncation on package-level tasks.
+project_doc_max_bytes = 131_072
+
+# Default approval mode for interactive sessions.
+# Use --approval never for CI/headless dispatch.
+approval = "suggest"
+
+# Sandbox: allow file writes within workspace, restrict network.
+[sandbox]
+network = "blocked"
+filesystem = "workspace-write"

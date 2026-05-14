@@ -42,6 +42,8 @@ P0 Runtime Hardening work follows this same Codex-with-guardrails path by defaul
 
 When choosing Claude vs Codex for a T1: prefer Claude for ambiguous scope, novel architecture, or work that requires synthesizing multiple files. Prefer Codex for bounded, mechanically-verifiable changes inside a single package even when tier is T1.
 
+**When T1/T2 classification is ambiguous** (two interpretations are equally defensible and the choice affects behavior): pause and use extended deliberation before routing. The tier decision gates the entire lane lifecycle — under-gating (T2 when it's T1) bypasses the PM merge gate; over-gating (T1 when T2 suffices) adds unnecessary ceremony. If still ambiguous after deliberation, apply Rule 9 (Griff escalation).
+
 ### Rule 2 — Sensitive path: Claude + mandatory Griff gate
 
 Issue touches any of these paths:
@@ -114,20 +116,25 @@ Create the rescue lane via `/dispatch`, not via raw `codex exec` — the rescue 
 
 Reset the counter when: test/build passes, user changes the goal, or user says "keep trying."
 
-### Rule 7 — Gemini: codebase scans
+### Rule 7 — Explore: codebase scans
 
-Route to Gemini (via `cc-gemini-plugin:gemini` agent — not the raw `gemini` CLI) when:
+Route to the Explore subagent when:
 
 - "Find every place X / scan the whole repo / map all callers of Y / architecture impact"
-- Cross-package impact analysis before a T1 refactor (Claude calls Gemini as recon first)
+- Cross-package impact analysis before a T1 refactor (run recon first, synthesize before presenting)
 - QA Agent requests coverage gap analysis before adding surface tests
-- Answering a question requires correlating more than 3 files Claude can't hold at once
+- Answering a question requires correlating more than 3 files
 
-Invoke silently. Synthesize before presenting. Always demand `file:line` citations — reject flat summaries.
+Invoke silently via the Agent tool with `subagent_type: "Explore"`. Synthesize before presenting. Always demand `file:line` citations — reject flat summaries.
 
-```bash
-# Standard codebase scan pattern
-/cc-gemini-plugin:gemini --dirs <comma-separated-paths> "Find every place X. Return file:line list."
+```typescript
+// Standard codebase scan pattern — set breadth based on scope
+Agent({
+  subagent_type: "Explore",
+  description: "Codebase scan: <what you're looking for>",
+  prompt: "Find every place X is called/imported. Return file:line list. Be thorough — check all apps/ and packages/."
+})
+// breadth hint in prompt: "quick" | "medium" | "very thorough"
 ```
 
 ### Rule 8 — QA Agent: post-merge surface verification
