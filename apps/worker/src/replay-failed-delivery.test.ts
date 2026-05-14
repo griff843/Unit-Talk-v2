@@ -1,4 +1,4 @@
-import test from 'node:test';
+﻿import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   parseReplayArgs,
@@ -13,11 +13,9 @@ interface FakeOutboxRow {
   status: string;
   attempt_count: number;
   last_error: string | null;
-  last_attempted_at: string;
-  metadata: Record<string, unknown> | null;
+  updated_at: string;
   pick_id?: string;
   created_at?: string;
-  updated_at?: string;
   [key: string]: unknown;
 }
 
@@ -151,7 +149,7 @@ const NOW = new Date('2026-05-14T12:00:00.000Z');
 
 test('dry-run mode prints candidate rows without DB mutations', async () => {
   const db = new FakeReplayDatabase([
-    makeRow('outbox-1', { last_attempted_at: '2026-05-14T10:00:00.000Z' }),
+    makeRow('outbox-1', { updated_at: '2026-05-14T10:00:00.000Z' }),
   ]);
 
   const result = await replayFailedDeliveries(db, replayOptions({ dryRun: true }), NOW);
@@ -164,7 +162,7 @@ test('dry-run mode prints candidate rows without DB mutations', async () => {
 
 test('production cap enforcement rejects more than 50 candidate rows before writes', async () => {
   const rows = Array.from({ length: 51 }, (_unused, index) =>
-    makeRow(`outbox-${index}`, { last_attempted_at: '2026-05-14T10:00:00.000Z' }),
+    makeRow(`outbox-${index}`, { updated_at: '2026-05-14T10:00:00.000Z' }),
   );
   const db = new FakeReplayDatabase(rows);
 
@@ -175,10 +173,10 @@ test('production cap enforcement rejects more than 50 candidate rows before writ
   assert.deepEqual(db.updates, []);
 });
 
-test('min-age-hours filters rows by last_attempted_at cutoff', async () => {
+test('min-age-hours filters rows by updated_at cutoff', async () => {
   const db = new FakeReplayDatabase([
-    makeRow('old', { last_attempted_at: '2026-05-14T09:59:59.000Z' }),
-    makeRow('new', { last_attempted_at: '2026-05-14T10:30:00.000Z' }),
+    makeRow('old', { updated_at: '2026-05-14T09:59:59.000Z' }),
+    makeRow('new', { updated_at: '2026-05-14T10:30:00.000Z' }),
   ]);
 
   const result = await replayFailedDeliveries(
@@ -194,12 +192,11 @@ test('min-age-hours filters rows by last_attempted_at cutoff', async () => {
   );
 });
 
-test('successful replay returns audit log shape and writes replay metadata', async () => {
+test('successful replay returns audit log shape', async () => {
   const db = new FakeReplayDatabase([
     makeRow('outbox-1', {
       attempt_count: 2,
-      last_attempted_at: '2026-05-14T10:00:00.000Z',
-      metadata: { existing: true },
+      updated_at: '2026-05-14T10:00:00.000Z',
     }),
   ]);
 
@@ -214,15 +211,11 @@ test('successful replay returns audit log shape and writes replay metadata', asy
   assert.equal(db.rows[0]?.status, 'pending');
   assert.equal(db.rows[0]?.attempt_count, 3);
   assert.equal(db.rows[0]?.last_error, null);
-  assert.deepEqual(db.rows[0]?.metadata, {
-    existing: true,
-    replay_at: '2026-05-14T12:00:00.000Z',
-  });
 });
 
 test('DB write failures are reported for non-zero CLI exit handling', async () => {
   const db = new FakeReplayDatabase([
-    makeRow('outbox-1', { last_attempted_at: '2026-05-14T10:00:00.000Z' }),
+    makeRow('outbox-1', { updated_at: '2026-05-14T10:00:00.000Z' }),
   ]);
   db.failUpdates = true;
 
@@ -255,8 +248,7 @@ function makeRow(id: string, overrides: Partial<FakeOutboxRow> = {}): FakeOutbox
     status: 'failed',
     attempt_count: 0,
     last_error: 'failed',
-    last_attempted_at: '2026-05-14T10:00:00.000Z',
-    metadata: {},
+    updated_at: '2026-05-14T10:00:00.000Z',
     ...overrides,
   };
 }

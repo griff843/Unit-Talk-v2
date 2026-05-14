@@ -141,10 +141,10 @@ export async function replayFailedDeliveries(
   let query = db
     .from('distribution_outbox')
     .select(
-      'id,pick_id,target,status,attempt_count,last_error,last_attempted_at,metadata,created_at,updated_at',
+      'id,pick_id,target,status,attempt_count,last_error,created_at,updated_at',
     )
     .eq('status', 'failed')
-    .lt('last_attempted_at', cutoff);
+    .lt('updated_at', cutoff);
 
   if (options.target !== 'all') {
     query = query.eq('target', options.target);
@@ -152,7 +152,7 @@ export async function replayFailedDeliveries(
     query = query.in('target', LIVE_TARGETS);
   }
 
-  query = query.order('last_attempted_at', { ascending: true }).limit(MAX_REPLAY_LIMIT + 1);
+  query = query.order('updated_at', { ascending: true }).limit(MAX_REPLAY_LIMIT + 1);
 
   const { data, error } = await query;
   if (error) {
@@ -174,17 +174,12 @@ export async function replayFailedDeliveries(
   let replayed = 0;
 
   for (const row of selectedRows) {
-    const metadata = asRecord(row.metadata);
     const { data: updated, error: updateError } = await db
       .from('distribution_outbox')
       .update({
         status: 'pending',
         last_error: null,
         attempt_count: row.attempt_count + 1,
-        metadata: {
-          ...metadata,
-          replay_at: replayAt,
-        },
       })
       .eq('id', row.id)
       .eq('status', 'failed')
@@ -252,13 +247,6 @@ function readTarget(value: string | undefined): ReplayTarget {
     return value;
   }
   throw new Error('--target must be discord:canary, discord:best-bets, or all');
-}
-
-function asRecord(value: unknown): Record<string, unknown> {
-  if (value && typeof value === 'object' && !Array.isArray(value)) {
-    return value as Record<string, unknown>;
-  }
-  return {};
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
