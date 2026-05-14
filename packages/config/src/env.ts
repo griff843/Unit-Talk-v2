@@ -324,7 +324,17 @@ export type RuntimeConfigErrorCode =
   | 'RUNTIME_REQUIRED_ENV_MISSING'
   | 'RUNTIME_REQUIRED_ENV_GROUP_MISSING'
   | 'RUNTIME_IN_MEMORY_FORBIDDEN'
-  | 'RUNTIME_DRY_RUN_FORBIDDEN';
+  | 'RUNTIME_DRY_RUN_FORBIDDEN'
+  | 'RUNTIME_AUTORUN_SINGLE_CYCLE_AMBIGUOUS';
+
+export type RuntimeConfigFailureCategory =
+  | 'runtime_mode'
+  | 'database_credentials'
+  | 'service_auth'
+  | 'persistence_mode'
+  | 'dry_run'
+  | 'execution_mode'
+  | 'required_env';
 
 export interface RuntimeRequiredKeyGroup {
   name: string;
@@ -342,6 +352,10 @@ export interface AssertProductionRuntimeConfigOptions {
   appVersion?: string | undefined;
   defaultRuntimeMode?: RuntimeMode | undefined;
   prohibitDryRunInProduction?: boolean | undefined;
+  autorun?: boolean | undefined;
+  maxCyclesPerRun?: number | undefined;
+  maxCyclesKey?: string | undefined;
+  prohibitSingleCycleAutorunInProduction?: boolean | undefined;
 }
 
 export interface RuntimeStartupLogFields {
@@ -357,6 +371,21 @@ export interface RuntimeStartupLogFields {
 export interface RuntimeConfigValidationResult
   extends RuntimeStartupLogFields {
   runtimeModeKey: string;
+}
+
+export interface RuntimeConfigFailureLogFields {
+  event: 'startup_config_invalid';
+  service: string;
+  category: RuntimeConfigFailureCategory;
+  runtimeModeKey: string;
+  runtimeMode: string;
+  productionLike: boolean;
+  persistenceMode: RuntimePersistenceMode;
+  dryRun: boolean;
+  autorun: boolean | null;
+  maxCyclesPerRun: number | null;
+  missingKeys: string[];
+  message: string;
 }
 
 export class RuntimeConfigError extends Error {
@@ -450,6 +479,22 @@ export function assertProductionRuntimeConfig(
     });
   }
 
+  if (
+    options.prohibitSingleCycleAutorunInProduction &&
+    options.autorun &&
+    options.maxCyclesPerRun === 1
+  ) {
+    const maxCyclesKey = options.maxCyclesKey ?? 'MAX_CYCLES';
+    throw new RuntimeConfigError({
+      code: 'RUNTIME_AUTORUN_SINGLE_CYCLE_AMBIGUOUS',
+      service: options.service,
+      missingKeys: [maxCyclesKey],
+      message:
+        `${options.service} production autorun cannot use ${maxCyclesKey}=1 because one-cycle startup is ambiguous. ` +
+        `Set ${maxCyclesKey}=0 for continuous mode or >1 for an explicit bounded run.`,
+    });
+  }
+
   return {
     service: options.service,
     runtimeMode,
@@ -484,6 +529,52 @@ export function resolveAppVersion(
     env.UNIT_TALK_SCORER_RUNTIME_VERSION?.trim() ||
     'unknown'
   );
+}
+
+export function createRuntimeConfigFailureLogFields(
+  env: AppEnv,
+  options: AssertProductionRuntimeConfigOptions,
+  error: RuntimeConfigError,
+): RuntimeConfigFailureLogFields {
+  return {
+    event: 'startup_config_invalid',
+    service: error.service,
+    category: categorizeRuntimeConfigError(error),
+    runtimeModeKey: options.runtimeModeKey,
+    runtimeMode: readEnvString(env, options.runtimeModeKey)?.trim().toLowerCase() || 'unset',
+    productionLike: isProductionLikeRuntime(env),
+    persistenceMode: options.persistenceMode ?? 'not_applicable',
+    dryRun: options.dryRun ?? false,
+    autorun: options.autorun ?? null,
+    maxCyclesPerRun: options.maxCyclesPerRun ?? null,
+    missingKeys: [...error.missingKeys],
+    message: error.message,
+  };
+}
+
+function categorizeRuntimeConfigError(
+  error: Pick<RuntimeConfigError, 'code' | 'missingKeys'>,
+): RuntimeConfigFailureCategory {
+  switch (error.code) {
+    case 'RUNTIME_MODE_REQUIRED':
+    case 'RUNTIME_MODE_INVALID':
+    case 'RUNTIME_MODE_MUST_FAIL_CLOSED':
+      return 'runtime_mode';
+    case 'RUNTIME_IN_MEMORY_FORBIDDEN':
+      return 'persistence_mode';
+    case 'RUNTIME_DRY_RUN_FORBIDDEN':
+      return 'dry_run';
+    case 'RUNTIME_AUTORUN_SINGLE_CYCLE_AMBIGUOUS':
+      return 'execution_mode';
+    case 'RUNTIME_REQUIRED_ENV_GROUP_MISSING':
+      return 'service_auth';
+    case 'RUNTIME_REQUIRED_ENV_MISSING':
+      return error.missingKeys.every(isSupabaseKey)
+        ? 'database_credentials'
+        : error.missingKeys.some(isServiceAuthKey)
+          ? 'service_auth'
+          : 'required_env';
+  }
 }
 
 function resolveRuntimeMode(
@@ -523,6 +614,23 @@ function collectMissingRequiredKeys(env: AppEnv, keys: readonly string[]) {
 
 function hasAnyEnvValue(env: AppEnv, keys: readonly string[]) {
   return keys.some((key) => Boolean(readEnvString(env, key)?.trim()));
+}
+
+function isSupabaseKey(key: string) {
+  return (
+    key === 'SUPABASE_URL' ||
+    key === 'SUPABASE_ANON_KEY' ||
+    key === 'SUPABASE_SERVICE_ROLE_KEY'
+  );
+}
+
+function isServiceAuthKey(key: string) {
+  return (
+    key.startsWith('UNIT_TALK_API_KEY_') ||
+    key === 'UNIT_TALK_CC_API_KEY' ||
+    key === 'UNIT_TALK_INGESTOR_API_KEY' ||
+    key === 'UNIT_TALK_BOT_API_KEY'
+  );
 }
 
 function readEnvString(env: AppEnv, key: string) {

@@ -2,7 +2,9 @@ import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 import {
   assertProductionRuntimeConfig,
+  createRuntimeConfigFailureLogFields,
   loadEnvironment,
+  RuntimeConfigError,
   type AppEnv,
 } from '@unit-talk/config';
 import { createDiscordClient } from './client.js';
@@ -26,7 +28,7 @@ function seedProcessEnvFromRoot(): AppEnv {
 }
 
 export function createDiscordBotStartupConfig(env: AppEnv) {
-  return assertProductionRuntimeConfig(env, {
+  const startupOptions = {
     service: 'discord-bot',
     runtimeModeKey: 'UNIT_TALK_DISCORD_BOT_RUNTIME_MODE',
     requiredKeys: [
@@ -38,11 +40,26 @@ export function createDiscordBotStartupConfig(env: AppEnv) {
       'DISCORD_VIP_PLUS_ROLE_ID',
       'DISCORD_CAPPER_CHANNEL_ID',
       'UNIT_TALK_API_URL',
+      'UNIT_TALK_BOT_API_KEY',
     ],
     persistenceMode: 'not_applicable',
     dryRun: false,
     workerTargets: [],
-  });
+  } as const;
+
+  try {
+    return assertProductionRuntimeConfig(env, startupOptions);
+  } catch (error) {
+    if (error instanceof RuntimeConfigError) {
+      console.error(
+        '[discord-bot] Startup config invalid:',
+        JSON.stringify(
+          createRuntimeConfigFailureLogFields(env, startupOptions, error),
+        ),
+      );
+    }
+    throw error;
+  }
 }
 
 async function main() {

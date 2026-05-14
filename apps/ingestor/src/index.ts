@@ -1,8 +1,10 @@
 import {
   assertProductionRuntimeConfig,
+  createRuntimeConfigFailureLogFields,
   loadEnvironment,
   type AppEnv,
   type RuntimeMode,
+  RuntimeConfigError,
 } from '@unit-talk/config';
 import {
   createDatabaseIngestorRepositoryBundle,
@@ -60,7 +62,7 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
   const schedulerConfig = parseSchedulerConfig(env as SchedulerEnv);
   const sgoApiKeys = collectConfiguredSgoApiKeyCandidates(env);
 
-  const startupConfig = assertProductionRuntimeConfig(env, {
+  const startupOptions = {
     service: 'ingestor',
     runtimeModeKey: 'UNIT_TALK_INGESTOR_RUNTIME_MODE',
     requiredKeys: [
@@ -68,13 +70,32 @@ function createIngestorRuntimeDependencies(options: { environment?: AppEnv } = {
       'SUPABASE_ANON_KEY',
       'SUPABASE_SERVICE_ROLE_KEY',
       'UNIT_TALK_API_URL',
+      'UNIT_TALK_INGESTOR_API_KEY',
     ],
     requiredKeyGroups: [
       { name: 'provider auth', keys: ['SGO_API_KEY', 'SGO_API_KEY_FALLBACK', 'ODDS_API_KEY'] },
     ],
     persistenceMode: hasDatabaseEnvironment(env) ? 'database' : 'in-memory',
     dryRun: false,
-  });
+    autorun,
+    maxCyclesPerRun: maxCycles ?? 0,
+    maxCyclesKey: 'UNIT_TALK_INGESTOR_MAX_CYCLES',
+    prohibitSingleCycleAutorunInProduction: true,
+  } as const;
+  let startupConfig;
+  try {
+    startupConfig = assertProductionRuntimeConfig(env, startupOptions);
+  } catch (error) {
+    if (error instanceof RuntimeConfigError) {
+      console.error(
+        '[ingestor] Startup config invalid:',
+        JSON.stringify(
+          createRuntimeConfigFailureLogFields(env, startupOptions, error),
+        ),
+      );
+    }
+    throw error;
+  }
   const runtimeMode = startupConfig.runtimeMode;
   const providerOfferStagingMode = parseProviderOfferStagingMode(
     env.UNIT_TALK_PROVIDER_OFFER_STAGING_MODE,
