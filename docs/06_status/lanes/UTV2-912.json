@@ -8,7 +8,7 @@
   "base_branch": "main",
   "commit_sha": null,
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": ["supabase/migrations/202605140001_utv2_912_market_type_id_alias_backfill.sql"],
   "file_scope_lock": [
     "apps/api/src/candidate-scoring-service.ts",
     "supabase/migrations"
