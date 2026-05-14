@@ -1,3 +1,9 @@
+---
+name: doc-truth-audit
+description: Audits docs that claim metadata.domainAnalysis runtime consumers or producers
+version: "1.0"
+---
+
 # Doc Truth Audit
 
 ## V1 Scope
