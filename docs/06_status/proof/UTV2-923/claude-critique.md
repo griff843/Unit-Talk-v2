@@ -3,6 +3,7 @@
 **PR:** #661  
 **Branch:** codex/utv2-923-remove-runtime-ambiguity  
 **Head SHA at critique:** ffe0b079  
+**Merge SHA:** 32a76705db9993f06d4b0dadf1c149b6d7d5f3df  
 **Critic:** Claude Sonnet 4.6 (orchestrator)  
 **Date:** 2026-05-14
 

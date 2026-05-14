@@ -3,6 +3,7 @@
 **PR:** #661  
 **Branch:** codex/utv2-923-remove-runtime-ambiguity  
 **Head SHA:** ffe0b079  
+**Merge SHA:** 32a76705db9993f06d4b0dadf1c149b6d7d5f3df  
 **Date:** 2026-05-14  
 **Tier:** T2 — no DB migration, no `packages/db` changes, no `*-service.ts` changes
 
