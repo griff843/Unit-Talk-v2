@@ -33,6 +33,7 @@ export * from './recap-embed.js';
 export * from './multi-book-consensus.js';
 export * from './clv-weight-tuner.js';
 export * from './member-lifecycle.js';
+export * from './lifecycle-validator.js';
 export * from './correlation-detection.js';
 export * from './execution-quality.js';
 export * from './provider-quality.js';
