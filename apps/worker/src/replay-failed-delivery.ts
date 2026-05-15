@@ -10,6 +10,8 @@ const MAX_REPLAY_LIMIT = 50;
 const DEFAULT_MIN_AGE_HOURS = 1;
 const LIVE_TARGETS = ['discord:canary', 'discord:best-bets'] as const;
 
+export const REPLAYABLE_STATUSES = ['failed', 'dead_letter'] as const;
+export type ReplayableStatus = (typeof REPLAYABLE_STATUSES)[number];
 export type ReplayTarget = (typeof LIVE_TARGETS)[number] | 'all';
 
 export interface ReplayOptions {
@@ -17,6 +19,7 @@ export interface ReplayOptions {
   dryRun: boolean;
   minAgeHours: number;
   target: ReplayTarget;
+  status: ReplayableStatus | 'all';
 }
 
 export interface ReplayAuditLog {
@@ -29,10 +32,22 @@ export interface ReplayAuditLog {
 
 interface FailedOutboxRow {
   id: string;
+  pick_id: string;
   target: string;
+  status: string;
   attempt_count: number;
+  last_error?: string | null;
   metadata?: unknown;
   [key: string]: unknown;
+}
+
+interface AuditLogInsert {
+  action: string;
+  actor?: string | null;
+  entity_id?: string | null;
+  entity_ref?: string | null;
+  entity_type: string;
+  payload?: unknown;
 }
 
 interface QueryResult<T> {
@@ -64,6 +79,9 @@ export interface ReplayDatabaseClient {
     select(columns: string): SelectQuery<FailedOutboxRow>;
     update(values: Record<string, unknown>): UpdateQuery<FailedOutboxRow>;
   };
+  from(table: 'audit_log'): {
+    insert(values: AuditLogInsert): PromiseLike<{ data: unknown; error: { message: string } | null }>;
+  };
 }
 
 export function parseReplayArgs(argv: string[]): ReplayOptions {
@@ -72,11 +90,12 @@ export function parseReplayArgs(argv: string[]): ReplayOptions {
     dryRun: false,
     minAgeHours: DEFAULT_MIN_AGE_HOURS,
     target: 'all',
+    status: 'all',
   };
 
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index];
-    if (token === '--dry-run') {
+    if (token === '--dry-run' || token === '--inspect') {
       options.dryRun = true;
       continue;
     }
@@ -117,6 +136,17 @@ export function parseReplayArgs(argv: string[]): ReplayOptions {
       continue;
     }
 
+    if (token === '--status') {
+      options.status = readReplayableStatus(argv[index + 1]);
+      index += 1;
+      continue;
+    }
+
+    if (token?.startsWith('--status=')) {
+      options.status = readReplayableStatus(token.slice('--status='.length));
+      continue;
+    }
+
     throw new Error(`Unsupported argument: ${token ?? '(missing)'}`);
   }
 
@@ -138,12 +168,16 @@ export async function replayFailedDeliveries(
 
   const startedAt = Date.now();
   const cutoff = new Date(now.getTime() - options.minAgeHours * 60 * 60 * 1000).toISOString();
+
+  const replayableStatuses: readonly string[] =
+    options.status === 'all' ? REPLAYABLE_STATUSES : [options.status];
+
   let query = db
     .from('distribution_outbox')
     .select(
       'id,pick_id,target,status,attempt_count,last_error,created_at,updated_at',
     )
-    .eq('status', 'failed')
+    .in('status', replayableStatuses)
     .lt('updated_at', cutoff);
 
   if (options.target !== 'all') {
@@ -173,21 +207,49 @@ export async function replayFailedDeliveries(
   let replayed = 0;
 
   for (const row of selectedRows) {
+    if (!REPLAYABLE_STATUSES.includes(row.status as ReplayableStatus)) {
+      errors.push(`Skipping outbox ${row.id}: status '${row.status}' is not replayable`);
+      continue;
+    }
+
+    const previousStatus = row.status;
+    const nextAttemptCount = row.attempt_count + 1;
+
     const { data: updated, error: updateError } = await db
       .from('distribution_outbox')
       .update({
         status: 'pending',
         last_error: null,
-        attempt_count: row.attempt_count + 1,
+        attempt_count: nextAttemptCount,
       })
       .eq('id', row.id)
-      .eq('status', 'failed')
+      .eq('status', previousStatus)
       .select()
       .single();
 
     if (updateError || !updated) {
       errors.push(`Failed to replay outbox ${row.id}: ${updateError?.message ?? 'no row returned'}`);
       continue;
+    }
+
+    const { error: auditError } = await db.from('audit_log').insert({
+      action: 'replay',
+      actor: 'replay-failed-delivery',
+      entity_type: 'distribution_outbox',
+      entity_id: row.id,
+      entity_ref: row.pick_id,
+      payload: {
+        outbox_id: row.id,
+        pick_id: row.pick_id,
+        previous_status: previousStatus,
+        new_status: 'pending',
+        attempt_count: nextAttemptCount,
+        target: row.target,
+      },
+    });
+
+    if (auditError) {
+      errors.push(`Replayed outbox ${row.id} but audit log failed: ${auditError.message}`);
     }
 
     replayed += 1;
@@ -246,6 +308,13 @@ function readTarget(value: string | undefined): ReplayTarget {
     return value;
   }
   throw new Error('--target must be discord:canary, discord:best-bets, or all');
+}
+
+function readReplayableStatus(value: string | undefined): ReplayableStatus | 'all' {
+  if (value === 'all' || value === 'failed' || value === 'dead_letter') {
+    return value;
+  }
+  throw new Error(`--status must be failed, dead_letter, or all`);
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
