@@ -2,7 +2,10 @@
   "id": "UTV2-976",
   "title": "Add ops:reconcile — scheduled stranded lane detection referenced but missing",
   "owner": "claude",
-  "status": "open",
+  "status": "done",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/685",
+  "merge_sha": "b4f045fe3fb1c0a873c23ff5aab0a9b52089cf6a",
+  "closed_at": "2026-05-15T18:10:00.000Z",
   "tier": "T2",
   "branch": "griffadavi/utv2-976-add-opsreconcile-scheduled-stranded-lane-detection",
   "file_scope_lock": [
@@ -12,5 +15,5 @@
     "package.json"
   ],
   "createdAt": "2026-05-15T17:33:00.000Z",
-  "updatedAt": "2026-05-15T17:33:00.000Z"
+  "updatedAt": "2026-05-15T18:10:00.000Z"
 }
