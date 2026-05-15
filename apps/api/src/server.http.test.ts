@@ -153,7 +153,12 @@ test('POST /api/submissions with oversized body returns 413', async () => {
       runtimeMode: 'fail_open',
       authConfig: { enabled: false, keys: new Map() },
       bodyLimitBytes: 64,
-      submissionRateLimit: { maxRequests: 100, windowMs: 60_000 },
+      submissionRateLimit: {
+        maxRequests: 100,
+        windowMs: 60_000,
+        keyStrategy: 'submitted_identity',
+        store: 'memory',
+      },
       logger: createApiRuntimeDependencies({
         repositories: createInMemoryRepositoryBundle(),
       }).logger,

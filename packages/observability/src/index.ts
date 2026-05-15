@@ -473,6 +473,7 @@ export interface CreateLoggerOptions {
 }
 
 const CORRELATION_ID_HEADER_NAMES = ['x-correlation-id', 'x-request-id'] as const;
+const TRACEPARENT_HEADER_NAME = 'traceparent';
 
 export function createLogger(options: CreateLoggerOptions): Logger {
   const baseFields = sanitizeFields(options.fields);
@@ -782,6 +783,153 @@ export function getOrCreateCorrelationId(
     | Record<string, string | string[] | undefined>,
 ) {
   return createCorrelationId(readCorrelationId(headers));
+}
+
+export function readTraceparent(
+  headers:
+    | Headers
+    | IncomingHttpHeaders
+    | Record<string, string | string[] | undefined>,
+) {
+  return normalizeTraceparent(readHeaderValue(headers, TRACEPARENT_HEADER_NAME));
+}
+
+export function normalizeTraceparent(value: unknown): string | undefined {
+  if (typeof value !== 'string') {
+    return undefined;
+  }
+
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed.slice(0, 256) : undefined;
+}
+
+export function createTraceContext(input: {
+  correlationId: string;
+  traceparent?: string | undefined;
+}) {
+  return {
+    correlationId: createCorrelationId(input.correlationId),
+    ...(input.traceparent ? { traceparent: normalizeTraceparent(input.traceparent) } : {}),
+  };
+}
+
+export function attachTraceContextToMetadata(
+  metadata: Record<string, unknown> | undefined,
+  input: {
+    correlationId: string;
+    traceparent?: string | undefined;
+  },
+): Record<string, unknown> {
+  return {
+    ...(metadata ?? {}),
+    ...createTraceContext(input),
+  };
+}
+
+export function readCorrelationIdFromMetadata(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return undefined;
+  }
+
+  return normalizeCorrelationId((metadata as Record<string, unknown>)['correlationId']);
+}
+
+export function readTraceparentFromMetadata(metadata: unknown): string | undefined {
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    return undefined;
+  }
+
+  return normalizeTraceparent((metadata as Record<string, unknown>)['traceparent']);
+}
+
+export function readTraceContextFromOutboxPayload(payload: unknown) {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+    return {};
+  }
+
+  const metadata = (payload as Record<string, unknown>)['metadata'];
+  const correlationId = readCorrelationIdFromMetadata(metadata);
+  const traceparent = readTraceparentFromMetadata(metadata);
+
+  return {
+    ...(correlationId ? { correlationId } : {}),
+    ...(traceparent ? { traceparent } : {}),
+  };
+}
+
+export function createTraceLogFields(input: {
+  correlationId?: string | undefined;
+  traceparent?: string | undefined;
+  spanName?: string | undefined;
+  lifecyclePoint?: string | undefined;
+}) {
+  return {
+    ...(input.correlationId ? { correlationId: input.correlationId } : {}),
+    ...(input.traceparent ? { traceparent: input.traceparent } : {}),
+    ...(input.spanName ? { spanName: input.spanName } : {}),
+    ...(input.lifecyclePoint ? { lifecyclePoint: input.lifecyclePoint } : {}),
+  } satisfies LogFields;
+}
+
+export interface OpenTelemetryInitOptions {
+  serviceName: string;
+  otlpEndpoint?: string | undefined;
+  logger?: Logger | undefined;
+}
+
+export interface OpenTelemetryInitResult {
+  enabled: boolean;
+  serviceName: string;
+  reason?: string | undefined;
+}
+
+type DynamicImporter = (specifier: string) => Promise<unknown>;
+
+const dynamicImport = new Function(
+  'specifier',
+  'return import(specifier)',
+) as DynamicImporter;
+
+export async function initializeOpenTelemetry(
+  options: OpenTelemetryInitOptions,
+): Promise<OpenTelemetryInitResult> {
+  const endpoint = options.otlpEndpoint?.trim();
+  if (!endpoint) {
+    return {
+      enabled: false,
+      serviceName: options.serviceName,
+      reason: 'OTEL_EXPORTER_OTLP_ENDPOINT unset',
+    };
+  }
+
+  try {
+    const sdkNodeModule = await dynamicImport('@opentelemetry/sdk-node');
+    const NodeSDK = (sdkNodeModule as { NodeSDK?: new (input: Record<string, unknown>) => { start(): void } })
+      .NodeSDK;
+    if (!NodeSDK) {
+      throw new Error('@opentelemetry/sdk-node did not expose NodeSDK');
+    }
+
+    const sdk = new NodeSDK({
+      serviceName: options.serviceName,
+    });
+    sdk.start();
+    options.logger?.info('opentelemetry initialized', {
+      serviceName: options.serviceName,
+      otlpEndpointConfigured: true,
+    });
+    return { enabled: true, serviceName: options.serviceName };
+  } catch (error) {
+    options.logger?.warn('opentelemetry initialization skipped', {
+      serviceName: options.serviceName,
+      reason: error instanceof Error ? error.message : String(error),
+    });
+    return {
+      enabled: false,
+      serviceName: options.serviceName,
+      reason: error instanceof Error ? error.message : String(error),
+    };
+  }
 }
 
 export function createRequestLogFields(input: {

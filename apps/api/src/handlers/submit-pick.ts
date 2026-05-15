@@ -5,11 +5,17 @@ import type { ApiResponse } from '../http.js';
 import { errorResponse } from '../http.js';
 import type { AuthContext } from '../auth.js';
 import { submitPickController } from '../controllers/index.js';
+import {
+  type Logger,
+} from '@unit-talk/observability';
 
 export interface SubmitPickRequest {
   body: unknown;
   /** Auth context from the bearer token — capperId overrides submittedBy when role === 'capper'. */
   auth?: AuthContext | null | undefined;
+  correlationId?: string | undefined;
+  traceparent?: string | undefined;
+  logger?: Logger | undefined;
 }
 
 export type SubmitPickResponse = ApiResponse<{
@@ -24,8 +30,16 @@ export async function handleSubmitPick(
 ): Promise<SubmitPickResponse> {
   try {
     return await submitPickController(
-      coerceSubmissionPayload(request.body, request.auth),
+      coerceSubmissionPayload(request.body, request.auth, {
+        correlationId: request.correlationId,
+        traceparent: request.traceparent,
+      }),
       repositories,
+      {
+        correlationId: request.correlationId,
+        traceparent: request.traceparent,
+        logger: request.logger,
+      },
     );
   } catch (error) {
     const apiError = normalizeApiError(error);
@@ -40,7 +54,14 @@ export async function handleSubmitPick(
  * takes precedence over whatever submittedBy the form sent — the form field
  * is ignored entirely. This is the trust boundary enforcement for UTV2-658.
  */
-function coerceSubmissionPayload(body: unknown, auth?: AuthContext | null): SubmissionPayload {
+function coerceSubmissionPayload(
+  body: unknown,
+  auth?: AuthContext | null,
+  traceContext?: {
+    correlationId?: string | undefined;
+    traceparent?: string | undefined;
+  },
+): SubmissionPayload {
   const payload = isRecord(body) ? body : {};
   const source = readString(payload.source) as SubmissionPayload['source'];
   const stakeUnits = resolveStakeUnits(payload, source);
@@ -69,8 +90,29 @@ function coerceSubmissionPayload(body: unknown, auth?: AuthContext | null): Subm
     stakeUnits: stakeUnits.value,
     confidence: readOptionalNumber(payload.confidence),
     eventName: readOptionalString(payload.eventName),
-    metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+    metadata: buildSubmissionMetadata(metadata, traceContext),
   };
+}
+
+function buildSubmissionMetadata(
+  metadata: Record<string, unknown>,
+  traceContext:
+    | {
+        correlationId?: string | undefined;
+        traceparent?: string | undefined;
+      }
+    | undefined,
+) {
+  if (traceContext?.correlationId) {
+    const enriched = {
+      ...metadata,
+      correlationId: traceContext.correlationId,
+      ...(traceContext.traceparent ? { traceparent: traceContext.traceparent } : {}),
+    };
+    return Object.keys(enriched).length > 0 ? enriched : undefined;
+  }
+
+  return Object.keys(metadata).length > 0 ? metadata : undefined;
 }
 
 const SYSTEM_DEFAULT_STAKE_SOURCES = new Set<SubmissionPayload['source']>([

@@ -36,6 +36,26 @@ test('createApiRuntimeDependencies fails closed when database config is unavaila
   );
 });
 
+test('createApiRuntimeDependencies rejects production in-memory rate limiting', () => {
+  assert.throws(
+    () =>
+      createApiRuntimeDependencies({
+        environment: createTestEnvironment({
+          NODE_ENV: 'production',
+          UNIT_TALK_APP_ENV: 'production',
+          UNIT_TALK_API_RUNTIME_MODE: 'fail_closed',
+          SUPABASE_URL: 'https://unit-talk.test',
+          SUPABASE_ANON_KEY: 'anon-key',
+          SUPABASE_SERVICE_ROLE_KEY: 'service-role-key',
+          UNIT_TALK_API_KEY_SUBMITTER: 'submitter-key',
+          UNIT_TALK_API_RATE_LIMIT_STORE: 'memory',
+          UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY: 'authenticated_identity',
+        }),
+      }),
+    /shared rate limiting/i,
+  );
+});
+
 test('POST /api/submissions rejects request bodies larger than the configured cap', async () => {
   const server = createApiServer({
     runtime: createTestRuntime({
@@ -84,6 +104,8 @@ test('POST /api/submissions rate limits repeat callers and exposes reset metadat
       submissionRateLimit: {
         maxRequests: 1,
         windowMs: 60_000,
+        keyStrategy: 'submitted_identity',
+        store: 'memory',
       },
     }),
   });
@@ -125,6 +147,8 @@ test('POST /api/submissions allows requests up to the configured limit', async (
       submissionRateLimit: {
         maxRequests: 3,
         windowMs: 60_000,
+        keyStrategy: 'submitted_identity',
+        store: 'memory',
       },
     }),
   });
@@ -152,6 +176,8 @@ test('POST /api/submissions keys rate limit by Discord user ID from body when pr
       submissionRateLimit: {
         maxRequests: 1,
         windowMs: 60_000,
+        keyStrategy: 'submitted_identity',
+        store: 'memory',
       },
     }),
   });
@@ -211,6 +237,8 @@ test('POST /api/submissions keys rate limit by submittedBy when discordUserId ab
       submissionRateLimit: {
         maxRequests: 1,
         windowMs: 60_000,
+        keyStrategy: 'submitted_identity',
+        store: 'memory',
       },
     }),
   });
@@ -251,6 +279,59 @@ test('POST /api/submissions keys rate limit by submittedBy when discordUserId ab
       201,
       'different submittedBy should get a fresh bucket',
     );
+  } finally {
+    server.close();
+  }
+});
+
+test('POST /api/submissions resists body identity spoofing when keyed by authenticated actor', async () => {
+  let now = 1_000;
+  const server = createApiServer({
+    runtime: createTestRuntime({
+      now: () => now,
+      authConfig: {
+        enabled: true,
+        keys: new Map([
+          [
+            'submitter-key',
+            { role: 'submitter', identity: 'submitter:discord-bot' },
+          ],
+        ]),
+      },
+      submissionRateLimit: {
+        maxRequests: 1,
+        windowMs: 60_000,
+        keyStrategy: 'authenticated_identity',
+        store: 'memory',
+      },
+    }),
+  });
+
+  await listen(server);
+  const address = server.address() as AddressInfo;
+
+  try {
+    const first = await submitTestPickWithDiscordIdAndAuth(
+      address.port,
+      'spoofed-user-a',
+      'submitter-key',
+    );
+    assert.equal(first.status, 201);
+
+    now += 1_000;
+
+    const second = await submitTestPickWithDiscordIdAndAuth(
+      address.port,
+      'spoofed-user-b',
+      'submitter-key',
+    );
+    const body = (await second.json()) as {
+      ok: boolean;
+      error?: { code: string };
+    };
+
+    assert.equal(second.status, 429);
+    assert.equal(body.error?.code, 'RATE_LIMIT_EXCEEDED');
   } finally {
     server.close();
   }
@@ -566,6 +647,8 @@ function createTestRuntime(
     submissionRateLimit: {
       maxRequests: 10,
       windowMs: 60_000,
+      keyStrategy: 'submitted_identity',
+      store: 'memory',
     },
     logger: createLogger({ service: 'api', fields: { env: 'test' } }),
     errorTracker: createErrorTracker({ service: 'api' }),
@@ -650,6 +733,27 @@ async function submitTestPickWithDiscordId(
   return fetch(`http://127.0.0.1:${port}/api/submissions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      source: 'discord',
+      market: 'NBA points',
+      selection: 'Player Over 18.5',
+      stakeUnits: 1,
+      discordUserId,
+    }),
+  });
+}
+
+async function submitTestPickWithDiscordIdAndAuth(
+  port: number,
+  discordUserId: string,
+  token: string,
+) {
+  return fetch(`http://127.0.0.1:${port}/api/submissions`, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      authorization: `Bearer ${token}`,
+    },
     body: JSON.stringify({
       source: 'discord',
       market: 'NBA points',

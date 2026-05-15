@@ -47,6 +47,14 @@ const REQUIRED_DEPLOY_SECRETS = [
   'UNIT_TALK_DEPLOY_SSH_KEY',
 ] as const;
 
+const REQUIRED_STAGING_DEPLOY_SECRETS = [
+  'UNIT_TALK_STAGING_DEPLOY_HOST',
+  'UNIT_TALK_STAGING_DEPLOY_USER',
+  'UNIT_TALK_STAGING_DEPLOY_PATH',
+  'UNIT_TALK_STAGING_DEPLOY_HEALTH_URL',
+  'UNIT_TALK_STAGING_DEPLOY_SSH_KEY',
+] as const;
+
 export function collectDeployStaticChecks(
   repoRoot = process.cwd(),
   environment: Record<string, string | undefined> = loadEnvironment(),
@@ -255,6 +263,152 @@ export function collectDeployStaticChecks(
         ? { name, passed: true }
         : { name, passed: false, detail: 'deploy workflow release/rollback contract is missing' },
     );
+  }
+
+  return results;
+}
+
+export function collectStagingParityChecks(
+  repoRoot = process.cwd(),
+  environment: Record<string, string | undefined> = loadEnvironment(),
+  stagingWorkflowText?: string,
+): CheckResult[] {
+  const results: CheckResult[] = [];
+
+  // App env must be staging
+  const appEnv = environment.UNIT_TALK_APP_ENV?.trim();
+  results.push(
+    appEnv === 'staging'
+      ? { name: 'staging env UNIT_TALK_APP_ENV', passed: true }
+      : { name: 'staging env UNIT_TALK_APP_ENV', passed: false, detail: 'UNIT_TALK_APP_ENV must be staging' },
+  );
+
+  // Same required env vars as production
+  for (const varName of REQUIRED_ENV_VARS) {
+    const value = environment[varName]?.trim();
+    results.push(
+      value
+        ? { name: `staging env ${varName}`, passed: true }
+        : { name: `staging env ${varName}`, passed: false, detail: `${varName} is not set or empty` },
+    );
+  }
+
+  // Runtime modes must be fail_closed even on staging
+  for (const runtimeModeName of [
+    'UNIT_TALK_API_RUNTIME_MODE',
+    'UNIT_TALK_WORKER_RUNTIME_MODE',
+    'UNIT_TALK_INGESTOR_RUNTIME_MODE',
+    'UNIT_TALK_DISCORD_BOT_RUNTIME_MODE',
+  ] as const) {
+    const value = environment[runtimeModeName]?.trim();
+    results.push(
+      value === 'fail_closed'
+        ? { name: `staging env ${runtimeModeName} fail-closed`, passed: true }
+        : {
+            name: `staging env ${runtimeModeName} fail-closed`,
+            passed: false,
+            detail: `${runtimeModeName} must be fail_closed in staging`,
+          },
+    );
+  }
+
+  // Worker dry-run must be disabled
+  const workerDryRun = environment.UNIT_TALK_WORKER_DRY_RUN?.trim();
+  results.push(
+    workerDryRun === 'false'
+      ? { name: 'staging env UNIT_TALK_WORKER_DRY_RUN disabled', passed: true }
+      : {
+          name: 'staging env UNIT_TALK_WORKER_DRY_RUN disabled',
+          passed: false,
+          detail: 'UNIT_TALK_WORKER_DRY_RUN must be false in staging',
+        },
+  );
+
+  // Staging compose must mirror production service set
+  const stagingComposePath = path.join(repoRoot, 'deploy', 'staging', 'docker-compose.yml');
+  const stagingCompose = YAML.parse(readTextFile(stagingComposePath)) as {
+    services?: Record<string, { image?: string; restart?: string; depends_on?: unknown; healthcheck?: unknown; env_file?: string[] }>;
+  };
+
+  for (const serviceName of REQUIRED_DEPLOY_SERVICES) {
+    const service = stagingCompose.services?.[serviceName];
+    results.push(
+      service
+        ? { name: `staging compose service ${serviceName}`, passed: true }
+        : {
+            name: `staging compose service ${serviceName}`,
+            passed: false,
+            detail: 'missing staging compose service — staging must mirror production service set',
+          },
+    );
+    if (!service) continue;
+
+    const image = service.image ?? '';
+    results.push(
+      image.includes(`unit-talk-v2/${serviceName}:`) && image.includes('UNIT_TALK_IMAGE_TAG')
+        ? { name: `staging image ${serviceName}`, passed: true }
+        : {
+            name: `staging image ${serviceName}`,
+            passed: false,
+            detail: 'staging image must use GHCR service image and UNIT_TALK_IMAGE_TAG',
+          },
+    );
+
+    results.push(
+      service.restart
+        ? { name: `staging restart ${serviceName}`, passed: true }
+        : { name: `staging restart ${serviceName}`, passed: false, detail: 'missing restart policy' },
+    );
+
+    const envFile = service.env_file ?? [];
+    const usesEnvFile = Array.isArray(envFile)
+      ? envFile.some((f: string) => f.includes('.env.staging'))
+      : String(envFile).includes('.env.staging');
+    results.push(
+      usesEnvFile
+        ? { name: `staging env_file ${serviceName}`, passed: true }
+        : {
+            name: `staging env_file ${serviceName}`,
+            passed: false,
+            detail: 'staging service must use .env.staging, not .env.production',
+          },
+    );
+  }
+
+  results.push(
+    stagingCompose.services?.api?.healthcheck
+      ? { name: 'staging api healthcheck', passed: true }
+      : { name: 'staging api healthcheck', passed: false, detail: 'api healthcheck is required in staging' },
+  );
+
+  for (const dependent of ['worker', 'ingestor', 'discord-bot'] as const) {
+    const dependsOn = stagingCompose.services?.[dependent]?.depends_on;
+    const dependsOnApi = JSON.stringify(dependsOn ?? {}).includes('api');
+    results.push(
+      dependsOnApi
+        ? { name: `staging ${dependent} waits for api`, passed: true }
+        : {
+            name: `staging ${dependent} waits for api`,
+            passed: false,
+            detail: 'staging service must depend on api health before starting',
+          },
+    );
+  }
+
+  // Staging workflow secrets
+  const workflowText = stagingWorkflowText ?? (() => {
+    const stagingWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'staging-deploy.yml');
+    return fs.existsSync(stagingWorkflowPath) ? readTextFile(stagingWorkflowPath) : '';
+  })();
+
+  if (workflowText) {
+    for (const secretName of REQUIRED_STAGING_DEPLOY_SECRETS) {
+      results.push(
+        workflowText.includes(secretName)
+          ? { name: `staging secret ${secretName}`, passed: true }
+          : { name: `staging secret ${secretName}`, passed: false, detail: 'staging deploy workflow must reference secret' },
+      );
+    }
   }
 
   return results;

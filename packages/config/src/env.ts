@@ -70,6 +70,8 @@ export interface AppEnv {
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_MAX?: string | undefined;
   UNIT_TALK_API_SUBMISSION_RATE_LIMIT_WINDOW_MS?: string | undefined;
   UNIT_TALK_RATE_LIMIT_SUBMISSIONS_PER_MINUTE?: string | undefined;
+  UNIT_TALK_API_RATE_LIMIT_STORE?: string | undefined;
+  UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY?: string | undefined;
   UNIT_TALK_OPERATOR_RUNTIME_MODE?: string | undefined;
   UNIT_TALK_SHADOW_MODE?: string | undefined;
   DISCORD_BOT_TOKEN?: string | undefined;
@@ -252,6 +254,14 @@ export function loadEnvironment(rootDir = process.cwd()): AppEnv {
     ),
     UNIT_TALK_RATE_LIMIT_SUBMISSIONS_PER_MINUTE: optionalEnv(
       'UNIT_TALK_RATE_LIMIT_SUBMISSIONS_PER_MINUTE',
+      merged,
+    ),
+    UNIT_TALK_API_RATE_LIMIT_STORE: optionalEnv(
+      'UNIT_TALK_API_RATE_LIMIT_STORE',
+      merged,
+    ),
+    UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY: optionalEnv(
+      'UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY',
       merged,
     ),
     UNIT_TALK_OPERATOR_RUNTIME_MODE: optionalEnv('UNIT_TALK_OPERATOR_RUNTIME_MODE', merged),
