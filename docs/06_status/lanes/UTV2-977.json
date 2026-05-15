@@ -1,0 +1,16 @@
+{
+  "id": "UTV2-977",
+  "title": "Fix tier-c-path-guard.sh silent failure when Python 3 absent from Git Bash PATH",
+  "owner": "claude",
+  "status": "done",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/684",
+  "merge_sha": "3fca5c4cabeb7936552fc43eeb88e6c439181c6e",
+  "closed_at": "2026-05-15T17:29:00.000Z",
+  "tier": "T3",
+  "branch": "griffadavi/utv2-977-fix-tier-c-path-guardsh-silent-failure-when-python-3-absent",
+  "file_scope_lock": [
+    ".claude/hooks/tier-c-path-guard.sh"
+  ],
+  "createdAt": "2026-05-15T17:14:00.000Z",
+  "updatedAt": "2026-05-15T17:14:00.000Z"
+}
