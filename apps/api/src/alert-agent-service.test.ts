@@ -276,6 +276,80 @@ test('runAlertDetectionPass persists rows and deduplicates on repeated passes', 
   assert.equal(rows[0]?.first_mover_book, 'sgo');
 });
 
+test('runAlertDetectionPass logs and drops invalid detections before DB write', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  await repositories.events.upsertByExternalId({
+    externalId: 'evt-invalid-1',
+    sportId: 'NBA',
+    eventName: 'Lakers vs Celtics',
+    eventDate: '2026-03-28',
+    status: 'scheduled',
+    metadata: {},
+  });
+  await repositories.providerOffers.upsertBatch([
+    makeOfferInsert({
+      providerEventId: 'evt-invalid-1',
+      providerMarketKey: 'spread',
+      line: 4.5,
+      snapshotAt: '2026-03-28T09:30:00.000Z',
+      idempotencyKey: 'evt-invalid-1:spread:sgo:all:4.5:0930',
+    }),
+    makeOfferInsert({
+      providerEventId: 'evt-invalid-1',
+      providerMarketKey: 'spread',
+      line: 6,
+      snapshotAt: '2026-03-28T10:00:00.000Z',
+      idempotencyKey: 'evt-invalid-1:spread:sgo:all:6.0:1000',
+    }),
+  ]);
+
+  const originalFindByExternalId = repositories.events.findByExternalId.bind(
+    repositories.events,
+  );
+  repositories.events.findByExternalId = async (externalId) => {
+    const event = await originalFindByExternalId(externalId);
+    return event ? { ...event, id: '' } : null;
+  };
+
+  let saveCalls = 0;
+  const originalSaveDetection = repositories.alertDetections.saveDetection.bind(
+    repositories.alertDetections,
+  );
+  repositories.alertDetections.saveDetection = async (input) => {
+    saveCalls += 1;
+    return originalSaveDetection(input);
+  };
+
+  const errorLogs: string[] = [];
+  const result = await runAlertDetectionPass(repositories, {
+    enabled: true,
+    lookbackMinutes: 60,
+    minTier: 'watch',
+    now: '2026-03-28T10:30:00.000Z',
+    logger: {
+      error(message: string) {
+        errorLogs.push(message);
+      },
+    },
+  });
+
+  assert.equal(result.detections, 1);
+  assert.equal(result.persisted, 0);
+  assert.equal(saveCalls, 0);
+  assert.equal((await repositories.alertDetections.listRecent()).length, 0);
+  assert.equal(errorLogs.length, 1);
+
+  const payload = JSON.parse(errorLogs[0] ?? '{}') as {
+    event?: string;
+    reason?: string;
+    detection?: { eventId?: string; marketKey?: string };
+  };
+  assert.equal(payload.event, 'alert_agent.validation_failed');
+  assert.match(payload.reason ?? '', /eventId must be a non-empty string/);
+  assert.equal(payload.detection?.eventId, '');
+  assert.equal(payload.detection?.marketKey, 'spread');
+});
+
 test('runAlertDetectionPass skips detections for disabled sports like NFL', async () => {
   const repositories = createInMemoryRepositoryBundle();
   await repositories.events.upsertByExternalId({
