@@ -6,9 +6,11 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-924-opentelemetry-foundation",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "c292fb1b6fdd228dd17d65b872c6d2e8ac410e2d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/675",
+  "files_changed": [
+    "packages/observability/src/index.ts"
+  ],
   "file_scope_lock": [
     "packages/observability/src",
     "apps/api/src",
@@ -16,10 +18,13 @@
     "apps/discord-bot/src",
     "packages/config/src"
   ],
-  "expected_proof_paths": [],
-  "status": "started",
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-924/diff-summary.md",
+    "docs/06_status/proof/UTV2-924/verification-log.md"
+  ],
+  "status": "in_review",
   "started_at": "2026-05-15T03:50:00.000Z",
-  "heartbeat_at": "2026-05-15T03:50:00.000Z",
+  "heartbeat_at": "2026-05-15T06:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
