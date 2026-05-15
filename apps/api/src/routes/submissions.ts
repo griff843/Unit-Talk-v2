@@ -16,7 +16,13 @@ export async function handleSubmissions(
   // Read body first so we can key the rate limiter by Discord user ID when present.
   const body = await readJsonBody(request, runtime.bodyLimitBytes);
 
-  const rateLimitResult = consumeSubmissionRateLimit(request, body, response, runtime);
+  const rateLimitResult = await consumeSubmissionRateLimit(
+    request,
+    body,
+    response,
+    runtime,
+    auth,
+  );
   if (rateLimitResult.exceeded) {
     requestLogger.warn('submission rate limit exceeded', {
       limit: rateLimitResult.limit,
@@ -37,14 +43,20 @@ export async function handleSubmissions(
   writeJson(response, apiResponse.status, apiResponse.body);
 }
 
-function consumeSubmissionRateLimit(
+async function consumeSubmissionRateLimit(
   request: IncomingMessage,
   body: Record<string, unknown>,
   response: ServerResponse,
   runtime: ApiRuntimeDependencies,
+  auth: AuthContext | null,
 ) {
-  const key = buildSubmissionRateLimitKey(request, body);
-  const result = runtime.rateLimitStore.consume(
+  const key = buildSubmissionRateLimitKey(
+    request,
+    body,
+    runtime.submissionRateLimit.keyStrategy,
+    auth,
+  );
+  const result = await runtime.rateLimitStore.consume(
     key,
     runtime.submissionRateLimit,
     runtime.now(),
@@ -67,19 +79,32 @@ function consumeSubmissionRateLimit(
 /**
  * Build the rate-limit key for a submission request.
  *
- * Priority order:
- * 1. `discordUserId` field in the request body (explicit Discord user ID)
- * 2. `submittedBy` field in the request body (capper identity)
- * 3. `x-forwarded-for` header first IP segment (proxy/CDN-forwarded client IP)
- * 4. socket remote address
- * 5. fallback: "unknown"
+ * Key strategy:
+ * - authenticated_identity: trusted auth context identity, falling back to IP
+ * - submitted_identity: legacy local/dev behavior using request body identity, then IP
+ * - ip: client IP only
  */
 function buildSubmissionRateLimitKey(
   request: IncomingMessage,
   body: Record<string, unknown>,
+  strategy: ApiRuntimeDependencies['submissionRateLimit']['keyStrategy'],
+  auth: AuthContext | null,
 ): string {
-  // Prefer Discord user identity from body so each Discord user gets their own bucket
-  // regardless of which IP they're coming from.
+  if (strategy === 'authenticated_identity' && auth) {
+    return `submission:auth:${auth.identity}`;
+  }
+
+  if (strategy === 'submitted_identity') {
+    const submittedIdentity = readSubmittedIdentity(body);
+    if (submittedIdentity !== null) {
+      return `submission:submitted:${submittedIdentity}`;
+    }
+  }
+
+  return `submission:ip:${readClientIp(request)}`;
+}
+
+function readSubmittedIdentity(body: Record<string, unknown>): string | null {
   const discordUserId =
     typeof body['discordUserId'] === 'string' && body['discordUserId'].length > 0
       ? body['discordUserId']
@@ -87,16 +112,15 @@ function buildSubmissionRateLimitKey(
         ? body['submittedBy']
         : null;
 
-  if (discordUserId !== null) {
-    return `submission:discord:${discordUserId}`;
-  }
+  return discordUserId;
+}
 
-  // Fall back to IP address.
+function readClientIp(request: IncomingMessage): string {
   const forwardedFor = request.headers['x-forwarded-for'];
   const clientIp =
     typeof forwardedFor === 'string'
       ? forwardedFor.split(',')[0]?.trim()
       : request.socket.remoteAddress ?? 'unknown';
 
-  return `submission:ip:${clientIp ?? 'unknown'}`;
+  return clientIp ?? 'unknown';
 }
