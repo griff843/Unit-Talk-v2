@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+import path from 'node:path';
 import {
   activeManifestOverlap,
   branchExists,
@@ -19,7 +21,50 @@ import {
   worktreeExists,
   worktreePathForBranch,
   writeManifest,
+  ROOT,
+  type CanonicalLaneType,
+  type LaneExecutor,
 } from './shared.js';
+
+const CANONICAL_LANE_TYPES: CanonicalLaneType[] = [
+  'runtime',
+  'modeling',
+  'verification',
+  'hygiene',
+  'migration',
+  'governance',
+  'delivery-ui',
+  'data-canonical',
+];
+
+const LEGACY_EXECUTOR_MAP: Record<string, LaneExecutor> = {
+  claude: 'claude',
+  'codex-cli': 'codex-cli',
+  'codex-cloud': 'codex-cloud',
+  codex: 'codex-cli',
+};
+
+function writeSyncFile(issueId: string, content: string): void {
+  const syncDir = path.join(ROOT, '.ops', 'sync');
+  fs.mkdirSync(syncDir, { recursive: true });
+  fs.writeFileSync(path.join(syncDir, `${issueId}.yml`), content, 'utf8');
+}
+
+function buildSyncYml(issueId: string): string {
+  return [
+    'version: 1',
+    'approval:',
+    '  allow_multiple_issues: false',
+    '  skip_sync_required: false',
+    'entities:',
+    '  issues:',
+    `    - ${issueId}`,
+    '  findings: []',
+    '  controls: []',
+    '  proofs: []',
+    '',
+  ].join('\n');
+}
 
 function main(): void {
   const { positionals, flags } = parseArgs(process.argv.slice(2));
@@ -42,8 +87,21 @@ function main(): void {
 
     const tier = validateTier(tierInput);
     validateBranchName(branch);
-    if (!['claude', 'codex-cli', 'codex-cloud'].includes(laneType)) {
-      throw new Error(`Invalid --lane-type: ${laneType}`);
+
+    let canonicalLaneType: CanonicalLaneType;
+    let executor: LaneExecutor;
+
+    if (CANONICAL_LANE_TYPES.includes(laneType as CanonicalLaneType)) {
+      canonicalLaneType = laneType as CanonicalLaneType;
+      const executorArg = flags.get('executor')?.at(-1);
+      executor = (executorArg as LaneExecutor | undefined) ?? 'claude';
+    } else if (laneType in LEGACY_EXECUTOR_MAP) {
+      canonicalLaneType = 'runtime';
+      executor = LEGACY_EXECUTOR_MAP[laneType]!;
+    } else {
+      throw new Error(
+        `Invalid --lane-type: ${laneType}. Use a canonical type (${CANONICAL_LANE_TYPES.join(', ')}) with optional --executor (claude|codex-cli|codex-cloud).`,
+      );
     }
     const normalizedFiles = normalizeFileScope(fileArgs);
     const overlap = activeManifestOverlap(issueId, normalizedFiles);
@@ -121,12 +179,14 @@ function main(): void {
       file_scope_lock: normalizedFiles,
       expected_proof_paths: defaultProofPaths(issueId, tier),
       preflight_token: preflight.tokenRelativePath,
-      lane_type: laneType as 'claude' | 'codex-cli' | 'codex-cloud',
-      created_by: laneType === 'claude' ? 'claude' : 'codex-cli',
+      lane_type: canonicalLaneType,
+      executor,
+      created_by: executor === 'claude' ? 'claude' : 'codex-cli',
       status: 'started',
       now,
     });
     writeManifest(manifest);
+    writeSyncFile(issueId, buildSyncYml(issueId));
 
     emitJson({
       ok: true,

@@ -11,7 +11,22 @@ export type LaneManifestStatus =
   | 'done'
   | 'blocked'
   | 'reopened';
-export type LaneType = 'claude' | 'codex-cli' | 'codex-cloud';
+export type CanonicalLaneType =
+  | 'runtime'
+  | 'modeling'
+  | 'verification'
+  | 'hygiene'
+  | 'migration'
+  | 'governance'
+  | 'delivery-ui'
+  | 'data-canonical';
+
+export type LegacyLaneType = 'claude' | 'codex' | 'codex-cli' | 'codex-cloud';
+
+export type LaneType = CanonicalLaneType | LegacyLaneType;
+
+export type LaneExecutor = 'claude' | 'codex-cli' | 'codex-cloud';
+
 export type CreatedBy = 'claude' | 'codex-cli' | 'pm';
 
 export interface TruthCheckHistoryEntry {
@@ -45,6 +60,7 @@ export interface LaneManifest {
   schema_version: 1;
   issue_id: string;
   lane_type: LaneType;
+  executor?: LaneExecutor;
   tier: LaneTier;
   worktree_path: string;
   branch: string;
@@ -559,7 +575,12 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   if (!MANIFEST_STATUSES.has(manifest.status)) {
     errors.push(`${sourcePath}: status is invalid`);
   }
-  if (!['claude', 'codex-cli', 'codex-cloud'].includes(manifest.lane_type)) {
+  const VALID_LANE_TYPES = new Set([
+    'runtime', 'modeling', 'verification', 'hygiene', 'migration',
+    'governance', 'delivery-ui', 'data-canonical',
+    'claude', 'codex', 'codex-cli', 'codex-cloud',
+  ]);
+  if (!VALID_LANE_TYPES.has(manifest.lane_type)) {
     errors.push(`${sourcePath}: lane_type is invalid`);
   }
   if (!['claude', 'codex-cli', 'pm'].includes(manifest.created_by)) {
@@ -759,6 +780,7 @@ export function createManifest(input: {
   expected_proof_paths: string[];
   preflight_token: string;
   lane_type?: LaneType;
+  executor?: LaneExecutor;
   created_by?: CreatedBy;
   status?: LaneManifestStatus;
   now?: string;
@@ -767,7 +789,8 @@ export function createManifest(input: {
   return {
     schema_version: 1,
     issue_id: input.issue_id,
-    lane_type: input.lane_type ?? 'codex-cli',
+    lane_type: input.lane_type ?? 'runtime',
+    executor: input.executor,
     tier: input.tier,
     worktree_path: input.worktree_path,
     branch: input.branch,

@@ -1,20 +1,21 @@
 #!/usr/bin/env tsx
 /**
- * Validates that .ops/sync.yml issue ID matches the current git branch.
- * Exits 1 if they mismatch — used as a pre-push guard.
+ * Validates that the lane's sync metadata declares the correct issue ID.
+ * Exits 1 if there is a mismatch; exits 0 otherwise.
  *
- * Usage: tsx scripts/ops/sync-check.ts
+ * Check order:
+ *   1. .ops/sync/UTV2-NNN.yml  (per-issue file — preferred, no conflict risk)
+ *   2. .ops/sync.yml            (legacy shared file — backward compat only)
  *
- * Skips silently if:
- *   - Not on a lane branch (main, chore/*, docs/*, etc.)
- *   - .ops/sync.yml does not exist
+ * Skips silently when not on a lane branch (main, chore/*, docs/*, etc.).
  */
 
 import { execSync } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { parse as parseYaml } from 'yaml';
 
-const SYNC_YML = '.ops/sync.yml';
+const LEGACY_SYNC_YML = '.ops/sync.yml';
+const SYNC_DIR = '.ops/sync';
 const BRANCH_PATTERN = /^(?:claude|codex)\/utv2-(\d+)-/i;
 
 function getCurrentBranch(): string {
@@ -40,14 +41,34 @@ function main(): void {
   const branchIssue = extractIssueFromBranch(branch);
 
   if (!branchIssue) {
-    // Not a lane branch — skip
     process.exit(0);
   }
 
-  const syncIssue = extractIssueFromSync(SYNC_YML);
+  // Check per-issue file first (preferred model)
+  const perIssuePath = `${SYNC_DIR}/${branchIssue}.yml`;
+  if (existsSync(perIssuePath)) {
+    const syncIssue = extractIssueFromSync(perIssuePath);
+    if (!syncIssue) {
+      console.error(
+        `\n[sync-check] MISSING: ${perIssuePath} exists but declares no issues.`,
+      );
+      console.error(`  Add entities.issues: [${branchIssue}] to ${perIssuePath}.\n`);
+      process.exit(1);
+    }
+    if (syncIssue.toUpperCase() !== branchIssue.toUpperCase()) {
+      console.error(
+        `\n[sync-check] MISMATCH: ${perIssuePath} lists "${syncIssue}" but branch "${branch}" expects "${branchIssue}".`,
+      );
+      process.exit(1);
+    }
+    console.log(`[sync-check] OK (per-issue): branch "${branch}" ↔ ${perIssuePath}`);
+    process.exit(0);
+  }
 
+  // Fall back to legacy .ops/sync.yml
+  const syncIssue = extractIssueFromSync(LEGACY_SYNC_YML);
   if (!syncIssue) {
-    // No sync.yml or no issues listed — skip (fibery-ci-enforcement will catch missing file)
+    // No sync metadata at all — skip (fibery-ci-enforcement will catch missing file)
     process.exit(0);
   }
 
@@ -55,11 +76,13 @@ function main(): void {
     console.error(
       `\n[sync-check] MISMATCH: .ops/sync.yml lists "${syncIssue}" but branch "${branch}" expects "${branchIssue}".`,
     );
-    console.error(`  Update .ops/sync.yml to reference ${branchIssue} before pushing.\n`);
+    console.error(
+      `  Create .ops/sync/${branchIssue}.yml with entities.issues: [${branchIssue}] to fix this permanently.\n`,
+    );
     process.exit(1);
   }
 
-  console.log(`[sync-check] OK: branch "${branch}" ↔ sync.yml "${syncIssue}"`);
+  console.log(`[sync-check] OK (legacy): branch "${branch}" ↔ sync.yml "${syncIssue}"`);
   process.exit(0);
 }
 

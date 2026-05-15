@@ -40,6 +40,12 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      issue_id:
+        description: "Issue ID to manually close (e.g. UTV2-961)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -49,6 +55,8 @@ jobs:
   lane-close:
     name: Auto-close merged lane
     runs-on: ubuntu-latest
+    # Never re-trigger on bot housekeeping commits — prevents infinite push loops.
+    if: github.actor != 'github-actions[bot]' || github.event_name == 'workflow_dispatch'
 
     steps:
       - name: Extract issue ID from commit message and PR branch
@@ -57,36 +65,37 @@ jobs:
           COMMIT_MSG: ${{ github.event.head_commit.message }}
           COMMIT_SHA: ${{ github.sha }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          DISPATCH_ISSUE_ID: ${{ inputs.issue_id }}
         run: |
-          # Extract the first UTV2-NNN identifier from the commit message.
-          # Sources: branch name in merge line, close markers, conventional
-          # commit scope, or any freeform mention.
+          # workflow_dispatch: use the provided issue_id directly.
+          if [ -n "$DISPATCH_ISSUE_ID" ]; then
+            issue_id=$(echo "$DISPATCH_ISSUE_ID" | tr '[:lower:]' '[:upper:]')
+            echo "::notice title=post-merge-lane-close::Manual replay for $issue_id"
+            echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # push trigger: extract from commit message then PR branch (handles squash merges).
           issue_id=$(echo "$COMMIT_MSG" | grep -oP '(?i)UTV2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
 
-          # If not found in commit message, query the GitHub API for the PR
-          # branch name (format: */utv2-NNN-* or */UTV2-NNN-*).
-          # This handles squash-merges and other commit styles that may not
-          # include the issue ID in the commit message body.
           pr_number=""
           pr_branch=""
-          if [ -z "$issue_id" ] || true; then
-            # Always try to find the associated PR to get pr_number for later comment posting.
-            api_resp=$(curl -sS \
-              -H "Authorization: Bearer $GITHUB_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              "https://api.github.com/repos/${{ github.repository }}/commits/${COMMIT_SHA}/pulls" \
-              2>/dev/null || echo "[]")
+          # Always resolve the associated PR to get pr_number for comment posting.
+          api_resp=$(curl -sS \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${COMMIT_SHA}/pulls" \
+            2>/dev/null || echo "[]")
 
-            pr_number=$(echo "$api_resp" | jq -r '.[0].number // empty' 2>/dev/null || true)
-            pr_branch=$(echo "$api_resp" | jq -r '.[0].head.ref // empty' 2>/dev/null || true)
+          pr_number=$(echo "$api_resp" | jq -r '.[0].number // empty' 2>/dev/null || true)
+          pr_branch=$(echo "$api_resp" | jq -r '.[0].head.ref // empty' 2>/dev/null || true)
 
-            if [ -z "$issue_id" ] && [ -n "$pr_branch" ]; then
-              # Try to extract UTV2-NNN from branch name: claude/utv2-NNN-... or utv2-NNN-...
-              branch_issue=$(echo "$pr_branch" | grep -oiP '(?<![a-zA-Z])utv2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
-              if [ -n "$branch_issue" ]; then
-                issue_id="$branch_issue"
-                echo "::notice title=post-merge-lane-close::Found issue $issue_id from PR branch $pr_branch"
-              fi
+          if [ -z "$issue_id" ] && [ -n "$pr_branch" ]; then
+            branch_issue=$(echo "$pr_branch" | grep -oiP '(?<![a-zA-Z])utv2-\d+' | head -n 1 | tr '[:lower:]' '[:upper:]' || true)
+            if [ -n "$branch_issue" ]; then
+              issue_id="$branch_issue"
+              echo "::notice title=post-merge-lane-close::Found issue $issue_id from PR branch $pr_branch"
             fi
           fi
 
@@ -98,7 +107,6 @@ jobs:
             echo "issue_id=$issue_id" >> "$GITHUB_OUTPUT"
           fi
 
-          # Always emit pr_number so later steps can post comments
           echo "pr_number=${pr_number}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout
@@ -109,33 +117,6 @@ jobs:
           # branch protection). Falls back to GITHUB_TOKEN if not configured, but
           # the git push steps will then be blocked by branch protection.
           token: ${{ secrets.SYNC_BOT_TOKEN || secrets.GITHUB_TOKEN }}
-
-      - name: Reset sync.yml to neutral on main
-        # Always run — every squash merge to main rewrites .ops/sync.yml with the
-        # merged PR's issue ID, causing all in-flight branches to conflict on that
-        # file. Resetting to issues: [] immediately after merge keeps main neutral
-        # so subsequent branches only conflict if they have actual content changes.
-        run: |
-          node -e "
-            const fs = require('fs');
-            const neutral = 'version: 1\napproval:\n  allow_multiple_issues: true\n  skip_sync_required: false\nentities:\n  issues: []\n  findings: []\n  controls: []\n  proofs: []\n';
-            const current = fs.existsSync('.ops/sync.yml') ? fs.readFileSync('.ops/sync.yml', 'utf8') : '';
-            if (current === neutral) {
-              console.log('::notice title=post-merge-lane-close::sync.yml already neutral — no reset needed.');
-              process.exit(0);
-            }
-            fs.writeFileSync('.ops/sync.yml', neutral);
-            console.log('::notice title=post-merge-lane-close::sync.yml reset to neutral.');
-          "
-          if git diff --quiet .ops/sync.yml; then
-            echo "::notice title=post-merge-lane-close::sync.yml unchanged — no commit needed."
-          else
-            git config user.name "github-actions[bot]"
-            git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-            git add .ops/sync.yml
-            git commit -m "ops: reset sync.yml to neutral after merge [skip ci]"
-            git push
-          fi
 
       - name: Check lane manifest exists
         if: steps.extract.outputs.issue_id != ''
@@ -319,11 +300,17 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add "$MANIFEST_PATH"
 
-          # Check if there are actually changes to commit
+          # Remove per-issue sync file now that the lane is closed.
+          per_issue_sync=".ops/sync/${ISSUE_ID}.yml"
+          if [ -f "$per_issue_sync" ]; then
+            git rm --force "$per_issue_sync"
+            echo "::notice title=post-merge-lane-close::Removed per-issue sync file $per_issue_sync"
+          fi
+
           if git diff --cached --quiet; then
-            echo "::notice title=post-merge-lane-close::No manifest changes to commit (already up to date)."
+            echo "::notice title=post-merge-lane-close::No changes to commit (already up to date)."
           else
-            git commit -m "ops: auto-close lane $ISSUE_ID [skip ci]"
+            git commit -m "chore(lanes): close $ISSUE_ID — lane closed, sync file removed"
             git push
             echo "::notice title=post-merge-lane-close::Lane $ISSUE_ID closed and manifest committed."
           fi
