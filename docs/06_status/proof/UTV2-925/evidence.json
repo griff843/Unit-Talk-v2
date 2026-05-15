@@ -3,10 +3,10 @@
   "schema_version": 1,
   "issue_id": "UTV2-925",
   "tier": "T1",
-  "merge_sha": "MERGE_SHA_PLACEHOLDER",
+  "merge_sha": "be3bf9587e719517d90381dcfa79615cd9499d35",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/673",
-  "merged_at": null,
-  "generated_at": "2026-05-15T13:30:00.000Z",
+  "merged_at": "2026-05-15T13:50:38Z",
+  "generated_at": "2026-05-15T13:55:00.000Z",
   "verifier": {
     "identity": "claude/utv2-925-orchestrator"
   },
