@@ -1,6 +1,6 @@
 name: Ingestor Scheduled Run
 
-# Bridge workflow: runs one ingestor cycle every 25 minutes while the
+# Bridge workflow: runs one ingestor cycle every 5 minutes while the
 # persistent daemon host (Hetzner, UTV2-770) is not yet provisioned.
 # Remove or disable this workflow once the daemon is running on Hetzner.
 
@@ -8,6 +8,10 @@ on:
   schedule:
     - cron: '*/5 * * * *'
   workflow_dispatch:
+
+concurrency:
+  group: ingestor-scheduled-run
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -45,11 +49,8 @@ jobs:
       SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
       UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
       UNIT_TALK_INGESTOR_AUTORUN: 'true'
-      UNIT_TALK_INGESTOR_MAX_CYCLES: '8'
-      UNIT_TALK_INGESTOR_POLL_MS: '1000'
-      UNIT_TALK_INGESTOR_SCHEDULING_ENABLED: 'true'
-      UNIT_TALK_INGESTOR_PEAK_POLL_MS: '30000'
-      UNIT_TALK_INGESTOR_OFFPEAK_POLL_MS: '55000'
+      UNIT_TALK_INGESTOR_MAX_CYCLES: '2'
+      UNIT_TALK_INGESTOR_POLL_MS: '30000'
       UNIT_TALK_APP_ENV: production
     steps:
       - name: Checkout

@@ -1,0 +1,13 @@
+{
+  "id": "UTV2-910",
+  "title": "Ingestor cadence break — one-shot bridge leaves offer data stale",
+  "owner": "claude",
+  "status": "open",
+  "tier": "T1",
+  "branch": "griffadavi/utv2-910-ingestor-cadence-break-one-shot-bridge-leaves-offer-data",
+  "file_scope_lock": [
+    ".github/workflows/ingestor-scheduled-run.yml"
+  ],
+  "createdAt": "2026-05-15T18:12:00.000Z",
+  "updatedAt": "2026-05-15T18:12:00.000Z"
+}
