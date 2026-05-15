@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-969",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-969-generate-standardized-execution-packets",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/execution-packet.ts",
+    "scripts/ops/execution-packet.test.ts",
+    "docs/05_operations/schemas/execution-packet-v1.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-15T21:00:00.000Z",
+  "heartbeat_at": "2026-05-15T21:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
