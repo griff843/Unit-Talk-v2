@@ -92,7 +92,8 @@ For each validated target:
 5. Create the lane manifest and write sync.yml, then commit both to the branch:
    ```bash
    # Write docs/06_status/lanes/UTV2-{number}.json (from template below)
-   # Write .ops/sync.yml (auto-generated from lane manifest — see schema below)
+   # Write .ops/sync.yml — OVERWRITE the file from the template below. Never append or
+   # carry over issue IDs from main. One lane branch = exactly one issue ID in sync.yml.
    git add docs/06_status/lanes/UTV2-{number}.json .ops/sync.yml
    git commit -m "chore(lanes): UTV2-{number} lane manifest and sync metadata"
    ```
@@ -101,16 +102,18 @@ For each validated target:
    ```yaml
    version: 1
    approval:
-     allow_multiple_issues: true
+     allow_multiple_issues: false
      skip_sync_required: false
    entities:
      issues:
-       - UTV2-{number}          # always: from branch pattern
+       - UTV2-{number}          # only this lane's issue — no other IDs
      findings: []
      controls: []
      proofs: []                 # populate from manifest.expected_proof_paths if non-empty
    ```
    If `expected_proof_paths` is non-empty in the manifest, each path becomes an entry under `entities.proofs`.
+
+   **sync.yml rule:** The `issues` list must contain exactly one entry: the current lane's issue ID. Never merge in IDs from the existing main-branch sync.yml. The `branch-discipline-guard` CI check fails if multiple IDs appear without the `multi-issue-pr-approved` label.
 
 ### Phase 4: Execute
 
