@@ -1,7 +1,8 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-955",
-  "lane_type": "claude",
+  "lane_type": "governance",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": ".",
   "branch": "claude/utv2-955-lane-taxonomy-execution-contracts",

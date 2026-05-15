@@ -1,0 +1,76 @@
+name: Housekeeping Fast CI
+
+# Lightweight CI gate that runs on every push to main, including housekeeping
+# commits from github-actions[bot]. This ensures that when a new lane branch is
+# cut from a bot-commit tip, the branch's required status checks have a baseline
+# result and the [skip ci] deadlock cannot occur.
+#
+# Note: GitHub suppresses workflow triggers for commits that contain [skip ci]
+# in the message, so this workflow cannot itself be triggered by such commits.
+# Its purpose is different: it provides a fast, always-green check for any push
+# that DOES trigger CI (i.e., non-skip commits), so that developers always see
+# a green baseline when they branch from main.
+#
+# The real fix for [skip ci] deadlocks is in post-merge-lane-close.yml:
+#   1. The sync.yml reset step has been removed (per-issue sync files eliminate
+#      the need for a shared-file reset).
+#   2. The manifest close commit no longer uses [skip ci].
+#   3. The job is guarded by `if: github.actor != 'github-actions[bot]'` to
+#      prevent push loops.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  fast-check:
+    name: Housekeeping check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verify lane manifest structure
+        run: |
+          echo "Checking for malformed lane manifests..."
+          bad=0
+          for f in docs/06_status/lanes/UTV2-*.json; do
+            [ -f "$f" ] || continue
+            if ! jq -e '.schema_version == 1 and .issue_id != null and .status != null' "$f" > /dev/null 2>&1; then
+              echo "::warning::Malformed manifest: $f"
+              bad=$((bad + 1))
+            fi
+          done
+          if [ "$bad" -gt 0 ]; then
+            echo "::warning::$bad malformed manifests found — run scripts/ops/normalize-manifests.ts to fix"
+          else
+            echo "All lane manifests have valid structure."
+          fi
+
+      - name: Verify per-issue sync files are well-formed
+        run: |
+          echo "Checking .ops/sync/*.yml files..."
+          bad=0
+          for f in .ops/sync/UTV2-*.yml; do
+            [ -f "$f" ] || continue
+            issue=$(basename "$f" .yml)
+            if ! grep -q "issues:" "$f"; then
+              echo "::warning::$f missing entities.issues"
+              bad=$((bad + 1))
+            elif ! grep -q "$issue" "$f"; then
+              echo "::warning::$f does not reference $issue in entities.issues"
+              bad=$((bad + 1))
+            fi
+          done
+          if [ "$bad" -gt 0 ]; then
+            echo "::error::$bad sync files are malformed"
+            exit 1
+          fi
+          echo "All per-issue sync files are well-formed."

@@ -89,16 +89,16 @@ For each validated target:
    This script junctions root + per-app node_modules from the main repo and copies `local.env`
    so `pnpm verify` works without a full `pnpm install`.
 4. Update Linear issue state to "In Claude" or "In Codex" via MCP
-5. Create the lane manifest and write sync.yml, then commit both to the branch:
+5. Create the lane manifest and write the per-issue sync file, then commit both to the branch:
    ```bash
    # Write docs/06_status/lanes/UTV2-{number}.json (from template below)
-   # Write .ops/sync.yml — OVERWRITE the file from the template below. Never append or
-   # carry over issue IDs from main. One lane branch = exactly one issue ID in sync.yml.
-   git add docs/06_status/lanes/UTV2-{number}.json .ops/sync.yml
+   # Write .ops/sync/UTV2-{number}.yml — per-issue sync file (NOT the shared .ops/sync.yml)
+   # Per-issue files (UTV2-961) eliminate sync.yml conflicts between concurrent branches.
+   git add docs/06_status/lanes/UTV2-{number}.json ".ops/sync/UTV2-{number}.yml"
    git commit -m "chore(lanes): UTV2-{number} lane manifest and sync metadata"
    ```
 
-   **sync.yml schema (auto-generate at lane-open):**
+   **Per-issue sync file schema** (`.ops/sync/UTV2-{number}.yml`):
    ```yaml
    version: 1
    approval:
@@ -113,7 +113,7 @@ For each validated target:
    ```
    If `expected_proof_paths` is non-empty in the manifest, each path becomes an entry under `entities.proofs`.
 
-   **sync.yml rule:** The `issues` list must contain exactly one entry: the current lane's issue ID. Never merge in IDs from the existing main-branch sync.yml. The `branch-discipline-guard` CI check fails if multiple IDs appear without the `multi-issue-pr-approved` label.
+   **Per-issue sync rule:** Each lane writes its own `.ops/sync/UTV2-{number}.yml`. Never mutate the shared `.ops/sync.yml` — that file stays neutral on main (`issues: []`). The `branch-discipline-guard` CI check reads the per-issue file automatically from the PR branch name.
 
 ### Phase 4: Execute
 
@@ -256,7 +256,8 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 {
   "schema_version": 1,
   "issue_id": "UTV2-###",
-  "lane_type": "claude",
+  "lane_type": "governance",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": ".",
   "branch": "claude/utv2-###-slug",
@@ -276,4 +277,21 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
   "truth_check_history": [],
   "reopen_history": []
 }
+```
+
+**Lane type selection guide** (choose the correct `lane_type`):
+| lane_type      | Use for                                                              |
+|----------------|----------------------------------------------------------------------|
+| runtime        | Worker, outbox, delivery, API logic, dead-letter, scoring adapters  |
+| modeling       | CanonicalPick schema, scoring logic, CLV, promotion rules           |
+| verification   | Proof bundles, evidence, test scaffolding, truth-check tooling      |
+| hygiene        | Lint, cleanup, debt reduction, formatting, dead code removal        |
+| migration      | DB migrations, schema.generated.ts, database.types.ts              |
+| governance     | Lane contracts, CI workflows, dispatch skill, audit docs, policies  |
+| delivery-ui    | Discord bot, command-center, smart-form, QA agent                  |
+| data-canonical | Ingestor, odds data, provider canonical transforms                  |
+
+**Executor** is separate from `lane_type`:
+- `"executor": "claude"` — Claude Code executed the lane
+- `"executor": "codex-cli"` — Codex executed the lane
 ```

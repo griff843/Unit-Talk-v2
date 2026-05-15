@@ -6,20 +6,32 @@
   "worktree_path": ".",
   "branch": "claude/utv2-975-governance-convergence-audit",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "fa372cdc",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/680",
+  "files_changed": [
+    "docs/governance/GOVERNANCE_CONVERGENCE_AUDIT.md",
+    "docs/06_status/lanes/UTV2-975.json",
+    ".ops/sync.yml"
+  ],
   "file_scope_lock": [
     "docs/governance/GOVERNANCE_CONVERGENCE_AUDIT.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-15T13:48:00.000Z",
-  "heartbeat_at": "2026-05-15T13:50:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-15T14:20:00.000Z",
+  "closed_at": "2026-05-15T14:20:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-15T14:20:00.000Z",
+      "verdict": "pass",
+      "merge_sha": "fa372cdc",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
   "reopen_history": []
 }

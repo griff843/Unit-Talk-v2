@@ -15,12 +15,16 @@ export const LANE_TYPES = [
   'data-canonical',
 ] as const;
 
+export const LANE_EXECUTOR_TYPES = ['claude', 'codex-cli', 'codex-cloud'] as const;
+
 export type LaneType = (typeof LANE_TYPES)[number];
+export type LaneExecutor = (typeof LANE_EXECUTOR_TYPES)[number];
 
 export interface LaneManifestContract {
   schema_version: 1;
   lane_id: string;
   lane_type: LaneType;
+  executor?: LaneExecutor;
   allowed_path_globs: string[];
   forbidden_path_globs: string[];
   required_proof_artifacts: string[];
