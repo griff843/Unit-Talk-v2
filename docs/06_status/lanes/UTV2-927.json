@@ -6,9 +6,15 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-927-staging-environment-parity",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "407bcae56d335bb7f8e55417df35950006f0cfa8",
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    ".github/workflows/staging-deploy.yml",
+    "deploy/staging/docker-compose.yml",
+    "scripts/deploy-check.ts",
+    "scripts/deploy-check.test.ts",
+    "scripts/staging-check.ts"
+  ],
   "file_scope_lock": [
     ".github/workflows",
     "deploy",
@@ -16,10 +22,13 @@
     "scripts/ops",
     "packages/config/src"
   ],
-  "expected_proof_paths": [],
-  "status": "started",
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-927/diff-summary.md",
+    "docs/06_status/proof/UTV2-927/verification-log.md"
+  ],
+  "status": "in_review",
   "started_at": "2026-05-15T03:50:00.000Z",
-  "heartbeat_at": "2026-05-15T03:50:00.000Z",
+  "heartbeat_at": "2026-05-15T06:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
