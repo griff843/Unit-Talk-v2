@@ -7,6 +7,9 @@ import { ApiError } from '../errors.js';
 import { processShadowSubmission, processSubmission } from '../submission-service.js';
 import { enqueueDistributionWithRunTracking } from '../run-audit-service.js';
 import { isGovernanceBrakeSource } from '../distribution-service.js';
+import {
+  type Logger,
+} from '@unit-talk/observability';
 
 export interface SubmitPickControllerResult {
   submissionId: string;
@@ -22,6 +25,11 @@ export interface SubmitPickControllerResult {
 export async function submitPickController(
   payload: SubmissionPayload,
   repositories: RepositoryBundle,
+  options: {
+    correlationId?: string | undefined;
+    traceparent?: string | undefined;
+    logger?: Logger | undefined;
+  } = {},
 ): Promise<ApiResponse<SubmitPickControllerResult>> {
   const routingShadowEnabled = isModelDrivenRoutingShadowEnabled(payload);
   const result = routingShadowEnabled
@@ -31,6 +39,17 @@ export async function submitPickController(
   if (!result.pick.id) {
     throw new ApiError(500, 'PICK_CREATION_FAILED', 'Canonical pick was not created');
   }
+
+  options.logger?.info('submission ingested', {
+    ...(options.correlationId ? { correlationId: options.correlationId } : {}),
+    ...(options.traceparent ? { traceparent: options.traceparent } : {}),
+    lifecyclePoint: 'api.ingestion',
+    pickId: result.pick.id,
+    submissionId: result.submission.id,
+    source: result.pick.source,
+    promotionStatus: result.pick.promotionStatus ?? 'not_eligible',
+    promotionTarget: result.pick.promotionTarget ?? null,
+  });
 
   // Phase 7A governance brake: non-human pick sources must NOT auto-enqueue.
   // They land in `awaiting_approval` and wait for operator review. The brake
@@ -91,6 +110,13 @@ export async function submitPickController(
   if (!routingShadowEnabled && result.pick.promotionStatus === 'qualified' && result.pick.promotionTarget != null) {
     const distributionTarget = `discord:${result.pick.promotionTarget}`;
     try {
+      options.logger?.info('distribution enqueue requested', {
+        ...(options.correlationId ? { correlationId: options.correlationId } : {}),
+        ...(options.traceparent ? { traceparent: options.traceparent } : {}),
+        lifecyclePoint: 'api.outbox_enqueue',
+        pickId: result.pick.id,
+        target: distributionTarget,
+      });
       await enqueueDistributionWithRunTracking(
         result.pick,
         distributionTarget,
@@ -101,6 +127,13 @@ export async function submitPickController(
         repositories.audit,
       );
       outboxEnqueued = true;
+      options.logger?.info('distribution enqueue completed', {
+        ...(options.correlationId ? { correlationId: options.correlationId } : {}),
+        ...(options.traceparent ? { traceparent: options.traceparent } : {}),
+        lifecyclePoint: 'api.outbox_enqueue',
+        pickId: result.pick.id,
+        target: distributionTarget,
+      });
     } catch (enqueueError) {
       // Enqueue failure is audited inside enqueueDistributionWithRunTracking.
       // Pick is durable but NOT queued — this is a degraded state.

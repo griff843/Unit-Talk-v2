@@ -2,8 +2,16 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { once } from 'node:events';
 import type { AddressInfo } from 'node:net';
+import type { UnitTalkSupabaseClient } from '@unit-talk/db';
 import { evaluateQueueHealth } from '@unit-talk/observability';
-import { buildApiRuntimeTruth, createApiRuntimeDependencies, createApiServer } from './server.js';
+import {
+  buildApiRuntimeTruth,
+  createApiRuntimeDependencies,
+  createApiServer,
+  InMemoryApiRateLimitStore,
+  SupabaseRpcApiRateLimitStore,
+  type ApiSubmissionRateLimit,
+} from './server.js';
 import { createInMemoryRepositoryBundle } from './persistence.js';
 import {
   processShadowSubmission,
@@ -11,6 +19,69 @@ import {
 } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
+
+const RATE_LIMIT_TEST_CONFIG: ApiSubmissionRateLimit = {
+  maxRequests: 2,
+  windowMs: 60_000,
+  keyStrategy: 'authenticated_identity',
+  store: 'memory',
+};
+
+test('rate limit store increments a shared counter and resets after window expiry', () => {
+  const store = new InMemoryApiRateLimitStore();
+
+  const first = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 1_000);
+  const second = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 2_000);
+  const third = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 3_000);
+  const reset = store.consume('submission:auth:submitter', RATE_LIMIT_TEST_CONFIG, 62_000);
+
+  assert.equal(first.exceeded, false);
+  assert.equal(first.remaining, 1);
+  assert.equal(second.exceeded, false);
+  assert.equal(second.remaining, 0);
+  assert.equal(third.exceeded, true);
+  assert.equal(third.remaining, 0);
+  assert.equal(reset.exceeded, false);
+  assert.equal(reset.remaining, 1);
+});
+
+test('rate limit RPC store shares state across simulated API instances', async () => {
+  const client = createFakeRateLimitRpcClient();
+  const instanceA = new SupabaseRpcApiRateLimitStore(client);
+  const instanceB = new SupabaseRpcApiRateLimitStore(client);
+  const sharedLimit: ApiSubmissionRateLimit = {
+    ...RATE_LIMIT_TEST_CONFIG,
+    store: 'supabase_rpc',
+  };
+
+  const first = await instanceA.consume('submission:auth:submitter', sharedLimit, 1_000);
+  const second = await instanceB.consume('submission:auth:submitter', sharedLimit, 2_000);
+  const third = await instanceA.consume('submission:auth:submitter', sharedLimit, 3_000);
+
+  assert.equal(first.exceeded, false);
+  assert.equal(second.exceeded, false);
+  assert.equal(third.exceeded, true);
+  assert.equal(third.remaining, 0);
+});
+
+test('rate limit RPC store fails closed when shared state is unavailable', async () => {
+  const client = {
+    async rpc() {
+      return { data: null, error: { message: 'function missing' } };
+    },
+  } as unknown as UnitTalkSupabaseClient;
+  const store = new SupabaseRpcApiRateLimitStore(client);
+
+  await assert.rejects(
+    () =>
+      store.consume(
+        'submission:auth:submitter',
+        { ...RATE_LIMIT_TEST_CONFIG, store: 'supabase_rpc' },
+        1_000,
+      ),
+    /Shared rate limit store unavailable/,
+  );
+});
 
 test('GET /health returns degraded 503 when using in-memory repositories', async () => {
   const server = createApiServer({
@@ -2179,3 +2250,33 @@ test('GET /api/settlements/recent returns empty array when no settlements', asyn
     server.close();
   }
 });
+
+function createFakeRateLimitRpcClient(): UnitTalkSupabaseClient {
+  const buckets = new Map<string, { count: number; resetAt: string }>();
+
+  return {
+    async rpc(_fn: string, args: Record<string, unknown>) {
+      const key = `${String(args['p_key'])}:${String(args['p_window_start'])}`;
+      const limit = Number(args['p_limit']);
+      const existing = buckets.get(key);
+      const bucket = existing ?? {
+        count: 0,
+        resetAt: String(args['p_window_expires_at']),
+      };
+      bucket.count += 1;
+      buckets.set(key, bucket);
+
+      return {
+        data: [
+          {
+            exceeded: bucket.count > limit,
+            limit,
+            remaining: Math.max(limit - bucket.count, 0),
+            reset_at: bucket.resetAt,
+          },
+        ],
+        error: null,
+      };
+    },
+  } as unknown as UnitTalkSupabaseClient;
+}

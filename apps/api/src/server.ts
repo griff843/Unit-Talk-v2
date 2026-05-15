@@ -2,16 +2,20 @@ import http, { type IncomingMessage, type ServerResponse } from 'node:http';
 import {
   assertProductionRuntimeConfig,
   createRuntimeConfigFailureLogFields,
+  isProductionLikeRuntime,
   loadEnvironment,
   type AppEnv,
   type RuntimeMode,
   RuntimeConfigError,
 } from '@unit-talk/config';
 import {
+  createDatabaseClientFromConnection,
   createDatabaseRepositoryBundle,
   createInMemoryRepositoryBundle,
   createServiceRoleDatabaseConnectionConfig,
+  type DatabaseConnectionConfig,
   type RepositoryBundle,
+  type UnitTalkSupabaseClient,
 } from '@unit-talk/db';
 import {
   buildRuntimeTruthReport,
@@ -103,7 +107,15 @@ export type ApiRuntimeMode = RuntimeMode;
 export interface ApiSubmissionRateLimit {
   maxRequests: number;
   windowMs: number;
+  keyStrategy: ApiRateLimitKeyStrategy;
+  store: ApiRateLimitStoreKind;
 }
+
+export type ApiRateLimitStoreKind = 'memory' | 'supabase_rpc';
+export type ApiRateLimitKeyStrategy =
+  | 'authenticated_identity'
+  | 'submitted_identity'
+  | 'ip';
 
 export interface ApiRuntimeDependencies {
   repositories: RepositoryBundle;
@@ -145,16 +157,20 @@ export interface ApiRateLimitResult {
 }
 
 export interface ApiRateLimitStore {
+  readonly kind?: ApiRateLimitStoreKind | 'shared';
   consume(
     key: string,
     limit: ApiSubmissionRateLimit,
     now: number,
-  ): ApiRateLimitResult;
+  ): ApiRateLimitResult | Promise<ApiRateLimitResult>;
 }
 
 const DEFAULT_BODY_LIMIT_BYTES = 64 * 1024;
 const DEFAULT_RATE_LIMIT_MAX_REQUESTS = 10;
 const DEFAULT_RATE_LIMIT_WINDOW_MS = 60_000;
+const DEFAULT_RATE_LIMIT_STORE: ApiRateLimitStoreKind = 'memory';
+const DEFAULT_RATE_LIMIT_KEY_STRATEGY: ApiRateLimitKeyStrategy =
+  'submitted_identity';
 const SUPABASE_REQUIRED_KEYS = [
   'SUPABASE_URL',
   'SUPABASE_ANON_KEY',
@@ -208,6 +224,7 @@ export function createApiRuntimeDependencies(
   }
   const runtimeMode = startupConfig.runtimeMode;
   const authConfig = loadAuthConfig(createAuthConfigEnv(environment));
+  const submissionRateLimit = readSubmissionRateLimit(environment);
   const metricsCollector = createMetricsCollector();
   const versionInfo = readRuntimeVersionInfo(environment);
   const lokiUrl = process.env.LOKI_URL?.trim();
@@ -226,6 +243,11 @@ export function createApiRuntimeDependencies(
     });
   const errorTracker =
     options.errorTracker ?? createErrorTracker({ service: 'api', logger });
+  assertProductionRateLimitConfig({
+    environment,
+    rateLimit: submissionRateLimit,
+    rateLimitStore: options.rateLimitStore,
+  });
 
   if (options.repositories) {
     return withRuntimeTruthStartupLog({
@@ -234,7 +256,7 @@ export function createApiRuntimeDependencies(
       runtimeMode,
       authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
-      submissionRateLimit: readSubmissionRateLimit(environment),
+      submissionRateLimit,
       logger,
       errorTracker,
       now: options.now ?? Date.now,
@@ -253,11 +275,13 @@ export function createApiRuntimeDependencies(
       runtimeMode,
       authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
-      submissionRateLimit: readSubmissionRateLimit(environment),
+      submissionRateLimit,
       logger,
       errorTracker,
       now: options.now ?? Date.now,
-      rateLimitStore: options.rateLimitStore ?? new InMemoryApiRateLimitStore(),
+      rateLimitStore:
+        options.rateLimitStore ??
+        createConfiguredRateLimitStore(submissionRateLimit, connection),
       metricsCollector,
       versionInfo,
     });
@@ -280,7 +304,7 @@ export function createApiRuntimeDependencies(
       runtimeMode,
       authConfig,
       bodyLimitBytes: readBodyLimitBytes(environment),
-      submissionRateLimit: readSubmissionRateLimit(environment),
+      submissionRateLimit,
       logger,
       errorTracker,
       now: options.now ?? Date.now,
@@ -619,7 +643,13 @@ export async function routeRequest(
   if (method === 'POST' && url.pathname === '/api/submissions') {
     const auth =
       (request as IncomingMessage & { auth?: AuthContext }).auth ?? null;
-    return handleSubmissions(request, response, runtime, requestLogger, auth);
+    return handleSubmissions(
+      request,
+      response,
+      runtime,
+      requestLogger,
+      auth,
+    );
   }
 
   const settleMatch =
@@ -926,7 +956,78 @@ function readSubmissionRateLimit(environment: AppEnv): ApiSubmissionRateLimit {
       ? windowMsOverride
       : DEFAULT_RATE_LIMIT_WINDOW_MS;
 
-  return { maxRequests, windowMs };
+  return {
+    maxRequests,
+    windowMs,
+    keyStrategy: readRateLimitKeyStrategy(environment),
+    store: readRateLimitStore(environment),
+  };
+}
+
+function readRateLimitStore(environment: AppEnv): ApiRateLimitStoreKind {
+  const configured =
+    environment.UNIT_TALK_API_RATE_LIMIT_STORE?.trim().toLowerCase() ??
+    DEFAULT_RATE_LIMIT_STORE;
+
+  if (configured === 'memory' || configured === 'supabase_rpc') {
+    return configured;
+  }
+
+  throw new Error('UNIT_TALK_API_RATE_LIMIT_STORE must be memory or supabase_rpc.');
+}
+
+function readRateLimitKeyStrategy(environment: AppEnv): ApiRateLimitKeyStrategy {
+  const configured =
+    environment.UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY?.trim().toLowerCase() ??
+    DEFAULT_RATE_LIMIT_KEY_STRATEGY;
+
+  if (
+    configured === 'authenticated_identity' ||
+    configured === 'submitted_identity' ||
+    configured === 'ip'
+  ) {
+    return configured;
+  }
+
+  throw new Error(
+    'UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY must be authenticated_identity, submitted_identity, or ip.',
+  );
+}
+
+function assertProductionRateLimitConfig(input: {
+  environment: AppEnv;
+  rateLimit: ApiSubmissionRateLimit;
+  rateLimitStore?: ApiRateLimitStore | undefined;
+}) {
+  if (!isProductionLikeRuntime(input.environment)) {
+    return;
+  }
+
+  const storeKind = input.rateLimitStore?.kind ?? input.rateLimit.store;
+  if (storeKind === 'memory') {
+    throw new Error(
+      'API production runtime requires shared rate limiting. Set UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc.',
+    );
+  }
+
+  if (input.rateLimit.keyStrategy === 'submitted_identity') {
+    throw new Error(
+      'API production runtime cannot key rate limits from submitted request body identity. Set UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity or ip.',
+    );
+  }
+}
+
+function createConfiguredRateLimitStore(
+  rateLimit: ApiSubmissionRateLimit,
+  connection: DatabaseConnectionConfig,
+): ApiRateLimitStore {
+  if (rateLimit.store === 'supabase_rpc') {
+    return new SupabaseRpcApiRateLimitStore(
+      createDatabaseClientFromConnection(connection),
+    );
+  }
+
+  return new InMemoryApiRateLimitStore();
 }
 
 function toApiFailure(error: unknown) {
@@ -966,7 +1067,8 @@ class ApiRequestError extends Error {
   }
 }
 
-class InMemoryApiRateLimitStore implements ApiRateLimitStore {
+export class InMemoryApiRateLimitStore implements ApiRateLimitStore {
+  readonly kind = 'memory' as const;
   #buckets = new Map<string, { count: number; resetAt: number }>();
 
   consume(
@@ -996,4 +1098,80 @@ class InMemoryApiRateLimitStore implements ApiRateLimitStore {
       resetAt: bucket.resetAt,
     };
   }
+}
+
+interface RateLimitRpcRow {
+  exceeded: boolean;
+  limit: number;
+  remaining: number;
+  reset_at: string;
+}
+
+export class SupabaseRpcApiRateLimitStore implements ApiRateLimitStore {
+  readonly kind = 'supabase_rpc' as const;
+
+  constructor(private readonly client: UnitTalkSupabaseClient) {}
+
+  async consume(
+    key: string,
+    limit: ApiSubmissionRateLimit,
+    now: number,
+  ): Promise<ApiRateLimitResult> {
+    const windowStartMs = Math.floor(now / limit.windowMs) * limit.windowMs;
+
+    /*
+     * Requires PM-approved migration before production enablement:
+     * create table rate_limit_buckets (key text not null, window_start timestamptz not null,
+     *   count integer not null default 0, expires_at timestamptz not null,
+     *   primary key (key, window_start));
+     * create function consume_rate_limit_bucket(...) atomically upserts count and returns
+     * exceeded, limit, remaining, reset_at.
+     */
+    const { data, error } = await this.client.rpc('consume_rate_limit_bucket', {
+      p_key: key,
+      p_window_start: new Date(windowStartMs).toISOString(),
+      p_window_expires_at: new Date(windowStartMs + limit.windowMs).toISOString(),
+      p_limit: limit.maxRequests,
+    });
+
+    if (error) {
+      throw new Error(`Shared rate limit store unavailable: ${error.message}`);
+    }
+
+    const row = normalizeRateLimitRpcRow(data);
+    if (!row) {
+      throw new Error('Shared rate limit store returned no result.');
+    }
+
+    return {
+      exceeded: row.exceeded,
+      limit: row.limit,
+      remaining: row.remaining,
+      resetAt: Date.parse(row.reset_at),
+    };
+  }
+}
+
+function normalizeRateLimitRpcRow(data: unknown): RateLimitRpcRow | null {
+  const row = Array.isArray(data) ? data[0] : data;
+  if (!row || typeof row !== 'object') {
+    return null;
+  }
+
+  const value = row as Partial<RateLimitRpcRow>;
+  if (
+    typeof value.exceeded !== 'boolean' ||
+    typeof value.limit !== 'number' ||
+    typeof value.remaining !== 'number' ||
+    typeof value.reset_at !== 'string'
+  ) {
+    return null;
+  }
+
+  return {
+    exceeded: value.exceeded,
+    limit: value.limit,
+    remaining: value.remaining,
+    reset_at: value.reset_at,
+  };
 }
