@@ -1,0 +1,13 @@
+{
+  "id": "UTV2-977",
+  "title": "Fix tier-c-path-guard.sh silent failure when Python 3 absent from Git Bash PATH",
+  "owner": "claude",
+  "status": "open",
+  "tier": "T3",
+  "branch": "griffadavi/utv2-977-fix-tier-c-path-guardsh-silent-failure-when-python-3-absent",
+  "file_scope_lock": [
+    ".claude/hooks/tier-c-path-guard.sh"
+  ],
+  "createdAt": "2026-05-15T17:14:00.000Z",
+  "updatedAt": "2026-05-15T17:14:00.000Z"
+}
