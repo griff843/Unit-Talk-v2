@@ -17,14 +17,23 @@
 # All three must be true; otherwise the standard Tier C warning applies.
 
 input=$(cat)
-file_path=$(echo "$input" | python3 -c "
+
+# Extract file_path from JSON input.
+# Prefer python3 for reliable parsing; fall back to grep+sed on systems where
+# python3 is absent from PATH (common on Windows Git Bash). Without this fallback
+# the hook would silently pass every Tier C write, defeating all protection.
+if command -v python3 >/dev/null 2>&1; then
+  file_path=$(echo "$input" | python3 -c "
 import json, sys
 try:
     d = json.load(sys.stdin)
     print(d.get('tool_input', {}).get('file_path', ''))
 except Exception:
     print('')
-" 2>/dev/null || echo "")
+" 2>/dev/null)
+else
+  file_path=$(echo "$input" | grep -o '"file_path":"[^"]*"' | head -1 | sed 's/"file_path":"//;s/"$//')
+fi
 
 [ -z "$file_path" ] && exit 0
 
