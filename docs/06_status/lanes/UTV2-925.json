@@ -16,10 +16,12 @@
     "apps/worker/src/replay-failed-delivery.ts",
     "apps/worker/src/replay-failed-delivery.test.ts"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-925/evidence.json"
+  ],
   "status": "in_review",
   "started_at": "2026-05-15T04:00:00.000Z",
-  "heartbeat_at": "2026-05-15T05:00:00.000Z",
+  "heartbeat_at": "2026-05-15T13:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
