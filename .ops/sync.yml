@@ -5,8 +5,6 @@ approval:
 entities:
   issues:
     - UTV2-958
-    - UTV2-924
-    - UTV2-931
   findings: []
   controls: []
   proofs: []

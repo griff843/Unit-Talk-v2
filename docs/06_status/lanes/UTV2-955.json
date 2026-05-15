@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-955",
+  "lane_type": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-955-lane-taxonomy-execution-contracts",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/governance/LANE_TAXONOMY.md",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-15T05:42:00Z",
+  "heartbeat_at": "2026-05-15T05:42:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
