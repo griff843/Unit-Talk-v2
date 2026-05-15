@@ -34,10 +34,10 @@
       "artifact_path": "docs/06_status/proof/UTV2-953/runtime-verification.md"
     }
   },
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-14T20:26:22.000Z",
-  "heartbeat_at": "2026-05-14T21:16:57.425Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-15T03:24:43.516Z",
+  "closed_at": "2026-05-15T03:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -49,6 +49,13 @@
       "failures": [
         "H4"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-15T03:24:43.516Z",
+      "verdict": "pass",
+      "merge_sha": "df82550f243ccb7a5b8b5b2c8a2175976362e825",
+      "failures": [],
       "runner": "manual"
     }
   ],
