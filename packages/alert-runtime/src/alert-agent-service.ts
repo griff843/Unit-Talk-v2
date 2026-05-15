@@ -1,4 +1,8 @@
 import { createHash } from 'node:crypto';
+import {
+  alertDetectionMarketTypes,
+  alertDetectionTiers,
+} from '@unit-talk/db';
 import type {
   AlertDetectionCreateInput,
   AlertDetectionMarketType,
@@ -20,12 +24,18 @@ const ACTIVE_ALERT_SPORT_SET: ReadonlySet<string> = new Set(ACTIVE_ALERT_SPORTS)
 const DEFAULT_ALERT_VELOCITY_WINDOW_MINUTES = 15;
 const DEFAULT_ALERT_STEAM_MIN_BOOKS = 3;
 const DEFAULT_ALERT_STEAM_WINDOW_MINUTES = 10;
+const ALERT_DETECTION_TIER_SET: ReadonlySet<AlertDetectionTier> = new Set(alertDetectionTiers);
+const ALERT_DETECTION_MARKET_TYPE_SET: ReadonlySet<AlertDetectionMarketType> = new Set(
+  alertDetectionMarketTypes,
+);
 
 const tierRank: Record<AlertDetectionTier, number> = {
   watch: 1,
   notable: 2,
   'alert-worthy': 3,
 };
+
+type AlertAgentLogger = Pick<Console, 'error'>;
 
 export interface AlertMarketThresholds {
   watch: number;
@@ -87,6 +97,7 @@ export interface AlertAgentConfig {
   minTier: AlertDetectionTier;
   thresholds: AlertThresholdConfig;
   now?: string;
+  logger?: AlertAgentLogger;
 }
 
 export interface RunAlertDetectionPassResult {
@@ -416,9 +427,35 @@ export async function runAlertDetectionPass(
         signal.marketKey,
         firstMoverWindowStartIso,
       )) ?? signal.bookmakerKey;
-    const created = await repositories.alertDetections.saveDetection(
-      buildAlertDetectionCreateInput(event.id, signal, idempotencyKey, firstMoverBook),
+    const detectionInput = buildAlertDetectionCreateInput(
+      event.id,
+      signal,
+      idempotencyKey,
+      firstMoverBook,
     );
+    const validationFailure = validateAlertDetectionCreateInput(detectionInput);
+    if (validationFailure) {
+      resolved.logger?.error(
+        JSON.stringify({
+          service: 'alert-agent',
+          event: 'alert_agent.validation_failed',
+          reason: validationFailure,
+          detection: {
+            eventId: detectionInput.eventId,
+            participantId: detectionInput.participantId ?? null,
+            marketKey: detectionInput.marketKey,
+            bookmakerKey: detectionInput.bookmakerKey,
+            marketType: detectionInput.marketType,
+            tier: detectionInput.tier,
+            baselineSnapshotAt: detectionInput.baselineSnapshotAt,
+            currentSnapshotAt: detectionInput.currentSnapshotAt,
+          },
+        }),
+      );
+      continue;
+    }
+
+    const created = await repositories.alertDetections.saveDetection(detectionInput);
     if (!created) {
       duplicateSignals += 1;
       continue;
@@ -498,6 +535,81 @@ function buildAlertDetectionCreateInput(
     tier: signal.tier,
     metadata: signal.metadata,
   };
+}
+
+function validateAlertDetectionCreateInput(input: AlertDetectionCreateInput): string | null {
+  if (!isNonEmptyString(input.idempotencyKey)) {
+    return 'idempotencyKey must be a non-empty string';
+  }
+  if (!isNonEmptyString(input.eventId)) {
+    return 'eventId must be a non-empty string';
+  }
+  if (input.participantId !== undefined && input.participantId !== null && !isNonEmptyString(input.participantId)) {
+    return 'participantId must be null, undefined, or a non-empty string';
+  }
+  if (!isNonEmptyString(input.marketKey)) {
+    return 'marketKey must be a non-empty string';
+  }
+  if (!isNonEmptyString(input.bookmakerKey)) {
+    return 'bookmakerKey must be a non-empty string';
+  }
+  if (input.firstMoverBook !== undefined && input.firstMoverBook !== null && !isNonEmptyString(input.firstMoverBook)) {
+    return 'firstMoverBook must be null, undefined, or a non-empty string';
+  }
+  if (!isIsoTimestamp(input.baselineSnapshotAt)) {
+    return 'baselineSnapshotAt must be a valid ISO timestamp';
+  }
+  if (!isIsoTimestamp(input.currentSnapshotAt)) {
+    return 'currentSnapshotAt must be a valid ISO timestamp';
+  }
+  if (!Number.isFinite(input.oldLine)) {
+    return 'oldLine must be a finite number';
+  }
+  if (!Number.isFinite(input.newLine)) {
+    return 'newLine must be a finite number';
+  }
+  if (!Number.isFinite(input.lineChange)) {
+    return 'lineChange must be a finite number';
+  }
+  if (!Number.isFinite(input.lineChangeAbs)) {
+    return 'lineChangeAbs must be a finite number';
+  }
+  if (input.velocity !== undefined && input.velocity !== null && !Number.isFinite(input.velocity)) {
+    return 'velocity must be null, undefined, or a finite number';
+  }
+  if (!Number.isFinite(input.timeElapsedMinutes) || input.timeElapsedMinutes < 0) {
+    return 'timeElapsedMinutes must be a non-negative finite number';
+  }
+  if (input.direction !== 'up' && input.direction !== 'down') {
+    return 'direction must be up or down';
+  }
+  if (!ALERT_DETECTION_MARKET_TYPE_SET.has(input.marketType)) {
+    return 'marketType must be a valid AlertDetection market type';
+  }
+  if (!ALERT_DETECTION_TIER_SET.has(input.tier)) {
+    return 'tier must be a valid AlertDetection tier';
+  }
+  if (
+    input.notifiedChannels !== undefined &&
+    input.notifiedChannels !== null &&
+    !input.notifiedChannels.every(isNonEmptyString)
+  ) {
+    return 'notifiedChannels must contain only non-empty strings';
+  }
+  if (input.notifiedAt !== undefined && input.notifiedAt !== null && !isIsoTimestamp(input.notifiedAt)) {
+    return 'notifiedAt must be null, undefined, or a valid ISO timestamp';
+  }
+  if (
+    input.cooldownExpiresAt !== undefined &&
+    input.cooldownExpiresAt !== null &&
+    !isIsoTimestamp(input.cooldownExpiresAt)
+  ) {
+    return 'cooldownExpiresAt must be null, undefined, or a valid ISO timestamp';
+  }
+  if (!isPlainObject(input.metadata)) {
+    return 'metadata must be a plain object';
+  }
+  return null;
 }
 
 async function markSteamIfNeeded(
@@ -724,4 +836,16 @@ function normalizeTier(rawValue: string | undefined): AlertDetectionTier {
 function roundTo(value: number, decimals: number) {
   const multiplier = 10 ** decimals;
   return Math.round(value * multiplier) / multiplier;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim().length > 0;
+}
+
+function isIsoTimestamp(value: unknown): value is string {
+  return isNonEmptyString(value) && Number.isFinite(Date.parse(value));
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
