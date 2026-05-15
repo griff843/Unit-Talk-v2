@@ -7,7 +7,7 @@
   "worktree_path": ".",
   "branch": "claude/utv2-962-registry-reconciliation",
   "base_branch": "main",
-  "commit_sha": "fc3da35c",
+  "commit_sha": "5071e807",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/683",
   "files_changed": [
     "docs/governance/REGISTRY_RECONCILIATION.md",
@@ -22,13 +22,21 @@
     ".ops/sync/UTV2-970.yml"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-15T15:43:00.000Z",
-  "heartbeat_at": "2026-05-15T15:50:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-15T16:50:00.000Z",
+  "closed_at": "2026-05-15T16:50:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-15T16:50:00.000Z",
+      "verdict": "pass",
+      "merge_sha": "5071e807",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
   "reopen_history": []
 }
