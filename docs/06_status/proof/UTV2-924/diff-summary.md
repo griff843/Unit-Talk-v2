@@ -33,3 +33,6 @@ Services had no structured way to propagate W3C traceparent headers or initializ
 - 178/178 tests pass (full suite)
 - 32/32 observability package tests pass
 - `pnpm type-check` green
+
+## Merge
+Squash-merged to main as SHA `3fff22dc1768bede0879220e75bf2cfe946c0199` (PR #675, merged 2026-05-15T11:54:26Z)

@@ -1,7 +1,10 @@
 # Verification Log — UTV2-927: Staging Environment Parity
 
 ## Branch
-`codex/utv2-927-staging-environment-parity` — SHA `407bcae56d335bb7f8e55417df35950006f0cfa8`
+`codex/utv2-927-staging-environment-parity` — branch SHA `407bcae56d335bb7f8e55417df35950006f0cfa8`
+
+## Merge
+Squash-merged to main as SHA `15b37b6de5cb23bdbc0e094a2209fa39e1271508` (PR #676, merged 2026-05-15T12:04:24Z)
 
 ## Verification Steps
 

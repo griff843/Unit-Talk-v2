@@ -1,7 +1,10 @@
 # Verification Log — UTV2-924: OpenTelemetry Foundation
 
 ## Branch
-`codex/utv2-924-opentelemetry-foundation` — SHA `c292fb1b6fdd228dd17d65b872c6d2e8ac410e2d`
+`codex/utv2-924-opentelemetry-foundation` — branch SHA `c292fb1b6fdd228dd17d65b872c6d2e8ac410e2d`
+
+## Merge
+Squash-merged to main as SHA `3fff22dc1768bede0879220e75bf2cfe946c0199` (PR #675, merged 2026-05-15T11:54:26Z)
 
 ## Verification Steps
 

@@ -39,3 +39,6 @@ Production deploy confidence was weak because staging had no codified parity con
 - 183/183 tests pass (5 new staging parity tests)
 - `pnpm type-check` green
 - Staging parity is now a codified, testable contract
+
+## Merge
+Squash-merged to main as SHA `15b37b6de5cb23bdbc0e094a2209fa39e1271508` (PR #676, merged 2026-05-15T12:04:24Z)

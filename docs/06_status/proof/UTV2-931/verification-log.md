@@ -1,7 +1,10 @@
 # Verification Log — UTV2-931: Replace In-Memory Rate Limiting
 
 ## Branch
-`codex/utv2-931-replace-in-memory-rate-limiting` — SHA `18b9e710d8a97b37fc6b691188aa5c0e4c0c21e5`
+`codex/utv2-931-replace-in-memory-rate-limiting` — branch SHA `18b9e710d8a97b37fc6b691188aa5c0e4c0c21e5`
+
+## Merge
+Squash-merged to main as SHA `3932f609fec041ec9134d0a5c485ecb67a1aa352` (PR #674, merged 2026-05-15T12:00:18Z)
 
 ## Verification Steps
 

@@ -31,3 +31,6 @@ Rate limiting on `/api/submissions` was in-memory and per-process. Under horizon
 - Configurable key strategy: `UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=submitted_identity` (default)
 - Production assertion prevents accidental in-memory store in `fail_closed` runtime
 - 178/178 tests pass; `pnpm type-check` green
+
+## Merge
+Squash-merged to main as SHA `3932f609fec041ec9134d0a5c485ecb67a1aa352` (PR #674, merged 2026-05-15T12:00:18Z)
