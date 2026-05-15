@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-782",
-  "lane_type": "claude",
+  "lane_type": "verification",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-782-walpitr-restore-proof",
@@ -31,5 +31,6 @@
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "claude"
 }

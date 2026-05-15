@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-942",
-  "lane_type": "codex-cli",
+  "lane_type": "runtime",
   "tier": "T2",
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-942-rv-002-worker-failure-recovery",
   "branch": "codex/utv2-942-rv-002-worker-failure-recovery",
@@ -25,5 +25,6 @@
   "preflight_token": ".out/ops/preflight/codex/utv2-942-rv-002-worker-failure-recovery.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "codex-cli"
 }

@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-776",
-  "lane_type": "codex",
+  "lane_type": "migration",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-776-supabase-hetzner-comparison-mode",
@@ -21,5 +21,6 @@
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "codex-cli"
 }

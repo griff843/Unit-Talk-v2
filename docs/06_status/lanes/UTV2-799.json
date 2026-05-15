@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-799",
-  "lane_type": "codex",
+  "lane_type": "governance",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-799-backup-rpo-rto-policy",
@@ -21,5 +21,6 @@
   "preflight_token": "dispatch-auto",
   "created_by": "codex",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "codex-cli"
 }

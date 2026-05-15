@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-944",
-  "lane_type": "codex",
+  "lane_type": "runtime",
   "tier": "T1",
   "worktree_path": ".",
   "branch": "codex/utv2-944-rv-004-replay-failed-delivery",
@@ -26,5 +26,6 @@
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "codex-cli"
 }

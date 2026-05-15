@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-920",
-  "lane_type": "codex-cli",
+  "lane_type": "runtime",
   "tier": "T1",
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-920-db-invariant-rpc-guards",
   "branch": "codex/utv2-920-db-invariant-rpc-guards",
@@ -30,5 +30,6 @@
   "preflight_token": ".out/ops/preflight/codex/utv2-920-db-invariant-rpc-guards.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "codex-cli"
 }

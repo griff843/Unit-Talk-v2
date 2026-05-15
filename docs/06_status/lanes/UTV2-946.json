@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-946",
-  "lane_type": "codex-cli",
+  "lane_type": "verification",
   "tier": "T2",
   "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-946-rv-006-config-chaos-testing",
   "branch": "codex/utv2-946-rv-006-config-chaos-testing",
@@ -32,5 +32,6 @@
   "preflight_token": ".out/ops/preflight/codex/utv2-946-rv-006-config-chaos-testing.json",
   "created_by": "codex-cli",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "codex-cli"
 }

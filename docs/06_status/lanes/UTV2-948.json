@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-948",
-  "lane_type": "claude",
+  "lane_type": "runtime",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "griffadavi/utv2-948-p0-protocol-enforcement",
@@ -41,7 +41,7 @@
   "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": [],
-  "notes": "UTV2-948 is bootstrap for the P0 Runtime Hardening Merge Protocol. Ships through its own protocol \u00e2\u20ac\u201d Claude implementation + Claude critique + PM approval + runtime verification + manual merge. Dogfood: this manifest's p0_protocol block is populated as artifacts are produced.",
+  "notes": "UTV2-948 is bootstrap for the P0 Runtime Hardening Merge Protocol. Ships through its own protocol â€” Claude implementation + Claude critique + PM approval + runtime verification + manual merge. Dogfood: this manifest's p0_protocol block is populated as artifacts are produced.",
   "p0_protocol": {
     "required": true,
     "codex_implementation": {
@@ -62,5 +62,6 @@
       "result": "pass"
     },
     "merge_type": "manual"
-  }
+  },
+  "executor": "claude"
 }

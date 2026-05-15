@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-789",
-  "lane_type": "claude",
+  "lane_type": "runtime",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-789-least-privilege-postgres-roles",
@@ -37,5 +37,6 @@
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [],
-  "reopen_history": []
+  "reopen_history": [],
+  "executor": "claude"
 }

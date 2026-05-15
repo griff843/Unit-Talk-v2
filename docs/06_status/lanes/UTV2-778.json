@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-778",
-  "lane_type": "codex",
+  "lane_type": "runtime",
   "tier": "T1",
   "branch": "codex/utv2-778-disk-growth-alerts",
   "base_branch": "main",
@@ -10,5 +10,6 @@
   "started_at": "2026-05-03T05:00:00.000Z",
   "heartbeat_at": "2026-05-03T05:00:00.000Z",
   "preflight_token": "dispatch-auto",
-  "created_by": "codex"
+  "created_by": "codex",
+  "executor": "codex-cli"
 }

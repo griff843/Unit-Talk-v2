@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-923",
+  "lane_type": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:\\Dev\\Unit-Talk-v2-main\\.out\\worktrees\\codex__utv2-923-remove-runtime-ambiguity",
+  "branch": "codex/utv2-923-remove-runtime-ambiguity",
+  "base_branch": "main",
+  "commit_sha": "32a76705db9993f06d4b0dadf1c149b6d7d5f3df",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/661",
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/server.test.ts",
+    "apps/api/src/server.ts",
+    "apps/command-center/src/app/api-health/page.tsx",
+    "apps/command-center/src/components/ApiHealthMonitoring.tsx",
+    "apps/command-center/src/lib/data/api-health.test.ts",
+    "apps/command-center/src/lib/data/api-health.ts",
+    "apps/command-center/src/lib/server-api.test.ts",
+    "apps/command-center/src/lib/server-api.ts",
+    "apps/ingestor/src/index.ts",
+    "apps/ingestor/src/ingestor.test.ts",
+    "apps/worker/src/runtime.ts",
+    "apps/worker/src/worker-runtime.test.ts",
+    "packages/observability/src/index.test.ts",
+    "packages/observability/src/index.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-923/diff-summary.md",
+    "docs/06_status/proof/UTV2-923/claude-critique.md",
+    "docs/06_status/proof/UTV2-923/runtime-verification.md"
+  ],
+  "p0_protocol": {
+    "required": true,
+    "codex_implementation": {
+      "recorded": true,
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/661"
+    },
+    "claude_critique": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-923/claude-critique.md"
+    },
+    "human_approval": {
+      "recorded": false,
+      "pm_verdict_url": null
+    },
+    "runtime_verification": {
+      "recorded": true,
+      "artifact_path": "docs/06_status/proof/UTV2-923/runtime-verification.md",
+      "result": "pass"
+    },
+    "merge_type": "manual"
+  },
+  "status": "done",
+  "started_at": "2026-05-13T23:05:54.192Z",
+  "heartbeat_at": "2026-05-14T04:42:31.380Z",
+  "closed_at": "2026-05-14T04:42:31.380Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-923-remove-runtime-ambiguity.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-14T04:16:42.936Z",
+      "verdict": "fail",
+      "merge_sha": "32a76705db9993f06d4b0dadf1c149b6d7d5f3df",
+      "failures": [
+        "G4",
+        "P3",
+        "H4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-14T04:20:57.460Z",
+      "verdict": "fail",
+      "merge_sha": "32a76705db9993f06d4b0dadf1c149b6d7d5f3df",
+      "failures": [
+        "G4",
+        "H4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-14T04:41:37.346Z",
+      "verdict": "pass",
+      "merge_sha": "32a76705db9993f06d4b0dadf1c149b6d7d5f3df",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-14T04:42:29.159Z",
+      "verdict": "pass",
+      "merge_sha": "32a76705db9993f06d4b0dadf1c149b6d7d5f3df",
+      "failures": [],
+      "runner": "ops:lane:close"
+    }
+  ],
+  "reopen_history": []
+}
