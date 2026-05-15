@@ -4,9 +4,9 @@ approval:
   skip_sync_required: false
 entities:
   issues:
+    - UTV2-955
     - UTV2-924
     - UTV2-931
-    - UTV2-955
   findings: []
   controls: []
   proofs: []
