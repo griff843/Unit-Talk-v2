@@ -1,0 +1,143 @@
+name: Staging Deploy
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: 'Container image tag to deploy to staging. Defaults to the workflow SHA.'
+        required: false
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+concurrency:
+  group: staging-deploy
+  cancel-in-progress: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ghcr.io/griff843/unit-talk-v2
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_STAGING_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_STAGING_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_STAGING_DEPLOY_PATH }}
+  DEPLOY_HEALTH_URL: ${{ secrets.UNIT_TALK_STAGING_DEPLOY_HEALTH_URL }}
+
+jobs:
+  parity-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Write staging gate env
+        run: |
+          cat <<'EOF' > local.env
+          NODE_ENV=production
+          UNIT_TALK_APP_ENV=staging
+          SUPABASE_URL=${{ secrets.STAGING_SUPABASE_URL }}
+          SUPABASE_ANON_KEY=${{ secrets.STAGING_SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY=${{ secrets.STAGING_SUPABASE_SERVICE_ROLE_KEY }}
+          UNIT_TALK_API_RUNTIME_MODE=fail_closed
+          UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed
+          UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed
+          UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed
+          UNIT_TALK_INGESTOR_AUTORUN=true
+          UNIT_TALK_WORKER_AUTORUN=true
+          UNIT_TALK_WORKER_DRY_RUN=false
+          UNIT_TALK_WORKER_MAX_CYCLES=0
+          UNIT_TALK_INGESTOR_MAX_CYCLES=2
+          UNIT_TALK_INGESTOR_API_KEY=${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          UNIT_TALK_BOT_API_KEY=${{ secrets.UNIT_TALK_BOT_API_KEY }}
+          EOF
+
+      - name: Staging parity check
+        run: npx tsx scripts/staging-check.ts
+
+  build:
+    needs: parity-check
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [api, worker, ingestor, discord-bot]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+
+      - name: Build and push image
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          docker build --target "${{ matrix.service }}" \
+            --tag "$IMAGE_NAMESPACE/${{ matrix.service }}:$IMAGE_TAG" \
+            --tag "$IMAGE_NAMESPACE/${{ matrix.service }}:${{ github.sha }}-staging" \
+            .
+          docker push "$IMAGE_NAMESPACE/${{ matrix.service }}:$IMAGE_TAG"
+          docker push "$IMAGE_NAMESPACE/${{ matrix.service }}:${{ github.sha }}-staging"
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate staging deploy secrets
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_HEALTH_URL"
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_STAGING_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload staging compose manifest
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
+          scp deploy/staging/docker-compose.yml "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/docker-compose.yml"
+
+      - name: Release staging containers
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -eu
+            cd '$DEPLOY_PATH'
+            export UNIT_TALK_IMAGE_TAG='$IMAGE_TAG'
+            docker compose pull
+            docker compose up -d --remove-orphans
+          "
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$DEPLOY_HEALTH_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
