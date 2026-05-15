@@ -32,14 +32,22 @@
     "docs/06_status/proof/UTV2-948/claude-critique.md",
     "docs/06_status/proof/UTV2-948/runtime-verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-12T14:30:00.000Z",
-  "heartbeat_at": "2026-05-12T18:05:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-12T18:01:31Z",
+  "closed_at": "2026-05-12T18:01:31Z",
   "blocked_by": [],
   "preflight_token": "manual-dogfood-utv2-948",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.701Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": "0cb5ea39015c70e89b0fac28e10711b5cb3caa1d",
+      "note": "PR #641 merged; filled missing closed_at."
+    }
+  ],
   "reopen_history": [],
   "notes": "UTV2-948 is bootstrap for the P0 Runtime Hardening Merge Protocol. Ships through its own protocol â€” Claude implementation + Claude critique + PM approval + runtime verification + manual merge. Dogfood: this manifest's p0_protocol block is populated as artifacts are produced.",
   "p0_protocol": {

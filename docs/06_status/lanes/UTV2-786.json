@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-786",
-  "lane_type": "runtime",
+  "lane_type": "claude",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-786-provisioning-checklist",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/570",
   "files_changed": [],
   "file_scope_lock": [
     "docs/05_operations/HETZNER_PROVISIONING_CHECKLIST.md"
@@ -15,14 +15,21 @@
   "expected_proof_paths": [
     "docs/05_operations/HETZNER_PROVISIONING_CHECKLIST.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-02T00:00:00.000Z",
-  "heartbeat_at": "2026-05-02T00:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-03T17:32:17Z",
+  "closed_at": "2026-05-03T17:32:17Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
-  "reopen_history": [],
-  "executor": "claude"
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.692Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": null,
+      "note": "PR #570 merged; reconciled stale active manifest."
+    }
+  ],
+  "reopen_history": []
 }

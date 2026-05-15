@@ -25,10 +25,18 @@
   "status": "closed",
   "started_at": "2026-04-24T06:44:26.116Z",
   "heartbeat_at": "2026-04-24T06:44:26.116Z",
-  "closed_at": null,
+  "closed_at": "2026-04-24T06:44:26.116Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-746-replay-audit-scorecard.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.705Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": null,
+      "note": "Manifest already closed without PR; filled closed_at from heartbeat_at."
+    }
+  ],
   "reopen_history": []
 }

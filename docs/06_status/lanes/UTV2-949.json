@@ -29,12 +29,20 @@
   ],
   "status": "done",
   "started_at": "2026-05-13T00:00:00.000Z",
-  "heartbeat_at": "2026-05-13T00:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-13T12:00:35Z",
+  "closed_at": "2026-05-13T12:00:35Z",
   "blocked_by": [],
   "preflight_token": "dispatch-approval-2026-05-13",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.703Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": "86a45f4a1df837bb9e6bc18317dd954ff1e4c031",
+      "note": "PR #653 merged; filled missing closed_at."
+    }
+  ],
   "reopen_history": [],
   "notes": "T2 P0 observability. Codex implements; Claude critique required; PM approval required; runtime verification via synthetic failing PR; no auto-merge. Blocker UTV2-948 shipped. Scope: p0-protocol.yml structured events + ops:p0-events script + daily-digest P0 section + formatP0Failures helper.",
   "p0_protocol": {
