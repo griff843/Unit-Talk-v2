@@ -1,15 +1,25 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-778",
-  "lane_type": "runtime",
+  "lane_type": "codex",
   "tier": "T1",
   "branch": "codex/utv2-778-disk-growth-alerts",
   "base_branch": "main",
   "file_scope_lock": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-03T05:00:00.000Z",
-  "heartbeat_at": "2026-05-03T05:00:00.000Z",
+  "heartbeat_at": "2026-05-03T17:38:06Z",
   "preflight_token": "dispatch-auto",
   "created_by": "codex",
-  "executor": "codex-cli"
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/569",
+  "closed_at": "2026-05-03T17:38:06Z",
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.688Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": null,
+      "note": "PR #569 merged; reconciled stale active manifest."
+    }
+  ]
 }

@@ -11,6 +11,8 @@ This file is read by Codex before every task. Follow every rule here exactly.
 
 **Execution model:** All Codex lanes run on the **main checkout** (`C:\Dev\Unit-Talk-v2-main`). Do not expect a separate worktree directory — the branch is checked out directly on the main working tree. The `worktree_path` in your lane manifest will always be `"."`. This applies regardless of file scope (see `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`).
 
+**MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Use Linear MCP (`linear`) for Linear issue lookup/update workflows when available; fall back to the repo CLI commands only when MCP is unavailable.
+
 ---
 
 ## Package Manager + Commands

@@ -24,7 +24,7 @@
   "status": "closed",
   "started_at": "2026-04-24T06:30:40.654Z",
   "heartbeat_at": "2026-04-24T06:50:46.722Z",
-  "closed_at": null,
+  "closed_at": "2026-04-24T06:50:46.722Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-749-board-pick-writer-scheduler.json",
   "created_by": "claude",
@@ -39,6 +39,13 @@
         "L4"
       ],
       "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-14T22:47:46.706Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": null,
+      "note": "Manifest already closed without PR; filled closed_at from heartbeat_at."
     }
   ],
   "reopen_history": []

@@ -36,12 +36,20 @@
   ],
   "status": "done",
   "started_at": "2026-05-13T00:00:00.000Z",
-  "heartbeat_at": "2026-05-13T00:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-13T12:04:01Z",
+  "closed_at": "2026-05-13T12:04:01Z",
   "blocked_by": [],
   "preflight_token": "dispatch-approval-2026-05-13",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.700Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": "9915417b442c21098de58ed83c09c618de743bc0",
+      "note": "PR #654 merged; filled missing closed_at."
+    }
+  ],
   "reopen_history": [],
   "notes": "T1 P0 service-to-service auth. Codex implements; Claude critique required; PM approval required; runtime auth-flow verification required; no auto-merge. Blockers UTV2-948 + UTV2-915 shipped. Gap: ingestor triggerGradingRun() and discord-bot createApiClient() send no auth headers; command-center already wired.",
   "p0_protocol": {

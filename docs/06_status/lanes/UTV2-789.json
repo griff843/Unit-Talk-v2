@@ -1,13 +1,13 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-789",
-  "lane_type": "runtime",
+  "lane_type": "claude",
   "tier": "T1",
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-789-least-privilege-postgres-roles",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/515",
   "files_changed": [
     "scripts/postgres/roles.sql",
     "scripts/postgres/provision-roles.sh",
@@ -29,14 +29,21 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-789.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-04-30T18:10:00.000Z",
-  "heartbeat_at": "2026-04-30T18:10:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-03T19:17:11Z",
+  "closed_at": "2026-05-03T19:17:11Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
-  "truth_check_history": [],
-  "reopen_history": [],
-  "executor": "claude"
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-14T22:47:46.694Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
+      "merge_sha": null,
+      "note": "PR #515 merged; reconciled stale active manifest."
+    }
+  ],
+  "reopen_history": []
 }

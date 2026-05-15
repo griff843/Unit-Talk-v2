@@ -36,8 +36,8 @@
   },
   "status": "done",
   "started_at": "2026-05-14T20:26:22.000Z",
-  "heartbeat_at": "2026-05-15T03:24:43.516Z",
-  "closed_at": "2026-05-15T03:30:00.000Z",
+  "heartbeat_at": "2026-05-14T21:11:10Z",
+  "closed_at": "2026-05-14T21:11:10Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
@@ -52,11 +52,11 @@
       "runner": "manual"
     },
     {
-      "checked_at": "2026-05-15T03:24:43.516Z",
-      "verdict": "pass",
+      "timestamp": "2026-05-14T22:47:46.704Z",
+      "runner": "manual-reconciliation",
+      "verdict": "PASS",
       "merge_sha": "df82550f243ccb7a5b8b5b2c8a2175976362e825",
-      "failures": [],
-      "runner": "manual"
+      "note": "PR #670 merged; filled missing closed_at."
     }
   ],
   "reopen_history": []

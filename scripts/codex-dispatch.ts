@@ -55,6 +55,8 @@ type ChildResult = {
   stderr: string;
 };
 
+type CodexNotifyEvent = 'complete' | 'fail' | 'input-needed';
+
 const CLAUDE_DIR = path.join(ROOT, '.claude');
 const CODEX_QUEUE_DIR = path.join(CLAUDE_DIR, 'codex-queue');
 const EXECUTION_TRUTH_MODEL_PATH = path.join(ROOT, 'docs', '05_operations', 'EXECUTION_TRUTH_MODEL.md');
@@ -93,6 +95,54 @@ function runPnpm(args: string[]): ChildResult {
     stdout: (child.stdout ?? '').trim(),
     stderr: (child.stderr ?? '').trim(),
   };
+}
+
+function notifyCodexDispatch(event: CodexNotifyEvent, detail: string): void {
+  const webhookUrl = loadEnvironment().DISCORD_OPS_WEBHOOK_URL?.trim();
+  if (!webhookUrl) {
+    return;
+  }
+
+  const args = [
+    'tsx',
+    'scripts/agent-notify/notify.ts',
+    `--event=${event}`,
+    '--agent=codex',
+    `--detail=${detail}`,
+  ];
+
+  const child =
+    process.platform === 'win32'
+      ? spawnSync('cmd.exe', ['/d', '/s', '/c', 'npx', ...args], {
+          cwd: ROOT,
+          env: { ...process.env, DISCORD_OPS_WEBHOOK_URL: webhookUrl },
+          stdio: 'inherit',
+        })
+      : spawnSync('npx', args, {
+          cwd: ROOT,
+          env: { ...process.env, DISCORD_OPS_WEBHOOK_URL: webhookUrl },
+          stdio: 'inherit',
+        });
+
+  if (child.error) {
+    process.stderr.write(`codex-dispatch notify skipped: ${child.error.message}\n`);
+  }
+}
+
+function dispatchNotifyDetail(result: DispatchResult): string {
+  const parts = [
+    result.issue_id ? `issue=${result.issue_id}` : undefined,
+    result.branch ? `branch=${result.branch}` : undefined,
+    `code=${result.code}`,
+    result.message,
+  ];
+  return parts.filter((part): part is string => Boolean(part)).join(' | ');
+}
+
+function notificationEventForFailure(result: DispatchResult): CodexNotifyEvent {
+  return result.code === 'missing_linear_token' || result.message.toLowerCase().includes('missing required')
+    ? 'input-needed'
+    : 'fail';
 }
 
 async function fetchIssue(identifier: string, apiKey: string): Promise<LinearIssue> {
@@ -379,6 +429,17 @@ async function main(): Promise<number> {
         if (preflight.stderr) {
           process.stderr.write(`${preflight.stderr}\n`);
         }
+        notifyCodexDispatch(
+          'fail',
+          dispatchNotifyDetail({
+            ok: false,
+            code: 'preflight_failed',
+            message: `Preflight failed with exit code ${preflight.status}`,
+            issue_id: issueId,
+            tier,
+            branch,
+          }),
+        );
         return preflight.status;
       }
       if (!dryRun) {
@@ -409,6 +470,7 @@ async function main(): Promise<number> {
         process.stderr.write(`Branch: ${branch}\n`);
         process.stderr.write(`Preflight: ${preflightRelativePath}\n`);
       }
+      notifyCodexDispatch('complete', dispatchNotifyDetail(result));
       return 0;
     }
 
@@ -420,6 +482,17 @@ async function main(): Promise<number> {
       if (laneStart.stderr) {
         process.stderr.write(`${laneStart.stderr}\n`);
       }
+      notifyCodexDispatch(
+        'fail',
+        dispatchNotifyDetail({
+          ok: false,
+          code: 'lane_start_failed',
+          message: `lane-start failed with exit code ${laneStart.status}`,
+          issue_id: issueId,
+          tier,
+          branch,
+        }),
+      );
       return laneStart.status;
     }
 
@@ -473,6 +546,7 @@ async function main(): Promise<number> {
       } else {
         process.stderr.write(`${result.message}\n`);
       }
+      notifyCodexDispatch('fail', dispatchNotifyDetail(result));
       return 1;
     }
 
@@ -499,6 +573,7 @@ async function main(): Promise<number> {
       process.stderr.write(`Packet: ${relativeToRoot(packetPath)}\n`);
       process.stderr.write(`Manifest: ${manifestPath}\n`);
     }
+    notifyCodexDispatch('complete', dispatchNotifyDetail(result));
     return 0;
   } catch (error) {
     const dispatched = error as { dispatch_code?: number; dispatch_result?: DispatchResult };
@@ -517,6 +592,7 @@ async function main(): Promise<number> {
     } else {
       process.stderr.write(`${result.message}\n`);
     }
+    notifyCodexDispatch(notificationEventForFailure(result), dispatchNotifyDetail(result));
     return dispatched.dispatch_code ?? 1;
   }
 }
