@@ -1,0 +1,16 @@
+{
+  "id": "UTV2-976",
+  "title": "Add ops:reconcile — scheduled stranded lane detection referenced but missing",
+  "owner": "claude",
+  "status": "open",
+  "tier": "T2",
+  "branch": "griffadavi/utv2-976-add-opsreconcile-scheduled-stranded-lane-detection",
+  "file_scope_lock": [
+    "scripts/ops/reconcile.ts",
+    "scripts/ops/reconcile.test.ts",
+    ".github/workflows/ops-reconcile.yml",
+    "package.json"
+  ],
+  "createdAt": "2026-05-15T17:33:00.000Z",
+  "updatedAt": "2026-05-15T17:33:00.000Z"
+}
