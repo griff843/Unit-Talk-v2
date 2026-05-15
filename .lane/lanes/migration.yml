@@ -1,0 +1,24 @@
+schema_version: 1
+lane_id: migration
+lane_type: migration
+allowed_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+  - packages/db/**
+  - scripts/**
+  - .lane/migration-lock.yml
+forbidden_path_globs:
+  - apps/worker/**
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+  - sql-review.md
+  - db-smoke.log
+ci_requirements:
+  - pnpm verify
+  - pnpm test:db
+  - pnpm supabase:types
+merge_policy: Serial merge only; one active migration lock at a time.
+concurrency_notes: Blocks other migration lanes until the lock is released after merge.
+requires_migration_lock: true

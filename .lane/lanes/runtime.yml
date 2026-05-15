@@ -1,0 +1,29 @@
+schema_version: 1
+lane_id: runtime
+lane_type: runtime
+allowed_path_globs:
+  - apps/api/**
+  - apps/alert-agent/**
+  - apps/ingestor/**
+  - packages/alert-runtime/**
+  - packages/config/**
+  - packages/events/**
+  - packages/intelligence/**
+  - packages/observability/**
+  - scripts/**
+  - .env.example
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+  - apps/worker/**
+  - packages/contracts/src/**
+  - packages/domain/src/**
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+  - runtime-health.json
+ci_requirements:
+  - pnpm verify
+merge_policy: Requires green verify and no active overlapping lane manifest.
+concurrency_notes: May run beside non-overlapping UI, verification, and hygiene lanes.

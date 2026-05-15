@@ -1,0 +1,23 @@
+schema_version: 1
+lane_id: delivery-ui
+lane_type: delivery-ui
+allowed_path_globs:
+  - apps/command-center/**
+  - apps/smart-form/**
+  - apps/qa-agent/**
+  - scripts/**
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+  - apps/worker/**
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+  - screenshot-desktop.png
+  - screenshot-mobile.png
+ci_requirements:
+  - pnpm verify
+  - pnpm --filter @unit-talk/smart-form verify
+merge_policy: Requires UI verification evidence for user-visible changes.
+concurrency_notes: May run beside backend lanes when shared contracts are untouched.

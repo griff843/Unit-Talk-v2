@@ -1,0 +1,22 @@
+schema_version: 1
+lane_id: modeling
+lane_type: modeling
+allowed_path_globs:
+  - packages/intelligence/**
+  - packages/verification/**
+  - scripts/model-registry/**
+  - scripts/source-ledger/**
+  - scripts/**
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+  - apps/worker/**
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+  - model-evaluation.json
+ci_requirements:
+  - pnpm verify
+merge_policy: Requires reproducible model proof and green verify.
+concurrency_notes: Avoid concurrent edits to shared model registry files.
