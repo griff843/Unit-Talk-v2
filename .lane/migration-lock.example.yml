@@ -1,0 +1,9 @@
+schema_version: 1
+issue_id: UTV2-000
+lane_type: migration
+owner: codex
+acquired_at: 2026-01-01T00:00:00.000Z
+scope:
+  - supabase/migrations/**
+  - packages/db/src/database.types.ts
+release_after: merge

@@ -3,7 +3,11 @@ approval:
   allow_multiple_issues: true
   skip_sync_required: false
 entities:
-  issues: []
+  issues:
+    - UTV2-956
+    - UTV2-957
+    - UTV2-959
+    - UTV2-960
   findings: []
   controls: []
   proofs: []

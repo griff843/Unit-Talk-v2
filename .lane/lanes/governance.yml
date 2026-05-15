@@ -1,0 +1,21 @@
+schema_version: 1
+lane_id: governance
+lane_type: governance
+allowed_path_globs:
+  - .github/**
+  - .lane/**
+  - scripts/**
+  - docs/05_operations/**
+  - docs/06_status/lanes/**
+  - package.json
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+ci_requirements:
+  - pnpm verify
+merge_policy: Requires explicit issue scope for changes that affect CI or lane policy.
+concurrency_notes: Coordinate with active lanes before changing shared orchestration rules.

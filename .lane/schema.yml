@@ -1,0 +1,19 @@
+schema_version: 1
+required_fields:
+  - lane_id
+  - lane_type
+  - allowed_path_globs
+  - forbidden_path_globs
+  - required_proof_artifacts
+  - ci_requirements
+  - merge_policy
+  - concurrency_notes
+lane_types:
+  - runtime
+  - modeling
+  - verification
+  - hygiene
+  - migration
+  - governance
+  - delivery-ui
+  - data-canonical

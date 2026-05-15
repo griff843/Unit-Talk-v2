@@ -1,0 +1,23 @@
+schema_version: 1
+lane_id: data-canonical
+lane_type: data-canonical
+allowed_path_globs:
+  - apps/ingestor/**
+  - packages/db/**
+  - packages/intelligence/**
+  - scripts/**
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+  - apps/worker/**
+  - packages/contracts/src/**
+  - packages/domain/src/**
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+  - canonical-diff.json
+ci_requirements:
+  - pnpm verify
+merge_policy: Requires canonical data proof when ingestion or materialization changes.
+concurrency_notes: Coordinate with runtime lanes touching the same ingestion files.

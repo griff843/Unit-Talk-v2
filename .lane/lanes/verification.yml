@@ -1,0 +1,20 @@
+schema_version: 1
+lane_id: verification
+lane_type: verification
+allowed_path_globs:
+  - packages/verification/**
+  - scripts/**
+  - proof/**
+  - .lane/**
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+  - validation-report.md
+ci_requirements:
+  - pnpm verify
+merge_policy: Verification tooling may merge independently when runtime behavior is untouched.
+concurrency_notes: Coordinate if changing shared CI or lane contract scripts.

@@ -1,0 +1,26 @@
+schema_version: 1
+lane_id: hygiene
+lane_type: hygiene
+allowed_path_globs:
+  - .github/**
+  - .lane/**
+  - scripts/**
+  - package.json
+  - pnpm-lock.yaml
+  - pnpm-workspace.yaml
+  - tsconfig*.json
+  - eslint.config.*
+forbidden_path_globs:
+  - supabase/migrations/**
+  - database/migrations/**
+  - packages/**/database.types.ts
+  - apps/worker/**
+  - packages/contracts/src/**
+  - packages/domain/src/**
+required_proof_artifacts:
+  - diff-summary.md
+  - verification.log
+ci_requirements:
+  - pnpm verify
+merge_policy: Merge after confirming no runtime or schema ownership drift.
+concurrency_notes: Safe to run with implementation lanes when file scopes do not overlap.
