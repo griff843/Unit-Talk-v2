@@ -2,12 +2,15 @@
   "id": "UTV2-910",
   "title": "Ingestor cadence break — one-shot bridge leaves offer data stale",
   "owner": "claude",
-  "status": "open",
+  "status": "done",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/686",
+  "merge_sha": "8b16ed4c7b7dd0282ac280b4ea51dd71dc4d0b25",
+  "closed_at": "2026-05-15T18:45:00.000Z",
   "tier": "T1",
   "branch": "griffadavi/utv2-910-ingestor-cadence-break-one-shot-bridge-leaves-offer-data",
   "file_scope_lock": [
     ".github/workflows/ingestor-scheduled-run.yml"
   ],
   "createdAt": "2026-05-15T18:12:00.000Z",
-  "updatedAt": "2026-05-15T18:12:00.000Z"
+  "updatedAt": "2026-05-15T18:45:00.000Z"
 }
