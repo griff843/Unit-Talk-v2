@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-912",
+  "lane_type": "claude",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-912-market-type-id-null-fix",
+  "base_branch": "main",
+  "commit_sha": "754bab09c981d6649d900b003a93e931ef8edc35",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/671",
+  "files_changed": ["supabase/migrations/202605140001_utv2_912_market_type_id_alias_backfill.sql"],
+  "file_scope_lock": [
+    "apps/api/src/candidate-scoring-service.ts",
+    "supabase/migrations"
+  ],
+  "expected_proof_paths": [],
+  "status": "pr_open",
+  "started_at": "2026-05-14T21:40:00.000Z",
+  "heartbeat_at": "2026-05-14T22:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
