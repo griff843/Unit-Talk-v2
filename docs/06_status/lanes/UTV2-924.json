@@ -7,7 +7,7 @@
   "branch": "codex/utv2-924-opentelemetry-foundation",
   "base_branch": "main",
   "commit_sha": "c292fb1b6fdd228dd17d65b872c6d2e8ac410e2d",
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/675",
   "files_changed": [
     "packages/observability/src/index.ts"
   ],
