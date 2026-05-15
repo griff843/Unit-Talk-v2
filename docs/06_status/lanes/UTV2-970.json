@@ -1,0 +1,27 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-970",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "claude/utv2-970-housekeeping-ci-policy",
+  "base_branch": "main",
+  "commit_sha": "4f18dac9",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/682",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/governance/MANIFEST_HOUSEKEEPING_POLICY.md",
+    "docs/05_operations/LANE_MANIFEST_SPEC.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-05-15T15:23:00.000Z",
+  "heartbeat_at": "2026-05-15T15:23:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

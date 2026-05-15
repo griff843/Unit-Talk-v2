@@ -253,3 +253,17 @@ The manifest points to these sources; it does not replace them.
 - Manifest does not store test output (use proof files).
 - Manifest does not replace Linear or GitHub — it supplements them at a higher rank for *active* state only.
 - Manifest does not enforce policy by itself; scripts and CI do, using the manifest as input.
+
+---
+
+## 13. Manifest housekeeping CI policy
+
+Manifest commits (lane-open, PR-open, lane-close) must not use `[skip ci]` on PR branches. The `[skip ci]` tag suppresses all CI workflows, which prevents required branch-protection checks from running and deadlocks the merge without admin override.
+
+**Canonical policy:** `docs/governance/MANIFEST_HOUSEKEEPING_POLICY.md`
+
+Key rules:
+- Lane-open commit (`chore(lanes): UTV2-NNN lane manifest and sync metadata`) — no `[skip ci]`, always followed by implementation commits
+- Post-merge closeout on main uses actor guard (`github.actor != 'github-actions[bot]'`) instead of `[skip ci]` to prevent push loops
+- Per-issue sync files (`.ops/sync/UTV2-NNN.yml`) replace shared `.ops/sync.yml` mutation, eliminating rebase conflicts
+- Manifest-only PRs should carry `tier:T3` so `merge-gate.yml` auto-passes
