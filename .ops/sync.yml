@@ -1,10 +1,10 @@
 version: 1
 approval:
-  allow_multiple_issues: true
+  allow_multiple_issues: false
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-925
+    - UTV2-975
   findings: []
   controls: []
   proofs: []
