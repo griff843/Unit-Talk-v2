@@ -6,6 +6,7 @@ entities:
   issues:
     - UTV2-924
     - UTV2-931
+    - UTV2-955
   findings: []
   controls: []
   proofs: []
