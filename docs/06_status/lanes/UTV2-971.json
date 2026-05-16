@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-971",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-971-generate-standardized-pr-review-packets",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/pr-review-packet.ts",
+    "scripts/ops/pr-review-packet.test.ts",
+    "docs/05_operations/schemas/pr-review-packet-v1.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-15T21:30:00.000Z",
+  "heartbeat_at": "2026-05-15T21:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
