@@ -1,6 +1,12 @@
-import type { RuntimeTruthReport } from '@unit-talk/observability';
+import type { QueueHealthEvaluation, RuntimeTruthReport } from '@unit-talk/observability';
 
 type EnvReader = Record<string, string | undefined>;
+
+export interface RuntimeHealthSummary {
+  apiStatus: 'healthy' | 'degraded' | 'down';
+  warnings: string[];
+  queueHealth: QueueHealthEvaluation | null;
+}
 
 export type CommandCenterAuthRole = 'operator';
 export type CommandCenterAuthMethod = 'basic' | 'bearer' | 'dev_bypass';
@@ -93,6 +99,35 @@ export async function fetchRuntimeTruth(input: {
   }
 
   return (await response.json()) as RuntimeTruthReport;
+}
+
+export async function fetchRuntimeHealth(input: {
+  env?: NodeJS.ProcessEnv | undefined;
+  fetchImpl?: typeof fetch | undefined;
+} = {}): Promise<RuntimeHealthSummary> {
+  const env = input.env ?? process.env;
+  const fetchImpl = input.fetchImpl ?? fetch;
+  const response = await fetchImpl(`${resolveApiBaseUrl(env)}/health`, {
+    method: 'GET',
+    cache: 'no-store',
+  });
+
+  // /health returns 503 when degraded — still has a valid body
+  if (!response.ok && response.status !== 503) {
+    throw new Error(`Runtime health request failed: ${response.status}`);
+  }
+
+  const body = (await response.json()) as {
+    status?: 'healthy' | 'degraded' | 'down';
+    warnings?: string[];
+    queueHealth?: QueueHealthEvaluation | null;
+  };
+
+  return {
+    apiStatus: body.status ?? 'down',
+    warnings: body.warnings ?? [],
+    queueHealth: body.queueHealth ?? null,
+  };
 }
 
 export function resolveCommandCenterAccessConfig(
