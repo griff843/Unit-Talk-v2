@@ -7,8 +7,8 @@
   "worktree_path": ".",
   "branch": "codex/utv2-964-standardize-reusable-workflow-skill-registry",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6cdf66d8e2894783b01fc3cd31d9407dabad3c68",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/697",
   "files_changed": [
     "docs/governance/SKILL_REGISTRY.md"
   ],
@@ -16,10 +16,10 @@
     "docs/governance/SKILL_REGISTRY.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T12:49:30.000Z",
-  "heartbeat_at": "2026-05-16T12:49:30.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-16T14:15:00.000Z",
+  "closed_at": "2026-05-16T14:15:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",

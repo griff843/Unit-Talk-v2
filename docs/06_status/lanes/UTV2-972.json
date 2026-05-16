@@ -7,8 +7,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-972-lane-closeout-orchestration",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "6070973f2f8302c7670e8b6061e65e820c168bea",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/696",
   "files_changed": [
     "scripts/ops/lane-close.ts",
     "scripts/ops/lane-close.test.ts"
@@ -18,10 +18,10 @@
     "scripts/ops/lane-close.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T12:49:30.000Z",
-  "heartbeat_at": "2026-05-16T12:49:30.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-16T14:00:00.000Z",
+  "closed_at": "2026-05-16T14:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
