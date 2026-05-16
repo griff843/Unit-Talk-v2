@@ -1022,7 +1022,7 @@ The following are **not built** in Phase 0 or Phase 1. They are deferred until d
 | **Bridge / orchestrator service** | Current executor count (2) doesn't justify a coordination service. Manual dispatch works. |
 | **Auto-dispatch from Linear** | Requires idempotency, crash recovery, rate limiting — real distributed systems work. Not justified yet. |
 | **Dependency intelligence** | <50 active issues. Humans can see dependencies. YAGNI for 6+ months. |
-| **Workload balancing** | 2 executors, max 2 Codex lanes. Nothing to balance. |
+| **Workload balancing** | 2 executors; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10` for current ratified limits (Claude 2, Codex 3, safe classes). |
 | **Automatic issue creation** | Creates issue sprawl and PM loss-of-control. Never automate without human approval. |
 | **ChatGPT as final authority** | ChatGPT cannot verify proof, run tests, or read diffs. May assist drafting but never decide. |
 | **Status-doc auto-sync** | PROGRAM_STATUS.md is updated at sprint close. Weekly update doesn't need automation. |

@@ -1,0 +1,87 @@
+name: Lane Authority Check
+
+# Validates that PR changed files respect the path authority declared in
+# .lane/lanes/<type>.yml for the lane type this branch belongs to.
+#
+# Lane type is derived from the lane manifest at docs/06_status/lanes/<issue>.json.
+# If no manifest is found (e.g. a housekeeping branch), the check is skipped.
+#
+# Complements file-scope-lock-check.yml (which enforces cross-lane overlap via
+# manifests). This check enforces per-type path policy via .lane/lanes/*.yml.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  lane-check:
+    name: Lane authority
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Derive lane type from manifest
+        id: lane_type
+        run: |
+          BRANCH="${{ github.event.pull_request.head.ref }}"
+          echo "Branch: $BRANCH"
+
+          # Extract issue ID from branch name (e.g. griffadavi/utv2-929-... → UTV2-929)
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "No UTV2 issue ID found in branch name — skipping lane check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          MANIFEST_PATH="docs/06_status/lanes/${ISSUE_ID}.json"
+          if [ ! -f "$MANIFEST_PATH" ]; then
+            echo "No lane manifest at $MANIFEST_PATH — skipping lane check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          LANE_TYPE=$(node -e "const m=JSON.parse(require('fs').readFileSync('${MANIFEST_PATH}','utf8')); process.stdout.write(m.lane_type||'');" 2>/dev/null || true)
+
+          if [ -z "$LANE_TYPE" ]; then
+            echo "No lane_type in manifest — skipping lane check."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "Detected lane_type: $LANE_TYPE for $ISSUE_ID"
+          echo "lane_type=$LANE_TYPE" >> "$GITHUB_OUTPUT"
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Run lane authority check
+        if: steps.lane_type.outputs.skip != 'true'
+        env:
+          LANE_TYPE: ${{ steps.lane_type.outputs.lane_type }}
+          BASE_REF: ${{ github.event.pull_request.base.sha }}
+          HEAD_REF: ${{ github.sha }}
+        run: |
+          pnpm lane:check \
+            --lane "$LANE_TYPE" \
+            --base "$BASE_REF" \
+            --head "$HEAD_REF"

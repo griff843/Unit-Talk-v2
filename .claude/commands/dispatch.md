@@ -5,7 +5,7 @@ One-command lane execution. Pulls from the dispatch queue, routes to the right e
 **Usage:**
 - `/dispatch` — auto-pick the top dispatch candidate and execute
 - `/dispatch UTV2-###` — execute a specific issue
-- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel (1 Claude + up to 2 Codex)
+- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel (up to 2 Claude + up to 3 Codex for safe classes)
 - `/dispatch --dry-run` — show what would be dispatched without executing
 
 **Arguments:** `$ARGUMENTS`
@@ -20,7 +20,7 @@ If no issue IDs provided:
 1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
 2. Parse `dispatch_candidates` from the JSON output
 3. If empty: report "No dispatchable issues. Add tier labels to Ready issues in Linear." and stop.
-4. Pick candidates up to capacity: 1 Claude lane + up to 2 Codex lanes (default); PM wave trial may authorize up to 4 total for safe IAOS/tooling work — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
+4. Pick candidates up to capacity: up to 2 Claude lanes + up to 3 Codex lanes for safe work classes (Governance, Hygiene, Verification, Delivery/UI); dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per type — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
 
 If issue IDs provided:
 1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
@@ -241,8 +241,8 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 ## Rules
 
 - **Never dispatch T1 without PM confirmation.** T1 changes require plan approval before execution.
-- **Default: max 1 Claude lane at a time.** Claude executes sequentially. PM may authorize 2 Claude lanes for IAOS/tooling trial waves (safe work classes only).
-- **Default: max 2 Codex lanes in parallel.** PM may authorize a third Codex slot as part of a trial wave. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10` for trial conditions and ineligible lane types.
+- **Default: max 2 Claude lanes (safe work classes).** Dangerous classes (Runtime, Migration, Modeling, Data/Canonical) are singleton per type regardless. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
+- **Default: max 3 Codex lanes (safe work classes).** Same dangerous-class restrictions apply. Total hard cap is 5 active lanes across all executors.
 - **Never start a lane if file scope overlaps with an active lane.** Check manifests first.
 - **Fail closed.** If any prerequisite is unclear, skip the issue and report why.
 - **Commit message must include issue ID.** Format: `feat|fix|chore(scope): UTV2-### description`

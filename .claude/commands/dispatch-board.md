@@ -31,7 +31,7 @@ T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT.
 2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
    - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
    - **Exclude:** In Claude, In Codex (already active), Done, Cancelled, Blocked, untiered
-3. `cat .claude/lanes.json` — note active lanes, `file_scope_lock[]`, slot usage (default: max 1 Claude, max 2 Codex; PM may authorize up to 4 for IAOS/tooling trial — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
+3. `cat .claude/lanes.json` — note active lanes, `file_scope_lock[]`, slot usage (default: max 2 Claude, max 3 Codex for safe work classes; total cap 5 — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
 4. Build candidate list — exclude:
    - File-scope overlap with any active lane
    - Missing tier label
@@ -63,7 +63,7 @@ Excluded:
   UTV2-801  file scope overlap with active lane UTV2-871
   UTV2-802  blocked by UTV2-799 (not Done)
 
-Codex health: OK  |  Claude slots: 1  |  Codex slots: 2
+Codex health: OK  |  Claude slots: 2  |  Codex slots: 3
 ```
 
 ---
@@ -88,7 +88,7 @@ For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, 
 
 Dispatch order:
 1. Approved T1 Claude lanes first
-2. Non-T1 Claude lanes — sequentially (default: max 1 active; PM wave trial may allow 2 for IAOS/tooling safe classes)
+2. Non-T1 Claude lanes — sequentially (default: max 2 active for safe work classes; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
 3. Codex lanes — up to 2 in parallel (default); up to 3 if PM trial includes a third Codex slot
 
 ---
@@ -175,7 +175,7 @@ git add .ops/sync.yml && git commit -m "ops: reset sync.yml to neutral after mer
 - **T2 clear-scope: Claude diff-review is the sole gate.** No PM_VERDICT.
 - **P0 lanes never auto-merge.** Before any merge attempt, run `pnpm ops:p0-detect <UTV2-###>`. If `is_p0: true`, the merge protocol (UTV2-948) overrides tier policy: the orchestrator surfaces the merge gate to PM and waits. PM merges manually. Required artifacts: `docs/06_status/proof/<UTV2-###>/claude-critique.md` and `runtime-verification.md`, both checked by the `P0 Protocol` workflow before merge is allowed.
 - **Auto-skip external-gate labels.** No user qualifier needed.
-- **Default: max 1 Claude lane, max 2 Codex lanes.** PM may authorize a controlled expanded trial of up to 4 lanes for safe IAOS/tooling waves (governance, hygiene, verification, delivery/UI only). Runtime, migration, modeling, and data/canonical lanes are never eligible for trial expansion. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`. Queue — never stack.
+- **Default: max 2 Claude lanes, max 3 Codex lanes for safe work classes** (Governance, Hygiene, Verification, Delivery/UI). Total hard cap 5. Runtime, migration, modeling, and data/canonical lanes are singleton per type regardless of executor count. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`. Queue — never stack.
 - **No scope overlap.** Check `file_scope_lock` before every dispatch.
 - **Codex lanes are async.** Dispatch and continue. Review on `--check-codex` re-entry.
 - **Board truth over Linear truth.** If `lanes.json` says active but Linear says Done, reconcile before dispatching.

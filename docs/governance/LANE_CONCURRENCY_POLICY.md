@@ -182,33 +182,37 @@ No prose enforces these rules. Scripts enforce them. Prose defines the policy th
 The type-based limits in §1 govern which lane *types* can coexist. This section governs how many lanes each *executor* (Claude Code, Codex CLI) may hold simultaneously. Both policies apply.
 
 **Issued under:** UTV2-979  
+**Ratified:** 2026-05-16 (PM governance review)  
 **Effective:** 2026-05-16
 
-### Hard baseline (default, always enforced)
+### Ratified standard (safe work classes — enforced now)
 
-| Executor | Default limit | Notes |
+| Executor | Ratified limit | Notes |
 |---|---|---|
-| Claude Code | **1 active lane** | Claude executes sequentially; queued lanes wait |
-| Codex CLI | **2 active lanes** | Up to 2 concurrent Codex dispatches |
+| Claude Code | **2 active lanes** | Safe work classes only; see §10 ineligible list |
+| Codex CLI | **3 active lanes** | Safe work classes only |
+| Total hard cap | **5** | Per §1; type-level limits always apply on top |
 
-These defaults are codified in the dispatch-board and dispatch skill command docs.
+Per-cycle PM authorization is required when launching multi-lane waves above 3 total (1 Claude + 2 Codex legacy baseline). Authorization must be explicit in the PM dispatch instruction and does not persist to the next cycle unless re-stated.
 
-### Controlled expanded trial (IAOS/tooling waves only)
+Pre-dispatch gates (both required when running ≥4 total lanes):
 
-PM may authorize up to **4 concurrent lanes** for low-risk IAOS governance/tooling work when all of the following hold:
+1. `pnpm exec tsx scripts/ops/merge-risk.ts` — no `hard_fail` or `block` findings
+2. `pnpm exec tsx scripts/ops/lane-maximizer.ts` — no `DISPATCH_LIMIT` or `OVERLAP` findings
+3. All candidate lanes have execution packets (via `scripts/ops/execution-packet.ts`)
 
-1. Merge-risk analysis is clean — no runtime, migration, or package hot spots active
-2. All lanes have execution packets
-3. No file-scope lock conflicts between any two lanes in the wave
-4. All lanes belong to safe work classes (see below)
+Example 5-lane topology (safe class mix):
+```
+1 × Runtime          (Claude or Codex — singleton by type, not counted in executor safe-class limit)
+1 × Verification     (Claude — read-only)
+1 × Governance       (Claude — docs only)
+2 × Hygiene          (Codex — disjoint file scopes)
+```
+Total: 5 lanes, Claude 2, Codex 2 (Runtime may be either).
 
-Example topology: 1 Claude governance lane + 2 Codex implementation lanes + 1 Claude/Codex verification lane = 4 total.
+### Safe work classes
 
-Trial authorization must be **explicit in the PM dispatch instruction**. It does not persist to the next dispatch cycle unless re-stated.
-
-### Safe work classes (eligible for trial expansion)
-
-The controlled expanded trial applies only to these lane types:
+The ratified limits apply to these lane types only:
 
 | Lane type | Notes |
 |---|---|
@@ -217,25 +221,26 @@ The controlled expanded trial applies only to these lane types:
 | Verification | Proof bundles, evidence, truth-check tooling |
 | Delivery/UI | `apps/command-center`, `apps/discord-bot`, `apps/smart-form`, `apps/qa-agent` |
 
-### Ineligible for trial expansion
+### Ineligible work classes (singleton per type — hard limit unchanged)
 
-These lane types **must not push total active lanes above the hard baseline**, regardless of PM wave authorization:
+These lane types are **always singleton**, regardless of executor counts or PM wave authorization:
 
 | Lane type | Reason |
 |---|---|
-| Runtime | Active pick pipeline write path; singleton required |
+| Runtime | Active pick pipeline write path; one write path at a time |
 | Migration | Serial DB deploy required; concurrent merge creates rollback ambiguity |
 | Modeling | Shadow scoring cannot compare against two moving baselines |
 | Data/Canonical | Touches schema or ingestor; same constraints as Migration |
 
-### Path to permanent expansion (not yet ratified)
+### Path to 6–8 disciplined ceiling (not yet ratified)
 
-6–8 disciplined lanes is a capacity **target**, not the globally ratified default. Permanent expansion to this ceiling requires completion of:
+Three mechanical gaps must be closed before the 6–8 ceiling can be ratified:
 
-- **UTV2-965** — execution-location policy and routing
-- **UTV2-968** — recommend-only lane maximization
+1. **`.lane/` path conflicts** — `runtime.yml` and `governance.yml` reconciled with `LANE_TAXONOMY.md` *(addressed in this commit)*
+2. **`pnpm lane:check` in CI** — required gate wired as a PR check *(addressed in this commit)*
+3. **`ops:scope-diff`** — Codex scope bleed detection implemented *(addressed in this commit)*
 
-Expected target after those gates: 5–6 normal lanes, 6–8 disciplined lanes for safe work classes.
+Plus one empirical gate: **one successful 5-lane wave** must complete cleanly before the ceiling raises further.
 
 ### Canonical citation
 
