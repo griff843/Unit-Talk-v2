@@ -10,6 +10,8 @@ allowed_path_globs:
   - pnpm-workspace.yaml
   - tsconfig*.json
   - eslint.config.*
+  - .ops/sync/**
+  - docs/06_status/lanes/**
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**
