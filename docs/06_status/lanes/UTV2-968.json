@@ -7,8 +7,8 @@
   "worktree_path": ".",
   "branch": "codex/utv2-968-recommend-only-lane-maximization",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "78c2c0ce61f88722b46d6c051fe6763e5277cdb6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/699",
   "files_changed": [
     "scripts/ops/lane-maximizer.ts",
     "scripts/ops/lane-maximizer.test.ts"
@@ -18,10 +18,10 @@
     "scripts/ops/lane-maximizer.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T14:30:00.000Z",
-  "heartbeat_at": "2026-05-16T14:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-16T15:45:00.000Z",
+  "closed_at": "2026-05-16T15:45:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
