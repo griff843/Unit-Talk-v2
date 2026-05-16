@@ -174,3 +174,69 @@ No prose enforces these rules. Scripts enforce them. Prose defines the policy th
 - `docs/05_operations/LANE_MANIFEST_SPEC.md` — manifest schema and file-scope lock spec
 - `docs/05_operations/DELEGATION_POLICY.md` — authorization tiers and sensitive-path matrix
 - `docs/05_operations/EXECUTION_TRUTH_MODEL.md` — truth hierarchy and lifecycle transitions
+
+---
+
+## 10. Executor-level concurrency (Claude / Codex)
+
+The type-based limits in §1 govern which lane *types* can coexist. This section governs how many lanes each *executor* (Claude Code, Codex CLI) may hold simultaneously. Both policies apply.
+
+**Issued under:** UTV2-979  
+**Effective:** 2026-05-16
+
+### Hard baseline (default, always enforced)
+
+| Executor | Default limit | Notes |
+|---|---|---|
+| Claude Code | **1 active lane** | Claude executes sequentially; queued lanes wait |
+| Codex CLI | **2 active lanes** | Up to 2 concurrent Codex dispatches |
+
+These defaults are codified in the dispatch-board and dispatch skill command docs.
+
+### Controlled expanded trial (IAOS/tooling waves only)
+
+PM may authorize up to **4 concurrent lanes** for low-risk IAOS governance/tooling work when all of the following hold:
+
+1. Merge-risk analysis is clean — no runtime, migration, or package hot spots active
+2. All lanes have execution packets
+3. No file-scope lock conflicts between any two lanes in the wave
+4. All lanes belong to safe work classes (see below)
+
+Example topology: 1 Claude governance lane + 2 Codex implementation lanes + 1 Claude/Codex verification lane = 4 total.
+
+Trial authorization must be **explicit in the PM dispatch instruction**. It does not persist to the next dispatch cycle unless re-stated.
+
+### Safe work classes (eligible for trial expansion)
+
+The controlled expanded trial applies only to these lane types:
+
+| Lane type | Notes |
+|---|---|
+| Governance | Docs, policy, CI workflows, audit |
+| Hygiene | Linting, cleanup, dead-code removal, scaffolding |
+| Verification | Proof bundles, evidence, truth-check tooling |
+| Delivery/UI | `apps/command-center`, `apps/discord-bot`, `apps/smart-form`, `apps/qa-agent` |
+
+### Ineligible for trial expansion
+
+These lane types **must not push total active lanes above the hard baseline**, regardless of PM wave authorization:
+
+| Lane type | Reason |
+|---|---|
+| Runtime | Active pick pipeline write path; singleton required |
+| Migration | Serial DB deploy required; concurrent merge creates rollback ambiguity |
+| Modeling | Shadow scoring cannot compare against two moving baselines |
+| Data/Canonical | Touches schema or ingestor; same constraints as Migration |
+
+### Path to permanent expansion (not yet ratified)
+
+6–8 disciplined lanes is a capacity **target**, not the globally ratified default. Permanent expansion to this ceiling requires completion of:
+
+- **UTV2-965** — execution-location policy and routing
+- **UTV2-968** — recommend-only lane maximization
+
+Expected target after those gates: 5–6 normal lanes, 6–8 disciplined lanes for safe work classes.
+
+### Canonical citation
+
+When `dispatch-board`, `dispatch`, or any agent skill references executor-level lane count limits, this section (§10) is the single authoritative source. Do not duplicate limit values in prose — link here.
