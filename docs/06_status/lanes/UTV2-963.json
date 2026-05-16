@@ -8,15 +8,17 @@
   "worktree_path": ".",
   "branch": "claude/utv2-963-formalize-agent-role-system",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "3287f2ca",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/692",
+  "files_changed": [
+    "docs/05_operations/agent-role-contracts.md"
+  ],
   "file_scope_lock": [
     ".claude/agents/**",
     "docs/05_operations/agent-role-contracts.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in-review",
   "started_at": "2026-05-16T11:14:00.000Z",
   "heartbeat_at": "2026-05-16T11:14:00.000Z",
   "closed_at": null,
