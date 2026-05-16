@@ -1,39 +1,20 @@
-# System State - 2026-05-14 23:05 EDT
+# System State — 2026-05-16 09:00
 
 ## Branch
-codex/workflow-audit-hardening
+main
 
 ## Active Milestone
-Phase 7A - Governance Brake active
+Phase 7A — Governance Brake active
 
 ## Active Lanes
-none
+  none
 
 ## Working Tree
-Clean before status-doc refresh
-
-## Repo Health
-HEALTHY via `pnpm ops:health`
-
-## Open PR
-PR #672 - [codex] workflow audit hardening
-
-- Branch: `codex/workflow-audit-hardening -> main`
-- URL: https://github.com/griff843/Unit-Talk-v2/pull/672
-- State: open draft
-- Label: `tier:T3`
-- Merge state: BLOCKED by sync-metadata checks for the hygiene lane
-
-## Lane Scoreboard
-- Total lane manifests: 147
-- Active lanes: 0
-- Stale lanes: 0
-- Missing `closed_at`: 0
-- Truth failures retained as history: 6
+Clean — all changes committed
 
 ## Recent Commits
-0388a4de chore(ops): workflow audit hardening
-a99cdfcc chore(lanes): UTV2-953 post-merge lane manifest + proof update
-8c2a45b4 ops: reset sync.yml to neutral after merge [skip ci]
-df82550f docs(UTV2-953): runtime-mode env documentation - P0 follow-up (#670)
-2efb60a9 chore(lanes): close UTV2-943/944/945/947 - all merged [skip ci]
+c45c2d24 chore(lanes): close UTV2-971 and UTV2-974 — merged at 7c9244f9 (#690) and 849b14ee (#691)
+849b14ee feat(ops): UTV2-974 execution-state observability report (#691)
+7c9244f9 feat(ops): UTV2-971 standardized PR review packets (#690)
+4a1eaf1f chore(lanes): close UTV2-969 and UTV2-973 — merged at 20ccfc51 (#688) and 3101d890 (#689)
+3101d890 feat(ops): UTV2-973 merge-risk and blocked-lane analysis (#689)

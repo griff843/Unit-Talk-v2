@@ -7,17 +7,19 @@
   "worktree_path": ".",
   "branch": "claude/utv2-958-proof-bundle-standard",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "955f7fc9f60b12301ad189b0d3a8ffadd1b82aef",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/678",
-  "files_changed": [],
+  "files_changed": [
+    "docs/governance/PROOF_BUNDLE_STANDARD.md"
+  ],
   "file_scope_lock": [
     "docs/governance/PROOF_BUNDLE_STANDARD.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "closed",
   "started_at": "2026-05-15T05:58:00Z",
-  "heartbeat_at": "2026-05-15T06:15:00Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-15T11:07:42Z",
+  "closed_at": "2026-05-15T11:07:42Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
