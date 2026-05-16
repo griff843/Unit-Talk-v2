@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-964",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-964-standardize-reusable-workflow-skill-registry",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/governance/SKILL_REGISTRY.md"
+  ],
+  "file_scope_lock": [
+    "docs/governance/SKILL_REGISTRY.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-16T12:49:30.000Z",
+  "heartbeat_at": "2026-05-16T12:49:30.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
