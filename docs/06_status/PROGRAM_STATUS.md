@@ -7,14 +7,12 @@
 
 ## Last Updated
 
-2026-05-14 23:05 EDT - repo hygiene and workflow audit hardening closed into draft PR #672.
+2026-05-16 — board cleared after high-velocity lane close sprint (14 issues merged since 2026-05-14 status).
 
-- Repo health is GREEN: `pnpm ops:health` reports `HEALTHY`.
-- Git hygiene is clean: only one worktree remains, local branch set is reduced to `main` and `codex/workflow-audit-hardening`, and the working directory was clean before this status-doc refresh.
-- Lane registry is clean: 147 lane manifests, 0 active lanes, 0 stale lanes, 0 missing `closed_at`.
-- Draft PR #672 is open for workflow audit hardening and carries `tier:T3`.
-- PR #672 local verification passed: `pnpm verify`, pre-push `pnpm verify`, and R-level check all passed.
-- PR #672 is still merge-blocked by sync-metadata enforcement checks because the hygiene lane does not map to a normal Linear implementation issue.
+- Repo health is GREEN: `pnpm ops:health` reports HEALTHY after lane manifest reconciliation.
+- Board is clean: 0 active lanes, 0 stale manifests, 0 missing `closed_at`.
+- Working tree is clean: all docs and proof artifacts committed.
+- Only UTV2-770 (Hetzner cutover gate) remains open — blocked by `needs:hetzner`.
 
 ---
 
@@ -23,41 +21,43 @@
 | Field | Value |
 |---|---|
 | Platform | Unit Talk V2 - sports betting pick lifecycle platform |
-| Active operating mode | Governance Brake active; workflow hygiene closeout in review |
-| Static baseline | `pnpm verify` PASS locally and in pre-push hook for PR #672 |
+| Active operating mode | Phase 7A — Governance Brake active |
+| Static baseline | `pnpm verify` PASS |
 | Repo health | `pnpm ops:health` HEALTHY |
-| Active Codex lanes | none in canonical lane manifests |
-| Active worktree count | 1 - `C:/Dev/Unit-Talk-v2-main` |
-| Local branches | `main`, `codex/workflow-audit-hardening` |
-| Open closeout PR | #672 - `[codex] workflow audit hardening` |
-| PR #672 state | Draft; `tier:T3`; merge blocked by sync metadata checks |
-| Phase | Phase 7A - Governance Brake active |
+| Active Codex lanes | none |
+| Active Claude lanes | none |
+| Active worktrees | 1 — `C:/Dev/Unit-Talk-v2-main` (main checkout) |
+| Local branches | `main` only |
+| Open PRs | none |
 
 ---
 
 ## Active Work Queue
 
-Live queue truth from `pnpm ops:brief`:
-
 | Priority | Issue | Status | Notes |
 |---:|---|---|---|
-| 1 | UTV2-910 | Ready for Codex | T1 ingestor cadence break; one-shot bridge leaves offer data stale |
-| 2 | UTV2-952 | In Codex | T2 flaky `/health` UUID probe returns 503 in database persistence mode |
-| 3 | UTV2-954 | In Codex | T2 alert-agent validator integration P0 follow-up |
-| 4 | UTV2-770 | In Claude | Hetzner cutover gate; ingestion freshness must be proven before production |
-| 5 | PR #672 | Draft PR | Workflow audit hardening closeout; needs sync-metadata decision before merge |
+| 1 | UTV2-770 | In Claude | Hetzner cutover gate; blocked by `needs:hetzner`; ingestion freshness proof required before production |
 
 ---
 
-## Recently Closed / Merged / Cleaned
+## Recently Closed (since 2026-05-14)
 
-| Item | Result |
-|---|---|
-| PR #672 | Open draft with workflow audit hardening, private agent notifications, lane scoreboard, and stale lane reconciliation |
-| Local branch cleanup | 525 stale local branches deleted after safety bundle creation |
-| Worktree cleanup | Git worktree registry reduced to the main checkout only |
-| Lane reconciliation | 0 active lanes, 0 stale lanes, 0 missing `closed_at` |
-| Safety backup | Local refs bundle created at `C:\Dev\unit-talk-local-refs-backup-20260514-194454.bundle` |
+| Issue / PR | Result | Merged SHA |
+|---|---|---|
+| PR #672 — workflow audit hardening | Merged 2026-05-15 | `f119c156` |
+| UTV2-910 — ingestor cadence fix (T1) | Merged 2026-05-15, PR #686 | `8b16ed4c` |
+| UTV2-952 — /health UUID probe fix (T2) | Done 2026-05-15 | — |
+| UTV2-954 — alert runtime validator (T2) | Merged 2026-05-15, PR #687 | `b9799398` |
+| UTV2-955 — lane taxonomy docs (T3) | Merged 2026-05-15, PR #677 | `43a6b7a8` |
+| UTV2-958 — proof bundle standard (T3) | Merged 2026-05-15, PR #678 | `955f7fc9` |
+| UTV2-962 — registry reconciliation (T3) | Merged 2026-05-15, PR #683 | `5071e807` |
+| UTV2-969 — execution packet generator (T2) | Merged 2026-05-16, PR #688 | `20ccfc51` |
+| UTV2-970 — manifest housekeeping CI policy (T3) | Merged 2026-05-15, PR #682 | `6df8a8c9` |
+| UTV2-971 — PR review packets (T2) | Merged 2026-05-16, PR #690 | `7c9244f9` |
+| UTV2-973 — merge-risk analysis (T2) | Merged 2026-05-16, PR #689 | `3101d890` |
+| UTV2-974 — execution-state observability (T2) | Merged 2026-05-16, PR #691 | `849b14ee` |
+| UTV2-976 — ops:reconcile stranded lanes (T3) | Merged 2026-05-15 | `b4f045fe` |
+| UTV2-977 — tier-c-path-guard shell fallback (T3) | Merged 2026-05-15, PR #684 | `3fca5c4c` |
 
 ---
 
@@ -66,11 +66,11 @@ Live queue truth from `pnpm ops:brief`:
 | Gate | Status | Current Truth |
 |---|---|---|
 | Repo hygiene | Green | `ops:health` HEALTHY |
-| Lane registry | Green | No active/stale/missing-close lane manifests |
-| PR #672 mergeability | Blocked | Sync-metadata checks require a decision for non-Linear hygiene work |
-| Runtime readiness | Not asserted by this status update | Static verify does not equal runtime proof |
-| MLB production-readiness | Open | Still data/proof gated; do not close from this hygiene work |
-| Hetzner cutover | Open | UTV2-770 remains in Claude; ingestion freshness proof still required |
+| Lane registry | Green | 0 active lanes, 0 stale, 0 missing `closed_at` |
+| Working tree | Green | Clean — all changes committed |
+| Runtime readiness | Not asserted | Static verify does not equal runtime proof |
+| MLB production-readiness | Open | Data/proof gated; separate from hygiene work |
+| Hetzner cutover | Open | UTV2-770 in Claude; ingestion freshness proof still required |
 
 ---
 
@@ -78,21 +78,17 @@ Live queue truth from `pnpm ops:brief`:
 
 | Risk | Severity | Status / Action |
 |---|---:|---|
-| PR #672 sync metadata gate | Medium | Decide whether to attach a Linear hygiene issue, add approved bypass metadata, or keep PR as a manual governance exception |
-| Status drift | Medium | This file is now refreshed, but Linear remains the operational queue authority |
-| Runtime proof confusion | High | Do not treat `pnpm verify` or repo health as worker/API/DB runtime readiness |
-| Deferred outbox rows | Medium | `ops:brief` reports 6 deferred pending rows outside worker targets; not stuck, but worth tracking |
-| Old quarantine folder | Low | External folder deletion may still be draining under `C:\Dev\unit-talk-worktree-trash-20260514-2038`; it is outside repo health |
+| UTV2-770 blocked on infra | High | Needs Hetzner provisioning before cutover gate can close |
+| Runtime proof gap | High | Static verify is not runtime readiness; do not conflate |
+| Deferred outbox rows | Medium | 6 deferred pending rows outside worker targets; not stuck |
 
 ---
 
 ## Next PM Actions
 
-1. Resolve PR #672 sync-metadata policy: attach a Linear issue, add an approved bypass, or explicitly accept a governance exception.
-2. If PR #672 is accepted, mark it ready for review and merge after checks are green.
-3. Dispatch or re-triage UTV2-910 next; it is the highest-priority ready Codex item in the brief.
-4. Keep UTV2-770 with Claude until ingestion freshness proof is complete.
-5. Continue to treat runtime proof separately from static repo health.
+1. Resolve UTV2-770: provide Hetzner access or re-scope ingestion freshness proof path.
+2. Monitor outbox deferred rows — 6 rows outside worker targets (oldest ~283h).
+3. Queue next sprint once UTV2-770 is unblocked or a scope decision is made.
 
 ---
 
@@ -105,7 +101,6 @@ Live queue truth from `pnpm ops:brief`:
 | Historical record | `docs/06_status/PROGRAM_STATUS_ARCHIVE.md` |
 | Operational work queue | Linear |
 | PR/source truth | GitHub |
-| Lifecycle truth | `docs/ai_context/v2_truth_pack` and current lifecycle proof docs |
 
 ---
 
