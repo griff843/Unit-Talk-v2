@@ -7,18 +7,22 @@
   "worktree_path": ".",
   "branch": "codex/utv2-934-runtime-simplification-pass",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "c24993b6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/704",
+  "files_changed": [
+    "scripts/ops/fix-sync-yml.mjs",
+    "scripts/ops/fix-sync-yml.test.ts",
+    "scripts/ops/worktree-setup.ps1"
+  ],
   "file_scope_lock": [
     "scripts/ops/**",
     "scripts/ut-cli/**"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T17:15:00.000Z",
-  "heartbeat_at": "2026-05-16T17:15:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-16T21:52:08.000Z",
+  "closed_at": "2026-05-16T21:52:08.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

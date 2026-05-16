@@ -7,17 +7,19 @@
   "worktree_path": ".",
   "branch": "codex/utv2-939-multi-op-survivability",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "b2ffe6c0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/702",
+  "files_changed": [
+    ".claude/commands/operator-runbook.md"
+  ],
   "file_scope_lock": [
     ".claude/commands/**"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T17:15:00.000Z",
-  "heartbeat_at": "2026-05-16T17:15:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-16T21:52:18.000Z",
+  "closed_at": "2026-05-16T21:52:18.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

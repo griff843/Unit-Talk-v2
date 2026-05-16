@@ -7,18 +7,22 @@
   "worktree_path": ".",
   "branch": "codex/utv2-932-queue-arch-evaluation",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "c8e504f4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/703",
+  "files_changed": [
+    "scripts/benchmarks/queue-throughput.ts",
+    "scripts/benchmarks/queue-throughput.test.ts",
+    "docs/06_status/queue-arch-evaluation.md"
+  ],
   "file_scope_lock": [
     "scripts/benchmarks/**",
     "docs/06_status/**"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T17:15:00.000Z",
-  "heartbeat_at": "2026-05-16T17:15:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-16T21:52:21.000Z",
+  "closed_at": "2026-05-16T21:52:21.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
