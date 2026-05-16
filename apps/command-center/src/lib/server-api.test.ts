@@ -4,6 +4,7 @@ import {
   authenticateCommandCenterRequest,
   assertCommandCenterAuthConfig,
   fetchRuntimeTruth,
+  fetchRuntimeHealth,
   resolveApiBaseUrl,
   resolveCommandCenterApiHeaders,
   resolveOperatorIdentity,
@@ -186,6 +187,80 @@ test('authenticateCommandCenterRequest accepts bearer token auth', () => {
 
 test('resolveOperatorIdentity defaults to command-center', () => {
   assert.equal(resolveOperatorIdentity(createEnv()), 'command-center');
+});
+
+const stubQueueHealth = {
+  status: 'healthy' as const,
+  observedAt: '2026-05-16T17:00:00.000Z',
+  workerTargets: ['discord:best-bets'],
+  queueDepth: 2,
+  pendingCount: 2,
+  pendingByTarget: { 'discord:best-bets': 2 },
+  failedCount: 0,
+  deadLetterCount: 0,
+  processingCount: 0,
+  oldestPendingAt: null,
+  oldestPendingAgeMs: null,
+  oldestPendingTarget: null,
+  lastSuccessfulDeliveryAt: '2026-05-16T16:55:00.000Z',
+  lastSuccessfulDeliveryAgeMs: 300_000,
+  targetMismatches: [],
+  silentStrandingRisk: false,
+  alerts: [],
+  metrics: {},
+};
+
+test('fetchRuntimeHealth returns queue health from /health endpoint', async () => {
+  const result = await fetchRuntimeHealth({
+    env: createEnv({ API_BASE_URL: 'http://api.test' }),
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({ status: 'healthy', warnings: [], queueHealth: stubQueueHealth }),
+        { status: 200 },
+      ),
+  });
+
+  assert.equal(result.apiStatus, 'healthy');
+  assert.deepEqual(result.warnings, []);
+  assert.ok(result.queueHealth !== null);
+  assert.equal(result.queueHealth?.status, 'healthy');
+  assert.equal(result.queueHealth?.pendingCount, 2);
+});
+
+test('fetchRuntimeHealth handles 503 degraded response with body', async () => {
+  const result = await fetchRuntimeHealth({
+    env: createEnv({ API_BASE_URL: 'http://api.test' }),
+    fetchImpl: async () =>
+      new Response(
+        JSON.stringify({ status: 'degraded', warnings: ['queue stale'], queueHealth: null }),
+        { status: 503 },
+      ),
+  });
+
+  assert.equal(result.apiStatus, 'degraded');
+  assert.deepEqual(result.warnings, ['queue stale']);
+  assert.equal(result.queueHealth, null);
+});
+
+test('fetchRuntimeHealth throws on non-503 error', async () => {
+  await assert.rejects(
+    () =>
+      fetchRuntimeHealth({
+        env: createEnv({ API_BASE_URL: 'http://api.test' }),
+        fetchImpl: async () => new Response('{}', { status: 500 }),
+      }),
+    /Runtime health request failed: 500/,
+  );
+});
+
+test('fetchRuntimeHealth returns null queue health when field is absent', async () => {
+  const result = await fetchRuntimeHealth({
+    env: createEnv({ API_BASE_URL: 'http://api.test' }),
+    fetchImpl: async () =>
+      new Response(JSON.stringify({ status: 'healthy', warnings: [] }), { status: 200 }),
+  });
+
+  assert.equal(result.queueHealth, null);
 });
 
 function createBasicAuthHeader(username: string, password: string): string {
