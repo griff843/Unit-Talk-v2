@@ -79,7 +79,7 @@ If the Codex branch is behind `main`, create a v2 branch (`claude/utv2-###-v2` o
 - T2 is Codex-safe only when acceptance criteria and file scope are explicit.
 - Route migration, contract, domain lifecycle, promotion, settlement, outbox, worker, schema, or ambiguous work to Claude/human planning first.
 - Never start a lane whose file scope overlaps an active lane.
-- Keep max active Codex lanes to 2 unless the user explicitly approves more.
+- Default: max 2 active Codex lanes. PM may authorize a third Codex slot for IAOS/tooling trial waves (governance, hygiene, verification, delivery/UI only). Runtime, migration, modeling, and data/canonical lanes never expand beyond 1. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
 - Fail closed when tier, scope, acceptance criteria, branch, or lane truth is unclear.
 
 ## Verification

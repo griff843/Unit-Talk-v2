@@ -162,6 +162,21 @@ Codex is the **implementation lane**. You own:
 - readiness decisions, closeout artifacts, proof templates
 - Linear / Notion syncing
 
+## Executor Concurrency Limits
+
+These limits are set by PM and enforced by the orchestrator. Codex does not self-authorize lane expansion.
+
+| Executor | Default limit | Trial limit (PM-authorized only) |
+|---|---|---|
+| Claude Code | 1 active lane | 2 lanes (IAOS/tooling safe-class waves only) |
+| Codex CLI | 2 active lanes | 3 lanes (IAOS/tooling safe-class waves only) |
+
+**Safe work classes** (eligible for PM trial expansion): governance, hygiene, verification, delivery/UI.
+
+**Ineligible for trial expansion** (hard singleton regardless of PM wave): runtime, migration, modeling, data/canonical.
+
+Canonical policy: `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
+
 ---
 
 ## Tier C Paths — Stop and Report, Do Not Touch

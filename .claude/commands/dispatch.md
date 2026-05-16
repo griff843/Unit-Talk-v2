@@ -20,7 +20,7 @@ If no issue IDs provided:
 1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
 2. Parse `dispatch_candidates` from the JSON output
 3. If empty: report "No dispatchable issues. Add tier labels to Ready issues in Linear." and stop.
-4. Pick candidates up to capacity: 1 Claude lane + up to 2 Codex lanes
+4. Pick candidates up to capacity: 1 Claude lane + up to 2 Codex lanes (default); PM wave trial may authorize up to 4 total for safe IAOS/tooling work — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
 
 If issue IDs provided:
 1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
@@ -241,8 +241,8 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 ## Rules
 
 - **Never dispatch T1 without PM confirmation.** T1 changes require plan approval before execution.
-- **Max 1 Claude lane at a time.** Claude executes sequentially.
-- **Max 2 Codex lanes in parallel.** Per executor routing defaults.
+- **Default: max 1 Claude lane at a time.** Claude executes sequentially. PM may authorize 2 Claude lanes for IAOS/tooling trial waves (safe work classes only).
+- **Default: max 2 Codex lanes in parallel.** PM may authorize a third Codex slot as part of a trial wave. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10` for trial conditions and ineligible lane types.
 - **Never start a lane if file scope overlaps with an active lane.** Check manifests first.
 - **Fail closed.** If any prerequisite is unclear, skip the issue and report why.
 - **Commit message must include issue ID.** Format: `feat|fix|chore(scope): UTV2-### description`
