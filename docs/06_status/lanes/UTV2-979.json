@@ -7,8 +7,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-979-ratify-lane-concurrency-policy",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "81c2b91a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/695",
   "files_changed": [
     "docs/governance/LANE_CONCURRENCY_POLICY.md",
     ".claude/commands/dispatch-board.md",
@@ -24,10 +24,10 @@
     ".agents/skills/dispatch/SKILL.md"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-16T12:37:31.483Z",
   "heartbeat_at": "2026-05-16T12:37:31.483Z",
-  "closed_at": null,
+  "closed_at": "2026-05-16T12:47:30.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",

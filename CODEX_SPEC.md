@@ -1,71 +1,67 @@
-# Codex Spec: UTV2-610 — High-risk verification package tests
+# Codex Spec: UTV2-965 — Define execution-location policy and routing
 
 ## Issue
-UTV2-610: Audit prerequisite: add high-risk tests for the verification package and other undercovered gate logic
+UTV2-965: Define machine-readable execution-location routing for lanes without assuming every lane uses a git worktree.
 
 ## Branch
-`griffadavi/utv2-610-verification-tests`
+`codex/utv2-965-define-execution-location-policy-and-routing`
 
 ## Tier
 T2
 
 ## Context
-Claude's audit identified thin coverage in `packages/verification` gate and control-plane logic. False PASS states from under-tested gate code would undermine all readiness claims. This is pure test writing — no runtime logic changes, no new features.
+UTV2-962 (canonical registry reconciliation) is Done and merged — that is the root dependency for this issue. The repo already has `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`. This issue must align with it, not replace it. The known failure mode this addresses: a 2026-05-12 incident where a lane touching `packages/` was dispatched into a git worktree, causing junction/symlink breakage. The policy must make this unroutable by inspection before dispatch.
 
-## Scope (write only — do NOT modify implementation files)
+## Scope — write only these files
 
-### Primary targets (add tests where missing or thin):
+- `docs/05_operations/execution-location-policy.md` (NEW — primary deliverable)
+- May reference `docs/05_operations/WORKTREE_ISOLATION_POLICY.md` but do NOT modify it
 
-1. **`packages/verification/src/engine/determinism-validator.ts`**
-   - Threshold boundary conditions (at-limit, just-above, just-below)
-   - Score divergence edge cases that should produce FAIL
-   - False-positive scenario: two nearly-identical runs that should still PASS
+Do NOT touch any files under `packages/`, `apps/`, `supabase/`, `.claude/hooks/`, or `scripts/`.
 
-2. **`packages/verification/src/engine/fault/assertion-engine.ts`**
-   - Failure mode: assertion with no expectations registered
-   - Failure mode: partial assertion (some pass, some fail)
-   - Edge case: empty fault injection produces no assertion violations
+## Deliverables
 
-3. **`packages/verification/src/engine/fault/fault-orchestrator.ts`**
-   - Failure mode: fault injection triggers before any picks are processed
-   - Recovery case: orchestrator continues after single fault injection
+1. **Execution-location decision model** — document the two states: `main_checkout` and `worktree`
+2. **Eligibility rules** (machine-readable) — which lane types go where:
+   - `packages/**` → `main_checkout` always
+   - `apps/api/**`, `apps/worker/**`, `apps/ingestor/**` → `main_checkout` (package-adjacent)
+   - `apps/command-center/**`, `apps/discord-bot/**`, `apps/smart-form/**`, `apps/qa-agent/**` → `worktree` eligible
+   - `docs/**`, `scripts/**`, `.claude/**`, `.github/**` → `worktree` eligible
+   - All Codex lanes → `main_checkout` always, regardless of file scope
+3. **Registry field definitions** — document `execution_location` and `worktree_path` fields for lane manifests
+4. **Validation rules** — what checks must pass before a lane can use a worktree (e.g. no `packages/` in file_scope_lock)
+5. **Migration note** — what existing lane-start behavior conflicts with this policy and how to resolve it
 
-4. **`packages/verification/src/engine/event-store.ts`**
-   - Boundary: storing and retrieving zero events
-   - Boundary: event order preserved under concurrent writes (if applicable)
+## Required model
 
-5. **`packages/verification/src/scenarios/registry.ts`** (extend existing test)
-   - Duplicate scenario registration should throw or be idempotent (not silent)
-   - Missing scenario lookup returns null/throws — not undefined behavior
-
-### Test file naming convention
-Add tests alongside source files: `*.test.ts` in the same directory.
-
-### Test framework
-Use `node:test` + `assert` (same as existing tests in this package — check `determinism-gate.test.ts` and `fault-injection.test.ts` for the pattern).
-
-## Acceptance criteria
-- All newly added test files pass under `pnpm test:verification`
-- Full `pnpm verify` passes (type-check + lint + build + all tests)
-- Record which scenarios are newly covered in a `docs/06_status/proof/UTV2-610/diff-summary.md`
-
-## Proof required
-- `docs/06_status/proof/UTV2-610/diff-summary.md` — list of newly covered scenarios
-- `docs/06_status/proof/UTV2-610/verification.log` — tail of `pnpm verify` output showing green
-
-## sync.yml
-Create `.ops/sync.yml`:
-```yaml
-version: 1
-approval:
-  allow_multiple_issues: false
-  skip_sync_required: false
-entities:
-  issues:
-    - UTV2-610
+The document must define execution location explicitly:
+```
+execution_location: main_checkout  — when lane touches packages/* or package-adjacent apps
+execution_location: worktree       — when lane is app/docs/scripts only AND executor is Claude
+worktree_path: "."                 — always set when execution_location is main_checkout
 ```
 
+## Acceptance criteria
+- Execution-location rules are explicit and machine-readable
+- Lane-start/dispatch behavior has a clear target contract
+- Invalid worktree routing can be detected before execution by inspecting file_scope_lock
+- Existing repo policy in WORKTREE_ISOLATION_POLICY.md is preserved and referenced, not duplicated
+
+## Pre-PR steps (required before opening PR)
+1. `pnpm verify` — must exit 0
+2. `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` — paste output in PR body under `## R-level compliance`
+3. Open PR: `gh pr create --title "docs(governance): UTV2-965 execution-location policy and routing"`
+4. PR body must include: `Closes UTV2-965`, `## R-level compliance` section, `## Merge order` section
+5. After PR opens: `gh pr edit <PR-number> --add-label "tier:T2"`
+
+## Merge order (for PR body)
+
+| Lane | Issue | Files touched | Must merge after |
+|---|---|---|---|
+| Codex | UTV2-965 | `docs/05_operations/execution-location-policy.md` | none (independent of UTV2-963, UTV2-966) |
+
 ## Do NOT
-- Modify any implementation files in `packages/verification/src`
-- Add new exports to `packages/verification/src/index.ts`
-- Touch any other package or app
+- Modify `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`
+- Touch any file under `packages/`, `apps/`, `supabase/`, `scripts/`, `.claude/`
+- Create a second source of lane truth (agents read from `.claude/lanes.json`, not this doc)
+- Add runtime enforcement code — this issue is policy/docs only
