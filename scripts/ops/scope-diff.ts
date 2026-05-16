@@ -21,7 +21,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { ROOT, emitJson, readAllManifests, type LaneManifest } from './shared.js';
+import { ROOT, emitJson, type LaneManifest } from './shared.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
