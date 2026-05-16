@@ -1,5 +1,10 @@
 <#
 .SYNOPSIS
+  [Deprecated compatibility stub] All lanes now run on main checkout.
+  Worktrees are no longer used for any lane type. This script is retained
+  for backward compatibility only and will be removed in a future cleanup.
+  See docs/05_operations/WORKTREE_ISOLATION_POLICY.md — Rule 3 (main checkout).
+
   Wire up a fresh git worktree so pnpm verify works without a full pnpm install.
 
 .DESCRIPTION

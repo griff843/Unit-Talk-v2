@@ -11,12 +11,12 @@
 //   node scripts/ops/fix-sync-yml.mjs UNI-174
 
 import { execSync } from 'child_process';
-import { writeFileSync, readFileSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const repoRoot = resolve(__dirname, '../..');
+const repoRoot = process.env.UT_REPO_ROOT ?? resolve(__dirname, '../..');
 const syncYmlPath = resolve(repoRoot, '.ops/sync.yml');
 
 function getBranchIssueId() {
@@ -40,6 +40,14 @@ if (!issueId) {
   console.error('Cannot determine issue ID from branch name. Pass it explicitly:');
   console.error('  node scripts/ops/fix-sync-yml.mjs UTV2-123');
   process.exit(1);
+}
+
+// Deprecated: per-issue sync files (.ops/sync/UTV2-###.yml) supersede this script.
+// If a per-issue file exists, skip writing sync.yml — it stays neutral.
+const perIssuePath = resolve(repoRoot, `.ops/sync/${issueId}.yml`);
+if (existsSync(perIssuePath)) {
+  process.stderr.write(`Deprecated: per-issue sync file found at ${perIssuePath} — leaving legacy .ops/sync.yml untouched.\n`);
+  process.exit(0);
 }
 
 const current = readFileSync(syncYmlPath, 'utf8');
