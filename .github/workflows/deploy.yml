@@ -49,6 +49,31 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Validate production secret inventory
+        env:
+          SECRET_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SECRET_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SECRET_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          SECRET_DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          SECRET_DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          SECRET_UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
+          SECRET_UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          SECRET_SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+        run: |
+          missing=()
+          test -n "$SECRET_SUPABASE_URL"              || missing+=(SUPABASE_URL)
+          test -n "$SECRET_SUPABASE_ANON_KEY"         || missing+=(SUPABASE_ANON_KEY)
+          test -n "$SECRET_SUPABASE_SERVICE_ROLE_KEY" || missing+=(SUPABASE_SERVICE_ROLE_KEY)
+          test -n "$SECRET_DISCORD_BOT_TOKEN"         || missing+=(DISCORD_BOT_TOKEN)
+          test -n "$SECRET_DISCORD_CLIENT_ID"         || missing+=(DISCORD_CLIENT_ID)
+          test -n "$SECRET_UNIT_TALK_BOT_API_KEY"     || missing+=(UNIT_TALK_BOT_API_KEY)
+          test -n "$SECRET_UNIT_TALK_INGESTOR_API_KEY" || missing+=(UNIT_TALK_INGESTOR_API_KEY)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required production secrets are not configured: ${missing[*]}"
+            exit 1
+          fi
+          echo "All required production secrets are present."
+
       - name: Write deploy gate env
         run: |
           cat <<'EOF' > local.env
@@ -58,10 +83,17 @@ jobs:
           SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
           SUPABASE_SERVICE_ROLE_KEY=${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           UNIT_TALK_API_RUNTIME_MODE=fail_closed
+          UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed
+          UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed
+          UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed
           UNIT_TALK_INGESTOR_AUTORUN=true
           UNIT_TALK_WORKER_AUTORUN=true
           UNIT_TALK_WORKER_ADAPTER=discord
+          UNIT_TALK_WORKER_DRY_RUN=false
           DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
+          UNIT_TALK_BOT_API_KEY=${{ secrets.UNIT_TALK_BOT_API_KEY }}
+          UNIT_TALK_INGESTOR_API_KEY=${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           EOF
 
       - name: Deploy check

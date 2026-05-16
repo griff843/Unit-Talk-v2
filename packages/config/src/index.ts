@@ -7,3 +7,4 @@ export const workspaceConfig = {
 export type WorkspaceConfig = typeof workspaceConfig;
 
 export * from './env.js';
+export * from './secret-presence.js';
