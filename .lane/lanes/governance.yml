@@ -4,11 +4,14 @@ lane_type: governance
 allowed_path_globs:
   - .github/**
   - .lane/**
+  - .ops/**
   - scripts/**
+  - deploy/**
   - docs/governance/**
   - docs/05_operations/**
   - docs/06_status/lanes/**
   - package.json
+  - packages/config/**
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**
