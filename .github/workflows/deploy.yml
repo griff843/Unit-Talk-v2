@@ -79,6 +79,9 @@ jobs:
           fi
           echo "All required production secrets are present."
 
+      - name: Run test suite (dev env — must pass before gate env is written)
+        run: pnpm verify
+
       - name: Write deploy gate env
         run: |
           cat > local.env << ENVEOF
@@ -102,8 +105,8 @@ jobs:
           SGO_API_KEY=${{ secrets.SGO_API_KEY }}
           ENVEOF
 
-      - name: Deploy check
-        run: pnpm deploy:check
+      - name: Deploy static checks (pnpm verify already ran above)
+        run: pnpm deploy:check --skip-verify
 
   build:
     needs: verify
