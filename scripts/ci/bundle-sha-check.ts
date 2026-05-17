@@ -105,6 +105,12 @@ function main(): void {
   // Also accept mergeSha as an ancestor of expectedSha.
   // This handles the normal case where proof is generated at commit X, then bundle.json
   // is updated in a follow-on commit Y — the substantive code is the same.
+  // Deepen the shallow clone first so git merge-base can find ancestor commits.
+  try {
+    execSync('git fetch --deepen=20', { stdio: 'pipe' });
+  } catch {
+    // Best-effort — proceed with whatever history is available
+  }
   try {
     execSync(`git merge-base --is-ancestor ${mergeSha} ${expectedSha}`, { stdio: 'pipe' });
     console.log(
