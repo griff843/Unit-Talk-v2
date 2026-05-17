@@ -59,6 +59,8 @@ jobs:
           SECRET_UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
           SECRET_UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           SECRET_SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+          SECRET_UNIT_TALK_DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          SECRET_UNIT_TALK_DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
         run: |
           missing=()
           test -n "$SECRET_SUPABASE_URL"              || missing+=(SUPABASE_URL)
@@ -69,11 +71,19 @@ jobs:
           test -n "$SECRET_UNIT_TALK_BOT_API_KEY"     || missing+=(UNIT_TALK_BOT_API_KEY)
           test -n "$SECRET_UNIT_TALK_INGESTOR_API_KEY" || missing+=(UNIT_TALK_INGESTOR_API_KEY)
           test -n "$SECRET_SGO_API_KEY"              || missing+=(SGO_API_KEY)
+          test -n "$SECRET_UNIT_TALK_DEPLOY_HOST"    || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$SECRET_UNIT_TALK_DEPLOY_SSH_KEY" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ERROR: Required production secrets are not configured: ${missing[*]}"
             exit 1
           fi
           echo "All required production secrets are present."
+
+      - name: Create CI local.env (dev defaults — no auth keys, allows in-memory tests)
+        run: cp .env.example local.env
+
+      - name: Run test suite (dev env — must pass before gate env is written)
+        run: pnpm verify
 
       - name: Write deploy gate env
         run: |
@@ -88,20 +98,33 @@ jobs:
           UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed
           UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed
           UNIT_TALK_INGESTOR_AUTORUN=true
+          UNIT_TALK_INGESTOR_MAX_CYCLES=0
           UNIT_TALK_WORKER_AUTORUN=true
+          UNIT_TALK_WORKER_MAX_CYCLES=0
           UNIT_TALK_WORKER_ADAPTER=discord
           UNIT_TALK_WORKER_DRY_RUN=false
           DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
           UNIT_TALK_BOT_API_KEY=${{ secrets.UNIT_TALK_BOT_API_KEY }}
           UNIT_TALK_INGESTOR_API_KEY=${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          SGO_API_KEY=${{ secrets.SGO_API_KEY }}
           EOF
 
-      - name: Deploy check
-        run: pnpm deploy:check
+      - name: Validate progressive delivery contract
+        run: npx tsx scripts/deploy-check.ts --skip-verify
+
+  rollback-dry-run:
+    needs: verify
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate rollback dry-run
+        run: bash deploy/rollback.sh --dry-run --tag "${{ inputs.rollback_tag || github.sha }}"
 
   build:
-    needs: verify
+    needs: [verify, rollback-dry-run]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -136,9 +159,11 @@ jobs:
             UNIT_TALK_GIT_SHA=${{ github.sha }}
             UNIT_TALK_BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
 
-  deploy:
+  canary:
+    name: Canary deploy
     needs: build
     runs-on: ubuntu-latest
+    environment: canary
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -170,7 +195,7 @@ jobs:
           GHCR_PAT: ${{ secrets.GHCR_PAT }}
         run: printf '%s' "$GHCR_PAT" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker login ghcr.io -u griff843 --password-stdin'
 
-      - name: Release containers
+      - name: Release API canary
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
           ROLLBACK_TAG: ${{ inputs.rollback_tag }}
@@ -180,25 +205,85 @@ jobs:
              if [ -f .unit-talk-release ]; then cp .unit-talk-release .unit-talk-release.previous; fi && \
              printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
-             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api"
+          DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
+          case "$DEEP_HEALTH_URL" in
+            */api/health\?full=true) ;;
+            */health) DEEP_HEALTH_URL="${DEEP_HEALTH_URL%/health}/api/health?full=true" ;;
+            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/api/health?full=true" ;;
+          esac
           for attempt in $(seq 1 30); do
-            if curl -fsS "$DEPLOY_HEALTH_URL" >/dev/null; then
+            if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
               exit 0
             fi
             sleep 10
           done
           if [ -n "$ROLLBACK_TAG" ]; then
-            ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-              "set -eu && cd '$DEPLOY_PATH' && \
-               printf '%s\n' '$ROLLBACK_TAG' > .unit-talk-release && \
-               UNIT_TALK_IMAGE_TAG='$ROLLBACK_TAG' docker compose pull && \
-               UNIT_TALK_IMAGE_TAG='$ROLLBACK_TAG' docker compose up -d --remove-orphans"
+            bash deploy/rollback.sh --tag "$ROLLBACK_TAG" --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
+          fi
+          exit 1
+
+  promote:
+    name: Promote production
+    needs: canary
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate deploy secrets
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_HEALTH_URL"
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Authenticate GHCR on remote
+        env:
+          GHCR_PAT: ${{ secrets.GHCR_PAT }}
+        run: printf '%s' "$GHCR_PAT" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker login ghcr.io -u griff843 --password-stdin'
+
+      - name: Promote all production containers
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+          ROLLBACK_TAG: ${{ inputs.rollback_tag }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && \
+             printf '%s\n' '$IMAGE_TAG' > .unit-talk-release && \
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
+          DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
+          case "$DEEP_HEALTH_URL" in
+            */api/health\?full=true) ;;
+            */health) DEEP_HEALTH_URL="${DEEP_HEALTH_URL%/health}/api/health?full=true" ;;
+            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/api/health?full=true" ;;
+          esac
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          if [ -n "$ROLLBACK_TAG" ]; then
+            bash deploy/rollback.sh --tag "$ROLLBACK_TAG" --host "$DEPLOY_HOST" --user "$DEPLOY_USER" --path "$DEPLOY_PATH"
           fi
           exit 1
 
   smoke:
     name: Post-deploy functional smoke
-    needs: deploy
+    needs: promote
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
