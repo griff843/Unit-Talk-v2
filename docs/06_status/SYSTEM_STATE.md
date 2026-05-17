@@ -1,7 +1,7 @@
-# System State — 2026-05-17 03:53
+# System State — 2026-05-17 04:51
 
 ## Branch
-claude/utv2-938-formal-invariant-verification
+claude/utv2-936-automated-recovery
 
 ## Active Milestone
 Phase 7A 
@@ -10,11 +10,11 @@ Phase 7A
   none
 
 ## Working Tree
-2 file(s) modified/untracked
+3 file(s) modified/untracked
 
 ## Recent Commits
-e518f388 chore(lanes): UTV2-938 manifest — PR #711 open, awaiting t1-approved
-ad61bc7e docs(proof): UTV2-938 force-add verification.log (gitignored extension)
-d6b1549c feat(verification): UTV2-938 formal lifecycle FSM invariant verification
-3619711e chore(lanes): UTV2-938 lane manifest and sync metadata
-ff7ecdd9 chore(lanes): close UTV2-930 — merged at cc194455 (#710)
+7bdde6ca chore(lanes): UTV2-936 update manifest — pr_open at #712
+479b522e docs(proof): UTV2-936 T1 evidence bundle and verification artifacts
+4535b4e7 feat(worker): UTV2-936 automated recovery workflows with kill-switch, denylist, and audit
+e03c5a42 chore(lanes): UTV2-936 lane manifest and sync metadata
+1ee2a106 chore(lanes): close UTV2-938 — merged at d0effc8c (#711)
