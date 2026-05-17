@@ -1,20 +1,20 @@
-# System State — 2026-05-17 04:51
+# System State — 2026-05-17 08:01
 
 ## Branch
-claude/utv2-936-automated-recovery
+
 
 ## Active Milestone
 Phase 7A 
 
 ## Active Lanes
-  none
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
 
 ## Working Tree
-3 file(s) modified/untracked
+Clean
 
 ## Recent Commits
-7bdde6ca chore(lanes): UTV2-936 update manifest — pr_open at #712
-479b522e docs(proof): UTV2-936 T1 evidence bundle and verification artifacts
-4535b4e7 feat(worker): UTV2-936 automated recovery workflows with kill-switch, denylist, and audit
-e03c5a42 chore(lanes): UTV2-936 lane manifest and sync metadata
-1ee2a106 chore(lanes): close UTV2-938 — merged at d0effc8c (#711)
+d0effc8 feat(verification): UTV2-938 formal lifecycle FSM invariant verification (#711)
+ff7ecdd chore(lanes): close UTV2-930 — merged at cc194455 (#710)
+cc19445 feat(contracts): UTV2-930 canonical lifecycle FSM — single source of truth in contracts (#710)
+6a70281 chore(lanes): close UTV2-933 — merged at 9e2bb5fe (#709)
+9e2bb5f feat(governance): UTV2-933 generated API contracts — parseSubmissionPayload with runtime schema and drift tests (#709)
