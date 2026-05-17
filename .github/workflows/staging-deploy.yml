@@ -69,8 +69,21 @@ jobs:
       - name: Staging parity check
         run: npx tsx scripts/staging-check.ts
 
-  build:
+      - name: Validate progressive delivery contract
+        run: npx tsx scripts/deploy-check.ts --skip-verify
+
+  rollback-dry-run:
     needs: parity-check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate rollback dry-run
+        run: bash deploy/rollback.sh --dry-run --tag "${{ inputs.image_tag || github.sha }}"
+
+  build:
+    needs: [parity-check, rollback-dry-run]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -105,9 +118,11 @@ jobs:
             UNIT_TALK_GIT_SHA=${{ github.sha }}
             UNIT_TALK_BUILD_TIMESTAMP=${{ github.event.head_commit.timestamp }}
 
-  deploy:
+  stage-canary:
+    name: Staging canary
     needs: build
     runs-on: ubuntu-latest
+    environment: staging-canary
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -139,7 +154,60 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: printf '%s' "$GH_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker login ghcr.io -u griff843 --password-stdin'
 
-      - name: Release staging containers
+      - name: Release staging API canary
+        env:
+          IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "set -eu && cd '$DEPLOY_PATH' && \
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
+             UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api"
+          DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
+          case "$DEEP_HEALTH_URL" in
+            */api/health\?full=true) ;;
+            */health) DEEP_HEALTH_URL="${DEEP_HEALTH_URL%/health}/api/health?full=true" ;;
+            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/api/health?full=true" ;;
+          esac
+          for attempt in $(seq 1 30); do
+            if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
+              exit 0
+            fi
+            sleep 10
+          done
+          exit 1
+
+  promote-staging:
+    name: Promote staging
+    needs: stage-canary
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate staging deploy secrets
+        run: |
+          test -n "$DEPLOY_HOST"
+          test -n "$DEPLOY_USER"
+          test -n "$DEPLOY_PATH"
+          test -n "$DEPLOY_HEALTH_URL"
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_STAGING_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY"
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Authenticate GHCR on remote
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: printf '%s' "$GH_TOKEN" | ssh "$DEPLOY_USER@$DEPLOY_HOST" 'docker login ghcr.io -u griff843 --password-stdin'
+
+      - name: Promote all staging containers
         env:
           IMAGE_TAG: ${{ inputs.image_tag || github.sha }}
         run: |
@@ -147,8 +215,14 @@ jobs:
             "set -eu && cd '$DEPLOY_PATH' && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose pull && \
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
+          DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
+          case "$DEEP_HEALTH_URL" in
+            */api/health\?full=true) ;;
+            */health) DEEP_HEALTH_URL="${DEEP_HEALTH_URL%/health}/api/health?full=true" ;;
+            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/api/health?full=true" ;;
+          esac
           for attempt in $(seq 1 30); do
-            if curl -fsS "$DEPLOY_HEALTH_URL" >/dev/null; then
+            if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
               exit 0
             fi
             sleep 10
