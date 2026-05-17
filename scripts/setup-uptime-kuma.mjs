@@ -38,11 +38,9 @@ async function main() {
     let nextBtn = page.locator('button[type="submit"]');
     const isDisabled = await nextBtn.getAttribute('disabled');
     if (isDisabled !== null) {
-      // Force via JS dispatch to trigger Vue reactivity
-      await page.evaluate(() => {
-        const sel = document.querySelector('select#language');
-        if (sel) sel.dispatchEvent(new Event('change', { bubbles: true }));
-      });
+      // Force via JS dispatch to trigger Vue reactivity (browser context — document is valid)
+      // eslint-disable-next-line no-undef
+      await page.evaluate(() => document.querySelector('select#language')?.dispatchEvent(new Event('change', { bubbles: true })));
       await page.waitForTimeout(500);
     }
     await nextBtn.click({ force: true });
