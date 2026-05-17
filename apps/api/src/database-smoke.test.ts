@@ -370,7 +370,7 @@ test(
 );
 
 test(
-  'UTV2-996: duplicate settlement is idempotent — second call returns existing record, no extra rows',
+  'UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows',
   { skip: smokeSkip() },
   async () => {
     const environment = loadEnvironment();
@@ -389,21 +389,26 @@ test(
         repositories,
       );
 
+      // Second call from 'settled' state routes to correction (service design: re-settle = correct)
       const second = await recordPickSettlement(
         result.pick.id,
         { status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'db-smoke://utv2-996-dup', settledBy: 'codex' },
         repositories,
       );
 
-      assert.equal(first.settlementRecord.id, second.settlementRecord.id, 'duplicate settlement must return the same record ID');
+      // Correction creates a new record — different ID
+      assert.notEqual(first.settlementRecord.id, second.settlementRecord.id, 're-settlement must produce a correction record');
+      // Correction points to original
+      assert.equal(second.settlementRecord.corrects_id, first.settlementRecord.id, 'correction corrects_id must reference original');
 
-      const { count: settlementCount, error: settlementError } = await client
+      // Exactly one base record (corrects_id = null) — no true duplicate rows
+      const { count: baseCount, error: baseError } = await client
         .from('settlement_records')
         .select('id', { count: 'exact', head: true })
         .eq('pick_id', result.pick.id)
         .is('corrects_id', null);
-      assert.ifError(settlementError);
-      assert.equal(settlementCount, 1, 'exactly one base settlement record must exist after duplicate calls');
+      assert.ifError(baseError);
+      assert.equal(baseCount, 1, 'exactly one base settlement record must exist — no true duplicate rows');
     } finally {
       await client.from('picks').delete().eq('id', result.pick.id);
       await client.from('submissions').delete().eq('id', result.submission.id);

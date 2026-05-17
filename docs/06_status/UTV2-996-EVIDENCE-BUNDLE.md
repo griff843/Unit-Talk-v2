@@ -9,7 +9,7 @@
 | Date | 2026-05-17 |
 | Verifier Identity | claude/sonnet-4-6/session-utv2-996 |
 | Commit SHA(s) | 2370bc8f6490e844d3946f53f18224f3d5a76733 |
-| Related PRs | pending |
+| Related PRs | #726 |
 
 ## Scope
 
@@ -65,7 +65,7 @@ DB smoke tests: node --import tsx/esm --test apps/api/src/database-smoke.test.ts
 | Live or smoke DB proof shows invalid settlement writes no partial settlement/lifecycle/audit rows | A1 | PASS |
 | Correction chain proof includes original + correction records | A3, A6 | PASS |
 | `audit_log` remains append-only | A4, A5 | PASS |
-| Settlement drill output is saved as a proof artifact | `docs/06_status/proof/UTV2-996/settlement-drill.md` | DONE |
+| Settlement drill output is saved as a proof artifact | `docs/06_status/proof/UTV2-996/settlement-verification.md` | DONE |
 
 ## Stop Conditions Encountered
 
@@ -75,4 +75,4 @@ None. No T1/Tier-C migration paths were touched. All changes are additive (new t
 
 Verifier: claude/sonnet-4-6/session-utv2-996
 Date: 2026-05-17
-Result: PASS — all acceptance criteria met; proof artifact at `docs/06_status/proof/UTV2-996/settlement-drill.md`
+Result: PASS — all acceptance criteria met; proof artifact at `docs/06_status/proof/UTV2-996/settlement-verification.md`

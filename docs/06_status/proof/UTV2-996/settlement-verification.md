@@ -1,5 +1,9 @@
 # PROOF: UTV2-996
-MERGE_SHA: 2370bc8f6490e844d3946f53f18224f3d5a76733
+MERGE_SHA: 63c9bed4259fd1db01e6c27fb27e44451f241254
+
+## Verification
+
+Live-DB settlement drill: all 5 assertions passed. DB smoke tests: exit 0.
 
 ASSERTIONS:
 - [x] 396 settled records in settlement_records table — table queryable and populated

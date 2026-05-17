@@ -1,16 +1,9 @@
 {
   "$schema": "https://unit-talk.internal/schemas/evidence-bundle/v1",
-  "issue_id": "UTV2-915",
+  "issue_id": "UTV2-996",
   "tier": "T1",
-  "merge_sha": "1b6f3909f9226d9c0c10b915f42357408ef558c2",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/651",
-  "merged_at": "2026-05-13T09:32:08Z",
-  "bundle_markdown": "docs/06_status/UTV2-915-EVIDENCE-BUNDLE.md",
-  "p0_protocol": {
-    "codex_implementation_pr": "https://github.com/griff843/Unit-Talk-v2/pull/651",
-    "claude_critique": "docs/06_status/proof/UTV2-915/claude-critique.md",
-    "runtime_verification": "docs/06_status/proof/UTV2-915/runtime-verification.md",
-    "human_approval": "https://github.com/griff843/Unit-Talk-v2/pull/651#issuecomment-4439336654",
-    "merge_type": "manual"
-  }
+  "merge_sha": "63c9bed4259fd1db01e6c27fb27e44451f241254",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/726",
+  "merged_at": null,
+  "bundle_markdown": "docs/06_status/UTV2-996-EVIDENCE-BUNDLE.md"
 }
