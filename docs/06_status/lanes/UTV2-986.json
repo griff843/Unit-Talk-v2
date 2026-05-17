@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-986",
-  "lane_type": "modeling",
+  "lane_type": "runtime",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": ".",
