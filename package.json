@@ -104,6 +104,7 @@
     "qa:auth": "tsx apps/qa-agent/src/cli.ts auth",
     "qa:auth-setup": "tsx apps/qa-agent/src/cli.ts auth",
     "smoke:discord": "tsx apps/qa-agent/src/cli.ts --surface discord --persona vip_user --flow pick_delivery --mode fast",
+    "audit:discord-targets": "tsx scripts/audit-discord-targets.ts",
     "migration:audit": "tsx scripts/utv2-356-migration-audit.ts",
     "portfolio:review": "tsx scripts/portfolio-review.ts",
     "proof:check": "tsx scripts/proof-check.ts",
