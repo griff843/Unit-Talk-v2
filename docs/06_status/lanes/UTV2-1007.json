@@ -2,26 +2,29 @@
   "schema_version": 1,
   "issue_id": "UTV2-1007",
   "lane_type": "governance",
-  "executor": "codex-cli",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": ".",
   "branch": "codex/utv2-1007-machine-readable-governance-outputs",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "0542da44ea38078a90b616a72db0c4c432fc01b3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/720",
+  "files_changed": [
+    "scripts/ops/agent-result-schema.ts",
+    "scripts/ops/agent-result-schema.test.ts"
+  ],
   "file_scope_lock": [
     "scripts/ops/agent-result-schema.ts",
     "scripts/ops/agent-result-schema.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_progress",
+  "status": "in_review",
   "started_at": "2026-05-17T10:10:00.000Z",
-  "heartbeat_at": "2026-05-17T10:10:00.000Z",
+  "heartbeat_at": "2026-05-17T11:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
-  "created_by": "codex-cli",
+  "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": []
 }

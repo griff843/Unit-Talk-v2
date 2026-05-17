@@ -2,27 +2,31 @@
   "schema_version": 1,
   "issue_id": "UTV2-1005",
   "lane_type": "governance",
-  "executor": "codex-cli",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": ".",
   "branch": "codex/utv2-1005-runtime-verifier-mandatory-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "5737ac36eace7225a527b9b992c7f1b78d1cf481",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/722",
+  "files_changed": [
+    "scripts/ops/runtime-verifier-gate.ts",
+    "scripts/ops/runtime-verifier-gate.test.ts",
+    ".github/workflows/runtime-verifier-gate.yml"
+  ],
   "file_scope_lock": [
     "scripts/ops/runtime-verifier-gate.ts",
     "scripts/ops/runtime-verifier-gate.test.ts",
     ".github/workflows/runtime-verifier-gate.yml"
   ],
   "expected_proof_paths": [],
-  "status": "in_progress",
+  "status": "in_review",
   "started_at": "2026-05-17T10:10:00.000Z",
-  "heartbeat_at": "2026-05-17T10:10:00.000Z",
+  "heartbeat_at": "2026-05-17T11:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
-  "created_by": "codex-cli",
+  "created_by": "claude",
   "truth_check_history": [],
   "reopen_history": []
 }
