@@ -1,25 +1,26 @@
-import type { CanonicalPick } from '@unit-talk/contracts';
+/**
+ * Pick OUTCOME lifecycle — tracks a pick from scoring to settlement result.
+ * This is separate from the pick DELIVERY lifecycle in @unit-talk/contracts
+ * (draft -> validated -> queued -> posted -> settled/voided), which governs
+ * ingestion and delivery. These two state machines operate on different
+ * dimensions and must not be conflated.
+ */
 
-type CanonicalPickStatus = CanonicalPick extends { status: infer Status }
-  ? Extract<Status, string>
-  : never;
-
+// Explicit outcome states — not derived from CanonicalPick (which tracks
+// delivery lifecycle state, not outcome state).
 export type PickLifecycleStatus =
-  [CanonicalPickStatus] extends [never]
-    ?
-        | 'pending'
-        | 'qualified'
-        | 'disqualified'
-        | 'awaiting_approval'
-        | 'approved'
-        | 'rejected'
-        | 'sent'
-        | 'cancelled'
-        | 'won'
-        | 'lost'
-        | 'push'
-        | 'void'
-    : CanonicalPickStatus;
+  | 'pending'
+  | 'qualified'
+  | 'disqualified'
+  | 'awaiting_approval'
+  | 'approved'
+  | 'rejected'
+  | 'sent'
+  | 'cancelled'
+  | 'won'
+  | 'lost'
+  | 'push'
+  | 'void';
 
 const transitionEntries = [
   ['pending', ['qualified', 'disqualified']],

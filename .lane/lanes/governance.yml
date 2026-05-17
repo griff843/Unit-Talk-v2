@@ -10,9 +10,12 @@ allowed_path_globs:
   - docs/governance/**
   - docs/05_operations/**
   - docs/06_status/lanes/**
+  - docs/06_status/proof/**
   - package.json
   - packages/config/**
   - packages/contracts/**
+  - packages/db/src/**
+  - packages/domain/src/**
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**

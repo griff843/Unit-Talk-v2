@@ -1,5 +1,7 @@
 import {
   createLifecycleEvent,
+  getAllowedLifecycleTransitions,
+  isTerminalLifecycleState,
   type PickLifecycleState,
   type WriterRole,
 } from '@unit-talk/contracts';
@@ -52,44 +54,19 @@ export class InvalidPickStateError extends Error {
 }
 
 // ---------------------------------------------------------------------------
-// Allowed-transitions map (single source of truth)
-// ---------------------------------------------------------------------------
-
-/**
- * The canonical lifecycle FSM.
- *
- * Terminal states (`settled`, `voided`) have no outgoing transitions.
- * Regression transitions (e.g. posted -> validated) are forbidden by omission.
- *
- * Phase 7A (UTV2-491): `awaiting_approval` is a governance brake state for
- * non-human producers. Valid forward paths: `queued` (approved) or `voided`
- * (rejected). Not a terminal state, but has no backward transitions and
- * cannot skip directly to `posted` or `settled`.
- */
-const allowedTransitions: Record<PickLifecycleState, PickLifecycleState[]> = {
-  draft: ['validated', 'voided'],
-  validated: ['queued', 'awaiting_approval', 'voided'],
-  awaiting_approval: ['queued', 'voided'],
-  queued: ['posted', 'voided'],
-  posted: ['settled', 'voided'],
-  settled: [],
-  voided: [],
-};
-
-// ---------------------------------------------------------------------------
-// Helper exports
+// Helper exports (delegates to @unit-talk/contracts canonical FSM)
 // ---------------------------------------------------------------------------
 
 /** Returns the list of valid next states for a given state. */
 export function getAllowedTransitions(
   fromState: PickLifecycleState,
 ): PickLifecycleState[] {
-  return allowedTransitions[fromState] ?? [];
+  return getAllowedLifecycleTransitions(fromState) as PickLifecycleState[];
 }
 
 /** Returns `true` for terminal states (`settled`, `voided`). */
 export function isTerminalState(state: PickLifecycleState): boolean {
-  return state === 'settled' || state === 'voided';
+  return isTerminalLifecycleState(state);
 }
 
 // ---------------------------------------------------------------------------
@@ -119,8 +96,8 @@ export async function transitionPickLifecycle(
   }
 
   const fromState = existing.status as PickLifecycleState;
-  const allowed = allowedTransitions[fromState] ?? [];
-  if (!allowed.includes(toState)) {
+  const allowed = getAllowedLifecycleTransitions(fromState);
+  if (!(allowed as readonly string[]).includes(toState)) {
     throw new InvalidTransitionError(fromState, toState);
   }
 
@@ -240,8 +217,8 @@ export async function atomicClaimForTransition(
   expectedCurrentState: PickLifecycleState,
   targetState: PickLifecycleState,
 ): Promise<ClaimResult> {
-  const allowed = allowedTransitions[expectedCurrentState] ?? [];
-  if (!allowed.includes(targetState)) {
+  const allowed = getAllowedLifecycleTransitions(expectedCurrentState);
+  if (!(allowed as readonly string[]).includes(targetState)) {
     return { claimed: false, pickId };
   }
 

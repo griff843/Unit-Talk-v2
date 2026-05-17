@@ -16,6 +16,42 @@ export type PickLifecycleState =
   | 'settled'
   | 'voided';
 
+/**
+ * Canonical lifecycle FSM — single source of truth for all layers (contracts, DB, domain).
+ * Terminal states have empty arrays. Regression transitions absent by omission.
+ *
+ * Phase 7A (UTV2-491): awaiting_approval is the governance brake for non-human producers.
+ * Forward paths: queued (approved) or voided (rejected).
+ */
+export const pickLifecycleTransitions: Readonly<
+  Record<PickLifecycleState, readonly PickLifecycleState[]>
+> = {
+  draft: ['validated', 'voided'],
+  validated: ['queued', 'awaiting_approval', 'voided'],
+  awaiting_approval: ['queued', 'voided'],
+  queued: ['posted', 'voided'],
+  posted: ['settled', 'voided'],
+  settled: [],
+  voided: [],
+};
+
+export function isAllowedLifecycleTransition(
+  from: PickLifecycleState,
+  to: PickLifecycleState,
+): boolean {
+  return (pickLifecycleTransitions[from] as readonly string[]).includes(to);
+}
+
+export function isTerminalLifecycleState(state: PickLifecycleState): boolean {
+  return pickLifecycleTransitions[state].length === 0;
+}
+
+export function getAllowedLifecycleTransitions(
+  from: PickLifecycleState,
+): readonly PickLifecycleState[] {
+  return pickLifecycleTransitions[from];
+}
+
 export interface CanonicalPick {
   id: string;
   submissionId: string;
