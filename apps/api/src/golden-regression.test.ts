@@ -112,6 +112,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.510834,
         hasRealEdge: true,
         realEdgeBookCount: 1,
+        edgeProvenance: { method: 'market-devigged', providerCoverageState: 'sgo', fallbackReason: null },
         band: 'C',
         contrarySignal: {
           contrarianism: 'strongly-contrarian',
@@ -235,6 +236,7 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
         marketProbability: 0.75,
         hasRealEdge: false,
         realEdgeBookCount: 0,
+        edgeProvenance: { method: 'confidence-delta', providerCoverageState: 'none', fallbackReason: 'no-any-offer' },
         band: 'SUPPRESS',
         contrarySignal: {
           contrarianism: 'consensus-fade',
@@ -283,17 +285,18 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       selection: 'Skater Over 3.5',
       odds: null,
       confidence: 0.9,
-      promotionStatus: 'qualified',
-      promotionTarget: 'exclusive-insights',
-      promotionScore: 92.69000000000001,
-      promotionReason: 'hard eligibility checks passed | promotion score 92.69 meets threshold 90.00',
-      promotionVersion: 'exclusive-insights-v2',
+      // UTV2-985 fail-closed: no odds → no market data → edge=0 → suppressed
+      promotionStatus: 'suppressed',
+      promotionTarget: null,
+      promotionScore: 60.49000000000001,
+      promotionReason: 'promotion score 60.49 is below threshold 70.00',
+      promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'NHL',
         eventName: 'Rangers vs Bruins',
         promotionScores: { trust: 90, readiness: 88, uniqueness: 84, boardFit: 89 },
         kellySizing: null,
-        band: 'C',
+        band: 'SUPPRESS',
       },
     },
     expectedSettlements: [

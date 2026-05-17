@@ -2246,11 +2246,11 @@ test('distribution gate rejects blocked discord:exclusive-insights even for qual
   assert.deepEqual(await repositories.outbox.listByPickId(result.pick.id), []);
 });
 
-// A3: best-bets with absent/null edge+trust scores still qualifies (thresholds are 0)
+// A3: UTV2-985 fail-closed — picks without explicit edge and no market data are suppressed
 test('best-bets qualified pick with absent edge and trust scores still qualifies', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  // No edge/trust in promotionScores. best-bets minimumEdge=0, minimumTrust=0 so
-  // absent scores (fallback to confidence-based score) satisfy the threshold.
+  // No edge/trust in promotionScores, no provider offers → confidence-delta fallback.
+  // UTV2-985: edge contribution = 0 (fail-closed — confidence-delta must not inflate edge).
   const result = await processSubmission(
     {
       source: 'api',
@@ -2264,30 +2264,17 @@ test('best-bets qualified pick with absent edge and trust scores still qualifies
           readiness: 82,
           uniqueness: 80,
           boardFit: 78,
-          // edge and trust intentionally absent
+          // edge and trust intentionally absent — no market data → edge=0
         },
       },
     },
     repositories,
   );
 
-  // confidence=0.85 → fallback score for edge/trust = 85 (passes threshold of 0).
-  // overall = 85*0.35 + 85*0.25 + 82*0.2 + 80*0.1 + 78*0.1 = 29.75 + 21.25 + 16.4 + 8 + 7.8 = 83.2 ≥ 70.
-  // trader-insights: edge=85 ≥ 85, trust=85 ≥ 85, overall=83.2 ≥ 80 → also qualifies → ti wins.
-  assert.equal(result.pick.promotionTarget, 'trader-insights');
-  assert.equal(result.pick.promotionStatus, 'qualified');
-
-  // Can route to trader-insights.
-  const tiTracked = await enqueueDistributionWithRunTracking(
-    result.pick,
-    'discord:trader-insights',
-    'api',
-    repositories.picks,
-    repositories.outbox,
-    repositories.runs,
-    repositories.audit,
-  );
-  assert.equal(tiTracked.target, 'discord:trader-insights');
+  // edge=0, trust≈85 (confidence fallback), readiness=82, uniqueness=80, boardFit=78
+  // score = 0*0.35 + 85*0.25 + 82*0.2 + 80*0.1 + 78*0.1 = 0+21.25+16.4+8+7.8 = 53.45 < 70 → suppressed
+  assert.equal(result.pick.promotionStatus, 'suppressed');
+  assert.ok(result.pick.promotionTarget == null, 'confidence-delta pick must not qualify without market-backed edge (UTV2-985)');
 });
 
 // ─── Exposure Gate Tests ────────────────────────────────────────────────────

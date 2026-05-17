@@ -201,6 +201,12 @@ export async function processSubmission(
         marketProbability: realEdgeResult.marketProbability,
         hasRealEdge: realEdgeResult.hasRealEdge,
         realEdgeBookCount: realEdgeResult.bookCount,
+        // UTV2-985: explicit provenance so operators can audit edge coverage without JSON parsing.
+        edgeProvenance: {
+          method: realEdgeResult.provenance.method,
+          providerCoverageState: realEdgeResult.provenance.providerCoverageState,
+          fallbackReason: realEdgeResult.provenance.fallbackReason,
+        },
         ...(
           realEdgeResult.contrarySignal &&
           realEdgeResult.contrarySignal.contrarianism !== 'aligned'

@@ -52,8 +52,23 @@ export const edgeSources = [
 ] as const;
 export type EdgeSource = (typeof edgeSources)[number];
 export type EdgeSourceQuality = 'market-backed' | 'explicit' | 'confidence-fallback';
+/**
+ * How the edge value was computed.
+ * - 'market-devigged': model probability vs a devigged provider offer (authoritative)
+ * - 'confidence-delta': confidence minus implied odds — no market data, self-reported only
+ */
+export type EdgeMethod = 'market-devigged' | 'confidence-delta';
+/**
+ * Which provider tier supplied the market data used for edge computation.
+ * - 'none': no market data found; confidence-delta fallback was used (UTV2-985)
+ */
+export type ProviderCoverageState = 'pinnacle' | 'consensus' | 'sgo' | 'single-book' | 'none';
 export type EdgeFallbackReason =
   | 'missing-explicit-edge-and-market-edge'
+  | 'no-pinnacle-offer'
+  | 'no-consensus-books'
+  | 'no-sgo-offer'
+  | 'no-any-offer'
   | 'not-applicable';
 
 export interface PromotionScoreWeights {
@@ -340,6 +355,16 @@ export interface PromotionDecisionSnapshot {
      * small so operators can group root causes by stable labels.
      */
     edgeFallbackReason?: EdgeFallbackReason | undefined;
+    /**
+     * How the edge was computed — 'market-devigged' (authoritative) or
+     * 'confidence-delta' (self-reported, no market data). Added UTV2-985.
+     */
+    edgeMethod?: EdgeMethod | undefined;
+    /**
+     * Which provider tier supplied market data, or 'none' when confidence-delta
+     * fallback was used. Enables coverage auditing without JSON parsing. UTV2-985.
+     */
+    providerCoverageState?: ProviderCoverageState | undefined;
   };
 
   /** Gate boolean/value inputs at the moment of decision. */
