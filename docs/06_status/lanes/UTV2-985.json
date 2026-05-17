@@ -23,9 +23,9 @@
     "docs/06_status/proof/UTV2-985/evidence-bundle.md",
     "docs/06_status/proof/UTV2-985/edge-coverage-report.json"
   ],
-  "status": "in_progress",
+  "status": "pr_open",
   "started_at": "2026-05-17T12:15:00.000Z",
-  "heartbeat_at": "2026-05-17T12:15:00.000Z",
+  "heartbeat_at": "2026-05-17T22:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
