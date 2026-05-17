@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1002",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "DOCS",
+  "worktree_path": ".",
+  "branch": "claude/utv2-1002-reconcile-null-sha-orphaned-manifests",
+  "base_branch": "main",
+  "commit_sha": "417731d489aec7095e2249514dbd3e646993e032",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/713",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1002/lane-reconciliation.md",
+    "docs/06_status/lanes/UTV2-910.json",
+    "docs/06_status/lanes/UTV2-976.json",
+    "docs/06_status/lanes/UTV2-977.json",
+    "docs/06_status/lanes/UTV2-1002.json",
+    ".ops/sync/UTV2-1002.yml"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1002/**",
+    "docs/06_status/lanes/UTV2-910.json",
+    "docs/06_status/lanes/UTV2-976.json",
+    "docs/06_status/lanes/UTV2-977.json",
+    "docs/06_status/lanes/UTV2-1002.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1002/lane-reconciliation.md"
+  ],
+  "status": "done",
+  "started_at": "2026-05-17T08:57:00.000Z",
+  "heartbeat_at": "2026-05-17T09:44:00.000Z",
+  "closed_at": "2026-05-17T09:44:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

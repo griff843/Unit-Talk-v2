@@ -1,6 +1,6 @@
 {
   "id": "UTV2-976",
-  "title": "Add ops:reconcile — scheduled stranded lane detection referenced but missing",
+  "title": "Add ops:reconcile \u2014 scheduled stranded lane detection referenced but missing",
   "owner": "claude",
   "status": "done",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/685",
@@ -15,5 +15,6 @@
     "package.json"
   ],
   "createdAt": "2026-05-15T17:33:00.000Z",
-  "updatedAt": "2026-05-15T18:10:00.000Z"
+  "updatedAt": "2026-05-15T18:10:00.000Z",
+  "issue_id": "UTV2-976"
 }

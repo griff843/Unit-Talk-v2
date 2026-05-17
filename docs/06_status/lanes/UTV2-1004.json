@@ -7,8 +7,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-1004-agent-rationalization-decision",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e97c4c36bbbf4b0aecc5b4d4ad27f2fe4a9e2c4a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/714",
   "files_changed": [
     "docs/06_status/proof/UTV2-1004/agent-rationalization-decision.md",
     "docs/06_status/lanes/UTV2-1004.json",
@@ -21,10 +21,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1004/agent-rationalization-decision.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-17T09:08:00.000Z",
-  "heartbeat_at": "2026-05-17T09:08:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-17T09:44:00.000Z",
+  "closed_at": "2026-05-17T09:44:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
