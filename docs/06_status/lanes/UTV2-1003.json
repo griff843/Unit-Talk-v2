@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1003",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1003-opsreconcile-dry-run-default",
+  "base_branch": "main",
+  "commit_sha": "8f11554d3cb493adee1216be47563ffe018d4909",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/717",
+  "files_changed": ["scripts/ops/reconcile.ts", "scripts/ops/reconcile.test.ts", ".github/workflows/ops-reconcile.yml"],
+  "file_scope_lock": [
+    "scripts/ops/reconcile.ts",
+    "scripts/ops/reconcile.test.ts",
+    ".github/workflows/ops-reconcile.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-05-17T12:00:00.000Z",
+  "heartbeat_at": "2026-05-17T10:00:00.000Z",
+  "closed_at": "2026-05-17T10:00:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

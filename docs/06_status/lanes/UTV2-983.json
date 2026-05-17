@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-983",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "codex/utv2-983-collapse-runtime-health-canonical",
+  "base_branch": "main",
+  "commit_sha": "a4b3f5f8331238f7e98de216984f2daf49ced065",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/718",
+  "files_changed": ["scripts/ops/canonical-health.ts", "scripts/ops/canonical-health.test.ts", "package.json"],
+  "file_scope_lock": [
+    "scripts/ops/canonical-health.ts",
+    "scripts/ops/canonical-health.test.ts",
+    "package.json"
+  ],
+  "expected_proof_paths": [],
+  "status": "done",
+  "started_at": "2026-05-17T09:45:00.000Z",
+  "heartbeat_at": "2026-05-17T10:00:00.000Z",
+  "closed_at": "2026-05-17T10:00:00.000Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

@@ -33,7 +33,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run reconcile
-        run: pnpm ops:reconcile -- --json > reconcile-result.json
+        run: pnpm ops:reconcile -- --apply --json > reconcile-result.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
