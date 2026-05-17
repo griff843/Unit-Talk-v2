@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-938",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-938-formal-invariant-verification",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "packages/db/src/**",
+    "packages/domain/src/**",
+    "apps/api/src/t1-proof-lifecycle-invariants.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-938/evidence-bundle.md",
+    "docs/06_status/proof/UTV2-938/verification.log"
+  ],
+  "status": "started",
+  "started_at": "2026-05-17T07:00:00.000Z",
+  "heartbeat_at": "2026-05-17T07:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
