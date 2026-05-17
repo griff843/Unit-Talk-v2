@@ -119,6 +119,15 @@ export async function runWorkerCycles(
   });
   const registry = options.targetRegistry ?? resolveTargetRegistry();
   const summaries: WorkerCycleSummary[] = [];
+  const resolvedPersistenceMode = options.persistenceMode ?? 'database';
+  // Surfaces active claim mode at startup so operators can verify atomicity guarantees from logs.
+  console.log(JSON.stringify({
+    event: 'worker.startup',
+    workerId: options.workerId,
+    targets: options.targets,
+    persistenceMode: resolvedPersistenceMode,
+    claimMode: resolvedPersistenceMode === 'database' ? 'atomic' : 'sequential',
+  }));
   // Track system_run IDs for open circuits so we can close them when the circuit resets
   const openCircuitRunIds = new Map<string, string>();
   await hydrateOpenCircuitRuns(options.repositories, cb, openCircuitRunIds);

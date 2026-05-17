@@ -2435,3 +2435,93 @@ test('runWorkerCycles survives Supabase 521 transient error during stale claim r
   assert.equal(cycles.length, 1, 'worker should complete the cycle without crashing');
   assert.equal(cycles[0]?.results[0]?.status, 'idle', 'no outbox rows — result is idle');
 });
+
+
+
+// ── UTV2-995: outbox claim atomicity proof tests ──────────────────────────────────────────
+
+test("processNextDistributionWork defaults to database persistence mode (fail-closed)", async () => {
+  let atomicClaimCalled = false;
+  let sequentialClaimCalled = false;
+
+  const { repositories } = createWorkerTestRepositories([]);
+  repositories.outbox = {
+    ...repositories.outbox,
+    async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+      atomicClaimCalled = true;
+      return null;
+    },
+    async claimNext(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+      sequentialClaimCalled = true;
+      return null;
+    },
+  } as unknown as typeof repositories.outbox;
+
+  await processNextDistributionWork(
+    repositories,
+    "discord:canary",
+    "test-worker",
+    createStubDeliveryAdapter(),
+  );
+
+  assert.equal(atomicClaimCalled, true, "default mode must use claimNextAtomic (atomic path)");
+  assert.equal(sequentialClaimCalled, false, "sequential claimNext must NOT be called in default database mode");
+});
+
+test("processNextDistributionWork with persistenceMode=database calls claimNextAtomic", async () => {
+  let atomicClaimCalled = false;
+  let sequentialClaimCalled = false;
+
+  const { repositories } = createWorkerTestRepositories([]);
+  repositories.outbox = {
+    ...repositories.outbox,
+    async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+      atomicClaimCalled = true;
+      return null;
+    },
+    async claimNext(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+      sequentialClaimCalled = true;
+      return null;
+    },
+  } as unknown as typeof repositories.outbox;
+
+  await processNextDistributionWork(
+    repositories,
+    "discord:canary",
+    "test-worker",
+    createStubDeliveryAdapter(),
+    { persistenceMode: "database" },
+  );
+
+  assert.equal(atomicClaimCalled, true, "database mode must call claimNextAtomic");
+  assert.equal(sequentialClaimCalled, false, "database mode must NOT call sequential claimNext");
+});
+
+test("processNextDistributionWork with persistenceMode=in_memory calls claimNext (sequential)", async () => {
+  let atomicClaimCalled = false;
+  let sequentialClaimCalled = false;
+
+  const { repositories } = createWorkerTestRepositories([]);
+  repositories.outbox = {
+    ...repositories.outbox,
+    async claimNextAtomic(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+      atomicClaimCalled = true;
+      return null;
+    },
+    async claimNext(_target: string, _workerId: string): Promise<OutboxRecord | null> {
+      sequentialClaimCalled = true;
+      return null;
+    },
+  } as unknown as typeof repositories.outbox;
+
+  await processNextDistributionWork(
+    repositories,
+    "discord:canary",
+    "test-worker",
+    createStubDeliveryAdapter(),
+    { persistenceMode: "in_memory" },
+  );
+
+  assert.equal(sequentialClaimCalled, true, "in_memory mode must use sequential claimNext");
+  assert.equal(atomicClaimCalled, false, "in_memory mode must NOT call claimNextAtomic");
+});
