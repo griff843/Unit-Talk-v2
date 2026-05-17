@@ -1,6 +1,19 @@
 import { randomUUID } from 'node:crypto';
 import type { IncomingHttpHeaders } from 'node:http';
 
+export {
+  evaluateSlo,
+  sloReportLogFields,
+  defaultSloThresholds,
+  SLO_OBJECTIVES,
+  type SloStatus,
+  type DeployRisk,
+  type SloObjectiveDefinition,
+  type SloObjectiveEvaluation,
+  type SloReport,
+  type SloThresholds,
+} from './slo.js';
+
 export interface HealthSignal {
   component: string;
   status: 'healthy' | 'degraded' | 'down';
