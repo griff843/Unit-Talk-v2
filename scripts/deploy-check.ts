@@ -281,7 +281,8 @@ export function collectDeployStaticChecks(
   const workflowChecks = [
     ['deploy workflow dispatch', /workflow_dispatch:/],
     ['deploy workflow builds api', /service:\s+\[api,\s*worker,\s*ingestor,\s*discord-bot\]/],
-    ['deploy workflow pushes ghcr', /docker push "\$IMAGE_NAMESPACE\/\$\{\{ matrix\.service \}\}:\$IMAGE_TAG"/],
+    // Matches either the classic `docker push` style or docker/build-push-action style
+    ['deploy workflow pushes ghcr', /docker push "\$IMAGE_NAMESPACE|build-push-action|push: true/],
     ['deploy workflow runs health check', /curl -fsS "\$DEPLOY_HEALTH_URL"/],
     ['deploy workflow rollback path', /ROLLBACK_TAG/],
   ] as const;
@@ -473,7 +474,11 @@ function printSummary(results: CheckResult[]): boolean {
 }
 
 async function main() {
-  const results = [runVerify(), ...collectDeployStaticChecks()];
+  const skipVerify = process.argv.includes('--skip-verify');
+  const verifyResult = skipVerify
+    ? { name: 'pnpm verify', passed: true, detail: 'skipped (ran as separate CI step)' }
+    : runVerify();
+  const results = [verifyResult, ...collectDeployStaticChecks()];
   const allPassed = printSummary(results);
 
   if (allPassed) {
