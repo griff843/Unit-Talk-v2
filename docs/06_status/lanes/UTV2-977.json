@@ -12,5 +12,6 @@
     ".claude/hooks/tier-c-path-guard.sh"
   ],
   "createdAt": "2026-05-15T17:14:00.000Z",
-  "updatedAt": "2026-05-15T17:14:00.000Z"
+  "updatedAt": "2026-05-15T17:14:00.000Z",
+  "issue_id": "UTV2-977"
 }
