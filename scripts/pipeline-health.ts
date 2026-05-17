@@ -1,7 +1,7 @@
 // Pipeline health check — run with: tsx scripts/pipeline-health.ts [--output-json <path>]
 import { loadEnvironment } from '@unit-talk/config'
 import { resolveTargetRegistry } from '@unit-talk/contracts'
-import { evaluateQueueHealth, type QueueHealthOutboxRow } from '@unit-talk/observability'
+import { evaluateQueueHealth, evaluateSlo, type QueueHealthOutboxRow } from '@unit-talk/observability'
 import { createClient } from '@supabase/supabase-js'
 import fs from 'node:fs'
 
@@ -65,6 +65,7 @@ const queueHealth = evaluateQueueHealth({
   outboxRows: queueHealthRows,
   targetMismatches,
 })
+const sloReport = evaluateSlo(queueHealth)
 const counts: Record<string, number> = {}
 for (const r of rows) counts[r.status] = (counts[r.status] || 0) + 1
 
@@ -223,6 +224,20 @@ if (badChannels.length) {
   console.log('  All receipts on live delivery targets/channels: CLEAN')
 }
 
+// ── SLO status ────────────────────────────────────────────────────────────
+console.log('\n╔══ SLO STATUS ═══════════════════════════════════════════════')
+console.log(`  Overall: ${sloReport.overallStatus.toUpperCase()}  |  Deploy risk: ${sloReport.deployRisk.toUpperCase()}`)
+for (const e of sloReport.evaluations) {
+  const icon = e.status === 'ok' ? '✓' : e.status === 'at_risk' ? '⚠' : '⛔'
+  console.log(`  ${icon} [${e.objective.id}] ${e.status.toUpperCase()} — ${e.note}`)
+}
+if (sloReport.violatedObjectives.length > 0) {
+  console.log(`  Violated objectives: ${sloReport.violatedObjectives.join(', ')}`)
+}
+if (sloReport.atRiskObjectives.length > 0) {
+  console.log(`  At-risk objectives:  ${sloReport.atRiskObjectives.join(', ')}`)
+}
+
 // ── Summary ───────────────────────────────────────────────────────────────
 console.log('\n╔══ VERDICT ══════════════════════════════════════════════════')
 const warns: string[] = []
@@ -267,6 +282,10 @@ if (outputJsonPath) {
     silent_stranding_risk: queueHealth.silentStrandingRisk,
     queue_health_alerts: queueHealth.alerts,
     worker_verdict: workerVerdict,
+    slo_overall_status: sloReport.overallStatus,
+    slo_deploy_risk: sloReport.deployRisk,
+    slo_violated_objectives: sloReport.violatedObjectives,
+    slo_at_risk_objectives: sloReport.atRiskObjectives,
     criticals,
     warns,
     has_anomaly:
