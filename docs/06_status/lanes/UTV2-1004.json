@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1004",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "DOCS",
+  "worktree_path": ".",
+  "branch": "claude/utv2-1004-agent-rationalization-decision",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1004/agent-rationalization-decision.md",
+    "docs/06_status/lanes/UTV2-1004.json",
+    ".ops/sync/UTV2-1004.yml"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1004/**",
+    "docs/06_status/lanes/UTV2-1004.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1004/agent-rationalization-decision.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-17T09:08:00.000Z",
+  "heartbeat_at": "2026-05-17T09:08:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
