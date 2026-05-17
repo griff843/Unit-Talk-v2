@@ -6,6 +6,7 @@ import {
   readMarketBackedEdgeScore,
   readDomainAnalysisTrustSignal,
   readDomainAnalysisReadinessSignal,
+  readKellyGradientReadiness,
   evaluateAndPersistBestBetsPromotion,
 } from './promotion-service.js';
 import { processSubmission } from './submission-service.js';
@@ -1031,4 +1032,85 @@ test('computeRealEdge returns provenance with method and providerCoverageState',
   assert.equal(result.provenance.method, 'confidence-delta', 'provenance.method must match');
   assert.equal(result.provenance.providerCoverageState, 'none', 'no market data → none');
   assert.equal(result.provenance.fallbackReason, 'no-any-offer', 'fallbackReason must be set');
+});
+
+// ── Unit tests for readKellyGradientReadiness (UTV2-986 Kelly primary path) ──
+
+test('readKellyGradientReadiness returns null when metadata is empty', () => {
+  assert.equal(readKellyGradientReadiness({}), null);
+  assert.equal(readKellyGradientReadiness({ sport: 'NBA' }), null);
+});
+
+test('readKellyGradientReadiness returns null when kellySizing absent and domainAnalysis absent', () => {
+  assert.equal(readKellyGradientReadiness({ someOtherField: true }), null);
+});
+
+test('readKellyGradientReadiness returns null when fractional_kelly is zero (no edge)', () => {
+  const metadata = {
+    kellySizing: {
+      raw_kelly: -0.05,
+      fractional_kelly: 0,
+      recommended_units: 0,
+      recommended_fraction: 0,
+      capped: false,
+      cap_reason: null,
+      has_edge: false,
+    },
+  };
+  assert.equal(readKellyGradientReadiness(metadata), null);
+});
+
+test('readKellyGradientReadiness returns null when fractional_kelly is negative', () => {
+  const metadata = {
+    kellySizing: { fractional_kelly: -0.01 },
+  };
+  assert.equal(readKellyGradientReadiness(metadata), null);
+});
+
+test('readKellyGradientReadiness reads fractional_kelly from kellySizing (primary path)', () => {
+  const metadata = {
+    kellySizing: { fractional_kelly: 0.03 },
+  };
+  // 40 + 55 * min(1, 0.03 / 0.25) = 40 + 55 * 0.12 = 40 + 6.6 → 47
+  assert.equal(readKellyGradientReadiness(metadata), 47);
+});
+
+test('readKellyGradientReadiness maps fractional_kelly=0.25 to ceiling (95)', () => {
+  const metadata = {
+    kellySizing: { fractional_kelly: 0.25 },
+  };
+  assert.equal(readKellyGradientReadiness(metadata), 95);
+});
+
+test('readKellyGradientReadiness maps fractional_kelly above 0.25 to ceiling (95)', () => {
+  const metadata = {
+    kellySizing: { fractional_kelly: 0.40 },
+  };
+  assert.equal(readKellyGradientReadiness(metadata), 95);
+});
+
+test('readKellyGradientReadiness primary path takes precedence over domainAnalysis fallback', () => {
+  const metadata = {
+    kellySizing: { fractional_kelly: 0.10 },
+    domainAnalysis: { kellyFraction: 0.25 },
+  };
+  // Primary path: 40 + 55 * min(1, 0.10 / 0.25) = 40 + 55 * 0.4 = 40 + 22 = 62
+  assert.equal(readKellyGradientReadiness(metadata), 62);
+});
+
+test('readKellyGradientReadiness falls back to domainAnalysis.kellyFraction when kellySizing absent', () => {
+  const metadata = {
+    domainAnalysis: { kellyFraction: 0.10 },
+  };
+  // Fallback path: 40 + 55 * min(1, 0.10 / 0.25) = 62
+  assert.equal(readKellyGradientReadiness(metadata), 62);
+});
+
+test('readKellyGradientReadiness falls back to domainAnalysis when kellySizing has no fractional_kelly', () => {
+  const metadata = {
+    kellySizing: { raw_kelly: 0.08, has_edge: false },
+    domainAnalysis: { kellyFraction: 0.05 },
+  };
+  // Primary path misses (no fractional_kelly > 0) → fallback: 40 + 55 * 0.2 = 51
+  assert.equal(readKellyGradientReadiness(metadata), 51);
 });

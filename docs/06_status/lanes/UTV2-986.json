@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-986",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-986-kelly-sizing-metadata-path",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/promotion-service.ts",
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "scripts/setup-uptime-kuma.mjs"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-986/evidence-bundle.md",
+    "apps/api/src/t1-proof-utv2-986-kelly-readiness.test.ts"
+  ],
+  "status": "started",
+  "started_at": "2026-05-17T19:45:00.000Z",
+  "heartbeat_at": "2026-05-17T19:45:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

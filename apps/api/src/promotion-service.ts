@@ -1331,7 +1331,7 @@ export function readKellyGradientReadiness(
 ): number | null {
   const kellySizing = metadata['kellySizing'];
   if (isRecord(kellySizing)) {
-    const fraction = kellySizing['kellyFraction'];
+    const fraction = kellySizing['fractional_kelly'];
     if (typeof fraction === 'number' && Number.isFinite(fraction) && fraction > 0) {
       return Math.round(40 + 55 * Math.min(1, fraction / 0.25));
     }
