@@ -1,0 +1,51 @@
+﻿name: Update server env (one-shot)
+
+on:
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+
+jobs:
+  update-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Append Discord role/channel IDs
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" bash << 'SSHEOF'
+          set -e
+          ENV_FILE="/opt/unit-talk/.env.production"
+          sed -i '/^DISCORD_CAPPER_ROLE_ID=/d' "$ENV_FILE"
+          sed -i '/^DISCORD_VIP_ROLE_ID=/d' "$ENV_FILE"
+          sed -i '/^DISCORD_VIP_PLUS_ROLE_ID=/d' "$ENV_FILE"
+          sed -i '/^DISCORD_CAPPER_CHANNEL_ID=/d' "$ENV_FILE"
+          sed -i '/^DISCORD_TRIAL_ROLE_ID=/d' "$ENV_FILE"
+          printf 'DISCORD_CAPPER_ROLE_ID=1288140783643267092\n' >> "$ENV_FILE"
+          printf 'DISCORD_VIP_ROLE_ID=1288831350710865972\n' >> "$ENV_FILE"
+          printf 'DISCORD_VIP_PLUS_ROLE_ID=1288831367291080745\n' >> "$ENV_FILE"
+          printf 'DISCORD_CAPPER_CHANNEL_ID=1289478274615087146\n' >> "$ENV_FILE"
+          printf 'DISCORD_TRIAL_ROLE_ID=1427318157562871908\n' >> "$ENV_FILE"
+          echo "--- Discord env vars now set ---"
+          grep 'DISCORD_CAPPER_ROLE_ID\|DISCORD_VIP_ROLE_ID\|DISCORD_VIP_PLUS_ROLE_ID\|DISCORD_CAPPER_CHANNEL_ID\|DISCORD_TRIAL_ROLE_ID' "$ENV_FILE"
+          SSHEOF
+
+      - name: Force-recreate discord-bot
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /opt/unit-talk && UNIT_TALK_IMAGE_TAG=\$(cat .unit-talk-release) docker compose up -d --force-recreate discord-bot"
+
+      - name: Check discord-bot status
+        run: |
+          sleep 30
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "cd /opt/unit-talk && docker compose ps discord-bot && docker compose logs --tail=30 discord-bot"
