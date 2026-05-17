@@ -1,0 +1,36 @@
+﻿name: Debug ingestor crash
+
+on:
+  workflow_dispatch:
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Capture ingestor crash in real time
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" bash << 'SSHEOF'
+          echo "=== ingestor restart count ==="
+          docker inspect unit-talk-ingestor-1 --format '{{.RestartCount}} restarts, state: {{.State.Status}}, exitCode: {{.State.ExitCode}}'
+
+          echo ""
+          echo "=== full ingestor logs (last 100 lines) ==="
+          docker logs --tail=100 unit-talk-ingestor-1 2>&1
+
+          echo ""
+          echo "=== following live logs for 90 seconds ==="
+          timeout 90 docker logs -f unit-talk-ingestor-1 2>&1 || true
+          SSHEOF
