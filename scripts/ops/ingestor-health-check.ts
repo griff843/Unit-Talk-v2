@@ -2,6 +2,10 @@ import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
+import {
+  evaluateIngestorOutageHealth,
+  type IngestorHealthStatus,
+} from '../../apps/ingestor/src/staleness.js';
 
 export interface IngestorContainerStatus {
   running: boolean;
@@ -13,8 +17,16 @@ export interface IngestorContainerStatus {
 
 export interface IngestorHealthResult {
   healthy: boolean;
+  status: IngestorHealthStatus;
   containerRunning: boolean;
+  runtimeRunning: boolean;
+  outage: boolean;
+  dataStale: boolean;
   offerAgeMinutes: number;
+  staleThresholdMinutes: number;
+  latestOfferUpdatedAt: string | null;
+  latestRunStartedAt: string | null;
+  summary: string;
   staleSince?: string;
 }
 
@@ -90,7 +102,7 @@ function readContainerStartedAt(containerName: string) {
   return startedAt.length > 0 && !startedAt.startsWith('0001-') ? startedAt : null;
 }
 
-export async function readLatestProviderOfferCreatedAt(environment: Pick<
+export async function readLatestProviderOfferUpdatedAt(environment: Pick<
   AppEnv,
   'SUPABASE_URL' | 'SUPABASE_SERVICE_ROLE_KEY'
 >): Promise<string | null> {
@@ -104,36 +116,73 @@ export async function readLatestProviderOfferCreatedAt(environment: Pick<
 
   const { data, error } = await db
     .from('provider_offers')
-    .select('created_at')
-    .order('created_at', { ascending: false })
+    .select('updated_at')
+    .order('updated_at', { ascending: false })
     .limit(1);
 
   if (error) {
     throw new Error(`provider_offers freshness query failed: ${error.message}`);
   }
 
-  return typeof data?.[0]?.created_at === 'string' ? data[0].created_at : null;
+  return typeof data?.[0]?.updated_at === 'string' ? data[0].updated_at : null;
+}
+
+export async function readLatestIngestorRunStartedAt(environment: Pick<
+  AppEnv,
+  'SUPABASE_URL' | 'SUPABASE_SERVICE_ROLE_KEY'
+>): Promise<string | null> {
+  if (!environment.SUPABASE_URL || !environment.SUPABASE_SERVICE_ROLE_KEY) {
+    return null;
+  }
+
+  const db = createClient(environment.SUPABASE_URL, environment.SUPABASE_SERVICE_ROLE_KEY, {
+    auth: { persistSession: false },
+  });
+
+  const { data, error } = await db
+    .from('system_runs')
+    .select('started_at')
+    .eq('run_type', 'ingestor.cycle')
+    .order('started_at', { ascending: false })
+    .limit(1);
+
+  if (error) {
+    throw new Error(`system_runs ingestor freshness query failed: ${error.message}`);
+  }
+
+  return typeof data?.[0]?.started_at === 'string' ? data[0].started_at : null;
 }
 
 export function evaluateIngestorHealthCheck(input: {
   container: Pick<IngestorContainerStatus, 'running' | 'healthy'>;
-  latestOfferCreatedAt: string | null;
+  latestOfferUpdatedAt: string | null;
+  latestRunStartedAt: string | null;
   staleThresholdMinutes?: number;
   now?: Date;
 }): IngestorHealthResult {
-  const now = input.now ?? new Date();
   const staleThresholdMinutes = input.staleThresholdMinutes ?? DEFAULT_STALE_MINUTES;
-  const offerAgeMinutes = input.latestOfferCreatedAt
-    ? Math.round((now.getTime() - new Date(input.latestOfferCreatedAt).getTime()) / 60_000)
-    : UNKNOWN_OFFER_AGE_MINUTES;
-  const offersFresh = offerAgeMinutes <= staleThresholdMinutes;
-  const healthy = input.container.running && input.container.healthy && offersFresh;
+  const runtimeRunning = input.container.running && input.container.healthy;
+  const health = evaluateIngestorOutageHealth({
+    runtimeRunning,
+    latestRunStartedAt: input.latestRunStartedAt,
+    latestOfferUpdatedAt: input.latestOfferUpdatedAt,
+    staleThresholdMinutes,
+    now: input.now,
+  });
 
   return {
-    healthy,
+    healthy: health.status === 'HEALTHY',
+    status: health.status,
     containerRunning: input.container.running,
-    offerAgeMinutes,
-    ...(offersFresh ? {} : { staleSince: input.latestOfferCreatedAt ?? now.toISOString() }),
+    runtimeRunning,
+    outage: health.outage,
+    dataStale: health.dataStale,
+    offerAgeMinutes: health.ageMinutes ?? UNKNOWN_OFFER_AGE_MINUTES,
+    staleThresholdMinutes: health.staleThresholdMinutes,
+    latestOfferUpdatedAt: health.latestOfferUpdatedAt,
+    latestRunStartedAt: health.latestRunStartedAt,
+    summary: health.summary,
+    ...(health.staleSince ? { staleSince: health.staleSince } : {}),
   };
 }
 
@@ -143,12 +192,16 @@ export async function collectIngestorHealthCheck(options: {
 } = {}): Promise<IngestorHealthResult> {
   const environment = options.environment ?? loadEnvironment();
   const container = readIngestorContainerStatus();
-  const latestOfferCreatedAt = await readLatestProviderOfferCreatedAt(environment);
+  const [latestOfferUpdatedAt, latestRunStartedAt] = await Promise.all([
+    readLatestProviderOfferUpdatedAt(environment),
+    readLatestIngestorRunStartedAt(environment),
+  ]);
   const staleThresholdMinutes = parseHealthThreshold(environment.UNIT_TALK_INGESTOR_OFFER_STALE_MINUTES);
 
   return evaluateIngestorHealthCheck({
     container,
-    latestOfferCreatedAt,
+    latestOfferUpdatedAt,
+    latestRunStartedAt,
     staleThresholdMinutes,
     now: options.now,
   });
@@ -164,8 +217,16 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   main().catch((error) => {
     const health: IngestorHealthResult = {
       healthy: false,
+      status: 'FAILED',
       containerRunning: false,
+      runtimeRunning: false,
+      outage: true,
+      dataStale: true,
       offerAgeMinutes: UNKNOWN_OFFER_AGE_MINUTES,
+      staleThresholdMinutes: DEFAULT_STALE_MINUTES,
+      latestOfferUpdatedAt: null,
+      latestRunStartedAt: null,
+      summary: 'Ingestor health check failed before runtime state could be proven.',
       staleSince: new Date().toISOString(),
     };
     console.error(error instanceof Error ? error.message : String(error));
