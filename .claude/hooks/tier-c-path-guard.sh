@@ -128,9 +128,10 @@ PYEOF
   fi
 
   if [ -n "$manifest_authorized" ]; then
-    # Exit 0 (allow silently) when the active lane manifest authorizes this path.
-    # The manifest commits on branch start serve as the audit trail.
-    exit 0
+    echo "TIER-C MANIFEST-AUTHORIZED: $matched"
+    echo "Reason: $reason"
+    echo "Authorization: Active lane $manifest_authorized has $matched in file_scope_lock. Pre-authorized write — proceed."
+    exit 2
   fi
 
   echo "TIER-C WARNING: $matched"

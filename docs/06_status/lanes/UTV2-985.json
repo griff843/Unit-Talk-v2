@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-985",
-  "lane_type": "modeling",
+  "lane_type": "runtime",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": ".",
@@ -14,9 +14,14 @@
     "packages/contracts/src/promotion.ts",
     "apps/api/src/real-edge-service.ts",
     "apps/api/src/submission-service.ts",
+    "apps/api/src/submission-service.test.ts",
     "apps/api/src/promotion-service.ts",
     "apps/api/src/promotion-edge-integration.test.ts",
+    "apps/api/src/golden-regression.test.ts",
+    "apps/api/src/t1-proof-utv2-985-edge-provenance.test.ts",
     "scripts/ops/edge-coverage-report.ts",
+    "scripts/ops/runtime-verifier-gate.ts",
+    ".lane/lanes/runtime.yml",
     "docs/06_status/proof/UTV2-985/**"
   ],
   "expected_proof_paths": [

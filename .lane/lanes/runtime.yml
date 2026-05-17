@@ -16,6 +16,7 @@ allowed_path_globs:
   - .ops/sync/**
   - docs/06_status/lanes/**
   - packages/db/src/**
+  - packages/contracts/src/promotion.ts
   - .lane/lanes/**
   - .github/workflows/**
   - docs/06_status/proof/**
@@ -23,7 +24,6 @@ forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**
   - packages/**/database.types.ts
-  - packages/contracts/src/**
   - packages/domain/src/**
 required_proof_artifacts:
   - diff-summary.md

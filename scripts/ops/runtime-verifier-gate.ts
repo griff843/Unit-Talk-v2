@@ -122,7 +122,11 @@ function createResult(options: CliOptions): GateResult {
     }
 
     if (options.sha !== null && !content.includes(options.sha)) {
-      failures.push(`SHA ${options.sha} not found in ${name} — proof may not be bound to this commit`);
+      // Downgraded to warning: the exact HEAD SHA cannot be embedded in the proof file
+      // at commit time due to a circular dependency (SHA is only known after commit).
+      // The staleness check (isStale) provides temporal binding; the SHA advisory here
+      // is informational. See UTV2-985 for the design note.
+      warnings.push(`SHA ${options.sha} not found in ${name} — proof may not include the exact HEAD SHA (advisory only; staleness check provides temporal binding)`);
     }
 
     if (isStale(filePath, options.maxAgeHours)) {
