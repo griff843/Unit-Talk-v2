@@ -12,7 +12,8 @@
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/promotion-service.ts",
-    "apps/api/src/promotion-edge-integration.test.ts"
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "scripts/setup-uptime-kuma.mjs"
   ],
   "expected_proof_paths": [],
   "status": "started",
