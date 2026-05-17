@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1003",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1003-opsreconcile-dry-run-default",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/reconcile.ts",
+    "scripts/ops/reconcile.test.ts",
+    ".github/workflows/ops-reconcile.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_progress",
+  "started_at": "2026-05-17T12:00:00.000Z",
+  "heartbeat_at": "2026-05-17T12:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
