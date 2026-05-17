@@ -1,4 +1,4 @@
-# System State — 2026-05-17 08:01
+# System State — 2026-05-17 12:10
 
 ## Branch
 
@@ -13,8 +13,8 @@ Phase 7A
 Clean
 
 ## Recent Commits
-d0effc8 feat(verification): UTV2-938 formal lifecycle FSM invariant verification (#711)
-ff7ecdd chore(lanes): close UTV2-930 — merged at cc194455 (#710)
-cc19445 feat(contracts): UTV2-930 canonical lifecycle FSM — single source of truth in contracts (#710)
-6a70281 chore(lanes): close UTV2-933 — merged at 9e2bb5fe (#709)
-9e2bb5f feat(governance): UTV2-933 generated API contracts — parseSubmissionPayload with runtime schema and drift tests (#709)
+ff0cfb4 chore(lanes): close UTV2-991 — manifest sealed with merge SHA a44c86b2
+a44c86b feat(ops): UTV2-991 post-deploy functional smoke beyond /health (#723)
+dc00796 chore(lanes): close UTV2-1005/1006/1007 — manifests sealed with merge SHAs
+6e20839 feat(ops): UTV2-1005 runtime-verifier mandatory gate script (#722)
+767ed68 feat(ops): UTV2-1006 proof-auditor mandatory gate script (#721)
