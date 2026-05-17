@@ -13,6 +13,8 @@ allowed_path_globs:
   - package.json
   - packages/config/**
   - packages/contracts/**
+  - packages/db/src/**
+  - packages/domain/src/**
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**
