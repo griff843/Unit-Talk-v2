@@ -1,0 +1,76 @@
+# Production topology specification
+# This file declares the authoritative expected state of the production environment.
+# The deploy-check script validates the compose file against these declarations.
+# Drift between this spec and actual deployment state indicates manual changes
+# that must be reconciled before the next deploy.
+#
+# Version: matched to UNIT_TALK_IMAGE_TAG at deploy time.
+
+version: 1
+
+services:
+  api:
+    image: ghcr.io/griff843/unit-talk-v2/api
+    port: 4000
+    host_port_env: UNIT_TALK_API_HOST_PORT
+    restart: unless-stopped
+    healthcheck: true
+    resource_limits:
+      memory: 512m
+      cpus: '0.5'
+    required_env:
+      - SUPABASE_URL
+      - SUPABASE_SERVICE_ROLE_KEY
+      - UNIT_TALK_API_RUNTIME_MODE
+      - UNIT_TALK_API_KEY_OPERATOR
+      - UNIT_TALK_API_KEY_WORKER
+
+  worker:
+    image: ghcr.io/griff843/unit-talk-v2/worker
+    restart: unless-stopped
+    depends_on: [api]
+    resource_limits:
+      memory: 256m
+      cpus: '0.25'
+    required_env:
+      - SUPABASE_URL
+      - SUPABASE_SERVICE_ROLE_KEY
+      - UNIT_TALK_WORKER_RUNTIME_MODE
+      - UNIT_TALK_DISTRIBUTION_TARGETS
+      - UNIT_TALK_WORKER_API_KEY
+
+  ingestor:
+    image: ghcr.io/griff843/unit-talk-v2/ingestor
+    restart: unless-stopped
+    depends_on: [api]
+    resource_limits:
+      memory: 256m
+      cpus: '0.25'
+    required_env:
+      - SUPABASE_URL
+      - SUPABASE_SERVICE_ROLE_KEY
+      - UNIT_TALK_INGESTOR_RUNTIME_MODE
+      - UNIT_TALK_INGESTOR_API_KEY
+      - SGO_API_KEY
+
+  discord-bot:
+    image: ghcr.io/griff843/unit-talk-v2/discord-bot
+    restart: on-failure
+    depends_on: [api]
+    resource_limits:
+      memory: 128m
+      cpus: '0.1'
+    required_env:
+      - DISCORD_BOT_TOKEN
+      - DISCORD_CLIENT_ID
+      - UNIT_TALK_DISCORD_BOT_RUNTIME_MODE
+      - UNIT_TALK_BOT_API_KEY
+
+network:
+  name: unit-talk
+  driver: bridge
+
+# Drift policy:
+# Any addition or removal of services must update both this spec and the compose file.
+# Resource limit changes require a topology spec bump (change version).
+# Secret changes require secrets-rotation.md to be updated simultaneously.
