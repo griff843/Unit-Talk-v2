@@ -38,7 +38,13 @@ const REQUIRED_PACKAGE_SCRIPTS = [
 ] as const;
 
 const REQUIRED_COMPOSE_SERVICES = ['api', 'worker', 'ingestor'] as const;
-const REQUIRED_DEPLOY_SERVICES = ['api', 'worker', 'ingestor', 'discord-bot'] as const;
+const REQUIRED_DEPLOY_SERVICES = [
+  'api',
+  'worker',
+  'ingestor',
+  'discord-bot',
+] as const;
+const DEEP_HEALTH_CHECK_PATTERN = /\/api\/health\?full=true/;
 const REQUIRED_DEPLOY_SECRETS = [
   'UNIT_TALK_DEPLOY_HOST',
   'UNIT_TALK_DEPLOY_USER',
@@ -66,7 +72,11 @@ export function collectDeployStaticChecks(
     results.push(
       value
         ? { name: `env ${varName}`, passed: true }
-        : { name: `env ${varName}`, passed: false, detail: `${varName} is not set or empty` },
+        : {
+            name: `env ${varName}`,
+            passed: false,
+            detail: `${varName} is not set or empty`,
+          },
     );
   }
 
@@ -103,9 +113,10 @@ export function collectDeployStaticChecks(
     ['worker', 'UNIT_TALK_WORKER_MAX_CYCLES'],
     ['ingestor', 'UNIT_TALK_INGESTOR_MAX_CYCLES'],
   ] as const) {
-    const autorunKey = service === 'worker'
-      ? 'UNIT_TALK_WORKER_AUTORUN'
-      : 'UNIT_TALK_INGESTOR_AUTORUN';
+    const autorunKey =
+      service === 'worker'
+        ? 'UNIT_TALK_WORKER_AUTORUN'
+        : 'UNIT_TALK_INGESTOR_AUTORUN';
     const autorun = environment[autorunKey]?.trim() === 'true';
     const maxCycles = environment[key]?.trim();
     const explicitContinuousOrBounded =
@@ -129,47 +140,77 @@ export function collectDeployStaticChecks(
     );
   }
 
-  const packageJson = readJsonFile<{ scripts?: Record<string, string> }>(path.join(repoRoot, 'package.json'));
+  const packageJson = readJsonFile<{ scripts?: Record<string, string> }>(
+    path.join(repoRoot, 'package.json'),
+  );
   for (const scriptName of REQUIRED_PACKAGE_SCRIPTS) {
     const script = packageJson.scripts?.[scriptName];
     results.push(
       script
         ? { name: `package script ${scriptName}`, passed: true }
-        : { name: `package script ${scriptName}`, passed: false, detail: 'missing package script' },
+        : {
+            name: `package script ${scriptName}`,
+            passed: false,
+            detail: 'missing package script',
+          },
     );
   }
 
   const dockerfile = readTextFile(path.join(repoRoot, 'Dockerfile'));
   for (const target of REQUIRED_COMPOSE_SERVICES) {
-    const hasTarget = new RegExp(`FROM\\s+node:[^\\n]+\\s+AS\\s+${target}\\b`, 'i').test(dockerfile);
+    const hasTarget = new RegExp(
+      `FROM\\s+node:[^\\n]+\\s+AS\\s+${target}\\b`,
+      'i',
+    ).test(dockerfile);
     results.push(
       hasTarget
         ? { name: `docker target ${target}`, passed: true }
-        : { name: `docker target ${target}`, passed: false, detail: 'missing Dockerfile target' },
+        : {
+            name: `docker target ${target}`,
+            passed: false,
+            detail: 'missing Dockerfile target',
+          },
     );
   }
 
-  const compose = YAML.parse(readTextFile(path.join(repoRoot, 'docker-compose.yml'))) as {
-    services?: Record<string, { restart?: string; healthcheck?: unknown; depends_on?: unknown }>;
+  const compose = YAML.parse(
+    readTextFile(path.join(repoRoot, 'docker-compose.yml')),
+  ) as {
+    services?: Record<
+      string,
+      { restart?: string; healthcheck?: unknown; depends_on?: unknown }
+    >;
   };
   for (const serviceName of REQUIRED_COMPOSE_SERVICES) {
     const service = compose.services?.[serviceName];
     if (!service) {
-      results.push({ name: `compose service ${serviceName}`, passed: false, detail: 'missing compose service' });
+      results.push({
+        name: `compose service ${serviceName}`,
+        passed: false,
+        detail: 'missing compose service',
+      });
       continue;
     }
 
     results.push(
       service.restart
         ? { name: `compose restart ${serviceName}`, passed: true }
-        : { name: `compose restart ${serviceName}`, passed: false, detail: 'missing restart policy' },
+        : {
+            name: `compose restart ${serviceName}`,
+            passed: false,
+            detail: 'missing restart policy',
+          },
     );
   }
 
   results.push(
     compose.services?.api?.healthcheck
       ? { name: 'compose api healthcheck', passed: true }
-      : { name: 'compose api healthcheck', passed: false, detail: 'api healthcheck is required' },
+      : {
+          name: 'compose api healthcheck',
+          passed: false,
+          detail: 'api healthcheck is required',
+        },
   );
 
   for (const dependent of ['worker', 'ingestor'] as const) {
@@ -186,20 +227,48 @@ export function collectDeployStaticChecks(
     );
   }
 
-  const deployComposePath = path.join(repoRoot, 'deploy', 'production', 'docker-compose.yml');
-  const deployWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'deploy.yml');
+  const deployComposePath = path.join(
+    repoRoot,
+    'deploy',
+    'production',
+    'docker-compose.yml',
+  );
+  const deployWorkflowPath = path.join(
+    repoRoot,
+    '.github',
+    'workflows',
+    'deploy.yml',
+  );
+  const stagingWorkflowPath = path.join(
+    repoRoot,
+    '.github',
+    'workflows',
+    'staging-deploy.yml',
+  );
+  const rollbackScriptPath = path.join(repoRoot, 'deploy', 'rollback.sh');
   const deployCompose = YAML.parse(readTextFile(deployComposePath)) as {
-    services?: Record<string, {
-      image?: string;
-      restart?: string;
-      depends_on?: unknown;
-      healthcheck?: unknown;
-      networks?: unknown;
-      deploy?: { resources?: { limits?: { memory?: string; cpus?: string } } };
-    }>;
+    services?: Record<
+      string,
+      {
+        image?: string;
+        restart?: string;
+        depends_on?: unknown;
+        healthcheck?: unknown;
+        networks?: unknown;
+        deploy?: {
+          resources?: { limits?: { memory?: string; cpus?: string } };
+        };
+      }
+    >;
     networks?: Record<string, unknown>;
   };
   const deployWorkflow = readTextFile(deployWorkflowPath);
+  const stagingWorkflow = fs.existsSync(stagingWorkflowPath)
+    ? readTextFile(stagingWorkflowPath)
+    : '';
+  const rollbackScript = fs.existsSync(rollbackScriptPath)
+    ? readTextFile(rollbackScriptPath)
+    : '';
 
   for (const serviceName of REQUIRED_DEPLOY_SERVICES) {
     const service = deployCompose.services?.[serviceName];
@@ -214,7 +283,8 @@ export function collectDeployStaticChecks(
 
     const image = service.image ?? '';
     results.push(
-      image.includes(`unit-talk-v2/${serviceName}:`) && image.includes('UNIT_TALK_IMAGE_TAG')
+      image.includes(`unit-talk-v2/${serviceName}:`) &&
+        image.includes('UNIT_TALK_IMAGE_TAG')
         ? { name: `production image ${serviceName}`, passed: true }
         : {
             name: `production image ${serviceName}`,
@@ -226,26 +296,37 @@ export function collectDeployStaticChecks(
     results.push(
       service.restart
         ? { name: `production restart ${serviceName}`, passed: true }
-        : { name: `production restart ${serviceName}`, passed: false, detail: 'missing restart policy' },
+        : {
+            name: `production restart ${serviceName}`,
+            passed: false,
+            detail: 'missing restart policy',
+          },
     );
   }
 
   results.push(
     deployCompose.services?.api?.healthcheck
       ? { name: 'production api healthcheck', passed: true }
-      : { name: 'production api healthcheck', passed: false, detail: 'api healthcheck is required' },
+      : {
+          name: 'production api healthcheck',
+          passed: false,
+          detail: 'api healthcheck is required',
+        },
   );
 
   for (const serviceName of REQUIRED_DEPLOY_SERVICES) {
-    const memLimit = deployCompose.services?.[serviceName]?.deploy?.resources?.limits?.memory;
-    const cpuLimit = deployCompose.services?.[serviceName]?.deploy?.resources?.limits?.cpus;
+    const memLimit =
+      deployCompose.services?.[serviceName]?.deploy?.resources?.limits?.memory;
+    const cpuLimit =
+      deployCompose.services?.[serviceName]?.deploy?.resources?.limits?.cpus;
     results.push(
       memLimit && cpuLimit
         ? { name: `production resource limits ${serviceName}`, passed: true }
         : {
             name: `production resource limits ${serviceName}`,
             passed: false,
-            detail: 'production services must declare memory and cpu resource limits to prevent resource exhaustion',
+            detail:
+              'production services must declare memory and cpu resource limits to prevent resource exhaustion',
           },
     );
   }
@@ -253,7 +334,11 @@ export function collectDeployStaticChecks(
   results.push(
     deployCompose.networks && Object.keys(deployCompose.networks).length > 0
       ? { name: 'production network defined', passed: true }
-      : { name: 'production network defined', passed: false, detail: 'production compose must declare an explicit named network' },
+      : {
+          name: 'production network defined',
+          passed: false,
+          detail: 'production compose must declare an explicit named network',
+        },
   );
 
   for (const dependent of ['worker', 'ingestor', 'discord-bot'] as const) {
@@ -274,24 +359,100 @@ export function collectDeployStaticChecks(
     results.push(
       deployWorkflow.includes(secretName)
         ? { name: `deploy secret ${secretName}`, passed: true }
-        : { name: `deploy secret ${secretName}`, passed: false, detail: 'deploy workflow must require secret' },
+        : {
+            name: `deploy secret ${secretName}`,
+            passed: false,
+            detail: 'deploy workflow must require secret',
+          },
     );
   }
 
   const workflowChecks = [
     ['deploy workflow dispatch', /workflow_dispatch:/],
-    ['deploy workflow builds api', /service:\s+\[api,\s*worker,\s*ingestor,\s*discord-bot\]/],
+    [
+      'deploy workflow builds api',
+      /service:\s+\[api,\s*worker,\s*ingestor,\s*discord-bot\]/,
+    ],
     // Matches either the classic `docker push` style or docker/build-push-action style
-    ['deploy workflow pushes ghcr', /docker push "\$IMAGE_NAMESPACE|build-push-action|push: true/],
-    ['deploy workflow runs health check', /curl -fsS "\$DEPLOY_HEALTH_URL"/],
+    [
+      'deploy workflow pushes ghcr',
+      /docker push "\$IMAGE_NAMESPACE|build-push-action|push: true/,
+    ],
+    ['deploy workflow runs deep health check', DEEP_HEALTH_CHECK_PATTERN],
+    ['deploy workflow canary environment gate', /environment:\s*canary/],
+    ['deploy workflow production promotion gate', /environment:\s*production/],
+    ['deploy workflow promotion waits for canary', /needs:\s*canary/],
     ['deploy workflow rollback path', /ROLLBACK_TAG/],
+    [
+      'deploy workflow validates rollback dry-run',
+      /deploy\/rollback\.sh --dry-run/,
+    ],
   ] as const;
   for (const [name, pattern] of workflowChecks) {
     results.push(
       pattern.test(deployWorkflow)
         ? { name, passed: true }
-        : { name, passed: false, detail: 'deploy workflow release/rollback contract is missing' },
+        : {
+            name,
+            passed: false,
+            detail: 'deploy workflow release/rollback contract is missing',
+          },
     );
+  }
+
+  const rollbackChecks = [
+    ['rollback script exists', fs.existsSync(rollbackScriptPath)],
+    ['rollback script supports dry-run', /--dry-run/.test(rollbackScript)],
+    [
+      'rollback script updates release tag',
+      /\.unit-talk-release/.test(rollbackScript),
+    ],
+    [
+      'rollback script restarts compose services',
+      /docker compose up -d --remove-orphans/.test(rollbackScript),
+    ],
+    [
+      'rollback script uses requested image tag',
+      /UNIT_TALK_IMAGE_TAG='\$TAG'/.test(rollbackScript),
+    ],
+  ] as const;
+  for (const [name, passed] of rollbackChecks) {
+    results.push(
+      passed
+        ? { name, passed: true }
+        : {
+            name,
+            passed: false,
+            detail: 'rollback script contract is missing',
+          },
+    );
+  }
+
+  if (stagingWorkflow) {
+    const stagingWorkflowChecks = [
+      ['staging workflow runs deep health check', DEEP_HEALTH_CHECK_PATTERN],
+      [
+        'staging workflow canary environment gate',
+        /environment:\s*staging-canary/,
+      ],
+      ['staging workflow promotion gate', /environment:\s*staging/],
+      ['staging workflow promotion waits for canary', /needs:\s*stage-canary/],
+      [
+        'staging workflow validates rollback dry-run',
+        /deploy\/rollback\.sh --dry-run/,
+      ],
+    ] as const;
+    for (const [name, pattern] of stagingWorkflowChecks) {
+      results.push(
+        pattern.test(stagingWorkflow)
+          ? { name, passed: true }
+          : {
+              name,
+              passed: false,
+              detail: 'staging progressive delivery contract is missing',
+            },
+      );
+    }
   }
 
   return results;
@@ -309,7 +470,11 @@ export function collectStagingParityChecks(
   results.push(
     appEnv === 'staging'
       ? { name: 'staging env UNIT_TALK_APP_ENV', passed: true }
-      : { name: 'staging env UNIT_TALK_APP_ENV', passed: false, detail: 'UNIT_TALK_APP_ENV must be staging' },
+      : {
+          name: 'staging env UNIT_TALK_APP_ENV',
+          passed: false,
+          detail: 'UNIT_TALK_APP_ENV must be staging',
+        },
   );
 
   // Same required env vars as production
@@ -318,7 +483,11 @@ export function collectStagingParityChecks(
     results.push(
       value
         ? { name: `staging env ${varName}`, passed: true }
-        : { name: `staging env ${varName}`, passed: false, detail: `${varName} is not set or empty` },
+        : {
+            name: `staging env ${varName}`,
+            passed: false,
+            detail: `${varName} is not set or empty`,
+          },
     );
   }
 
@@ -354,9 +523,23 @@ export function collectStagingParityChecks(
   );
 
   // Staging compose must mirror production service set
-  const stagingComposePath = path.join(repoRoot, 'deploy', 'staging', 'docker-compose.yml');
+  const stagingComposePath = path.join(
+    repoRoot,
+    'deploy',
+    'staging',
+    'docker-compose.yml',
+  );
   const stagingCompose = YAML.parse(readTextFile(stagingComposePath)) as {
-    services?: Record<string, { image?: string; restart?: string; depends_on?: unknown; healthcheck?: unknown; env_file?: string[] }>;
+    services?: Record<
+      string,
+      {
+        image?: string;
+        restart?: string;
+        depends_on?: unknown;
+        healthcheck?: unknown;
+        env_file?: string[];
+      }
+    >;
   };
 
   for (const serviceName of REQUIRED_DEPLOY_SERVICES) {
@@ -367,26 +550,33 @@ export function collectStagingParityChecks(
         : {
             name: `staging compose service ${serviceName}`,
             passed: false,
-            detail: 'missing staging compose service — staging must mirror production service set',
+            detail:
+              'missing staging compose service — staging must mirror production service set',
           },
     );
     if (!service) continue;
 
     const image = service.image ?? '';
     results.push(
-      image.includes(`unit-talk-v2/${serviceName}:`) && image.includes('UNIT_TALK_IMAGE_TAG')
+      image.includes(`unit-talk-v2/${serviceName}:`) &&
+        image.includes('UNIT_TALK_IMAGE_TAG')
         ? { name: `staging image ${serviceName}`, passed: true }
         : {
             name: `staging image ${serviceName}`,
             passed: false,
-            detail: 'staging image must use GHCR service image and UNIT_TALK_IMAGE_TAG',
+            detail:
+              'staging image must use GHCR service image and UNIT_TALK_IMAGE_TAG',
           },
     );
 
     results.push(
       service.restart
         ? { name: `staging restart ${serviceName}`, passed: true }
-        : { name: `staging restart ${serviceName}`, passed: false, detail: 'missing restart policy' },
+        : {
+            name: `staging restart ${serviceName}`,
+            passed: false,
+            detail: 'missing restart policy',
+          },
     );
 
     const envFile = service.env_file ?? [];
@@ -399,7 +589,8 @@ export function collectStagingParityChecks(
         : {
             name: `staging env_file ${serviceName}`,
             passed: false,
-            detail: 'staging service must use .env.staging, not .env.production',
+            detail:
+              'staging service must use .env.staging, not .env.production',
           },
     );
   }
@@ -407,7 +598,11 @@ export function collectStagingParityChecks(
   results.push(
     stagingCompose.services?.api?.healthcheck
       ? { name: 'staging api healthcheck', passed: true }
-      : { name: 'staging api healthcheck', passed: false, detail: 'api healthcheck is required in staging' },
+      : {
+          name: 'staging api healthcheck',
+          passed: false,
+          detail: 'api healthcheck is required in staging',
+        },
   );
 
   for (const dependent of ['worker', 'ingestor', 'discord-bot'] as const) {
@@ -425,17 +620,30 @@ export function collectStagingParityChecks(
   }
 
   // Staging workflow secrets
-  const workflowText = stagingWorkflowText ?? (() => {
-    const stagingWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'staging-deploy.yml');
-    return fs.existsSync(stagingWorkflowPath) ? readTextFile(stagingWorkflowPath) : '';
-  })();
+  const workflowText =
+    stagingWorkflowText ??
+    (() => {
+      const stagingWorkflowPath = path.join(
+        repoRoot,
+        '.github',
+        'workflows',
+        'staging-deploy.yml',
+      );
+      return fs.existsSync(stagingWorkflowPath)
+        ? readTextFile(stagingWorkflowPath)
+        : '';
+    })();
 
   if (workflowText) {
     for (const secretName of REQUIRED_STAGING_DEPLOY_SECRETS) {
       results.push(
         workflowText.includes(secretName)
           ? { name: `staging secret ${secretName}`, passed: true }
-          : { name: `staging secret ${secretName}`, passed: false, detail: 'staging deploy workflow must reference secret' },
+          : {
+              name: `staging secret ${secretName}`,
+              passed: false,
+              detail: 'staging deploy workflow must reference secret',
+            },
       );
     }
   }
@@ -476,7 +684,11 @@ function printSummary(results: CheckResult[]): boolean {
 async function main() {
   const skipVerify = process.argv.includes('--skip-verify');
   const verifyResult = skipVerify
-    ? { name: 'pnpm verify', passed: true, detail: 'skipped (ran as separate CI step)' }
+    ? {
+        name: 'pnpm verify',
+        passed: true,
+        detail: 'skipped (ran as separate CI step)',
+      }
     : runVerify();
   const results = [verifyResult, ...collectDeployStaticChecks()];
   const allPassed = printSummary(results);
@@ -490,6 +702,9 @@ async function main() {
   process.exit(1);
 }
 
-if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+if (
+  process.argv[1] &&
+  import.meta.url === pathToFileURL(process.argv[1]).href
+) {
   void main();
 }
