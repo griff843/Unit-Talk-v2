@@ -1,6 +1,40 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { mapFailuresToCode, remediationForCode, type CloseoutFailureCode } from './lane-close.js';
+import {
+  mapFailuresToCode,
+  remediationForCode,
+  requireCloseCommitSha,
+  type CloseoutFailureCode,
+} from './lane-close.js';
+import type { LaneManifest } from './shared.js';
+
+function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
+  return {
+    schema_version: 1,
+    issue_id: 'UTV2-1001',
+    lane_type: 'governance',
+    executor: 'codex-cli',
+    tier: 'T3',
+    worktree_path: '.',
+    branch: 'codex/utv2-1001-enforce-non-null-merge-sha',
+    base_branch: 'main',
+    commit_sha: 'abc123',
+    pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1001',
+    files_changed: ['scripts/ops/lane-close.ts'],
+    file_scope_lock: ['scripts/**'],
+    expected_proof_paths: [],
+    status: 'merged',
+    started_at: '2026-05-17T09:00:00.000Z',
+    heartbeat_at: '2026-05-17T09:00:00.000Z',
+    closed_at: null,
+    blocked_by: [],
+    preflight_token: 'dispatch-auto',
+    created_by: 'codex-cli',
+    truth_check_history: [],
+    reopen_history: [],
+    ...overrides,
+  };
+}
 
 // ── Scenario 1: clean closeout ────────────────────────────────────────────────
 
@@ -11,6 +45,44 @@ test('clean closeout: pass verdict with no failures maps to lane_closed', () => 
 
 test('clean closeout: lane_closed remediation is empty string', () => {
   assert.strictEqual(remediationForCode('lane_closed'), '');
+});
+
+test('lane close commit guard: null commit_sha throws', () => {
+  assert.throws(
+    () => requireCloseCommitSha(createManifest({ commit_sha: null })),
+    /ERROR: Lane close requires commit_sha — run ops:truth-check first/,
+  );
+});
+
+test('lane close commit guard: undefined commit_sha throws', () => {
+  const manifest = createManifest() as LaneManifest & {
+    commit_sha?: string | null;
+  };
+  delete manifest.commit_sha;
+
+  assert.throws(
+    () => requireCloseCommitSha(manifest),
+    /ERROR: Lane close requires commit_sha — run ops:truth-check first/,
+  );
+});
+
+test('lane close commit guard: empty commit_sha throws', () => {
+  assert.throws(
+    () => requireCloseCommitSha(createManifest({ commit_sha: '   ' })),
+    /ERROR: Lane close requires commit_sha — run ops:truth-check first/,
+  );
+});
+
+test('lane close commit guard: valid commit_sha proceeds normally', () => {
+  assert.doesNotThrow(() =>
+    requireCloseCommitSha(createManifest({ commit_sha: 'abc123' })),
+  );
+});
+
+test('lane close commit guard: already done lane is not retroactively failed', () => {
+  assert.doesNotThrow(() =>
+    requireCloseCommitSha(createManifest({ commit_sha: null, status: 'done' })),
+  );
 });
 
 // ── Scenario 2: missing proof ─────────────────────────────────────────────────
@@ -144,6 +216,9 @@ const allFailureCodes: CloseoutFailureCode[] = [
 for (const code of allFailureCodes) {
   test(`remediation message for ${code} is a non-empty string`, () => {
     const msg = remediationForCode(code);
-    assert.ok(typeof msg === 'string' && msg.length > 0, `Expected non-empty remediation for ${code}`);
+    assert.ok(
+      typeof msg === 'string' && msg.length > 0,
+      `Expected non-empty remediation for ${code}`,
+    );
   });
 }
