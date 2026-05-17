@@ -3,6 +3,10 @@
 // Reports M1–M4 milestone-critical truth: runtime, ingestion, grading, identity, CLV, delivery.
 import { loadEnvironment } from '@unit-talk/config'
 import { createClient } from '@supabase/supabase-js'
+import {
+  formatClvPayloadPathCounts,
+  summarizeClvCoverage,
+} from './clvCoverage.js'
 
 const env = loadEnvironment()
 const url = env.SUPABASE_URL ?? ''
@@ -163,7 +167,7 @@ async function main() {
 
   const { data: settlements, error: settlErr } = await db
     .from('settlement_records')
-    .select('id, pick_id, result, source, corrects_id')
+    .select('id, pick_id, result, source, payload, corrects_id')
     .is('corrects_id', null)
     .order('created_at', { ascending: false })
     .limit(500)
@@ -188,12 +192,8 @@ async function main() {
 
   // ── 6. CLV Resolution ─────────────────────────────────────────────────────
   const settlementsForCLV = settlements ?? []
-  const withCLV = settlementsForCLV.filter(s => {
-    const p = s as { payload?: Record<string, unknown> }
-    return p.payload && typeof p.payload === 'object'
-      && (('clvRaw' in (p.payload as Record<string, unknown>)) || ('beatsClosingLine' in (p.payload as Record<string, unknown>)))
-  })
-  const clvPct = settlementsForCLV.length > 0 ? Math.round((withCLV.length / settlementsForCLV.length) * 100) : 0
+  const clvCoverage = summarizeClvCoverage(settlementsForCLV)
+  const clvPct = clvCoverage.coveragePct
   {
     const status: SignalStatus = settlementsForCLV.length === 0 ? 'UNKNOWN'
       : clvPct < THRESHOLDS.clvCoverageWarnPct ? 'YELLOW' : 'GREEN'
@@ -201,7 +201,7 @@ async function main() {
       name: 'CLV Resolution',
       status,
       value: `${clvPct}% settlements have CLV data`,
-      detail: `total_records=${settlementsForCLV.length}; with_clv=${withCLV.length}`,
+      detail: `total_records=${clvCoverage.totalRecords}; with_clv=${clvCoverage.withClv}; payload_paths: ${formatClvPayloadPathCounts(clvCoverage.pathCounts)}`,
     })
     if (status === 'YELLOW') warns.push(`CLV: only ${clvPct}% settlements have CLV payload (threshold=${THRESHOLDS.clvCoverageWarnPct}%)`)
   }
