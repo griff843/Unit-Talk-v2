@@ -7,7 +7,7 @@
   "worktree_path": ".",
   "branch": "claude/utv2-930-unified-lifecycle-spec",
   "base_branch": "main",
-  "commit_sha": "7651eda4",
+  "commit_sha": "cc194455",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/710",
   "files_changed": [
     ".lane/lanes/governance.yml",
@@ -29,10 +29,10 @@
     "docs/06_status/proof/UTV2-930/evidence-bundle.md",
     "docs/06_status/proof/UTV2-930/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-17T03:20:00.000Z",
-  "heartbeat_at": "2026-05-17T04:35:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-17T04:00:00.000Z",
+  "closed_at": "2026-05-17T04:00:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
