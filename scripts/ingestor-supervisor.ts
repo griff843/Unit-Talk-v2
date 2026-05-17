@@ -37,7 +37,7 @@ interface RuntimeStatus {
   processConflicts: ProcessRef[];
   latestRunStatus: string | null;
   latestRunStartedAt: string | null;
-  latestOfferCreatedAt: string | null;
+  latestOfferUpdatedAt: string | null;
   health: ReturnType<typeof evaluateIngestorHealth>;
   paths: {
     runtimeDir: string;
@@ -253,7 +253,7 @@ function printHumanStatus(status: RuntimeStatus) {
   console.log(`Restarts:   ${status.supervisorState.restartCount}`);
   console.log(`Run status: ${status.latestRunStatus ?? 'none'}`);
   console.log(`Run at:     ${status.latestRunStartedAt ?? 'none'}`);
-  console.log(`Offer at:   ${status.latestOfferCreatedAt ?? 'none'}`);
+  console.log(`Offer at:   ${status.latestOfferUpdatedAt ?? 'none'}`);
   console.log(`Runtime:    ${status.paths.runtimeDir}`);
   console.log(`Logs:       ${status.paths.supervisorLog}`);
   console.log(`Child log:  ${status.paths.childLog}`);
@@ -336,7 +336,7 @@ async function collectRuntimeStatus(): Promise<RuntimeStatus> {
     restartCount: state.restartCount,
     latestRunStatus: dbStatus.latestRunStatus,
     latestRunStartedAt: dbStatus.latestRunStartedAt,
-    latestOfferCreatedAt: dbStatus.latestOfferCreatedAt,
+    latestOfferCreatedAt: dbStatus.latestOfferUpdatedAt,
   });
 
   return {
@@ -347,7 +347,7 @@ async function collectRuntimeStatus(): Promise<RuntimeStatus> {
     processConflicts: conflicts,
     latestRunStatus: dbStatus.latestRunStatus,
     latestRunStartedAt: dbStatus.latestRunStartedAt,
-    latestOfferCreatedAt: dbStatus.latestOfferCreatedAt,
+    latestOfferUpdatedAt: dbStatus.latestOfferUpdatedAt,
     health,
     paths: {
       runtimeDir: RUNTIME_DIR,
@@ -364,7 +364,7 @@ async function readDatabaseStatus() {
     return {
       latestRunStatus: null,
       latestRunStartedAt: null,
-      latestOfferCreatedAt: null,
+      latestOfferUpdatedAt: null,
     };
   }
 
@@ -381,8 +381,8 @@ async function readDatabaseStatus() {
       .limit(1),
     db
       .from('provider_offers')
-      .select('created_at')
-      .order('created_at', { ascending: false })
+      .select('updated_at')
+      .order('updated_at', { ascending: false })
       .limit(1),
   ]);
 
@@ -391,8 +391,8 @@ async function readDatabaseStatus() {
       typeof runRows?.[0]?.status === 'string' ? runRows[0].status : null,
     latestRunStartedAt:
       typeof runRows?.[0]?.started_at === 'string' ? runRows[0].started_at : null,
-    latestOfferCreatedAt:
-      typeof offerRows?.[0]?.created_at === 'string' ? offerRows[0].created_at : null,
+    latestOfferUpdatedAt:
+      typeof offerRows?.[0]?.updated_at === 'string' ? offerRows[0].updated_at : null,
   };
 }
 

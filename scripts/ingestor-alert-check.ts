@@ -232,7 +232,7 @@ async function main() {
       level: 'CRITICAL',
       check: 'offers',
       ageMinutes: health.offerAgeMinutes,
-      message: `Ingestor health check failed: containerRunning=${health.containerRunning} offerAgeMinutes=${health.offerAgeMinutes}.`,
+      message: `Ingestor health check failed: status=${health.status} outage=${health.outage} dataStale=${health.dataStale} latestOfferUpdatedAt=${health.latestOfferUpdatedAt ?? 'none'} latestRunStartedAt=${health.latestRunStartedAt ?? 'none'} offerAgeMinutes=${health.offerAgeMinutes}.`,
     });
   }
 

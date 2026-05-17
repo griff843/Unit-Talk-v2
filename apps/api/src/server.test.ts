@@ -1585,10 +1585,12 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
 
   const previousToken = process.env.DISCORD_BOT_TOKEN;
   const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const prevPosterKeyRecap = process.env.UNIT_TALK_API_KEY_POSTER;
   const previousFetch = globalThis.fetch;
   let capturedUrl = '';
   let capturedBody = '';
   process.env.DISCORD_BOT_TOKEN = 'test-token';
+  process.env.UNIT_TALK_API_KEY_POSTER = 'test-poster-key';
   process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
     'discord:recaps': '1300411261854547968',
   });
@@ -1613,6 +1615,7 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
         method: 'POST',
         headers: {
           'content-type': 'application/json',
+          'authorization': 'Bearer test-poster-key',
         },
         body: JSON.stringify({ period: 'daily' }),
       },
@@ -1660,10 +1663,18 @@ test('POST /api/recap/post returns ok true and posts a recap embed when settled 
     } else {
       process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
     }
+    if (prevPosterKeyRecap === undefined) {
+      delete process.env.UNIT_TALK_API_KEY_POSTER;
+    } else {
+      process.env.UNIT_TALK_API_KEY_POSTER = prevPosterKeyRecap;
+    }
   }
 });
 
 test('POST /api/recap/post returns no settled picks reason when the requested window is empty', async () => {
+  const prevPosterKey = process.env.UNIT_TALK_API_KEY_POSTER;
+  process.env.UNIT_TALK_API_KEY_POSTER = 'test-poster-key';
+
   const server = createApiServer({
     repositories: createInMemoryRepositoryBundle(),
   });
@@ -1679,6 +1690,7 @@ test('POST /api/recap/post returns no settled picks reason when the requested wi
         method: 'POST',
         headers: {
           'content-type': 'application/json',
+          'authorization': 'Bearer test-poster-key',
         },
         body: JSON.stringify({ period: 'daily' }),
       },
@@ -1690,6 +1702,8 @@ test('POST /api/recap/post returns no settled picks reason when the requested wi
     assert.equal(body.reason, 'no settled picks in window');
   } finally {
     server.close();
+    if (prevPosterKey === undefined) delete process.env.UNIT_TALK_API_KEY_POSTER;
+    else process.env.UNIT_TALK_API_KEY_POSTER = prevPosterKey;
   }
 });
 
@@ -1707,7 +1721,9 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
 
   const previousToken = process.env.DISCORD_BOT_TOKEN;
   const previousTargetMap = process.env.UNIT_TALK_DISCORD_TARGET_MAP;
+  const prevPosterKey = process.env.UNIT_TALK_API_KEY_POSTER;
   delete process.env.DISCORD_BOT_TOKEN;
+  process.env.UNIT_TALK_API_KEY_POSTER = 'test-poster-key';
   process.env.UNIT_TALK_DISCORD_TARGET_MAP = JSON.stringify({
     'discord:recaps': '1300411261854547968',
   });
@@ -1724,6 +1740,7 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
         method: 'POST',
         headers: {
           'content-type': 'application/json',
+          'authorization': 'Bearer test-poster-key',
         },
         body: JSON.stringify({ period: 'daily' }),
       },
@@ -1745,6 +1762,8 @@ test('POST /api/recap/post returns DISCORD_BOT_TOKEN not configured when picks e
     } else {
       process.env.UNIT_TALK_DISCORD_TARGET_MAP = previousTargetMap;
     }
+    if (prevPosterKey === undefined) delete process.env.UNIT_TALK_API_KEY_POSTER;
+    else process.env.UNIT_TALK_API_KEY_POSTER = prevPosterKey;
   }
 });
 
