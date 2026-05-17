@@ -1,4 +1,4 @@
-name: Proof Coverage Guard
+﻿name: Proof Coverage Guard
 
 # Any PR that touches sensitive runtime paths (lifecycle, promotion, audit,
 # distribution, review controller, migrations) must also include a
@@ -123,7 +123,50 @@ jobs:
           # Accept any change to a file whose path matches a live-DB proof pattern.
           # Proof scripts may live with the app/package that owns the runtime surface.
           proof_patterns=(
-            'apps/api/src/t1-proof-.*\.test\.ts$'
+            'apps/[^/]+/src/t1-proof-.*\.test\.ts$'
+            'apps/api/src/.*test-db.*\.ts$'
+            'apps/[^/]+/src/scripts/.*\.ts$'
+            'packages/[^/]+/src/scripts/.*\.ts$'
+          )
+
+          proof_changed=""
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            for pattern in "${proof_patterns[@]}"; do
+              if echo "$file" | grep -qE "$pattern"; then
+                proof_changed+="$file"$'\n'
+                break
+              fi
+            done
+          done < /tmp/changed.txt
+
+          if [ -n "$proof_changed" ]; then
+            echo "✓ Live-DB proof coverage present:"
+            printf '%s' "$proof_changed"
+            exit 0
+          fi
+
+          echo "::error title=Proof coverage missing::This PR touches sensitive runtime paths but does not include a corresponding live-DB proof change."
+          echo ""
+          echo "Sensitive files touched:"
+          printf '%s' "${{ steps.sensitive.outputs.sensitive }}"
+          echo ""
+          echo "This class of change has shipped broken twice (UTV2-519, UTV2-521)"
+          echo "because unit tests pass under InMemory while production diverges."
+          echo ""
+          echo "Required: add or update a live-DB proof case under one of:"
+          echo "  - apps/api/src/t1-proof-*.test.ts (gated on SUPABASE_SERVICE_ROLE_KEY)"
+          echo "  - apps/*/src/scripts/*.ts (proof script)"
+          echo "  - packages/*/src/scripts/*.ts (proof script)"
+          echo ""
+          echo "The proof must exercise your change against the real submission or"
+          echo "review pipeline via in-process controller calls with live repos."
+          echo "See apps/api/src/t1-proof-awaiting-approval.test.ts for the pattern."
+          echo ""
+          echo "If this PR is genuinely infrastructure-only and does not need a"
+          echo "runtime proof, add the label 'skip-proof-coverage' to the PR."
+          exit 1
+
             'apps/api/src/.*test-db.*\.ts$'
             'apps/[^/]+/src/scripts/.*\.ts$'
             'packages/[^/]+/src/scripts/.*\.ts$'

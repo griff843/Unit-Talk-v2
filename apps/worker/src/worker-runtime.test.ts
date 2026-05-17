@@ -220,6 +220,26 @@ class FakeOutboxRepository implements OutboxRepository {
     return entry;
   }
 
+  async listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]> {
+    return this.entries
+      .filter(
+        (e) =>
+          (e.status === 'failed' || e.status === 'dead_letter') &&
+          e.attempt_count < maxAttemptCount &&
+          e.last_error !== null,
+      )
+      .slice(0, limit);
+  }
+
+  async resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null> {
+    const entry = this.entries.find((e) => e.id === outboxId && e.status === expectedStatus);
+    if (!entry) return null;
+    entry.status = 'pending';
+    entry.last_error = null;
+    entry.updated_at = new Date().toISOString();
+    return entry;
+  }
+
   private requireEntry(outboxId: string) {
     const entry = this.entries.find((candidate) => candidate.id === outboxId);
     if (!entry) {
