@@ -3,6 +3,11 @@
 // Reports score provenance mix, market-backed share, CLV coverage, auto-grade coverage.
 import { loadEnvironment } from '@unit-talk/config'
 import { createClient } from '@supabase/supabase-js'
+import {
+  formatClvPayloadPathCounts,
+  getActiveClvPayloadPaths,
+  summarizeClvCoverage,
+} from './clvCoverage.js'
 
 const env = loadEnvironment()
 const url = env.SUPABASE_URL ?? ''
@@ -138,17 +143,20 @@ async function main() {
     signals.push({ name: 'CLV Coverage', status: 'UNKNOWN', value: 'query failed', detail: settlErr.message })
   } else {
     const recs = settlements ?? []
-    const withCLV = recs.filter(s => {
-      if (!s.payload || typeof s.payload !== 'object') return false
-      const p = s.payload as Record<string, unknown>
-      return 'clvRaw' in p || 'beatsClosingLine' in p || 'clv' in p
-    })
+    const clvCoverage = summarizeClvCoverage(recs)
+    const withCLV = recs.filter(s => getActiveClvPayloadPaths(s).length > 0)
     const beats = withCLV.filter(s => {
       const p = s.payload as Record<string, unknown>
-      return p.beatsClosingLine === true || (typeof p.clvRaw === 'number' && (p.clvRaw as number) > 0)
+      const nestedClv = p.clv && typeof p.clv === 'object' && !Array.isArray(p.clv)
+        ? p.clv as Record<string, unknown>
+        : null
+      return p.beatsClosingLine === true
+        || nestedClv?.beatsClosingLine === true
+        || (typeof p.clvRaw === 'number' && p.clvRaw > 0)
+        || (typeof nestedClv?.clvRaw === 'number' && nestedClv.clvRaw > 0)
     })
     const clvPct = recs.length >= THRESHOLDS.minSampleForThreshold
-      ? Math.round((withCLV.length / recs.length) * 100) : -1
+      ? clvCoverage.coveragePct : -1
     const beatsPct = withCLV.length > 0 ? Math.round((beats.length / withCLV.length) * 100) : 0
 
     const status: SignalStatus = clvPct < 0 ? 'UNKNOWN'
@@ -159,7 +167,7 @@ async function main() {
       name: 'CLV Coverage',
       status,
       value: clvPct >= 0 ? `${clvPct}% settlements have CLV; ${beatsPct}% beat closing line` : `sample too small (${recs.length})`,
-      detail: `total_records=${recs.length}; with_clv=${withCLV.length}; beats_closing=${beats.length}`,
+      detail: `total_records=${clvCoverage.totalRecords}; with_clv=${clvCoverage.withClv}; beats_closing=${beats.length}; payload_paths: ${formatClvPayloadPathCounts(clvCoverage.pathCounts)}`,
     })
     if (status === 'RED') criticals.push(`CLV: only ${clvPct}% settled picks have CLV data`)
     if (status === 'YELLOW') warns.push(`CLV: ${clvPct}% coverage (threshold=${THRESHOLDS.clvCoverageWarnPct}%)`)
