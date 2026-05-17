@@ -12,6 +12,7 @@ allowed_path_globs:
   - docs/06_status/lanes/**
   - package.json
   - packages/config/**
+  - packages/contracts/**
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**
