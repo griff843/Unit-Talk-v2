@@ -4,6 +4,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
+import { ROOT } from './shared.js';
 
 type GateOutput = {
   verdict: 'PASS' | 'FAIL';
@@ -15,7 +16,8 @@ type GateOutput = {
 };
 
 const tempDirs: string[] = [];
-const scriptPath = path.resolve('scripts/ops/proof-auditor-gate.ts');
+const TSX = path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+const scriptPath = path.join(ROOT, 'scripts', 'ops', 'proof-auditor-gate.ts');
 
 after(() => {
   for (const tempDir of tempDirs) {
@@ -30,9 +32,10 @@ function makeTempDir(): string {
 }
 
 function runGate(args: string[]): { status: number | null; output: GateOutput } {
-  const result = spawnSync('npx', ['tsx', scriptPath, ...args, '--json'], {
+  const result = spawnSync(process.execPath, [TSX, scriptPath, ...args, '--json'], {
+    cwd: ROOT,
     encoding: 'utf8',
-    windowsHide: true,
+    stdio: 'pipe',
   });
 
   assert.strictEqual(result.error, undefined);
