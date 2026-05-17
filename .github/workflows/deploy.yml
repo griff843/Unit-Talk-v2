@@ -59,6 +59,8 @@ jobs:
           SECRET_UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
           SECRET_UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           SECRET_SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+          SECRET_UNIT_TALK_DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          SECRET_UNIT_TALK_DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
         run: |
           missing=()
           test -n "$SECRET_SUPABASE_URL"              || missing+=(SUPABASE_URL)
@@ -69,11 +71,19 @@ jobs:
           test -n "$SECRET_UNIT_TALK_BOT_API_KEY"     || missing+=(UNIT_TALK_BOT_API_KEY)
           test -n "$SECRET_UNIT_TALK_INGESTOR_API_KEY" || missing+=(UNIT_TALK_INGESTOR_API_KEY)
           test -n "$SECRET_SGO_API_KEY"              || missing+=(SGO_API_KEY)
+          test -n "$SECRET_UNIT_TALK_DEPLOY_HOST"    || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$SECRET_UNIT_TALK_DEPLOY_SSH_KEY" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
           if [ ${#missing[@]} -gt 0 ]; then
             echo "ERROR: Required production secrets are not configured: ${missing[*]}"
             exit 1
           fi
           echo "All required production secrets are present."
+
+      - name: Create CI local.env (dev defaults — no auth keys, allows in-memory tests)
+        run: cp .env.example local.env
+
+      - name: Run test suite (dev env — must pass before gate env is written)
+        run: pnpm verify
 
       - name: Write deploy gate env
         run: |
@@ -88,13 +98,16 @@ jobs:
           UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed
           UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed
           UNIT_TALK_INGESTOR_AUTORUN=true
+          UNIT_TALK_INGESTOR_MAX_CYCLES=0
           UNIT_TALK_WORKER_AUTORUN=true
+          UNIT_TALK_WORKER_MAX_CYCLES=0
           UNIT_TALK_WORKER_ADAPTER=discord
           UNIT_TALK_WORKER_DRY_RUN=false
           DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}
           UNIT_TALK_BOT_API_KEY=${{ secrets.UNIT_TALK_BOT_API_KEY }}
           UNIT_TALK_INGESTOR_API_KEY=${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          SGO_API_KEY=${{ secrets.SGO_API_KEY }}
           EOF
 
       - name: Validate progressive delivery contract
