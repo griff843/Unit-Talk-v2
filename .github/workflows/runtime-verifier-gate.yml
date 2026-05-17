@@ -1,0 +1,82 @@
+name: Runtime Verifier Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - 'docs/06_status/proof/**'
+
+permissions:
+  contents: read
+  pull-requests: write
+  checks: write
+
+jobs:
+  runtime-verifier-gate:
+    name: Runtime Verifier Gate
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Detect issue ID from branch
+        id: issue
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiP '(utv2|uni)-\d+' | head -1 | tr '[:lower:]' '[:upper:]')
+          echo "id=${ISSUE_ID}" >> "$GITHUB_OUTPUT"
+          echo "Branch: $BRANCH  →  Issue: ${ISSUE_ID:-<none>}"
+
+      - name: Run runtime-verifier gate
+        id: gate
+        run: |
+          ISSUE="${{ steps.issue.outputs.id }}"
+          SHA="${{ github.event.pull_request.head.sha }}"
+          PROOF_DIR="docs/06_status/proof/${ISSUE}"
+
+          if [ -z "$ISSUE" ]; then
+            echo "No issue ID found in branch name — skipping gate."
+            echo "verdict=SKIP" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          if [ ! -d "$PROOF_DIR" ]; then
+            echo "Proof dir not found: $PROOF_DIR — gate not applicable for this PR."
+            echo "verdict=SKIP" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          npx tsx scripts/ops/runtime-verifier-gate.ts \
+            --proof-dir "$PROOF_DIR" \
+            --sha "$SHA" \
+            --json | tee gate-result.json
+
+          VERDICT=$(cat gate-result.json | python3 -c "import sys,json; print(json.load(sys.stdin)['verdict'])")
+          echo "verdict=${VERDICT}" >> "$GITHUB_OUTPUT"
+
+          if [ "$VERDICT" != "PASS" ]; then
+            echo "::error::Runtime verifier gate FAILED — see gate-result.json for details"
+            exit 1
+          fi
+
+      - name: Upload gate result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-verifier-gate-${{ github.run_id }}.json
+          path: gate-result.json
+          retention-days: 14
