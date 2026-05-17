@@ -184,3 +184,48 @@ jobs:
             "
           fi
           exit 1
+
+  smoke:
+    name: Post-deploy functional smoke
+    needs: deploy
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run post-deploy functional smoke
+        env:
+          SMOKE_HEALTH_URL: ${{ secrets.UNIT_TALK_DEPLOY_HEALTH_URL }}
+        run: |
+          npx tsx scripts/post-deploy-smoke.ts \
+            --health-url "$SMOKE_HEALTH_URL" \
+            --max-retries 5 \
+            --retry-interval-ms 10000 \
+            --json | tee smoke-result.json
+          VERDICT=$(python3 -c "import sys,json; print(json.load(open('smoke-result.json'))['verdict'])")
+          if [ "$VERDICT" != "PASS" ]; then
+            echo "::error::Post-deploy functional smoke FAILED — see smoke-result.json"
+            exit 1
+          fi
+
+      - name: Upload smoke result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-result-${{ github.run_id }}.json
+          path: smoke-result.json
+          retention-days: 30
