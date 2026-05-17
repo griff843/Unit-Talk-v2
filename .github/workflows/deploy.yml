@@ -79,6 +79,9 @@ jobs:
           fi
           echo "All required production secrets are present."
 
+      - name: Create CI local.env (dev defaults — no auth keys, allows in-memory tests)
+        run: cp .env.example local.env
+
       - name: Run test suite (dev env — must pass before gate env is written)
         run: pnpm verify
 
