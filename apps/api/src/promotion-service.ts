@@ -4,7 +4,9 @@ import {
   type CanonicalPick,
   type EdgeSource,
   type EdgeFallbackReason,
+  type EdgeMethod,
   type EdgeSourceQuality,
+  type ProviderCoverageState,
   type PickLifecycleState,
   type PromotionDecisionSnapshot,
   type PromotionPolicy,
@@ -312,6 +314,8 @@ export async function evaluateAllPoliciesEagerAndPersist(
       ...(scoreInputs.edgeFallbackReason
         ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
         : {}),
+      edgeMethod: scoreInputs.edgeMethod,
+      providerCoverageState: scoreInputs.providerCoverageState,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -586,6 +590,8 @@ async function buildSmartFormQualifiedResult(
       ...(scoreInputs.edgeFallbackReason
         ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
         : {}),
+      edgeMethod: scoreInputs.edgeMethod,
+      providerCoverageState: scoreInputs.providerCoverageState,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -867,6 +873,8 @@ async function persistPromotionDecisionForPick(
       ...(scoreInputs.edgeFallbackReason
         ? { edgeFallbackReason: scoreInputs.edgeFallbackReason }
         : {}),
+      edgeMethod: scoreInputs.edgeMethod,
+      providerCoverageState: scoreInputs.providerCoverageState,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -1007,25 +1015,45 @@ async function readPromotionScoreInputs(
   const configured = readNestedRecord(pick.metadata, 'promotionScores');
   const confidenceScore = normalizeConfidenceForScoring(pick.confidence);
 
-  // Edge fallback priority: explicit promotionScores.edge > market-backed/domain analysis edge > confidence.
-  // Root causes UTV2-571 tracks: missing promotionScores.edge plus no matching
-  // paired provider offer, or market-backed realEdge stored only at top-level on
-  // older rows. Keep these labels stable so fallback rate is measurable.
-  const domainEdgeScore = readDomainAnalysisEdgeScore(pick.metadata);
-  const edgeFallback = domainEdgeScore ?? confidenceScore;
+  // Edge fallback priority: explicit promotionScores.edge > market-backed edge > 0.
+  // UTV2-985 (PM requirement): confidence-delta must NOT contribute a positive
+  // edge score. Picks without market-backed data receive edge = 0 so they cannot
+  // masquerade as edge-driven promotions. Use readMarketBackedEdgeScore() here.
+  const marketBackedEdgeScore = readMarketBackedEdgeScore(pick.metadata);
 
   // Track the source of the edge score for the decision snapshot
   const edgeIsExplicit = typeof configured?.['edge'] === 'number';
   const edgeSource: EdgeSource = edgeIsExplicit
     ? 'explicit'
-    : domainEdgeScore !== null
+    : marketBackedEdgeScore !== null
       ? readDomainAnalysisEdgeSource(pick.metadata)
       : 'confidence-delta';
   const edgeSourceQuality = resolveEdgeSourceQuality(edgeSource);
+
+  // PM UTV2-985: granular fallback reason from persisted edgeProvenance when available,
+  // otherwise use the legacy summary label.
+  const edgeProvenance = pick.metadata['edgeProvenance'];
+  const persistedFallbackReason =
+    isRecord(edgeProvenance) && typeof edgeProvenance['fallbackReason'] === 'string'
+      ? (edgeProvenance['fallbackReason'] as EdgeFallbackReason)
+      : undefined;
   const edgeFallbackReason: EdgeFallbackReason | undefined =
     edgeSourceQuality === 'confidence-fallback'
-      ? 'missing-explicit-edge-and-market-edge'
+      ? (persistedFallbackReason ?? 'missing-explicit-edge-and-market-edge')
       : undefined;
+
+  // Derive edgeMethod and providerCoverageState for explicit snapshot provenance.
+  const edgeMethod: EdgeMethod = edgeIsExplicit ? 'market-devigged' : (
+    edgeSourceQuality === 'confidence-fallback' ? 'confidence-delta' : 'market-devigged'
+  );
+  const providerCoverageState: ProviderCoverageState =
+    isRecord(edgeProvenance) && typeof edgeProvenance['providerCoverageState'] === 'string'
+      ? (edgeProvenance['providerCoverageState'] as ProviderCoverageState)
+      : edgeSourceQuality === 'confidence-fallback' ? 'none'
+      : (edgeSource === 'real-edge' ? 'pinnacle'
+        : edgeSource === 'consensus-edge' ? 'consensus'
+        : edgeSource === 'sgo-edge' ? 'sgo'
+        : edgeSource === 'single-book-edge' ? 'single-book' : 'none');
 
   // Trust fallback priority: explicit promotionScores.trust > domain trust signal > confidence
   const trustFallback = readDomainAnalysisTrustSignal(pick.metadata) ?? confidenceScore;
@@ -1085,8 +1113,16 @@ async function readPromotionScoreInputs(
           ).length,
         });
 
+  // PM UTV2-985: explicit score — market-backed edge OR 0 (fail-closed).
+  // When edgeIsExplicit, operator-provided value takes precedence (trust the operator).
+  // When market data exists, use the devigged edge score.
+  // When only confidence-delta is available, edge contribution is 0 — no inflation.
+  const edgeContribution: number = edgeIsExplicit
+    ? readScore(configured, 'edge', 0)
+    : marketBackedEdgeScore ?? 0;
+
   return {
-    edge: readScore(configured, 'edge', edgeFallback),
+    edge: edgeContribution,
     trust,
     readiness: readScore(configured, 'readiness', readinessFallback),
     uniqueness,
@@ -1096,6 +1132,10 @@ async function readPromotionScoreInputs(
     /** Coarse bucket for measuring market-backed vs confidence-fallback routing. */
     edgeSourceQuality,
     ...(edgeFallbackReason ? { edgeFallbackReason } : {}),
+    /** How the edge was computed (market-devigged or confidence-delta). UTV2-985. */
+    edgeMethod,
+    /** Which provider tier supplied market data, or 'none'. UTV2-985. */
+    providerCoverageState,
   };
 }
 
@@ -1111,6 +1151,10 @@ async function readPromotionScoreInputs(
  * Used as fallback when no market data is available.
  *
  * Both are mapped to 0-100 score: clamp(50 + rawValue * 400, 0, 100)
+ *
+ * NOTE: Do NOT use this function for promotion eligibility decisions (UTV2-985).
+ * Use readMarketBackedEdgeScore() instead — confidence-delta must not inflate
+ * promotion scores. This function is kept for band assignment and diagnostics.
  */
 export function readDomainAnalysisEdgeScore(
   metadata: Record<string, unknown>,
@@ -1141,6 +1185,38 @@ export function readDomainAnalysisEdgeScore(
   }
 
   return scoreRawEdge(rawEdge);
+}
+
+/**
+ * Read edge score from market-backed data ONLY.
+ *
+ * Returns null when no devigged market offer was found (confidence-delta fallback).
+ * Used for promotion eligibility decisions (UTV2-985): confidence-delta must not
+ * contribute a positive edge score — picks without market data receive edge = 0.
+ *
+ * This enforces the PM fail-closed requirement: "prefer UNPROVEN / insufficient
+ * market edge evidence over synthetic confidence inflation."
+ */
+export function readMarketBackedEdgeScore(
+  metadata: Record<string, unknown>,
+): number | null {
+  const domainAnalysis = metadata['domainAnalysis'];
+  const topLevelMarketEdge = readTopLevelMarketBackedRealEdge(metadata);
+
+  if (isRecord(domainAnalysis)) {
+    const realEdge = domainAnalysis['realEdge'];
+    if (typeof realEdge === 'number' && Number.isFinite(realEdge)) {
+      return scoreRawEdge(realEdge);
+    }
+  }
+
+  if (topLevelMarketEdge !== null) {
+    return scoreRawEdge(topLevelMarketEdge);
+  }
+
+  // No market-backed data available — return null (caller uses 0 as edge contribution).
+  // Confidence-delta value in domainAnalysis.edge is intentionally excluded here.
+  return null;
 }
 
 /**

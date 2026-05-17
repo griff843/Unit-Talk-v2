@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   readDomainAnalysisEdgeScore,
   readDomainAnalysisEdgeSource,
+  readMarketBackedEdgeScore,
   readDomainAnalysisTrustSignal,
   readDomainAnalysisReadinessSignal,
   evaluateAndPersistBestBetsPromotion,
@@ -107,23 +108,23 @@ test('explicit promotionScores.edge wins over domain analysis edge', async () =>
   assert.equal(result.pick.promotionStatus, 'qualified');
 });
 
-test('domain analysis edge is used when promotionScores.edge is absent and odds are present', async () => {
+test('UTV2-985 fail-closed: confidence-delta pick without explicit edge is suppressed even with odds', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  // Submitting with odds + confidence but NO explicit promotionScores.edge
-  // odds +150 → implied 0.4, confidence 0.65 → raw edge 0.25 → score clamp(50+0.25*400)=150→100
-  // Domain-derived edge score = 100 ≥ 85 → trader-insights edge threshold passes
+  // odds +150 + confidence 0.65 → confidence-delta fallback (no provider offers seeded)
+  // UTV2-985: edge contribution = 0 (fail-closed — no market-backed data)
+  // Score: 0*0.35 + 90*0.25 + 88*0.2 + 84*0.1 + 89*0.1 = 57.4 < 70 → no tier qualifies
   const result = await processSubmission(
     {
       source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 8.5',
       odds: 150,
-      confidence: 0.65, // above confidenceFloor (0.6)
+      confidence: 0.65,
       metadata: {
         sport: 'NBA',
         eventName: 'Bulls vs Knicks',
         promotionScores: {
-          // edge intentionally absent — domain analysis should fill this
+          // no explicit edge — without real market data, edge contribution = 0
           trust: 90,
           readiness: 88,
           uniqueness: 84,
@@ -134,17 +135,15 @@ test('domain analysis edge is used when promotionScores.edge is absent and odds 
     repositories,
   );
 
-  // Domain-derived edge=100, trust=90 → clears the exclusive-insights thresholds.
-  // Overall score with edge=100: 100*0.35 + 90*0.25 + 88*0.2 + 84*0.1 + 89*0.1 = 35+22.5+17.6+8.4+8.9 = 92.4 ≥ 90
-  // → exclusive-insights qualifies
-  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
-  assert.equal(result.pick.promotionStatus, 'qualified');
+  // No market-backed edge → edge=0 → score 57.4 < 70 → suppressed
+  assert.equal(result.pick.promotionStatus, 'suppressed');
+  assert.ok(result.pick.promotionTarget == null, 'no tier should qualify without market-backed edge');
 });
 
-test('domain analysis edge below ti threshold routes to best-bets when explicit edge absent', async () => {
+test('UTV2-985 fail-closed: confidence-delta pick with marginal edge and no market data is suppressed', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  // odds -200 → implied 0.6667, confidence 0.70 → raw edge ≈ 0.0333 → score ≈ 63.3
-  // Domain-derived edge score ≈ 63 < 85 → trader-insights edge suppressed → best-bets
+  // odds -200, confidence 0.70 → confidence-delta fallback (no provider offers)
+  // UTV2-985: edge contribution = 0 → score = 0*0.35+90*0.25+88*0.2+84*0.1+89*0.1 = 57.4 < 70
   const result = await processSubmission(
     {
       source: 'api',
@@ -156,7 +155,7 @@ test('domain analysis edge below ti threshold routes to best-bets when explicit 
         sport: 'NBA',
         eventName: 'Heat vs Sixers',
         promotionScores: {
-          // edge intentionally absent
+          // no explicit edge — confidence-delta gets edge=0
           trust: 90,
           readiness: 88,
           uniqueness: 84,
@@ -167,15 +166,14 @@ test('domain analysis edge below ti threshold routes to best-bets when explicit 
     repositories,
   );
 
-  // Domain-derived edge ≈ 63 < 85 → ti suppressed. bb: score with edge=63 ≥ 70? Let's check:
-  // 63*0.35 + 90*0.25 + 88*0.2 + 84*0.1 + 89*0.1 = 22.05+22.5+17.6+8.4+8.9 = 79.45 ≥ 70 → bb qualifies
-  assert.equal(result.pick.promotionTarget, 'best-bets');
-  assert.equal(result.pick.promotionStatus, 'qualified');
+  // No market-backed edge → edge=0 → score 57.4 < 70 → suppressed
+  assert.equal(result.pick.promotionStatus, 'suppressed');
+  assert.ok(result.pick.promotionTarget == null, 'no tier should qualify without market-backed edge');
 });
 
-test('confidence fallback is used when both promotionScores.edge and domain analysis are absent', async () => {
+test('UTV2-985 fail-closed: pick without odds or explicit edge is suppressed even with high confidence', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  // No odds → no domain analysis → no domain edge → confidence fallback
+  // No odds → no domain analysis → no market data → edge contribution = 0 (fail-closed)
   const result = await processSubmission(
     {
       source: 'api',
@@ -186,7 +184,7 @@ test('confidence fallback is used when both promotionScores.edge and domain anal
         sport: 'NBA',
         eventName: 'Suns vs Nuggets',
         promotionScores: {
-          // edge absent, no odds → confidence fallback = 90
+          // no explicit edge — without market data, edge = 0 (not inflated by confidence)
           trust: 90,
           readiness: 88,
           uniqueness: 84,
@@ -197,12 +195,9 @@ test('confidence fallback is used when both promotionScores.edge and domain anal
     repositories,
   );
 
-  // Confidence=0.90 → fallback edge score=90 ≥ 90 (ei minimum) → all gates pass
-  // 'NBA steals' normalizes to 'steals-all-game-ou' (player-prop): trust×1.1, uniqueness×1.1
-  // ei score: (90*0.45)*1.0 + (90*0.30)*1.1 + (88*0.10)*1.0 + (84*0.10)*1.1 + (89*0.05)*1.0 = 92.59 ≥ 90
-  // → exclusive-insights qualifies (highest qualifying tier)
-  assert.equal(result.pick.promotionTarget, 'exclusive-insights');
-  assert.equal(result.pick.promotionStatus, 'qualified');
+  // edge=0 → score = 0*0.35+90*0.25+88*0.2+84*0.1+89*0.1 = 57.4 < 70 → suppressed
+  assert.equal(result.pick.promotionStatus, 'suppressed');
+  assert.ok(result.pick.promotionTarget == null, 'high confidence alone must not drive promotion (UTV2-985)');
 });
 
 test('negative domain edge suppresses promotion correctly', async () => {
@@ -335,12 +330,11 @@ test('readDomainAnalysisReadinessSignal keeps very small positive kellyFraction 
 
 // ── Integration tests: domain-aware trust/readiness in promotion (Week 21) ───
 
-test('domain trust signal elevates trust when no explicit trust score and positive edge', async () => {
+test('domain trust signal applies but UTV2-985: edge=0 still suppresses pick without market data', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  // odds +150 → implied 0.4, confidence 0.65 → raw edge 0.25 → hasPositiveEdge=true, edge≥0.05
-  // Domain trust signal = 80 (significant positive edge)
-  // Confidence-based trust would be 0.65*100 = 65
-  // So domain trust (80) > confidence trust (65) — domain signal wins
+  // odds +150 → confidence-delta (no provider offers) → domain trust signal = 80 still applies
+  // UTV2-985: edge contribution = 0 regardless of domain analysis — no market-backed data
+  // Domain trust signal = 80 (reads positive domain edge) but edge score is still zeroed
   const result = await processSubmission(
     {
       source: 'api',
@@ -361,14 +355,12 @@ test('domain trust signal elevates trust when no explicit trust score and positi
     repositories,
   );
 
-  // edge: domain edge score = clamp(50+0.25*400)=150→100 (no explicit edge)
-  // trust: domain trust signal = 80 (positive edge ≥ 0.05, no explicit trust)
-  // readiness: domain readiness = 85 (Kelly fraction > 0, no explicit readiness)
-  // uniqueness: 84, boardFit: 89
-  // ti thresholds: edge=100≥85✓, trust=80<85✗ → ti suppressed
-  // bb: score = 100*0.35 + 80*0.25 + 85*0.2 + 84*0.1 + 89*0.1 = 35+20+17+8.4+8.9 = 89.3 ≥ 70
-  assert.equal(result.pick.promotionTarget, 'best-bets');
-  assert.equal(result.pick.promotionStatus, 'qualified');
+  // UTV2-985: no market-backed edge → edge=0 even with positive domain analysis edge
+  // trust: domain trust signal = 80 (still applies — domain trust is independent of edge zeroing)
+  // readiness: Kelly-based = 85, uniqueness: 84, boardFit: 89
+  // bb: score = 0*0.35 + 80*0.25 + 85*0.2 + 84*0.1 + 89*0.1 = 0+20+17+8.4+8.9 = 54.3 < 70 → suppressed
+  assert.equal(result.pick.promotionStatus, 'suppressed');
+  assert.ok(result.pick.promotionTarget == null, 'no tier qualifies without market-backed edge');
 });
 
 test('domain readiness signal activates when Kelly fraction is present', async () => {
@@ -406,9 +398,9 @@ test('domain readiness signal activates when Kelly fraction is present', async (
   assert.equal(result.pick.promotionStatus, 'qualified');
 });
 
-test('without odds, trust and readiness use non-domain fallbacks', async () => {
+test('UTV2-985 fail-closed: without odds or explicit edge, pick is suppressed regardless of confidence', async () => {
   const repositories = createInMemoryRepositoryBundle();
-  // No odds → no domain analysis → trust falls back to confidence, readiness falls back to 80
+  // No odds → no market data → edge=0 (fail-closed). Trust falls back to confidence score.
   const result = await processSubmission(
     {
       source: 'api',
@@ -419,7 +411,7 @@ test('without odds, trust and readiness use non-domain fallbacks', async () => {
         sport: 'NBA',
         eventName: 'Mavericks vs Spurs',
         promotionScores: {
-          // No explicit trust/readiness — should use confidence/80 fallback (no domain analysis)
+          // no explicit edge — edge=0 without market data
           uniqueness: 84,
           boardFit: 89,
         },
@@ -428,12 +420,11 @@ test('without odds, trust and readiness use non-domain fallbacks', async () => {
     repositories,
   );
 
-  // No odds → no domain analysis → all domain signals return null
-  // edge: confidence fallback = 90, trust: confidence fallback = 90, readiness: default 80
-  // ti: edge=90≥85✓, trust=90≥85✓
-  // score = 90*0.35 + 90*0.25 + 80*0.2 + 84*0.1 + 89*0.1 = 31.5+22.5+16+8.4+8.9 = 87.3 ≥ 80 → qualifies
-  assert.equal(result.pick.promotionTarget, 'trader-insights');
-  assert.equal(result.pick.promotionStatus, 'qualified');
+  // edge=0 → score = 0*0.35 + trust*0.25 + readiness*0.2 + 84*0.1 + 89*0.1
+  // trust fallback = confidence score ≈ 90, readiness fallback = 60
+  // = 0 + 22.5 + 12 + 8.4 + 8.9 = 51.8 < 70 → suppressed
+  assert.equal(result.pick.promotionStatus, 'suppressed');
+  assert.ok(result.pick.promotionTarget == null, 'confidence alone must not drive promotion (UTV2-985)');
 });
 
 test('marginal domain edge gives lower trust than significant edge', async () => {
@@ -893,4 +884,151 @@ test('promotion history payload includes breakdown, qualified, and score (UTV2-9
   assert.equal(typeof payload.score, 'number', 'payload.score must be a number');
   assert.equal(payload.score, evalResult.decision.score, 'payload.score must match decision.score');
   assert.equal(payload.qualified, evalResult.decision.qualified, 'payload.qualified must match decision.qualified');
+});
+
+// ── UTV2-985: readMarketBackedEdgeScore — must return null for confidence-delta ──
+
+test('readMarketBackedEdgeScore returns null when no market data (confidence-delta only)', () => {
+  // Pick with only confidence-delta — no realEdge in domainAnalysis
+  assert.equal(readMarketBackedEdgeScore({}), null);
+  assert.equal(readMarketBackedEdgeScore({ domainAnalysis: { edge: 0.10, confidenceDelta: 0.10 } }), null);
+  assert.equal(readMarketBackedEdgeScore({ realEdge: 0.05, realEdgeSource: 'confidence-delta' }), null);
+});
+
+test('readMarketBackedEdgeScore returns score when Pinnacle real edge present', () => {
+  const metadata = {
+    domainAnalysis: {
+      realEdge: 0.05,
+      realEdgeSource: 'pinnacle',
+      edge: -0.10, // confidence-delta should be ignored
+    },
+  };
+  assert.equal(readMarketBackedEdgeScore(metadata), 70); // 50 + 0.05*400 = 70
+});
+
+test('readMarketBackedEdgeScore returns score when top-level market-backed realEdge present', () => {
+  const metadata = {
+    realEdge: 0.10,
+    realEdgeSource: 'sgo', // not confidence-delta → market-backed
+    domainAnalysis: { edge: 0.01 },
+  };
+  assert.equal(readMarketBackedEdgeScore(metadata), 90); // 50 + 0.10*400 = 90
+});
+
+test('readMarketBackedEdgeScore ignores top-level realEdge when source is confidence-delta', () => {
+  const metadata = {
+    realEdge: 0.05,
+    realEdgeSource: 'confidence-delta',
+  };
+  assert.equal(readMarketBackedEdgeScore(metadata), null);
+});
+
+// ── UTV2-985: promotion scoring must zero confidence-delta edge contribution ──
+
+test('evaluateAndPersistBestBetsPromotion uses edge=0 for confidence-delta-only picks', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  // Submit a pick with confidence and odds but no provider offers → confidence-delta fallback
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'player-points-ou',
+      selection: 'Over',
+      odds: -110,
+      confidence: 0.70,
+    },
+    repos,
+  );
+  assert.ok(result.pick, 'pick must be created');
+  assert.equal(result.pick.metadata['realEdgeSource'], 'confidence-delta', 'must use confidence-delta fallback');
+
+  const promotion = await evaluateAndPersistBestBetsPromotion(
+    result.pick.id,
+    'test:utv2-985',
+    repos.picks,
+    repos.audit,
+  );
+  assert.ok(promotion, 'promotion result must be returned');
+  const snapshot = promotion.snapshot;
+  assert.ok(snapshot, 'snapshot must be present');
+  assert.equal(snapshot.scoreInputs.edge, 0, 'edge must be 0 for confidence-delta picks (UTV2-985 fail-closed)');
+  assert.equal(snapshot.scoreInputs.edgeSourceQuality, 'confidence-fallback', 'must label as confidence-fallback');
+  assert.equal(snapshot.scoreInputs.edgeMethod, 'confidence-delta', 'edgeMethod must be confidence-delta');
+  assert.equal(snapshot.scoreInputs.providerCoverageState, 'none', 'providerCoverageState must be none');
+});
+
+test('evaluateAndPersistBestBetsPromotion uses real edge score when market data is present', async () => {
+  const repos = createInMemoryRepositoryBundle();
+  // Seed a provider offer so real edge can be computed via SGO tier
+  const now = new Date().toISOString();
+  await repos.providerOffers.upsertBatch([{
+    providerKey: 'sgo',
+    providerMarketKey: 'player-points-ou',
+    providerEventId: 'test-event-985',
+    providerParticipantId: null,
+    sportKey: 'NBA',
+    line: null,
+    overOdds: -110,
+    underOdds: -110,
+    devigMode: 'PAIRED' as const,
+    isOpening: false,
+    isClosing: false,
+    snapshotAt: now,
+    idempotencyKey: `sgo:player-points-ou:test-event-985:${now}`,
+    bookmakerKey: null,
+  }]);
+
+  const result = await processSubmission(
+    {
+      source: 'smart-form',
+      market: 'player-points-ou',
+      selection: 'Over',
+      odds: -110,
+      confidence: 0.60,
+    },
+    repos,
+  );
+  assert.ok(result.pick, 'pick must be created');
+  assert.ok(result.pick.metadata['realEdgeSource'] !== undefined, 'realEdgeSource must be set');
+
+  const promotion = await evaluateAndPersistBestBetsPromotion(
+    result.pick.id,
+    'test:utv2-985',
+    repos.picks,
+    repos.audit,
+  );
+  assert.ok(promotion, 'promotion result must be returned');
+  const snapshot = promotion.snapshot;
+  assert.ok(snapshot, 'snapshot must be present');
+  assert.ok(
+    snapshot.scoreInputs.edgeMethod === 'market-devigged' || snapshot.scoreInputs.edgeMethod === 'confidence-delta',
+    'edgeMethod must be set',
+  );
+  assert.ok(snapshot.scoreInputs.providerCoverageState !== undefined, 'providerCoverageState must be set');
+});
+
+// ── UTV2-985: RealEdgeResult must include provenance ──
+
+test('computeRealEdge returns provenance with method and providerCoverageState', async () => {
+  const { computeRealEdge } = await import('./real-edge-service.js');
+  const repos = createInMemoryRepositoryBundle();
+
+  const result = await computeRealEdge({
+    confidence: 0.60,
+    marketKey: 'player-points-ou',
+    selection: 'Over',
+    submittedOdds: -110,
+    providerOffers: repos.providerOffers,
+  });
+
+  assert.ok(result.provenance, 'provenance must be present');
+  assert.ok(result.provenance.method === 'market-devigged' || result.provenance.method === 'confidence-delta', 'method must be valid');
+  assert.ok(
+    ['pinnacle', 'consensus', 'sgo', 'single-book', 'none'].includes(result.provenance.providerCoverageState),
+    'providerCoverageState must be valid',
+  );
+  // No offers seeded → should fall back to confidence-delta
+  assert.equal(result.marketSource, 'confidence-delta', 'no offers → confidence-delta');
+  assert.equal(result.provenance.method, 'confidence-delta', 'provenance.method must match');
+  assert.equal(result.provenance.providerCoverageState, 'none', 'no market data → none');
+  assert.equal(result.provenance.fallbackReason, 'no-any-offer', 'fallbackReason must be set');
 });
