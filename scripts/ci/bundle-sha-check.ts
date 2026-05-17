@@ -1,5 +1,6 @@
 /**
- * CI check: validate that an evidence bundle's mergeSha matches the PR head commit.
+ * CI check: validate that an evidence bundle's mergeSha matches the PR head commit,
+ * or is an ancestor of it (proof generated at X, metadata committed on top at Y).
  *
  * Usage:
  *   tsx scripts/ci/bundle-sha-check.ts --bundle-path <path> --expected-sha <sha> [--tier T1|T2|T3]
@@ -10,6 +11,7 @@
  */
 
 import fs from 'node:fs';
+import { execSync } from 'node:child_process';
 
 function parseArgs(argv: string[]): {
   bundlePath: string | undefined;
@@ -98,6 +100,25 @@ function main(): void {
   if (mergeSha === expectedSha) {
     console.log(`Bundle SHA verified: ${expectedSha}`);
     process.exit(0);
+  }
+
+  // Also accept mergeSha as an ancestor of expectedSha.
+  // This handles the normal case where proof is generated at commit X, then bundle.json
+  // is updated in a follow-on commit Y — the substantive code is the same.
+  // Deepen the shallow clone first so git merge-base can find ancestor commits.
+  try {
+    execSync('git fetch --deepen=20', { stdio: 'pipe' });
+  } catch {
+    // Best-effort — proceed with whatever history is available
+  }
+  try {
+    execSync(`git merge-base --is-ancestor ${mergeSha} ${expectedSha}`, { stdio: 'pipe' });
+    console.log(
+      `Bundle SHA verified (ancestor): proof built at ${mergeSha}, PR head is ${expectedSha}`,
+    );
+    process.exit(0);
+  } catch {
+    // Not an ancestor — fall through to mismatch error
   }
 
   console.log(

@@ -369,3 +369,102 @@ test(
   },
 );
 
+test(
+  'UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows',
+  { skip: smokeSkip() },
+  async () => {
+    const environment = loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
+    const client = createDatabaseClientFromConnection(connection);
+    const repositories = createDatabaseRepositoryBundle(connection);
+    const result = await createSmokePick(repositories, 'utv2-996-duplicate');
+
+    try {
+      await transitionPickLifecycle(repositories.picks, result.pick.id, 'queued', 'utv2-996 drill queue');
+      await transitionPickLifecycle(repositories.picks, result.pick.id, 'posted', 'utv2-996 drill post', 'poster');
+
+      const first = await recordPickSettlement(
+        result.pick.id,
+        { status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'db-smoke://utv2-996-dup', settledBy: 'codex' },
+        repositories,
+      );
+
+      // Second call from 'settled' state routes to correction (service design: re-settle = correct)
+      const second = await recordPickSettlement(
+        result.pick.id,
+        { status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'db-smoke://utv2-996-dup', settledBy: 'codex' },
+        repositories,
+      );
+
+      // Correction creates a new record — different ID
+      assert.notEqual(first.settlementRecord.id, second.settlementRecord.id, 're-settlement must produce a correction record');
+      // Correction points to original
+      assert.equal(second.settlementRecord.corrects_id, first.settlementRecord.id, 'correction corrects_id must reference original');
+
+      // Exactly one base record (corrects_id = null) — no true duplicate rows
+      const { count: baseCount, error: baseError } = await client
+        .from('settlement_records')
+        .select('id', { count: 'exact', head: true })
+        .eq('pick_id', result.pick.id)
+        .is('corrects_id', null);
+      assert.ifError(baseError);
+      assert.equal(baseCount, 1, 'exactly one base settlement record must exist — no true duplicate rows');
+    } finally {
+      await client.from('picks').delete().eq('id', result.pick.id);
+      await client.from('submissions').delete().eq('id', result.submission.id);
+    }
+  },
+);
+
+test(
+  'UTV2-996: correction chain is additive — original settlement row is not mutated',
+  { skip: smokeSkip() },
+  async () => {
+    const environment = loadEnvironment();
+    const connection = createServiceRoleDatabaseConnectionConfig(environment);
+    const client = createDatabaseClientFromConnection(connection);
+    const repositories = createDatabaseRepositoryBundle(connection);
+    const result = await createSmokePick(repositories, 'utv2-996-correction');
+
+    try {
+      await transitionPickLifecycle(repositories.picks, result.pick.id, 'queued', 'utv2-996 drill queue');
+      await transitionPickLifecycle(repositories.picks, result.pick.id, 'posted', 'utv2-996 drill post', 'poster');
+
+      const original = await recordPickSettlement(
+        result.pick.id,
+        { status: 'settled', result: 'win', source: 'operator', confidence: 'confirmed', evidenceRef: 'db-smoke://utv2-996-orig', settledBy: 'codex' },
+        repositories,
+      );
+
+      const correction = await recordPickSettlement(
+        result.pick.id,
+        { status: 'settled', result: 'loss', source: 'operator', confidence: 'confirmed', evidenceRef: 'db-smoke://utv2-996-corr', settledBy: 'codex' },
+        repositories,
+      );
+
+      assert.notEqual(original.settlementRecord.id, correction.settlementRecord.id, 'correction must produce a new settlement record');
+      assert.equal(correction.settlementRecord.corrects_id, original.settlementRecord.id, 'correction corrects_id must point to original record');
+
+      const { data: originalRow, error: origError } = await client
+        .from('settlement_records')
+        .select('id, result, corrects_id')
+        .eq('id', original.settlementRecord.id)
+        .single();
+      assert.ifError(origError);
+      assert.equal(originalRow!.result, 'win', 'original row result must not be mutated by correction');
+      assert.equal(originalRow!.corrects_id, null, 'original row corrects_id must remain null');
+
+      const { count: auditCount, error: auditError } = await client
+        .from('audit_log')
+        .select('id', { count: 'exact', head: true })
+        .eq('entity_ref', result.pick.id)
+        .like('action', 'settlement.%');
+      assert.ifError(auditError);
+      assert.ok((auditCount ?? 0) >= 2, 'audit_log must have entries for both original and correction settlements');
+    } finally {
+      await client.from('picks').delete().eq('id', result.pick.id);
+      await client.from('submissions').delete().eq('id', result.submission.id);
+    }
+  },
+);
+
