@@ -15,7 +15,10 @@
     "apps/api/src/promotion-edge-integration.test.ts",
     "scripts/setup-uptime-kuma.mjs"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-986/evidence-bundle.md",
+    "apps/api/src/t1-proof-utv2-986-kelly-readiness.test.ts"
+  ],
   "status": "started",
   "started_at": "2026-05-17T19:45:00.000Z",
   "heartbeat_at": "2026-05-17T19:45:00.000Z",

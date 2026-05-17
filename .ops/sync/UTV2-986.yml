@@ -7,4 +7,6 @@ entities:
     - UTV2-986
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-986/evidence-bundle.md
+    - apps/api/src/t1-proof-utv2-986-kelly-readiness.test.ts
