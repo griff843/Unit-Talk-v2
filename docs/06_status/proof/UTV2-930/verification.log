@@ -1,0 +1,37 @@
+verification_schema: v1
+issue: UTV2-930
+tier: T1
+branch: claude/utv2-930-unified-lifecycle-spec
+branch_sha: 2a3813c9ff029e60483950ca20c7fc63fe5ff81d
+generated_at: 2026-05-17T04:30:00.000Z
+verifier: claude-sonnet-4-6
+
+steps:
+  - step: pnpm verify
+    result: PASS
+    exit_code: 0
+    notes: all suites green including new lifecycle-matrix.test.ts (6/6)
+
+  - step: pnpm test:db
+    result: PASS
+    exit_code: 0
+    tests_run: 5
+    tests_pass: 5
+    tests_fail: 0
+    duration_ms: 176265
+    notes: live Supabase project zfzdnfwdarxucxtaojxm
+
+  - step: r-level-check
+    result: PASS
+    verdict: PASS
+    rules_triggered: none
+    artifacts_required: none
+
+  - step: lifecycle-matrix-drift-test
+    result: PASS
+    tests_run: 6
+    tests_pass: 6
+    tests_fail: 0
+    notes: cross-package contracts vs db FSM parity verified
+
+overall: PASS
