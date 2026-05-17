@@ -7,9 +7,16 @@
   "worktree_path": ".",
   "branch": "claude/utv2-938-formal-invariant-verification",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "ad61bc7ebaa615758242222875407a12d866aa34",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/711",
+  "files_changed": [
+    "apps/api/src/t1-proof-lifecycle-invariants.test.ts",
+    "docs/06_status/proof/UTV2-938/evidence-bundle.md",
+    "docs/06_status/proof/UTV2-938/verification.log",
+    "packages/db/src/lifecycle-exhaustive.test.ts",
+    "packages/db/src/settlement-invariants.test.ts",
+    "package.json"
+  ],
   "file_scope_lock": [
     "packages/db/src/**",
     "packages/domain/src/**",
@@ -19,7 +26,7 @@
     "docs/06_status/proof/UTV2-938/evidence-bundle.md",
     "docs/06_status/proof/UTV2-938/verification.log"
   ],
-  "status": "started",
+  "status": "pr_open",
   "started_at": "2026-05-17T07:00:00.000Z",
   "heartbeat_at": "2026-05-17T07:00:00.000Z",
   "closed_at": null,
