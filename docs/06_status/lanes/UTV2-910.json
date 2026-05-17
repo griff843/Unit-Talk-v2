@@ -1,6 +1,6 @@
 {
   "id": "UTV2-910",
-  "title": "Ingestor cadence break — one-shot bridge leaves offer data stale",
+  "title": "Ingestor cadence break \u2014 one-shot bridge leaves offer data stale",
   "owner": "claude",
   "status": "done",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/686",
@@ -12,5 +12,6 @@
     ".github/workflows/ingestor-scheduled-run.yml"
   ],
   "createdAt": "2026-05-15T18:12:00.000Z",
-  "updatedAt": "2026-05-15T18:45:00.000Z"
+  "updatedAt": "2026-05-15T18:45:00.000Z",
+  "issue_id": "UTV2-910"
 }
