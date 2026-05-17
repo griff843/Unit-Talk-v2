@@ -98,7 +98,9 @@ jobs:
           UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed
           UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed
           UNIT_TALK_INGESTOR_AUTORUN=true
+          UNIT_TALK_INGESTOR_MAX_CYCLES=0
           UNIT_TALK_WORKER_AUTORUN=true
+          UNIT_TALK_WORKER_MAX_CYCLES=0
           UNIT_TALK_WORKER_ADAPTER=discord
           UNIT_TALK_WORKER_DRY_RUN=false
           DISCORD_BOT_TOKEN=${{ secrets.DISCORD_BOT_TOKEN }}
