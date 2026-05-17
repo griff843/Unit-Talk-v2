@@ -113,10 +113,7 @@ jobs:
 
           # Helper: build JSON safely via Python (handles special chars in password)
           make_auth_json() {
-            python3 -c "
-import json, sys
-print(json.dumps({'username': 'admin', 'password': sys.argv[1]}))
-" "$KUMA_PASS"
+            python3 -c "import json,sys;print(json.dumps({'username':'admin','password':sys.argv[1]}))" "$KUMA_PASS"
           }
 
           # Initial admin setup — idempotent, no-op if admin already exists
