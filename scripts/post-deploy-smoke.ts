@@ -59,7 +59,7 @@ function parseArgs(argv: string[]): CliOptions {
 async function fetchWithRetry(url: string, maxRetries: number, intervalMs: number): Promise<{ status: number; body: unknown } | { error: string }> {
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
       const body = await res.json().catch(() => null);
       return { status: res.status, body };
     } catch (err: unknown) {
