@@ -7,9 +7,19 @@
   "worktree_path": ".",
   "branch": "claude/utv2-936-automated-recovery",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "479b522eed4dffe6116aa423ed9713da459f3be0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/712",
+  "files_changed": [
+    "apps/worker/src/automated-recovery.ts",
+    "apps/worker/src/runner.ts",
+    "apps/worker/src/index.ts",
+    "apps/worker/src/worker-automated-recovery.test.ts",
+    "apps/worker/src/worker-runtime.test.ts",
+    "apps/worker/src/t1-proof-automated-recovery.test.ts",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    ".lane/lanes/runtime.yml"
+  ],
   "file_scope_lock": [
     "apps/worker/src/**",
     "packages/db/src/**",
@@ -22,7 +32,7 @@
     "docs/06_status/proof/UTV2-936/diff-summary.md",
     "docs/06_status/proof/UTV2-936/runtime-health.json"
   ],
-  "status": "started",
+  "status": "pr_open",
   "started_at": "2026-05-17T09:00:00.000Z",
   "heartbeat_at": "2026-05-17T09:00:00.000Z",
   "closed_at": null,
