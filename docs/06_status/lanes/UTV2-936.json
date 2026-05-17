@@ -13,12 +13,14 @@
   "file_scope_lock": [
     "apps/worker/src/**",
     "packages/db/src/**",
-    "apps/api/src/t1-proof-automated-recovery.test.ts",
+    ".lane/lanes/runtime.yml",
     "docs/06_status/proof/UTV2-936/**"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-936/evidence-bundle.md",
-    "docs/06_status/proof/UTV2-936/verification.log"
+    "docs/06_status/proof/UTV2-936/verification.log",
+    "docs/06_status/proof/UTV2-936/diff-summary.md",
+    "docs/06_status/proof/UTV2-936/runtime-health.json"
   ],
   "status": "started",
   "started_at": "2026-05-17T09:00:00.000Z",

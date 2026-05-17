@@ -843,6 +843,26 @@ export class InMemoryOutboxRepository implements OutboxRepository {
     existing.updated_at = new Date().toISOString();
     return existing;
   }
+
+  async listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]> {
+    return this.entries
+      .filter(
+        (e) =>
+          (e.status === 'failed' || e.status === 'dead_letter') &&
+          e.attempt_count < maxAttemptCount &&
+          e.last_error !== null,
+      )
+      .slice(0, limit);
+  }
+
+  async resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null> {
+    const existing = this.entries.find((e) => e.id === outboxId && e.status === expectedStatus);
+    if (!existing) return null;
+    existing.status = 'pending';
+    existing.last_error = null;
+    existing.updated_at = new Date().toISOString();
+    return existing;
+  }
 }
 
 export class InMemoryAlertDetectionRepository implements AlertDetectionRepository {
@@ -3712,6 +3732,31 @@ export class DatabaseOutboxRepository implements OutboxRepository {
         `Failed to reset outbox for retry: ${error?.message ?? 'unknown'}`,
       );
     return data as OutboxRecord;
+  }
+
+  async listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .select('*')
+      .in('status', ['failed', 'dead_letter'])
+      .lt('attempt_count', maxAttemptCount)
+      .not('last_error', 'is', null)
+      .order('updated_at', { ascending: true })
+      .limit(limit);
+    if (error) throw new Error(`listForAutoRecovery failed: ${error.message}`);
+    return (data ?? []) as OutboxRecord[];
+  }
+
+  async resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null> {
+    const { data, error } = await this.client
+      .from('distribution_outbox')
+      .update({ status: 'pending', last_error: null })
+      .eq('id', outboxId)
+      .eq('status', expectedStatus)
+      .select()
+      .maybeSingle();
+    if (error) throw new Error(`resetForAutoRecovery failed: ${error.message}`);
+    return data as OutboxRecord | null;
   }
 }
 

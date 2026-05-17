@@ -16,6 +16,11 @@ import {
 } from './distribution-worker.js';
 import { DeliveryCircuitBreaker } from './circuit-breaker.js';
 import { readCircuitBreakerThreshold, readCircuitBreakerCooldownMs } from './runtime.js';
+import {
+  runAutoRecoverySweep,
+  isRecoveryEnabled,
+  type AutoRecoveryResult,
+} from './automated-recovery.js';
 
 // ---------------------------------------------------------------------------
 // Transient network error detection
@@ -32,7 +37,7 @@ import { readCircuitBreakerThreshold, readCircuitBreakerCooldownMs } from './run
  * HTML responses (<!DOCTYPE) are also treated as transient — PostgREST
  * never returns HTML on success, so any HTML body indicates infrastructure issues.
  */
-function isTransientNetworkError(error: unknown): boolean {
+export function isTransientNetworkError(error: unknown): boolean {
   const msg = error instanceof Error ? error.message : String(error);
   return (
     msg.includes('fetch failed') ||
@@ -74,6 +79,12 @@ export interface WorkerRunnerOptions {
   logger?: Logger | undefined;
   queueHealthProvider?: (() => Promise<QueueHealthEvaluation | null>) | undefined;
   /**
+   * When true, runs automated recovery sweep each cycle (resets eligible failed/dead_letter
+   * rows back to pending). Defaults to AUTOMATED_RECOVERY_ENABLED env var (false if unset).
+   * Set explicitly in tests to avoid env var dependency.
+   */
+  autoRecoveryEnabled?: boolean | undefined;
+  /**
    * Persistence mode controls atomic vs sequential claim/confirm paths.
    * - 'database': uses claimNextAtomic / confirmDeliveryAtomic (SELECT FOR UPDATE SKIP LOCKED).
    * - 'in_memory': uses sequential claimNext / markSent (safe for tests, not for concurrent workers).
@@ -86,6 +97,7 @@ export interface WorkerCycleSummary {
   cycle: number;
   reapedOutboxIds: string[];
   results: WorkerProcessResult[];
+  autoRecovery: AutoRecoveryResult | null;
 }
 
 interface ReapedClaimInfo {
@@ -146,6 +158,51 @@ export async function runWorkerCycles(
         throw reapError;
       }
     }
+
+    // Automated recovery sweep — resets eligible failed/dead_letter rows back to pending.
+    // Runs before delivery so recovered rows can be claimed in the same cycle.
+    const recoveryEnabled =
+      options.autoRecoveryEnabled !== undefined ? options.autoRecoveryEnabled : isRecoveryEnabled();
+    let autoRecovery = null;
+    if (recoveryEnabled) {
+      try {
+        const { randomUUID } = await import('node:crypto');
+        autoRecovery = await runAutoRecoverySweep(
+          options.repositories,
+          randomUUID(),
+          () =>
+            options.autoRecoveryEnabled !== undefined
+              ? options.autoRecoveryEnabled
+              : isRecoveryEnabled(),
+        );
+        if (autoRecovery.recovered > 0) {
+          console.log(
+            JSON.stringify({
+              event: 'worker.auto-recovery-sweep',
+              workerId: options.workerId,
+              cycle,
+              recovered: autoRecovery.recovered,
+              skipped: autoRecovery.skipped,
+              errors: autoRecovery.errors,
+              correlationId: autoRecovery.correlationId,
+            }),
+          );
+        }
+      } catch (recoveryError: unknown) {
+        if (!isTransientNetworkError(recoveryError)) {
+          throw recoveryError;
+        }
+        console.log(
+          JSON.stringify({
+            event: 'worker.auto-recovery-skipped-transient',
+            workerId: options.workerId,
+            cycle,
+            reason: recoveryError instanceof Error ? recoveryError.message : String(recoveryError),
+          }),
+        );
+      }
+    }
+
     const results: WorkerProcessResult[] = [];
     const reapedById = new Map(reaped.map((entry) => [entry.row.id, entry]));
 
@@ -255,6 +312,7 @@ export async function runWorkerCycles(
       cycle,
       reapedOutboxIds: reaped.map((entry) => entry.row.id),
       results,
+      autoRecovery,
     });
 
     if (heartbeatRunId !== undefined) {

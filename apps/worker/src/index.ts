@@ -40,6 +40,7 @@ export function createWorkerRuntimeSummary() {
     watchdogMs: runtime.watchdogMs,
     autorun: runtime.autorun,
     simulationMode: runtime.simulationMode,
+    autoRecoveryEnabled: process.env['AUTOMATED_RECOVERY_ENABLED'] === 'true',
     nextStep: runtime.autorun
       ? 'worker cycles will execute with the configured delivery adapter'
       : 'set UNIT_TALK_WORKER_AUTORUN=true to execute worker cycles',
@@ -47,6 +48,16 @@ export function createWorkerRuntimeSummary() {
 }
 
 const runtime = createWorkerRuntimeDependencies();
+
+if (process.env['AUTOMATED_RECOVERY_ENABLED'] === 'true') {
+  console.log(
+    JSON.stringify({
+      event: 'worker.startup',
+      warning: 'AUTOMATED_RECOVERY_ENABLED is true — worker will auto-reset eligible failed/dead_letter rows each cycle',
+      severity: 'warn',
+    }),
+  );
+}
 
 if (runtime.autorun) {
   const deliveryAdapter = runtime.simulationMode
