@@ -1,20 +1,20 @@
-# System State — 2026-05-16 08:11
+# System State — 2026-05-17 00:02
 
 ## Branch
-claude/utv2-963-formalize-agent-role-system
+
 
 ## Active Milestone
 Phase 7A 
 
 ## Active Lanes
-  none
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
 
 ## Working Tree
-3 file(s) modified/untracked
+Clean
 
 ## Recent Commits
-9460f901 chore(lanes): UTV2-963 manifest updated — PR #692 in-review
-3287f2ca docs(governance): UTV2-963 agent role contracts — inventory, ownership map, validation rules
-2ebe451b chore(lanes): UTV2-963 lane manifest and sync metadata
-15a522cc docs(status): sync program status and lane manifests to current truth
-c45c2d24 chore(lanes): close UTV2-971 and UTV2-974 — merged at 7c9244f9 (#690) and 849b14ee (#691)
+9b025d6 chore(lanes): close UTV2-929 — merged at 5d59106b (#700)
+5d59106 feat(delivery-ui): UTV2-929 runtime dashboard with queue health panel (#700)
+9d6b030 fix(governance): add .ops/sync/** and docs/06_status/lanes/** to all lane types (#705)
+7f3dbf6 chore(lanes): close UTV2-935 — merged at 001d3c25 (#701)
+001d3c2 feat(config): UTV2-935 secrets management hardening (#701)
