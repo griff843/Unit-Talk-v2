@@ -1,3 +1,10 @@
-issue_id: UTV2-984
-branch: codex/utv2-984-fix-clv-coverage-metric-contradiction
-status: started
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-984
+  findings: []
+  controls: []
+  proofs: []
