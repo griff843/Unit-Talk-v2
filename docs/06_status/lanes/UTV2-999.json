@@ -7,8 +7,8 @@
   "worktree_path": ".",
   "branch": "claude/utv2-999-elite-model-acceptance-thresholds",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "f1fe8a59e7cf93e4247f952de972abbe49c22fd1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/719",
   "files_changed": [
     "docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md"
   ],
@@ -18,10 +18,10 @@
   "expected_proof_paths": [
     "docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-17T10:00:00.000Z",
-  "heartbeat_at": "2026-05-17T10:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-17T11:35:00.000Z",
+  "closed_at": "2026-05-17T11:35:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
