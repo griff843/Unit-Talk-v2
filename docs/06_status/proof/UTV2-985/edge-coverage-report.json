@@ -1,0 +1,11 @@
+{
+  "_note": "Run scripts/ops/edge-coverage-report.ts --days 30 --json --out this-file.json against live DB post-deploy to populate real numbers. Pre-deploy baseline from 12,043-pick audit is embedded in the report tool itself.",
+  "auditBaseline": {
+    "pickCount": 12043,
+    "realEdgePct": 0.2,
+    "confidenceDeltaPct": 92.4,
+    "otherPct": 7.4
+  },
+  "postDeployTarget": "realEdgePct should trend upward as new picks with real market data are submitted under the fixed scoring engine",
+  "toolCommand": "source local.env && export SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY && npx tsx scripts/ops/edge-coverage-report.ts --days 30 --json --out docs/06_status/proof/UTV2-985/edge-coverage-report.json"
+}
