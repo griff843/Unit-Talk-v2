@@ -315,6 +315,8 @@ export interface OutboxRepository {
   ): Promise<OutboxRecord>;
   listByPickId(pickId: string): Promise<OutboxRecord[]>;
   resetForRetry(outboxId: string): Promise<OutboxRecord>;
+  listForAutoRecovery(maxAttemptCount: number, limit: number): Promise<OutboxRecord[]>;
+  resetForAutoRecovery(outboxId: string, expectedStatus: string): Promise<OutboxRecord | null>;
 }
 
 export interface AlertDetectionCreateInput {
