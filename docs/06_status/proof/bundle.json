@@ -2,8 +2,8 @@
   "$schema": "https://unit-talk.internal/schemas/evidence-bundle/v1",
   "issue_id": "UTV2-996",
   "tier": "T1",
-  "merge_sha": "c2007955b719f006b9efdbecb5a213b0f07ee948",
+  "merge_sha": "b959bcaf1da9803a5c18592ce41757c502354ffd",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/726",
-  "merged_at": null,
+  "merged_at": "2026-05-17T16:52:00.000Z",
   "bundle_markdown": "docs/06_status/UTV2-996-EVIDENCE-BUNDLE.md"
 }

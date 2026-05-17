@@ -7,21 +7,30 @@
   "worktree_path": ".",
   "branch": "claude/utv2-996-settlement-corruption-replay-drill",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "b959bcaf1da9803a5c18592ce41757c502354ffd",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/726",
+  "files_changed": [
+    "scripts/ops/settlement-drill.ts",
+    "apps/api/src/database-smoke.test.ts",
+    "docs/06_status/proof/UTV2-996/settlement-verification.md",
+    "docs/06_status/UTV2-996-EVIDENCE-BUNDLE.md",
+    "docs/06_status/proof/bundle.json",
+    ".lane/lanes/verification.yml",
+    "scripts/ci/bundle-sha-check.ts",
+    "package.json"
+  ],
   "file_scope_lock": [
     "scripts/ops/settlement-drill.ts",
     "docs/06_status/proof/UTV2-996/**"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-996/settlement-drill.md",
+    "docs/06_status/proof/UTV2-996/settlement-verification.md",
     "docs/06_status/UTV2-996-EVIDENCE-BUNDLE.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-17T15:52:00.000Z",
-  "heartbeat_at": "2026-05-17T15:52:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-17T16:52:00.000Z",
+  "closed_at": "2026-05-17T16:52:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
