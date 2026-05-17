@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1006",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1006-proof-auditor-mandatory-gate",
+  "base_branch": "main",
+  "commit_sha": "60fef567d653b5f3357b4e0c790ace505ca73a2f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/721",
+  "files_changed": [
+    "scripts/ops/proof-auditor-gate.ts",
+    "scripts/ops/proof-auditor-gate.test.ts",
+    "package.json"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/proof-auditor-gate.ts",
+    "scripts/ops/proof-auditor-gate.test.ts",
+    "scripts/evidence-bundle/validate-bundle.mjs"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-05-17T10:10:00.000Z",
+  "heartbeat_at": "2026-05-17T11:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
