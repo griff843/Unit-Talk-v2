@@ -1,0 +1,11 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-999
+  findings: []
+  controls: []
+  proofs:
+    - docs/05_operations/MODEL_EDGE_ACCEPTANCE_STANDARD.md
