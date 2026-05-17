@@ -31,6 +31,11 @@ test('deploy static checks require durable runtime env and hosted topology', () 
   assert.ok(checks.some((check) => check.name === 'package script api:start'));
   assert.ok(checks.some((check) => check.name === 'env UNIT_TALK_WORKER_DRY_RUN disabled'));
   assert.ok(checks.some((check) => check.name === 'env UNIT_TALK_INGESTOR_MAX_CYCLES avoids one-cycle ambiguity'));
+  assert.ok(checks.some((check) => check.name === 'production resource limits api' && check.passed));
+  assert.ok(checks.some((check) => check.name === 'production resource limits worker' && check.passed));
+  assert.ok(checks.some((check) => check.name === 'production resource limits ingestor' && check.passed));
+  assert.ok(checks.some((check) => check.name === 'production resource limits discord-bot' && check.passed));
+  assert.ok(checks.some((check) => check.name === 'production network defined' && check.passed));
 });
 
 test('deploy static checks fail closed when production runtime env is missing', () => {

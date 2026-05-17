@@ -189,7 +189,15 @@ export function collectDeployStaticChecks(
   const deployComposePath = path.join(repoRoot, 'deploy', 'production', 'docker-compose.yml');
   const deployWorkflowPath = path.join(repoRoot, '.github', 'workflows', 'deploy.yml');
   const deployCompose = YAML.parse(readTextFile(deployComposePath)) as {
-    services?: Record<string, { image?: string; restart?: string; depends_on?: unknown; healthcheck?: unknown }>;
+    services?: Record<string, {
+      image?: string;
+      restart?: string;
+      depends_on?: unknown;
+      healthcheck?: unknown;
+      networks?: unknown;
+      deploy?: { resources?: { limits?: { memory?: string; cpus?: string } } };
+    }>;
+    networks?: Record<string, unknown>;
   };
   const deployWorkflow = readTextFile(deployWorkflowPath);
 
@@ -226,6 +234,26 @@ export function collectDeployStaticChecks(
     deployCompose.services?.api?.healthcheck
       ? { name: 'production api healthcheck', passed: true }
       : { name: 'production api healthcheck', passed: false, detail: 'api healthcheck is required' },
+  );
+
+  for (const serviceName of REQUIRED_DEPLOY_SERVICES) {
+    const memLimit = deployCompose.services?.[serviceName]?.deploy?.resources?.limits?.memory;
+    const cpuLimit = deployCompose.services?.[serviceName]?.deploy?.resources?.limits?.cpus;
+    results.push(
+      memLimit && cpuLimit
+        ? { name: `production resource limits ${serviceName}`, passed: true }
+        : {
+            name: `production resource limits ${serviceName}`,
+            passed: false,
+            detail: 'production services must declare memory and cpu resource limits to prevent resource exhaustion',
+          },
+    );
+  }
+
+  results.push(
+    deployCompose.networks && Object.keys(deployCompose.networks).length > 0
+      ? { name: 'production network defined', passed: true }
+      : { name: 'production network defined', passed: false, detail: 'production compose must declare an explicit named network' },
   );
 
   for (const dependent of ['worker', 'ingestor', 'discord-bot'] as const) {
