@@ -7,9 +7,15 @@
   "worktree_path": ".",
   "branch": "codex/utv2-994-ingestor-outage-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "69b8e429",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/732",
+  "files_changed": [
+    "apps/ingestor/src/staleness.ts",
+    "apps/ingestor/src/staleness.test.ts",
+    "scripts/ingestor-supervisor.ts",
+    "scripts/ops/ingestor-health-check.ts",
+    "scripts/ingestor-alert-check.ts"
+  ],
   "file_scope_lock": [
     "apps/ingestor/src/**",
     "scripts/ingestor-supervisor.ts",
@@ -17,10 +23,10 @@
     "scripts/ingestor-alert-check.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-17T18:06:00.000Z",
-  "heartbeat_at": "2026-05-17T18:06:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-17T19:30:00.000Z",
+  "closed_at": "2026-05-17T19:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
