@@ -12,6 +12,10 @@ import {
   type IngestorSupervisorState,
 } from '../apps/ingestor/src/supervisor.js';
 import {
+  readIngestorContainerStatus,
+  type IngestorContainerStatus,
+} from './ops/ingestor-health-check.js';
+import {
   appendRestartAuditLog,
   createRestartAuditEntry,
   evaluateRestartRequest,
@@ -27,6 +31,7 @@ interface ProcessRef {
 
 interface RuntimeStatus {
   supervisorState: IngestorSupervisorState;
+  container: IngestorContainerStatus;
   supervisorRunning: boolean;
   childRunning: boolean;
   processConflicts: ProcessRef[];
@@ -93,6 +98,12 @@ function normalizeCommand(value: string | undefined): Command {
 async function startSupervisor() {
   ensureRuntimeDir();
   const existingStatus = await collectRuntimeStatus();
+
+  if (existingStatus.container.running && existingStatus.container.healthy) {
+    console.log('Container mode active — local supervisor not needed.');
+    printHumanStatus(existingStatus);
+    return;
+  }
 
   if (existingStatus.supervisorRunning) {
     console.log('Ingestor supervisor is already running.');
@@ -230,6 +241,12 @@ async function printStatus() {
 }
 
 function printHumanStatus(status: RuntimeStatus) {
+  console.log(
+    `Docker:     ${status.container.running ? 'RUNNING' : 'DOWN'} (${status.container.status ?? 'no ingestor container from docker ps'})`,
+  );
+  console.log(`Docker at:  ${status.container.startedAt ?? 'none'}`);
+  console.log('Docker ps:');
+  console.log(status.container.psOutput || '  (no running ingestor containers)');
   console.log(`Supervisor: ${status.supervisorRunning ? 'RUNNING' : 'DOWN'}`);
   console.log(`Child:      ${status.childRunning ? 'RUNNING' : 'DOWN'}`);
   console.log(`Health:     ${status.health.status.toUpperCase()} — ${status.health.summary}`);
@@ -250,6 +267,15 @@ function printHumanStatus(status: RuntimeStatus) {
 
   for (const fact of status.health.facts) {
     console.log(`  * ${fact}`);
+  }
+
+  if (
+    process.env.UNIT_TALK_INGESTOR_RUNTIME_MODE === 'fail_closed' &&
+    !status.container.running &&
+    !status.supervisorRunning &&
+    !status.childRunning
+  ) {
+    console.log('  * WARNING: fail_closed runtime mode is set but neither Docker nor local process mode is running.');
   }
 }
 
@@ -297,6 +323,7 @@ async function collectRuntimeStatus(): Promise<RuntimeStatus> {
   ensureRuntimeDir();
   const env = loadEnvironment();
   const state = readSupervisorState();
+  const container = readIngestorContainerStatus();
   const supervisorRunning = isProcessRunning(state.supervisorPid);
   const childRunning = isProcessRunning(state.childPid);
   const conflicts = listUnmanagedIngestorProcesses(state);
@@ -314,6 +341,7 @@ async function collectRuntimeStatus(): Promise<RuntimeStatus> {
 
   return {
     supervisorState: state,
+    container,
     supervisorRunning,
     childRunning,
     processConflicts: conflicts,

@@ -149,7 +149,8 @@
     "verify:commands": "pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs",
     "verify": "pnpm ops:sync-check && pnpm env:check && pnpm lint && pnpm type-check && pnpm build && pnpm test && pnpm --filter @unit-talk/smart-form verify && pnpm verify:commands",
     "verify:quick": "pnpm ops:sync-check && pnpm env:check && pnpm lint && pnpm type-check",
-    "settlement:drill": "tsx scripts/ops/settlement-drill.ts"
+    "settlement:drill": "tsx scripts/ops/settlement-drill.ts",
+    "ingestor:health-check": "tsx scripts/ops/ingestor-health-check.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",

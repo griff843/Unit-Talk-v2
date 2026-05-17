@@ -1,6 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { pathToFileURL } from 'node:url';
 import { loadEnvironment, type AppEnv } from '@unit-talk/config';
+import { collectIngestorHealthCheck } from './ops/ingestor-health-check.js';
 
 interface AlertFinding {
   level: 'OK' | 'CRITICAL';
@@ -225,6 +226,16 @@ async function main() {
     ...findings.filter((finding) => finding.level === 'CRITICAL'),
     ...(cycleFailureFinding ? [cycleFailureFinding] : []),
   ];
+  const health = await collectIngestorHealthCheck({ environment: env });
+  if (!health.healthy) {
+    criticalFindings.push({
+      level: 'CRITICAL',
+      check: 'offers',
+      ageMinutes: health.offerAgeMinutes,
+      message: `Ingestor health check failed: containerRunning=${health.containerRunning} offerAgeMinutes=${health.offerAgeMinutes}.`,
+    });
+  }
+
   if (criticalFindings.length > 0) {
     await postDiscordAlert(criticalFindings.map((finding) => `- ${finding.message}`).join('\n'));
     process.exit(1);
