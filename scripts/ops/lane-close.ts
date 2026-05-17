@@ -2,6 +2,7 @@ import { loadEnvironment } from '@unit-talk/config';
 import {
   emitJson,
   parseArgs,
+  type LaneManifest,
   readManifest,
   requireIssueId,
   writeManifest,
@@ -78,11 +79,33 @@ export function remediationForCode(code: CloseoutFailureCode): string {
   }
 }
 
+const MISSING_COMMIT_SHA_MESSAGE =
+  'ERROR: Lane close requires commit_sha — run ops:truth-check first';
+
+export function requireCloseCommitSha(manifest: LaneManifest): void {
+  if (manifest.status === 'done') {
+    return;
+  }
+
+  const commitSha = (manifest as LaneManifest & { commit_sha?: string | null })
+    .commit_sha;
+  if (
+    commitSha === null ||
+    commitSha === undefined ||
+    commitSha.trim() === ''
+  ) {
+    throw new Error(MISSING_COMMIT_SHA_MESSAGE);
+  }
+}
+
 async function main(): Promise<void> {
   const { positionals, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
 
   try {
+    const manifest = readManifest(issueId);
+    requireCloseCommitSha(manifest);
+
     const result = await runTruthCheck({
       issueId,
       json: true,
@@ -102,7 +125,6 @@ async function main(): Promise<void> {
       process.exit(result.exit_code);
     }
 
-    const manifest = readManifest(issueId);
     manifest.status = 'done';
     manifest.closed_at = new Date().toISOString();
     manifest.heartbeat_at = manifest.closed_at;
@@ -119,6 +141,14 @@ async function main(): Promise<void> {
       truth_check: result,
     });
   } catch (error) {
+    if (
+      error instanceof Error &&
+      error.message === MISSING_COMMIT_SHA_MESSAGE
+    ) {
+      console.error(error.message);
+      process.exit(1);
+    }
+
     emitJson({
       ok: false,
       code: 'infra_error' as CloseoutFailureCode,
