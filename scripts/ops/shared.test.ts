@@ -57,3 +57,27 @@ test('validateManifest accepts a canonical done status manifest', () => {
   const errors = validateManifest(manifest);
   assert.deepStrictEqual(errors, []);
 });
+
+test('validateManifest accepts Windows absolute worktree paths on non-Windows runners', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1062',
+    tier: 'T2',
+    branch: 'codex/utv2-1062-cross-platform-closeout',
+    worktree_path: 'C:/Dev/Unit-Talk-v2-main',
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1062', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1062-cross-platform-closeout.json',
+  });
+  manifest.status = 'merged';
+  manifest.created_by = 'codex-cli';
+  manifest.execution_location = {
+    mode: 'main-control',
+    cwd: 'C:\\Dev\\Unit-Talk-v2-main',
+    package_install: 'not_required',
+  };
+
+  const errors = validateManifest(manifest).filter((entry) =>
+    entry.includes('worktree_path') || entry.includes('execution_location.cwd'),
+  );
+  assert.deepStrictEqual(errors, []);
+});
