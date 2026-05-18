@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-981",
+  "lane_type": "runtime",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-981-runtime-health-baseline",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/**",
+    "apps/worker/src/**",
+    "apps/ingestor/src/**",
+    "scripts/**",
+    "docs/06_status/proof/UTV2-981/**",
+    "docs/06_status/lanes/UTV2-981.json",
+    ".ops/sync/UTV2-981.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-981/evidence-bundle.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-18T04:00:00Z",
+  "heartbeat_at": "2026-05-18T04:00:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
