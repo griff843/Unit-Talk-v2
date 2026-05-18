@@ -28,7 +28,8 @@ scripts/BOT_MANAGEMENT.md
 skills-lock.json
 # Test output and session artifacts (never commit)
 apps/smart-form/test-results/
-artifacts/
+artifacts/*.json
+!artifacts/.gitkeep
 personas/*.json
 !personas/*.example.json
 # Session-specific diagnostic scripts (scratch, not governed)
