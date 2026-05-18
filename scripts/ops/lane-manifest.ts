@@ -18,6 +18,7 @@ import {
   worktreePathForBranch,
   writeManifest,
 } from './shared.js';
+import { buildLaneExecutionLocation } from './lane-execution.js';
 
 function main(): void {
   const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
@@ -65,15 +66,18 @@ function createCommand(flags: Map<string, string[]>) {
     throw new Error('Missing --files (repeatable, at least one required)');
   }
 
+  const fileScopeLock = normalizeFileScope(files);
+  const worktreePath = worktreePathForBranch(branch);
   const manifest = createManifest({
     issue_id: issueId.toUpperCase(),
     tier,
     branch,
-    worktree_path: worktreePathForBranch(branch),
-    file_scope_lock: normalizeFileScope(files),
+    worktree_path: worktreePath,
+    file_scope_lock: fileScopeLock,
     expected_proof_paths: getFlags(flags, 'proof-path'),
     preflight_token: getRequired(flags, 'preflight-token'),
   });
+  manifest.execution_location = buildLaneExecutionLocation(worktreePath, fileScopeLock);
   writeManifest(manifest);
   emitJson({
     ok: true,
@@ -188,6 +192,8 @@ function statusCommand(issueId: string | undefined, json: boolean): void {
     status: manifest.status,
     branch: manifest.branch,
     worktree_path: manifest.worktree_path,
+    cwd: manifest.execution_location?.cwd ?? manifest.worktree_path,
+    execution_location: manifest.execution_location,
     heartbeat_at: manifest.heartbeat_at,
     pr_url: manifest.pr_url,
     commit_sha: manifest.commit_sha,

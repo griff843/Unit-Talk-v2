@@ -1,8 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
 import { evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
 import { buildFiberyPayloads } from './fibery-update-scaffold.js';
+import { ROOT } from './shared.js';
 
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
   const { lintMigrationContent } = await import('../lint-migrations.mjs');
@@ -85,4 +88,18 @@ test('fibery scaffold groups commit subjects into update payloads', () => {
     ],
   );
   assert.strictEqual(payloads[0]?.fibery.operation, 'update_issue_from_commit_activity');
+});
+
+test('required PR check workflows do not create stale failed contexts on opened events', () => {
+  for (const workflow of ['merge-gate.yml', 'tier-label-check.yml']) {
+    const content = fs.readFileSync(path.join(ROOT, '.github', 'workflows', workflow), 'utf8');
+    const pullRequestBlock = content.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
+
+    assert.ok(pullRequestBlock, `${workflow} must declare explicit pull_request types`);
+    assert.doesNotMatch(
+      pullRequestBlock[1] ?? '',
+      /(^|,\s*)opened(\s*,|$)/,
+      `${workflow} must not run required checks on pull_request.opened before labels settle`,
+    );
+  }
 });

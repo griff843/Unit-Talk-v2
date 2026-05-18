@@ -1,11 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {
   mapFailuresToCode,
+  releaseCloseoutLocks,
   remediationForCode,
   requireCloseCommitSha,
   type CloseoutFailureCode,
 } from './lane-close.js';
+import { acquireMergeLock, readMergeLock } from './merge-mutex.js';
+import { readAllLeases, reserveLease } from './lease-registry.js';
 import type { LaneManifest } from './shared.js';
 
 function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -34,6 +40,20 @@ function createManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
     reopen_history: [],
     ...overrides,
   };
+}
+
+function withTempCloseoutState(
+  run: (paths: { leaseRegistryDir: string; mergeLockPath: string }) => void,
+): void {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-lane-close-'));
+  try {
+    run({
+      leaseRegistryDir: path.join(dir, 'leases'),
+      mergeLockPath: path.join(dir, 'merge-lock.json'),
+    });
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 }
 
 // ── Scenario 1: clean closeout ────────────────────────────────────────────────
@@ -83,6 +103,55 @@ test('lane close commit guard: already done lane is not retroactively failed', (
   assert.doesNotThrow(() =>
     requireCloseCommitSha(createManifest({ commit_sha: null, status: 'done' })),
   );
+});
+
+test('lane close releases dispatch lease and merge lock after successful closeout', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const issueId = 'UTV2-1001';
+    const branch = 'codex/utv2-1001-enforce-non-null-merge-sha';
+    const lease = reserveLease(
+      {
+        issue_id: issueId,
+        branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1001,
+          session_id: 'lane-close-test',
+        },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+    const lock = acquireMergeLock(
+      {
+        issue_id: issueId,
+        branch,
+        pr: '1001',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1001,
+          session_id: 'lane-close-test',
+        },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+
+    assert.strictEqual(lease.ok, true);
+    assert.strictEqual(lock.ok, true);
+
+    releaseCloseoutLocks(issueId, branch, { leaseRegistryDir, mergeLockPath });
+
+    const releasedLease = readAllLeases(leaseRegistryDir).find((entry) => entry.issue_id === issueId);
+    const releasedLock = readMergeLock(mergeLockPath);
+    assert.strictEqual(releasedLease?.status, 'released');
+    assert.strictEqual(releasedLock.ok ? releasedLock.lock.status : '', 'released');
+  });
 });
 
 // ── Scenario 2: missing proof ─────────────────────────────────────────────────

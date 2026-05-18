@@ -1,6 +1,14 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
+  prepareLaneExecutionDirectory,
+  validateExecutionCwd,
+} from './lane-execution.js';
+import {
+  defaultLeaseOwner,
+  reserveLease,
+} from './lease-registry.js';
+import {
   activeManifestOverlap,
   branchExists,
   createBranchAndWorktree,
@@ -71,7 +79,7 @@ function main(): void {
   const issueId = requireIssueId(positionals[0] ?? '');
   const tierInput = flags.get('tier')?.at(-1);
   const branch = flags.get('branch')?.at(-1);
-  const laneType = flags.get('lane-type')?.at(-1) ?? 'codex-cli';
+  const laneType = flags.get('lane-type')?.at(-1);
   const fileArgs = flags.get('files') ?? [];
 
   try {
@@ -80,6 +88,9 @@ function main(): void {
     }
     if (!branch) {
       throw new Error('Missing required --branch');
+    }
+    if (!laneType) {
+      throw new Error('Missing required --lane-type');
     }
     if (fileArgs.length === 0) {
       throw new Error('Missing required --files (repeatable, at least one required)');
@@ -139,8 +150,30 @@ function main(): void {
           'Existing branch/worktree may resume only when manifest matches issue, branch, worktree, and resumable status',
         );
       }
+      const cwdErrors = validateExecutionCwd(worktreePath, manifest.execution_location?.cwd ?? worktreePath);
+      if (cwdErrors.length > 0) {
+        throw new Error(`Existing manifest execution cwd is incoherent: ${cwdErrors.join('; ')}`);
+      }
 
+      const setup = prepareLaneExecutionDirectory({
+        cwd: worktreePath,
+        fileScope: normalizedFiles,
+      });
+      const lease = reserveLease({
+        issue_id: issueId,
+        branch,
+        executor,
+        cwd: worktreePath,
+        worktree_path: worktreePath,
+        execution_location: { cwd: setup.execution_location.cwd },
+        file_scope_lock: normalizedFiles,
+        owner: defaultLeaseOwner(),
+      });
+      if (!lease.ok) {
+        throw new Error(`Lane lease check failed: ${lease.code} ${lease.message}`);
+      }
       manifest.heartbeat_at = new Date().toISOString();
+      manifest.execution_location = setup.execution_location;
       writeManifest(manifest);
       emitJson({
         ok: true,
@@ -148,6 +181,10 @@ function main(): void {
         issue_id: issueId,
         branch,
         worktree_path: worktreePath,
+        cwd: setup.execution_location.cwd,
+        execution_location: setup.execution_location,
+        lease_code: lease.code,
+        lease_path: lease.lease_path,
         manifest_path: relativeToRoot(manifestPath),
         status: manifest.status,
       });
@@ -163,6 +200,23 @@ function main(): void {
 
     if (!branchAlreadyExists && !worktreeAlreadyExists) {
       createBranchAndWorktree(branch, worktreePath);
+    }
+    const setup = prepareLaneExecutionDirectory({
+      cwd: worktreePath,
+      fileScope: normalizedFiles,
+    });
+    const lease = reserveLease({
+      issue_id: issueId,
+      branch,
+      executor,
+      cwd: worktreePath,
+      worktree_path: worktreePath,
+      execution_location: { cwd: setup.execution_location.cwd },
+      file_scope_lock: normalizedFiles,
+      owner: defaultLeaseOwner(),
+    });
+    if (!lease.ok) {
+      throw new Error(`Lane lease check failed: ${lease.code} ${lease.message}`);
     }
 
     const now = new Date().toISOString();
@@ -185,6 +239,7 @@ function main(): void {
       status: 'started',
       now,
     });
+    manifest.execution_location = setup.execution_location;
     writeManifest(manifest);
     writeSyncFile(issueId, buildSyncYml(issueId));
 
@@ -195,6 +250,10 @@ function main(): void {
       tier,
       branch,
       worktree_path: worktreePath,
+      cwd: setup.execution_location.cwd,
+      execution_location: setup.execution_location,
+      lease_code: lease.code,
+      lease_path: lease.lease_path,
       manifest_path: relativeToRoot(manifestPath),
       file_scope_lock: normalizedFiles,
       expected_proof_paths: manifest.expected_proof_paths,

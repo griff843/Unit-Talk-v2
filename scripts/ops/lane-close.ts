@@ -9,7 +9,8 @@ import {
   type TruthCheckResult,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
-import { requireMergeLockHeld } from './merge-mutex.js';
+import { releaseMergeLock, requireMergeLockHeld } from './merge-mutex.js';
+import { releaseLease } from './lease-registry.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -99,6 +100,29 @@ export function requireCloseCommitSha(manifest: LaneManifest): void {
   }
 }
 
+export function releaseCloseoutLocks(
+  issueId: string,
+  branch: string,
+  options: { leaseRegistryDir?: string; mergeLockPath?: string } = {},
+): void {
+  const lease = releaseLease({
+    issue_id: issueId,
+    actor: 'ops:lane-close',
+    reason: 'lane closed successfully',
+  }, { registryDir: options.leaseRegistryDir });
+  if (!lease.ok) {
+    throw new Error(`Failed to release dispatch lease: ${lease.code} ${lease.message}`);
+  }
+
+  const mergeLock = releaseMergeLock({
+    issue_id: issueId,
+    branch,
+  }, { lockPath: options.mergeLockPath });
+  if (!mergeLock.ok) {
+    throw new Error(`Failed to release merge lock: ${mergeLock.code} ${mergeLock.message}`);
+  }
+}
+
 async function main(): Promise<void> {
   const { positionals, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
@@ -149,6 +173,7 @@ async function main(): Promise<void> {
     writeManifest(manifest);
 
     await transitionLinearIssueToDone(issueId);
+    releaseCloseoutLocks(issueId, manifest.branch);
 
     emitJson({
       ok: true,

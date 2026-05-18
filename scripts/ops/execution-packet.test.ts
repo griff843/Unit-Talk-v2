@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { generateExecutionPacket } from './execution-packet.js';
+import { assertExecutionPacketCwd, generateExecutionPacket } from './execution-packet.js';
 import { type LaneManifest } from './shared.js';
 
 function createTestManifest(overrides: Partial<LaneManifest> = {}): LaneManifest {
@@ -116,6 +116,42 @@ test('execution_location maps codex-cli executor', () => {
   );
 
   assert.strictEqual(packet.execution_location, 'Codex CLI (autonomous)');
+});
+
+test('packet includes exact cwd from manifest execution location', () => {
+  const packet = generateExecutionPacket(
+    createTestManifest({
+      execution_location: {
+        mode: 'worktree',
+        cwd: 'C:/Dev/Unit-Talk-v2-main/.out/worktrees/codex__utv2-969-lane',
+        package_install: 'not_required',
+        setup_command: null,
+        main_checkout_control_only: true,
+      },
+    }),
+  );
+
+  assert.strictEqual(packet.cwd, 'C:/Dev/Unit-Talk-v2-main/.out/worktrees/codex__utv2-969-lane');
+  assert.match(packet.cwd_guard_command, /cd "/);
+});
+
+test('packet cwd guard rejects execution from wrong cwd', () => {
+  const packet = generateExecutionPacket(
+    createTestManifest({
+      execution_location: {
+        mode: 'worktree',
+        cwd: 'C:/Dev/Unit-Talk-v2-main/.out/worktrees/codex__utv2-969-lane',
+        package_install: 'not_required',
+        setup_command: null,
+        main_checkout_control_only: true,
+      },
+    }),
+  );
+
+  assert.throws(
+    () => assertExecutionPacketCwd(packet, 'C:/Dev/Unit-Talk-v2-main'),
+    /wrong cwd/,
+  );
 });
 
 test('missing expected_proof_paths does not prevent packet generation', () => {
