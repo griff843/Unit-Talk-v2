@@ -17,15 +17,23 @@ jobs:
         with:
           script: |
             const labels = context.payload.pull_request.labels.map(l => l.name);
-            const hasTier = labels.some(l => l.startsWith('tier:'));
+            const validTierLabels = new Set(['tier:T1', 'tier:T2', 'tier:T3']);
+            const tierLabels = labels.filter(l => l.startsWith('tier:'));
 
-            if (hasTier) {
-              console.log('Tier label present:', labels.filter(l => l.startsWith('tier:')));
+            if (tierLabels.length === 1 && validTierLabels.has(tierLabels[0])) {
+              console.log('Tier label present:', tierLabels[0]);
               return;
             }
 
+            const reason =
+              tierLabels.length === 0
+                ? 'Tier label missing.'
+                : tierLabels.length > 1
+                  ? `Multiple tier labels present: ${tierLabels.join(', ')}.`
+                  : `Invalid tier label present: ${tierLabels[0]}.`;
+
             const body = [
-              '**Tier label missing.**',
+              `**${reason}**`,
               '',
               'Add one of the following before this PR can merge:',
               '- `tier:T1` — production-critical path (requires `t1-approved` from PM)',
@@ -44,7 +52,7 @@ jobs:
 
             const existing = comments.find(c =>
               c.user.login === 'github-actions[bot]' &&
-              c.body.includes('Tier label missing')
+              c.body.includes('Tier label')
             );
 
             if (!existing) {
@@ -55,3 +63,5 @@ jobs:
                 body,
               });
             }
+
+            core.setFailed(reason);
