@@ -11,8 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "apps/worker/src",
-    "apps/api/src/t1-proof-utv2-993-worker-restart.test.ts",
+    "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
     "docs/06_status/proof/UTV2-993/evidence-bundle.md",
     "docs/06_status/proof/UTV2-993/runtime-verification.md",
     "docs/06_status/lanes/UTV2-993.json",
@@ -20,7 +19,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-993/evidence-bundle.md",
-    "apps/api/src/t1-proof-utv2-993-worker-restart.test.ts"
+    "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts"
   ],
   "status": "started",
   "started_at": "2026-05-18T03:00:00Z",

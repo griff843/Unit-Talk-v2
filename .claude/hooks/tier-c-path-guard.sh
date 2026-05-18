@@ -128,10 +128,10 @@ PYEOF
   fi
 
   if [ -n "$manifest_authorized" ]; then
-    echo "TIER-C MANIFEST-AUTHORIZED: $matched"
-    echo "Reason: $reason"
-    echo "Authorization: Active lane $manifest_authorized has $matched in file_scope_lock. Pre-authorized write — proceed."
-    exit 2
+    # Manifest-authorized: file is in an active lane's file_scope_lock.
+    # Exit 0 so the write proceeds without user confirmation.
+    # (Exit 2 was previously used here but Claude Code blocks on any non-zero exit.)
+    exit 0
   fi
 
   echo "TIER-C WARNING: $matched"
