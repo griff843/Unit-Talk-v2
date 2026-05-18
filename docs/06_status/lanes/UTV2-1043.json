@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1043",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1043-make-tier-label-check-honest",
+  "base_branch": "main",
+  "commit_sha": "438e9fda4859469cdc546d01ccfbb9742ef1fba0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/751",
+  "files_changed": [
+    ".github/workflows/tier-label-check.yml"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/tier-label-check.yml"
+  ],
+  "expected_proof_paths": [],
+  "status": "closed",
+  "started_at": "2026-05-18T06:30:00.000Z",
+  "heartbeat_at": "2026-05-18T12:37:00.000Z",
+  "closed_at": "2026-05-18T12:37:30Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

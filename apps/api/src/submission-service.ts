@@ -19,6 +19,7 @@ import {
   type SubmissionRecord,
   type SubmissionRepository,
 } from '@unit-talk/db';
+import { createLogger } from '@unit-talk/observability';
 import { ApiError } from './errors.js';
 import {
   americanToImplied,
@@ -36,6 +37,11 @@ import {
 } from './domain-analysis-service.js';
 import { resolvePickThumbnailUrl } from './pick-asset-resolver.js';
 import { evaluateAllPoliciesEagerAndPersist } from './promotion-service.js';
+
+const submissionServiceLogger = createLogger({
+  service: 'api',
+  fields: { component: 'submission-service' },
+});
 
 export interface SubmissionProcessingResult {
   submission: ValidatedSubmission;
@@ -75,6 +81,39 @@ export function computeSubmissionIdempotencyKey(payload: SubmissionPayload): str
     payload.eventName ?? '',
   ];
   return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 32);
+}
+
+function getSubmissionAtomicFallbackReason(err: unknown): 'in_memory_sentinel' | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes('processSubmissionAtomic is not supported in InMemory mode')) {
+    return 'in_memory_sentinel';
+  }
+  // All other errors (PGRST202, schema-cache miss, network failures) must rethrow
+  // in database mode — sequential fallback risks partial durable writes.
+  return null;
+}
+
+function warnSubmissionAtomicFallback(
+  err: unknown,
+  reason: 'in_memory_sentinel',
+  context: {
+    flow: 'processSubmission' | 'processShadowSubmission';
+    submissionId: string;
+    pickId: string;
+    idempotencyKey: string;
+  },
+) {
+  const message = err instanceof Error ? err.message : String(err);
+  submissionServiceLogger.warn('submission atomic write fell back to sequential persistence', {
+    flow: context.flow,
+    reason,
+    fallbackMode: 'sequential',
+    submissionId: context.submissionId,
+    pickId: context.pickId,
+    idempotencyKey: context.idempotencyKey,
+    errorName: err instanceof Error ? err.name : typeof err,
+    errorMessage: message,
+  });
 }
 
 export async function processSubmission(
@@ -299,8 +338,19 @@ export async function processSubmission(
     submissionEventRecord = atomicResult.submissionEvent ?? undefined;
     pickRecord = atomicResult.pick;
     lifecycleEventRecord = atomicResult.lifecycleEvent!;
-  } catch {
-    // Sequential fallback (InMemory mode or RPC not deployed yet).
+  } catch (err) {
+    const fallbackReason = getSubmissionAtomicFallbackReason(err);
+    if (fallbackReason === null) {
+      throw err;
+    }
+    warnSubmissionAtomicFallback(err, fallbackReason, {
+      flow: 'processSubmission',
+      submissionId: submission.id,
+      pickId: enrichedPick.id,
+      idempotencyKey,
+    });
+
+    // Sequential fallback (InMemory mode only).
     submissionRecord = await repositories.submissions.saveSubmission(submissionInput);
 
     const [seqEventRecord, seqPickRecord] = await Promise.all([
@@ -471,7 +521,18 @@ export async function processShadowSubmission(
     submissionEventRecord = atomicResult.submissionEvent ?? undefined;
     pickRecord = atomicResult.pick;
     lifecycleEventRecord = atomicResult.lifecycleEvent!;
-  } catch {
+  } catch (err) {
+    const fallbackReason = getSubmissionAtomicFallbackReason(err);
+    if (fallbackReason === null) {
+      throw err;
+    }
+    warnSubmissionAtomicFallback(err, fallbackReason, {
+      flow: 'processShadowSubmission',
+      submissionId: submission.id,
+      pickId: enrichedPick.id,
+      idempotencyKey,
+    });
+
     submissionRecord = await repositories.submissions.saveSubmission(submissionInput);
     const [seqEventRecord, seqPickRecord] = await Promise.all([
       repositories.submissions.saveSubmissionEvent(eventInput),

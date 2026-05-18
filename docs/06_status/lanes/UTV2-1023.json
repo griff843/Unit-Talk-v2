@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1023",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1023-fix-node-version-mismatch",
+  "base_branch": "main",
+  "commit_sha": "611c2786b58e7626479e686e6b771dee0b0e9a4d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/756",
+  "files_changed": [
+    ".github/workflows/ci.yml",
+    ".lane/lanes/governance.yml",
+    ".nvmrc",
+    "package.json"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/ci.yml",
+    "Dockerfile",
+    "package.json"
+  ],
+  "expected_proof_paths": [],
+  "status": "closed",
+  "started_at": "2026-05-18T06:30:00.000Z",
+  "heartbeat_at": "2026-05-18T12:37:00.000Z",
+  "closed_at": "2026-05-18T12:37:56Z",
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

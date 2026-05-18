@@ -19,6 +19,7 @@ import {
 } from './submission-service.js';
 import { transitionPickLifecycle } from './lifecycle-service.js';
 import { enqueueDistributionWithRunTracking } from './run-audit-service.js';
+import { checkZombiePickHealth } from './routes/health.js';
 
 const RATE_LIMIT_TEST_CONFIG: ApiSubmissionRateLimit = {
   maxRequests: 2,
@@ -373,6 +374,51 @@ test('GET /health exposes queue health and fails when pending work has no delive
       runtime.metricsCollector.snapshot().gauges['distribution_outbox_pending_total']?.[0]?.value,
       1,
     );
+  } finally {
+    server.close();
+    restoreEnv('SUPABASE_URL', previousSupabaseUrl);
+    restoreEnv('SUPABASE_ANON_KEY', previousSupabaseAnonKey);
+    restoreEnv('SUPABASE_SERVICE_ROLE_KEY', previousSupabaseServiceRoleKey);
+  }
+});
+
+test('GET /health fails when a qualified pick has no active outbox row', async () => {
+  const previousSupabaseUrl = process.env.SUPABASE_URL;
+  const previousSupabaseAnonKey = process.env.SUPABASE_ANON_KEY;
+  const previousSupabaseServiceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  process.env.SUPABASE_URL = 'not-a-url';
+  process.env.SUPABASE_ANON_KEY = 'anon-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key';
+
+  const repositories = createInMemoryRepositoryBundle();
+  await createQualifiedPick(repositories);
+
+  const runtime = createApiRuntimeDependencies({ repositories });
+  runtime.persistenceMode = 'database';
+  const server = createApiServer({ runtime });
+
+  server.listen(0);
+  await once(server, 'listening');
+
+  const address = server.address() as AddressInfo;
+  try {
+    const response = await fetch(`http://127.0.0.1:${address.port}/health`);
+    const body = (await response.json()) as {
+      status: string;
+      zombiePicks: {
+        status: string;
+        count: number;
+        remediation: string | null;
+      };
+      warnings: string[];
+    };
+
+    assert.equal(response.status, 503);
+    assert.equal(body.status, 'down');
+    assert.equal(body.zombiePicks.status, 'down');
+    assert.equal(body.zombiePicks.count, 1);
+    assert.match(body.zombiePicks.remediation ?? '', /\/api\/picks\/:id\/requeue/);
+    assert.ok(body.warnings.some((warning) => warning.includes('zombie picks detected')));
   } finally {
     server.close();
     restoreEnv('SUPABASE_URL', previousSupabaseUrl);
@@ -1537,6 +1583,11 @@ test('POST /api/picks/:id/requeue returns 409 when pick is already terminal', as
 test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pick', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const created = await createQualifiedPick(repositories);
+  const runtime = createApiRuntimeDependencies({ repositories });
+
+  const beforeRecovery = await checkZombiePickHealth(runtime);
+  assert.equal(beforeRecovery.status, 'down');
+  assert.equal(beforeRecovery.count, 1);
 
   const server = createApiServer({ repositories });
 
@@ -1559,6 +1610,10 @@ test('POST /api/picks/:id/requeue returns 200 and enqueues orphaned qualified pi
     assert.equal(body.data?.pickId, created.pick.id);
     assert.equal(body.data?.target, 'discord:best-bets');
     assert.ok(body.data?.outboxId);
+
+    const afterRecovery = await checkZombiePickHealth(runtime);
+    assert.equal(afterRecovery.status, 'healthy');
+    assert.equal(afterRecovery.count, 0);
 
     const claimed = await repositories.outbox.claimNext(
       'discord:best-bets',

@@ -296,8 +296,18 @@ export async function runWorkerCycles(
               },
             });
             openCircuitRunIds.set(target, circuitRun.id);
-          } catch {
-            // Non-fatal — circuit breaker state is in-process; DB write is best-effort
+          } catch (err) {
+            options.logger?.warn('worker circuit durable state not persisted', {
+              target,
+              error: err instanceof Error
+                ? {
+                    name: err.name,
+                    message: err.message,
+                    stack: err.stack ?? null,
+                  }
+                : String(err),
+              note: 'Durable circuit state was not persisted; in-memory circuit remains open.',
+            });
           }
         }
       } else if (result.status === 'sent') {

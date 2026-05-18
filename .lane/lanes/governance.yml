@@ -17,6 +17,7 @@ allowed_path_globs:
   - pnpm-lock.yaml
   - pnpm-workspace.yaml
   - tsconfig*.json
+  - .nvmrc
   - Dockerfile
   - apps/**/package.json
   - packages/events/**
