@@ -164,6 +164,39 @@ test('G5 ignores commits before the lane start timestamp', () => {
   assert.deepStrictEqual(result, ['post-lane-sha']);
 });
 
+test('G5 allows same-issue closeout repair commits before lane is done', () => {
+  const result = findPostMergeTouches({
+    mergeSha: 'merge-sha',
+    filesChanged: ['scripts/ops/truth-check-lib.ts'],
+    issueId: 'UTV2-1062',
+    allowSameIssueCommits: true,
+    showCommit: () => ({
+      timestamp: '2026-05-18T20:00:00.000Z',
+      subject: 'feat(ops): UTV2-1062 primary merge',
+    }),
+    gitCommand: (args) => {
+      if (args[0] === 'log') {
+        return {
+          ok: true,
+          stdout: [
+            'same-issue-sha\tfix(ops): UTV2-1062 closeout repair\t2026-05-18T21:00:00.000Z',
+            'unlinked-sha\tfix(ops): closeout repair\t2026-05-18T21:30:00.000Z',
+          ].join('\n'),
+          stderr: '',
+        };
+      }
+
+      return {
+        ok: true,
+        stdout: 'scripts/ops/truth-check-lib.ts\n',
+        stderr: '',
+      };
+    },
+  });
+
+  assert.deepStrictEqual(result, ['unlinked-sha']);
+});
+
 test('P8 skips absent test_run_logs and fails present logs without merge SHA', () => {
   assert.strictEqual(evaluateTestRunLogEvidence({}, 'merge-sha'), 'skip');
   assert.strictEqual(evaluateTestRunLogEvidence({ test_run_logs: [] }, 'merge-sha'), 'skip');

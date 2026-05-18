@@ -624,6 +624,7 @@ export async function runTruthCheck(
         issueId,
         sinceSha: options.sinceSha,
         laneStartedAt: manifest.started_at,
+        allowSameIssueCommits: manifest.status !== 'done',
       });
       if (postMergeTouches.length > 0) {
         addCheck(
@@ -1335,6 +1336,7 @@ export function findPostMergeTouches(input: {
   issueId: string;
   sinceSha?: string;
   laneStartedAt?: string;
+  allowSameIssueCommits?: boolean;
   gitCommand?: typeof git;
   showCommit?: typeof gitShowCommit;
 }): string[] {
@@ -1377,6 +1379,12 @@ export function findPostMergeTouches(input: {
       continue;
     }
     const referencedIssues = subject.match(/(?:UTV2|UNI)-\d+/gi) ?? [];
+    if (
+      input.allowSameIssueCommits &&
+      referencedIssues.some((candidate) => candidate.toUpperCase() === input.issueId)
+    ) {
+      continue;
+    }
     const hasFollowUpIssue = referencedIssues.some(
       (candidate) => candidate.toUpperCase() !== input.issueId,
     );
