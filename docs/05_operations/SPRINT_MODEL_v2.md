@@ -1,7 +1,7 @@
 # Sprint Model v2 — Risk-Tiered Sprints
 
 > Adopted 2026-03-21. Replaces the weekly ceremony model used for Weeks 6-21.
-> Decision record: `docs/05_operations/SPRINT_MODEL_v2_PROPOSAL.md`
+> Decision record: historical proposal from 2026-03-21.
 
 ## Core Principle
 
@@ -36,7 +36,7 @@ Sprint ceremony scales with risk. High-risk changes get full governance. Low-ris
 | Proof bundle | Not required. Test results in commit suffice. |
 | Independent verification | Not required. `pnpm verify` passing is sufficient. |
 | Rollback plan | Not required (code is revertable via git). |
-| Status update | Update `ISSUE_QUEUE.md` (DONE) + update `PROGRAM_STATUS.md` capabilities/risks if behavior changed. |
+| Status update | Update Linear. Update `PROGRAM_STATUS.md` capabilities/risks only if behavior changed. |
 | Linear sync | Required at sprint close. |
 | Notion sync | Batched — sync at next T1 close or monthly. |
 | Test evidence | `pnpm verify` must pass. Test count must not decrease. |
@@ -53,7 +53,7 @@ Sprint ceremony scales with risk. High-risk changes get full governance. Low-ris
 | Proof bundle | Not required. |
 | Independent verification | Not required. |
 | Rollback plan | Not required. |
-| Status update | Update `ISSUE_QUEUE.md` (DONE). No `PROGRAM_STATUS.md` update required. |
+| Status update | Update Linear. No `PROGRAM_STATUS.md` update required. |
 | Linear sync | Batched — sync at next T2+ close. |
 | Notion sync | Batched — sync at next T1 close or monthly. |
 | Test evidence | `pnpm verify` must pass. Test count must not decrease. |
@@ -123,14 +123,14 @@ These are non-negotiable regardless of tier:
 
 | File | Purpose | Updated When |
 |------|---------|-------------|
-| `docs/06_status/ISSUE_QUEUE.md` | Operational work queue — active/ready/blocked/done | Every lane state change |
+| `docs/06_status/ISSUE_QUEUE.md` | Historical work queue record; not active execution truth | Not required for active execution |
 | `docs/06_status/PROGRAM_STATUS.md` | High-level program status — milestone, capabilities, risks | T1/T2 sprint close only |
-| `docs/06_status/system_snapshot.md` | Runtime evidence record — IDs, receipts, proof | When new T1 proof is captured |
+| `docs/06_status/SYSTEM_STATE.md` | Volatile checkout snapshot | Explicit snapshot/convergence pass |
 
 The following files are superseded (historical record only):
-- `docs/06_status/status_source_of_truth.md`
-- `docs/06_status/current_phase.md`
-- `docs/06_status/next_build_order.md`
+- status_source_of_truth.md
+- current_phase.md
+- next_build_order.md
 
 ## Proof and Rollback Templates
 
@@ -155,7 +155,7 @@ The sprint author classifies the tier at planning time. If uncertain, default to
 | Surface | T1 | T2 | T3 |
 |---------|-----|-----|-----|
 | Git commit + push | Yes | Yes | Yes |
-| `ISSUE_QUEUE.md` | Mark DONE | Mark DONE | Mark DONE |
+| `ISSUE_QUEUE.md` | Historical only | Historical only | Historical only |
 | `PROGRAM_STATUS.md` | Full update (capabilities, risks, milestone) | Update capabilities/risks if changed | No update required |
 | Linear | Sync at close | Sync at close | Batch into next T2+ |
 | Notion | Sync at close | Batch into next T1 or monthly | Batch into next T1 or monthly |

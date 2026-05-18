@@ -1,6 +1,6 @@
 # Agent Operating Model
 
-> **Status:** Active authority. Adopted 2026-03-28. Supersedes `agent_delegation_policy.md`.
+> **Status:** Active authority. Adopted 2026-03-28. Refreshed 2026-05-18 for UTV2-1051 alignment.
 > **Authority tier:** Tier 4 — Operating Policy
 > **Owner:** Program Owner
 
@@ -73,7 +73,7 @@ All execution state lives in Linear. The issue is the record.
 | Blockers requiring a decision | Chat (one escalation per blocker) |
 | Proof artifacts | `out/sprints/` in repo (gitignored) |
 | Runtime capability truth | `docs/06_status/PROGRAM_STATUS.md` |
-| Active work queue | `docs/06_status/ISSUE_QUEUE.md` |
+| Historical work queue | `docs/06_status/ISSUE_QUEUE.md` |
 | Architecture contracts | `docs/02_architecture/contracts/` |
 | Lane policy | this file |
 
@@ -86,10 +86,10 @@ These are separate systems with separate purposes.
 | System | Purpose | Updated by |
 |--------|---------|------------|
 | `PROGRAM_STATUS.md` | High-level milestone, capabilities, open risks — the *what* of the program | T1/T2 sprint close only |
-| `ISSUE_QUEUE.md` | Active work queue state — the *current state* of every open issue | Every lane state change |
+| `ISSUE_QUEUE.md` | Historical work queue record; not active execution truth | Not required for active execution |
 | Linear | Execution board — issue lifecycle, assignments, PR links, completion evidence | Agents at every state change |
 
-**Rule:** When `ISSUE_QUEUE.md` and Linear disagree, Linear wins and `ISSUE_QUEUE.md` must be updated to match.
+**Rule:** When `ISSUE_QUEUE.md` and Linear disagree, Linear wins. `ISSUE_QUEUE.md` is historical and does not need to be updated to match routine lane state changes.
 
 **Rule:** `PROGRAM_STATUS.md` reflects only proven, merged capabilities. It is not a planning document.
 
@@ -189,7 +189,7 @@ When Codex is unavailable or the PM explicitly authorizes batch execution, Claud
 | Doc type | Updated when |
 |----------|-------------|
 | `PROGRAM_STATUS.md` | T1 or T2 sprint closes with a behavioral change |
-| `ISSUE_QUEUE.md` | Every issue state change |
+| `ISSUE_QUEUE.md` | Historical only; not required for active state |
 | Architecture contracts | Only when the contract changes materially — requires explicit issue scope |
 | Operating model docs | Only when a governance issue in scope requires it |
 | Proof artifacts | T1 proofs — written to `out/sprints/` (gitignored; not committed) |
@@ -216,6 +216,5 @@ When Codex is unavailable or the PM explicitly authorizes batch execution, Claud
 |----------|---------|
 | `docs/05_operations/SPRINT_MODEL_v2.md` | Tier definitions and ceremony requirements |
 | `docs/05_operations/docs_authority_map.md` | Authority tier chain |
-| `docs/06_status/ISSUE_QUEUE.md` | Active work queue |
+| `docs/06_status/ISSUE_QUEUE.md` | Deprecated historical work queue |
 | `docs/06_status/PROGRAM_STATUS.md` | Program status authority |
-| `docs/05_operations/agent_delegation_policy.md` | Superseded — see this file |

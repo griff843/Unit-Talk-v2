@@ -1,0 +1,119 @@
+{
+  "schema_version": 1,
+  "owner": "Program Owner",
+  "updated_at": "2026-05-18",
+  "live_truth_order": [
+    "Linear",
+    "GitHub",
+    "runtime_commands",
+    "lane_manifests",
+    "status_docs",
+    "historical_records"
+  ],
+  "active_authority_files": [
+    "docs/05_operations/AGENT_OPERATING_MODEL.md",
+    "docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md",
+    "docs/05_operations/SPRINT_MODEL_v2.md",
+    "docs/05_operations/docs_authority_map.md",
+    "docs/05_operations/agent-role-contracts.md"
+  ],
+  "historical_files": [
+    "docs/06_status/ISSUE_QUEUE.md",
+    "docs/06_status/PROOF_BUNDLE_SCHEMA.md",
+    "docs/06_status/PROOF_TEMPLATE.md",
+    "docs/archive/GOVERNED_LOOP_SPEC.md",
+    "docs/archive/CODEX_CLASSIFY_INTEGRATION_SPEC.md",
+    "docs/archive/CODEX_DISPATCH_INTEGRATION_SPEC.md",
+    "docs/archive/CODEX_RECEIVE_INTEGRATION_SPEC.md",
+    "docs/archive/CODEX_STATUS_INTEGRATION_SPEC.md",
+    "docs/archive/codex_wave_execution_playbook.md"
+  ],
+  "deprecated_live_control_planes": [
+    {
+      "path": "docs/06_status/ISSUE_QUEUE.md",
+      "allowed_terms": [
+        "historical",
+        "deprecated",
+        "not required",
+        "not active"
+      ],
+      "forbidden_patterns": [
+        "Active work queue",
+        "Operational work queue",
+        "Every lane state change",
+        "update ISSUE_QUEUE",
+        "Update `ISSUE_QUEUE.md`",
+        "`ISSUE_QUEUE.md` \\| Mark DONE"
+      ]
+    }
+  ],
+  "tool_surfaces": [
+    {
+      "name": "runtime-verifier",
+      "kind": "prompt-agent",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1045"
+    },
+    {
+      "name": "proof-auditor",
+      "kind": "prompt-agent",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1046"
+    },
+    {
+      "name": "lane-reconciler",
+      "kind": "prompt-agent",
+      "category": "scheduled-monitor",
+      "automation": ".github/workflows/ops-reconcile.yml"
+    },
+    {
+      "name": "codex-return-reviewer",
+      "kind": "prompt-agent",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1047"
+    },
+    {
+      "name": "pr-risk-reviewer",
+      "kind": "prompt-agent",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1047"
+    },
+    {
+      "name": "ci-triage",
+      "kind": "prompt-agent",
+      "category": "manual-diagnostic",
+      "target_issue": "UTV2-1050"
+    },
+    {
+      "name": "lane-governor",
+      "kind": "prompt-agent",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1048"
+    },
+    {
+      "name": "db-proof-reviewer",
+      "kind": "prompt-agent",
+      "category": "archive-delete-candidate",
+      "target_issue": "UTV2-1049"
+    },
+    {
+      "name": "scripts/ops/runtime-verifier-gate.ts",
+      "kind": "script",
+      "category": "required-gate-limited",
+      "automation": ".github/workflows/runtime-verifier-gate.yml",
+      "target_issue": "UTV2-1045"
+    },
+    {
+      "name": "scripts/ops/proof-auditor-gate.ts",
+      "kind": "script",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1046"
+    },
+    {
+      "name": "scripts/ops/pr-review-packet.ts",
+      "kind": "script",
+      "category": "manual-transitional",
+      "target_issue": "UTV2-1047"
+    }
+  ]
+}

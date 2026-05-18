@@ -200,7 +200,7 @@ An agent file is valid if ALL of the following hold:
 2. **Model is a valid Claude model ID:** must be one of `claude-sonnet-4-6`, `claude-opus-4-7`, `claude-haiku-4-5-20251001`.
 3. **Tools are from the allowed set:** Bash, Read, Grep, Glob, Edit, Write, Agent, WebFetch, WebSearch. No other tools permitted.
 4. **Governance agents do not include Edit/Write/Agent:** any agent whose body describes APPROVE/REJECT, VALID/INVALID, or report-only authority must not list Edit, Write, or Agent in its tools.
-5. **Body defines authority boundary:** the agent body must include either "blocking" or "advisory" to indicate its authority type.
+5. **Body defines authority boundary:** the agent body must identify whether it is enforced by automation or only advisory/manual.
 6. **Body defines output format:** the agent body must include a structured output format section.
 7. **No second source of execution truth:** agents must read canonical state from `.claude/lanes.json` (lane state), Linear MCP (issue state), and GitHub (PR/branch state). Agents must not maintain their own lane registry.
 
