@@ -3,17 +3,24 @@
 Issue: UTV2-1062
 PR: https://github.com/griff843/Unit-Talk-v2/pull/760
 Head SHA: 6acf7a8de5e862c8404408a03e1d48f89137a62e
+Merge SHA: 0ec12418477d1783fc754f311e7ea9c4aba948d7
 Captured: 2026-05-18T20:52:37Z
 
 ## Verification
 
 Pre-merge verification completed from `C:\Dev\Unit-Talk-v2-utv2-1062` on branch `codex/utv2-1062-orchestration-kernel-integration`.
 
+## Diff Summary
+
+UTV2-1062 wired the orchestration prompt hot paths to deterministic ops commands, added the dispatch lease and merge wrapper closeout flow, added kernel support for lane start/close/release semantics, and hardened the return-review, reconciler, stale-check, and sync metadata paths needed for Orchestration Kernel v1.
+
 Commands run:
 
 ```text
 pnpm ops:sync-check
 pnpm verify
+pnpm type-check
+pnpm test
 pnpm exec tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
 git push
 ```

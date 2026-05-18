@@ -2,6 +2,8 @@
 
 This checklist must be completed before Orchestration Kernel v1 is treated as ratified for normal multi-lane operation.
 
+Merge SHA: 0ec12418477d1783fc754f311e7ea9c4aba948d7
+
 ## One-Lane Trial Gate
 
 - [ ] `pnpm ops:lane-start UTV2-1062 ...` creates `docs/06_status/lanes/UTV2-1062.json`, `.ops/sync/UTV2-1062.yml`, and `.ops/leases/UTV2-1062.json`.
