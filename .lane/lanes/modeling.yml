@@ -2,13 +2,18 @@ schema_version: 1
 lane_id: modeling
 lane_type: modeling
 allowed_path_globs:
+  - packages/domain/**
+  - packages/contracts/**
   - packages/intelligence/**
   - packages/verification/**
+  - apps/api/src/**
   - scripts/model-registry/**
   - scripts/source-ledger/**
   - scripts/**
   - .ops/sync/**
+  - .lane/lanes/**
   - docs/06_status/lanes/**
+  - docs/06_status/proof/**
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**

@@ -1114,3 +1114,78 @@ test('readKellyGradientReadiness falls back to domainAnalysis when kellySizing h
   // Primary path misses (no fractional_kelly > 0) → fallback: 40 + 55 * 0.2 = 51
   assert.equal(readKellyGradientReadiness(metadata), 51);
 });
+
+// ── UTV2-987: uniqueness real signal and fallback reason ──────────────────
+
+test('snapshot includes uniquenessInputs with zero saturation when no same-market peers open', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const result = await processSubmission(
+    {
+      source: 'model-driven',
+      market: 'player_props',
+      selection: 'TestPlayer OVER 5.5',
+      confidence: 0.7,
+      stakeUnits: 1.5,
+    },
+    repositories,
+  );
+  const promotionResult = await evaluateAndPersistBestBetsPromotion(
+    result.pick.id,
+    'test-runner',
+    repositories.picks,
+    repositories.audit,
+  );
+  const snapshot = promotionResult.snapshot;
+  assert.ok(snapshot, 'snapshot must be present');
+  const scoreInputs = snapshot.scoreInputs as Record<string, unknown>;
+  // openPicks is always an array (never undefined) in the pipeline — no fallback fires
+  // With no same-market peers, dimensions are present with zero counts
+  const uniquenessInputs = scoreInputs['uniquenessInputs'] as
+    | { sameSportMarketCount: number; selectionOverlapCount: number }
+    | undefined;
+  assert.ok(uniquenessInputs !== undefined, 'uniquenessInputs must be present when openPicks data is available');
+  assert.equal(uniquenessInputs.sameSportMarketCount, 0, 'sameSportMarketCount must be 0 with no same-market peers');
+  assert.equal(uniquenessInputs.selectionOverlapCount, 0, 'selectionOverlapCount must be 0 with no matching selection');
+  assert.equal(scoreInputs['uniquenessFallbackReason'], undefined, 'uniquenessFallbackReason must not be set when openPicks data is available');
+});
+
+test('snapshot includes uniquenessInputs with saturation count when same-market peers are open', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  // Submit two picks with the same market to create saturation
+  await processSubmission(
+    {
+      source: 'model-driven',
+      market: 'player_props',
+      selection: 'PlayerA OVER 3.5',
+      confidence: 0.7,
+      stakeUnits: 1.5,
+    },
+    repositories,
+  );
+  const pick2 = await processSubmission(
+    {
+      source: 'model-driven',
+      market: 'player_props',
+      selection: 'PlayerB OVER 7.5',
+      confidence: 0.72,
+      stakeUnits: 1.5,
+    },
+    repositories,
+  );
+
+  // Evaluate pick2 — pick1 is a same-market open pick
+  const promotionResult = await evaluateAndPersistBestBetsPromotion(
+    pick2.pick.id,
+    'test-runner',
+    repositories.picks,
+    repositories.audit,
+  );
+
+  const scoreInputs = promotionResult.snapshot.scoreInputs as Record<string, unknown>;
+  const uniquenessInputs = scoreInputs['uniquenessInputs'] as
+    | { sameSportMarketCount: number; selectionOverlapCount: number }
+    | undefined;
+  assert.ok(uniquenessInputs !== undefined, 'uniquenessInputs must be present when openPicks data is available');
+  assert.ok(uniquenessInputs.sameSportMarketCount >= 1, 'sameSportMarketCount must reflect at least one same-market peer (pick1)');
+});

@@ -19,7 +19,7 @@ import {
 import {
   applyBandDowngrades,
   computeBoardFitScore,
-  computeUniquenessScore,
+  computeUniquenessWithMeta,
   evaluatePromotionEligibility,
   generatePickNarrative,
   initialBandAssignment,
@@ -316,6 +316,12 @@ export async function evaluateAllPoliciesEagerAndPersist(
         : {}),
       edgeMethod: scoreInputs.edgeMethod,
       providerCoverageState: scoreInputs.providerCoverageState,
+      ...(scoreInputs.uniquenessFallbackReason
+        ? { uniquenessFallbackReason: scoreInputs.uniquenessFallbackReason }
+        : {}),
+      ...(scoreInputs.uniquenessInputs
+        ? { uniquenessInputs: scoreInputs.uniquenessInputs }
+        : {}),
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -875,6 +881,12 @@ async function persistPromotionDecisionForPick(
         : {}),
       edgeMethod: scoreInputs.edgeMethod,
       providerCoverageState: scoreInputs.providerCoverageState,
+      ...(scoreInputs.uniquenessFallbackReason
+        ? { uniquenessFallbackReason: scoreInputs.uniquenessFallbackReason }
+        : {}),
+      ...(scoreInputs.uniquenessInputs
+        ? { uniquenessInputs: scoreInputs.uniquenessInputs }
+        : {}),
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -1104,14 +1116,22 @@ async function readPromotionScoreInputs(
       ? (configured['uniqueness'] as number)
       : null;
 
-  const uniqueness =
-    explicitUniqueness !== null
-      ? explicitUniqueness
-      : computeUniquenessScore({
-          activeSameSportMarketCount: openPicks?.filter(
-            p => p.id !== pick.id && p.market === pick.market,
-          ).length,
-        });
+  // Compute selection overlap: count open picks targeting same player/participant.
+  // Use first two tokens of selection string as rough participant identifier.
+  const selectionPrefix = pick.selection.split(' ').slice(0, 2).join(' ').toLowerCase();
+  const activeSelectionOverlapCount = openPicks?.filter(
+    p => p.id !== pick.id && p.selection.toLowerCase().startsWith(selectionPrefix),
+  ).length;
+
+  const uniquenessResult = explicitUniqueness !== null
+    ? { score: explicitUniqueness, fallbackReason: undefined, dimensions: null }
+    : computeUniquenessWithMeta({
+        activeSameSportMarketCount: openPicks?.filter(
+          p => p.id !== pick.id && p.market === pick.market,
+        ).length,
+        activeSelectionOverlapCount,
+      });
+  const uniqueness = uniquenessResult.score;
 
   // PM UTV2-985: explicit score — market-backed edge OR 0 (fail-closed).
   // When edgeIsExplicit, operator-provided value takes precedence (trust the operator).
@@ -1136,6 +1156,10 @@ async function readPromotionScoreInputs(
     edgeMethod,
     /** Which provider tier supplied market data, or 'none'. UTV2-985. */
     providerCoverageState,
+    /** Explicit reason when uniqueness returned fallback value. UTV2-987. */
+    ...(uniquenessResult.fallbackReason ? { uniquenessFallbackReason: uniquenessResult.fallbackReason } : {}),
+    /** Dimensions used to compute uniqueness when data was available. UTV2-987. */
+    ...(uniquenessResult.dimensions ? { uniquenessInputs: uniquenessResult.dimensions } : {}),
   };
 }
 
