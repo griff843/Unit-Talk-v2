@@ -1,6 +1,6 @@
 ---
 name: db-proof-reviewer
-description: Validates T1 evidence bundles and pnpm test:db output before a T1 PR can be merged. Checks that proof is SHA-bound to the merge SHA (not branch HEAD), all required sections are present, and test ran against real Supabase. Use before applying t1-approved label or opening T1 merge gate.
+description: Legacy advisory DB proof review aid for T1 evidence bundles and pnpm test:db output. Checks that proof is SHA-bound to the merge SHA (not branch HEAD), all required sections are present, and test ran against real Supabase. This agent is an archive/delete candidate; CI and PM policy remain the blocking authority.
 model: claude-sonnet-4-6
 tools:
   - Bash
@@ -73,5 +73,5 @@ Blocker (INVALID only):
   <specific issue preventing T1 merge approval>
 ```
 
-VALID = orchestrator may apply `t1-approved` label and proceed to PM merge gate.
-INVALID = proof must be regenerated. Do not apply `t1-approved`.
+VALID = proof appears complete from this legacy advisory review.
+INVALID = proof has specific gaps that should be regenerated before the orchestrator relies on it.
