@@ -136,17 +136,25 @@ export async function submitPickController(
       });
     } catch (enqueueError) {
       // Enqueue failure is audited inside enqueueDistributionWithRunTracking.
-      // Pick is durable but NOT queued — this is a degraded state.
-      // Log structured error so operators can find zombie picks.
+      // The pick is durable and qualified, but no active outbox row exists. The
+      // safe operator repair is POST /api/picks/:id/requeue; that path refuses
+      // duplicate active outbox rows before replaying the enqueue.
       outboxEnqueued = false;
-      console.error(JSON.stringify({
-        service: 'submit-pick-controller',
-        event: 'enqueue.failed',
+      await recordZombiePickAlertRun({
+        repositories,
         pickId: result.pick.id,
         promotionTarget: result.pick.promotionTarget,
-        error: enqueueError instanceof Error ? enqueueError.message : String(enqueueError),
-        impact: 'Pick qualified but not queued for delivery. Manual re-queue required.',
-      }));
+        distributionTarget,
+        enqueueError,
+      });
+      options.logger?.error('distribution enqueue failed; zombie pick alert recorded', enqueueError, {
+        ...(options.correlationId ? { correlationId: options.correlationId } : {}),
+        ...(options.traceparent ? { traceparent: options.traceparent } : {}),
+        lifecyclePoint: 'api.outbox_enqueue',
+        pickId: result.pick.id,
+        target: distributionTarget,
+        recoveryAction: 'POST /api/picks/:id/requeue',
+      });
     }
   }
 
@@ -180,4 +188,37 @@ function isModelDrivenRoutingShadowEnabled(payload: SubmissionPayload) {
   }
 
   return isShadowEnabled(parseShadowModeEnv(process.env.UNIT_TALK_SHADOW_MODE), 'routing');
+}
+
+async function recordZombiePickAlertRun(input: {
+  repositories: RepositoryBundle;
+  pickId: string;
+  promotionTarget: string | undefined;
+  distributionTarget: string;
+  enqueueError: unknown;
+}) {
+  const errorMessage = input.enqueueError instanceof Error
+    ? input.enqueueError.message
+    : String(input.enqueueError);
+  const details = {
+    event: 'zombie_pick.detected',
+    pickId: input.pickId,
+    promotionTarget: input.promotionTarget ?? null,
+    distributionTarget: input.distributionTarget,
+    error: errorMessage,
+    impact: 'Pick qualified but no active delivery outbox row was created.',
+    recoveryAction: 'POST /api/picks/:id/requeue',
+    duplicateDeliveryGuard: 'requeue checks for existing pending/processing/sent outbox rows before enqueueing',
+  };
+  const run = await input.repositories.runs.startRun({
+    runType: 'distribution.enqueue.zombie_pick',
+    actor: 'submission',
+    details,
+    idempotencyKey: `${input.pickId}:${input.distributionTarget}:zombie-pick-alert`,
+  });
+  await input.repositories.runs.completeRun({
+    runId: run.id,
+    status: 'failed',
+    details,
+  });
 }

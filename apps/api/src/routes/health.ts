@@ -3,8 +3,12 @@ import type { ApiRuntimeDependencies, ApiHealthResponse, ApiHealthStatus } from 
 import { writeJson } from '../http-utils.js';
 import { checkSchemaDrift, type SchemaDriftCheckResult } from '../model-health-scanner.js';
 import { recordQueueHealthMetrics } from '@unit-talk/observability';
+import type { PickLifecycleState } from '@unit-talk/contracts';
 
 const HEALTH_PROBE_PICK_ID = '00000000-0000-0000-0000-000000000000';
+const ZOMBIE_PICK_LIFECYCLE_STATES: PickLifecycleState[] = ['draft', 'validated'];
+const ZOMBIE_PICK_PROMOTION_STATUSES = new Set(['qualified', 'promoted']);
+const ZOMBIE_PICK_OUTBOX_STATUSES = ['pending', 'sent', 'delivered'] as const;
 
 /**
  * Probes DB connectivity by issuing a lightweight query through the picks
@@ -29,6 +33,7 @@ async function probeDbConnectivity(runtime: ApiRuntimeDependencies): Promise<boo
 interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
   warnings: string[];
   queueHealth: ApiRuntimeDependencies['queueHealth'];
+  zombiePicks: ZombiePickHealth;
   schemaDrift:
     | {
         status: 'not_applicable';
@@ -46,6 +51,63 @@ interface ApiHealthResponseWithSchemaDrift extends ApiHealthResponse {
         warnings: string[];
         remediation: string;
       };
+}
+
+export interface ZombiePickHealth {
+  status: 'healthy' | 'down';
+  count: number;
+  checkedAt: string;
+  remediation: string | null;
+}
+
+export async function checkZombiePickHealth(
+  runtime: ApiRuntimeDependencies,
+): Promise<ZombiePickHealth> {
+  const checkedAt = new Date(runtime.now()).toISOString();
+  /*
+   * Repository equivalent of the operator query:
+   * SELECT count(*) FROM picks p
+   * WHERE p.promotion_status IN ('qualified', 'promoted')
+   *   AND p.status NOT IN ('queued', 'posted', 'settled', 'voided', 'awaiting_approval')
+   *   AND NOT EXISTS (
+   *     SELECT 1 FROM delivery_outbox o
+   *     WHERE o.pick_id = p.id
+   *       AND o.status IN ('pending', 'sent', 'delivered')
+   *   );
+   */
+  const candidates = await runtime.repositories.picks.listByLifecycleStates(
+    ZOMBIE_PICK_LIFECYCLE_STATES,
+  );
+
+  let count = 0;
+  for (const pick of candidates) {
+    if (
+      !ZOMBIE_PICK_PROMOTION_STATUSES.has(pick.promotion_status) ||
+      pick.promotion_target == null
+    ) {
+      continue;
+    }
+
+    const target = `discord:${pick.promotion_target}`;
+    const activeOutbox = await runtime.repositories.outbox.findByPickAndTarget(
+      pick.id,
+      target,
+      ZOMBIE_PICK_OUTBOX_STATUSES,
+    );
+
+    if (!activeOutbox) {
+      count += 1;
+    }
+  }
+
+  return {
+    status: count > 0 ? 'down' : 'healthy',
+    count,
+    checkedAt,
+    remediation: count > 0
+      ? 'Operator recovery: POST /api/picks/:id/requeue for each zombie pick. The requeue path checks for existing active outbox rows before enqueueing, so replay repairs missing work without duplicate delivery.'
+      : null,
+  };
 }
 
 function formatQueueAlertWarning(alert: NonNullable<ApiRuntimeDependencies['queueHealth']>['alerts'][number]): string {
@@ -76,21 +138,30 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
 
   const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
   const queueHealth = runtime.queueHealth ?? null;
+  const zombiePicks = await checkZombiePickHealth(runtime);
   if (queueHealth) {
     recordQueueHealthMetrics(runtime.metricsCollector, queueHealth);
   }
   const queueUnhealthy = queueHealth?.status === 'degraded' || queueHealth?.status === 'down';
+  const zombiePickUnhealthy = zombiePicks.status === 'down';
   const status: ApiHealthStatus = !isDurable
     ? 'degraded'
+    : zombiePickUnhealthy
+      ? 'down'
     : queueHealth?.status === 'down'
       ? 'down'
       : queueHealth?.status === 'degraded'
         ? 'degraded'
         : 'healthy';
-  const httpStatus = isDurable && !queueUnhealthy ? 200 : 503;
+  const httpStatus = isDurable && !queueUnhealthy && !zombiePickUnhealthy ? 200 : 503;
   const warnings = [
     ...(schemaDrift?.warnings ?? []),
     ...(queueHealth?.alerts.map((alert) => formatQueueAlertWarning(alert)) ?? []),
+    ...(zombiePicks.status === 'down'
+      ? [
+          `zombie picks detected: count=${zombiePicks.count} [remediation=${zombiePicks.remediation}]`,
+        ]
+      : []),
   ];
 
   writeJson(response, httpStatus, {
@@ -107,6 +178,7 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
     },
     warnings,
     queueHealth,
+    zombiePicks,
     schemaDrift: schemaDrift
       ? {
           status: schemaDrift.status,

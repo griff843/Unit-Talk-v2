@@ -151,3 +151,57 @@ test('submit-pick-controller: discord-bot source is NOT braked (human-relayed pa
   assert.notEqual(result.body.data.lifecycleState, 'awaiting_approval');
   assert.equal(result.body.data.governanceBrake, undefined);
 });
+
+test('submit-pick-controller: enqueue failure writes operator-visible zombie pick alert run', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const originalUpdateLifecycle = repositories.picks.updatePickLifecycleState.bind(repositories.picks);
+  repositories.picks.updatePickLifecycleState = async (pickId, lifecycleState) => {
+    if (lifecycleState === 'queued') {
+      throw new Error('synthetic lifecycle write failure');
+    }
+
+    return originalUpdateLifecycle(pickId, lifecycleState);
+  };
+
+  const result = await submitPickController(
+    makePayload('api', {
+      metadata: {
+        sport: 'NBA',
+        eventName: 'Suns vs Nuggets',
+        promotionScores: {
+          edge: 82,
+          trust: 83,
+          readiness: 88,
+          uniqueness: 80,
+          boardFit: 86,
+        },
+      },
+    }),
+    repositories,
+  );
+
+  assert.equal(result.status, 201);
+  assert.ok(result.body.ok);
+  if (!result.body.ok) return;
+
+  assert.equal(result.body.data.promotionStatus, 'qualified');
+  assert.equal(result.body.data.outboxEnqueued, false);
+  assert.match(
+    String((result.body.data as { warning?: string }).warning),
+    /distribution enqueue failed/i,
+  );
+
+  const pick = await repositories.picks.findPickById(result.body.data.pickId);
+  assert.equal(pick?.status, 'validated');
+  const outboxRows = await repositories.outbox.listByPickId(result.body.data.pickId);
+  assert.equal(outboxRows.length, 0);
+
+  const alertRuns = await repositories.runs.listByType('distribution.enqueue.zombie_pick');
+  assert.equal(alertRuns.length, 1);
+  assert.equal(alertRuns[0]?.status, 'failed');
+  assert.equal(alertRuns[0]?.actor, 'submission');
+  const alertDetails = alertRuns[0]?.details;
+  assert.ok(alertDetails && typeof alertDetails === 'object' && !Array.isArray(alertDetails));
+  assert.equal(alertDetails.pickId, result.body.data.pickId);
+  assert.equal(alertDetails.recoveryAction, 'POST /api/picks/:id/requeue');
+});
