@@ -1,0 +1,12 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-993
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-993/evidence-bundle.md
+    - apps/api/src/t1-proof-utv2-993-worker-restart.test.ts

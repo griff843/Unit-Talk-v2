@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-993",
+  "lane_type": "verification",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "claude/utv2-993-worker-restart-double-delivery-safety",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/worker/src",
+    "apps/api/src/t1-proof-utv2-993-worker-restart.test.ts",
+    "docs/06_status/proof/UTV2-993/evidence-bundle.md",
+    "docs/06_status/proof/UTV2-993/runtime-verification.md",
+    "docs/06_status/lanes/UTV2-993.json",
+    ".ops/sync/UTV2-993.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-993/evidence-bundle.md",
+    "apps/api/src/t1-proof-utv2-993-worker-restart.test.ts"
+  ],
+  "status": "started",
+  "started_at": "2026-05-18T03:00:00Z",
+  "heartbeat_at": "2026-05-18T03:00:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
