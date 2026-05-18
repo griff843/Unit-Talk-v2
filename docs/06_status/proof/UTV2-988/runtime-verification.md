@@ -6,7 +6,7 @@
 
 ---
 
-## Pre-Merge Checklist
+## Pre-merge Checklist
 
 - [x] `pnpm verify` green on branch
 - [x] R-level check PASS
