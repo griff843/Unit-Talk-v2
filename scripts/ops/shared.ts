@@ -596,16 +596,16 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   if (!['T1', 'T2', 'T3'].includes(manifest.tier)) {
     errors.push(`${sourcePath}: tier is invalid`);
   }
-  if (!path.isAbsolute(manifest.worktree_path)) {
+  if (!isPortableAbsolutePath(manifest.worktree_path)) {
     errors.push(`${sourcePath}: worktree_path must be absolute`);
   }
   if (manifest.execution_location) {
-    if (!path.isAbsolute(manifest.execution_location.cwd)) {
+    if (!isPortableAbsolutePath(manifest.execution_location.cwd)) {
       errors.push(`${sourcePath}: execution_location.cwd must be absolute`);
     }
     if (
-      path.resolve(manifest.execution_location.cwd).replaceAll('\\', '/') !==
-      path.resolve(manifest.worktree_path).replaceAll('\\', '/')
+      normalizePortableAbsolutePath(manifest.execution_location.cwd) !==
+      normalizePortableAbsolutePath(manifest.worktree_path)
     ) {
       errors.push(`${sourcePath}: execution_location.cwd must match worktree_path`);
     }
@@ -675,6 +675,21 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   }
 
   return errors;
+}
+
+function isPortableAbsolutePath(value: string): boolean {
+  return path.isAbsolute(value) || path.win32.isAbsolute(value) || path.posix.isAbsolute(value);
+}
+
+function normalizePortableAbsolutePath(value: string): string {
+  const normalized = value.replaceAll('\\', '/');
+  if (path.win32.isAbsolute(value)) {
+    return normalized.replace(/^([A-Z]):/, (_, drive: string) => `${drive.toLowerCase()}:`);
+  }
+  if (path.posix.isAbsolute(value)) {
+    return path.posix.normalize(normalized);
+  }
+  return path.resolve(value).replaceAll('\\', '/');
 }
 
 export function writeManifest(manifest: LaneManifest): void {
