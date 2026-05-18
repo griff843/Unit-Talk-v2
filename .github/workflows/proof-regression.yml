@@ -3,9 +3,6 @@ name: Proof Regression Check
 # Re-runs relevant proof scripts when files in their scope change.
 # Keeps proof artifacts evergreen — not just point-in-time snapshots.
 #
-# Currently advisory (exits 0 always). Future: make required check
-# once proof scripts are stable.
-
 on:
   pull_request:
     paths:
@@ -28,10 +25,9 @@ permissions:
   contents: read
 
 jobs:
-  regression:
+  proof-regression:
     name: Proof regression
     runs-on: ubuntu-latest
-    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -119,7 +115,7 @@ jobs:
         run: |
           for script in ${{ steps.affected.outputs.scripts }}; do
             echo "Running $script..."
-            npx tsx "$script" || echo "::warning title=proof-regression::$script produced non-zero exit"
+            npx tsx "$script"
           done
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
