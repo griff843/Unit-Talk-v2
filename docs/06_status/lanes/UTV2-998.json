@@ -7,9 +7,16 @@
   "worktree_path": ".",
   "branch": "codex/utv2-998-stake-units-roi",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "0136e95bf11265d8cc3185eff6388cabe4ce3663",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/745",
+  "files_changed": [
+    "apps/api/src/submission-service.ts",
+    "apps/api/src/submission-service.test.ts",
+    "scripts/roi-by-sport.ts",
+    "scripts/roi-by-sport.test.ts",
+    "scripts/ingestor-status.mjs",
+    "docs/06_status/proof/UTV2-998/evidence-bundle.md"
+  ],
   "file_scope_lock": [
     "apps/api/src/**",
     "packages/contracts/src/**",
@@ -22,10 +29,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-998/evidence-bundle.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-18T04:00:00Z",
   "heartbeat_at": "2026-05-18T04:00:00Z",
-  "closed_at": null,
+  "closed_at": "2026-05-18T05:00:00Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
