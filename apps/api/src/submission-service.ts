@@ -83,33 +83,19 @@ export function computeSubmissionIdempotencyKey(payload: SubmissionPayload): str
   return createHash('sha256').update(parts.join('|')).digest('hex').slice(0, 32);
 }
 
-function getSubmissionAtomicFallbackReason(
-  err: unknown,
-): 'in_memory_sentinel' | 'rpc_not_deployed' | null {
+function getSubmissionAtomicFallbackReason(err: unknown): 'in_memory_sentinel' | null {
   const message = err instanceof Error ? err.message : String(err);
   if (message.includes('processSubmissionAtomic is not supported in InMemory mode')) {
     return 'in_memory_sentinel';
   }
-
-  const code =
-    typeof err === 'object' && err !== null && typeof (err as Record<string, unknown>)['code'] === 'string'
-      ? ((err as Record<string, unknown>)['code'] as string)
-      : '';
-  const normalizedMessage = message.toLowerCase();
-  const isProcessSubmissionAtomic = normalizedMessage.includes('process_submission_atomic');
-  const isRpcNotDeployed =
-    code === 'PGRST202' ||
-    normalizedMessage.includes('pgrst202') ||
-    normalizedMessage.includes('could not find the function') ||
-    (normalizedMessage.includes('function') && normalizedMessage.includes('does not exist')) ||
-    normalizedMessage.includes('schema cache');
-
-  return isProcessSubmissionAtomic && isRpcNotDeployed ? 'rpc_not_deployed' : null;
+  // All other errors (PGRST202, schema-cache miss, network failures) must rethrow
+  // in database mode — sequential fallback risks partial durable writes.
+  return null;
 }
 
 function warnSubmissionAtomicFallback(
   err: unknown,
-  reason: 'in_memory_sentinel' | 'rpc_not_deployed',
+  reason: 'in_memory_sentinel',
   context: {
     flow: 'processSubmission' | 'processShadowSubmission';
     submissionId: string;
@@ -364,7 +350,7 @@ export async function processSubmission(
       idempotencyKey,
     });
 
-    // Sequential fallback (InMemory mode or RPC not deployed yet).
+    // Sequential fallback (InMemory mode only).
     submissionRecord = await repositories.submissions.saveSubmission(submissionInput);
 
     const [seqEventRecord, seqPickRecord] = await Promise.all([
