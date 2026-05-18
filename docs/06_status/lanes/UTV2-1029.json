@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1029",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-1029-archive-planning-artifacts",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "docs/05_operations/GOVERNED_LOOP_SPEC.md",
+    "docs/05_operations/CODEX_CLASSIFY_INTEGRATION_SPEC.md",
+    "docs/05_operations/CODEX_DISPATCH_INTEGRATION_SPEC.md",
+    "docs/05_operations/CODEX_RECEIVE_INTEGRATION_SPEC.md",
+    "docs/05_operations/CODEX_STATUS_INTEGRATION_SPEC.md",
+    "docs/05_operations/codex_wave_execution_playbook.md",
+    "docs/05_operations/docs_authority_map.md",
+    "CLAUDE.md"
+  ],
+  "file_scope_lock": [
+    "docs/05_operations/GOVERNED_LOOP_SPEC.md",
+    "docs/05_operations/CODEX_CLASSIFY_INTEGRATION_SPEC.md",
+    "docs/05_operations/CODEX_DISPATCH_INTEGRATION_SPEC.md",
+    "docs/05_operations/CODEX_RECEIVE_INTEGRATION_SPEC.md",
+    "docs/05_operations/CODEX_STATUS_INTEGRATION_SPEC.md",
+    "docs/05_operations/codex_wave_execution_playbook.md",
+    "docs/05_operations/docs_authority_map.md",
+    "docs/archive/",
+    "CLAUDE.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-18T05:55:00.000Z",
+  "heartbeat_at": "2026-05-18T05:55:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
