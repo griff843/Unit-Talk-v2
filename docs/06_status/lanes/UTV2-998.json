@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-998",
+  "lane_type": "modeling",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "codex/utv2-998-stake-units-roi",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/**",
+    "packages/contracts/src/**",
+    "packages/db/src/**",
+    "scripts/**",
+    "docs/06_status/proof/UTV2-998/**",
+    "docs/06_status/lanes/UTV2-998.json",
+    ".ops/sync/UTV2-998.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-998/evidence-bundle.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-18T04:00:00Z",
+  "heartbeat_at": "2026-05-18T04:00:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
