@@ -2,7 +2,7 @@ name: Tier Label Check
 
 on:
   pull_request:
-    types: [opened, reopened, labeled, unlabeled, ready_for_review]
+    types: [reopened, labeled, unlabeled, ready_for_review]
 
 permissions:
   pull-requests: write

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addUnsupportedRuntimeChecks,
+  evaluateCloseoutTruthGate,
   evaluateRequiredChecksWithHeadFallback,
   evaluateTestRunLogEvidence,
   findPostMergeTouches,
@@ -247,4 +248,138 @@ test('formatP0Failures ignores non-H check failures', () => {
     ],
   });
   assert.strictEqual(formatP0Failures(result), '');
+});
+
+function closeoutInput(
+  overrides: Partial<Parameters<typeof evaluateCloseoutTruthGate>[0]> = {},
+): Parameters<typeof evaluateCloseoutTruthGate>[0] {
+  const mergeSha = 'abc123merge';
+  return {
+    manifest: {
+      issue_id: 'UTV2-1058',
+      status: 'merged',
+      commit_sha: mergeSha,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1058',
+      files_changed: ['scripts/ops/truth-check-lib.ts'],
+      expected_proof_paths: ['docs/06_status/proof/UTV2-1058/verification.log'],
+      created_by: 'codex-cli',
+    },
+    linear_state: 'Done',
+    pr_merged: true,
+    pr_merge_sha: mergeSha,
+    pr_head_sha: 'head456',
+    proof_artifacts: [
+      {
+        path: 'docs/06_status/proof/UTV2-1058/verification.log',
+        content: `MERGE_SHA: ${mergeSha}\npnpm verify pass`,
+        mtime_ms: 2000,
+      },
+    ],
+    merge_timestamp_ms: 1000,
+    runtime_proof_required: false,
+    transition_age_ms: 0,
+    ...overrides,
+  };
+}
+
+function failedCloseoutIds(input: Parameters<typeof evaluateCloseoutTruthGate>[0]): string[] {
+  return evaluateCloseoutTruthGate(input)
+    .filter((check) => check.status === 'fail')
+    .map((check) => check.id);
+}
+
+test('closeout truth gate passes clean merged closeout', () => {
+  assert.deepStrictEqual(failedCloseoutIds(closeoutInput()), []);
+});
+
+test('closeout truth gate fails Done without merged PR SHA', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(closeoutInput({ pr_merge_sha: null })),
+    ['C1'],
+  );
+});
+
+test('closeout truth gate fails completed work without manifest merge SHA', () => {
+  const input = closeoutInput();
+  input.manifest = { ...input.manifest, commit_sha: null };
+  input.proof_artifacts = [
+    {
+      path: 'docs/06_status/proof/UTV2-1058/verification.log',
+      content: 'HEAD_SHA: head456\npnpm verify pass',
+      mtime_ms: 2000,
+    },
+  ];
+
+  assert.deepStrictEqual(failedCloseoutIds(input), ['C2']);
+});
+
+test('closeout truth gate fails proof without merge or head SHA binding', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        proof_artifacts: [
+          {
+            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            content: 'pnpm verify pass without sha',
+            mtime_ms: 2000,
+          },
+        ],
+      }),
+    ),
+    ['C4'],
+  );
+});
+
+test('closeout truth gate fails runtime-proof narrative closure', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        runtime_proof_required: true,
+        proof_artifacts: [
+          {
+            path: 'docs/06_status/proof/UTV2-1058/evidence.json',
+            content: '{"schema_version":1,"merge_sha":"abc123merge","static_proof":{"summary":"tests passed"}}',
+            mtime_ms: 2000,
+          },
+        ],
+      }),
+    ),
+    ['C6'],
+  );
+});
+
+test('closeout truth gate accepts runtime-proof with live evidence references', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        runtime_proof_required: true,
+        proof_artifacts: [
+          {
+            path: 'docs/06_status/proof/UTV2-1058/evidence.json',
+            content: JSON.stringify({
+              schema_version: 1,
+              merge_sha: 'abc123merge',
+              runtime_proof: { row_counts: [{ table: 'picks', count: 1 }] },
+            }),
+            mtime_ms: 2000,
+          },
+        ],
+      }),
+    ),
+    [],
+  );
+});
+
+test('closeout truth gate fails manifest and Linear drift beyond transition window', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        linear_state: 'In Review',
+        pr_merged: true,
+        transition_age_ms: 60 * 60 * 1000,
+        allowed_transition_ms: 30 * 60 * 1000,
+      }),
+    ),
+    ['C7'],
+  );
 });

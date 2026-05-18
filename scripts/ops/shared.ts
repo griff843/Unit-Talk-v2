@@ -63,6 +63,13 @@ export interface LaneManifest {
   executor?: LaneExecutor;
   tier: LaneTier;
   worktree_path: string;
+  execution_location?: {
+    mode: 'worktree' | 'main-control';
+    cwd: string;
+    package_install: 'not_required' | 'required' | 'verified';
+    setup_command: string | null;
+    main_checkout_control_only: boolean;
+  };
   branch: string;
   base_branch: string;
   commit_sha: string | null;
@@ -591,6 +598,27 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   }
   if (!path.isAbsolute(manifest.worktree_path)) {
     errors.push(`${sourcePath}: worktree_path must be absolute`);
+  }
+  if (manifest.execution_location) {
+    if (!path.isAbsolute(manifest.execution_location.cwd)) {
+      errors.push(`${sourcePath}: execution_location.cwd must be absolute`);
+    }
+    if (
+      path.resolve(manifest.execution_location.cwd).replaceAll('\\', '/') !==
+      path.resolve(manifest.worktree_path).replaceAll('\\', '/')
+    ) {
+      errors.push(`${sourcePath}: execution_location.cwd must match worktree_path`);
+    }
+    if (!['worktree', 'main-control'].includes(manifest.execution_location.mode)) {
+      errors.push(`${sourcePath}: execution_location.mode is invalid`);
+    }
+    if (
+      !['not_required', 'required', 'verified'].includes(
+        manifest.execution_location.package_install,
+      )
+    ) {
+      errors.push(`${sourcePath}: execution_location.package_install is invalid`);
+    }
   }
   try {
     validateBranchName(manifest.branch);

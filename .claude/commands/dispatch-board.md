@@ -2,6 +2,10 @@
 
 Board-wide autonomous loop. Reads the entire Linear board, routes every executable issue via `/three-brain`, and runs the dispatch → execute → verify → close cycle until the board is empty or all remaining issues are blocked.
 
+## Mandatory merge wrapper
+
+All PR merge, PR branch refresh, and post-merge `main` sync operations must go through `pnpm ops:merge-wrapper`. Do not call `gh pr merge`, `gh pr update-branch`, `git pull origin main`, `git merge origin/main`, or `git rebase origin/main` directly; the wrapper owns the merge mutex and records deferred auto-merge state for later reconciliation.
+
 **Usage:**
 - `/dispatch-board` — run all executable issues
 - `/dispatch-board --milestone <id>` — scope to a Linear milestone
@@ -101,9 +105,11 @@ After PR open:
 1. CI green on PR
 2. Run `/verification` (tier-appropriate)
 3. `ops:truth-check UTV2-###`
-4. Pre-merge conflict check: `gh pr view <n> --json mergeable --jq .mergeable` → if `CONFLICTING`, rebase on `origin/main` and force-push
-5. On PASS: `gh pr merge <n> --squash` → Linear Done → close manifest → dispatch next Claude candidate
-6. On FAIL: mark blocked with specific failing check → dispatch next from unblocked pool
+4. Pre-merge diagnostic: `pnpm ops:pr-block-diagnostic --pr <n>` → if genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
+5. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
+6. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
+7. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. Then dispatch next Claude candidate.
+8. On FAIL: mark blocked with specific failing check → dispatch next from unblocked pool
 
 ### Codex lanes (async)
 
@@ -115,9 +121,11 @@ When Codex finishes and opens its PR(s), run: /dispatch-board --check-codex
 
 On `--check-codex`: query GitHub for open PRs on active Codex branches, then for each:
 1. Diff review — files within `file_scope_lock`, no scope bleed, `pnpm verify` + R-level section present and green
-2. Conflict check; rebase if needed
-3. Clean → `gh pr review <n> --approve` → `gh pr merge <n> --squash` → Linear Done → close manifest → dispatch next Codex candidate
-4. Scope bleed / verify failure → leave PR open, mark blocked, dispatch next
+2. Run `pnpm ops:pr-block-diagnostic --pr <n>`; if a genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
+3. Clean → `gh pr review <n> --approve` → `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
+4. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
+5. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. Then dispatch next Codex candidate.
+6. Scope bleed / verify failure → leave PR open, mark blocked, dispatch next
 
 ### T1 merge gate
 
@@ -132,7 +140,7 @@ After T1 PR open + evidence bundle:
      schema: pm-verdict/v1
      Issue: UTV2-###
    ```
-4. On `PM_VERDICT: APPROVED` detected: merge → Fibery proof sync → Linear Done → close manifest
+4. On `PM_VERDICT: APPROVED` detected: run `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close`, then `pnpm ops:lane-close UTV2-###`. Run Fibery proof sync only after closeout succeeds.
 
 ---
 
@@ -159,11 +167,10 @@ Deferred (external gate):
 Board: 2 merged, 1 awaiting PM, 2 blocked, 2 deferred
 ```
 
-After all merges, reset sync.yml:
+After all merges, sync main through the merge wrapper before any ops cleanup:
 ```bash
-git checkout main && git pull --ff-only
-# edit .ops/sync.yml → entities.issues: []
-git add .ops/sync.yml && git commit -m "ops: reset sync.yml to neutral after merge [skip ci]" && git push
+pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
+# If .ops/sync.yml cleanup is still needed, make it a normal ops PR. Do not push directly from the board loop.
 ```
 
 ---

@@ -2,6 +2,10 @@
 
 One-command lane execution. Pulls from the dispatch queue, routes to the right executor, and runs the full lane end-to-end.
 
+## Mandatory merge wrapper
+
+Use `pnpm ops:merge-wrapper` for PR merge, PR branch refresh, and post-merge `main` sync operations. Do not call raw `gh pr merge`, `gh pr update-branch`, `git pull origin main`, `git merge origin/main`, or `git rebase origin/main`; those bypass the merge mutex.
+
 **Usage:**
 - `/dispatch` — auto-pick the top dispatch candidate and execute
 - `/dispatch UTV2-###` — execute a specific issue
@@ -59,41 +63,16 @@ For each validated target:
 
 1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
 2. Determine file scope from the issue description (look for file paths, package names, or area labels)
-3. Create the lane manifest — evaluate worktree eligibility first:
-
-   **Worktree eligibility check** (per `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`):
-   ```typescript
-   const usesWorktree = (fileScope: string[]): boolean => {
-     const packageTouching = fileScope.some(f =>
-       f.startsWith('packages/') ||
-       f.startsWith('apps/api/') ||
-       f.startsWith('apps/worker/') ||
-       f.startsWith('apps/ingestor/')
-     );
-     return !packageTouching;
-   };
-   ```
-   - If `usesWorktree` returns **false** (touches packages or package-adjacent apps): use main checkout only — do NOT call `git worktree add`. Set `worktree_path: "."` in the lane manifest.
-   - All **Codex lanes** default to main checkout regardless of file scope (Rule 3 of Worktree Isolation Policy).
-   - Worktrees are only permitted for app-only lanes touching `apps/command-center/`, `apps/discord-bot/`, `apps/smart-form/`, `apps/qa-agent/`, `scripts/`, `docs/`, `.claude/`, `.github/`.
+3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose.
 
    ```bash
-   git checkout main && git pull --ff-only origin main
-   git checkout -b {branch}
+   pnpm ops:merge-wrapper main-sync --issue UTV2-{number} --branch main
+   pnpm ops:lane-start UTV2-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
    ```
-   If worktree is eligible (app-only Claude lane only):
-   ```bash
-   git worktree add .worktrees/utv2-{number}-fix {branch}
-   pwsh scripts/ops/worktree-setup.ps1 .worktrees/utv2-{number}-fix
-   ```
-   This script junctions root + per-app node_modules from the main repo and copies `local.env`
-   so `pnpm verify` works without a full `pnpm install`.
+   `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification.
 4. Update Linear issue state to "In Claude" or "In Codex" via MCP
-5. Create the lane manifest and write the per-issue sync file, then commit both to the branch:
+5. Confirm `ops:lane-start` created the lane manifest and per-issue sync file, then commit both to the branch:
    ```bash
-   # Write docs/06_status/lanes/UTV2-{number}.json (from template below)
-   # Write .ops/sync/UTV2-{number}.yml — per-issue sync file (NOT the shared .ops/sync.yml)
-   # Per-issue files (UTV2-961) eliminate sync.yml conflicts between concurrent branches.
    git add docs/06_status/lanes/UTV2-{number}.json ".ops/sync/UTV2-{number}.yml"
    git commit -m "chore(lanes): UTV2-{number} lane manifest and sync metadata"
    ```
@@ -114,6 +93,11 @@ For each validated target:
    If `expected_proof_paths` is non-empty in the manifest, each path becomes an entry under `entities.proofs`.
 
    **Per-issue sync rule:** Each lane writes its own `.ops/sync/UTV2-{number}.yml`. Never mutate the shared `.ops/sync.yml` — that file stays neutral on main (`issues: []`). The `branch-discipline-guard` CI check reads the per-issue file automatically from the PR branch name.
+
+6. For long-running work, refresh the lease heartbeat before it expires:
+   ```bash
+   pnpm ops:lease heartbeat --issue UTV2-{number} --branch {branch} --executor {claude|codex-cli|codex-cloud} --cwd {lane_start_cwd}
+   ```
 
 ### Phase 4: Execute
 
@@ -188,6 +172,10 @@ When dispatching multiple lanes:
 2. Dispatch Codex lanes in background (they run in parallel) via `Agent({run_in_background: true})`
 3. After Claude lane PR is open, continue other work — you will be **automatically notified** when background Codex lanes complete
 4. On Codex completion notification: review diff, run critique, apply tier label, then use `PushNotification` to surface the result if the session needs a summary
+5. If abandoning an active lane before work begins, release the lease explicitly:
+   ```bash
+   pnpm ops:lease release --issue UTV2-{number} --actor claude --reason "abandoned before implementation"
+   ```
 
 **Monitoring long-running shell commands:**
 When running `pnpm build`, `pnpm test`, or other slow Bash commands in background, use the `Monitor` tool to stream stdout in real time rather than waiting blind:

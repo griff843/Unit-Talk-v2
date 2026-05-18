@@ -158,6 +158,33 @@ test('tier C path is risky with TIER_C_PATH', () => {
   assert.deepStrictEqual(report.risky[0]?.reason_codes, ['TIER_C_PATH']);
 });
 
+test('package-touching lane is blocked from parallel dispatch until isolated install is verified', () => {
+  const activeLanes = [makeManifest('UTV2-96808A', { file_scope_lock: ['scripts/ops/active.ts'] })];
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-96808P', { file_scope: ['packages/config/src/env.ts'] })],
+    activeLanes,
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['ISOLATED_INSTALL_REQUIRED']);
+});
+
+test('package-touching lane may run in parallel after isolated install is proven green', () => {
+  const activeLanes = [makeManifest('UTV2-96808B', { file_scope_lock: ['scripts/ops/active.ts'] })];
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96808V', {
+        file_scope: ['packages/config/src/env.ts'],
+        isolated_install_verified: true,
+      }),
+    ],
+    activeLanes,
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.risky[0]?.reason_codes, ['TIER_C_PATH']);
+});
+
 test('claude dispatch limit hit blocks with DISPATCH_LIMIT_CLAUDE', () => {
   const activeLanes = [makeManifest('UTV2-96809A', { executor: 'claude', file_scope_lock: ['scripts/ops/other.ts'] })];
   const report = evaluateCandidates(
@@ -229,8 +256,8 @@ test('multiple candidates with mixed outcomes appear in the correct buckets', ()
     );
 
     assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended').sort(), ['UTV2-96813N', 'UTV2-96813R']);
-    assert.deepStrictEqual(findDecisionIssueIds(report, 'blocked').sort(), ['UTV2-96813B', 'UTV2-96813O']);
-    assert.deepStrictEqual(findDecisionIssueIds(report, 'risky'), ['UTV2-96813K']);
+    assert.deepStrictEqual(findDecisionIssueIds(report, 'blocked').sort(), ['UTV2-96813B', 'UTV2-96813K', 'UTV2-96813O']);
+    assert.deepStrictEqual(findDecisionIssueIds(report, 'risky'), []);
     assert.deepStrictEqual(findDecisionIssueIds(report, 'deferred'), ['UTV2-96813F']);
   });
 });

@@ -37,9 +37,14 @@ jobs:
           LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
           UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
 
+      - name: Report stale dispatch leases
+        run: pnpm ops:lease report --json > lease-stale-result.json
+
       - name: Upload drift report
         uses: actions/upload-artifact@v4
         with:
-          name: lane-drift-result.json
-          path: lane-drift-result.json
+          name: lane-drift-results
+          path: |
+            lane-drift-result.json
+            lease-stale-result.json
           retention-days: 14

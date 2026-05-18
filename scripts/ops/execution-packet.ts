@@ -1,5 +1,7 @@
 import path from 'node:path';
-import { ROOT, emitJson, readManifest, type LaneManifest } from './shared.js';
+import { pathToFileURL } from 'node:url';
+import { validateExecutionCwd } from './lane-execution.js';
+import { ROOT, emitJson, parseArgs, readManifest, type LaneManifest } from './shared.js';
 
 export interface ExecutionPacket {
   issue_id: string;
@@ -9,6 +11,8 @@ export interface ExecutionPacket {
   lane_type: string;
   branch: string;
   execution_location: string;
+  cwd: string;
+  cwd_guard_command: string;
   allowed_file_scope: string[];
   tier_c_warnings: string[];
   blockers: string[];
@@ -50,6 +54,8 @@ export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket
     lane_type: manifest.lane_type ?? 'unknown',
     branch: manifest.branch,
     execution_location: deriveExecutionLocation(manifest.executor),
+    cwd: manifest.execution_location?.cwd ?? manifest.worktree_path,
+    cwd_guard_command: `cd "${manifest.execution_location?.cwd ?? manifest.worktree_path}"`,
     allowed_file_scope: [...(manifest.file_scope_lock ?? [])],
     tier_c_warnings: collectTierCWarnings(manifest.file_scope_lock ?? []),
     blockers: [...(manifest.blocked_by ?? [])],
@@ -73,6 +79,16 @@ export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket
 
 export function printExecutionPacket(manifest: LaneManifest): void {
   emitJson(generateExecutionPacket(manifest));
+}
+
+export function assertExecutionPacketCwd(
+  packet: Pick<ExecutionPacket, 'cwd'>,
+  actualCwd = process.cwd(),
+): void {
+  const errors = validateExecutionCwd(packet.cwd, actualCwd);
+  if (errors.length > 0) {
+    throw new Error(errors.join('; '));
+  }
 }
 
 function deriveExecutionLocation(executor: LaneManifest['executor']): string {
@@ -124,16 +140,21 @@ function packetTimestamp(): string {
 }
 
 function main(): void {
-  const issueId = process.argv[2];
+  const { positionals, bools } = parseArgs(process.argv.slice(2));
+  const issueId = positionals[0];
   if (!issueId) {
-    throw new Error('Usage: npx tsx scripts/ops/execution-packet.ts <ISSUE-ID>');
+    throw new Error('Usage: npx tsx scripts/ops/execution-packet.ts <ISSUE-ID> [--enforce-cwd]');
   }
 
-  printExecutionPacket(readManifest(issueId));
+  const packet = generateExecutionPacket(readManifest(issueId));
+  if (bools.has('enforce-cwd')) {
+    assertExecutionPacketCwd(packet);
+  }
+  emitJson(packet);
 }
 
-if (process.argv[1]?.includes(`execution-packet${path.extname(process.argv[1])}`) ||
-    process.argv[1]?.includes('execution-packet')) {
+const argv1 = process.argv[1] ?? '';
+if (argv1 && import.meta.url === pathToFileURL(path.resolve(argv1)).href) {
   try {
     main();
   } catch (error) {

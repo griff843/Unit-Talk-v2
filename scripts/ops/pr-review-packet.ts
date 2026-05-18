@@ -1,12 +1,25 @@
-import { execSync } from 'node:child_process';
+#!/usr/bin/env tsx
+import { execFileSync, execSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import micromatch from 'micromatch';
-import { ROOT, readManifest, type LaneManifest } from './shared.js';
+import { parse as parseYaml } from 'yaml';
+import {
+  ROOT,
+  emitJson,
+  getFlag,
+  parseArgs,
+  readManifest,
+  requireIssueId,
+  type LaneExecutor,
+  type LaneManifest,
+} from './shared.js';
 
 export interface ProofArtifactChecklistEntry {
   artifact: string;
   present: boolean;
+  required: boolean;
 }
 
 export interface CiStatusSummaryEntry {
@@ -17,25 +30,81 @@ export interface CiStatusSummaryEntry {
 export interface RLevelCompliance {
   status: 'PASS' | 'FAIL' | 'UNKNOWN';
   reason: string;
+  report_path?: string;
+}
+
+export interface SyncMetadataResult {
+  status: 'PASS' | 'FAIL';
+  path: string | null;
+  issue_id: string | null;
+  reason: string;
+}
+
+export interface ScopeDiffResult {
+  allowed_file_scope: string[];
+  out_of_scope_files: string[];
+}
+
+export interface PackageTestDriftResult {
+  package_json_changed: boolean;
+  test_script_changed: boolean;
+  newly_added_test_files: TestFileWiring[];
+  missing_test_wiring: string[];
+  dropped_tests: string[];
+}
+
+export interface TestFileWiring {
+  file: string;
+  wired: boolean;
+  matched_scripts: string[];
+}
+
+export interface UntrackedArtifactScan {
+  status: 'PASS' | 'WARN';
+  files: string[];
+  reason: string;
+}
+
+export interface ReturnReviewCheck {
+  id: string;
+  status: 'PASS' | 'FAIL';
+  detail: string;
 }
 
 export interface PRReviewPacket {
+  schema_version: 2;
+  generated_at: string;
   issue_id: string;
   pr_number: number;
   pr_url: string;
+  pr_head_sha: string;
   title: string;
   branch: string;
+  expected_executor: LaneExecutor | null;
   tier: string;
   tier_label_present: boolean;
+  changed_files: string[];
   file_scope_summary: string[];
-  tier_c_paths: string[];
+  allowed_file_scope: string[];
+  out_of_scope_files: string[];
   scope_bleed: string[];
+  tier_c_paths: string[];
+  package_test_drift: PackageTestDriftResult;
+  untracked_artifact_scan: UntrackedArtifactScan;
+  sync_metadata: SyncMetadataResult;
   r_level_compliance: RLevelCompliance;
   proof_artifact_checklist: ProofArtifactChecklistEntry[];
+  proof_requirement: {
+    required: boolean;
+    present: boolean;
+    missing: string[];
+  };
   ci_status_summary: CiStatusSummaryEntry[];
   merge_order_notes: string;
   missing_tier_label: boolean;
   missing_proof: boolean;
+  checks: ReturnReviewCheck[];
+  verdict: 'PASS' | 'FAIL' | 'SKIP';
 }
 
 interface GitHubLabel {
@@ -43,7 +112,9 @@ interface GitHubLabel {
 }
 
 interface GitHubFile {
-  path: string;
+  path?: string;
+  filename?: string;
+  status?: string;
 }
 
 interface GitHubStatusCheck {
@@ -60,23 +131,44 @@ interface PullRequestSnapshot {
   url: string;
   title: string;
   headRefName: string;
+  headRefOid?: string;
   labels: GitHubLabel[];
   files: GitHubFile[];
   statusCheckRollup?: GitHubStatusCheck[] | null;
 }
 
+interface GitDiffEntry {
+  status: string;
+  file: string;
+  previousFile?: string;
+}
+
 export interface PacketInput {
   issue_id: string;
   pr_number?: number;
+  base_ref?: string;
+  head_ref?: string;
+  output_path?: string;
   prebuilt?: {
     manifest: LaneManifest;
     pull_request: PullRequestSnapshot;
     present_proof_paths?: string[];
     r_level_compliance?: RLevelCompliance;
+    sync_metadata?: SyncMetadataResult;
+    diff_entries?: GitDiffEntry[];
+    base_package_json?: PackageJsonSnapshot | null;
+    head_package_json?: PackageJsonSnapshot | null;
+    untracked_artifacts?: string[];
+    generated_at?: string;
   };
 }
 
+interface PackageJsonSnapshot {
+  scripts?: Record<string, string>;
+}
+
 const TIER_LABEL_PATTERN = /^tier:T[123]$/;
+const RETURN_REVIEW_TIERS = new Set(['T1', 'T2']);
 const PASS_STATES = new Set(['SUCCESS', 'NEUTRAL', 'SKIPPED']);
 const FAIL_STATES = new Set([
   'FAILURE',
@@ -93,54 +185,249 @@ const PENDING_STATES = new Set([
   'REQUESTED',
   'WAITING',
 ]);
+const TEST_FILE_PATTERN = /(?:^|\/)[^/]+\.test\.(?:ts|tsx|js|mjs|cjs)$/u;
+const TIER_C_PATTERNS = [
+  'supabase/migrations/**',
+  'packages/contracts/src/**',
+  'packages/domain/src/**',
+  'packages/db/src/lifecycle.ts',
+  'packages/db/src/repositories.ts',
+  'packages/db/src/runtime-repositories.ts',
+  'apps/api/src/distribution-service.ts',
+  'apps/api/src/auth.ts',
+  'apps/worker/**',
+  'packages/db/src/database.types.ts',
+];
 
 export async function generatePRReviewPacket(input: PacketInput): Promise<PRReviewPacket> {
   const manifest = input.prebuilt?.manifest ?? readManifest(input.issue_id);
   const pullRequest = input.prebuilt?.pull_request ?? readPullRequest(input.pr_number, manifest);
-  const changedFiles = normalizePaths(pullRequest.files.map((file) => file.path));
+  const baseRef = input.base_ref ?? `origin/${manifest.base_branch}`;
+  const headRef = input.head_ref ?? 'HEAD';
+  const changedFiles = normalizePaths(
+    pullRequest.files.map((file) => file.path ?? file.filename ?? '').filter(Boolean),
+  );
+  const diffEntries = input.prebuilt?.diff_entries ?? readGitDiffEntries(baseRef, headRef);
   const tierLabel = pullRequest.labels
     .map((label) => label.name)
     .find((name) => TIER_LABEL_PATTERN.test(name));
+  const tier = tierLabel?.replace('tier:', '') ?? manifest.tier;
   const proofArtifactChecklist = buildProofArtifactChecklist(
     manifest,
+    tier,
     input.prebuilt?.present_proof_paths,
   );
-  const rLevelCompliance = input.prebuilt?.r_level_compliance ?? readRLevelCompliance();
+  const rLevelCompliance = input.prebuilt?.r_level_compliance ?? readRLevelCompliance(baseRef, headRef);
+  const syncMetadata = input.prebuilt?.sync_metadata ?? readSyncMetadata(manifest.issue_id);
+  const scopeDiff = buildScopeDiff(changedFiles, manifest.file_scope_lock);
+  const packageTestDrift = buildPackageTestDrift({
+    diffEntries,
+    basePackageJson: input.prebuilt?.base_package_json ?? readPackageJsonAtRef(baseRef),
+    headPackageJson: input.prebuilt?.head_package_json ?? readPackageJsonFromDisk(),
+  });
+  const untrackedArtifactScan = buildUntrackedArtifactScan(
+    input.prebuilt?.untracked_artifacts ?? readUntrackedArtifacts(),
+  );
+  const missingProof = proofArtifactChecklist.filter((entry) => entry.required && !entry.present);
+  const checks = buildChecks({
+    tier,
+    outOfScopeFiles: scopeDiff.out_of_scope_files,
+    packageTestDrift,
+    syncMetadata,
+    rLevelCompliance,
+    proofArtifactChecklist,
+  });
+  const verdict = RETURN_REVIEW_TIERS.has(tier)
+    ? checks.some((check) => check.status === 'FAIL') ? 'FAIL' : 'PASS'
+    : 'SKIP';
 
   return {
+    schema_version: 2,
+    generated_at: input.prebuilt?.generated_at ?? new Date().toISOString(),
     issue_id: manifest.issue_id,
     pr_number: pullRequest.number,
     pr_url: pullRequest.url,
+    pr_head_sha: pullRequest.headRefOid ?? headRef,
     title: pullRequest.title,
     branch: pullRequest.headRefName,
-    tier: tierLabel?.replace('tier:', '') ?? manifest.tier,
+    expected_executor: manifest.executor ?? null,
+    tier,
     tier_label_present: tierLabel !== undefined,
+    changed_files: changedFiles,
     file_scope_summary: changedFiles,
+    allowed_file_scope: scopeDiff.allowed_file_scope,
+    out_of_scope_files: scopeDiff.out_of_scope_files,
+    scope_bleed: scopeDiff.out_of_scope_files,
     tier_c_paths: changedFiles.filter(isTierCPath),
-    scope_bleed: changedFiles.filter((filePath) => !matchesAnyScopeLock(filePath, manifest.file_scope_lock)),
+    package_test_drift: packageTestDrift,
+    untracked_artifact_scan: untrackedArtifactScan,
+    sync_metadata: syncMetadata,
     r_level_compliance: rLevelCompliance,
     proof_artifact_checklist: proofArtifactChecklist,
+    proof_requirement: {
+      required: RETURN_REVIEW_TIERS.has(tier),
+      present: missingProof.length === 0,
+      missing: missingProof.map((entry) => entry.artifact),
+    },
     ci_status_summary: summarizeChecks(pullRequest.statusCheckRollup ?? []),
     merge_order_notes: manifest.notes ?? '',
     missing_tier_label: tierLabel === undefined,
-    missing_proof: proofArtifactChecklist.some((entry) => !entry.present),
+    missing_proof: missingProof.length > 0,
+    checks,
+    verdict,
+  };
+}
+
+function buildChecks(input: {
+  tier: string;
+  outOfScopeFiles: string[];
+  packageTestDrift: PackageTestDriftResult;
+  syncMetadata: SyncMetadataResult;
+  rLevelCompliance: RLevelCompliance;
+  proofArtifactChecklist: ProofArtifactChecklistEntry[];
+}): ReturnReviewCheck[] {
+  if (!RETURN_REVIEW_TIERS.has(input.tier)) {
+    return [
+      {
+        id: 'tier',
+        status: 'PASS',
+        detail: `return review packet is advisory for ${input.tier}`,
+      },
+    ];
+  }
+
+  const missingProof = input.proofArtifactChecklist
+    .filter((entry) => entry.required && !entry.present)
+    .map((entry) => entry.artifact);
+  const checks: ReturnReviewCheck[] = [
+    {
+      id: 'scope',
+      status: input.outOfScopeFiles.length === 0 ? 'PASS' : 'FAIL',
+      detail: input.outOfScopeFiles.length === 0
+        ? 'all changed files are within the lane scope'
+        : `out-of-scope files: ${input.outOfScopeFiles.join(', ')}`,
+    },
+    {
+      id: 'test_wiring',
+      status: input.packageTestDrift.missing_test_wiring.length === 0 ? 'PASS' : 'FAIL',
+      detail: input.packageTestDrift.missing_test_wiring.length === 0
+        ? 'all newly added test files are referenced by package scripts'
+        : `new test files missing package script wiring: ${input.packageTestDrift.missing_test_wiring.join(', ')}`,
+    },
+    {
+      id: 'dropped_tests',
+      status: input.packageTestDrift.dropped_tests.length === 0 ? 'PASS' : 'FAIL',
+      detail: input.packageTestDrift.dropped_tests.length === 0
+        ? 'no dropped test files or package script references detected'
+        : `dropped tests: ${input.packageTestDrift.dropped_tests.join(', ')}`,
+    },
+    {
+      id: 'sync_metadata',
+      status: input.syncMetadata.status,
+      detail: input.syncMetadata.reason,
+    },
+    {
+      id: 'r_level',
+      status: input.rLevelCompliance.status === 'PASS' ? 'PASS' : 'FAIL',
+      detail: input.rLevelCompliance.reason,
+    },
+    {
+      id: 'proof',
+      status: missingProof.length === 0 ? 'PASS' : 'FAIL',
+      detail: missingProof.length === 0
+        ? 'required proof artifacts are present'
+        : `missing required proof artifacts: ${missingProof.join(', ')}`,
+    },
+  ];
+
+  return checks;
+}
+
+function buildScopeDiff(changedFiles: string[], scopeLock: string[]): ScopeDiffResult {
+  return {
+    allowed_file_scope: normalizePaths(scopeLock),
+    out_of_scope_files: changedFiles.filter((filePath) => !matchesAnyScopeLock(filePath, scopeLock)),
   };
 }
 
 function buildProofArtifactChecklist(
   manifest: LaneManifest,
+  tier: string,
   presentProofPaths?: string[],
 ): ProofArtifactChecklistEntry[] {
   const presentSet = presentProofPaths
     ? new Set(normalizePaths(presentProofPaths))
     : null;
+  const required = RETURN_REVIEW_TIERS.has(tier);
 
   return normalizePaths(manifest.expected_proof_paths).map((artifact) => ({
     artifact,
+    required,
     present: presentSet
       ? presentSet.has(artifact)
       : fs.existsSync(path.join(ROOT, artifact)),
   }));
+}
+
+function buildPackageTestDrift(input: {
+  diffEntries: GitDiffEntry[];
+  basePackageJson: PackageJsonSnapshot | null;
+  headPackageJson: PackageJsonSnapshot | null;
+}): PackageTestDriftResult {
+  const packageJsonChanged = input.diffEntries.some((entry) => entry.file === 'package.json');
+  const baseScripts = input.basePackageJson?.scripts ?? {};
+  const headScripts = input.headPackageJson?.scripts ?? {};
+  const newlyAddedTestFiles = normalizePaths(
+    input.diffEntries
+      .filter((entry) => isAddedStatus(entry.status) && isTestFile(entry.file))
+      .map((entry) => entry.file),
+  ).map((file) => buildTestFileWiring(file, headScripts));
+  const missingTestWiring = newlyAddedTestFiles
+    .filter((entry) => !entry.wired)
+    .map((entry) => entry.file);
+  const deletedTestFiles = input.diffEntries
+    .filter((entry) => isDeletedStatus(entry.status) && isTestFile(entry.file))
+    .map((entry) => entry.file);
+  const baseScriptTestFiles = extractScriptTestFiles(baseScripts);
+  const headScriptTestFiles = extractScriptTestFiles(headScripts);
+  const droppedScriptReferences = baseScriptTestFiles.filter((file) => !headScriptTestFiles.includes(file));
+  const droppedTests = normalizePaths([...deletedTestFiles, ...droppedScriptReferences]);
+  const testScriptChanged = packageJsonChanged && !sameJson(testScriptSubset(baseScripts), testScriptSubset(headScripts));
+
+  return {
+    package_json_changed: packageJsonChanged,
+    test_script_changed: testScriptChanged,
+    newly_added_test_files: newlyAddedTestFiles,
+    missing_test_wiring: missingTestWiring,
+    dropped_tests: droppedTests,
+  };
+}
+
+function buildTestFileWiring(file: string, scripts: Record<string, string>): TestFileWiring {
+  const matchedScripts = Object.entries(scripts)
+    .filter(([name, script]) => isTestScript(name, script) && scriptReferencesFile(script, file))
+    .map(([name]) => name)
+    .sort((left, right) => left.localeCompare(right));
+  return {
+    file,
+    wired: matchedScripts.length > 0,
+    matched_scripts: matchedScripts,
+  };
+}
+
+function buildUntrackedArtifactScan(files: string[]): UntrackedArtifactScan {
+  const normalized = normalizePaths(files).filter((file) =>
+    file.startsWith('artifacts/') ||
+    file.startsWith('.out/') ||
+    file.startsWith('docs/06_status/proof/'),
+  );
+  return {
+    status: normalized.length === 0 ? 'PASS' : 'WARN',
+    files: normalized,
+    reason: normalized.length === 0
+      ? 'no untracked artifact files detected'
+      : 'untracked artifact files are present; include or clean them before closeout',
+  };
 }
 
 function summarizeChecks(checks: GitHubStatusCheck[]): CiStatusSummaryEntry[] {
@@ -175,16 +462,14 @@ function matchesAnyScopeLock(filePath: string, scopeLock: string[]): boolean {
     if (normalizedPattern.endsWith('/')) {
       return filePath.startsWith(normalizedPattern);
     }
-    return micromatch.isMatch(filePath, normalizedPattern, { dot: true });
+    return micromatch.isMatch(filePath, normalizedPattern, { dot: true }) ||
+      filePath === normalizedPattern ||
+      filePath.startsWith(`${normalizedPattern}/`);
   });
 }
 
 function isTierCPath(filePath: string): boolean {
-  return (
-    filePath.startsWith('packages/domain/') ||
-    filePath.startsWith('packages/config/') ||
-    (filePath.startsWith('supabase/migrations/') && filePath.endsWith('.sql'))
-  );
+  return micromatch.isMatch(filePath, TIER_C_PATTERNS, { dot: true });
 }
 
 function readPullRequest(prNumber: number | undefined, manifest: LaneManifest): PullRequestSnapshot {
@@ -194,6 +479,7 @@ function readPullRequest(prNumber: number | undefined, manifest: LaneManifest): 
     'url',
     'title',
     'headRefName',
+    'headRefOid',
     'labels',
     'files',
     'statusCheckRollup',
@@ -223,17 +509,36 @@ function readPrNumberFromManifest(manifest: LaneManifest): number {
   return Number.parseInt(match[1] ?? '', 10);
 }
 
-function readRLevelCompliance(): RLevelCompliance {
-  const command = 'npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD';
+function readRLevelCompliance(baseRef: string, headRef: string): RLevelCompliance {
+  const outputPath = path.join('.out', 'ops', 'pr-review-packet', 'r-level-report.json');
+  const command = [
+    'tsx',
+    'scripts/ci/r-level-check.ts',
+    '--base',
+    baseRef,
+    '--head',
+    headRef,
+    '--output-json',
+    outputPath,
+  ];
   try {
-    const stdout = execSync(command, {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const commandArgs = ['exec', ...command];
+    const stdout =
+      process.platform === 'win32'
+        ? execFileSync('cmd.exe', ['/d', '/s', '/c', 'pnpm', ...commandArgs], {
+            cwd: ROOT,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+        : execFileSync('pnpm', commandArgs, {
+            cwd: ROOT,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
     return {
       status: stdout.includes('Verdict: PASS') ? 'PASS' : 'UNKNOWN',
       reason: firstNonEmptyLine(stdout) ?? 'r-level-check completed without a parseable verdict',
+      report_path: outputPath,
     };
   } catch (error) {
     if (!hasRLevelCheckScript()) {
@@ -243,18 +548,137 @@ function readRLevelCompliance(): RLevelCompliance {
       };
     }
 
-    const stderr = extractExecErrorOutput(error);
-    if (stderr.includes('Verdict: FAIL')) {
+    const output = extractExecErrorOutput(error);
+    if (output.includes('Verdict: FAIL')) {
       return {
         status: 'FAIL',
-        reason: firstNonEmptyLine(stderr) ?? 'r-level-check reported FAIL',
+        reason: firstNonEmptyLine(output) ?? 'r-level-check reported FAIL',
+        report_path: outputPath,
       };
     }
 
     return {
       status: 'UNKNOWN',
-      reason: firstNonEmptyLine(stderr) ?? 'unable to determine r-level compliance',
+      reason: firstNonEmptyLine(output) ?? 'unable to determine r-level compliance',
+      report_path: outputPath,
     };
+  }
+}
+
+function readSyncMetadata(issueId: string): SyncMetadataResult {
+  const perIssuePath = `.ops/sync/${issueId}.yml`;
+  const legacyPath = '.ops/sync.yml';
+  if (fs.existsSync(path.join(ROOT, perIssuePath))) {
+    return parseSyncMetadata(perIssuePath, issueId);
+  }
+  if (fs.existsSync(path.join(ROOT, legacyPath))) {
+    const result = parseSyncMetadata(legacyPath, issueId);
+    if (result.status === 'PASS') {
+      return result;
+    }
+  }
+  return {
+    status: 'FAIL',
+    path: null,
+    issue_id: null,
+    reason: `missing sync metadata for ${issueId}`,
+  };
+}
+
+function parseSyncMetadata(syncPath: string, expectedIssueId: string): SyncMetadataResult {
+  const absolutePath = path.join(ROOT, syncPath);
+  try {
+    const parsed = parseYaml(fs.readFileSync(absolutePath, 'utf8')) as {
+      entities?: { issues?: string[] };
+    } | null;
+    const issueId = parsed?.entities?.issues?.[0]?.toUpperCase() ?? null;
+    if (issueId === expectedIssueId.toUpperCase()) {
+      return {
+        status: 'PASS',
+        path: syncPath,
+        issue_id: issueId,
+        reason: `${syncPath} declares ${issueId}`,
+      };
+    }
+    return {
+      status: 'FAIL',
+      path: syncPath,
+      issue_id: issueId,
+      reason: `${syncPath} does not declare ${expectedIssueId}`,
+    };
+  } catch (error) {
+    return {
+      status: 'FAIL',
+      path: syncPath,
+      issue_id: null,
+      reason: `unable to parse ${syncPath}: ${error instanceof Error ? error.message : String(error)}`,
+    };
+  }
+}
+
+function readGitDiffEntries(baseRef: string, headRef: string): GitDiffEntry[] {
+  const result = execFileSync('git', ['diff', '--name-status', `${baseRef}..${headRef}`], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+  return parseGitDiffEntries(result);
+}
+
+function parseGitDiffEntries(output: string): GitDiffEntry[] {
+  return output
+    .split(/\r?\n/u)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const parts = line.split(/\t/u);
+      const status = parts[0] ?? '';
+      if (status.startsWith('R') || status.startsWith('C')) {
+        return {
+          status,
+          previousFile: normalizePath(parts[1] ?? ''),
+          file: normalizePath(parts[2] ?? ''),
+        };
+      }
+      return {
+        status,
+        file: normalizePath(parts[1] ?? ''),
+      };
+    })
+    .filter((entry) => entry.file.length > 0);
+}
+
+function readPackageJsonAtRef(ref: string): PackageJsonSnapshot | null {
+  try {
+    const stdout = execFileSync('git', ['show', `${ref}:package.json`], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return JSON.parse(stdout) as PackageJsonSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function readPackageJsonFromDisk(): PackageJsonSnapshot | null {
+  try {
+    return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')) as PackageJsonSnapshot;
+  } catch {
+    return null;
+  }
+}
+
+function readUntrackedArtifacts(): string[] {
+  try {
+    const stdout = execFileSync('git', ['ls-files', '--others', '--exclude-standard'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    });
+    return stdout.split(/\r?\n/u).filter(Boolean);
+  } catch {
+    return [];
   }
 }
 
@@ -291,7 +715,9 @@ function firstNonEmptyLine(input: string): string | undefined {
 }
 
 function normalizePaths(paths: string[]): string[] {
-  return [...new Set(paths.map(normalizePath))].sort((left, right) => left.localeCompare(right));
+  return [...new Set(paths.map(normalizePath).filter(Boolean))].sort((left, right) =>
+    left.localeCompare(right),
+  );
 }
 
 function normalizePath(value: string): string {
@@ -300,4 +726,114 @@ function normalizePath(value: string): string {
 
 function quoteForShell(value: string): string {
   return `"${value.replaceAll('"', '\\"')}"`;
+}
+
+function isTestFile(filePath: string): boolean {
+  return TEST_FILE_PATTERN.test(filePath);
+}
+
+function isAddedStatus(status: string): boolean {
+  return status === 'A' || status.startsWith('R') || status.startsWith('C');
+}
+
+function isDeletedStatus(status: string): boolean {
+  return status === 'D';
+}
+
+function isTestScript(name: string, script: string): boolean {
+  return name === 'test' || name.startsWith('test:') || /\btsx\s+--test\b/u.test(script);
+}
+
+function scriptReferencesFile(script: string, file: string): boolean {
+  const normalizedScript = normalizePath(script);
+  if (normalizedScript.includes(file)) {
+    return true;
+  }
+  const patterns = extractGlobLikeTokens(normalizedScript);
+  return patterns.some((pattern) => micromatch.isMatch(file, pattern, { dot: true }));
+}
+
+function extractScriptTestFiles(scripts: Record<string, string>): string[] {
+  const files = Object.entries(scripts)
+    .filter(([name, script]) => isTestScript(name, script))
+    .flatMap(([, script]) => extractPathLikeTokens(script))
+    .filter(isTestFile);
+  return normalizePaths(files);
+}
+
+function extractPathLikeTokens(script: string): string[] {
+  return normalizePath(script)
+    .split(/\s+/u)
+    .map((token) => token.replace(/^['"]|['"]$/gu, ''))
+    .filter((token) => token.includes('/') && !token.startsWith('--'));
+}
+
+function extractGlobLikeTokens(script: string): string[] {
+  return extractPathLikeTokens(script).filter((token) => /[*?[\]{}]/u.test(token));
+}
+
+function testScriptSubset(scripts: Record<string, string>): Record<string, string> {
+  return Object.fromEntries(
+    Object.entries(scripts)
+      .filter(([name, script]) => isTestScript(name, script))
+      .sort(([left], [right]) => left.localeCompare(right)),
+  );
+}
+
+function sameJson(left: unknown, right: unknown): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+async function main(): Promise<void> {
+  const { flags, bools } = parseArgs(process.argv.slice(2));
+  const issueFlag = getFlag(flags, 'issue');
+  const inferredIssue = issueFlag ?? inferIssueFromBranch();
+  if (!inferredIssue) {
+    throw new Error('Missing --issue <UTV2-###> and unable to infer issue from branch');
+  }
+  const packet = await generatePRReviewPacket({
+    issue_id: requireIssueId(inferredIssue),
+    pr_number: getFlag(flags, 'pr') ? Number.parseInt(getFlag(flags, 'pr') ?? '', 10) : undefined,
+    base_ref: getFlag(flags, 'base') ?? undefined,
+    head_ref: getFlag(flags, 'head') ?? undefined,
+  });
+  const outputPath = getFlag(flags, 'output');
+  if (outputPath) {
+    const absoluteOutput = path.resolve(ROOT, outputPath);
+    fs.mkdirSync(path.dirname(absoluteOutput), { recursive: true });
+    fs.writeFileSync(absoluteOutput, `${JSON.stringify(packet, null, 2)}\n`, 'utf8');
+  }
+  if (bools.has('json') || outputPath) {
+    emitJson(packet);
+  } else {
+    console.log(`Return review packet: ${packet.issue_id} ${packet.verdict}`);
+    for (const check of packet.checks) {
+      console.log(`- ${check.status} ${check.id}: ${check.detail}`);
+    }
+  }
+  process.exit(packet.verdict === 'FAIL' ? 1 : 0);
+}
+
+function inferIssueFromBranch(): string | null {
+  try {
+    const branch = execFileSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: ROOT,
+      encoding: 'utf8',
+    }).trim();
+    const match = branch.match(/(?:utv2|uni)-(\d+)/iu);
+    return match ? `UTV2-${match[1]}` : null;
+  } catch {
+    return null;
+  }
+}
+
+const isDirectRun = process.argv[1]
+  ? fileURLToPath(import.meta.url) === path.resolve(process.argv[1])
+  : false;
+
+if (isDirectRun) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : String(error));
+    process.exit(2);
+  });
 }

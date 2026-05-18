@@ -69,6 +69,119 @@ export interface CommitCheckResult {
   missing: string[];
 }
 
+export interface CloseoutProofArtifact {
+  path: string;
+  content: string;
+  mtime_ms?: number;
+}
+
+export interface CloseoutTruthGateInput {
+  manifest: Pick<
+    LaneManifest,
+    | 'issue_id'
+    | 'status'
+    | 'commit_sha'
+    | 'pr_url'
+    | 'files_changed'
+    | 'expected_proof_paths'
+    | 'created_by'
+  >;
+  linear_state: string;
+  pr_merged: boolean;
+  pr_merge_sha: string | null;
+  pr_head_sha?: string | null;
+  proof_artifacts: CloseoutProofArtifact[];
+  merge_timestamp_ms?: number | null;
+  runtime_proof_required?: boolean;
+  transition_age_ms?: number;
+  allowed_transition_ms?: number;
+}
+
+export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckResult[] {
+  const checks: CheckResult[] = [];
+  const fail = (id: string, detail: string): void => checks.push({ id, status: 'fail', detail });
+  const pass = (id: string, detail: string): void => checks.push({ id, status: 'pass', detail });
+
+  const linearDone = /^done$/i.test(input.linear_state);
+  const completedImplementation = input.manifest.files_changed.length > 0 ||
+    input.manifest.expected_proof_paths.length > 0;
+  const mergeSha = input.manifest.commit_sha?.trim() || null;
+  const prMergeSha = input.pr_merge_sha?.trim() || null;
+  const prHeadSha = input.pr_head_sha?.trim() || null;
+
+  if (linearDone && !prMergeSha) {
+    fail('C1', 'Linear Done is not allowed without a merged PR SHA');
+  } else {
+    pass('C1', 'Linear Done merge SHA requirement satisfied');
+  }
+
+  if (completedImplementation && !mergeSha) {
+    fail('C2', 'completed implementation work requires manifest.commit_sha');
+  } else {
+    pass('C2', 'manifest.commit_sha requirement satisfied');
+  }
+
+  if (prMergeSha && mergeSha && prMergeSha !== mergeSha) {
+    fail('C3', 'PR merge SHA does not match manifest.commit_sha');
+  } else {
+    pass('C3', 'PR merge SHA and manifest.commit_sha agree or are not both present');
+  }
+
+  const shaCandidates = [mergeSha, prHeadSha].filter((sha): sha is string => Boolean(sha));
+  const proofWithoutSha = input.proof_artifacts.filter(
+    (artifact) =>
+      artifact.content.trim().length > 0 &&
+      shaCandidates.length > 0 &&
+      !shaCandidates.some((sha) => artifact.content.includes(sha)),
+  );
+  if (proofWithoutSha.length > 0) {
+    fail('C4', `proof artifacts missing merge/head SHA binding: ${proofWithoutSha.map((artifact) => artifact.path).join(', ')}`);
+  } else {
+    pass('C4', 'proof artifacts are SHA-bound or no SHA-bound proof is applicable');
+  }
+
+  if (input.merge_timestamp_ms !== null && input.merge_timestamp_ms !== undefined) {
+    const staleProof = input.proof_artifacts.filter(
+      (artifact) =>
+        artifact.mtime_ms !== undefined &&
+        artifact.mtime_ms < input.merge_timestamp_ms!,
+    );
+    if (staleProof.length > 0) {
+      fail('C5', `proof artifacts predate merge SHA: ${staleProof.map((artifact) => artifact.path).join(', ')}`);
+    } else {
+      pass('C5', 'proof artifact mtimes do not predate merge timestamp');
+    }
+  } else {
+    pass('C5', 'proof mtime freshness not applicable without merge timestamp');
+  }
+
+  if (input.runtime_proof_required) {
+    const runtimeEvidence = input.proof_artifacts.some((artifact) => {
+      const parsed = tryParseEvidenceBundle(artifact.content);
+      return parsed ? hasRuntimeReferences(parsed.runtime_proof) : /runtime_proof|live db|row_counts|receipts|queries/i.test(artifact.content);
+    });
+    if (!runtimeEvidence) {
+      fail('C6', 'runtime-proof closeout requires live/runtime evidence, not narrative-only proof');
+    } else {
+      pass('C6', 'runtime-proof evidence is present');
+    }
+  } else {
+    pass('C6', 'runtime-proof evidence not required for this closeout');
+  }
+
+  const allowedTransitionMs = input.allowed_transition_ms ?? 30 * 60 * 1000;
+  const transitionAgeMs = input.transition_age_ms ?? 0;
+  if (input.pr_merged && !linearDone && transitionAgeMs > allowedTransitionMs) {
+    fail('C7', 'PR is merged but Linear is not Done beyond the allowed transition window');
+  } else if (linearDone && !input.pr_merged) {
+    fail('C7', 'Linear is Done but PR is not merged');
+  } else {
+    pass('C7', 'Linear/PR state is within the allowed closeout transition semantics');
+  }
+
+  return checks;
+}
+
 type Verdict = TruthCheckResult['verdict'];
 
 export async function runTruthCheck(
@@ -220,8 +333,10 @@ export async function runTruthCheck(
 
     const linearIssue = await fetchLinearIssue(issueId, linearToken);
     addCheck('L1', 'pass', `Linear issue ${linearIssue.identifier} exists`);
-    const tierLabels = (linearIssue.labels?.nodes ?? [])
-      .map((label) => label.name.toLowerCase().replace(/^tier:/, ''))
+    const linearLabels = (linearIssue.labels?.nodes ?? [])
+      .map((label) => label.name.toLowerCase());
+    const tierLabels = linearLabels
+      .map((label) => label.replace(/^tier:/, ''))
       .filter((label) => label === 't1' || label === 't2' || label === 't3');
     const uniqueTierLabels = [...new Set(tierLabels)];
     if (uniqueTierLabels.length !== 1) {
@@ -393,6 +508,27 @@ export async function runTruthCheck(
       }
     } else {
       addCheck('P4', 'fail', 'cannot evaluate proof freshness without merge commit timestamp');
+    }
+
+    const closeoutGateChecks = evaluateCloseoutTruthGate({
+      manifest,
+      linear_state: stateName,
+      pr_merged: pullRequest.merged,
+      pr_merge_sha: pullRequest.merge_commit_sha,
+      pr_head_sha: pullRequest.head?.sha,
+      proof_artifacts: proofFiles.map((proofPath) => ({
+        path: relativeToRoot(proofPath),
+        content: safeRead(proofPath),
+        mtime_ms: fs.existsSync(proofPath) ? fs.statSync(proofPath).mtime.getTime() : undefined,
+      })),
+      merge_timestamp_ms: mergeTimestamp ? Date.parse(mergeTimestamp) : null,
+      runtime_proof_required: tier === 'T1' ||
+        linearLabels.includes('runtime-truth') ||
+        linearLabels.includes('kind:runtime'),
+      transition_age_ms: 0,
+    });
+    for (const check of closeoutGateChecks) {
+      addCheck(check.id, check.status === 'fail' ? 'fail' : 'pass', check.detail);
     }
 
     if (tier === 'T1') {
@@ -1119,6 +1255,15 @@ function readFirstEvidenceBundle(
   }
 
   return null;
+}
+
+function tryParseEvidenceBundle(content: string): EvidenceBundleV1 | null {
+  try {
+    const parsed = JSON.parse(content) as EvidenceBundleV1;
+    return parsed && typeof parsed === 'object' ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function hasPopulatedObject(value: unknown): boolean {

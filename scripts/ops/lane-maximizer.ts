@@ -1,6 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { packageTouchingLaneRequiresSingleton } from './lane-execution.js';
 
 export interface LaneManifest {
   schema_version: number;
@@ -23,6 +24,7 @@ export interface CandidateLane {
   executor: 'claude' | 'codex-cli';
   file_scope: string[];
   blocked_by: string[];
+  isolated_install_verified?: boolean;
 }
 
 export type RecommendDecision = 'recommended' | 'blocked' | 'risky' | 'deferred';
@@ -63,6 +65,8 @@ const REASON_MESSAGES: Record<string, string> = {
   TIER_C_PATH: 'Candidate touches a Tier C path and should be treated as risky.',
   MIGRATION_PATH: 'Candidate touches a migration-sensitive path and is fail-closed blocked.',
   T1_REQUIRES_PM: 'T1 work requires PM authorization before recommendation.',
+  ISOLATED_INSTALL_REQUIRED:
+    'Package/API/worker/ingestor lanes stay singleton until isolated install is proven green in the lane cwd.',
 };
 
 function normalizePath(value: string): string {
@@ -232,6 +236,14 @@ export function evaluateCandidates(
 
     if (candidate.executor === 'codex-cli' && activeCodex >= limits.maxCodex) {
       report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'DISPATCH_LIMIT_CODEX'));
+      continue;
+    }
+
+    if (
+      packageTouchingLaneRequiresSingleton(fileScope, candidate.isolated_install_verified === true) &&
+      activeLanes.length > 0
+    ) {
+      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'ISOLATED_INSTALL_REQUIRED'));
       continue;
     }
 

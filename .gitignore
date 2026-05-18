@@ -66,6 +66,7 @@ apps/smart-form/test-results/
 .out/
 .ops/leases/
 .ops/merge-lock.json
+.ops/deferred-merges/
 _tmp_*
 .claude/scheduled_tasks.lock
 
