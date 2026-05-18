@@ -114,16 +114,16 @@ async function main(): Promise<void> {
       verdict: 'PARTIALLY_PROVEN',
       evidence: {
         visibility_surfaces: [
-          'ops-daily-digest.yml → stale lanes, CI failures, Fibery blockers',
+          'ops-daily-digest.yml → stale lanes and CI failures',
           'stale-lane-alerter.yml → zombie lane detection + Discord alert',
           'audit_log table — all critical actions recorded',
           'ops:brief command — system health snapshot',
-          'Fibery control tower — health color, readiness recommendation',
+          'ops proof artifacts — readiness evidence and verification status',
         ],
         audit_log_exists: (audits || []).length > 0,
-        gap: 'No unified risk dashboard aggregating all signals in real-time; currently distributed across digest, alerter, Fibery',
+        gap: 'No unified risk dashboard aggregating all signals in real-time; currently distributed across digest, alerter, and proof artifacts',
       },
-      notes: 'Risk visible via daily digest, stale alerter, audit log, ops:brief, and Fibery controls. No unified real-time dashboard — distributed across multiple surfaces.',
+      notes: 'Risk visible via daily digest, stale alerter, audit log, ops:brief, and proof artifacts. No unified real-time dashboard — distributed across multiple surfaces.',
     });
   }
 

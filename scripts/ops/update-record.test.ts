@@ -25,37 +25,6 @@ function withNote(contents: string): string {
   return filePath;
 }
 
-test('fibery dry-run validates entity and note file without posting', () => {
-  const notePath = withNote('Proof failed: live DB count mismatched expected row count.');
-  const result = runUpdateRecord([
-    '--target',
-    'fibery',
-    '--entity',
-    'CTRL-123',
-    '--note-file',
-    notePath,
-    '--status',
-    'blocked',
-    '--dry-run',
-  ]);
-
-  assert.strictEqual(result.status, 0);
-  const payload = JSON.parse(result.stdout) as {
-    ok: boolean;
-    code: string;
-    target: string;
-    entity: string;
-    status: string;
-    dry_run: boolean;
-  };
-  assert.strictEqual(payload.ok, true);
-  assert.strictEqual(payload.code, 'dry_run');
-  assert.strictEqual(payload.target, 'fibery');
-  assert.strictEqual(payload.entity, 'CTRL-123');
-  assert.strictEqual(payload.status, 'blocked');
-  assert.strictEqual(payload.dry_run, true);
-});
-
 test('linear dry-run validates issue and comment file without posting', () => {
   const notePath = withNote('PR opened: https://github.com/unit-talk/unit-talk-v2/pull/1');
   const result = runUpdateRecord([
@@ -91,9 +60,9 @@ test('update-record rejects empty note files', () => {
   const notePath = withNote('   ');
   const result = runUpdateRecord([
     '--target',
-    'fibery',
-    '--entity',
-    'CTRL-123',
+    'linear',
+    '--issue',
+    'UTV2-123',
     '--note-file',
     notePath,
     '--dry-run',

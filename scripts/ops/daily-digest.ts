@@ -1,17 +1,16 @@
 /**
  * UTV2-669: Daily ops health digest
  *
- * Aggregates five read-only sources into a structured JSON report:
+ * Aggregates read-only sources into a structured JSON report:
  *   1. Lane manifests → zombie stale-lane check (no GitHub/Linear API calls)
  *   2. ci-doctor subprocess → CI failures (status === 'fail' only; infra_error = skip)
  *   3. Linear GraphQL → active lanes + top-3 backlog
- *   4. Fibery API → open Controls (graceful skip when token absent)
- *   5. Linear GraphQL → top-3 dispatchable issues with executor routing
+ *   4. Linear GraphQL → top-3 dispatchable issues with executor routing
  *
  * Outputs:
  *   - Structured JSON at .out/ops/digest/YYYY-MM-DD.json (when --write-result)
  *   - Discord alert via UNIT_TALK_OPS_ALERT_WEBHOOK_URL when stale_lanes or
- *     ci_failures are present (Fibery blockers alone do NOT trigger alert)
+ *     ci_failures are present
  *   - Exits 0 always — never blocks CI
  *
  * Read-only guarantee: no writeManifest, updateManifest, or any state mutation.
@@ -65,10 +64,6 @@ interface DispatchCandidate {
   labels: string[];
 }
 
-interface FiberyBlocker {
-  control_id: string;
-  name: string;
-}
 
 interface P0EventsSummary {
   total_failures: number;
@@ -86,7 +81,6 @@ interface DigestReport {
   stale_lanes: StaleLaneEntry[];
   ci_failures: string[];
   linear: LinearSummary;
-  fibery_blockers: FiberyBlocker[];
   dispatch_candidates: DispatchCandidate[];
   p0_events: P0EventsSummary;
   recommended_next: string[];
@@ -102,8 +96,6 @@ const DIGEST_DIR = path.join(ROOT, '.out', 'ops', 'digest');
 const linearToken = process.env.LINEAR_API_TOKEN?.trim() ?? '';
 const linearTeamKey = process.env.LINEAR_TEAM_KEY?.trim() ?? 'UTV2';
 const webhookUrl = process.env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL?.trim() ?? '';
-const fiberyApiUrl = process.env.FIBERY_API_URL?.trim() ?? '';
-const fiberyToken = process.env.FIBERY_API_TOKEN?.trim() ?? '';
 
 const writeResult = process.argv.includes('--write-result');
 const jsonMode = process.argv.includes('--json');
@@ -337,60 +329,7 @@ async function fetchLinearSummary(infraErrors: string[]): Promise<LinearSummary>
   return { active_lanes, backlog_top3, skipped: false };
 }
 
-// ── Source 4: Fibery open Controls (graceful skip) ────────────────────────
-
-async function fetchFiberyBlockers(infraErrors: string[]): Promise<FiberyBlocker[]> {
-  if (!fiberyApiUrl || !fiberyToken) {
-    infraErrors.push('FIBERY_API_URL or FIBERY_API_TOKEN not set — skipping Fibery blockers');
-    return [];
-  }
-
-  try {
-    const response = await fetch(`${fiberyApiUrl}/api/commands`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Token ${fiberyToken}`,
-        'Content-Type': 'application/json',
-        'User-Agent': 'unit-talk-ops-daily-digest',
-      },
-      body: JSON.stringify([
-        {
-          command: 'fibery.entity/query',
-          args: {
-            query: {
-              'q/from': 'Unit Talk/Controls',
-              'q/select': ['fibery/id', 'Unit Talk/Control ID', 'Unit Talk/Name'],
-              'q/limit': 20,
-            },
-          },
-        },
-      ]),
-      signal: AbortSignal.timeout(10_000),
-    });
-
-    if (!response.ok) {
-      infraErrors.push(`Fibery Controls query failed: HTTP ${response.status}`);
-      return [];
-    }
-
-    const payload = (await response.json()) as unknown[];
-    const entities = Array.isArray(payload[0]) ? (payload[0] as unknown[]) : [];
-
-    return entities
-      .filter((e): e is Record<string, unknown> => typeof e === 'object' && e !== null)
-      .map((e) => ({
-        control_id: String(e['Unit Talk/Control ID'] ?? 'unknown'),
-        name: String(e['Unit Talk/Name'] ?? '(unnamed)'),
-      }));
-  } catch (err) {
-    infraErrors.push(
-      `Fibery blockers fetch error: ${err instanceof Error ? err.message : String(err)}`,
-    );
-    return [];
-  }
-}
-
-// ── Source 5: dispatch candidates from Linear ─────────────────────────────
+// ── Source 4: dispatch candidates from Linear ─────────────────────────────
 
 function parseTierLabel(labels: string[]): 'T1' | 'T2' | 'T3' | null {
   for (const l of labels) {
@@ -543,7 +482,6 @@ function runBriefText(): string {
 function deriveRecommendedNext(
   stale_lanes: StaleLaneEntry[],
   ci_failures: string[],
-  fibery_blockers: FiberyBlocker[],
   dispatch_candidates: DispatchCandidate[],
   p0_events: P0EventsSummary,
 ): string[] {
@@ -553,9 +491,6 @@ function deriveRecommendedNext(
   }
   if (stale_lanes.length > 0) {
     recs.push(`Close or reopen ${stale_lanes.length} zombie lane(s): ${stale_lanes.map((l) => l.issue_id).join(', ')}`);
-  }
-  if (fibery_blockers.length > 0) {
-    recs.push(`Review ${fibery_blockers.length} open Fibery control(s)`);
   }
   if (p0_events.misconfig_warning) {
     recs.push(`ACTION REQUIRED: "P0 Protocol" check missing from branch protection — ${p0_events.misconfig_detail}`);
@@ -599,11 +534,10 @@ async function main(): Promise<void> {
   const stale_lanes = fetchStaleLanes();
   const ci_failures = fetchCiFailures(infraErrors);
   const linear = await fetchLinearSummary(infraErrors);
-  const fibery_blockers = await fetchFiberyBlockers(infraErrors);
   const dispatch_candidates = await fetchDispatchCandidates(infraErrors);
   const p0_events = fetchP0EventsSummary(infraErrors);
   const brief_text = runBriefText();
-  const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, fibery_blockers, dispatch_candidates, p0_events);
+  const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, dispatch_candidates, p0_events);
 
   const report: DigestReport = {
     schema_version: 2,
@@ -612,7 +546,6 @@ async function main(): Promise<void> {
     stale_lanes,
     ci_failures,
     linear,
-    fibery_blockers,
     dispatch_candidates,
     p0_events,
     recommended_next,
@@ -635,7 +568,6 @@ async function main(): Promise<void> {
     console.log(`  ci_failures:    ${ci_failures.length}`);
     console.log(`  active_lanes:   ${linear.active_lanes.length}${linear.skipped ? ' (skipped)' : ''}`);
     console.log(`  backlog_top3:   ${linear.backlog_top3.length}${linear.skipped ? ' (skipped)' : ''}`);
-    console.log(`  fibery_blockers: ${fibery_blockers.length}`);
     console.log(`  p0_failures_7d: ${p0_events.total_failures}${p0_events.skipped ? ' (skipped)' : ''}`);
     if (p0_events.misconfig_warning) {
       console.warn(`  p0_misconfig: ${p0_events.misconfig_detail}`);
@@ -661,7 +593,7 @@ async function main(): Promise<void> {
     console.log(`  verdict: ${needsAlert ? 'ALERT' : 'CLEAN'}`);
   }
 
-  // Discord alert — only on stale_lanes or ci_failures; Fibery alone does not page
+  // Discord alert — only on stale_lanes or ci_failures
   const needsAlert = stale_lanes.length > 0 || ci_failures.length > 0;
   if (needsAlert) {
     const lines: string[] = [

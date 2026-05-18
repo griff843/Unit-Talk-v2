@@ -5,17 +5,15 @@ import {
   emitJson,
   getFlag,
   parseArgs,
-  requireIssueId,
 } from './shared.js';
 
-type Target = 'fibery' | 'linear';
+type Target = 'linear';
 
 interface UpdateRecordResult {
   ok: boolean;
   code: string;
   target?: Target;
   message?: string;
-  entity?: string;
   issue?: string;
   status?: string;
   dry_run?: boolean;
@@ -45,92 +43,18 @@ export function main(argv = process.argv.slice(2)): void {
 
 async function run(argv: string[]): Promise<UpdateRecordResult> {
   const { flags, bools } = parseArgs(argv);
-  const target = parseTarget(getFlag(flags, 'target'));
+  parseTarget(getFlag(flags, 'target'));
   const notePath = getFlag(flags, 'note-file') ?? getFlag(flags, 'comment-file');
   const note = readRequiredNote(notePath);
   const status = getFlag(flags, 'status');
-  const kind = getFlag(flags, 'kind');
   const dryRun = bools.has('dry-run');
 
-  if (target === 'fibery') {
-    return postFiberyUpdate({
-      entity: requireNonEmpty(getFlag(flags, 'entity'), '--entity'),
-      note,
-      status,
-      kind,
-      dryRun,
-    });
-  }
-
   return postLinearUpdate({
-    issue: requireIssueId(getFlag(flags, 'issue') ?? ''),
+    issue: requireNonEmpty(getFlag(flags, 'issue'), '--issue'),
     note,
     status,
     dryRun,
   });
-}
-
-async function postFiberyUpdate(input: {
-  entity: string;
-  note: string;
-  status?: string;
-  kind?: string;
-  dryRun: boolean;
-}): Promise<UpdateRecordResult> {
-  if (input.dryRun) {
-    return {
-      ok: true,
-      code: 'dry_run',
-      target: 'fibery',
-      entity: input.entity,
-      status: input.status,
-      dry_run: true,
-    };
-  }
-
-  const env = loadEnvironment();
-  const webhookUrl = env.FIBERY_UPDATE_WEBHOOK_URL?.trim();
-  if (!webhookUrl) {
-    throw new Error('FIBERY_UPDATE_WEBHOOK_URL is required for Fibery updates');
-  }
-
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  const token = env.FIBERY_UPDATE_WEBHOOK_TOKEN?.trim();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
-  }
-
-  const body: Record<string, unknown> = {
-    target: 'fibery',
-    entity: input.entity,
-    note: input.note,
-    source: 'pnpm ops:update-record',
-  };
-  if (input.status) {
-    body['status'] = input.status;
-  }
-  if (input.kind) {
-    body['kind'] = input.kind;
-  }
-
-  const response = await fetch(webhookUrl, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    throw new Error(`Fibery update webhook failed: ${response.status} ${response.statusText}`);
-  }
-
-  return {
-    ok: true,
-    code: 'fibery_update_posted',
-    target: 'fibery',
-    entity: input.entity,
-    status: input.status,
-  };
 }
 
 async function postLinearUpdate(input: {
@@ -278,10 +202,10 @@ async function fetchLinear<T>(
 }
 
 function parseTarget(value: string | undefined): Target {
-  if (value === 'fibery' || value === 'linear') {
+  if (value === 'linear') {
     return value;
   }
-  throw new Error('Missing or invalid --target. Use --target fibery or --target linear');
+  throw new Error('Missing or invalid --target. Use --target linear');
 }
 
 function readRequiredNote(filePath: string | undefined): string {

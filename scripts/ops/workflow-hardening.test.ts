@@ -4,7 +4,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
 import { evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
-import { buildFiberyPayloads } from './fibery-update-scaffold.js';
 import { ROOT } from './shared.js';
 
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
@@ -71,23 +70,6 @@ test('branch discipline warns without failing on multiple issue IDs', () => {
   assert.strictEqual(result.ok, true);
   assert.strictEqual(result.code, 'multiple_issue_references');
   assert.match(result.warning ?? '', /UTV2-123, UTV2-124/);
-});
-
-test('fibery scaffold groups commit subjects into update payloads', () => {
-  const payloads = buildFiberyPayloads([
-    { sha: 'abc', subject: 'fix(api): UTV2-123 one thing' },
-    { sha: 'def', subject: 'test(worker): refs UTV2-123 and UTV2-124' },
-    { sha: 'ghi', subject: 'chore: no issue' },
-  ]);
-
-  assert.deepStrictEqual(
-    payloads.map((payload) => [payload.issue_id, payload.commit_count]),
-    [
-      ['UTV2-123', 2],
-      ['UTV2-124', 1],
-    ],
-  );
-  assert.strictEqual(payloads[0]?.fibery.operation, 'update_issue_from_commit_activity');
 });
 
 test('required PR check workflows do not create stale failed contexts on opened events', () => {

@@ -1,7 +1,7 @@
 /**
  * UTV2-675: Submission Controls Proof Script
  *
- * Proves 4 P0 Fibery controls by querying live Supabase + inspecting code:
+ * Proves 4 P0 submission controls by querying live Supabase + inspecting code:
  *   1. Submission timestamps are accurate and consistent
  *   2. Submission validation is deterministic
  *   3. Capper attribution is correct and immutable

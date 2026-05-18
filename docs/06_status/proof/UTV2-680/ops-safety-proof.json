@@ -92,16 +92,16 @@
       "verdict": "PARTIALLY_PROVEN",
       "evidence": {
         "visibility_surfaces": [
-          "ops-daily-digest.yml → stale lanes, CI failures, Fibery blockers",
+          "ops-daily-digest.yml → stale lanes, CI failures, RETIRED_EXTERNAL_SYNC blockers",
           "stale-lane-alerter.yml → zombie lane detection + Discord alert",
           "audit_log table — all critical actions recorded",
           "ops:brief command — system health snapshot",
-          "Fibery control tower — health color, readiness recommendation"
+          "RETIRED_EXTERNAL_SYNC control tower — health color, readiness recommendation"
         ],
         "audit_log_exists": true,
-        "gap": "No unified risk dashboard aggregating all signals in real-time; currently distributed across digest, alerter, Fibery"
+        "gap": "No unified risk dashboard aggregating all signals in real-time; currently distributed across digest, alerter, RETIRED_EXTERNAL_SYNC"
       },
-      "notes": "Risk visible via daily digest, stale alerter, audit log, ops:brief, and Fibery controls. No unified real-time dashboard — distributed across multiple surfaces."
+      "notes": "Risk visible via daily digest, stale alerter, audit log, ops:brief, and RETIRED_EXTERNAL_SYNC controls. No unified real-time dashboard — distributed across multiple surfaces."
     },
     {
       "control": "Exposure limits are enforced",

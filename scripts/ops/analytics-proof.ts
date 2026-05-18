@@ -1,7 +1,7 @@
 /**
  * UTV2-676: Analytics/Recaps Controls Proof Script
  *
- * Proves 4 P0 Fibery controls:
+ * Proves 4 P0 analytics controls:
  *   1. Recaps are generated from settled data only
  *   2. No derived metrics use stale or non-canonical data
  *   3. Analytics match underlying data

@@ -201,16 +201,6 @@ Rules:
 - Lanes touching fully disjoint areas have no dependency — write "none" explicitly.
 - Each agent's PR body must include a `## Merge order` section citing this table.
 
-### Phase 5.5: Fibery auto-sync (for proof lanes)
-
-After a proof lane merges, automatically sync proof artifacts to Fibery:
-```bash
-source local.env && export FIBERY_API_URL FIBERY_API_TOKEN && npx tsx scripts/ops/fibery-proof-sync.ts UTV2-###
-```
-
-This replaces the manual Fibery update cycle (create artifacts → link → update status).
-If Fibery credentials are not set, skip with a note.
-
 ### Phase 6: Report
 
 After all dispatches:

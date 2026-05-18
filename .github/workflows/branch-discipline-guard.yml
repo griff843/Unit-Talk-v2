@@ -1,4 +1,4 @@
-name: Fibery CI Enforcement
+name: Branch Discipline Guard
 
 on:
   pull_request:
@@ -11,20 +11,14 @@ permissions:
 
 jobs:
   enforce:
-    name: Require sync metadata
+    name: Check issue references
     runs-on: ubuntu-latest
-    if: ${{ vars.FIBERY_API_URL != '' }}
     steps:
       - name: Checkout PR head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.sha }}
-
-      - name: Compute changed files
-        run: |
-          git diff --name-only "${{ github.event.pull_request.base.sha }}" "${{ github.event.pull_request.head.sha }}" > /tmp/changed.txt
-          cat /tmp/changed.txt
 
       - name: Collect commit messages
         id: commits
@@ -55,45 +49,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Resolve sync file path
-        id: sync_path
-        env:
-          PR_BRANCH: ${{ github.event.pull_request.head.ref }}
-        run: |
-          # Prefer per-issue sync file (.ops/sync/UTV2-NNN.yml) if it exists.
-          # Fall back to legacy .ops/sync.yml.
-          issue_id=$(echo "$PR_BRANCH" | grep -oiP '(?:claude|codex)/utv2-(\d+)-' | grep -oiP 'utv2-\d+' | tr '[:lower:]' '[:upper:]' || true)
-          per_issue_path=""
-          if [ -n "$issue_id" ]; then
-            per_issue_path=".ops/sync/${issue_id}.yml"
-          fi
-          if [ -n "$per_issue_path" ] && [ -f "$per_issue_path" ]; then
-            echo "sync_file=$per_issue_path" >> "$GITHUB_OUTPUT"
-            echo "::notice title=branch-discipline-guard::Using per-issue sync file: $per_issue_path"
-          else
-            echo "sync_file=.ops/sync.yml" >> "$GITHUB_OUTPUT"
-            echo "::notice title=branch-discipline-guard::Using legacy sync file: .ops/sync.yml"
-          fi
-
-      - name: Enforce Fibery sync metadata
+      - name: Enforce branch discipline
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_BODY: ${{ github.event.pull_request.body }}
           PR_BRANCH: ${{ github.event.pull_request.head.ref }}
-          PR_LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
-          SYNC_FILE: ${{ steps.sync_path.outputs.sync_file }}
         run: |
-          args=()
-          while IFS= read -r message; do
-            [ -z "$message" ] && continue
-            args+=(--commit-message "$message")
-          done < /tmp/commit-messages.txt
-
-          pnpm ops:fibery-ci-enforce -- \
-            --changed-file-list /tmp/changed.txt \
-            --sync-file "$SYNC_FILE" \
+          pnpm ops:branch-discipline -- \
             --title "$PR_TITLE" \
             --body "$PR_BODY" \
             --branch "$PR_BRANCH" \
-            --label "$PR_LABELS" \
-            "${args[@]}"
+            --commits "$(cat /tmp/commit-messages.txt)" \
+            --json

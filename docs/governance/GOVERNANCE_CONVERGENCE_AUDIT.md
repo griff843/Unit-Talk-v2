@@ -41,7 +41,7 @@ Additionally, the merge mechanics (`sync.yml` conflict model, `[skip ci]` deadlo
 | **Individual lane manifests** | `docs/06_status/lanes/*.json` | Active lane state, file locks, heartbeat, truth-check history | **Canonical** — declared by `LANE_MANIFEST_SPEC.md` |
 | **Global lanes registry** | `.claude/lanes.json` | Per-lane entry with `owner`, `status`, `allowedFiles`, `packetPath` | **Legacy** — 5 entries, all done/merged (April 2026), no new entries since |
 | **Lane type contracts** | `.lane/lanes/*.yml` | Path authority per lane type, proof requirements, concurrency rules | **New, unintegrated** — merged 2026-05-15; not cross-referenced from EXECUTION_TRUTH_MODEL.md |
-| **sync metadata** | `.ops/sync.yml` | Fibery/CI sync — links PR to issue, controls `allow_multiple_issues` flag | **Operational but conflicted** — single shared mutable file causes guaranteed rebase conflicts |
+| **sync metadata** | `.ops/sync.yml` | RETIRED_EXTERNAL_SYNC/CI sync — links PR to issue, controls `allow_multiple_issues` flag | **Operational but conflicted** — single shared mutable file causes guaranteed rebase conflicts |
 | **Linear issue state** | Linear API | Workflow intent, tier label, ownership | Rank 4 truth — follows manifest, never leads |
 | **GitHub PR metadata** | GitHub API | Merge SHA, CI outcomes, PR labels | Rank 1 truth for shipped state |
 
@@ -130,7 +130,7 @@ The current system tracks lane state in:
 - The branch name (branch-centric, fragile)
 - `.ops/sync.yml` (branch-local shared file, problematic)
 
-The principle in EXECUTION_TRUTH_MODEL.md §2 is that the manifest is authoritative. But several CI workflows (branch-discipline-guard, Fibery sync) derive issue identity from branch name patterns (`utv2-\d+`). This is a pragmatic fallback but creates dual derivation paths.
+The principle in EXECUTION_TRUTH_MODEL.md §2 is that the manifest is authoritative. But several CI workflows (branch-discipline-guard, RETIRED_EXTERNAL_SYNC sync) derive issue identity from branch name patterns (`utv2-\d+`). This is a pragmatic fallback but creates dual derivation paths.
 
 **Long-term direction:** Issue identity should always come from the lane manifest or `.ops/sync/UTV2-NNN.yml` (per-issue), never solely from branch name parsing.
 
@@ -147,10 +147,10 @@ The principle in EXECUTION_TRUTH_MODEL.md §2 is that the manifest is authoritat
 | **Merge authorization** | `merge-gate.yml`, `tier-label-check.yml` |
 | **Proof/evidence validation** | `evidence-bundle-validate.yml`, `proof-coverage-guard.yml`, `proof-regression.yml`, `r-level-compliance-check.yml` |
 | **Lane discipline** | `branch-discipline-guard.yml` (mislabeled — see §3.2), `file-scope-lock-check.yml` |
-| **Post-merge automation** | `post-merge-lane-close.yml`, `fibery-sync-on-merge.yml` |
+| **Post-merge automation** | `post-merge-lane-close.yml`, `RETIRED_EXTERNAL_SYNC-sync-on-merge.yml` |
 | **CI health** | `ci-doctor.yml`, `ci.yml` |
 | **Deployment** | `deploy.yml`, `staging-deploy.yml` |
-| **Sync** | `fibery-sync-on-pr.yml`, `fibery-sync-on-merge.yml` |
+| **Sync** | `RETIRED_EXTERNAL_SYNC-sync-on-pr.yml`, `RETIRED_EXTERNAL_SYNC-sync-on-merge.yml` |
 | **Alerting** | `stale-lane-alerter.yml`, `ingestor-staleness-alert.yml`, `pipeline-health-monitor.yml` |
 | **Governance** | `executor-result-validator.yml`, `doc-truth-gate.yml`, `shadow-parity-required.yml` |
 | **Validation** | `live-schema-parity.yml`, `qa-fast.yml`, `qa-experience-regression.yml` |
@@ -162,15 +162,15 @@ The principle in EXECUTION_TRUTH_MODEL.md §2 is that the manifest is authoritat
 
 The file `.github/workflows/branch-discipline-guard.yml` contains:
 ```yaml
-name: Fibery CI Enforcement
+name: RETIRED_EXTERNAL_SYNC CI Enforcement
 ```
 
-The file name `branch-discipline-guard.yml` implies it enforces branch naming or discipline rules, but its content is the Fibery CI enforcement workflow. This creates confusion for:
+The file name `branch-discipline-guard.yml` implies it enforces branch naming or discipline rules, but its content is the RETIRED_EXTERNAL_SYNC CI enforcement workflow. This creates confusion for:
 - Developers interpreting CI check failures
 - The dispatch skill, which references `branch-discipline-guard` by name
 - Any CI check status lookup that uses the workflow file name vs the `name:` field
 
-**Fix:** Rename to `fibery-ci-enforcement.yml` or rename the `name:` field to match. The check name visible in GitHub PR status is derived from job names, not the filename — but the discrepancy is still misleading.
+**Fix:** Rename to `RETIRED_EXTERNAL_SYNC-ci-enforcement.yml` or rename the `name:` field to match. The check name visible in GitHub PR status is derived from job names, not the filename — but the discrepancy is still misleading.
 
 ### 3.3 Merge Gate is well-designed
 
@@ -319,9 +319,9 @@ For every governance subsystem:
 | `.lane/lanes/*.yml` | `scripts/lane-contract.ts` | **Partial — mechanical copy** | **Reconcile** with LANE_TAXONOMY.md. Fix runtime/worker conflict. Add docs/governance/** to governance.yml. Wire `pnpm lane:check` into `pnpm verify`. Add missing CI check. |
 | `.lane/schema.yml` | `scripts/lane-contract.ts` | **Yes — for `.lane/` scope** | Keep. |
 | `.lane/migration-lock.yml` | `scripts/lane-contract.ts` | **Yes — for migration** | Keep. First correct use of `.lane/` system. |
-| `.ops/sync.yml` | CI / Fibery sync | **Yes — but broken model** | **Restructure** to per-issue files (`.ops/sync/UTV2-NNN.yml`). Single shared mutable file is the root cause of merge conflicts. |
+| `.ops/sync.yml` | CI / RETIRED_EXTERNAL_SYNC sync | **Yes — but broken model** | **Restructure** to per-issue files (`.ops/sync/UTV2-NNN.yml`). Single shared mutable file is the root cause of merge conflicts. |
 | `.github/workflows/merge-gate.yml` | CI | **Yes** | No change. Well-designed T1/T2/T3 gate. |
-| `.github/workflows/branch-discipline-guard.yml` | CI | **Misnamed** | **Rename** to `fibery-ci-enforcement.yml` or fix the `name:` field. |
+| `.github/workflows/branch-discipline-guard.yml` | CI | **Misnamed** | **Rename** to `RETIRED_EXTERNAL_SYNC-ci-enforcement.yml` or fix the `name:` field. |
 | `.github/workflows/tier-label-check.yml` | CI | **Yes (redundant with merge-gate)** | Acceptable. Fail-fast redundancy. Keep. |
 | `.claude/hooks/tier-c-path-guard.sh` | Session | **Advisory only** | **Harden**: add Python fallback check or rewrite in cross-platform form. Add lane-aware authorization path (UTV2-961 scope). |
 | `.claude/agents/` (4 agents) | Orchestrator | **Yes** | Keep. Add agent or skill for `.lane/` contract enforcement. |
@@ -339,7 +339,7 @@ Ordered by urgency and dependency.
 
 **UTV2-961 + UTV2-970 together:**
 
-1. **Replace `.ops/sync.yml` with per-issue files** (`.ops/sync/UTV2-NNN.yml`). Each lane branch touches only its own file. Update Fibery CI enforcement to scan `ops/sync/*.yml`. Update `branch-discipline-guard` check to use the new path.
+1. **Replace `.ops/sync.yml` with per-issue files** (`.ops/sync/UTV2-NNN.yml`). Each lane branch touches only its own file. Update RETIRED_EXTERNAL_SYNC CI enforcement to scan `ops/sync/*.yml`. Update `branch-discipline-guard` check to use the new path.
 
 2. **Remove `[skip ci]` from PR branch HEAD commits.** Housekeeping commits (manifest opens, link-pr) must use a lightweight CI path (path-aware workflow short-circuit) not `[skip ci]`. Every branch that needs protected checks must have those checks fire on HEAD.
 
@@ -375,7 +375,7 @@ These three changes make lane merges boring. Nothing else should proceed until t
 
 12. **Cross-platform hook reliability**: Replace `python3 -c "import json"` in `tier-c-path-guard.sh` with a shell-native fallback or require Python 3 in the dev environment prerequisites. Silent fallback to exit 0 defeats Tier C protection.
 
-13. **Rename `branch-discipline-guard.yml`** to `fibery-ci-enforcement.yml` (file rename + update any references to the check name in scripts and docs).
+13. **Rename `branch-discipline-guard.yml`** to `RETIRED_EXTERNAL_SYNC-ci-enforcement.yml` (file rename + update any references to the check name in scripts and docs).
 
 ---
 

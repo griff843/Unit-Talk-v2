@@ -22,7 +22,6 @@ All environment variables are classified as either **Secret** (sensitive, must b
 | `ODDS_API_KEY` | Ingestor | External API | Rotate on provider request |
 | `OPENAI_API_KEY` | Alert agent, intelligence | External API | Rotate quarterly |
 | `LINEAR_API_TOKEN` | Ops scripts, CI workflows | External API | Rotate quarterly |
-| `FIBERY_API_TOKEN` | Ops scripts, CI workflows | External API | Rotate quarterly |
 | `NOTION_API_KEY` | Legacy integration | External API | Rotate quarterly |
 | `UNIT_TALK_JWT_SECRET` | API (auth) | Auth | Rotate on compromise; signs bearer tokens |
 | `UNIT_TALK_API_KEY_OPERATOR` | API | Auth | Rotate quarterly |
@@ -31,10 +30,8 @@ All environment variables are classified as either **Secret** (sensitive, must b
 | `UNIT_TALK_API_KEY_SUBMITTER` | API | Auth | Rotate quarterly |
 | `UNIT_TALK_API_KEY_WORKER` | API, worker | Auth | Rotate quarterly |
 | `UNIT_TALK_OPS_ALERT_WEBHOOK_URL` | Ops digest, stale alerter | Webhook | Rotate on compromise |
-| `FIBERY_UPDATE_WEBHOOK_TOKEN` | Fibery sync | Webhook | Rotate on compromise |
-| `FIBERY_UPDATE_WEBHOOK_URL` | Fibery sync | Webhook | Stable |
 
-**Total secrets: 22**
+**Total secrets: 19**
 
 ### Config (non-sensitive, can be in code/env files)
 
@@ -68,7 +65,7 @@ For production hosting, secrets should be injected via environment variables fro
 ### Migration path
 
 1. **No code changes needed.** `@unit-talk/config` already reads `process.env` with highest priority. Any secret injected as an environment variable by the hosting platform overrides local files.
-2. **Hosting setup:** Configure 22 secrets in the hosting provider's secret store
+2. **Hosting setup:** Configure 19 secrets in the hosting provider's secret store
 3. **Validation:** `pnpm env:check` (`scripts/validate-env.mjs`) validates required variables at startup
 4. **Remove local.env from production:** Production runtime should NOT have `local.env` — secrets come from managed injection only
 
@@ -105,5 +102,5 @@ For production hosting, secrets should be injected via environment variables fro
 | External APIs (SGO, Odds, OpenAI) | PM |
 | Auth (JWT, API keys) | PM / Infrastructure |
 | Discord | PM |
-| CI/CD (Linear, Fibery, GitHub) | PM / Orchestrator |
+| CI/CD (Linear, GitHub) | PM / Orchestrator |
 | Webhooks | PM |

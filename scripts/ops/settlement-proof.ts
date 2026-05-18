@@ -1,7 +1,7 @@
 /**
  * UTV2-672: Settlement/Grading Proof Script
  *
- * Proves 4 P0 Fibery controls by querying live Supabase:
+ * Proves 4 P0 settlement controls by querying live Supabase:
  *   1. Win/loss/push logic is correct
  *   2. Settlement results are immutable after finalization
  *   3. All bet types are handled correctly

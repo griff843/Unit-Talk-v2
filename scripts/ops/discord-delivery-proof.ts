@@ -1,7 +1,7 @@
 /**
  * UTV2-677: Discord Delivery Controls Proof Script
  *
- * Proves 4 P0 Fibery controls:
+ * Proves 4 P0 delivery controls:
  *   1. Discord routing logic is explicit and correct
  *   2. Posts are sent to correct channels
  *   3. Posting failures are retried or surfaced
