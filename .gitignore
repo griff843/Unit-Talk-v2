@@ -64,6 +64,7 @@ apps/smart-form/test-results/
 .out/ops/ci-doctor/
 .out/worktrees/
 .out/
+.ops/leases/
 _tmp_*
 .claude/scheduled_tasks.lock
 
