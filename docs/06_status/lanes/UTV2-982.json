@@ -4,7 +4,7 @@
   "lane_type": "runtime",
   "executor": "claude",
   "tier": "T1",
-  "worktree_path": ".",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-982-unsupported-outbox-targets",
   "base_branch": "main",
   "commit_sha": "0de80a530ee3ef903c98306e172506f859cb52ea",
@@ -35,7 +35,7 @@
     "docs/06_status/proof/UTV2-982/evidence-bundle.md",
     "apps/api/src/t1-proof-utv2-982-outbox-cleanup.test.ts"
   ],
-  "status": "closed",
+  "status": "done",
   "started_at": "2026-05-18T00:33:36Z",
   "heartbeat_at": "2026-05-18T01:45:00Z",
   "closed_at": "2026-05-18T01:45:00Z",
