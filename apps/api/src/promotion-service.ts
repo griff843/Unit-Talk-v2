@@ -295,7 +295,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
     ? winnerPolicy.target
     : null;
   const winnerReason = summarizePromotionReason(winnerDecision);
-  const winnerBand = resolvePromotionBand(canonicalPick, scoreInputs, winnerDecision);
+  const winnerBand = computeDeterministicBand(canonicalPick, scoreInputs, winnerDecision);
 
   const makeSnapshot = (
     policy: PromotionPolicy,
@@ -416,7 +416,7 @@ export async function evaluateAllPoliciesEagerAndPersist(
       const boardState = boardStates[index]!;
       const historyReason = summarizePromotionReason(decision);
       const nonWinnerSnapshot = makeSnapshot(policy, boardState);
-      const historyBand = resolvePromotionBand(canonicalPick, scoreInputs, decision);
+      const historyBand = computeDeterministicBand(canonicalPick, scoreInputs, decision);
       const history = await pickRepository.insertPromotionHistoryRow({
         pickId,
         target: policy.target,
@@ -627,7 +627,7 @@ async function buildSmartFormQualifiedResult(
 
   const winnerDecision = decisions[bestBetsIndex]!;
   const winnerBoardState = boardStates[bestBetsIndex]!;
-  const winnerBand = resolvePromotionBand(canonicalPick, scoreInputs, winnerDecision);
+  const winnerBand = computeDeterministicBand(canonicalPick, scoreInputs, winnerDecision);
   const winnerSnapshot = makeSnapshot(bestBetsPolicy, winnerBoardState, {
     forcePromote: true,
     reason: 'smart-form submissions route directly to best-bets',
@@ -683,7 +683,7 @@ async function buildSmartFormQualifiedResult(
       const policy = policies[index]!;
       const decision = decisions[index]!;
       const boardState = boardStates[index]!;
-      const historyBand = resolvePromotionBand(canonicalPick, scoreInputs, decision);
+      const historyBand = computeDeterministicBand(canonicalPick, scoreInputs, decision);
       const history = await pickRepository.insertPromotionHistoryRow({
         pickId: canonicalPick.id,
         target: policy.target,
@@ -863,7 +863,7 @@ async function persistPromotionDecisionForPick(
   }, policy);
 
   const reason = summarizePromotionReason(decision);
-  const band = resolvePromotionBand(canonicalPick, scoreInputs, decision);
+  const band = computeDeterministicBand(canonicalPick, scoreInputs, decision);
   const snapshot: PromotionDecisionSnapshot = {
     band,
     scoringProfile: activeScoringProfile.name,
@@ -991,29 +991,24 @@ function hasRequiredFields(pick: CanonicalPick) {
   return Boolean(pick.market && pick.selection && pick.source);
 }
 
-function resolvePromotionBand(
+function computeDeterministicBand(
   pick: CanonicalPick,
   scoreInputs: Awaited<ReturnType<typeof readPromotionScoreInputs>>,
   decision: BoardPromotionDecision,
-) {
-  const existingBand = readMetadataString(pick.metadata, 'band');
-  if (existingBand) {
-    return existingBand;
-  }
-
-  const modelTier = readMetadataString(pick.metadata, 'modelTier')
-    ?? readMetadataString(pick.metadata, 'model_tier');
-  if (modelTier) {
-    return modelTier;
-  }
-
+): string {
   if (!decision.qualified) {
     return 'SUPPRESS';
   }
 
   const bandInput = buildBandInput(pick, scoreInputs, decision);
   const initial = initialBandAssignment(bandInput);
-  return applyBandDowngrades(bandInput, initial.band).finalBand;
+  const band = applyBandDowngrades(bandInput, initial.band).finalBand;
+  if (!band) {
+    throw new Error(
+      'Band computation returned empty for pick ' + pick.id + ' — this is a bug in band assignment logic.',
+    );
+  }
+  return band;
 }
 
 async function readPromotionScoreInputs(
