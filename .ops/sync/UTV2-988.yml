@@ -1,0 +1,12 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-988
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-988/evidence-bundle.md
+    - apps/api/src/t1-proof-utv2-988-band-persistence.test.ts
