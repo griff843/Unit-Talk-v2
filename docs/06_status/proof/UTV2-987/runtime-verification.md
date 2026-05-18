@@ -7,7 +7,7 @@
 
 ---
 
-## Pre-Merge Checklist
+## Pre-merge Verification
 
 - [x] `pnpm verify` green (lint + type-check + build + all unit tests)
 - [x] R-level check PASS — no additional artifacts required
