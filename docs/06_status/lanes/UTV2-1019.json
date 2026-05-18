@@ -7,17 +7,19 @@
   "worktree_path": ".",
   "branch": "codex/utv2-1019-fix-circuit-breaker-state-write",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "d5adb9b57733836e7ccc94c4b60ecfba72dfa590",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/752",
+  "files_changed": [
+    "apps/worker/src/runner.ts"
+  ],
   "file_scope_lock": [
     "apps/worker/src/runner.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-05-18T06:30:00.000Z",
-  "heartbeat_at": "2026-05-18T06:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-18T12:37:00.000Z",
+  "closed_at": "2026-05-18T12:37:43Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
