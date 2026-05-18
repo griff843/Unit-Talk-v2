@@ -1,3 +1,9 @@
+---
+archived: true
+reason: implementation-complete
+archived_at: 2026-05-18
+---
+
 # Codex Wave Execution Playbook
 
 ## Purpose
