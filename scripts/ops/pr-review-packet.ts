@@ -522,11 +522,19 @@ function readRLevelCompliance(baseRef: string, headRef: string): RLevelComplianc
     outputPath,
   ];
   try {
-    const stdout = execFileSync('pnpm', ['exec', ...command], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
+    const commandArgs = ['exec', ...command];
+    const stdout =
+      process.platform === 'win32'
+        ? execFileSync('cmd.exe', ['/d', '/s', '/c', 'pnpm', ...commandArgs], {
+            cwd: ROOT,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          })
+        : execFileSync('pnpm', commandArgs, {
+            cwd: ROOT,
+            encoding: 'utf8',
+            stdio: ['ignore', 'pipe', 'pipe'],
+          });
     return {
       status: stdout.includes('Verdict: PASS') ? 'PASS' : 'UNKNOWN',
       reason: firstNonEmptyLine(stdout) ?? 'r-level-check completed without a parseable verdict',
