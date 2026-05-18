@@ -1,0 +1,13 @@
+{
+  "verdict": "PASS",
+  "checked_at": "2026-05-18T11:34:42.080Z",
+  "registry_path": "docs/05_operations/system-alignment-registry.json",
+  "summary": {
+    "fail": 0,
+    "warn": 0,
+    "current_authority_contradictions": 0,
+    "historical_archive_noise": 0,
+    "implementation_gaps": 0
+  },
+  "findings": []
+}
