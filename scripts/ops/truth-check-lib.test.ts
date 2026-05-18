@@ -8,6 +8,7 @@ import {
   findPostMergeTouches,
   formatP0Failures,
   hasRuntimeReferences,
+  parseRequiredChecksFromBranchProtectionScript,
   type CommitCheckResult,
 } from './truth-check-lib.js';
 import type { TruthCheckResult } from './shared.js';
@@ -109,6 +110,25 @@ test('G4 falls back to PR head SHA when merge commit checks are missing', async 
   assert.strictEqual(result.passed, true);
   assert.strictEqual(result.checkedSha, 'head');
   assert.deepStrictEqual(checkedShas, ['merge-sha', 'head-sha']);
+});
+
+test('required check fallback parses branch-protection script contexts', () => {
+  const checks = parseRequiredChecksFromBranchProtectionScript(`
+gh api -X PATCH "repos/\${REPO}/branches/\${BRANCH}/protection/required_status_checks" \\
+  -f strict=true \\
+  -f 'contexts[]=verify' \\
+  -f 'contexts[]=Executor Result Validation' \\
+  -f 'contexts[]=Merge Gate' \\
+  -f 'contexts[]=P0 Protocol' \\
+  -f 'contexts[]=verify'
+`);
+
+  assert.deepStrictEqual(checks, [
+    'verify',
+    'Executor Result Validation',
+    'Merge Gate',
+    'P0 Protocol',
+  ]);
 });
 
 test('G5 ignores commits before the lane start timestamp', () => {

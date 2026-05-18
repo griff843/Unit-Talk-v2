@@ -1099,18 +1099,60 @@ function findLatestPmVerdict(
 
 const RUNTIME_VERIFY_FAIL_PATTERN = /^\s*-\s*\[[ xX]\]\s+.*:\s*(FAIL|SKIP|SKIPPED)\s*$/m;
 const RUNTIME_VERIFY_RESULT_PATTERN = /^result:\s*(pass|fail)\s*$/im;
+const BRANCH_PROTECTION_SCRIPT_PATH = path.join(ROOT, 'scripts', 'ops', 'apply-branch-protection.sh');
+
+export function parseRequiredChecksFromBranchProtectionScript(text: string): string[] {
+  return [
+    ...new Set(
+      [...text.matchAll(/contexts\[\]=([^'"\r\n]+)/g)]
+        .map((match) => match[1]?.trim())
+        .filter((entry): entry is string => Boolean(entry)),
+    ),
+  ];
+}
+
+function readRequiredChecksFallback(): string[] {
+  if (!fs.existsSync(BRANCH_PROTECTION_SCRIPT_PATH)) {
+    return [];
+  }
+
+  return parseRequiredChecksFromBranchProtectionScript(
+    fs.readFileSync(BRANCH_PROTECTION_SCRIPT_PATH, 'utf8'),
+  );
+}
+
+function isBranchProtectionReadBlocked(error: unknown): boolean {
+  const message = error instanceof Error ? error.message : String(error);
+  return /\b(403 Forbidden|404 Not Found)\b/.test(message);
+}
 
 async function fetchRequiredChecks(
   owner: string,
   repo: string,
   token: string,
 ): Promise<string[]> {
-  const response = await fetchJson<{
+  let response: {
     contexts?: string[];
     checks?: Array<{ context?: string }>;
-  }>(`https://api.github.com/repos/${owner}/${repo}/branches/main/protection/required_status_checks`, {
-    headers: githubHeaders(token),
-  });
+  };
+  try {
+    response = await fetchJson<{
+      contexts?: string[];
+      checks?: Array<{ context?: string }>;
+    }>(`https://api.github.com/repos/${owner}/${repo}/branches/main/protection/required_status_checks`, {
+      headers: githubHeaders(token),
+    });
+  } catch (error) {
+    if (!isBranchProtectionReadBlocked(error)) {
+      throw error;
+    }
+
+    const fallbackChecks = readRequiredChecksFallback();
+    if (fallbackChecks.length === 0) {
+      throw error;
+    }
+    return fallbackChecks;
+  }
 
   const contexts = response.contexts ?? [];
   const checks = (response.checks ?? [])
