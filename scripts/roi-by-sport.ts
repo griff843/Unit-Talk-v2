@@ -1,41 +1,45 @@
 #!/usr/bin/env tsx
 /**
- * UTV2-893: ROI / Win-Rate per Sport
+ * UTV2-998: stake-based ROI / Win-Rate per Sport.
  *
- * Queries settlement_records and computes win-rate and flat-bet ROI by sport.
- * Flat-bet ROI assumes -110 juice on all picks (if submission odds not available).
- * Data gate: run live on/after 2026-05-17 for post-UTV2-877 results.
+ * Historical rows with missing stake_units are labeled and excluded from ROI.
  *
- * Usage: npx tsx scripts/roi-by-sport.ts [--after YYYY-MM-DD]
+ * Usage: tsx scripts/roi-by-sport.ts [--after=YYYY-MM-DD]
  */
-import { createClient } from '@supabase/supabase-js';
-import { readFileSync } from 'node:fs';
-import { resolve, dirname } from 'node:path';
+import { loadEnvironment } from '@unit-talk/config';
+import {
+  createDatabaseClientFromConnection,
+  createServiceRoleDatabaseConnectionConfig,
+} from '@unit-talk/db';
 import { fileURLToPath } from 'node:url';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-
-function loadEnv() {
-  const content = readFileSync(resolve(__dirname, '..', 'local.env'), 'utf8');
-  for (const line of content.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('#')) continue;
-    const eq = trimmed.indexOf('=');
-    if (eq === -1) continue;
-    const key = trimmed.slice(0, eq).trim();
-    const val = trimmed.slice(eq + 1).trim().replace(/^["']|["']$/g, '');
-    if (!process.env[key]) process.env[key] = val;
-  }
-}
-
-interface PickRow {
+export interface RoiBySportRow {
   result: string | null;
   sport: string | null;
-  market_type: string | null;
-  submission_odds: number | null;
-  clv_percent: string | null;
-  clv_status: string | null;
-  settled_at: string;
+  marketType: string | null;
+  odds: number | null;
+  stakeUnits: number | null;
+  clvStatus: string | null;
+  settledAt: string;
+}
+
+export interface StakeIntegritySummary {
+  canonicalStakeRows: number;
+  historicalUnknownStakeRows: number;
+  totalRows: number;
+}
+
+interface SportSummary {
+  sport: string;
+  rows: RoiBySportRow[];
+  knownStakeRows: RoiBySportRow[];
+  wins: number;
+  losses: number;
+  pushes: number;
+  riskedUnits: number;
+  profitUnits: number;
+  roiPercent: number | null;
+  clvComputed: number;
 }
 
 function pct(n: number, total: number): string {
@@ -43,173 +47,204 @@ function pct(n: number, total: number): string {
   return `${((n / total) * 100).toFixed(1)}%`;
 }
 
-function americanToDecimal(american: number): number {
-  if (american > 0) return american / 100 + 1;
-  return 100 / Math.abs(american) + 1;
+function formatPercent(value: number | null): string {
+  if (value === null) return 'n/a';
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}%`;
 }
 
-function computeFlatBetROI(wins: number, losses: number, avgDecimalOdds: number): number {
-  const totalStaked = wins + losses;
-  if (totalStaked === 0) return 0;
-  const returns = wins * avgDecimalOdds;
-  return ((returns - totalStaked) / totalStaked) * 100;
+function formatUnits(value: number): string {
+  return `${value >= 0 ? '+' : ''}${value.toFixed(2)}u`;
 }
 
-async function main() {
-  loadEnv();
+function round2(value: number): number {
+  return Math.round(value * 100) / 100;
+}
 
-  const afterArg = process.argv.find(a => a.startsWith('--after='))?.split('=')[1];
-  const afterDate = afterArg ?? '2026-05-10';
+export function summarizeStakeIntegrity(rows: RoiBySportRow[]): StakeIntegritySummary {
+  const canonicalStakeRows = rows.filter(hasMeasurableStake).length;
+  return {
+    canonicalStakeRows,
+    historicalUnknownStakeRows: rows.length - canonicalStakeRows,
+    totalRows: rows.length,
+  };
+}
 
-  const sb = createClient(
-    process.env['SUPABASE_URL']!,
-    process.env['SUPABASE_SERVICE_ROLE_KEY']!
-  );
+export function computeProfitUnits(row: RoiBySportRow): number | null {
+  if (!hasMeasurableStake(row)) return null;
+  if (row.result === 'push') return 0;
+  if (row.result === 'loss') return -row.stakeUnits;
+  if (row.result !== 'win') return null;
 
-  console.log(`\n=== ROI / Win-Rate by Sport ===`);
-  console.log(`Query window: settled_at >= ${afterDate}`);
-  console.log(`Generated: ${new Date().toISOString()}\n`);
+  if (typeof row.odds === 'number' && Number.isFinite(row.odds) && row.odds !== 0) {
+    return row.odds > 0
+      ? round2(row.stakeUnits * (row.odds / 100))
+      : round2(row.stakeUnits * (100 / Math.abs(row.odds)));
+  }
 
-  const { data: rows, error } = await sb
+  return row.stakeUnits;
+}
+
+export function computeRoiPercent(rows: RoiBySportRow[]): number | null {
+  const knownStakeRows = rows.filter((row) => hasMeasurableStake(row) && row.result !== 'push');
+  const riskedUnits = knownStakeRows.reduce((sum, row) => sum + row.stakeUnits, 0);
+  if (riskedUnits <= 0) return null;
+
+  const profitUnits = knownStakeRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0);
+  return (profitUnits / riskedUnits) * 100;
+}
+
+export function buildSportSummaries(rows: RoiBySportRow[]): SportSummary[] {
+  const sports = [...new Set(rows.map((row) => row.sport ?? 'unknown'))].sort();
+  return sports.map((sport) => {
+    const sportRows = rows.filter((row) => (row.sport ?? 'unknown') === sport);
+    const knownStakeRows = sportRows.filter(hasMeasurableStake);
+    const riskRows = knownStakeRows.filter((row) => row.result !== 'push');
+    const riskedUnits = round2(riskRows.reduce((sum, row) => sum + row.stakeUnits, 0));
+    const profitUnits = round2(riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0));
+
+    return {
+      sport,
+      rows: sportRows,
+      knownStakeRows,
+      wins: sportRows.filter((row) => row.result === 'win').length,
+      losses: sportRows.filter((row) => row.result === 'loss').length,
+      pushes: sportRows.filter((row) => row.result === 'push').length,
+      riskedUnits,
+      profitUnits,
+      roiPercent: riskedUnits > 0 ? (profitUnits / riskedUnits) * 100 : null,
+      clvComputed: sportRows.filter((row) => row.clvStatus === 'computed').length,
+    };
+  });
+}
+
+async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
+  const env = loadEnvironment();
+  const connection = createServiceRoleDatabaseConnectionConfig(env);
+  const client = createDatabaseClientFromConnection(connection);
+
+  const { data, error } = await client
     .from('settlement_records')
     .select(`
       result,
       payload,
       settled_at,
-      picks!inner(metadata, submissions(odds))
+      picks!inner(stake_units, odds, metadata)
     `)
     .gte('settled_at', afterDate)
-    .is('corrects_id', null) as { data: Array<{
-      result: string | null;
-      payload: Record<string, unknown>;
-      settled_at: string;
-      picks: {
-        metadata: Record<string, unknown>;
-        submissions: Array<{ odds: number | null }> | null;
-      } | null;
-    }> | null; error: unknown };
+    .is('corrects_id', null);
 
-  if (error || !rows) {
-    // Fallback without submissions join
-    const { data: fallback, error: e2 } = await sb
-      .from('settlement_records')
-      .select(`result, payload, settled_at, picks!inner(metadata)`)
-      .gte('settled_at', afterDate)
-      .is('corrects_id', null) as { data: Array<{
-        result: string | null;
-        payload: Record<string, unknown>;
-        settled_at: string;
-        picks: { metadata: Record<string, unknown> } | null;
-      }> | null; error: unknown };
-
-    if (e2 || !fallback) {
-      console.error('Failed to fetch:', e2 ?? error);
-      process.exit(1);
-    }
-
-    const mapped: PickRow[] = fallback.map(r => ({
-      result: r.result,
-      sport: (r.picks?.metadata?.['sport'] as string) ?? null,
-      market_type: (r.picks?.metadata?.['marketTypeId'] as string) ?? null,
-      submission_odds: null,
-      clv_percent: (r.payload?.['clvPercent'] as string) ?? null,
-      clv_status: (r.payload?.['clvStatus'] as string) ?? null,
-      settled_at: r.settled_at,
-    }));
-    printReport(mapped, afterDate);
-    return;
+  if (error) {
+    throw new Error(`Failed to fetch settled ROI rows: ${error.message}`);
   }
 
-  const mapped: PickRow[] = rows.map(r => ({
-    result: r.result,
-    sport: (r.picks?.metadata?.['sport'] as string) ?? null,
-    market_type: (r.picks?.metadata?.['marketTypeId'] as string) ?? null,
-    submission_odds: r.picks?.submissions?.[0]?.odds ?? null,
-    clv_percent: (r.payload?.['clvPercent'] as string) ?? null,
-    clv_status: (r.payload?.['clvStatus'] as string) ?? null,
-    settled_at: r.settled_at,
-  }));
-  printReport(mapped, afterDate);
+  return (data ?? []).map((row) => {
+    const pick = Array.isArray(row.picks) ? row.picks[0] : row.picks;
+    const metadata = asRecord(pick?.metadata);
+    const payload = asRecord(row.payload);
+    return {
+      result: typeof row.result === 'string' ? row.result : null,
+      sport: typeof metadata?.['sport'] === 'string' ? metadata['sport'] : null,
+      marketType: typeof metadata?.['marketTypeId'] === 'string'
+        ? metadata['marketTypeId']
+        : typeof metadata?.['marketType'] === 'string'
+          ? metadata['marketType']
+          : null,
+      odds: readNumber(pick?.odds),
+      stakeUnits: readNumber(pick?.stake_units),
+      clvStatus: typeof payload?.['clvStatus'] === 'string' ? payload['clvStatus'] : null,
+      settledAt: row.settled_at,
+    };
+  });
 }
 
-function printReport(rows: PickRow[], afterDate: string) {
+export function printReport(rows: RoiBySportRow[], afterDate: string, generatedAt = new Date().toISOString()): string {
+  const lines: string[] = [];
   const total = rows.length;
-  const wins = rows.filter(r => r.result === 'win').length;
-  const losses = rows.filter(r => r.result === 'loss').length;
-  const pushes = rows.filter(r => r.result === 'push').length;
+  const wins = rows.filter((row) => row.result === 'win').length;
+  const losses = rows.filter((row) => row.result === 'loss').length;
+  const pushes = rows.filter((row) => row.result === 'push').length;
+  const knownRows = rows.filter(hasMeasurableStake);
+  const riskRows = knownRows.filter((row) => row.result !== 'push');
+  const totalRisked = round2(riskRows.reduce((sum, row) => sum + row.stakeUnits, 0));
+  const netUnits = round2(riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0));
+  const stakeIntegrity = summarizeStakeIntegrity(rows);
+  const roiPercent = totalRisked > 0 ? (netUnits / totalRisked) * 100 : null;
 
-  // Assume -110 as default odds if submission odds not available
-  const DEFAULT_AMERICAN_ODDS = -110;
-  const defaultDecimal = americanToDecimal(DEFAULT_AMERICAN_ODDS);
+  lines.push('=== ROI / Win-Rate by Sport ===');
+  lines.push(`Query window: settled_at >= ${afterDate}`);
+  lines.push(`Generated: ${generatedAt}`);
+  lines.push('');
+  lines.push('## Overall (all sports)');
+  lines.push('| Metric | Value |');
+  lines.push('|--------|-------|');
+  lines.push(`| Total settled | ${total} |`);
+  lines.push(`| Wins | ${wins} (${pct(wins, total)}) |`);
+  lines.push(`| Losses | ${losses} (${pct(losses, total)}) |`);
+  lines.push(`| Pushes | ${pushes} |`);
+  lines.push(`| Stake-known rows | ${stakeIntegrity.canonicalStakeRows} |`);
+  lines.push(`| Historical unknown-stake rows | ${stakeIntegrity.historicalUnknownStakeRows} |`);
+  lines.push(`| Total risked | ${totalRisked.toFixed(2)}u |`);
+  lines.push(`| Net units | ${formatUnits(netUnits)} |`);
+  lines.push(`| ROI (stake-based) | ${formatPercent(roiPercent)} |`);
+  lines.push(`| Note | Rows with stake_units IS NULL are labeled historical_unknown and excluded from ROI |`);
+  lines.push('');
+  lines.push('## By Sport');
+  lines.push('| Sport | Settled | Stake-known | Unknown stake | Wins | Win% | Losses | Risked | Net | ROI (stake-based) | CLV coverage |');
+  lines.push('|-------|---------|-------------|---------------|------|------|--------|--------|-----|-------------------|-------------|');
 
-  console.log(`## Overall (all sports)`);
-  console.log(`| Metric | Value |`);
-  console.log(`|--------|-------|`);
-  console.log(`| Total settled | ${total} |`);
-  console.log(`| Wins | ${wins} (${pct(wins, total)}) |`);
-  console.log(`| Losses | ${losses} (${pct(losses, total)}) |`);
-  console.log(`| Pushes | ${pushes} |`);
-  const hasOdds = rows.some(r => r.submission_odds != null);
-  if (hasOdds) {
-    const oddsRows = rows.filter(r => r.submission_odds != null && r.result !== 'push');
-    const winsWithOdds = oddsRows.filter(r => r.result === 'win');
-    const totalPayout = winsWithOdds.reduce((sum, r) => sum + americanToDecimal(r.submission_odds!), 0);
-    const trueROI = ((totalPayout - oddsRows.length) / oddsRows.length) * 100;
-    console.log(`| ROI (actual odds) | ${trueROI >= 0 ? '+' : ''}${trueROI.toFixed(2)}% |`);
-  } else {
-    const flatBetROI = computeFlatBetROI(wins, losses, defaultDecimal);
-    console.log(`| ROI (flat -110 assumption) | ${flatBetROI >= 0 ? '+' : ''}${flatBetROI.toFixed(2)}% |`);
-    console.log(`| Note | Submission odds not available — ROI uses -110 assumption |`);
+  for (const summary of buildSportSummaries(rows)) {
+    lines.push(
+      `| ${summary.sport} | ${summary.rows.length} | ${summary.knownStakeRows.length} | ${summary.rows.length - summary.knownStakeRows.length} | ${summary.wins} | ${pct(summary.wins, summary.rows.length)} | ${summary.losses} | ${summary.riskedUnits.toFixed(2)}u | ${formatUnits(summary.profitUnits)} | ${formatPercent(summary.roiPercent)} | ${pct(summary.clvComputed, summary.rows.length)} |`,
+    );
   }
 
-  // By sport
-  const sports = [...new Set(rows.map(r => r.sport ?? 'unknown'))].sort();
-  console.log(`\n## By Sport`);
-  console.log(`| Sport | Settled | Wins | Win% | Losses | ROI (${hasOdds ? 'actual' : '-110 assumption'}) | CLV coverage |`);
-  console.log(`|-------|---------|------|------|--------|-----|-------------|`);
-
-  for (const sport of sports) {
-    const sportRows = rows.filter(r => (r.sport ?? 'unknown') === sport);
-    const sWins = sportRows.filter(r => r.result === 'win');
-    const sLosses = sportRows.filter(r => r.result === 'loss');
-    const sComputed = sportRows.filter(r => r.clv_status === 'computed');
-
-    let roiStr: string;
-    if (hasOdds && sWins.some(r => r.submission_odds != null)) {
-      const oddsRows = sportRows.filter(r => r.submission_odds != null && r.result !== 'push');
-      const winsWithOdds = oddsRows.filter(r => r.result === 'win');
-      const totalPayout = winsWithOdds.reduce((sum, r) => sum + americanToDecimal(r.submission_odds!), 0);
-      const roi = ((totalPayout - oddsRows.length) / oddsRows.length) * 100;
-      roiStr = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
-    } else {
-      const roi = computeFlatBetROI(sWins.length, sLosses.length, defaultDecimal);
-      roiStr = `${roi >= 0 ? '+' : ''}${roi.toFixed(2)}%`;
-    }
-
-    console.log(`| ${sport.padEnd(5)} | ${String(sportRows.length).padEnd(7)} | ${String(sWins.length).padEnd(4)} | ${pct(sWins.length, sportRows.length).padEnd(4)} | ${String(sLosses.length).padEnd(6)} | ${roiStr.padEnd(4)} | ${pct(sComputed.length, sportRows.length)} |`);
-  }
-
-  // By market type if available
-  const markets = [...new Set(rows.map(r => r.market_type).filter(Boolean))];
+  const markets = [...new Set(rows.map((row) => row.marketType).filter((value): value is string => Boolean(value)))].sort();
   if (markets.length > 0) {
-    console.log(`\n## By Market Type`);
-    console.log(`| Market | Settled | Win% |`);
-    console.log(`|--------|---------|------|`);
-    for (const market of markets.sort()) {
-      const mRows = rows.filter(r => r.market_type === market);
-      const mWins = mRows.filter(r => r.result === 'win').length;
-      console.log(`| ${market} | ${mRows.length} | ${pct(mWins, mRows.length)} |`);
+    lines.push('');
+    lines.push('## By Market Type');
+    lines.push('| Market | Settled | Stake-known | Win% | ROI (stake-based) |');
+    lines.push('|--------|---------|-------------|------|-------------------|');
+    for (const market of markets) {
+      const marketRows = rows.filter((row) => row.marketType === market);
+      lines.push(`| ${market} | ${marketRows.length} | ${marketRows.filter(hasMeasurableStake).length} | ${pct(marketRows.filter((row) => row.result === 'win').length, marketRows.length)} | ${formatPercent(computeRoiPercent(marketRows))} |`);
     }
   }
 
-  console.log(`\n## Notes`);
-  console.log(`- Data window: ${afterDate} onwards (post-UTV2-877 scorer fix merged 2026-05-10)`);
-  console.log(`- Band data not available — band-sliced ROI requires band persistence fix`);
-  console.log(`- Market type data sparse — marketTypeId not consistently in picks.metadata`);
-  if (!hasOdds) {
-    console.log(`- True ROI requires submission odds from submissions table — using -110 flat assumption`);
-  }
-  console.log(`- Run with --after=2026-05-17 on that date for 7-day post-fix window`);
+  lines.push('');
+  lines.push('## Notes');
+  lines.push(`- Data window: ${afterDate} onwards (post-UTV2-877 scorer fix merged 2026-05-10)`);
+  lines.push('- Band data not available here; use band-specific reports when band persistence is required');
+  lines.push('- Market type data may be sparse; marketTypeId is not consistently present in picks.metadata');
+  lines.push('- ROI uses persisted picks.stake_units and persisted pick odds; no flat -110 fallback is used');
+  lines.push('- Run with --after=2026-05-17 on that date for 7-day post-fix window');
+
+  return lines.join('\n');
 }
 
-main().catch(e => { console.error(e); process.exit(1); });
+function hasMeasurableStake(row: RoiBySportRow): row is RoiBySportRow & { stakeUnits: number } {
+  return typeof row.stakeUnits === 'number' && Number.isFinite(row.stakeUnits) && row.stakeUnits > 0;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null;
+}
+
+function readNumber(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+async function main() {
+  const afterArg = process.argv.find((arg) => arg.startsWith('--after='))?.split('=')[1];
+  const afterDate = afterArg ?? '2026-05-10';
+  const rows = await fetchRows(afterDate);
+  console.log(printReport(rows, afterDate));
+}
+
+if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
+  main().catch((error: unknown) => {
+    console.error(error);
+    process.exit(1);
+  });
+}
