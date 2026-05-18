@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1028",
-  "lane_type": "hygiene",
-  "executor": "codex-cli",
+  "lane_type": "governance",
+  "executor": "claude",
   "tier": "T3",
   "worktree_path": ".",
   "branch": "codex/utv2-1028-delete-zero-import-stub-packages",

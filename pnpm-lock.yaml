@@ -80,12 +80,6 @@ importers:
       '@unit-talk/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@unit-talk/events':
-        specifier: workspace:*
-        version: link:../../packages/events
-      '@unit-talk/intelligence':
-        specifier: workspace:*
-        version: link:../../packages/intelligence
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -162,9 +156,6 @@ importers:
       '@unit-talk/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@unit-talk/events':
-        specifier: workspace:*
-        version: link:../../packages/events
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -317,12 +308,6 @@ importers:
       '@unit-talk/domain':
         specifier: workspace:*
         version: link:../../packages/domain
-      '@unit-talk/events':
-        specifier: workspace:*
-        version: link:../../packages/events
-      '@unit-talk/intelligence':
-        specifier: workspace:*
-        version: link:../../packages/intelligence
       '@unit-talk/observability':
         specifier: workspace:*
         version: link:../../packages/observability
@@ -357,17 +342,6 @@ importers:
       '@unit-talk/contracts':
         specifier: workspace:*
         version: link:../contracts
-
-  packages/events: {}
-
-  packages/intelligence:
-    dependencies:
-      '@unit-talk/contracts':
-        specifier: workspace:*
-        version: link:../contracts
-      '@unit-talk/domain':
-        specifier: workspace:*
-        version: link:../domain
 
   packages/observability: {}
 

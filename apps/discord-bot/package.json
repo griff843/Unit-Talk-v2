@@ -22,7 +22,6 @@
     "@unit-talk/config": "workspace:*",
     "@unit-talk/contracts": "workspace:*",
     "@unit-talk/domain": "workspace:*",
-    "@unit-talk/events": "workspace:*",
     "@unit-talk/observability": "workspace:*",
     "discord.js": "^14.26.4"
   }

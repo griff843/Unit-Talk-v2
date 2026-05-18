@@ -14,6 +14,10 @@ allowed_path_globs:
   - docs/archive/**
   - CLAUDE.md
   - package.json
+  - pnpm-workspace.yaml
+  - tsconfig*.json
+  - Dockerfile
+  - apps/**/package.json
   - packages/config/**
   - packages/contracts/**
   - packages/db/src/**
