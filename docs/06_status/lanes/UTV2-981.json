@@ -7,9 +7,11 @@
   "worktree_path": ".",
   "branch": "codex/utv2-981-runtime-health-baseline",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "1e818fbbf804dc134bd0dddeb2ae27e96eedc227",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/746",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-981/evidence-bundle.md"
+  ],
   "file_scope_lock": [
     "apps/api/src/**",
     "apps/worker/src/**",
@@ -22,10 +24,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-981/evidence-bundle.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-18T04:00:00Z",
   "heartbeat_at": "2026-05-18T04:00:00Z",
-  "closed_at": null,
+  "closed_at": "2026-05-18T05:30:00Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
