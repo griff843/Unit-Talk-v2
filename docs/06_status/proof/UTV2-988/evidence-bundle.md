@@ -2,7 +2,7 @@
 
 **Issue:** [UTV2-980H] Persist promotion band assignment for model performance proof  
 **Tier:** T1  
-**Merge SHA:** (set at merge)  
+**Merge SHA:** b79954a5295951f131ef9cddb1edb8cc33868303  
 **Generated:** 2026-05-18
 
 ---
