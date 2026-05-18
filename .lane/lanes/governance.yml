@@ -11,6 +11,8 @@ allowed_path_globs:
   - docs/05_operations/**
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
+  - docs/archive/**
+  - CLAUDE.md
   - package.json
   - packages/config/**
   - packages/contracts/**

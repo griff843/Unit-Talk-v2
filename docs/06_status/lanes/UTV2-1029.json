@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1029",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T3",
   "worktree_path": ".",
