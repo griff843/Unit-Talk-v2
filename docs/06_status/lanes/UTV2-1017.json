@@ -7,17 +7,19 @@
   "worktree_path": ".",
   "branch": "codex/utv2-1017-fix-blind-catch-all-submission-service",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "a7d97f01d164ecce8eaa876f140fafa373f05782",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/754",
+  "files_changed": [
+    "apps/api/src/submission-service.ts"
+  ],
   "file_scope_lock": [
     "apps/api/src/submission-service.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "closed",
   "started_at": "2026-05-18T06:30:00.000Z",
-  "heartbeat_at": "2026-05-18T06:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-18T13:48:00.000Z",
+  "closed_at": "2026-05-18T13:48:17Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
