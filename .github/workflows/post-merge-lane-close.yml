@@ -47,6 +47,10 @@ on:
         required: true
         type: string
 
+concurrency:
+  group: merge-closeout-mutex
+  cancel-in-progress: false
+
 permissions:
   contents: write
   pull-requests: write
@@ -244,6 +248,20 @@ jobs:
           echo "::error title=post-merge-lane-close::Truth-check failed (exit ${{ steps.truth_check.outputs.exit_code }}) — lane NOT closed."
           exit "${{ steps.truth_check.outputs.exit_code }}"
 
+      - name: Acquire merge mutex
+        if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.truth_check.outputs.exit_code == '0'
+        id: merge_lock
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+          PR_NUMBER: ${{ steps.extract.outputs.pr_number }}
+        run: |
+          pnpm ops:merge-lock acquire \
+            --issue "$ISSUE_ID" \
+            --branch main \
+            --pr "$PR_NUMBER" \
+            --reason post-merge-lane-close \
+            --ttl-minutes 60
+
       - name: Update manifest to done
         if: steps.extract.outputs.issue_id != '' && steps.manifest.outputs.exists == 'true' && steps.status.outputs.closeable == 'true' && steps.truth_check.outputs.exit_code == '0'
         env:
@@ -314,6 +332,13 @@ jobs:
             git push
             echo "::notice title=post-merge-lane-close::Lane $ISSUE_ID closed and manifest committed."
           fi
+
+      - name: Release merge mutex
+        if: always() && steps.merge_lock.outcome == 'success'
+        env:
+          ISSUE_ID: ${{ steps.extract.outputs.issue_id }}
+        run: |
+          pnpm ops:merge-lock release --issue "$ISSUE_ID" --branch main
 
       - name: Post summary annotation
         if: always() && steps.extract.outputs.issue_id != ''

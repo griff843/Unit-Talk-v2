@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import { loadEnvironment } from '@unit-talk/config';
+import { git } from './ops/shared.js';
+import { requireMergeLockHeld } from './ops/merge-mutex.js';
 
 type JsonObject = Record<string, unknown>;
 
@@ -324,6 +326,17 @@ async function closeIssue(): Promise<void> {
   const doneStateName = readOption('state') ?? 'Done';
   const commentBody = readOption('comment') ?? readOption('comment-file', { fileContents: true });
   const issue = await resolveIssue(issueRef);
+  const branch = readOption('branch') ?? currentGitBranch();
+  const lock = requireMergeLockHeld({
+    issue_id: issue.identifier,
+    branch,
+    reason: 'linear:close',
+  });
+  if (!lock.ok) {
+    throw new Error(
+      `Linear close requires merge mutex for ${issue.identifier} on ${branch}: ${lock.message}`,
+    );
+  }
   const doneStateId = await resolveStateId(doneStateName);
 
   await gql(
@@ -362,6 +375,14 @@ async function closeIssue(): Promise<void> {
   }
 
   console.log(`${issue.identifier} | closed=${doneStateName}`);
+}
+
+function currentGitBranch(): string {
+  const result = git(['branch', '--show-current']);
+  if (!result.ok || !result.stdout) {
+    throw new Error(`Unable to determine current branch: ${result.stderr || 'unknown error'}`);
+  }
+  return result.stdout;
 }
 
 async function resolveIssue(issueRef: string): Promise<LinearIssueNode> {
