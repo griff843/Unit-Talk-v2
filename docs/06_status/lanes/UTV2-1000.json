@@ -7,9 +7,12 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-1000-model-edge-proof",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "f9336782276912bc729920ba98ca2fa80ec8d85c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/744",
+  "files_changed": [
+    "scripts/model-edge-proof.ts",
+    "docs/06_status/proof/UTV2-1000/evidence-bundle.md"
+  ],
   "file_scope_lock": [
     "scripts/model-edge-proof.ts",
     "docs/06_status/proof/UTV2-1000/evidence-bundle.md",
@@ -19,11 +22,11 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1000/evidence-bundle.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-18T03:00:00Z",
   "heartbeat_at": "2026-05-18T03:00:00Z",
-  "closed_at": null,
-  "blocked_by": ["UTV2-997"],
+  "closed_at": "2026-05-18T04:00:00Z",
+  "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "truth_check_history": [],

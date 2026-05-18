@@ -7,9 +7,13 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "codex/utv2-997-canonical-model-evaluation-dataset",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "cc64f1927751382db3e19310d3edf936f933e5f8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/743",
+  "files_changed": [
+    "scripts/model-evaluation-dataset.ts",
+    "artifacts/.gitkeep",
+    "docs/06_status/proof/UTV2-997/evidence-bundle.md"
+  ],
   "file_scope_lock": [
     "scripts/model-evaluation-dataset.ts",
     "scripts/model-evaluation-dataset.test.ts",
@@ -20,10 +24,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-997/evidence-bundle.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-18T03:00:00Z",
   "heartbeat_at": "2026-05-18T03:00:00Z",
-  "closed_at": null,
+  "closed_at": "2026-05-18T04:00:00Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
