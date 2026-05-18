@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1028",
+  "lane_type": "hygiene",
+  "executor": "codex-cli",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1028-delete-zero-import-stub-packages",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "packages/events/",
+    "packages/intelligence/",
+    "apps/api/package.json",
+    "apps/worker/package.json",
+    "apps/discord-bot/package.json",
+    "tsconfig.json",
+    "Dockerfile",
+    "pnpm-workspace.yaml"
+  ],
+  "file_scope_lock": [
+    "packages/events/",
+    "packages/intelligence/",
+    "apps/api/package.json",
+    "apps/worker/package.json",
+    "apps/discord-bot/package.json",
+    "tsconfig.json",
+    "Dockerfile",
+    "pnpm-workspace.yaml"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-18T06:15:00.000Z",
+  "heartbeat_at": "2026-05-18T06:15:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
