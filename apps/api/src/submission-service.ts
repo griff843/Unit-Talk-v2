@@ -89,6 +89,7 @@ export async function processSubmission(
     events?: EventRepository;
   },
 ): Promise<SubmissionProcessingResult> {
+  payload = ensureMeasurableStakeUnits(payload);
   const normalizedMarketKey = normalizeMarketKey(payload.market);
 
   // Idempotency check: compute key from normalized payload and check for existing pick.
@@ -336,6 +337,21 @@ export async function processSubmission(
   };
 }
 
+function ensureMeasurableStakeUnits(payload: SubmissionPayload): SubmissionPayload {
+  if (typeof payload.stakeUnits !== 'number' || !Number.isFinite(payload.stakeUnits) || payload.stakeUnits <= 0) {
+    return {
+      ...payload,
+      stakeUnits: 1,
+      metadata: {
+        ...(payload.metadata ?? {}),
+        stakeUnitsSource: 'service_default_flat_1u',
+      },
+    };
+  }
+
+  return payload;
+}
+
 export async function processShadowSubmission(
   payload: SubmissionPayload,
   repositories: {
@@ -349,7 +365,7 @@ export async function processShadowSubmission(
 ): Promise<ShadowSubmissionProcessingResult> {
   const normalizedMarketKey = normalizeMarketKey(payload.market);
   const shadowRecordedAt = new Date().toISOString();
-  const shadowPayload: SubmissionPayload = {
+  const shadowPayload: SubmissionPayload = ensureMeasurableStakeUnits({
     ...payload,
     market: normalizedMarketKey,
     metadata: {
@@ -361,7 +377,7 @@ export async function processShadowSubmission(
         publicPromotionBlocked: true,
       },
     },
-  };
+  });
 
   const idempotencyKey = computeSubmissionIdempotencyKey(shadowPayload);
   const existingPick = await repositories.picks.findPickByIdempotencyKey(idempotencyKey);

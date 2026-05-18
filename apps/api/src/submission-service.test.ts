@@ -425,6 +425,26 @@ test('handleSubmitPick rejects human request bodies that omit stakeUnits', async
   assert.match(response.body.error.message, /stakeUnits must be a positive number/i);
 });
 
+test('processSubmission defaults direct service payloads without stakeUnits to measurable 1u', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+
+  const result = await processSubmission(
+    {
+      source: 'api',
+      market: 'NBA assists',
+      selection: 'Player Over 7.5',
+      odds: -110,
+    },
+    repositories,
+  );
+
+  assert.equal(result.pickRecord.stake_units, 1);
+  assert.equal(
+    (result.pickRecord.metadata as Record<string, unknown>)['stakeUnitsSource'],
+    'service_default_flat_1u',
+  );
+});
+
 test('processSubmission materializes canonical records and submission event', async () => {
   const repositories = createInMemoryRepositoryBundle();
   const result = await processSubmission(
@@ -435,6 +455,7 @@ test('processSubmission materializes canonical records and submission event', as
       selection: 'Player Over 7.5',
       line: 7.5,
       odds: -115,
+      stakeUnits: 1.25,
     },
     repositories,
   );
@@ -442,6 +463,7 @@ test('processSubmission materializes canonical records and submission event', as
   assert.equal(result.submissionRecord.status, 'validated');
   assert.equal(result.submissionEventRecord!.event_name, 'submission.accepted');
   assert.equal(result.pickRecord.market, 'assists-all-game-ou');
+  assert.equal(result.pickRecord.stake_units, 1.25);
   assert.equal(result.pickRecord.approval_status, 'approved');
   assert.equal(result.pickRecord.promotion_status, 'not_eligible');
   assert.equal(result.pickRecord.status, 'validated');
