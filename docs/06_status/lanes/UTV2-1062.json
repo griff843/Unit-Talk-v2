@@ -103,13 +103,29 @@
     "docs/06_status/proof/UTV2-1062/ratification-checklist.md",
     "docs/06_status/proof/UTV2-1062/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-18T20:24:00.000Z",
-  "heartbeat_at": "2026-05-18T20:52:37.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-18T22:19:12.047Z",
+  "closed_at": "2026-05-18T22:19:12.047Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-18T22:19:07.546Z",
+      "verdict": "pass",
+      "merge_sha": "0ec12418477d1783fc754f311e7ea9c4aba948d7",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-18T22:19:12.047Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "4195794fb0bbd874d9618e2d9a432ac21e116a13",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
+    }
+  ],
   "reopen_history": []
 }
