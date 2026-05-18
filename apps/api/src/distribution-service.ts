@@ -113,6 +113,28 @@ export class AwaitingApprovalBrakeError extends Error {
   }
 }
 
+
+/**
+ * Thrown when a caller attempts to enqueue a pick to a delivery target that is
+ * not supported by the worker. Only two categories of non-promotion targets are
+ * valid: discord:canary (canonical canary lane) and discord:<numericChannelId>
+ * (direct numeric channel IDs). Any other unknown target fails closed to
+ * prevent silent stranding of rows the worker will never claim.
+ */
+export class UnsupportedDeliveryTargetError extends Error {
+  public readonly target: string;
+
+  constructor(target: string) {
+    super(
+      'Delivery target "' + target + '" is not supported by the worker. ' +
+        'Only discord:canary and discord:<numericChannelId> are valid non-promotion targets. ' +
+        'Use a promotion target (best-bets, trader-insights, exclusive-insights) or a supported direct channel ID.',
+    );
+    this.name = 'UnsupportedDeliveryTargetError';
+    this.target = target;
+  }
+}
+
 /**
  * Terminal outbox statuses that allow a new enqueue for the same pick+target.
  * Rows in these states represent completed or abandoned delivery attempts.
@@ -136,6 +158,13 @@ export function resolveDeliveryTarget(
   return target;
 }
 
+function isSupportedNonPromotionTarget(target: string): boolean {
+  if (target === 'discord:canary') return true;
+  // discord:<numericChannelId> format — resolveDiscordChannelId handles these natively
+  const channelId = target.startsWith('discord:') ? target.slice('discord:'.length) : '';
+  return /^\d+$/.test(channelId);
+}
+
 export function evaluateDistributionTargetGate(
   target: string,
   targetRegistry?: TargetRegistryEntry[],
@@ -151,6 +180,9 @@ export function evaluateDistributionTargetGate(
   const resolvedTarget = resolveDeliveryTarget(target, env);
 
   if (!requestedPromotionTarget) {
+    if (!isSupportedNonPromotionTarget(target)) {
+      throw new UnsupportedDeliveryTargetError(target);
+    }
     return { ok: true, requestedPromotionTarget, resolvedTarget };
   }
 

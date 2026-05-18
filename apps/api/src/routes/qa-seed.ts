@@ -5,10 +5,9 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 
 import { loadEnvironment } from '@unit-talk/config';
 import type { CanonicalPick, SubmissionPayload } from '@unit-talk/contracts';
+import { enqueueDistributionWork } from '../distribution-service.js';
 import { writeJson } from '../http-utils.js';
 import type { ApiRuntimeDependencies } from '../server.js';
-
-const QA_PICK_DELIVERY_TARGET = 'discord:qa-pick-delivery';
 
 type QaChannelMap = {
   guildId: string;
@@ -128,6 +127,9 @@ export async function handleQaSeedPick(
   const channelId = loadQaPickDeliveryChannelId();
   const now = new Date().toISOString();
   const pick = createQaSeedPick(now);
+  // Route to the numeric channel ID directly so the worker can resolve and
+  // deliver it. In local env resolveDeliveryTarget redirects to discord:canary.
+  const deliveryTarget = `discord:${channelId}`;
 
   await runtime.repositories.submissions.saveSubmission({
     id: pick.submissionId,
@@ -135,24 +137,16 @@ export async function handleQaSeedPick(
     receivedAt: now,
   });
   await runtime.repositories.picks.savePick(pick, `qa-seed:${pick.id}`);
-  const outbox = await runtime.repositories.outbox.enqueue({
-    pickId: pick.id,
-    target: QA_PICK_DELIVERY_TARGET,
-    payload: {
-      qaSeed: true,
-      pickId: pick.id,
-      channelId,
-      title: 'QA Test Pick — Over 42.5',
-      odds: '-110',
-      units: '1',
-      book: 'QA Book',
-    },
-    idempotencyKey: `qa-seed:${pick.id}:${QA_PICK_DELIVERY_TARGET}`,
-  });
+  const enqueueResult = await enqueueDistributionWork(
+    pick,
+    runtime.repositories.outbox,
+    deliveryTarget,
+  );
 
+  const outboxId = 'outboxRecord' in enqueueResult ? enqueueResult.outboxRecord.id : null;
   writeJson(response, 200, {
     pickId: pick.id,
-    outboxId: outbox.id,
+    outboxId,
     channelId,
   });
 }

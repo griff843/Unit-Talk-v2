@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-982",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": ".",
+  "branch": "claude/utv2-982-unsupported-outbox-targets",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/src/distribution-service.ts",
+    "apps/api/src/routes/qa-seed.ts",
+    "apps/api/src/distribution-service.test.ts",
+    "apps/api/src/t1-proof-utv2-982-outbox-cleanup.test.ts",
+    "docs/06_status/proof/UTV2-982/evidence-bundle.md",
+    "docs/06_status/proof/UTV2-982/runtime-verification.md",
+    "docs/06_status/lanes/UTV2-982.json",
+    ".ops/sync/UTV2-982.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-982/evidence-bundle.md",
+    "apps/api/src/t1-proof-utv2-982-outbox-cleanup.test.ts"
+  ],
+  "status": "started",
+  "started_at": "2026-05-18T00:33:36Z",
+  "heartbeat_at": "2026-05-18T00:33:36Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}

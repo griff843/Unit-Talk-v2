@@ -167,7 +167,7 @@ test('POST /api/qa/seed-pick returns the seed response shape and enqueues sandbo
           assert.ok(pick, 'expected seeded pick to exist');
           assert.equal(pick?.status, 'queued');
           assert.ok(outbox, 'expected seeded outbox row to exist');
-          assert.equal(outbox.target, 'discord:qa-pick-delivery');
+          assert.equal(outbox.target, `discord:${channelId}`);
           assert.equal(outbox.status, 'pending');
         });
       },
