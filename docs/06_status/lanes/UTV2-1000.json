@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1000",
+  "lane_type": "data-canonical",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "C:/Dev/Unit-Talk-v2-main",
+  "branch": "codex/utv2-1000-model-edge-proof",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/model-edge-proof.ts",
+    "docs/06_status/proof/UTV2-1000/evidence-bundle.md",
+    "docs/06_status/lanes/UTV2-1000.json",
+    ".ops/sync/UTV2-1000.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1000/evidence-bundle.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-18T03:00:00Z",
+  "heartbeat_at": "2026-05-18T03:00:00Z",
+  "closed_at": null,
+  "blocked_by": ["UTV2-997"],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
