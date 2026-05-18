@@ -46,6 +46,14 @@ Use the workflow's job id as the `name` — GitHub's branch protection UI lists 
       "always_required": true,
       "tier_applicability": ["T1", "T2", "T3"],
       "purpose": "Runs pnpm verify: env:check + lint + type-check + build + discord command manifest check + unit tests + DB smoke test. Primary merge gate for every tier."
+    },
+    {
+      "name": "proof-regression",
+      "workflow": ".github/workflows/proof-regression.yml",
+      "job": "proof-regression",
+      "always_required": true,
+      "tier_applicability": ["T1", "T2", "T3"],
+      "purpose": "Runs proof scripts affected by proof-relevant runtime and domain changes. Non-zero proof script exits fail CI when required Supabase secrets are available."
     }
   ]
 }
@@ -71,6 +79,16 @@ Use the workflow's job id as the `name` — GitHub's branch protection UI lists 
 - **Required on main:** yes, always. Applies to T1, T2, T3 lanes without exception.
 - **Merge relevance:** primary merge gate. No tier may bypass.
 - **Notes:** `test:db` requires Supabase credentials; for non-migration PRs this runs against the main project; for migration PRs the parallel `Supabase PR DB Branch / validate` job re-runs `test:db` against an isolated preview branch.
+
+### 4.2 `proof-regression`
+
+- **Owning workflow:** `.github/workflows/proof-regression.yml`
+- **Job:** `proof-regression`
+- **Trigger:** `pull_request` when proof-relevant runtime, domain, or repository files change
+- **What it does:** Detects affected proof scripts from the PR diff, confirms live proof secrets are available, then runs each affected script with `npx tsx`.
+- **Required on main:** yes, always. Applies to T1, T2, T3 lanes without exception when the workflow is triggered.
+- **Merge relevance:** proof regression gate for lifecycle, submission, settlement, promotion, scoring, delivery, recap, and member-lifecycle changes.
+- **Notes:** live proof execution requires Supabase credentials; when they are absent, the workflow reports a notice and skips live proof scripts.
 
 ---
 
