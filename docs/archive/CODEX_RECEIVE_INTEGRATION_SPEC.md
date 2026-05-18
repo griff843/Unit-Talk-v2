@@ -1,3 +1,9 @@
+---
+archived: true
+reason: implementation-complete
+archived_at: 2026-05-18
+---
+
 # `codex-receive` — Canonical Lane Integration Specification
 
 **Status:** Canonical, implementation-ready

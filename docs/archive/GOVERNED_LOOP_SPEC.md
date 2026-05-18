@@ -1,3 +1,9 @@
+---
+archived: true
+reason: implementation-complete
+archived_at: 2026-05-18
+---
+
 # Governed Execution Loop — Implementation Specification
 
 > **Status:** Draft — ratification patch applied 2026-04-13 (fail-closed upgrade)
