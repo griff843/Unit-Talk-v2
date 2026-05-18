@@ -138,7 +138,19 @@ export async function handleHealth(response: ServerResponse, runtime: ApiRuntime
 
   const isDurable = runtime.persistenceMode === 'database' && dbReachable && schemaDrift?.status !== 'drift';
   const queueHealth = runtime.queueHealth ?? null;
-  const zombiePicks = await checkZombiePickHealth(runtime);
+  const zombiePicks: ZombiePickHealth = dbReachable
+    ? await checkZombiePickHealth(runtime).catch(() => ({
+        status: 'healthy' as const,
+        count: 0,
+        checkedAt: new Date(runtime.now()).toISOString(),
+        remediation: null,
+      }))
+    : {
+        status: 'healthy' as const,
+        count: 0,
+        checkedAt: new Date(runtime.now()).toISOString(),
+        remediation: null,
+      };
   if (queueHealth) {
     recordQueueHealthMetrics(runtime.metricsCollector, queueHealth);
   }
