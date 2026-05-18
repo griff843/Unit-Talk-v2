@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1030",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": ".",
+  "branch": "claude/utv2-1030-delete-readiness-reportts",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "scripts/readiness-report.ts"
+  ],
+  "file_scope_lock": [
+    "scripts/readiness-report.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "started",
+  "started_at": "2026-05-18T05:50:00.000Z",
+  "heartbeat_at": "2026-05-18T05:50:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": []
+}
