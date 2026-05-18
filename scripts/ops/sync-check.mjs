@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 
 const legacySyncYml = '.ops/sync.yml';
@@ -37,11 +38,9 @@ if (branchIssue) {
 
 function getCurrentBranch() {
   try {
-    const head = readFileSync('.git/HEAD', 'utf8').trim();
-    const prefix = 'ref: refs/heads/';
-    return head.startsWith(prefix) ? head.slice(prefix.length) : 'HEAD';
+    return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
   } catch (error) {
-    console.error(`[sync-check] Unable to read .git/HEAD: ${error instanceof Error ? error.message : String(error)}`);
+    console.error(`[sync-check] Unable to resolve git branch: ${error instanceof Error ? error.message : String(error)}`);
     return 'HEAD';
   }
 }
