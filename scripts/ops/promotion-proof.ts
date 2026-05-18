@@ -1,7 +1,7 @@
 /**
  * UTV2-674: Promotion Controls Proof Script
  *
- * Proves 4 P0 Fibery controls:
+ * Proves 4 P0 promotion controls:
  *   1. Promotion rules are explicitly defined
  *   2. Board caps are enforced correctly
  *   3. No duplicate promotion occurs

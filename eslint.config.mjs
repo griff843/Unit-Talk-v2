@@ -17,8 +17,6 @@ export default tseslint.config(
       '.out/**',
       'scripts/debug-*.ts',
       'scripts/live-data-lab-*.ts',
-      // Fibery automation snippets use injected runtime globals (context, args)
-      'scripts/ops/fibery-automations/**',
       // Playwright browser-runner scripts — page.evaluate() callbacks use browser globals
       'check-cc.mjs',
       '**/check-cc.mjs',

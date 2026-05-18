@@ -1,6 +1,6 @@
 # QA Roadmap Expansion — UTV2-763 Closeout
 
-> Phase 7E is done. Experience QA has a trust layer (UTV2-761) and Fibery guardrails (UTV2-762).
+> Phase 7E is done. Experience QA has a trust layer (UTV2-761) and retired external-sync guardrails (UTV2-762).
 > This document records the sequencing decision and the three concrete lanes created.
 
 ## Decision

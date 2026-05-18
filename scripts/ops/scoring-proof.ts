@@ -1,7 +1,7 @@
 /**
  * UTV2-673: Scoring Controls Proof Script
  *
- * Proves 4 P0 Fibery controls:
+ * Proves 4 P0 scoring controls:
  *   1. Scoring is deterministic for identical inputs
  *   2. Scoring output is explainable
  *   3. Scoring changes are versioned or tracked

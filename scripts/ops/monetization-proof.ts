@@ -1,7 +1,7 @@
 /**
  * UTV2-678: Monetization Controls Proof Script
  *
- * Proves 4 P0 Fibery controls:
+ * Proves 4 P0 monetization controls:
  *   1. Tier access rules are explicitly defined
  *   2. Trial logic behaves correctly
  *   3. Feature access is enforced correctly

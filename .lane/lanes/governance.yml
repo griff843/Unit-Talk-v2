@@ -7,12 +7,15 @@ allowed_path_globs:
   - .lane/**
   - .ops/**
   - .gitignore
+  - .env.example
+  - eslint.config.*
   - scripts/**
   - deploy/**
   - docs/governance/**
   - docs/05_operations/**
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
+  - docs/06_status/qa-roadmap-expansion.md
   - docs/archive/**
   - CLAUDE.md
   - package.json

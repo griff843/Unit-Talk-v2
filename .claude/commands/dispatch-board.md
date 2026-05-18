@@ -140,7 +140,7 @@ After T1 PR open + evidence bundle:
      schema: pm-verdict/v1
      Issue: UTV2-###
    ```
-4. On `PM_VERDICT: APPROVED` detected: run `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close`, then `pnpm ops:lane-close UTV2-###`. Run Fibery proof sync only after closeout succeeds.
+4. On `PM_VERDICT: APPROVED` detected: run `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`, then `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close`, then `pnpm ops:lane-close UTV2-###`.
 
 ---
 

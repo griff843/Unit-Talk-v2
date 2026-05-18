@@ -388,10 +388,25 @@ function buildPackageTestDrift(input: {
   const deletedTestFiles = input.diffEntries
     .filter((entry) => isDeletedStatus(entry.status) && isTestFile(entry.file))
     .map((entry) => entry.file);
+  const deletedFiles = new Set(
+    input.diffEntries
+      .filter((entry) => isDeletedStatus(entry.status))
+      .map((entry) => normalizePath(entry.file)),
+  );
+  const removedWithImplementation = new Set(
+    deletedTestFiles.filter((file) =>
+      matchingImplementationPathsForTest(file).some((implementationPath) => deletedFiles.has(implementationPath)),
+    ),
+  );
   const baseScriptTestFiles = extractScriptTestFiles(baseScripts);
   const headScriptTestFiles = extractScriptTestFiles(headScripts);
-  const droppedScriptReferences = baseScriptTestFiles.filter((file) => !headScriptTestFiles.includes(file));
-  const droppedTests = normalizePaths([...deletedTestFiles, ...droppedScriptReferences]);
+  const droppedScriptReferences = baseScriptTestFiles.filter((file) =>
+    !headScriptTestFiles.includes(file) && !removedWithImplementation.has(file),
+  );
+  const droppedTests = normalizePaths([
+    ...deletedTestFiles.filter((file) => !removedWithImplementation.has(file)),
+    ...droppedScriptReferences,
+  ]);
   const testScriptChanged = packageJsonChanged && !sameJson(testScriptSubset(baseScripts), testScriptSubset(headScripts));
 
   return {
@@ -730,6 +745,14 @@ function quoteForShell(value: string): string {
 
 function isTestFile(filePath: string): boolean {
   return TEST_FILE_PATTERN.test(filePath);
+}
+
+function matchingImplementationPathsForTest(filePath: string): string[] {
+  const normalized = normalizePath(filePath);
+  return [
+    normalized.replace(/(?:\.test|\.spec)(\.[cm]?[jt]sx?)$/u, '$1'),
+    normalized.replace(/(?:\.test|\.spec)(\.[cm]?[jt]sx?)$/u, '.js'),
+  ];
 }
 
 function isAddedStatus(status: string): boolean {

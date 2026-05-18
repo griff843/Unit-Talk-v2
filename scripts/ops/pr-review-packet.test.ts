@@ -192,6 +192,31 @@ test('generatePRReviewPacket detects dropped tests versus base package scripts',
   assert.equal(packet.checks.find((check) => check.id === 'dropped_tests')?.status, 'FAIL');
 });
 
+test('generatePRReviewPacket allows test deletion when matching implementation is deleted', async () => {
+  const packet = await generatePRReviewPacket(
+    createInput({
+      diff_entries: [
+        { status: 'M', file: 'package.json' },
+        { status: 'D', file: 'scripts/ops/retired-sync.test.ts' },
+        { status: 'D', file: 'scripts/ops/retired-sync.ts' },
+      ],
+      base_package_json: {
+        scripts: {
+          'test:ops': 'tsx --test scripts/ops/retired-sync.test.ts scripts/ops/shared.test.ts',
+        },
+      },
+      head_package_json: {
+        scripts: {
+          'test:ops': 'tsx --test scripts/ops/shared.test.ts scripts/ops/pr-review-packet.test.ts',
+        },
+      },
+    }),
+  );
+
+  assert.deepStrictEqual(packet.package_test_drift.dropped_tests, []);
+  assert.equal(packet.checks.find((check) => check.id === 'dropped_tests')?.status, 'PASS');
+});
+
 test('generatePRReviewPacket detects missing proof artifacts', async () => {
   const packet = await generatePRReviewPacket(
     createInput({

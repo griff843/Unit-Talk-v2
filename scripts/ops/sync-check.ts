@@ -68,7 +68,7 @@ function main(): void {
   // Fall back to legacy .ops/sync.yml
   const syncIssue = extractIssueFromSync(LEGACY_SYNC_YML);
   if (!syncIssue) {
-    // No sync metadata at all — skip (fibery-ci-enforcement will catch missing file)
+    // No sync metadata at all — skip; lane gates handle missing issue linkage.
     process.exit(0);
   }
 

@@ -9,7 +9,6 @@ name: Post-Merge Lane Close
 #   2. Run truth-check          — hard-gate (failure halts)
 #   3. Close manifest           — hard-gate (must succeed)
 #   4. Update Linear            — skipped (linear-auto-close.yml handles it)
-#   5. Update Fibery            — skipped (fibery-sync-on-merge.yml handles it)
 #
 # Issue ID extraction:
 #   1. Scans the head commit message for UTV2-\d+ patterns (case-insensitive):
