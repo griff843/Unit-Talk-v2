@@ -7,7 +7,7 @@
   "worktree_path": "C:/Dev/Unit-Talk-v2-main",
   "branch": "claude/utv2-993-worker-restart-double-delivery-safety",
   "base_branch": "main",
-  "commit_sha": "344961a5",
+  "commit_sha": "39e9db00ba876c2c63dc5dbdea6459fcd9639855",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/740",
   "files_changed": [
     "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts",
@@ -28,10 +28,10 @@
     "docs/06_status/proof/UTV2-993/evidence-bundle.md",
     "apps/worker/src/t1-proof-utv2-993-worker-restart.test.ts"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-18T03:00:00Z",
   "heartbeat_at": "2026-05-18T03:00:00Z",
-  "closed_at": null,
+  "closed_at": "2026-05-18T04:30:00Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
