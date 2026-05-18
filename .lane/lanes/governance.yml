@@ -18,6 +18,8 @@ allowed_path_globs:
   - tsconfig*.json
   - Dockerfile
   - apps/**/package.json
+  - packages/events/**
+  - packages/intelligence/**
   - packages/config/**
   - packages/contracts/**
   - packages/db/src/**
