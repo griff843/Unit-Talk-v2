@@ -5,6 +5,7 @@ import { InMemoryOutboxRepository } from '@unit-talk/db';
 import {
   AwaitingApprovalBrakeError,
   DistributionTargetMismatchError,
+  UnsupportedDeliveryTargetError,
   enqueueDistributionWork,
   evaluateDistributionTargetGate,
   getDistributionTargetValidationStats,
@@ -271,8 +272,8 @@ test('enqueueDistributionWork: different targets for same pick are allowed', asy
   const first = await enqueueDistributionWork(pick, outbox, TARGET_CANARY);
   assert.ok('outboxRecord' in first);
 
-  // Different target should work fine
-  const second = await enqueueDistributionWork(pick, outbox, 'discord:recaps');
+  // Different target should work fine — numeric channel IDs are valid non-promotion targets
+  const second = await enqueueDistributionWork(pick, outbox, 'discord:123456789123456789');
   assert.ok('outboxRecord' in second, 'expected enqueue to different target to succeed');
 });
 
@@ -395,4 +396,56 @@ test('retryDeliveryController: succeeds for failed row with no active conflict',
   if (!result.body.ok) throw new Error('expected ok');
   assert.equal(result.body.data.previousStatus, 'dead_letter');
   assert.equal(result.body.data.newStatus, 'pending');
+});
+
+// ---------------------------------------------------------------------------
+// UTV2-982: fail-closed validation for unsupported non-promotion targets
+// ---------------------------------------------------------------------------
+
+test('evaluateDistributionTargetGate: discord:canary passes as supported non-promotion target', () => {
+  const gate = evaluateDistributionTargetGate('discord:canary', [], {});
+  assert.equal(gate.ok, true);
+  assert.equal(gate.requestedPromotionTarget, null);
+});
+
+test('evaluateDistributionTargetGate: discord:<numericId> passes as supported direct channel target', () => {
+  const gate = evaluateDistributionTargetGate('discord:1234567890', [], {});
+  assert.equal(gate.ok, true);
+  assert.equal(gate.requestedPromotionTarget, null);
+});
+
+test('evaluateDistributionTargetGate: discord:qa-pick-delivery throws UnsupportedDeliveryTargetError', () => {
+  assert.throws(
+    () => evaluateDistributionTargetGate('discord:qa-pick-delivery', [], {}),
+    (err: unknown) => {
+      assert.ok(err instanceof UnsupportedDeliveryTargetError, 'expected UnsupportedDeliveryTargetError');
+      assert.equal(err.target, 'discord:qa-pick-delivery');
+      return true;
+    },
+  );
+});
+
+test('evaluateDistributionTargetGate: discord:unknown-lane throws UnsupportedDeliveryTargetError', () => {
+  assert.throws(
+    () => evaluateDistributionTargetGate('discord:some-other-lane', [], {}),
+    (err: unknown) => {
+      assert.ok(err instanceof UnsupportedDeliveryTargetError, 'expected UnsupportedDeliveryTargetError');
+      assert.equal(err.target, 'discord:some-other-lane');
+      return true;
+    },
+  );
+});
+
+test('enqueueDistributionWork: throws UnsupportedDeliveryTargetError for unsupported target', async () => {
+  const outbox = new InMemoryOutboxRepository();
+  const pick = makePick({ lifecycleState: 'queued', promotionStatus: 'not_eligible', promotionTarget: undefined });
+
+  await assert.rejects(
+    () => enqueueDistributionWork(pick, outbox, 'discord:qa-pick-delivery'),
+    (err: unknown) => {
+      assert.ok(err instanceof UnsupportedDeliveryTargetError);
+      assert.equal((err as UnsupportedDeliveryTargetError).target, 'discord:qa-pick-delivery');
+      return true;
+    },
+  );
 });

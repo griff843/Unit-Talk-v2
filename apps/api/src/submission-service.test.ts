@@ -872,17 +872,17 @@ test('enqueueDistributionWork creates an outbox record with idempotency key', as
       lifecycleState: queued.lifecycleState,
     },
     repositories.outbox,
-    'discord:free-picks',
+    'discord:canary',
   );
   assert.ok(!('enqueued' in distributionResult), 'expected DistributionEnqueueResult');
   const distribution = distributionResult;
 
   assert.equal(distribution.outboxRecord.pick_id, result.pick.id);
-  assert.equal(distribution.outboxRecord.target, 'discord:free-picks');
+  assert.equal(distribution.outboxRecord.target, 'discord:canary');
   assert.equal(distribution.outboxRecord.status, 'pending');
   assert.equal(
     distribution.outboxRecord.idempotency_key,
-    `${result.pick.id}:discord:free-picks:distribution`,
+    `${result.pick.id}:discord:canary:distribution`,
   );
 });
 
@@ -950,7 +950,7 @@ test('enqueueDistributionWithRunTracking records run and audit metadata', async 
       ...result.pick,
       lifecycleState: queued.lifecycleState,
     },
-    'discord:premium-picks',
+    'discord:canary',
     'api',
     repositories.picks,
     repositories.outbox,
@@ -985,12 +985,12 @@ test('claimDistributionWork claims the next pending outbox record for a worker',
   await enqueueDistributionWork(
     result.pick,
     repositories.outbox,
-    'discord:worker-queue',
+    'discord:canary',
   );
 
   const claimed = await claimDistributionWork(
     repositories.outbox,
-    'discord:worker-queue',
+    'discord:canary',
     'worker-1',
   );
 
@@ -1013,12 +1013,12 @@ test('failDistributionWork marks claimed work failed and increments attempt coun
   await enqueueDistributionWork(
     result.pick,
     repositories.outbox,
-    'discord:retry-queue',
+    'discord:canary',
   );
 
   const claimed = await claimDistributionWork(
     repositories.outbox,
-    'discord:retry-queue',
+    'discord:canary',
     'worker-2',
   );
 
@@ -1050,12 +1050,12 @@ test('completeDistributionWork marks claimed work sent', async () => {
   await enqueueDistributionWork(
     result.pick,
     repositories.outbox,
-    'discord:sent-queue',
+    'discord:canary',
   );
 
   const claimed = await claimDistributionWork(
     repositories.outbox,
-    'discord:sent-queue',
+    'discord:canary',
     'worker-3',
   );
 
@@ -1083,12 +1083,12 @@ test('recordDistributionReceipt stores a first-class delivery receipt', async ()
   await enqueueDistributionWork(
     result.pick,
     repositories.outbox,
-    'discord:receipts',
+    'discord:canary',
   );
 
   const claimed = await claimDistributionWork(
     repositories.outbox,
-    'discord:receipts',
+    'discord:canary',
     'worker-4',
   );
 
