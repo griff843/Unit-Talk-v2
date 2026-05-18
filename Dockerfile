@@ -16,8 +16,6 @@ COPY packages/config/package.json            packages/config/
 COPY packages/contracts/package.json         packages/contracts/
 COPY packages/db/package.json                packages/db/
 COPY packages/domain/package.json            packages/domain/
-COPY packages/events/package.json            packages/events/
-COPY packages/intelligence/package.json      packages/intelligence/
 COPY packages/observability/package.json     packages/observability/
 COPY packages/verification/package.json      packages/verification/
 COPY apps/api/package.json                   apps/api/

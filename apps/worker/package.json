@@ -18,8 +18,6 @@
     "@unit-talk/contracts": "workspace:*",
     "@unit-talk/db": "workspace:*",
     "@unit-talk/domain": "workspace:*",
-    "@unit-talk/events": "workspace:*",
-    "@unit-talk/intelligence": "workspace:*",
     "@unit-talk/observability": "workspace:*"
   }
 }
