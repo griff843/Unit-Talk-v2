@@ -65,6 +65,7 @@ apps/smart-form/test-results/
 .out/worktrees/
 .out/
 .ops/leases/
+.ops/merge-lock.json
 _tmp_*
 .claude/scheduled_tasks.lock
 

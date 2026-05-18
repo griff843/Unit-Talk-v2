@@ -9,6 +9,7 @@ import {
   type TruthCheckResult,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
+import { requireMergeLockHeld } from './merge-mutex.js';
 
 /**
  * Machine-readable codes emitted in the closeout JSON response.
@@ -104,6 +105,23 @@ async function main(): Promise<void> {
 
   try {
     const manifest = readManifest(issueId);
+    const lock = requireMergeLockHeld({
+      issue_id: issueId,
+      branch: manifest.branch,
+      reason: 'ops:lane-close',
+    });
+    if (!lock.ok) {
+      emitJson({
+        ok: false,
+        code: lock.code,
+        remediation:
+          `Acquire the merge mutex before closeout: pnpm ops:merge-lock acquire --issue ${issueId} ` +
+          `--branch ${manifest.branch} --reason ops:lane-close`,
+        issue_id: issueId,
+        merge_lock: lock,
+      });
+      process.exit(1);
+    }
     requireCloseCommitSha(manifest);
 
     const result = await runTruthCheck({

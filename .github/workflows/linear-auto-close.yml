@@ -50,6 +50,10 @@ on:
     branches:
       - main
 
+concurrency:
+  group: merge-closeout-mutex
+  cancel-in-progress: false
+
 jobs:
   linear-auto-close:
     name: Close Linear issues referenced in merge commit
