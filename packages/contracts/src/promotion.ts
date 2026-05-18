@@ -365,6 +365,19 @@ export interface PromotionDecisionSnapshot {
      * fallback was used. Enables coverage auditing without JSON parsing. UTV2-985.
      */
     providerCoverageState?: ProviderCoverageState | undefined;
+    /**
+     * Explicit reason when uniqueness returned the fallback value (no open-picks
+     * data available). UTV2-987.
+     */
+    uniquenessFallbackReason?: string | undefined;
+    /**
+     * Dimensions used to compute uniqueness score when open-picks data was
+     * available. Null when explicit uniqueness score was provided. UTV2-987.
+     */
+    uniquenessInputs?: {
+      sameSportMarketCount: number;
+      selectionOverlapCount: number;
+    } | undefined;
   };
 
   /** Gate boolean/value inputs at the moment of decision. */

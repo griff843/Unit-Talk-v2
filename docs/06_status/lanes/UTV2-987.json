@@ -13,10 +13,17 @@
   "file_scope_lock": [
     "packages/domain/src/scoring/uniqueness.ts",
     "packages/domain/src/scoring/uniqueness.test.ts",
+    "packages/contracts/src/promotion.ts",
     "apps/api/src/promotion-service.ts",
-    "apps/api/src/promotion-edge-integration.test.ts"
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "apps/api/src/t1-proof-utv2-987-uniqueness-signal.test.ts",
+    "docs/06_status/proof/UTV2-987/evidence-bundle.md",
+    "docs/06_status/proof/UTV2-987/runtime-verification.md"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-987/evidence-bundle.md",
+    "apps/api/src/t1-proof-utv2-987-uniqueness-signal.test.ts"
+  ],
   "status": "started",
   "started_at": "2026-05-17T23:55:00.000Z",
   "heartbeat_at": "2026-05-17T23:55:00.000Z",

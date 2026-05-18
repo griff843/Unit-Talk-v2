@@ -7,4 +7,6 @@ entities:
     - UTV2-987
   findings: []
   controls: []
-  proofs: []
+  proofs:
+    - docs/06_status/proof/UTV2-987/evidence-bundle.md
+    - apps/api/src/t1-proof-utv2-987-uniqueness-signal.test.ts
