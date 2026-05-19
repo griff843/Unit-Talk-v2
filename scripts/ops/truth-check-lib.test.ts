@@ -216,9 +216,9 @@ test('P9 accepts flat key-value runtime proof entries', () => {
   assert.strictEqual(hasRuntimeReferences({ closing_line_coverage_after: '   ', checked_rows: 0 }), false);
 });
 
-test('R1 R2 R3 skip for T1 when phase contracts are not required', () => {
+test('R1 R2 R3 skip for non-T1 tier', () => {
   const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
-  addUnsupportedRuntimeChecks((id, status, detail) => checks.push({ id, status, detail }), false, 'T1', false);
+  addUnsupportedRuntimeChecks((id, status, detail) => checks.push({ id, status, detail }), false, 'T2', null);
 
   assert.deepStrictEqual(
     checks.map((check) => [check.id, check.status]),
@@ -226,6 +226,89 @@ test('R1 R2 R3 skip for T1 when phase contracts are not required', () => {
       ['R1', 'skip'],
       ['R2', 'skip'],
       ['R3', 'skip'],
+    ],
+  );
+});
+
+test('R1 R2 R3 fail for T1 when --no-runtime is set', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks((id, status, detail) => checks.push({ id, status, detail }), true, 'T1', null);
+
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'fail'],
+      ['R2', 'fail'],
+      ['R3', 'fail'],
+    ],
+  );
+});
+
+test('R1 R2 R3 fail for T1 when evidence bundle is null', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks((id, status, detail) => checks.push({ id, status, detail }), false, 'T1', null);
+
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'fail'],
+      ['R2', 'fail'],
+      ['R3', 'fail'],
+    ],
+  );
+});
+
+test('R1 R2 R3 pass for T1 with valid evidence bundle', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    {
+      bundle: {
+        schema_version: 1,
+        verifier: { identity: 'runtime-verifier' },
+        runtime_proof: {
+          queries: [{ table: 'picks', count: 5 }],
+          row_counts: [{ table: 'picks', count: 5 }],
+        },
+      },
+    },
+  );
+
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'pass'],
+      ['R2', 'pass'],
+      ['R3', 'pass'],
+    ],
+  );
+});
+
+test('R1 fails for T1 when queries empty, R2 fails when row_counts empty, R3 fails when verifier identity missing', () => {
+  const checks: Array<{ id: string; status: 'pass' | 'fail' | 'skip'; detail: string }> = [];
+  addUnsupportedRuntimeChecks(
+    (id, status, detail) => checks.push({ id, status, detail }),
+    false,
+    'T1',
+    {
+      bundle: {
+        schema_version: 1,
+        runtime_proof: {
+          queries: [],
+          row_counts: [],
+        },
+      },
+    },
+  );
+
+  assert.deepStrictEqual(
+    checks.map((check) => [check.id, check.status]),
+    [
+      ['R1', 'fail'],
+      ['R2', 'fail'],
+      ['R3', 'fail'],
     ],
   );
 });
