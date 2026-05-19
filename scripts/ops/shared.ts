@@ -296,6 +296,48 @@ export function issueToManifestPath(issueId: string): string {
   return path.join(MANIFEST_DIR, `${issueId.toUpperCase()}.json`);
 }
 
+export function readConfiguredEnvValue(
+  key: string,
+  root = ROOT,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const fromProcess = env[key]?.trim();
+  if (fromProcess) {
+    return fromProcess;
+  }
+
+  for (const fileName of ['local.env', '.env', '.env.example']) {
+    const value = readEnvFileValue(path.join(root, fileName), key);
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function readEnvFileValue(filePath: string, key: string): string {
+  if (!fs.existsSync(filePath)) {
+    return '';
+  }
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+    const separator = line.indexOf('=');
+    if (separator <= 0) {
+      continue;
+    }
+    if (line.slice(0, separator).trim() !== key) {
+      continue;
+    }
+    return line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
+  }
+  return '';
+}
+
 export function parseArgs(argv: string[]): {
   positionals: string[];
   flags: Map<string, string[]>;

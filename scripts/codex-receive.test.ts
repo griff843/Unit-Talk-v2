@@ -8,20 +8,31 @@ import {
   issueToManifestPath,
 } from './ops/shared.js';
 
-function currentBranch(): string {
-  const result = spawnSync('git', ['branch', '--show-current'], {
+function branchFor(issueId: string): string {
+  return `codex/${issueId.toLowerCase()}-receive`;
+}
+
+function createBranch(branch: string): void {
+  const result = spawnSync('git', ['branch', branch, 'HEAD'], {
     cwd: ROOT,
     encoding: 'utf8',
     stdio: 'pipe',
   });
   assert.strictEqual(result.status, 0, result.stderr);
-  return result.stdout.trim();
+}
+
+function deleteBranch(branch: string): void {
+  spawnSync('git', ['branch', '-D', branch], {
+    cwd: ROOT,
+    encoding: 'utf8',
+    stdio: 'pipe',
+  });
 }
 
 function runCodexReceive(args: string[]) {
   return spawnSync(
     process.execPath,
-    [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/codex-receive.ts', '--', ...args],
+    [path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'), 'scripts/codex-receive.ts', ...args],
     {
       cwd: ROOT,
       encoding: 'utf8',
@@ -103,7 +114,6 @@ test('codex-receive rejects the removed --skip-tests flag', () => {
     [
       path.join(ROOT, 'node_modules', 'tsx', 'dist', 'cli.mjs'),
       'scripts/codex-receive.ts',
-      '--',
       '--issue',
       'UTV2-999',
       '--branch',
@@ -125,7 +135,7 @@ test('codex-receive rejects the removed --skip-tests flag', () => {
 
 test('codex-receive is idempotent when already in_review with the same PR URL', () => {
   const issueId = 'UTV2-99201';
-  const branch = currentBranch();
+  const branch = branchFor(issueId);
   try {
     withManifest(issueId, 'in_review', branch, (manifest) => {
       manifest.pr_url = 'https://github.com/example/unit-talk/pull/201';
@@ -160,7 +170,7 @@ test('codex-receive is idempotent when already in_review with the same PR URL', 
 
 test('codex-receive rejects conflicting PR URL from manifest truth', () => {
   const issueId = 'UTV2-99202';
-  const branch = currentBranch();
+  const branch = branchFor(issueId);
   try {
     withManifest(issueId, 'in_review', branch, (manifest) => {
       manifest.pr_url = 'https://github.com/example/unit-talk/pull/202';
@@ -184,11 +194,11 @@ test('codex-receive rejects conflicting PR URL from manifest truth', () => {
 });
 
 test('codex-receive returns no-op for merged or done lanes when PR URL matches manifest truth', () => {
-  const branch = currentBranch();
   for (const [issueId, status] of [
     ['UTV2-99203', 'merged'],
     ['UTV2-99204', 'done'],
   ] as const) {
+    const branch = branchFor(issueId);
     try {
       withManifest(issueId, status, branch, (manifest) => {
         manifest.pr_url = 'https://github.com/example/unit-talk/pull/203';
@@ -216,8 +226,9 @@ test('codex-receive returns no-op for merged or done lanes when PR URL matches m
 
 test('codex-receive parses lane-link-pr JSON when pnpm emits text before JSON', () => {
   const issueId = 'UTV2-99205';
-  const branch = currentBranch();
+  const branch = branchFor(issueId);
   try {
+    createBranch(branch);
     withManifest(issueId, 'started', branch);
     const result = runCodexReceive([
       '--issue',
@@ -236,6 +247,7 @@ test('codex-receive parses lane-link-pr JSON when pnpm emits text before JSON', 
     assert.strictEqual(payload.status, 'in_review');
     assert.strictEqual(payload.pr_url, 'https://github.com/example/unit-talk/pull/205');
   } finally {
+    deleteBranch(branch);
     cleanup(issueId);
   }
 });

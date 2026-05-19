@@ -1,11 +1,11 @@
 import { spawnSync } from 'node:child_process';
 import { pathToFileURL } from 'node:url';
-import { loadEnvironment } from '@unit-talk/config';
 import {
   ROOT,
   emitJson,
   getFlag,
   parseArgs,
+  readConfiguredEnvValue,
   readManifest,
   requireIssueId,
   validateBranchName,
@@ -239,8 +239,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       return 1;
     }
 
-    const env = loadEnvironment();
-    const linearToken = env.LINEAR_API_TOKEN?.trim();
+    const linearToken = readConfiguredEnvValue('LINEAR_API_TOKEN');
     if (!noLinear && !linearToken) {
       const result: ReceiveResult = {
         ok: false,
