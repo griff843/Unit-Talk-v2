@@ -13,6 +13,7 @@
   "file_scope_lock": [
     "scripts/roi-by-sport.ts",
     ".github/workflows/model-performance-monitor.yml",
+    ".lane/lanes/governance.yml",
     "docs/06_status/model-performance-log.md",
     "docs/06_status/lanes/UTV2-1026.json",
     "docs/06_status/proof/UTV2-1026/diff-summary.md",
