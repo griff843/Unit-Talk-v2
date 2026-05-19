@@ -21,7 +21,7 @@
     "docs/05_operations/RISK_VOLATILITY_STANDARD.md",
     "docs/06_status/lanes/UTV2-1022.json",
     "docs/06_status/proof/UTV2-1022/diff-summary.md",
-    "docs/06_status/proof/UTV2-1022/verification.txt",
+    "docs/06_status/proof/UTV2-1022/verification.md",
     "packages/contracts/src/promotion.ts",
     "packages/domain/src/promotion-conviction.test.ts",
     "packages/domain/src/promotion.ts",
@@ -29,7 +29,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1022/diff-summary.md",
-    "docs/06_status/proof/UTV2-1022/verification.txt"
+    "docs/06_status/proof/UTV2-1022/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-19T22:34:11.673Z",
