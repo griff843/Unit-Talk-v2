@@ -7,7 +7,7 @@
   "worktree_path": ".",
   "branch": "codex/utv2-1061-merge-mutex-wrapper-clean",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "dcb91623107ee4ff8d1678e33de72723011fb8d7",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/768",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,7 +20,7 @@
     "package.json"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "execution_location": {
     "mode": "main-control",
     "cwd": ".",
@@ -28,7 +28,7 @@
   },
   "started_at": "2026-05-18T23:56:40.000Z",
   "heartbeat_at": "2026-05-19T01:00:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-19T13:22:32.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
