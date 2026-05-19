@@ -31,3 +31,7 @@ pnpm test: PASS (479/479).
 - [x] R-level compliance — PASS
 - [x] Tier label `tier:T2` on PR #795
 - [x] Observability-only change — no data path, no model logic, no DB schema
+
+## Merge SHA
+
+ddd7015a7b01f8828b89ccf5fe73a9bc036168e9

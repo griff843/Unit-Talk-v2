@@ -75,3 +75,7 @@ paths:
 ## Impact
 
 PRs touching any of these paths will now trigger the runtime-verifier-gate workflow, ensuring no runtime-sensitive change bypasses the proof gate due to a narrow path filter.
+
+## Merge SHA
+
+9c0ba994fe017f38d1395b93369e130c004c494d

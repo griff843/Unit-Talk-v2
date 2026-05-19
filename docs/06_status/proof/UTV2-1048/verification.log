@@ -69,3 +69,5 @@ Notes:
   - The second `pnpm verify` attempt failed at `env:check` because this worktree did not have `local.env`. Ran the approved helper from the main checkout:
     `npx tsx scripts/link-worktree-env.ts /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1048-lane-governor-dispatch-preflight`
   - The helper hardlinked `local.env` and did not copy credentials.
+
+Merge SHA: 30a21254b461a1f193f8b0f9d63b037efbc50a34

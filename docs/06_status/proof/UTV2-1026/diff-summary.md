@@ -21,3 +21,7 @@ UTV2-1026: Implemented automated model performance monitoring. Extended `scripts
 - [x] R-level compliance — PASS
 - [x] Tier label `tier:T2` on PR #797
 - [x] No runtime submission/scoring code modified
+
+## Merge SHA
+
+68e724f93d291e7fa75fc2d67540be1b3a6359ce

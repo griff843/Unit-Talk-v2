@@ -38,3 +38,7 @@ automation-coverage: PASS (fail=0 warn=0 classified=15)
 
 All static verification checks pass. No R-level artifacts required (R1-R5 rules not triggered by diff path).
 T2 merge authority: orchestrator on green CI.
+
+## Merge SHA
+
+68e724f93d291e7fa75fc2d67540be1b3a6359ce

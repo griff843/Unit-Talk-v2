@@ -24,3 +24,7 @@ R-level check: PASS (no R-level artifacts required — governance doc only).
 - [x] R-level compliance — PASS (docs-only change)
 - [x] Tier label `tier:T2` on PR #796
 - [x] Governance doc change only — no runtime code modified
+
+## Merge SHA
+
+30a21254b461a1f193f8b0f9d63b037efbc50a34
