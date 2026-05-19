@@ -18,3 +18,7 @@ Pre-merge verification:
 
 The lane-check workflow change only captures lane authority output, posts a Linear triage comment on failure, and re-raises the failing check. It does not alter runtime delivery, lifecycle, promotion, settlement, or database behavior.
 
+## Merge SHA
+
+4a41c8f22efba2ce6b9fec34ba743b515b2c230e
+
