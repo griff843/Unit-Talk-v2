@@ -55,6 +55,8 @@ jobs:
             exit 0
           fi
 
+          echo "issue_id=$ISSUE_ID" >> "$GITHUB_OUTPUT"
+
           MANIFEST_PATH="docs/06_status/lanes/${ISSUE_ID}.json"
           if [ ! -f "$MANIFEST_PATH" ]; then
             echo "No lane manifest at $MANIFEST_PATH — skipping lane check."
@@ -75,13 +77,65 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Run lane authority check
+        id: lane_authority
         if: steps.lane_type.outputs.skip != 'true'
+        continue-on-error: true
         env:
           LANE_TYPE: ${{ steps.lane_type.outputs.lane_type }}
           BASE_REF: ${{ github.event.pull_request.base.sha }}
           HEAD_REF: ${{ github.sha }}
         run: |
+          set +e
           pnpm lane:check \
             --lane "$LANE_TYPE" \
             --base "$BASE_REF" \
-            --head "$HEAD_REF"
+            --head "$HEAD_REF" 2>&1 | tee lane-check-output.txt
+          status=${PIPESTATUS[0]}
+          set -e
+
+          echo "status=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Post Linear triage comment on lane check failure
+        if: steps.lane_authority.outcome == 'failure'
+        env:
+          LINEAR_API_TOKEN: ${{ secrets.LINEAR_API_TOKEN }}
+          ISSUE_ID: ${{ steps.lane_type.outputs.issue_id }}
+          LANE_TYPE: ${{ steps.lane_type.outputs.lane_type }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_URL: ${{ github.event.pull_request.html_url }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${LINEAR_API_TOKEN:-}" ]; then
+            echo "::warning title=lane-check::LINEAR_API_TOKEN is not configured; skipping Linear triage comment."
+            exit 0
+          fi
+
+          if [ -z "${ISSUE_ID:-}" ]; then
+            echo "::warning title=lane-check::No UTV2 issue id was detected; skipping Linear triage comment."
+            exit 0
+          fi
+
+          failure_output="$(sed -n '1,120p' lane-check-output.txt)"
+          COMMENT_BODY=$(cat <<EOF
+          **[Lane Check — Automated CI Triage]** Lane authority failed for PR #${PR_NUMBER}: ${PR_TITLE}
+
+          - Lane: \`${LANE_TYPE}\`
+          - PR: ${PR_URL}
+          - Run: ${RUN_URL}
+
+          Failure output:
+          \`\`\`text
+          ${failure_output}
+          \`\`\`
+          EOF
+          )
+
+          npx tsx scripts/ci/post-linear-comment.ts --issue-id "$ISSUE_ID" --body "$COMMENT_BODY"
+
+      - name: Fail on lane authority check failure
+        if: steps.lane_authority.outcome == 'failure'
+        run: exit 1
