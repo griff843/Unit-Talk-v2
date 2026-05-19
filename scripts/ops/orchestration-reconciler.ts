@@ -496,10 +496,10 @@ interface GhPrRecord {
   mergeCommit?: { oid?: string | null } | null;
 }
 
-interface GhCheckRecord {
+interface GhStatusCheckRollupItem {
   name?: string;
-  state?: string;
-  bucket?: string | null;
+  status?: string;
+  conclusion?: string | null;
 }
 
 function parseGhPr(record: GhPrRecord, state: PullRequestSnapshot['state']): PullRequestSnapshot {
@@ -525,15 +525,15 @@ function githubPullRequests(infraErrors: string[]): PullRequestSnapshot[] {
     ];
     for (const pr of prs) {
       try {
-        const checks = JSON.parse(
-          runCommand('gh', ['pr', 'checks', String(pr.number), '--json', 'name,state,bucket']),
-        ) as GhCheckRecord[];
-        pr.checks = checks
+        const rollup = JSON.parse(
+          runCommand('gh', ['pr', 'view', String(pr.number), '--json', 'statusCheckRollup']),
+        ) as { statusCheckRollup?: GhStatusCheckRollupItem[] };
+        pr.checks = (rollup.statusCheckRollup ?? [])
           .filter((check) => typeof check.name === 'string')
           .map((check) => ({
             name: check.name ?? 'unknown',
-            status: normalizeCheckStatus(check.state),
-            conclusion: normalizeCheckConclusionFromBucket(check.bucket),
+            status: normalizeCheckStatus(check.status?.toLowerCase()),
+            conclusion: normalizeCheckConclusion(check.conclusion),
           }));
       } catch (error) {
         infraErrors.push(`GitHub checks unavailable for PR #${pr.number}: ${error instanceof Error ? error.message : String(error)}`);
@@ -554,11 +554,14 @@ function normalizeCheckStatus(input: string | undefined): GitHubCheckSnapshot['s
   return 'unknown';
 }
 
-function normalizeCheckConclusionFromBucket(input: string | null | undefined): GitHubCheckSnapshot['conclusion'] {
-  switch (String(input ?? '').toLowerCase()) {
-    case 'pass': return 'success';
-    case 'fail': return 'failure';
-    case 'skipping': return 'skipped';
+function normalizeCheckConclusion(input: string | null | undefined): GitHubCheckSnapshot['conclusion'] {
+  switch (String(input ?? '').toUpperCase()) {
+    case 'SUCCESS': return 'success';
+    case 'FAILURE': return 'failure';
+    case 'CANCELLED': return 'cancelled';
+    case 'TIMED_OUT': return 'timed_out';
+    case 'SKIPPED': return 'skipped';
+    case 'NEUTRAL': return 'neutral';
     default: return null;
   }
 }

@@ -678,7 +678,8 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
 }
 
 function isPortableAbsolutePath(value: string): boolean {
-  return path.isAbsolute(value) || path.win32.isAbsolute(value) || path.posix.isAbsolute(value);
+  // "." is accepted as the main-checkout root when worktree_path is used with mode=main-control
+  return value === '.' || path.isAbsolute(value) || path.win32.isAbsolute(value) || path.posix.isAbsolute(value);
 }
 
 function normalizePortableAbsolutePath(value: string): string {

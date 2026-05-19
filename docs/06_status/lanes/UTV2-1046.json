@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1046",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1046-proof-auditor-gate-clean",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/769",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/proof-auditor-gate.yml",
+    "scripts/ops/proof-auditor-gate.ts",
+    "scripts/ops/proof-auditor-gate.test.ts"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": ".",
+    "package_install": "not_required"
+  },
+  "started_at": "2026-05-19T00:15:00.000Z",
+  "heartbeat_at": "2026-05-19T01:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}

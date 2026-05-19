@@ -1,0 +1,34 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1061",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": ".",
+  "branch": "codex/utv2-1061-merge-mutex-wrapper-clean",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/768",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/ops-merge-wrapper.ts",
+    "scripts/ops/ops-merge-wrapper.test.ts",
+    ".claude/commands/dispatch.md",
+    ".claude/commands/dispatch-board.md"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": ".",
+    "package_install": "not_required"
+  },
+  "started_at": "2026-05-18T23:56:40.000Z",
+  "heartbeat_at": "2026-05-19T01:00:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": []
+}
