@@ -11,7 +11,11 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/runtime-verifier-gate.yml"
+    ".github/workflows/runtime-verifier-gate.yml",
+    "docs/06_status/lanes/UTV2-1045.json",
+    "docs/06_status/proof/UTV2-1045/diff-summary.md",
+    "docs/06_status/proof/UTV2-1045/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1045/verification.log"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1045/diff-summary.md",
