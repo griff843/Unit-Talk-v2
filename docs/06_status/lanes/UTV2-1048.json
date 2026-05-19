@@ -11,7 +11,11 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/governance/LANE_CONCURRENCY_POLICY.md"
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "docs/06_status/lanes/UTV2-1048.json",
+    "docs/06_status/proof/UTV2-1048/diff-summary.md",
+    "docs/06_status/proof/UTV2-1048/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1048/verification.log"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1048/diff-summary.md",
