@@ -82,6 +82,8 @@ export interface OrchestrationReconcilerReport {
   generated_at: string;
   verdict: 'PASS' | 'WARN' | 'FAIL' | 'INFRA';
   exit_code: 0 | 1 | 3;
+  mode: OrchestrationReconcileMode;
+  filters: OrchestrationReconcileFilters;
   transition_window_minutes: number;
   summary: Record<OrchestrationVerdict, number>;
   checks: OrchestrationCheck[];
@@ -91,12 +93,25 @@ export interface OrchestrationReconcilerReport {
   };
 }
 
+export type OrchestrationReconcileMode = 'current' | 'all' | 'issue';
+
+export interface OrchestrationReconcileFilters {
+  mode: OrchestrationReconcileMode;
+  issue_id: string | null;
+  since: string | null;
+  selected_issue_ids: string[];
+  current_issue_ids: string[];
+}
+
 export interface OrchestrationReconcilerInput {
   linearIssues: LinearIssueSnapshot[];
   leases: DispatchLease[];
   manifests: LaneManifest[];
   branches: BranchSnapshot[];
   pullRequests: PullRequestSnapshot[];
+  mode?: OrchestrationReconcileMode;
+  issueId?: string;
+  since?: string | Date;
   requiredCheckNames?: string[];
   generatedAt?: string;
   now?: Date;
@@ -110,6 +125,14 @@ const DONE_LINEAR_STATE_NAMES = new Set(['done']);
 const DONE_LINEAR_STATE_TYPES = new Set(['completed']);
 const FAIL_CLASS_VERDICTS = new Set<OrchestrationVerdict>(['fail', 'stale_reclaim_required']);
 const CLOSED_MANIFEST_STATUSES = new Set(['merged', 'done']);
+
+interface FilteredInput extends OrchestrationReconcilerInput {
+  mode: OrchestrationReconcileMode;
+  normalizedIssueId: string | null;
+  sinceIso: string | null;
+  selectedIssueIds: string[];
+  currentIssueIds: string[];
+}
 
 export function readConfiguredEnvValue(
   key: string,
@@ -210,6 +233,151 @@ function uniqueIssueIds(input: OrchestrationReconcilerInput): string[] {
   return [...issueIds].sort((left, right) => left.localeCompare(right));
 }
 
+function timestampInScope(value: string | null | undefined, sinceMs: number | null): boolean {
+  if (sinceMs == null) {
+    return false;
+  }
+  const parsed = Date.parse(value ?? '');
+  return Number.isFinite(parsed) && parsed >= sinceMs;
+}
+
+function manifestInSinceScope(manifest: LaneManifest, sinceMs: number | null): boolean {
+  if (sinceMs == null) {
+    return false;
+  }
+  if (
+    timestampInScope(manifest.started_at, sinceMs)
+    || timestampInScope(manifest.heartbeat_at, sinceMs)
+    || timestampInScope(manifest.closed_at, sinceMs)
+  ) {
+    return true;
+  }
+  return (manifest.truth_check_history ?? []).some((entry) => timestampInScope(entry.checked_at, sinceMs))
+    || (manifest.reopen_history ?? []).some((entry) => timestampInScope(entry.timestamp, sinceMs));
+}
+
+function collectSinceIssueIds(input: OrchestrationReconcilerInput, sinceMs: number | null): Set<string> {
+  const issueIds = new Set<string>();
+  if (sinceMs == null) {
+    return issueIds;
+  }
+  for (const issue of input.linearIssues) {
+    if (timestampInScope(issue.updated_at, sinceMs)) {
+      issueIds.add(normalizeIssueId(issue.issue_id));
+    }
+  }
+  for (const lease of input.leases) {
+    if (timestampInScope(lease.heartbeat_at, sinceMs) || timestampInScope(lease.expires_at, sinceMs)) {
+      issueIds.add(normalizeIssueId(lease.issue_id));
+    }
+  }
+  for (const manifest of input.manifests) {
+    if (manifestInSinceScope(manifest, sinceMs)) {
+      issueIds.add(normalizeIssueId(manifest.issue_id));
+    }
+  }
+  for (const pr of input.pullRequests) {
+    const issueId = issueIdFromBranch(pr.branch);
+    if (issueId && (pr.state === 'open' || timestampInScope(pr.merged_at, sinceMs))) {
+      issueIds.add(issueId);
+    }
+  }
+  return issueIds;
+}
+
+function collectCurrentIssueIds(input: OrchestrationReconcilerInput): Set<string> {
+  const issueIds = new Set<string>();
+  const linearByIssue = mapByIssueId(input.linearIssues);
+  for (const issue of input.linearIssues.filter(isLinearActive)) {
+    issueIds.add(normalizeIssueId(issue.issue_id));
+  }
+  for (const lease of input.leases.filter(isLeaseActive)) {
+    issueIds.add(normalizeIssueId(lease.issue_id));
+  }
+  for (const manifest of input.manifests.filter(isManifestActive)) {
+    issueIds.add(normalizeIssueId(manifest.issue_id));
+  }
+  for (const pr of input.pullRequests.filter((entry) => entry.state === 'open')) {
+    const issueId = issueIdFromBranch(pr.branch);
+    if (issueId) issueIds.add(issueId);
+  }
+  for (const pr of input.pullRequests.filter((entry) => entry.state === 'merged')) {
+    const issueId = issueIdFromBranch(pr.branch);
+    if (!issueId) continue;
+    const linearIssue = linearByIssue.get(issueId);
+    if (linearIssue && !isLinearDone(linearIssue)) {
+      issueIds.add(issueId);
+    }
+  }
+  return issueIds;
+}
+
+function parseSinceBoundary(since: string | Date | undefined): { sinceIso: string | null; sinceMs: number | null } {
+  if (since == null || since === '') {
+    return { sinceIso: null, sinceMs: null };
+  }
+  const parsed = since instanceof Date ? since.getTime() : Date.parse(since);
+  if (!Number.isFinite(parsed)) {
+    throw new Error(`Invalid --since boundary: ${String(since)}`);
+  }
+  return { sinceIso: new Date(parsed).toISOString(), sinceMs: parsed };
+}
+
+function filterInput(input: OrchestrationReconcilerInput): FilteredInput {
+  const mode = input.issueId ? 'issue' : input.mode ?? 'current';
+  const normalizedIssueId = input.issueId ? normalizeIssueId(input.issueId) : null;
+  const { sinceIso, sinceMs } = parseSinceBoundary(input.since);
+  const currentIssueIds = collectCurrentIssueIds(input);
+  const sinceIssueIds = collectSinceIssueIds(input, sinceMs);
+  const selectedIssueIds = new Set<string>();
+
+  if (mode === 'issue') {
+    selectedIssueIds.add(normalizedIssueId ?? '');
+  } else if (mode === 'all') {
+    for (const issueId of sinceMs == null ? uniqueIssueIds(input) : sinceIssueIds) {
+      selectedIssueIds.add(issueId);
+    }
+  } else {
+    for (const issueId of currentIssueIds) {
+      selectedIssueIds.add(issueId);
+    }
+    for (const issueId of sinceIssueIds) {
+      selectedIssueIds.add(issueId);
+    }
+  }
+  selectedIssueIds.delete('');
+
+  const includeIssue = (issueId: string | null | undefined): boolean => {
+    if (!issueId) return mode === 'all' && sinceMs == null;
+    return selectedIssueIds.has(normalizeIssueId(issueId));
+  };
+
+  const selectedBranches = new Set<string>();
+  for (const lease of input.leases) {
+    if (includeIssue(lease.issue_id)) selectedBranches.add(lease.branch);
+  }
+  for (const manifest of input.manifests) {
+    if (includeIssue(manifest.issue_id)) selectedBranches.add(manifest.branch);
+  }
+  for (const pr of input.pullRequests) {
+    if (includeIssue(issueIdFromBranch(pr.branch))) selectedBranches.add(pr.branch);
+  }
+
+  return {
+    ...input,
+    mode,
+    normalizedIssueId,
+    sinceIso,
+    selectedIssueIds: [...selectedIssueIds].sort((left, right) => left.localeCompare(right)),
+    currentIssueIds: [...currentIssueIds].sort((left, right) => left.localeCompare(right)),
+    linearIssues: input.linearIssues.filter((issue) => includeIssue(issue.issue_id)),
+    leases: input.leases.filter((lease) => includeIssue(lease.issue_id)),
+    manifests: input.manifests.filter((manifest) => includeIssue(manifest.issue_id)),
+    branches: input.branches.filter((branch) => selectedBranches.has(branch.name) || includeIssue(issueIdFromBranch(branch.name))),
+    pullRequests: input.pullRequests.filter((pr) => includeIssue(issueIdFromBranch(pr.branch))),
+  };
+}
+
 function branchExists(branches: BranchSnapshot[], branch: string): boolean {
   return branches.some((entry) => entry.name === branch);
 }
@@ -259,8 +427,9 @@ function addCheck(checks: OrchestrationCheck[], check: OrchestrationCheck): void
 }
 
 export function buildOrchestrationReconcilerReport(
-  input: OrchestrationReconcilerInput,
+  rawInput: OrchestrationReconcilerInput,
 ): OrchestrationReconcilerReport {
+  const input = filterInput(rawInput);
   const now = input.now ?? new Date();
   const transitionWindowMinutes = input.transitionWindowMinutes ?? DEFAULT_TRANSITION_WINDOW_MINUTES;
   const transitionWindowMs = transitionWindowMinutes * 60 * 1000;
@@ -531,6 +700,14 @@ export function buildOrchestrationReconcilerReport(
     generated_at: input.generatedAt ?? now.toISOString(),
     verdict,
     exit_code: hasFail ? 1 : hasInfra ? 3 : 0,
+    mode: input.mode,
+    filters: {
+      mode: input.mode,
+      issue_id: input.normalizedIssueId,
+      since: input.sinceIso,
+      selected_issue_ids: input.selectedIssueIds,
+      current_issue_ids: input.currentIssueIds,
+    },
     transition_window_minutes: transitionWindowMinutes,
     summary,
     checks,
@@ -692,28 +869,84 @@ async function fetchLinearIssues(issueIds: string[], infraErrors: string[]): Pro
   return issues;
 }
 
-function renderHuman(report: OrchestrationReconcilerReport): string {
+export function renderHuman(report: OrchestrationReconcilerReport): string {
   const lines = [
-    `[ops:orchestration-reconcile] generated_at=${report.generated_at} verdict=${report.verdict}`,
+    `[ops:orchestration-reconcile] generated_at=${report.generated_at} verdict=${report.verdict} mode=${report.mode}`,
+    `  filters issue_id=${report.filters.issue_id ?? '-'} since=${report.filters.since ?? '-'} selected_issue_ids=${report.filters.selected_issue_ids.join(',') || '-'}`,
     `  transition_window_minutes=${report.transition_window_minutes}`,
     `  summary pass=${report.summary.pass} warn=${report.summary.warn} fail=${report.summary.fail} stale_reclaim_required=${report.summary.stale_reclaim_required} cleanup_candidate=${report.summary.cleanup_candidate} infra_error=${report.summary.infra_error}`,
   ];
-  for (const check of report.checks) {
-    lines.push(
-      `  [${check.verdict.toUpperCase()}] ${check.id} ${check.requirement} ${check.issue_id ?? '-'} ${check.branch ?? '-'} :: ${check.detail}`,
-    );
-    for (const item of check.evidence) {
-      lines.push(`    - ${item.surface} ${item.source}: ${item.detail}`);
+
+  const currentRequiredFailures = report.checks.filter((check) =>
+    check.requirement === 'required'
+    && (check.verdict === 'fail' || check.verdict === 'stale_reclaim_required' || check.verdict === 'infra_error')
+  );
+  const currentRequiredChecks = report.checks.filter((check) =>
+    check.requirement === 'required'
+    && check.verdict !== 'fail'
+    && check.verdict !== 'stale_reclaim_required'
+    && check.verdict !== 'infra_error'
+  );
+  const historicalDebt = report.checks.filter((check) => check.requirement === 'advisory');
+  const sections: Array<[string, OrchestrationCheck[]]> = [
+    ['current required failures', currentRequiredFailures],
+    ['current required checks', currentRequiredChecks],
+    ['historical debt / cleanup candidates', historicalDebt],
+  ];
+  for (const [label, checks] of sections) {
+    lines.push(`  ${label}:`);
+    if (checks.length === 0) {
+      lines.push('    none');
+      continue;
+    }
+    for (const check of checks) {
+      lines.push(
+        `    [${check.verdict.toUpperCase()}] ${check.id} ${check.requirement} ${check.issue_id ?? '-'} ${check.branch ?? '-'} :: ${check.detail}`,
+      );
+      for (const item of check.evidence) {
+        lines.push(`      - ${item.surface} ${item.source}: ${item.detail}`);
+      }
     }
   }
   lines.push(`  scheduling: ${report.scheduling.detail}`);
   return `${lines.join('\n')}\n`;
 }
 
+function parseMode(parsed: ReturnType<typeof parseArgs>): OrchestrationReconcileMode {
+  const boolModes = [
+    parsed.bools.has('current') ? 'current' : null,
+    parsed.bools.has('all') ? 'all' : null,
+    parsed.flags.has('issue') ? 'issue' : null,
+  ].filter((entry): entry is OrchestrationReconcileMode => entry != null);
+  if (boolModes.length > 1) {
+    throw new Error('Use only one reconcile mode: --current, --all, or --issue UTV2-####');
+  }
+  return boolModes[0] ?? 'current';
+}
+
+function parseIssueFilter(parsed: ReturnType<typeof parseArgs>): string | undefined {
+  const issueId = parsed.flags.get('issue')?.at(-1);
+  if (!issueId) {
+    return undefined;
+  }
+  const normalized = normalizeIssueId(issueId);
+  if (!/^(UTV2|UNI)-\d+$/.test(normalized)) {
+    throw new Error(`Invalid --issue value: ${issueId}`);
+  }
+  return normalized;
+}
+
+function parseSinceFilter(parsed: ReturnType<typeof parseArgs>): string | undefined {
+  return parsed.flags.get('since')?.at(-1);
+}
+
 async function main(argv = process.argv.slice(2)): Promise<void> {
   const parsed = parseArgs(argv);
   const json = parsed.bools.has('json');
   const human = parsed.bools.has('human') || !json || parsed.bools.has('both');
+  const mode = parseMode(parsed);
+  const issueId = parseIssueFilter(parsed);
+  const since = parseSinceFilter(parsed);
   const transitionWindow = Number.parseInt(parsed.flags.get('transition-window-minutes')?.at(-1) ?? '', 10);
   const infraErrors: string[] = [];
 
@@ -728,7 +961,11 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     branches,
     pullRequests,
   });
-  const linearIssues = await fetchLinearIssues(issueIds, infraErrors);
+  const linearIssueIds = new Set(issueIds);
+  if (issueId) {
+    linearIssueIds.add(issueId);
+  }
+  const linearIssues = await fetchLinearIssues([...linearIssueIds].sort((left, right) => left.localeCompare(right)), infraErrors);
 
   const report = buildOrchestrationReconcilerReport({
     linearIssues,
@@ -736,6 +973,9 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     manifests,
     branches,
     pullRequests,
+    mode,
+    issueId,
+    since,
     requiredCheckNames: (parsed.flags.get('required-check') ?? []).flatMap((entry) =>
       entry.split(',').map((value) => value.trim()).filter(Boolean),
     ),

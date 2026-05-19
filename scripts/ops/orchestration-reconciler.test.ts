@@ -6,6 +6,7 @@ import test from 'node:test';
 import {
   buildOrchestrationReconcilerReport,
   readConfiguredEnvValue,
+  renderHuman,
   type BranchSnapshot,
   type LinearIssueSnapshot,
   type PullRequestSnapshot,
@@ -236,6 +237,7 @@ test('fails when Linear Done has no merge SHA evidence', () => {
     manifests: [lane({ status: 'done', commit_sha: null })],
     branches: [],
     pullRequests: [],
+    mode: 'all',
     now: NOW,
   });
 
@@ -256,6 +258,7 @@ test('handles legacy manifests without truth_check_history while checking merge 
     manifests: [legacyManifest],
     branches: [],
     pullRequests: [],
+    mode: 'all',
     now: NOW,
   });
 
@@ -286,6 +289,7 @@ test('marks branch for closed lane as cleanup candidate', () => {
     manifests: [lane({ status: 'done', commit_sha: 'abc123' })],
     branches: [branch()],
     pullRequests: [],
+    mode: 'all',
     now: NOW,
   });
 
@@ -293,6 +297,118 @@ test('marks branch for closed lane as cleanup candidate', () => {
   assert.equal(entry.requirement, 'advisory');
   assert.equal(entry.verdict, 'cleanup_candidate');
   assert.equal(report.exit_code, 0);
+});
+
+test('defaults to current actionable issues instead of historical all debt', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
+    leases: [],
+    manifests: [lane({ status: 'done', commit_sha: null })],
+    branches: [branch()],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  assert.equal(report.mode, 'current');
+  assert.deepEqual(report.filters.selected_issue_ids, []);
+  assert.equal(report.checks.length, 0);
+  assert.equal(report.verdict, 'PASS');
+});
+
+test('all mode preserves strict historical reconciliation behavior', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
+    leases: [],
+    manifests: [lane({ status: 'done', commit_sha: null })],
+    branches: [branch()],
+    pullRequests: [],
+    mode: 'all',
+    now: NOW,
+  });
+
+  assert.equal(report.mode, 'all');
+  assert.deepEqual(report.filters.selected_issue_ids, ['UTV2-1059']);
+  assert.equal(check(report.checks, 'ORCH-DONE-MERGE-SHA').verdict, 'fail');
+  assert.equal(check(report.checks, 'ORCH-CLOSED-LANE-BRANCH-CLEANUP').verdict, 'cleanup_candidate');
+  assert.equal(report.exit_code, 1);
+});
+
+test('issue mode filters reconciliation to one issue', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [
+      linear({ issue_id: 'UTV2-1059' }),
+      linear({ issue_id: 'UTV2-1060' }),
+    ],
+    leases: [lease({ issue_id: 'UTV2-1059' })],
+    manifests: [lane({ issue_id: 'UTV2-1059' })],
+    branches: [branch()],
+    pullRequests: [],
+    issueId: 'utv2-1060',
+    now: NOW,
+  });
+
+  assert.equal(report.mode, 'issue');
+  assert.equal(report.filters.issue_id, 'UTV2-1060');
+  assert.deepEqual(report.filters.selected_issue_ids, ['UTV2-1060']);
+  const entry = check(report.checks, 'ORCH-LINEAR-ACTIVE-RECORD');
+  assert.equal(entry.issue_id, 'UTV2-1060');
+  assert.equal(entry.verdict, 'fail');
+  assert.equal(report.checks.some((item) => item.issue_id === 'UTV2-1059'), false);
+});
+
+test('since filter includes recent historical records without forcing all history', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [
+      linear({ issue_id: 'UTV2-1059', state_name: 'Done', state_type: 'completed', updated_at: '2026-05-17T11:00:00.000Z' }),
+      linear({ issue_id: 'UTV2-1060', state_name: 'Done', state_type: 'completed', updated_at: '2026-05-18T11:00:00.000Z' }),
+    ],
+    leases: [],
+    manifests: [
+      lane({
+        issue_id: 'UTV2-1059',
+        status: 'done',
+        commit_sha: null,
+        started_at: '2026-05-17T10:00:00.000Z',
+        heartbeat_at: '2026-05-17T11:30:00.000Z',
+      }),
+      lane({
+        issue_id: 'UTV2-1060',
+        status: 'done',
+        commit_sha: null,
+        branch: 'codex/utv2-1060-recent-history',
+        heartbeat_at: '2026-05-18T11:30:00.000Z',
+      }),
+    ],
+    branches: [branch(), branch('codex/utv2-1060-recent-history')],
+    pullRequests: [],
+    mode: 'all',
+    since: '2026-05-18T00:00:00.000Z',
+    now: NOW,
+  });
+
+  assert.equal(report.filters.since, '2026-05-18T00:00:00.000Z');
+  assert.deepEqual(report.filters.selected_issue_ids, ['UTV2-1060']);
+  assert.equal(report.checks.every((entry) => entry.issue_id === 'UTV2-1060'), true);
+  assert.equal(check(report.checks, 'ORCH-DONE-MERGE-SHA').verdict, 'fail');
+});
+
+test('human output separates required checks from cleanup candidates', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
+    leases: [],
+    manifests: [lane({ status: 'done', commit_sha: null })],
+    branches: [branch()],
+    pullRequests: [],
+    mode: 'all',
+    now: NOW,
+  });
+  const output = renderHuman(report);
+
+  assert.match(output, /mode=all/);
+  assert.match(output, /current required failures:/);
+  assert.match(output, /historical debt \/ cleanup candidates:/);
+  assert.match(output, /ORCH-DONE-MERGE-SHA/);
+  assert.match(output, /ORCH-CLOSED-LANE-BRANCH-CLEANUP/);
 });
 
 test('distinguishes required and advisory GitHub checks', () => {
