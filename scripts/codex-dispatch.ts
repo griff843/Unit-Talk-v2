@@ -20,7 +20,17 @@ import {
   validatePreflightToken,
   validateTier,
 } from './ops/shared.js';
-import { defaultLeaseOwner, reserveLease } from './ops/lease-registry.js';
+
+const CANONICAL_LANE_TYPES = new Set([
+  'runtime',
+  'modeling',
+  'verification',
+  'hygiene',
+  'migration',
+  'governance',
+  'delivery-ui',
+  'data-canonical',
+]);
 
 type LinearIssue = {
   id: string;
@@ -223,6 +233,7 @@ function runPreflight(
   files: string[],
   dryRun: boolean,
   explain: boolean,
+  fast: boolean,
 ): ChildResult {
   const args = ['ops:preflight', issueId, '--tier', tier, '--branch', branch, '--json'];
   for (const filePath of files) {
@@ -234,6 +245,9 @@ function runPreflight(
   if (explain) {
     args.push('--explain');
   }
+  if (fast) {
+    args.push('--fast');
+  }
   return runPnpm(args);
 }
 
@@ -242,12 +256,35 @@ function runLaneStart(
   tier: string,
   branch: string,
   files: string[],
+  laneType: string,
 ): ChildResult {
-  const args = ['ops:lane-start', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli'];
+  const args = ['ops:lane-start', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli'];
   for (const filePath of files) {
     args.push('--files', filePath);
   }
   return runPnpm(args);
+}
+
+function inferLaneType(issue: LinearIssue, explicitLaneType: string | undefined): string {
+  if (explicitLaneType) {
+    if (!CANONICAL_LANE_TYPES.has(explicitLaneType)) {
+      throw new Error(`Invalid --lane-type ${explicitLaneType}; use one of ${[...CANONICAL_LANE_TYPES].join(', ')}`);
+    }
+    return explicitLaneType;
+  }
+
+  const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
+  const hasLabel = (pattern: RegExp) => labels.some((label) => pattern.test(label));
+  if (hasLabel(/migration/)) return 'migration';
+  if (hasLabel(/modeling/)) return 'modeling';
+  if (hasLabel(/data|canonical/)) return 'data-canonical';
+  if (hasLabel(/delivery|ui/)) return 'delivery-ui';
+  if (hasLabel(/verification|proof/)) return 'verification';
+  if (hasLabel(/hygiene/)) return 'hygiene';
+  if (hasLabel(/governance|tooling|hardening/)) return 'governance';
+  if (hasLabel(/runtime/)) return 'runtime';
+
+  throw new Error('Missing required --lane-type; unable to infer a canonical lane type from Linear labels');
 }
 
 function buildVerificationLines(manifest: LaneManifest): string[] {
@@ -381,6 +418,7 @@ async function main(): Promise<number> {
   const dryRun = bools.has('dry-run');
   const json = bools.has('json');
   const explain = bools.has('explain');
+  const fast = bools.has('fast');
   let issueId = '';
   let tier = '';
   let branch = '';
@@ -396,6 +434,7 @@ async function main(): Promise<number> {
     const forbiddenFiles = parseForbiddenCsv(getFlag(flags, 'forbidden'));
     const packetOut = getFlag(flags, 'packet-out');
     const preflightTokenFlag = getFlag(flags, 'preflight-token');
+    const explicitLaneType = getFlag(flags, 'lane-type');
     const env = loadEnvironment();
     const linearToken = env.LINEAR_API_TOKEN?.trim();
 
@@ -414,16 +453,18 @@ async function main(): Promise<number> {
     validateBranchName(branch);
 
     const issue = await fetchIssue(issueId, linearToken);
+    const laneType = inferLaneType(issue, explicitLaneType);
     if (explain) {
       process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
       process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);
+      process.stderr.write(`Lane type: ${laneType}\n`);
     }
 
     let preflightRelativePath = relativeToRoot(preflightTokenPathForBranch(branch));
     if (preflightTokenFlag) {
       preflightRelativePath = validateSuppliedTokenPath(issueId, branch, preflightTokenFlag);
     } else {
-      const preflight = runPreflight(issueId, tier, branch, files, dryRun, explain);
+      const preflight = runPreflight(issueId, tier, branch, files, dryRun, explain, fast);
       if (preflight.status !== 0) {
         if (preflight.stdout) {
           process.stdout.write(`${preflight.stdout}\n`);
@@ -459,7 +500,7 @@ async function main(): Promise<number> {
         branch,
         preflight_token: preflightRelativePath,
         details: {
-          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli', ...files.flatMap((entry) => ['--files', entry])],
+          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli', ...files.flatMap((entry) => ['--files', entry])],
           would_write_packet: relativeToRoot(packetPathForIssue(issueId, packetOut)),
           tier_verification_hint: readTierVerificationHint(tier),
         },
@@ -476,38 +517,7 @@ async function main(): Promise<number> {
       return 0;
     }
 
-    const leaseResult = reserveLease({
-      issue_id: issueId,
-      branch,
-      executor: 'codex-cli',
-      cwd: ROOT,
-      file_scope_lock: files,
-      owner: defaultLeaseOwner(),
-    });
-    if (!leaseResult.ok) {
-      const result: DispatchResult = {
-        ok: false,
-        code: leaseResult.code,
-        message: leaseResult.message,
-        issue_id: issueId,
-        tier,
-        branch,
-        details: {
-          overlapping_files: leaseResult.overlapping_files,
-          conflicting_issue_id: leaseResult.conflicting_lease?.issue_id,
-          stale_issues: leaseResult.stale_leases?.map((lease) => lease.issue_id),
-        },
-      };
-      if (json) {
-        emitJson(result);
-      } else {
-        process.stderr.write(`${result.message}\n`);
-      }
-      notifyCodexDispatch('fail', dispatchNotifyDetail(result));
-      return 1;
-    }
-
-    const laneStart = runLaneStart(issueId, tier, branch, files);
+    const laneStart = runLaneStart(issueId, tier, branch, files, laneType);
     if (laneStart.status !== 0) {
       if (laneStart.stdout) {
         process.stdout.write(`${laneStart.stdout}\n`);
@@ -594,7 +604,7 @@ async function main(): Promise<number> {
       worktree_path: manifest.worktree_path,
       packet_path: relativeToRoot(packetPath),
       preflight_token: manifest.preflight_token,
-      lease_path: leaseResult.lease_path,
+      lease_path: String(laneStartJson.lease_path ?? ''),
       file_scope_lock: manifest.file_scope_lock,
       packet: json ? packet : undefined,
     };
