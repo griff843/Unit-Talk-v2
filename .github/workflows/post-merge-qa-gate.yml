@@ -1,0 +1,283 @@
+name: Post-Merge QA Gate
+
+# Phase 3.3 — Policy-engine-driven QA trigger.
+#
+# On every push to main, identifies the tier of the merged PR and the changed
+# files, then calls the policy engine (scripts/ops/policy-engine.ts) to decide
+# whether pnpm qa:experience must run.
+#
+# Decision logic:
+#   1. Resolve the PR that was just merged (GitHub API on commit SHA).
+#   2. Extract the tier:T1 / tier:T2 / tier:T3 label. No tier → non-lane PR → exit 0.
+#   3. Collect changed files: git diff --name-only HEAD~1 HEAD.
+#   4. Run policy engine: npx tsx scripts/ops/policy-engine.ts
+#        --trigger post_merge --tier <T> --path <file> ...
+#   5. If matched_count > 0 AND any result action contains "pnpm qa:experience" →
+#      run the QA experience suite.
+#   6. On QA failure: post an informational comment on the merged PR.
+#   7. Always exit 0 — this is observational / informational, not a blocking gate.
+#      The merge already happened; we are notifying, not reverting.
+#
+# Requirements:
+#   - GITHUB_TOKEN (automatic, needs pull-requests: write for comment posting)
+#   - No ANTHROPIC_API_KEY needed — policy engine is pure TypeScript, no LLM calls.
+
+on:
+  push:
+    branches:
+      - main
+
+concurrency:
+  group: post-merge-qa-gate-${{ github.sha }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  qa-gate:
+    name: Post-Merge QA Gate (Policy Engine)
+    runs-on: ubuntu-latest
+    # Never re-trigger on bot housekeeping commits — prevents infinite push loops.
+    if: github.actor != 'github-actions[bot]'
+
+    steps:
+      # ------------------------------------------------------------------
+      # 1. Resolve merged PR — extract tier label and PR number
+      # ------------------------------------------------------------------
+      - name: Resolve merged PR and extract tier
+        id: pr
+        env:
+          COMMIT_SHA: ${{ github.sha }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          api_resp=$(curl -sS \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/commits/${COMMIT_SHA}/pulls" \
+            2>/dev/null || echo "[]")
+
+          pr_number=$(echo "$api_resp" | jq -r '.[0].number // empty')
+          labels=$(echo "$api_resp" | jq -r '.[0].labels[]?.name // empty' 2>/dev/null || true)
+
+          if [ -z "$pr_number" ]; then
+            echo "::notice title=post-merge-qa-gate::No PR found for commit ${COMMIT_SHA}. Non-lane push — exiting 0."
+            echo "tier=" >> "$GITHUB_OUTPUT"
+            echo "pr_number=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "pr_number=$pr_number" >> "$GITHUB_OUTPUT"
+
+          # Extract tier label — expect exactly one of tier:T1, tier:T2, tier:T3
+          tier=""
+          for label in $labels; do
+            case "$label" in
+              tier:T1) tier="T1" ;;
+              tier:T2) tier="T2" ;;
+              tier:T3) tier="T3" ;;
+            esac
+          done
+
+          if [ -z "$tier" ]; then
+            echo "::notice title=post-merge-qa-gate::PR #${pr_number} has no tier label — non-lane PR, exiting 0."
+          else
+            echo "::notice title=post-merge-qa-gate::PR #${pr_number} resolved, tier=${tier}"
+          fi
+
+          echo "tier=$tier" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------
+      # 2. Collect changed files in this merge commit
+      # ------------------------------------------------------------------
+      - name: Checkout
+        if: steps.pr.outputs.tier != ''
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Collect changed files
+        if: steps.pr.outputs.tier != ''
+        id: files
+        run: |
+          changed=$(git diff --name-only HEAD~1 HEAD)
+          echo "Changed files:"
+          echo "$changed"
+
+          # Emit as newline-delimited output value
+          # We'll build --path flags in the policy-check step
+          echo "list<<FILES_EOF" >> "$GITHUB_OUTPUT"
+          echo "$changed" >> "$GITHUB_OUTPUT"
+          echo "FILES_EOF" >> "$GITHUB_OUTPUT"
+
+      # ------------------------------------------------------------------
+      # 3. Setup toolchain (only when a tier was found and files exist)
+      # ------------------------------------------------------------------
+      - name: Setup pnpm
+        if: steps.pr.outputs.tier != ''
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        if: steps.pr.outputs.tier != ''
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        if: steps.pr.outputs.tier != ''
+        run: pnpm install --frozen-lockfile
+
+      # ------------------------------------------------------------------
+      # 4. Run policy engine to determine whether QA is needed
+      # ------------------------------------------------------------------
+      - name: Evaluate policy engine
+        if: steps.pr.outputs.tier != ''
+        id: policy
+        env:
+          TIER: ${{ steps.pr.outputs.tier }}
+          CHANGED_FILES: ${{ steps.files.outputs.list }}
+        run: |
+          # Build --path flag arguments from changed files list
+          PATH_ARGS=""
+          while IFS= read -r f; do
+            [ -n "$f" ] && PATH_ARGS="$PATH_ARGS --path $f"
+          done <<< "$CHANGED_FILES"
+
+          if [ -z "$PATH_ARGS" ]; then
+            echo "::notice title=post-merge-qa-gate::No changed files detected — policy engine would match nothing. Exiting 0."
+            echo "run_qa=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          set +e
+          # shellcheck disable=SC2086
+          policy_output=$(npx tsx scripts/ops/policy-engine.ts \
+            --trigger post_merge \
+            --tier "$TIER" \
+            $PATH_ARGS 2>&1)
+          policy_exit=$?
+          set -e
+
+          echo "$policy_output"
+
+          echo "policy_output<<POLICY_EOF" >> "$GITHUB_OUTPUT"
+          echo "$policy_output" >> "$GITHUB_OUTPUT"
+          echo "POLICY_EOF" >> "$GITHUB_OUTPUT"
+
+          if [ "$policy_exit" -ne 0 ]; then
+            echo "::warning title=post-merge-qa-gate::Policy engine exited $policy_exit — treating as no-match."
+            echo "run_qa=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Parse matched_count and check if any action is "pnpm qa:experience"
+          matched_count=$(echo "$policy_output" | grep -o '"matched_count":[0-9]*' | grep -o '[0-9]*' | tail -1 || echo "0")
+          has_qa_action=$(echo "$policy_output" | grep -o '"pnpm qa:experience"' | head -1 || true)
+
+          echo "::notice title=post-merge-qa-gate::matched_count=${matched_count}, has_qa_action=${has_qa_action:-none}"
+
+          if [ "${matched_count:-0}" -gt 0 ] && [ -n "$has_qa_action" ]; then
+            echo "::notice title=post-merge-qa-gate::Policy match confirmed — QA experience suite will run."
+            echo "run_qa=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=post-merge-qa-gate::No policy matched for tier=${TIER} — QA not triggered."
+            echo "run_qa=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      # ------------------------------------------------------------------
+      # 5. Run QA experience suite when policy matched
+      # ------------------------------------------------------------------
+      - name: Install Playwright (Chromium only)
+        if: steps.policy.outputs.run_qa == 'true'
+        run: npx playwright install chromium --with-deps
+
+      - name: Run QA experience suite
+        if: steps.policy.outputs.run_qa == 'true'
+        id: qa
+        run: |
+          set +e
+          pnpm qa:experience --regression --mode fast --skip-preflight
+          QA_EXIT=$?
+          echo "qa_exit=$QA_EXIT" >> "$GITHUB_OUTPUT"
+          if [ "$QA_EXIT" -eq 0 ]; then
+            echo "qa_result=PASS" >> "$GITHUB_OUTPUT"
+          else
+            echo "qa_result=NEEDS_REVIEW" >> "$GITHUB_OUTPUT"
+          fi
+          # Informational only — always continue regardless of QA outcome
+          exit 0
+
+      - name: Upload QA artifacts
+        if: steps.policy.outputs.run_qa == 'true' && always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: post-merge-qa-artifacts-${{ github.sha }}
+          path: apps/qa-agent/artifacts/
+          retention-days: 14
+          if-no-files-found: ignore
+
+      # ------------------------------------------------------------------
+      # 6. Post informational comment on the merged PR (always after QA runs)
+      # ------------------------------------------------------------------
+      - name: Post QA result comment on merged PR
+        if: steps.policy.outputs.run_qa == 'true' && steps.pr.outputs.pr_number != ''
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ steps.pr.outputs.pr_number }}
+          TIER: ${{ steps.pr.outputs.tier }}
+          QA_RESULT: ${{ steps.qa.outputs.qa_result }}
+          QA_EXIT: ${{ steps.qa.outputs.qa_exit }}
+          POLICY_OUTPUT: ${{ steps.policy.outputs.policy_output }}
+        run: |
+          qa_result="${QA_RESULT:-UNKNOWN}"
+          qa_exit="${QA_EXIT:-?"}"
+
+          if [ "$qa_result" = "PASS" ]; then
+            icon="[PASS]"
+            summary="QA experience suite passed."
+          else
+            icon="[NEEDS_REVIEW]"
+            summary="QA experience suite reported issues (exit code ${qa_exit}). Run \`pnpm qa:experience --regression --mode fast\` locally to investigate."
+          fi
+
+          # Extract matched policy IDs from output for attribution
+          policy_ids=$(echo "$POLICY_OUTPUT" | grep -o '"policy_id":"[^"]*"' | sed 's/"policy_id":"//;s/"//' | tr '\n' ', ' | sed 's/, $//' || echo "post-merge-qa-runtime-delivery")
+
+          body="**Post-Merge QA Gate** — ${icon}
+
+Tier: \`${TIER}\` | Policy: \`${policy_ids}\` | Mode: \`fast\` | Regression: \`true\`
+
+${summary}
+
+> This is an informational check (Phase 3.3). The merge is not affected.
+> Triggered by policy engine: \`scripts/ops/policy-engine.ts\`"
+
+          curl -sS -X POST \
+            -H "Authorization: Bearer $GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/issues/${PR_NUMBER}/comments" \
+            -d "{\"body\": $(echo "$body" | jq -Rs .)}" \
+            > /dev/null
+
+          echo "::notice title=post-merge-qa-gate::Posted QA result comment on PR #${PR_NUMBER} (result=${qa_result})"
+
+      # ------------------------------------------------------------------
+      # 7. Always exit 0 — observational workflow
+      # ------------------------------------------------------------------
+      - name: Summary
+        if: always()
+        env:
+          TIER: ${{ steps.pr.outputs.tier }}
+          RUN_QA: ${{ steps.policy.outputs.run_qa }}
+          QA_RESULT: ${{ steps.qa.outputs.qa_result }}
+        run: |
+          tier="${TIER:-(none)}"
+          run_qa="${RUN_QA:-false}"
+          qa_result="${QA_RESULT:-(skipped)}"
+          echo "::notice title=post-merge-qa-gate::Summary — tier=${tier} run_qa=${run_qa} qa_result=${qa_result}"
+          # Workflow always exits 0 — informational only
+          exit 0
