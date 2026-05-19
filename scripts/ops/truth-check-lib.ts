@@ -127,15 +127,15 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
     pass('C3', 'PR merge SHA and manifest.commit_sha agree or are not both present');
   }
 
-  const shaCandidates = [mergeSha, prHeadSha].filter((sha): sha is string => Boolean(sha));
+  const requiredProofSha = mergeSha ?? prMergeSha ?? prHeadSha;
   const proofWithoutSha = input.proof_artifacts.filter(
     (artifact) =>
       artifact.content.trim().length > 0 &&
-      shaCandidates.length > 0 &&
-      !shaCandidates.some((sha) => artifact.content.includes(sha)),
+      requiredProofSha &&
+      !artifact.content.includes(requiredProofSha),
   );
   if (proofWithoutSha.length > 0) {
-    fail('C4', `proof artifacts missing merge/head SHA binding: ${proofWithoutSha.map((artifact) => artifact.path).join(', ')}`);
+    fail('C4', `proof artifacts missing required SHA binding (${requiredProofSha}): ${proofWithoutSha.map((artifact) => artifact.path).join(', ')}`);
   } else {
     pass('C4', 'proof artifacts are SHA-bound or no SHA-bound proof is applicable');
   }
@@ -158,7 +158,9 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   if (input.runtime_proof_required) {
     const runtimeEvidence = input.proof_artifacts.some((artifact) => {
       const parsed = tryParseEvidenceBundle(artifact.content);
-      return parsed ? hasRuntimeReferences(parsed.runtime_proof) : /runtime_proof|live db|row_counts|receipts|queries/i.test(artifact.content);
+      return parsed
+        ? hasRuntimeReferences(parsed.runtime_proof)
+        : hasRuntimeProofTextEvidence(artifact.content);
     });
     if (!runtimeEvidence) {
       fail('C6', 'runtime-proof closeout requires live/runtime evidence, not narrative-only proof');
@@ -171,7 +173,10 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
 
   const allowedTransitionMs = input.allowed_transition_ms ?? 30 * 60 * 1000;
   const transitionAgeMs = input.transition_age_ms ?? 0;
-  if (input.pr_merged && !linearDone && transitionAgeMs > allowedTransitionMs) {
+  const manifestDone = input.manifest.status === 'done';
+  if (manifestDone && !input.pr_merged) {
+    fail('C7', 'manifest is Done but PR is not merged');
+  } else if ((input.pr_merged || manifestDone) && !linearDone && transitionAgeMs > allowedTransitionMs) {
     fail('C7', 'PR is merged but Linear is not Done beyond the allowed transition window');
   } else if (linearDone && !input.pr_merged) {
     fail('C7', 'Linear is Done but PR is not merged');
@@ -180,6 +185,15 @@ export function evaluateCloseoutTruthGate(input: CloseoutTruthGateInput): CheckR
   }
 
   return checks;
+}
+
+function hasRuntimeProofTextEvidence(content: string): boolean {
+  return content
+    .split(/\r?\n/)
+    .some((line) =>
+      /runtime_proof|row_counts|receipts|queries/i.test(line) &&
+      /[\d{[]/.test(line),
+    );
 }
 
 type Verdict = TruthCheckResult['verdict'];

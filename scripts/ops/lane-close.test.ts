@@ -186,6 +186,31 @@ test('missing proof takes priority over stale proof when both present', () => {
   assert.strictEqual(code, 'missing_proof');
 });
 
+test('missing merge SHA: C1 failure maps to missing_merge_sha', () => {
+  const code = mapFailuresToCode(['C1'], 'fail');
+  assert.strictEqual(code, 'missing_merge_sha');
+});
+
+test('missing merge SHA: C2 failure maps to missing_merge_sha', () => {
+  const code = mapFailuresToCode(['C2'], 'fail');
+  assert.strictEqual(code, 'missing_merge_sha');
+});
+
+test('stale proof: C4 proof SHA binding failure maps to stale_proof', () => {
+  const code = mapFailuresToCode(['C4'], 'fail');
+  assert.strictEqual(code, 'stale_proof');
+});
+
+test('runtime proof: C6 narrative-only runtime proof maps to runtime_proof_required', () => {
+  const code = mapFailuresToCode(['C6'], 'fail');
+  assert.strictEqual(code, 'runtime_proof_required');
+});
+
+test('state drift: C7 drift maps to state_drift', () => {
+  const code = mapFailuresToCode(['C7'], 'fail');
+  assert.strictEqual(code, 'state_drift');
+});
+
 // ── Scenario 3: failing truth-check (general) ─────────────────────────────────
 
 test('failing truth-check: L2 failure (bad tier label) maps to truth_check_failed', () => {
@@ -273,8 +298,11 @@ test('M4 (wrong manifest status) maps to manifest_not_ready', () => {
 
 const allFailureCodes: CloseoutFailureCode[] = [
   'manifest_not_ready',
+  'missing_merge_sha',
   'missing_proof',
   'stale_proof',
+  'runtime_proof_required',
+  'state_drift',
   'pr_not_merged',
   'pr_sha_mismatch',
   'registry_mismatch',

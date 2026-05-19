@@ -441,7 +441,7 @@ test('closeout truth gate fails completed work without manifest merge SHA', () =
   input.proof_artifacts = [
     {
       path: 'docs/06_status/proof/UTV2-1058/verification.log',
-      content: 'HEAD_SHA: head456\npnpm verify pass',
+      content: 'MERGE_SHA: abc123merge\npnpm verify pass',
       mtime_ms: 2000,
     },
   ];
@@ -466,6 +466,47 @@ test('closeout truth gate fails proof without merge or head SHA binding', () => 
   );
 });
 
+test('closeout truth gate requires merge SHA binding when merge SHA is available', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        proof_artifacts: [
+          {
+            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            content: 'HEAD_SHA: head456\npnpm verify pass',
+            mtime_ms: 2000,
+          },
+        ],
+      }),
+    ),
+    ['C4'],
+  );
+});
+
+test('closeout truth gate can use head SHA only when no merge SHA is available', () => {
+  const input = closeoutInput({
+    linear_state: 'In Review',
+    pr_merged: false,
+    pr_merge_sha: null,
+    merge_timestamp_ms: null,
+  });
+  input.manifest = {
+    ...input.manifest,
+    commit_sha: null,
+    files_changed: [],
+    expected_proof_paths: [],
+  };
+  input.proof_artifacts = [
+    {
+      path: 'docs/06_status/proof/UTV2-1058/verification.log',
+      content: 'HEAD_SHA: head456\npnpm verify pass',
+      mtime_ms: 2000,
+    },
+  ];
+
+  assert.deepStrictEqual(failedCloseoutIds(input), []);
+});
+
 test('closeout truth gate fails runtime-proof narrative closure', () => {
   assert.deepStrictEqual(
     failedCloseoutIds(
@@ -481,6 +522,42 @@ test('closeout truth gate fails runtime-proof narrative closure', () => {
       }),
     ),
     ['C6'],
+  );
+});
+
+test('closeout truth gate rejects narrative text that only names live proof', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        runtime_proof_required: true,
+        proof_artifacts: [
+          {
+            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            content: 'MERGE_SHA: abc123merge\nLive DB was checked by the implementer.',
+            mtime_ms: 2000,
+          },
+        ],
+      }),
+    ),
+    ['C6'],
+  );
+});
+
+test('closeout truth gate accepts text runtime proof with concrete row counts', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        runtime_proof_required: true,
+        proof_artifacts: [
+          {
+            path: 'docs/06_status/proof/UTV2-1058/verification.log',
+            content: 'MERGE_SHA: abc123merge\nruntime_proof.row_counts picks=12',
+            mtime_ms: 2000,
+          },
+        ],
+      }),
+    ),
+    [],
   );
 });
 
@@ -514,6 +591,23 @@ test('closeout truth gate fails manifest and Linear drift beyond transition wind
         pr_merged: true,
         transition_age_ms: 60 * 60 * 1000,
         allowed_transition_ms: 30 * 60 * 1000,
+      }),
+    ),
+    ['C7'],
+  );
+});
+
+test('closeout truth gate fails Done manifest with unmerged PR', () => {
+  assert.deepStrictEqual(
+    failedCloseoutIds(
+      closeoutInput({
+        manifest: {
+          ...closeoutInput().manifest,
+          status: 'done',
+        },
+        linear_state: 'In Review',
+        pr_merged: false,
+        transition_age_ms: 60 * 60 * 1000,
       }),
     ),
     ['C7'],

@@ -20,8 +20,11 @@ import { releaseLease } from './lease-registry.js';
 export type CloseoutFailureCode =
   | 'lane_closed'         // success
   | 'manifest_not_ready'  // manifest status not eligible (M4 / ineligible verdict)
+  | 'missing_merge_sha'   // merged/done closeout lacks manifest or PR merge SHA (C1/C2/M6)
   | 'missing_proof'       // proof files absent or unreadable (P1/P2)
   | 'stale_proof'         // proof files predate or missing merge SHA reference (P3/P4)
+  | 'runtime_proof_required' // runtime closeout attempted with static/narrative proof only (C6)
+  | 'state_drift'         // PR, manifest, or Linear state drift exceeds transition semantics (C7)
   | 'pr_not_merged'       // PR not merged on GitHub (G1)
   | 'pr_sha_mismatch'     // PR merge SHA doesn't match manifest (G2)
   | 'registry_mismatch'   // Linear attachment doesn't include the PR URL (L4)
@@ -45,11 +48,14 @@ export function mapFailuresToCode(
 
   if (f.has('M1') || f.has('M2') || f.has('M3') || f.has('L1')) return 'infra_error';
   if (f.has('M4')) return 'manifest_not_ready';
+  if (f.has('C1') || f.has('C2') || f.has('M6')) return 'missing_merge_sha';
   if (f.has('G1')) return 'pr_not_merged';
   if (f.has('G2')) return 'pr_sha_mismatch';
   if (f.has('L4')) return 'registry_mismatch';
   if (f.has('P1') || f.has('P2')) return 'missing_proof';
-  if (f.has('P3') || f.has('P4')) return 'stale_proof';
+  if (f.has('P3') || f.has('P4') || f.has('C4') || f.has('C5')) return 'stale_proof';
+  if (f.has('C6')) return 'runtime_proof_required';
+  if (f.has('C7')) return 'state_drift';
 
   return 'truth_check_failed';
 }
@@ -62,10 +68,16 @@ export function remediationForCode(code: CloseoutFailureCode): string {
   switch (code) {
     case 'manifest_not_ready':
       return 'Manifest status must be "merged" or "done" before closeout. Ensure the PR is merged and the manifest commit_sha is set.';
+    case 'missing_merge_sha':
+      return 'Closeout requires both manifest.commit_sha and the merged PR SHA. Run truth-check after merge and do not silently repair missing SHAs.';
     case 'missing_proof':
       return 'One or more expected_proof_paths files are absent or empty. Generate proof artifacts before closing.';
     case 'stale_proof':
       return 'Proof files do not reference the merge SHA or predate the merge commit. Regenerate proof after merge.';
+    case 'runtime_proof_required':
+      return 'This issue requires live/runtime proof. Attach structured runtime evidence with queries, row counts, or receipts tied to the closeout SHA.';
+    case 'state_drift':
+      return 'PR, manifest, proof, and Linear state disagree beyond the allowed transition window. Reconcile the lane before closeout.';
     case 'pr_not_merged':
       return 'The PR listed in manifest.pr_url is not merged. Merge the PR before closing the lane.';
     case 'pr_sha_mismatch':
