@@ -22,3 +22,7 @@ UTV2-1047: Wired automatic PR risk packet generation into the existing return-re
 - [x] R-level compliance — PASS (no runtime data path modified)
 - [x] Tier label `tier:T2` on PR
 - [x] Closes UTV2-1047
+
+## Merge SHA
+
+a176e3221da253a20ed3360e9f4300423a0c3524

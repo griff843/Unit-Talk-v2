@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1047-auto-generate-pr-review-and-risk-packets-for-t1t2-prs",
   "branch": "codex/utv2-1047-auto-generate-pr-review-and-risk-packets-for-t1t2-prs",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "a176e3221da253a20ed3360e9f4300423a0c3524",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/798",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/return-review-packet.yml",
@@ -22,7 +22,7 @@
     "docs/06_status/proof/UTV2-1047/diff-summary.md",
     "docs/06_status/proof/UTV2-1047/verification.log"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-19T20:22:26.277Z",
   "heartbeat_at": "2026-05-19T20:22:26.277Z",
   "closed_at": null,

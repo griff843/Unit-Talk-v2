@@ -24,3 +24,5 @@ Rules matched: (none) — no R-level artifacts required for this diff
 Files modified: .github/workflows/return-review-packet.yml, scripts/ops/pr-review-packet.ts
 Both files within declared scope lock.
 RESULT: PASS
+
+Merge SHA: a176e3221da253a20ed3360e9f4300423a0c3524
