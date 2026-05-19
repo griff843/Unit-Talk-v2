@@ -87,10 +87,27 @@ export interface OrchestrationReconcilerReport {
   transition_window_minutes: number;
   summary: Record<OrchestrationVerdict, number>;
   checks: OrchestrationCheck[];
+  cleanup_plan: OrchestrationCleanupPlan;
   scheduling: {
     status: 'proposed';
     detail: string;
   };
+}
+
+export interface OrchestrationCleanupAction {
+  id: 'release_done_lease' | 'remove_closed_worktree' | 'delete_local_branch' | 'refuse_active_lane';
+  issue_id: string;
+  branch?: string;
+  worktree_path?: string;
+  command: string | null;
+  reason: string;
+  safe_to_apply: boolean;
+}
+
+export interface OrchestrationCleanupPlan {
+  dry_run: boolean;
+  applied: boolean;
+  actions: OrchestrationCleanupAction[];
 }
 
 export type OrchestrationReconcileMode = 'current' | 'all' | 'issue';
@@ -426,6 +443,86 @@ function addCheck(checks: OrchestrationCheck[], check: OrchestrationCheck): void
   checks.push(check);
 }
 
+function buildCleanupPlan(input: FilteredInput): OrchestrationCleanupPlan {
+  const actions: OrchestrationCleanupAction[] = [];
+  const activeIssues = new Set([
+    ...input.leases.filter(isLeaseActive).map((entry) => normalizeIssueId(entry.issue_id)),
+    ...input.manifests.filter(isManifestActive).map((entry) => normalizeIssueId(entry.issue_id)),
+    ...input.linearIssues.filter(isLinearActive).map((entry) => normalizeIssueId(entry.issue_id)),
+  ]);
+
+  for (const manifest of input.manifests) {
+    const issueId = normalizeIssueId(manifest.issue_id);
+    if (activeIssues.has(issueId)) {
+      actions.push({
+        id: 'refuse_active_lane',
+        issue_id: issueId,
+        branch: manifest.branch,
+        worktree_path: manifest.worktree_path,
+        command: null,
+        reason: 'Active lane state is present; cleanup requires manual force outside reconcile.',
+        safe_to_apply: false,
+      });
+      continue;
+    }
+    if (!CLOSED_MANIFEST_STATUSES.has(manifest.status)) {
+      continue;
+    }
+    if (fs.existsSync(manifest.worktree_path)) {
+      actions.push({
+        id: 'remove_closed_worktree',
+        issue_id: issueId,
+        branch: manifest.branch,
+        worktree_path: manifest.worktree_path,
+        command: `git worktree remove "${manifest.worktree_path}"`,
+        reason: `Closed lane manifest is ${manifest.status} and worktree still exists.`,
+        safe_to_apply: true,
+      });
+    }
+    if (branchExists(input.branches.filter((entry) => entry.source === 'local'), manifest.branch)) {
+      actions.push({
+        id: 'delete_local_branch',
+        issue_id: issueId,
+        branch: manifest.branch,
+        command: `git branch -d ${manifest.branch}`,
+        reason: `Closed lane manifest is ${manifest.status} and local branch still exists.`,
+        safe_to_apply: true,
+      });
+    }
+  }
+
+  for (const lease of input.leases) {
+    const issueId = normalizeIssueId(lease.issue_id);
+    if (activeIssues.has(issueId)) {
+      actions.push({
+        id: 'refuse_active_lane',
+        issue_id: issueId,
+        branch: lease.branch,
+        command: null,
+        reason: `Lease is ${lease.status}; active/current leases are not cleanup candidates.`,
+        safe_to_apply: false,
+      });
+      continue;
+    }
+    if (lease.status === 'released') {
+      actions.push({
+        id: 'release_done_lease',
+        issue_id: issueId,
+        branch: lease.branch,
+        command: null,
+        reason: 'Released lease is already safe; no mutation required.',
+        safe_to_apply: true,
+      });
+    }
+  }
+
+  return {
+    dry_run: true,
+    applied: false,
+    actions,
+  };
+}
+
 export function buildOrchestrationReconcilerReport(
   rawInput: OrchestrationReconcilerInput,
 ): OrchestrationReconcilerReport {
@@ -711,9 +808,10 @@ export function buildOrchestrationReconcilerReport(
     transition_window_minutes: transitionWindowMinutes,
     summary,
     checks,
+    cleanup_plan: buildCleanupPlan(input),
     scheduling: {
       status: 'proposed',
-      detail: 'Safe wiring: run pnpm ops:orchestration-reconcile --json from a scheduled CI job after Linear/GitHub credentials are present.',
+      detail: 'Safe wiring: run pnpm ops:orchestration-reconcile --current --cleanup-plan --json from a scheduled CI job after Linear/GitHub credentials are present.',
     },
   };
 }
@@ -944,6 +1042,8 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
   const parsed = parseArgs(argv);
   const json = parsed.bools.has('json');
   const human = parsed.bools.has('human') || !json || parsed.bools.has('both');
+  const cleanupPlan = parsed.bools.has('cleanup-plan');
+  const applyCleanup = parsed.bools.has('apply-cleanup');
   const mode = parseMode(parsed);
   const issueId = parseIssueFilter(parsed);
   const since = parseSinceFilter(parsed);
@@ -982,6 +1082,12 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     transitionWindowMinutes: Number.isFinite(transitionWindow) ? transitionWindow : undefined,
     infraErrors,
   });
+  if (applyCleanup) {
+    throw new Error('Cleanup apply is not automated yet; run the dry-run cleanup_plan commands explicitly under the merge mutex.');
+  }
+  if (!cleanupPlan && !json) {
+    report.cleanup_plan.actions = [];
+  }
 
   if (human) {
     process.stdout.write(renderHuman(report));

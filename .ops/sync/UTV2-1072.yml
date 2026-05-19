@@ -1,10 +1,14 @@
 version: 1
 approval:
-  allow_multiple_issues: false
+  allow_multiple_issues: true
   skip_sync_required: false
 entities:
   issues:
     - UTV2-1072
+    - UTV2-1073
+    - UTV2-1074
+    - UTV2-1075
   findings: []
   controls: []
   proofs: []
+

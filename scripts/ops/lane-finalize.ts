@@ -1,0 +1,191 @@
+import { spawnSync } from 'node:child_process';
+import { pathToFileURL } from 'node:url';
+import {
+  ROOT,
+  emitJson,
+  getFlag,
+  parseArgs,
+  readManifest,
+  requireIssueId,
+  type LaneManifest,
+} from './shared.js';
+
+export interface LaneFinalizeStep {
+  id: 'record_merge' | 'generate_proof' | 'close_lane' | 'reconcile_current';
+  command: string;
+  args: string[];
+  required: boolean;
+}
+
+export interface LaneFinalizePlan {
+  issue_id: string;
+  branch: string;
+  pr: string;
+  dry_run: boolean;
+  already_closed: boolean;
+  steps: LaneFinalizeStep[];
+}
+
+export interface LaneFinalizeResult {
+  ok: boolean;
+  code: 'lane_finalize_dry_run' | 'lane_finalized' | 'lane_already_finalized' | 'lane_finalize_failed';
+  issue_id: string;
+  branch: string;
+  pr: string;
+  dry_run: boolean;
+  steps: Array<LaneFinalizeStep & { status: 'planned' | 'passed' | 'skipped' | 'failed'; stdout?: string; stderr?: string }>;
+  message: string;
+}
+
+export type LaneFinalizeRunner = (
+  command: string,
+  args: string[],
+  options: { cwd: string; encoding: 'utf8'; stdio: 'pipe' },
+) => { status: number | null; stdout?: string | Buffer | null; stderr?: string | Buffer | null };
+
+export function buildLaneFinalizePlan(input: {
+  manifest: LaneManifest;
+  pr: string;
+  dryRun?: boolean;
+}): LaneFinalizePlan {
+  const alreadyClosed = input.manifest.status === 'done';
+  const issueId = input.manifest.issue_id;
+  const steps: LaneFinalizeStep[] = [];
+
+  if (!alreadyClosed) {
+    steps.push({
+      id: 'record_merge',
+      command: 'pnpm',
+      args: ['ops:lane-manifest', 'record-merge', issueId, '--pr', input.pr, '--json'],
+      required: true,
+    });
+    steps.push({
+      id: 'generate_proof',
+      command: 'pnpm',
+      args: ['ops:proof-generate', issueId, '--json', '--force'],
+      required: true,
+    });
+    steps.push({
+      id: 'close_lane',
+      command: 'pnpm',
+      args: ['ops:lane-close', issueId, '--acquire-lock'],
+      required: true,
+    });
+  }
+
+  steps.push({
+    id: 'reconcile_current',
+    command: 'pnpm',
+    args: ['ops:orchestration-reconcile', '--current', '--json'],
+    required: true,
+  });
+
+  return {
+    issue_id: issueId,
+    branch: input.manifest.branch,
+    pr: input.pr,
+    dry_run: input.dryRun ?? false,
+    already_closed: alreadyClosed,
+    steps,
+  };
+}
+
+export function runLaneFinalizePlan(
+  plan: LaneFinalizePlan,
+  options: { runner?: LaneFinalizeRunner } = {},
+): LaneFinalizeResult {
+  const runner = options.runner ?? spawnSync;
+  const steps: LaneFinalizeResult['steps'] = [];
+
+  if (plan.dry_run) {
+    return {
+      ok: true,
+      code: 'lane_finalize_dry_run',
+      issue_id: plan.issue_id,
+      branch: plan.branch,
+      pr: plan.pr,
+      dry_run: true,
+      steps: plan.steps.map((step) => ({ ...step, status: 'planned' })),
+      message: 'Lane finalize dry-run only; no closeout commands executed.',
+    };
+  }
+
+  for (const step of plan.steps) {
+    const result = runner(step.command, step.args, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: 'pipe',
+    });
+    const status = result.status ?? 1;
+    const output = {
+      stdout: String(result.stdout ?? '').trim(),
+      stderr: String(result.stderr ?? '').trim(),
+    };
+    if (status !== 0) {
+      steps.push({ ...step, status: 'failed', ...output });
+      return {
+        ok: false,
+        code: 'lane_finalize_failed',
+        issue_id: plan.issue_id,
+        branch: plan.branch,
+        pr: plan.pr,
+        dry_run: false,
+        steps,
+        message: `Lane finalize failed at ${step.id}.`,
+      };
+    }
+    steps.push({ ...step, status: 'passed', ...output });
+  }
+
+  return {
+    ok: true,
+    code: plan.already_closed ? 'lane_already_finalized' : 'lane_finalized',
+    issue_id: plan.issue_id,
+    branch: plan.branch,
+    pr: plan.pr,
+    dry_run: false,
+    steps,
+    message: plan.already_closed
+      ? 'Lane was already closed; reconciliation completed.'
+      : 'Lane finalize completed.',
+  };
+}
+
+function main(argv = process.argv.slice(2)): number {
+  const { flags, bools } = parseArgs(argv);
+  const issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
+  const pr = getFlag(flags, 'pr') ?? getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr-number');
+  const json = bools.has('json');
+  if (!pr) {
+    throw new Error('Missing required --pr');
+  }
+
+  const plan = buildLaneFinalizePlan({
+    manifest: readManifest(issueId),
+    pr,
+    dryRun: bools.has('dry-run') || bools.has('explain'),
+  });
+  const result = runLaneFinalizePlan(plan);
+  if (json) {
+    emitJson(result);
+  } else {
+    process.stdout.write(`${result.message}\n`);
+    for (const step of result.steps) {
+      process.stdout.write(`${step.status}: ${step.command} ${step.args.join(' ')}\n`);
+    }
+  }
+  return result.ok ? 0 : 1;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  try {
+    process.exitCode = main();
+  } catch (error) {
+    emitJson({
+      ok: false,
+      code: 'lane_finalize_failed',
+      message: error instanceof Error ? error.message : String(error),
+    });
+    process.exitCode = 1;
+  }
+}

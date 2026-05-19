@@ -297,6 +297,42 @@ test('marks branch for closed lane as cleanup candidate', () => {
   assert.equal(entry.requirement, 'advisory');
   assert.equal(entry.verdict, 'cleanup_candidate');
   assert.equal(report.exit_code, 0);
+  assert.equal(
+    report.cleanup_plan.actions.some((action) => action.id === 'delete_local_branch' && action.issue_id === 'UTV2-1059'),
+    true,
+  );
+});
+
+test('cleanup plan refuses active current lanes', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'In Codex' })],
+    leases: [lease()],
+    manifests: [lane()],
+    branches: [branch()],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  assert.equal(
+    report.cleanup_plan.actions.some((action) => action.id === 'refuse_active_lane' && action.safe_to_apply === false),
+    true,
+  );
+});
+
+test('cleanup plan treats released leases as no-op safe state', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
+    leases: [lease({ status: 'released' })],
+    manifests: [],
+    branches: [],
+    pullRequests: [],
+    mode: 'all',
+    now: NOW,
+  });
+
+  const action = report.cleanup_plan.actions.find((entry) => entry.id === 'release_done_lease');
+  assert.equal(action?.safe_to_apply, true);
+  assert.equal(action?.command, null);
 });
 
 test('defaults to current actionable issues instead of historical all debt', () => {

@@ -45,13 +45,16 @@ pnpm codex:dispatch -- --issue UTV2-### --tier T2 --branch codex/utv2-###-slug -
 The command:
 - validates the issue and branch
 - runs `ops:preflight`
-- creates the lane manifest via `ops:lane-start`
+- creates or resumes the git worktree and lane manifest via `ops:lane-start`
+- records `worktree_path`, dependency setup state, and cwd guard instructions in the manifest/packet
 - writes the Codex task packet to `.claude/codex-queue/UTV2-###.md`
 
 After dispatch, read and follow the generated packet before implementing:
 ```bash
 Get-Content .claude\codex-queue\UTV2-###.md
 ```
+
+Run lane work from the packet worktree cwd. The main checkout is control and merge only; do not branch-switch it for executable lane work.
 
 ## Receive Returned Work
 
@@ -61,6 +64,16 @@ pnpm codex:receive -- --issue UTV2-### --branch <branch> --pr <github-pr-url>
 ```
 
 This links the PR to the lane manifest and moves the lane to review. It does not replace verification.
+
+## Post-Merge Closeout
+
+After the PR merges, serialize closeout through the merge mutex and run:
+```bash
+pnpm ops:lane-finalize -- --issue UTV2-### --pr <github-pr-url-or-number> --json
+pnpm ops:orchestration-reconcile --current --cleanup-plan --json
+```
+
+The finalize command records the merge SHA, generates eligible T2 proof, closes the lane, releases the lease, and runs current-state reconcile. Cleanup remains dry-run unless an operator deliberately applies the listed local cleanup commands.
 
 ## Codex Return Validation
 

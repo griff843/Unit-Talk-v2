@@ -133,6 +133,9 @@ test('packet includes exact cwd from manifest execution location', () => {
 
   assert.strictEqual(packet.cwd, 'C:/Dev/Unit-Talk-v2-main/.out/worktrees/codex__utv2-969-lane');
   assert.match(packet.cwd_guard_command, /cd "/);
+  assert.match(packet.worktree_entrypoint, /pnpm install --frozen-lockfile/);
+  assert.equal(packet.dependency_setup.package_install, 'not_required');
+  assert.equal(packet.dependency_setup.main_checkout_control_only, true);
 });
 
 test('packet cwd guard rejects execution from wrong cwd', () => {
@@ -170,4 +173,17 @@ test('missing expected_proof_paths does not prevent packet generation', () => {
 
   assert.deepStrictEqual(packet.expected_proof_paths, []);
   assert.ok(packet.required_verification.includes('issue-specific verification'));
+});
+
+test('closeout instructions include lane-finalize and current reconcile', () => {
+  const packet = generateExecutionPacket(createTestManifest());
+
+  assert.equal(
+    packet.closeout_instructions.some((entry) => entry.includes('pnpm ops:lane-finalize')),
+    true,
+  );
+  assert.equal(
+    packet.closeout_instructions.some((entry) => entry.includes('pnpm ops:orchestration-reconcile --current')),
+    true,
+  );
 });

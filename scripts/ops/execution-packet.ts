@@ -14,6 +14,12 @@ export interface ExecutionPacket {
   execution_location: string;
   cwd: string;
   cwd_guard_command: string;
+  worktree_entrypoint: string;
+  dependency_setup: {
+    package_install: string;
+    setup_command: string | null;
+    main_checkout_control_only: boolean;
+  };
   allowed_file_scope: string[];
   tier_c_warnings: string[];
   blockers: string[];
@@ -58,6 +64,12 @@ export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket
     execution_location: deriveExecutionLocation(manifest.executor),
     cwd: manifest.execution_location?.cwd ?? manifest.worktree_path,
     cwd_guard_command: `cd "${manifest.execution_location?.cwd ?? manifest.worktree_path}"`,
+    worktree_entrypoint: `cd "${manifest.execution_location?.cwd ?? manifest.worktree_path}" && pnpm install --frozen-lockfile`,
+    dependency_setup: {
+      package_install: manifest.execution_location?.package_install ?? 'required',
+      setup_command: manifest.execution_location?.setup_command ?? 'pnpm install --frozen-lockfile',
+      main_checkout_control_only: manifest.execution_location?.main_checkout_control_only ?? true,
+    },
     allowed_file_scope: [...(manifest.file_scope_lock ?? [])],
     tier_c_warnings: collectTierCWarnings(manifest.file_scope_lock ?? []),
     blockers: [...(manifest.blocked_by ?? [])],
@@ -68,7 +80,8 @@ export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket
       'Run npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD',
       `Open PR with title matching feat(ops): ${issueId} description`,
       `Apply tier label: gh pr edit <PR-number> --add-label tier:${tier}`,
-      'Run ops:truth-check after merge to close lane',
+      `After merge, run pnpm ops:lane-finalize -- --issue ${issueId} --pr <PR-number-or-url> --json`,
+      'Run pnpm ops:orchestration-reconcile --current --json after closeout',
     ],
     repo_brief: loadRepoBrief(),
     source_of_truth: {
