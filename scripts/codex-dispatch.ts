@@ -223,6 +223,7 @@ function runPreflight(
   files: string[],
   dryRun: boolean,
   explain: boolean,
+  fast: boolean,
 ): ChildResult {
   const args = ['ops:preflight', issueId, '--tier', tier, '--branch', branch, '--json'];
   for (const filePath of files) {
@@ -233,6 +234,9 @@ function runPreflight(
   }
   if (explain) {
     args.push('--explain');
+  }
+  if (fast) {
+    args.push('--fast');
   }
   return runPnpm(args);
 }
@@ -381,6 +385,7 @@ async function main(): Promise<number> {
   const dryRun = bools.has('dry-run');
   const json = bools.has('json');
   const explain = bools.has('explain');
+  const fast = bools.has('fast');
   let issueId = '';
   let tier = '';
   let branch = '';
@@ -423,7 +428,7 @@ async function main(): Promise<number> {
     if (preflightTokenFlag) {
       preflightRelativePath = validateSuppliedTokenPath(issueId, branch, preflightTokenFlag);
     } else {
-      const preflight = runPreflight(issueId, tier, branch, files, dryRun, explain);
+      const preflight = runPreflight(issueId, tier, branch, files, dryRun, explain, fast);
       if (preflight.status !== 0) {
         if (preflight.stdout) {
           process.stdout.write(`${preflight.stdout}\n`);

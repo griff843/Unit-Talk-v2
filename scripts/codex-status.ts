@@ -2,7 +2,7 @@
  * scripts/codex-status.ts
  * Show status of all Codex CLI lanes from the canonical manifest directory.
  *
- * Reads docs/06_status/lanes/*.json and displays lanes with lane_type='codex-cli',
+ * Reads docs/06_status/lanes/*.json and displays lanes routed to executor='codex-cli',
  * color-coded by health: merged/done=green, in-review=yellow, stale>4h=red.
  *
  * Usage:
@@ -44,6 +44,7 @@ function isStranded(heartbeatAt: string): boolean {
 }
 
 type DisplayBucket = 'active' | 'in-review' | 'merged' | 'done' | 'blocked' | 'reopened';
+const TERMINAL_STATUSES = new Set(['merged', 'done', 'closed']);
 
 function displayBucket(status: string): DisplayBucket {
   switch (status) {
@@ -93,14 +94,15 @@ try {
 }
 
 const codexLanes = allManifests
-  .filter((m) => m.lane_type === 'codex-cli')
-  .filter((m) => showAll || (m.status !== 'merged' && m.status !== 'done'))
+  .filter((m) => m.executor === 'codex-cli' || m.lane_type === 'codex-cli')
+  .filter((m) => showAll || !TERMINAL_STATUSES.has(m.status))
   .sort((a, b) => new Date(b.started_at).getTime() - new Date(a.started_at).getTime());
 
 if (jsonMode) {
   const output = codexLanes.map((m) => ({
     issue_id: m.issue_id,
     lane_type: m.lane_type,
+    executor: m.executor,
     tier: m.tier,
     branch: m.branch,
     worktree_path: m.worktree_path,

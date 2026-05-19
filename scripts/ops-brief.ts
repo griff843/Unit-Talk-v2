@@ -93,8 +93,9 @@ function buildOverviewSection(
 
 function buildCodexLanesSection(): SectionResult {
   const ACTIVE_STATUSES = new Set(['started', 'in_progress', 'in_review', 'blocked', 'reopened']);
+  const TERMINAL_STATUSES = new Set(['merged', 'done', 'closed']);
 
-  let manifests: Array<{ issue_id: string; lane_type: string; status: string; branch: string; pr_url: string | null; started_at: string; heartbeat_at: string }>;
+  let manifests: Array<{ issue_id: string; lane_type: string; executor?: string; status: string; branch: string; pr_url: string | null; started_at: string; heartbeat_at: string }>;
   try {
     manifests = readAllManifests();
   } catch {
@@ -102,10 +103,10 @@ function buildCodexLanesSection(): SectionResult {
   }
 
   const codexManifests = manifests.filter(
-    (m) => m.lane_type === 'codex-cli' && m.status !== 'merged' && m.status !== 'done',
+    (m) => isCodexCliLane(m) && !TERMINAL_STATUSES.has(m.status),
   );
   const codexActive = manifests.filter(
-    (m) => m.lane_type === 'codex-cli' && ACTIVE_STATUSES.has(m.status),
+    (m) => isCodexCliLane(m) && ACTIVE_STATUSES.has(m.status),
   );
   const claudeActive = manifests.filter(
     (m) => m.lane_type === 'claude' && ACTIVE_STATUSES.has(m.status),
@@ -138,7 +139,7 @@ function buildCodexLanesSection(): SectionResult {
     lines.push(`stale_lanes=${stale.map((m) => m.issue_id).join(',')}`);
   }
 
-  const inReview = manifests.filter((m) => m.lane_type === 'codex-cli' && m.status === 'in_review');
+  const inReview = manifests.filter((m) => isCodexCliLane(m) && m.status === 'in_review');
   if (inReview.length > 0) {
     lines.push(`pending_review=${inReview.map((m) => m.issue_id).join(',')}`);
   }
@@ -148,6 +149,10 @@ function buildCodexLanesSection(): SectionResult {
     ok: stale.length === 0,
     lines,
   };
+}
+
+function isCodexCliLane(manifest: { lane_type: string; executor?: string }): boolean {
+  return manifest.executor === 'codex-cli' || manifest.lane_type === 'codex-cli';
 }
 
 function buildLinearSection(issueId: string | null): SectionResult {

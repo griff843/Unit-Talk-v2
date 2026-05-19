@@ -89,6 +89,12 @@ test('codex-dispatch rejects the removed --allowed flag', () => {
   assert.match(result.stderr, /--allowed flag is removed/i);
 });
 
+test('codex-dispatch forwards --fast to ops:preflight', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+  assert.match(source, /bools\.has\('fast'\)/, 'dispatch should parse --fast');
+  assert.match(source, /args\.push\('--fast'\)/, 'dispatch should forward --fast to preflight');
+});
+
 test('dispatch skill documents the Codex lane workflow', () => {
   const skill = fs.readFileSync(
     path.join(ROOT, '.agents', 'skills', 'dispatch', 'SKILL.md'),

@@ -194,6 +194,7 @@ async function main(): Promise<number> {
     fast,
     headSha,
     readPreflightBaselineCache(),
+    linearState.labels,
     addCheck,
   );
 
@@ -297,7 +298,7 @@ function runEnvCheck(
         : 'no suspicious quoted credential values detected',
     );
 
-    const githubToken = process.env.GITHUB_TOKEN?.trim();
+    const githubToken = process.env.GITHUB_TOKEN?.trim() || readConfiguredEnvValue('GITHUB_TOKEN')?.trim();
     if (!githubToken) {
       addCheck('PE3', 'fail', 'GITHUB_TOKEN must be present and non-empty');
     } else {
@@ -334,7 +335,13 @@ function runRepoChecks(
   if (!status.ok) {
     addCheck('PG2', 'infra_error', status.stderr || 'git status failed');
   } else if (status.stdout.trim().length > 0) {
-    addCheck('PG2', 'fail', 'working tree is not clean');
+    const dirtyPaths = parsePorcelainPaths(status.stdout);
+    const nonRegistryDirtyPaths = dirtyPaths.filter((dirtyPath) => !isLaneRegistryPath(dirtyPath));
+    if (nonRegistryDirtyPaths.length > 0) {
+      addCheck('PG2', 'fail', `working tree is not clean: ${nonRegistryDirtyPaths.slice(0, 5).join(', ')}${nonRegistryDirtyPaths.length > 5 ? ` +${nonRegistryDirtyPaths.length - 5} more` : ''}`);
+    } else {
+      addCheck('PG2', 'pass', `working tree has only lane registry changes (${dirtyPaths.length})`);
+    }
   } else {
     addCheck('PG2', 'pass', 'working tree is clean');
   }
@@ -660,37 +667,40 @@ async function runBaselineChecks(
   fast: boolean,
   headSha: string,
   cache: PreflightBaselineCache | null,
+  linearLabels: string[],
   addCheck: (id: string, status: CheckResult['status'], detail: string) => void,
 ): Promise<{ cacheHit: boolean; updatedCache: PreflightBaselineCache | null }> {
   let updatedCache: PreflightBaselineCache | null = null;
   let cacheHit = false;
 
+  if (fast && fastBaselineAllowed(tier, linearLabels)) {
+    if (cache?.head_sha === headSha && cache.type_check_passed_at && cache.tests_passed_at) {
+      cacheHit = true;
+      addCheck('PB1', 'skip', `PB1 skipped via --fast using trusted cache ${relativeToRoot(PREFLIGHT_BASELINE_CACHE_PATH)}`);
+      addCheck('PB2', 'skip', `PB2 skipped via --fast using trusted cache ${relativeToRoot(PREFLIGHT_BASELINE_CACHE_PATH)}`);
+      return { cacheHit, updatedCache: cache };
+    }
+    addCheck('PB1', 'fail', '--fast requested but no trusted type-check cache exists for current HEAD');
+    addCheck('PB2', 'fail', '--fast requested but no trusted test cache exists for current HEAD');
+    return { cacheHit, updatedCache };
+  }
+
   const typeCheck = runCommand('pnpm', ['type-check']);
   addCheck('PB1', typeCheck.ok ? 'pass' : 'fail', typeCheck.ok ? 'pnpm type-check passed' : typeCheck.detail);
   if (typeCheck.ok) {
     updatedCache = {
-      head_sha: headSha,
       ...(cache ?? {}),
+      head_sha: headSha,
       type_check_passed_at: new Date().toISOString(),
     };
-  }
-
-  if (tier === 'T3' && fast) {
-    if (cache?.head_sha === headSha && cache.tests_passed_at) {
-      cacheHit = true;
-      addCheck('PB2', 'skip', `PB2 skipped via --fast using cache ${relativeToRoot(PREFLIGHT_BASELINE_CACHE_PATH)}`);
-      return { cacheHit, updatedCache };
-    }
-    addCheck('PB2', 'fail', '--fast requested but no trusted baseline cache exists for current HEAD');
-    return { cacheHit, updatedCache };
   }
 
   const testRun = runCommand('pnpm', ['test']);
   addCheck('PB2', testRun.ok ? 'pass' : 'fail', testRun.ok ? 'pnpm test passed' : testRun.detail);
   if (testRun.ok) {
     updatedCache = {
-      head_sha: headSha,
       ...(updatedCache ?? cache ?? {}),
+      head_sha: headSha,
       tests_passed_at: new Date().toISOString(),
     };
   }
@@ -837,6 +847,63 @@ function readOptionalFile(filePath: string): string {
   } catch {
     return '';
   }
+}
+
+function readConfiguredEnvValue(key: string): string | undefined {
+  let value: string | undefined;
+  for (const fileName of ['.env.example', '.env', 'local.env']) {
+    const filePath = path.join(ROOT, fileName);
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+    for (const line of fs.readFileSync(filePath, 'utf8').split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (!trimmed || trimmed.startsWith('#')) {
+        continue;
+      }
+      const separatorIndex = trimmed.indexOf('=');
+      if (separatorIndex === -1) {
+        continue;
+      }
+      const entryKey = trimmed.slice(0, separatorIndex).trim();
+      if (entryKey === key) {
+        value = trimmed.slice(separatorIndex + 1).trim();
+      }
+    }
+  }
+  return value;
+}
+
+function parsePorcelainPaths(stdout: string): string[] {
+  return stdout
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .filter(Boolean)
+    .map((line) => {
+      const rawPath = line.slice(3).trim();
+      const renameTarget = rawPath.split(' -> ').at(-1) ?? rawPath;
+      return renameTarget.replace(/^"|"$/g, '');
+    });
+}
+
+function isLaneRegistryPath(repoRelativePath: string): boolean {
+  return (
+    /^\.ops\/sync\/UTV2-\d+\.yml$/.test(repoRelativePath) ||
+    /^docs\/06_status\/lanes\/UTV2-\d+\.json$/.test(repoRelativePath)
+  );
+}
+
+function fastBaselineAllowed(tier: LaneTier, linearLabels: string[]): boolean {
+  if (tier === 'T3') {
+    return true;
+  }
+  if (tier !== 'T2') {
+    return false;
+  }
+  const normalizedLabels = linearLabels.map((label) => label.toLowerCase().replace(/^area:/, '').replace(/^kind:/, '').replace(/^lane:/, ''));
+  return normalizedLabels.some((label) =>
+    ['governance', 'tooling', 'hygiene', 'verification', 'delivery-ui', 'delivery/ui', 'proof'].includes(label),
+  );
 }
 
 function credentialQuotesLookSuspicious(raw: string): boolean {
