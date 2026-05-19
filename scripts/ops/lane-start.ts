@@ -52,6 +52,36 @@ const LEGACY_EXECUTOR_MAP: Record<string, LaneExecutor> = {
   codex: 'codex-cli',
 };
 
+// Paths that require serialized (singleton) execution — parallel dispatch is invalid
+// unless --singleton-approved is explicitly passed.
+const SINGLETON_ONLY_PREFIXES = [
+  'supabase/migrations/',
+  'packages/contracts/src/',
+  'packages/domain/src/',
+  'apps/worker/',
+  '.github/workflows/',
+];
+
+const SINGLETON_ONLY_FILES = new Set([
+  'package.json',
+  'pnpm-lock.yaml',
+  'pnpm-workspace.yaml',
+  'packages/db/src/lifecycle.ts',
+  'packages/db/src/repositories.ts',
+  'packages/db/src/runtime-repositories.ts',
+  'apps/api/src/distribution-service.ts',
+  'apps/api/src/auth.ts',
+  'packages/db/src/database.types.ts',
+]);
+
+function isSingletonPath(filePath: string): boolean {
+  const normalized = filePath.replaceAll('\\', '/').replace(/^\.\//, '');
+  return (
+    SINGLETON_ONLY_FILES.has(normalized) ||
+    SINGLETON_ONLY_PREFIXES.some((prefix) => normalized.startsWith(prefix))
+  );
+}
+
 function writeSyncFile(issueId: string, content: string): void {
   const syncDir = path.join(ROOT, '.ops', 'sync');
   fs.mkdirSync(syncDir, { recursive: true });
@@ -115,6 +145,18 @@ function main(): void {
       );
     }
     const normalizedFiles = normalizeFileScope(fileArgs);
+    const singletonPaths = normalizedFiles.filter(isSingletonPath);
+    const singletonApproved = flags.has('singleton-approved');
+    if (singletonPaths.length > 0 && !singletonApproved) {
+      emitJson({
+        ok: false,
+        code: 'singleton_path_conflict',
+        message: `File scope includes singleton-only paths that require serialized execution: ${singletonPaths.join(', ')}. Pass --singleton-approved to confirm PM/orchestrator approval for this singleton lane.`,
+        singleton_paths: singletonPaths,
+      });
+      process.exit(1);
+    }
+
     const overlap = activeManifestOverlap(issueId, normalizedFiles);
     if (overlap) {
       emitJson({

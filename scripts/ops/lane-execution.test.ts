@@ -23,18 +23,42 @@ function withTempLane(run: (laneCwd: string) => void): void {
   }
 }
 
-test('docs/scripts-only isolated lanes do not require pnpm install', () => {
+test('docs/scripts-only worktree lanes run pnpm install when node_modules is absent', () => {
   withTempLane((laneCwd) => {
+    const calls: Array<{ command: string; args: string[]; cwd: string }> = [];
+    const runner = ((command: string, args: string[], options: { cwd?: string }) => {
+      calls.push({ command, args, cwd: options.cwd ?? '' });
+      return { status: 0, stdout: '', stderr: '', signal: null, output: [] };
+    }) as typeof spawnSync;
+
+    const setup = prepareLaneExecutionDirectory({
+      cwd: laneCwd,
+      fileScope: ['scripts/ops/lane-start.ts'],
+      runner,
+    });
+
+    assert.deepStrictEqual(calls, [
+      { command: 'pnpm', args: ['install', '--frozen-lockfile'], cwd: laneCwd.replaceAll('\\', '/') },
+    ]);
+    assert.strictEqual(setup.ran_install, true);
+    assert.strictEqual(setup.execution_location.cwd, laneCwd.replaceAll('\\', '/'));
+    assert.strictEqual(setup.execution_location.package_install, 'verified');
+  });
+});
+
+test('docs/scripts-only worktree lanes skip install when node_modules already exists', () => {
+  withTempLane((laneCwd) => {
+    fs.mkdirSync(path.join(laneCwd, 'node_modules'));
+
     const setup = prepareLaneExecutionDirectory({
       cwd: laneCwd,
       fileScope: ['scripts/ops/lane-start.ts'],
       runner: (() => {
-        throw new Error('runner should not be called');
+        throw new Error('runner should not be called when node_modules exists');
       }) as typeof spawnSync,
     });
 
     assert.strictEqual(setup.ran_install, false);
-    assert.strictEqual(setup.execution_location.cwd, laneCwd.replaceAll('\\', '/'));
     assert.strictEqual(setup.execution_location.package_install, 'not_required');
   });
 });
