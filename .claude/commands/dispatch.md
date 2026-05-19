@@ -31,6 +31,23 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 
 ## Execution flow
 
+### Phase 0: Concurrency preflight
+
+Before resolving targets or routing any issue, confirm the board is safe to accept new lanes.
+
+Invoke the lane-governor subagent:
+```typescript
+Agent({
+  subagent_type: "lane-governor",
+  description: "Concurrency preflight before dispatch",
+  prompt: "Check current lane state and confirm headroom before dispatch. Report: available Claude slots, available Codex slots, any forbidden combinations active, any file-scope locks that would block the candidate issues. Issues to check (if known): {issue_ids}. Be concise — one paragraph max."
+})
+```
+
+If lane-governor returns BLOCKED or any forbidden combination is active: stop, report the specific block, do not proceed to Phase 1.
+
+If lane-governor returns headroom available: proceed to Phase 1 with the slot counts confirmed.
+
 ### Phase 1: Resolve targets
 
 If no issue IDs provided:
