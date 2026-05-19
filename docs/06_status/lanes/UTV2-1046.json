@@ -13,7 +13,10 @@
   "file_scope_lock": [
     ".github/workflows/proof-auditor-gate.yml",
     "scripts/ops/proof-auditor-gate.ts",
-    "scripts/ops/proof-auditor-gate.test.ts"
+    "scripts/ops/proof-auditor-gate.test.ts",
+    ".ops/sync/UTV2-1046.yml",
+    "docs/06_status/lanes/UTV2-1046.json",
+    "docs/05_operations/REQUIRED_CI_CHECKS.md"
   ],
   "expected_proof_paths": [],
   "status": "in_review",

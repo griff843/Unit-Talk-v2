@@ -14,7 +14,10 @@
     "scripts/ops/ops-merge-wrapper.ts",
     "scripts/ops/ops-merge-wrapper.test.ts",
     ".claude/commands/dispatch.md",
-    ".claude/commands/dispatch-board.md"
+    ".claude/commands/dispatch-board.md",
+    ".ops/sync/UTV2-1061.yml",
+    "docs/06_status/lanes/UTV2-1061.json",
+    "package.json"
   ],
   "expected_proof_paths": [],
   "status": "in_review",
