@@ -1,3 +1,4 @@
+import fs from 'node:fs';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateExecutionCwd } from './lane-execution.js';
@@ -19,6 +20,7 @@ export interface ExecutionPacket {
   required_verification: string[];
   expected_proof_paths: string[];
   closeout_instructions: string[];
+  repo_brief: string;
   source_of_truth: {
     linear_url: string;
     branch: string;
@@ -68,6 +70,7 @@ export function generateExecutionPacket(manifest: LaneManifest): ExecutionPacket
       `Apply tier label: gh pr edit <PR-number> --add-label tier:${tier}`,
       'Run ops:truth-check after merge to close lane',
     ],
+    repo_brief: loadRepoBrief(),
     source_of_truth: {
       linear_url: `https://linear.app/unit-talk-v2/issue/${issueId}`,
       branch: manifest.branch,
@@ -129,6 +132,18 @@ function buildRequiredVerification(tier: string, expectedProofPaths: string[]): 
   }
 
   return values;
+}
+
+function loadRepoBrief(): string {
+  if (process.env.UNIT_TALK_TEST_MODE === '1' || process.env.NODE_ENV === 'test') {
+    return '[test-brief-stub]';
+  }
+  try {
+    const briefPath = path.join(ROOT, '.claude', 'agent-brief.md');
+    return fs.readFileSync(briefPath, 'utf8');
+  } catch {
+    return '[agent-brief.md not found — check .claude/agent-brief.md exists in repo root]';
+  }
 }
 
 function packetTimestamp(): string {
