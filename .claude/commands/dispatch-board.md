@@ -39,6 +39,8 @@ T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT.
 
 ## Phase 1: Read the board
 
+> **Preflight required first.** Before reading the board, run `/dispatch` Phase 0 (lane-governor concurrency preflight). If lane-governor returns BLOCKED, report the block and do not proceed.
+
 1. `pnpm ops:brief` — current context
 2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
    - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
