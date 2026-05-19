@@ -9,7 +9,13 @@ import {
   type TruthCheckResult,
 } from './shared.js';
 import { runTruthCheck } from './truth-check-lib.js';
-import { releaseMergeLock, requireMergeLockHeld } from './merge-mutex.js';
+import {
+  acquireMergeLock,
+  defaultMergeLockOwner,
+  releaseMergeLock,
+  requireMergeLockHeld,
+  type MergeLockResult,
+} from './merge-mutex.js';
 import { releaseLease } from './lease-registry.js';
 
 /**
@@ -30,6 +36,8 @@ export type CloseoutFailureCode =
   | 'registry_mismatch'   // Linear attachment doesn't include the PR URL (L4)
   | 'truth_check_failed'  // general truth-check failure (catch-all)
   | 'infra_error';        // missing token, manifest, or schema error
+
+export type CloseoutOutcome = 'closed' | 'already_closed' | 'closed_with_warnings' | 'blocked';
 
 /**
  * Maps a truth-check result to the most specific CloseoutFailureCode.
@@ -116,23 +124,72 @@ export function releaseCloseoutLocks(
   issueId: string,
   branch: string,
   options: { leaseRegistryDir?: string; mergeLockPath?: string } = {},
-): void {
+): { warnings: string[] } {
+  const warnings: string[] = [];
   const lease = releaseLease({
     issue_id: issueId,
     actor: 'ops:lane-close',
     reason: 'lane closed successfully',
   }, { registryDir: options.leaseRegistryDir });
-  if (!lease.ok) {
+  if (!lease.ok && !isIdempotentLeaseReleaseFailure(lease)) {
     throw new Error(`Failed to release dispatch lease: ${lease.code} ${lease.message}`);
+  }
+  if (!lease.ok) {
+    warnings.push(`dispatch lease already released or missing: ${lease.message}`);
   }
 
   const mergeLock = releaseMergeLock({
     issue_id: issueId,
     branch,
   }, { lockPath: options.mergeLockPath });
-  if (!mergeLock.ok) {
+  if (!mergeLock.ok && mergeLock.code !== 'merge_lock_missing') {
     throw new Error(`Failed to release merge lock: ${mergeLock.code} ${mergeLock.message}`);
   }
+  if (!mergeLock.ok) {
+    warnings.push(`merge lock already released or missing: ${mergeLock.message}`);
+  }
+
+  return { warnings };
+}
+
+export function ensureCloseoutMergeLock(
+  manifest: LaneManifest,
+  options: {
+    acquireLock?: boolean;
+    mergeLockPath?: string;
+    now?: Date;
+    cwd?: string;
+  } = {},
+): MergeLockResult {
+  const held = requireMergeLockHeld(
+    {
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      reason: 'ops:lane-close',
+    },
+    { lockPath: options.mergeLockPath, now: options.now },
+  );
+  if (held.ok || !options.acquireLock) {
+    return held;
+  }
+
+  return acquireMergeLock(
+    {
+      issue_id: manifest.issue_id,
+      branch: manifest.branch,
+      pr: manifest.pr_url,
+      cwd: options.cwd ?? process.cwd(),
+      reason: 'ops:lane-close',
+      owner: defaultMergeLockOwner(),
+    },
+    { lockPath: options.mergeLockPath, now: options.now },
+  );
+}
+
+function isIdempotentLeaseReleaseFailure(
+  result: ReturnType<typeof releaseLease>,
+): boolean {
+  return result.code === 'lease_invalid_existing' && result.message.startsWith('Lease not found:');
 }
 
 async function main(): Promise<void> {
@@ -141,17 +198,16 @@ async function main(): Promise<void> {
 
   try {
     const manifest = readManifest(issueId);
-    const lock = requireMergeLockHeld({
-      issue_id: issueId,
-      branch: manifest.branch,
-      reason: 'ops:lane-close',
+    const lock = ensureCloseoutMergeLock(manifest, {
+      acquireLock: bools.has('acquire-lock'),
     });
     if (!lock.ok) {
       emitJson({
         ok: false,
         code: lock.code,
+        outcome: 'blocked' satisfies CloseoutOutcome,
         remediation:
-          `Acquire the merge mutex before closeout: pnpm ops:merge-lock acquire --issue ${issueId} ` +
+          `Acquire the merge mutex before closeout or pass --acquire-lock: pnpm ops:merge-lock acquire --issue ${issueId} ` +
           `--branch ${manifest.branch} --reason ops:lane-close`,
         issue_id: issueId,
         merge_lock: lock,
@@ -172,6 +228,7 @@ async function main(): Promise<void> {
       emitJson({
         ok: false,
         code,
+        outcome: 'blocked' satisfies CloseoutOutcome,
         remediation: remediationForCode(code),
         issue_id: issueId,
         truth_check: result,
@@ -185,14 +242,18 @@ async function main(): Promise<void> {
     writeManifest(manifest);
 
     await transitionLinearIssueToDone(issueId);
-    releaseCloseoutLocks(issueId, manifest.branch);
+    const closeoutLocks = releaseCloseoutLocks(issueId, manifest.branch);
+    const outcome: CloseoutOutcome =
+      closeoutLocks.warnings.length > 0 ? 'closed_with_warnings' : 'closed';
 
     emitJson({
       ok: true,
       code: 'lane_closed' as CloseoutFailureCode,
+      outcome,
       issue_id: issueId,
       status: manifest.status,
       closed_at: manifest.closed_at,
+      warnings: closeoutLocks.warnings,
       truth_check: result,
     });
   } catch (error) {
@@ -207,6 +268,7 @@ async function main(): Promise<void> {
     emitJson({
       ok: false,
       code: 'infra_error' as CloseoutFailureCode,
+      outcome: 'blocked' satisfies CloseoutOutcome,
       remediation: remediationForCode('infra_error'),
       issue_id: issueId,
       message: error instanceof Error ? error.message : String(error),
@@ -222,12 +284,16 @@ async function transitionLinearIssueToDone(issueId: string): Promise<void> {
     throw new Error('LINEAR_API_TOKEN or LINEAR_API_KEY is required to close the Linear issue');
   }
 
-  const issuePayload = await fetchLinear<{ data?: { issue: { id: string } | null }; errors?: Array<{ message?: string }> }>(
+  const issuePayload = await fetchLinear<{
+    data?: { issue: { id: string; state?: { name?: string | null } | null } | null };
+    errors?: Array<{ message?: string }>;
+  }>(
     token,
     `
       query ResolveIssue($id: String!) {
         issue(id: $id) {
           id
+          state { name }
         }
       }
     `,
@@ -239,6 +305,9 @@ async function transitionLinearIssueToDone(issueId: string): Promise<void> {
   const issue = issuePayload.data?.issue;
   if (!issue) {
     throw new Error(`Linear issue not found: ${issueId}`);
+  }
+  if (/^done$/i.test(issue.state?.name ?? '')) {
+    return;
   }
 
   const statesPayload = await fetchLinear<{

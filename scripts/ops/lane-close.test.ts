@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  ensureCloseoutMergeLock,
   mapFailuresToCode,
   releaseCloseoutLocks,
   remediationForCode,
@@ -151,6 +152,155 @@ test('lane close releases dispatch lease and merge lock after successful closeou
     const releasedLock = readMergeLock(mergeLockPath);
     assert.strictEqual(releasedLease?.status, 'released');
     assert.strictEqual(releasedLock.ok ? releasedLock.lock.status : '', 'released');
+  });
+});
+
+test('lane close release is idempotent when closeout locks are already released', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    const issueId = 'UTV2-1001';
+    const branch = 'codex/utv2-1001-enforce-non-null-merge-sha';
+    reserveLease(
+      {
+        issue_id: issueId,
+        branch,
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        file_scope_lock: ['scripts/ops/lane-close.ts'],
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1001,
+          session_id: 'lane-close-test',
+        },
+      },
+      { registryDir: leaseRegistryDir, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+    acquireMergeLock(
+      {
+        issue_id: issueId,
+        branch,
+        pr: '1001',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1001,
+          session_id: 'lane-close-test',
+        },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+
+    releaseCloseoutLocks(issueId, branch, { leaseRegistryDir, mergeLockPath });
+    assert.doesNotThrow(() =>
+      releaseCloseoutLocks(issueId, branch, { leaseRegistryDir, mergeLockPath }),
+    );
+  });
+});
+
+test('lane close release is idempotent when closeout locks are already missing', () => {
+  withTempCloseoutState(({ leaseRegistryDir, mergeLockPath }) => {
+    assert.doesNotThrow(() =>
+      releaseCloseoutLocks('UTV2-1001', 'codex/utv2-1001-enforce-non-null-merge-sha', {
+        leaseRegistryDir,
+        mergeLockPath,
+      }),
+    );
+  });
+});
+
+test('lane close merge lock guard still requires an existing lock by default', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const result = ensureCloseoutMergeLock(createManifest(), {
+      mergeLockPath,
+      now: new Date('2026-05-18T12:00:00.000Z'),
+    });
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'merge_lock_missing');
+  });
+});
+
+test('lane close can acquire the merge lock when explicitly requested', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    const result = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      now: new Date('2026-05-18T12:00:00.000Z'),
+      cwd: process.cwd(),
+    });
+    const loaded = readMergeLock(mergeLockPath);
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.code, 'merge_lock_acquired');
+    assert.strictEqual(loaded.ok ? loaded.lock.issue_id : '', manifest.issue_id);
+    assert.strictEqual(loaded.ok ? loaded.lock.branch : '', manifest.branch);
+    assert.strictEqual(loaded.ok ? loaded.lock.reason : '', 'ops:lane-close');
+  });
+});
+
+test('lane close uses an existing matching merge lock even with acquire requested', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    const manifest = createManifest();
+    acquireMergeLock(
+      {
+        issue_id: manifest.issue_id,
+        branch: manifest.branch,
+        pr: '1001',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1001,
+          session_id: 'lane-close-test',
+        },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+
+    const result = ensureCloseoutMergeLock(manifest, {
+      acquireLock: true,
+      mergeLockPath,
+      now: new Date('2026-05-18T12:05:00.000Z'),
+    });
+
+    assert.strictEqual(result.ok, true);
+    assert.strictEqual(result.code, 'merge_lock_held');
+  });
+});
+
+test('lane close acquire request does not override another held merge lock', () => {
+  withTempCloseoutState(({ mergeLockPath }) => {
+    acquireMergeLock(
+      {
+        issue_id: 'UTV2-1002',
+        branch: 'codex/utv2-1002-other-lane',
+        pr: '1002',
+        cwd: process.cwd(),
+        reason: 'ops:lane-close',
+        owner: {
+          user: 'codex-test',
+          host: 'unit-test',
+          pid: 1002,
+          session_id: 'lane-close-test-other',
+        },
+      },
+      { lockPath: mergeLockPath, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+
+    const result = ensureCloseoutMergeLock(createManifest(), {
+      acquireLock: true,
+      mergeLockPath,
+      now: new Date('2026-05-18T12:05:00.000Z'),
+      cwd: process.cwd(),
+    });
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'merge_lock_held');
+    assert.strictEqual(result.lock?.issue_id, 'UTV2-1002');
   });
 });
 
