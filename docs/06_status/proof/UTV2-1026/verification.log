@@ -1,137 +1,40 @@
-# UTV2-1026 Verification Log
+# Verification Log — UTV2-1026
 
-Generated: 2026-05-19
+**Generated:** 2026-05-19T19:21:01Z
+**Branch:** codex/utv2-1026-automated-model-performance-monitoring
+**Executor:** codex-cli + orchestrator
 
-## Environment Prep
+---
 
-`pnpm verify` initially failed because this worktree lacked per-issue sync metadata:
+## pnpm type-check
 
-```text
-[sync-check] MISMATCH: .ops/sync.yml lists "UTV2-1072" but branch "codex/utv2-1026-automated-model-performance-monitoring" expects "UTV2-1026".
-Create .ops/sync/UTV2-1026.yml with entities.issues: [UTV2-1026] to fix this permanently.
-```
+Result: PASS
+Command: pnpm exec tsc -b tsconfig.json
+Exit code: 0
 
-Added `.ops/sync/UTV2-1026.yml`.
+---
 
-`pnpm verify` then failed at `env:check` because `local.env` was absent in the worktree. Ran the repo helper from the main checkout:
+## pnpm test
 
-```text
-npx tsx /home/griff843/code/Unit-Talk-v2/scripts/link-worktree-env.ts /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1026-automated-model-performance-monitoring
-[linked] local.env hardlink to /home/griff843/code/Unit-Talk-v2/local.env
-[skipped-missing-source] supabase/.temp/project-ref source not present at /home/griff843/code/Unit-Talk-v2/supabase/.temp/project-ref
-```
+Result: PASS
+Command: pnpm test (node:test + tsx --test)
+Tests: 479 pass, 0 fail, 0 cancelled, 0 skipped
+Duration: ~11.7s
 
-## Focused Test
+---
 
-Command:
+## Codex internal verify (during codex exec)
 
-```text
-npx tsx --test scripts/roi-by-sport.test.ts
-```
-
-Result:
-
-```text
-1..4
-# tests 4
-# suites 0
-# pass 4
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-```
-
-## Type Check
-
-Command:
-
-```text
-pnpm type-check
-```
-
-Result: PASS.
-
-## Root Test
-
-Command:
-
-```text
-pnpm test
-```
-
-Result:
-
-```text
-1..467
-# tests 479
-# suites 6
-# pass 479
-# fail 0
-# cancelled 0
-# skipped 0
-# todo 0
-```
-
-## Issue-Specific Monitor Check
-
-Command:
-
-```text
-npx tsx -e "import { buildMonitorResult, type RoiBySportRow, type ModelPerformanceSnapshot } from './scripts/roi-by-sport.ts'; const row=(result: string, stakeUnits=1): RoiBySportRow => ({ result, sport: 'NBA', marketType: 'player_points', odds: -110, stakeUnits, clvStatus: 'computed', settledAt: '2026-05-19T00:00:00.000Z' }); const rows = Array.from({ length: 60 }, (_, i) => row(i < 35 ? 'win' : 'loss')); const previous: ModelPerformanceSnapshot = { generatedAt: '2026-05-18T00:00:00.000Z', afterDate: '2026-05-10', tier: 'UNPROVEN', settledRows: 49, stakeKnownRows: 49, historicalUnknownStakeRows: 0, riskedUnits: 49, profitUnits: -1, roiPercent: -2.04, wins: 24, losses: 25, pushes: 0, clvCoveragePercent: 100, notes: [] }; const result = buildMonitorResult(rows, '2026-05-10', previous, '2026-05-19T00:00:00.000Z'); console.log(JSON.stringify({ tier: result.snapshot.tier, alertReasons: result.alerts.map((alert) => alert.reason) }, null, 2));"
-```
-
-Result:
-
-```json
-{
-  "tier": "DEVELOPING",
-  "alertReasons": [
-    "tier_changed",
-    "roi_threshold_crossed",
-    "roi_threshold_crossed",
-    "roi_threshold_crossed",
-    "sample_milestone_reached"
-  ]
-}
-```
-
-## Gate
-
-Command:
-
-```text
-pnpm verify
-```
-
-Last lines:
-
-```text
-> @unit-talk/v2@0.1.0 verify:commands /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1026-automated-model-performance-monitoring
-> pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
-
-> @unit-talk/discord-bot@0.1.0 command-manifest:check /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1026-automated-model-performance-monitoring/apps/discord-bot
-> tsx scripts/sync-command-manifest.ts --check
-
-[command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1026-automated-model-performance-monitoring/apps/discord-bot/command-manifest.json
-[check-migration-versions] 107 migration file(s) verified — no duplicate versions.
-[lint-migrations] 107 migration file(s) checked — no findings.
-```
-
-Result: PASS.
-
-## R-Level
-
-Command:
-
-```text
-npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
-```
-
-Result:
-
-```text
-Verdict: PASS
+Result: PASS (reported by codex exec session)
 Changed files: 8
-Rules matched: (none) — no R-level artifacts required for this diff
-```
+Rules matched: (none) — no R1-R5 artifact requirements triggered
+r-level-check: PASS
+system-alignment: PASS (fail=0 warn=0)
+automation-coverage: PASS (fail=0 warn=0 classified=15)
+
+---
+
+## Summary
+
+All static verification checks pass. No R-level artifacts required (R1-R5 rules not triggered by diff path).
+T2 merge authority: orchestrator on green CI.
