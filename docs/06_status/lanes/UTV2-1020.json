@@ -12,7 +12,10 @@
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/truth-check-lib.test.ts",
-    "scripts/ops/truth-check-lib.ts"
+    "scripts/ops/truth-check-lib.ts",
+    ".ops/sync.yml",
+    "docs/06_status/lanes/UTV2-1020.json",
+    "docs/06_status/proof/UTV2-1020/evidence.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1020/evidence.json"
