@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1040-real-edge-failure-visibility",
   "branch": "codex/utv2-1040-real-edge-failure-visibility",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ddd7015a7b01f8828b89ccf5fe73a9bc036168e9",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/795",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/submission-service.ts",
@@ -21,14 +21,22 @@
     "docs/06_status/proof/UTV2-1040/diff-summary.md",
     "docs/06_status/proof/UTV2-1040/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-19T19:04:10.900Z",
-  "heartbeat_at": "2026-05-19T19:04:10.900Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-19T20:19:05.165Z",
+  "closed_at": "2026-05-19T20:19:05.165Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1040-real-edge-failure-visibility.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-19T20:18:32.267Z",
+      "verdict": "pass",
+      "merge_sha": "ddd7015a7b01f8828b89ccf5fe73a9bc036168e9",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

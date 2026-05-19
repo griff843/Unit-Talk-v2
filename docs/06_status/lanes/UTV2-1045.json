@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1045-expand-runtime-verifier-gate",
   "branch": "codex/utv2-1045-expand-runtime-verifier-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "9c0ba994fe017f38d1395b93369e130c004c494d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/794",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/runtime-verifier-gate.yml",
@@ -21,14 +21,33 @@
     "docs/06_status/proof/UTV2-1045/diff-summary.md",
     "docs/06_status/proof/UTV2-1045/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-19T19:04:43.889Z",
-  "heartbeat_at": "2026-05-19T19:04:43.889Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-19T20:18:52.720Z",
+  "closed_at": "2026-05-19T20:18:52.720Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1045-expand-runtime-verifier-gate.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-19T20:16:46.094Z",
+      "verdict": "fail",
+      "merge_sha": "9c0ba994fe017f38d1395b93369e130c004c494d",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-19T20:18:28.185Z",
+      "verdict": "pass",
+      "merge_sha": "9c0ba994fe017f38d1395b93369e130c004c494d",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

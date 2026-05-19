@@ -24,26 +24,28 @@
   ],
   "status": "done",
   "started_at": "2026-05-19T21:37:49.320Z",
-  "heartbeat_at": "2026-05-19T22:13:43.484Z",
-  "closed_at": "2026-05-19T22:13:43.484Z",
+  "heartbeat_at": "2026-05-19T22:13:47.125Z",
+  "closed_at": "2026-05-19T22:13:47.125Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1050-automate-ci-failure-triage-into-linear-instead-of-manual-ci-triage.json",
   "created_by": "codex-cli",
   "truth_check_history": [
     {
-      "checked_at": "2026-05-19T22:13:40.002Z",
+      "checked_at": "2026-05-19T22:13:03.180Z",
+      "verdict": "fail",
+      "merge_sha": "4a41c8f22efba2ce6b9fec34ba743b515b2c230e",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-19T22:13:27.627Z",
       "verdict": "pass",
       "merge_sha": "4a41c8f22efba2ce6b9fec34ba743b515b2c230e",
       "failures": [],
       "runner": "manual"
-    },
-    {
-      "timestamp": "2026-05-19T22:13:43.484Z",
-      "runner": "post-merge-lane-close",
-      "merge_sha": "db606924f16fae93b20fd92cd4f3e040869662ad",
-      "verdict": "pass",
-      "exit_code": 0,
-      "checks": []
     }
   ],
   "reopen_history": [],

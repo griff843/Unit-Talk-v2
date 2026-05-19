@@ -22,14 +22,22 @@
     "docs/06_status/proof/UTV2-1047/diff-summary.md",
     "docs/06_status/proof/UTV2-1047/verification.log"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-19T20:22:26.277Z",
-  "heartbeat_at": "2026-05-19T20:22:26.277Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-19T21:37:24.264Z",
+  "closed_at": "2026-05-19T21:37:24.264Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1047-auto-generate-pr-review-and-risk-packets-for-t1t2-prs.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-19T21:37:11.750Z",
+      "verdict": "pass",
+      "merge_sha": "a176e3221da253a20ed3360e9f4300423a0c3524",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

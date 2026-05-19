@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1048-lane-governor-dispatch-preflight",
   "branch": "codex/utv2-1048-lane-governor-dispatch-preflight",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "30a21254b461a1f193f8b0f9d63b037efbc50a34",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/796",
   "files_changed": [],
   "file_scope_lock": [
     "docs/governance/LANE_CONCURRENCY_POLICY.md",
@@ -21,14 +21,22 @@
     "docs/06_status/proof/UTV2-1048/diff-summary.md",
     "docs/06_status/proof/UTV2-1048/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-19T19:05:26.242Z",
-  "heartbeat_at": "2026-05-19T19:05:26.242Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-19T20:19:13.756Z",
+  "closed_at": "2026-05-19T20:19:13.756Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1048-lane-governor-dispatch-preflight.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-19T20:18:36.349Z",
+      "verdict": "pass",
+      "merge_sha": "30a21254b461a1f193f8b0f9d63b037efbc50a34",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
