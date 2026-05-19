@@ -5,10 +5,10 @@
   "executor": "codex-cli",
   "tier": "T2",
   "worktree_path": ".",
-  "branch": "codex/utv2-1061-merge-mutex-wrapper",
+  "branch": "codex/utv2-1061-merge-mutex-wrapper-clean",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/768",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/ops-merge-wrapper.ts",
