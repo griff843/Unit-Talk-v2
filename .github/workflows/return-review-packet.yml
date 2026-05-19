@@ -62,6 +62,7 @@ jobs:
             --base "origin/${{ github.event.pull_request.base.ref }}" \
             --head "${{ github.event.pull_request.head.sha }}" \
             --output "artifacts/return-review-packet.json" \
+            --risk-output "artifacts/pr-risk-packet.json" \
             --json
 
       - name: Upload return review packet
@@ -69,5 +70,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: return-review-packet
-          path: artifacts/return-review-packet.json
+          path: |
+            artifacts/return-review-packet.json
+            artifacts/pr-risk-packet.json
           if-no-files-found: ignore

@@ -71,6 +71,29 @@ export interface ReturnReviewCheck {
   detail: string;
 }
 
+export interface PRRiskPacket {
+  schema_version: 1;
+  generated_at: string;
+  issue_id: string;
+  pr_number: number;
+  status: 'LOW' | 'MEDIUM' | 'HIGH' | 'BLOCKED';
+  reasons: string[];
+  signals: {
+    tier: string;
+    tier_label_present: boolean;
+    scope_bleed_count: number;
+    tier_c_path_count: number;
+    missing_proof: boolean;
+    r_level_status: RLevelCompliance['status'];
+    sync_metadata_status: SyncMetadataResult['status'];
+    missing_test_wiring_count: number;
+    dropped_tests_count: number;
+    untracked_artifact_status: UntrackedArtifactScan['status'];
+    failed_ci_count: number;
+    pending_ci_count: number;
+  };
+}
+
 export interface PRReviewPacket {
   schema_version: 2;
   generated_at: string;
@@ -103,6 +126,7 @@ export interface PRReviewPacket {
   merge_order_notes: string;
   missing_tier_label: boolean;
   missing_proof: boolean;
+  risk_packet: PRRiskPacket;
   checks: ReturnReviewCheck[];
   verdict: 'PASS' | 'FAIL' | 'SKIP';
 }
@@ -237,13 +261,31 @@ export async function generatePRReviewPacket(input: PacketInput): Promise<PRRevi
     rLevelCompliance,
     proofArtifactChecklist,
   });
+  const generatedAt = input.prebuilt?.generated_at ?? new Date().toISOString();
+  const ciStatusSummary = summarizeChecks(pullRequest.statusCheckRollup ?? []);
+  const missingTierLabel = tierLabel === undefined;
+  const riskPacket = buildRiskPacket({
+    generatedAt,
+    manifest,
+    pullRequest,
+    tier,
+    tierLabelPresent: !missingTierLabel,
+    scopeDiff,
+    tierCPaths: changedFiles.filter(isTierCPath),
+    packageTestDrift,
+    untrackedArtifactScan,
+    syncMetadata,
+    rLevelCompliance,
+    missingProof,
+    ciStatusSummary,
+  });
   const verdict = RETURN_REVIEW_TIERS.has(tier)
     ? checks.some((check) => check.status === 'FAIL') ? 'FAIL' : 'PASS'
     : 'SKIP';
 
   return {
     schema_version: 2,
-    generated_at: input.prebuilt?.generated_at ?? new Date().toISOString(),
+    generated_at: generatedAt,
     issue_id: manifest.issue_id,
     pr_number: pullRequest.number,
     pr_url: pullRequest.url,
@@ -269,12 +311,100 @@ export async function generatePRReviewPacket(input: PacketInput): Promise<PRRevi
       present: missingProof.length === 0,
       missing: missingProof.map((entry) => entry.artifact),
     },
-    ci_status_summary: summarizeChecks(pullRequest.statusCheckRollup ?? []),
+    ci_status_summary: ciStatusSummary,
     merge_order_notes: manifest.notes ?? '',
-    missing_tier_label: tierLabel === undefined,
+    missing_tier_label: missingTierLabel,
     missing_proof: missingProof.length > 0,
+    risk_packet: riskPacket,
     checks,
     verdict,
+  };
+}
+
+function buildRiskPacket(input: {
+  generatedAt: string;
+  manifest: LaneManifest;
+  pullRequest: PullRequestSnapshot;
+  tier: string;
+  tierLabelPresent: boolean;
+  scopeDiff: ScopeDiffResult;
+  tierCPaths: string[];
+  packageTestDrift: PackageTestDriftResult;
+  untrackedArtifactScan: UntrackedArtifactScan;
+  syncMetadata: SyncMetadataResult;
+  rLevelCompliance: RLevelCompliance;
+  missingProof: ProofArtifactChecklistEntry[];
+  ciStatusSummary: CiStatusSummaryEntry[];
+}): PRRiskPacket {
+  const failedCiCount = input.ciStatusSummary.filter((check) => check.status === 'fail').length;
+  const pendingCiCount = input.ciStatusSummary.filter((check) => check.status === 'pending').length;
+  const blockingReasons: string[] = [];
+  const highReasons: string[] = [];
+  const mediumReasons: string[] = [];
+
+  if (RETURN_REVIEW_TIERS.has(input.tier) && !input.tierLabelPresent) {
+    blockingReasons.push('missing tier label');
+  }
+  if (input.scopeDiff.out_of_scope_files.length > 0) {
+    blockingReasons.push(`scope bleed: ${input.scopeDiff.out_of_scope_files.join(', ')}`);
+  }
+  if (input.tierCPaths.length > 0) {
+    blockingReasons.push(`Tier C paths changed: ${input.tierCPaths.join(', ')}`);
+  }
+  if (input.missingProof.length > 0) {
+    blockingReasons.push(`missing proof artifacts: ${input.missingProof.map((entry) => entry.artifact).join(', ')}`);
+  }
+  if (input.rLevelCompliance.status !== 'PASS') {
+    blockingReasons.push(`R-level compliance ${input.rLevelCompliance.status}: ${input.rLevelCompliance.reason}`);
+  }
+  if (input.syncMetadata.status !== 'PASS') {
+    blockingReasons.push(`sync metadata ${input.syncMetadata.status}: ${input.syncMetadata.reason}`);
+  }
+  if (input.packageTestDrift.missing_test_wiring.length > 0) {
+    blockingReasons.push(`new tests missing package script wiring: ${input.packageTestDrift.missing_test_wiring.join(', ')}`);
+  }
+  if (input.packageTestDrift.dropped_tests.length > 0) {
+    blockingReasons.push(`dropped tests: ${input.packageTestDrift.dropped_tests.join(', ')}`);
+  }
+  if (failedCiCount > 0) {
+    highReasons.push(`${failedCiCount} failing CI check(s)`);
+  }
+  if (pendingCiCount > 0) {
+    mediumReasons.push(`${pendingCiCount} pending CI check(s)`);
+  }
+  if (input.untrackedArtifactScan.status === 'WARN') {
+    mediumReasons.push(input.untrackedArtifactScan.reason);
+  }
+
+  const status: PRRiskPacket['status'] = blockingReasons.length > 0
+    ? 'BLOCKED'
+    : highReasons.length > 0
+      ? 'HIGH'
+      : mediumReasons.length > 0
+        ? 'MEDIUM'
+        : 'LOW';
+
+  return {
+    schema_version: 1,
+    generated_at: input.generatedAt,
+    issue_id: input.manifest.issue_id,
+    pr_number: input.pullRequest.number,
+    status,
+    reasons: [...blockingReasons, ...highReasons, ...mediumReasons],
+    signals: {
+      tier: input.tier,
+      tier_label_present: input.tierLabelPresent,
+      scope_bleed_count: input.scopeDiff.out_of_scope_files.length,
+      tier_c_path_count: input.tierCPaths.length,
+      missing_proof: input.missingProof.length > 0,
+      r_level_status: input.rLevelCompliance.status,
+      sync_metadata_status: input.syncMetadata.status,
+      missing_test_wiring_count: input.packageTestDrift.missing_test_wiring.length,
+      dropped_tests_count: input.packageTestDrift.dropped_tests.length,
+      untracked_artifact_status: input.untrackedArtifactScan.status,
+      failed_ci_count: failedCiCount,
+      pending_ci_count: pendingCiCount,
+    },
   };
 }
 
@@ -826,10 +956,17 @@ async function main(): Promise<void> {
     fs.mkdirSync(path.dirname(absoluteOutput), { recursive: true });
     fs.writeFileSync(absoluteOutput, `${JSON.stringify(packet, null, 2)}\n`, 'utf8');
   }
+  const riskOutputPath = getFlag(flags, 'risk-output');
+  if (riskOutputPath) {
+    const absoluteRiskOutput = path.resolve(ROOT, riskOutputPath);
+    fs.mkdirSync(path.dirname(absoluteRiskOutput), { recursive: true });
+    fs.writeFileSync(absoluteRiskOutput, `${JSON.stringify(packet.risk_packet, null, 2)}\n`, 'utf8');
+  }
   if (bools.has('json') || outputPath) {
     emitJson(packet);
   } else {
     console.log(`Return review packet: ${packet.issue_id} ${packet.verdict}`);
+    console.log(`Risk packet: ${packet.risk_packet.status}`);
     for (const check of packet.checks) {
       console.log(`- ${check.status} ${check.id}: ${check.detail}`);
     }
