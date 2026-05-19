@@ -4,7 +4,34 @@ on:
   pull_request:
     types: [opened, synchronize, reopened]
     paths:
+      # Proof paths — direct evidence changes always trigger the gate
       - 'docs/06_status/proof/**'
+      # Lane closeout paths — manifest and ops-script changes can affect gate validity
+      - 'docs/06_status/lanes/**'
+      - 'scripts/ops/**'
+      # R-level artifact output paths
+      - 'artifacts/**'
+      # Runtime-sensitive paths (R-level classified per r1-r5-rules.json)
+      # lifecycle-fsm (R1–R4)
+      - 'apps/api/src/submission-service.ts'
+      - 'apps/api/src/candidate-pick-scanner.ts'
+      - 'packages/domain/src/lifecycle/**'
+      - 'apps/worker/**'
+      # promotion-scoring (R1–R3)
+      - 'packages/domain/src/promotion/**'
+      - 'apps/api/src/promotion-service.ts'
+      # settlement-grading (R1–R4)
+      - 'apps/api/src/settlement-service.ts'
+      - 'packages/domain/src/grading/**'
+      - 'packages/domain/src/clv/**'
+      # strategy-bankroll (R5)
+      - 'packages/domain/src/strategy/**'
+      # ingestor-provider (R1)
+      - 'apps/ingestor/**'
+      # DB runtime repositories (proof-coverage-guard sensitive paths)
+      - 'packages/db/src/lifecycle.ts'
+      - 'packages/db/src/repositories.ts'
+      - 'packages/db/src/runtime-repositories.ts'
 
 permissions:
   contents: read
