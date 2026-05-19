@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1024",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": ".out/worktrees/codex__utv2-1024-encode-t1-checklist-as-failing-ci",
+  "branch": "codex/utv2-1024-encode-t1-checklist-as-failing-ci",
+  "base_branch": "main",
+  "commit_sha": "00fecb8de87d465752e910164204338302849e6c",
+  "pr_url": null,
+  "files_changed": [
+    ".github/workflows/t1-proof-gate.yml",
+    ".ops/sync/UTV2-1024.yml",
+    "docs/06_status/lanes/UTV2-1024.json",
+    "docs/06_status/proof/UTV2-1024/diff-summary.md",
+    "docs/06_status/proof/UTV2-1024/verification.md",
+    "docs/06_status/proof/UTV2-1024/runtime-verification.md"
+  ],
+  "file_scope_lock": [
+    ".github/workflows/t1-proof-gate.yml",
+    ".ops/sync/UTV2-1024.yml",
+    "docs/06_status/lanes/UTV2-1024.json",
+    "docs/06_status/proof/UTV2-1024/"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1024/diff-summary.md",
+    "docs/06_status/proof/UTV2-1024/verification.md",
+    "docs/06_status/proof/UTV2-1024/runtime-verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-19T00:00:00Z",
+  "heartbeat_at": "2026-05-19T00:00:00Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex",
+  "truth_check_history": [],
+  "reopen_history": []
+}
