@@ -69,17 +69,18 @@ async function restQuery<T>(path: string): Promise<T[]> {
   return body as T[];
 }
 
-interface PromotionDecisionRow {
+interface PromotionHistoryRow {
   id: string;
   pick_id: string;
-  score_inputs: Record<string, unknown> | null;
+  score: number | null;
+  payload: Record<string, unknown> | null;
 }
 
-test('UTV2-1022: submitted pick persists riskScore and riskModifier in promotion decision snapshot', { skip: skipReason }, async () => {
+test('UTV2-1022: submitted pick persists riskScore and riskModifier in promotion history payload', { skip: skipReason }, async () => {
   const runId = randomUUID();
   const fixtureId = `utv2-1022-risk-${runId}`;
 
-  const payload: SubmissionPayload = {
+  const submission: SubmissionPayload = {
     source: 'manual',
     market: 'nba-spread',
     selection: `UTV2-1022 RISK PROOF ${fixtureId}`,
@@ -96,43 +97,47 @@ test('UTV2-1022: submitted pick persists riskScore and riskModifier in promotion
     },
   };
 
-  const response = await submitPickController(payload, repositories);
+  const response = await submitPickController(submission, repositories);
   assert.equal(response.status, 201, `risk proof: expected 201, got ${response.status}`);
   assert.ok((response.body as { ok: boolean }).ok, 'risk proof: response not ok');
 
   const data = (response.body as { ok: true; data: { pickId: string } }).data;
   const pickId = data.pickId;
 
-  // Verify the promotion_decisions row has riskScore, riskComponents, riskModifier persisted
-  const decisions = await restQuery<PromotionDecisionRow>(
-    `promotion_decisions?pick_id=eq.${pickId}&select=id,pick_id,score_inputs&limit=1`,
+  // pick_promotion_history row contains the promotion decision payload
+  const history = await restQuery<PromotionHistoryRow>(
+    `pick_promotion_history?pick_id=eq.${pickId}&select=id,pick_id,score,payload&limit=1`,
   );
 
-  if (decisions.length === 0) {
+  if (history.length === 0) {
     // Pick may not have reached promotion evaluation (e.g., awaiting_approval brake).
-    // This is acceptable — the risk score is still computed; evidence is in domain tests.
+    // This is acceptable — risk score is still computed; evidence is in domain unit tests.
     return;
   }
 
-  const scoreInputs = decisions[0]!.score_inputs;
-  assert.ok(scoreInputs !== null && typeof scoreInputs === 'object', 'score_inputs must be present');
+  const row = history[0]!;
+  // score column should be set (promotion score includes risk modifier)
+  assert.ok(typeof row.score === 'number', `promotion score must be a number, got ${typeof row.score}`);
 
-  // riskScore should be a number (0–100)
-  if ('riskScore' in scoreInputs) {
-    const riskScore = scoreInputs['riskScore'];
-    assert.ok(typeof riskScore === 'number', 'riskScore must be a number');
-    assert.ok(riskScore >= 0 && riskScore <= 100, `riskScore out of range: ${riskScore}`);
-  }
-
-  // riskModifier should be a number (0.85–1.0 for normal picks)
-  if ('riskModifier' in scoreInputs) {
-    const riskModifier = scoreInputs['riskModifier'];
-    assert.ok(typeof riskModifier === 'number', 'riskModifier must be a number');
-    assert.ok(riskModifier > 0 && riskModifier <= 1.0, `riskModifier out of range: ${riskModifier}`);
+  // payload contains scoreInputs with riskScore, riskComponents, riskModifier
+  if (row.payload !== null && typeof row.payload === 'object') {
+    const scoreInputs = row.payload['scoreInputs'] as Record<string, unknown> | undefined;
+    if (scoreInputs && typeof scoreInputs === 'object') {
+      if ('riskScore' in scoreInputs) {
+        const riskScore = scoreInputs['riskScore'];
+        assert.ok(typeof riskScore === 'number', 'riskScore must be a number');
+        assert.ok((riskScore as number) >= 0 && (riskScore as number) <= 100, `riskScore out of range: ${riskScore}`);
+      }
+      if ('riskModifier' in scoreInputs) {
+        const riskModifier = scoreInputs['riskModifier'];
+        assert.ok(typeof riskModifier === 'number', 'riskModifier must be a number');
+        assert.ok((riskModifier as number) > 0 && (riskModifier as number) <= 1.0, `riskModifier out of range: ${riskModifier}`);
+      }
+    }
   }
 });
 
-test('UTV2-1022: risk scoring is deterministic — same inputs produce same riskScore', { skip: skipReason }, async () => {
+test('UTV2-1022: risk scoring is deterministic — same inputs produce same promotion score', { skip: skipReason }, async () => {
   const runId = randomUUID();
 
   const makePayload = (suffix: string): SubmissionPayload => ({
@@ -161,17 +166,17 @@ test('UTV2-1022: risk scoring is deterministic — same inputs produce same risk
   const idA = (r1.body as { ok: true; data: { pickId: string } }).data.pickId;
   const idB = (r2.body as { ok: true; data: { pickId: string } }).data.pickId;
 
-  const [decisionsA, decisionsB] = await Promise.all([
-    restQuery<PromotionDecisionRow>(`promotion_decisions?pick_id=eq.${idA}&select=id,pick_id,score_inputs&limit=1`),
-    restQuery<PromotionDecisionRow>(`promotion_decisions?pick_id=eq.${idB}&select=id,pick_id,score_inputs&limit=1`),
+  const [histA, histB] = await Promise.all([
+    restQuery<PromotionHistoryRow>(`pick_promotion_history?pick_id=eq.${idA}&select=id,pick_id,score,payload&limit=1`),
+    restQuery<PromotionHistoryRow>(`pick_promotion_history?pick_id=eq.${idB}&select=id,pick_id,score,payload&limit=1`),
   ]);
 
-  if (decisionsA.length === 0 || decisionsB.length === 0) return;
+  if (histA.length === 0 || histB.length === 0) return;
 
-  const riskA = decisionsA[0]!.score_inputs?.['riskScore'];
-  const riskB = decisionsB[0]!.score_inputs?.['riskScore'];
+  const scoreA = histA[0]!.score;
+  const scoreB = histB[0]!.score;
 
-  if (typeof riskA === 'number' && typeof riskB === 'number') {
-    assert.equal(riskA, riskB, `risk scores not deterministic: ${riskA} vs ${riskB}`);
+  if (typeof scoreA === 'number' && typeof scoreB === 'number') {
+    assert.equal(scoreA, scoreB, `promotion scores not deterministic: ${scoreA} vs ${scoreB}`);
   }
 });

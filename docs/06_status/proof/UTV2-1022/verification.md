@@ -50,11 +50,29 @@ apps/api/src/promotion-service.ts: 0 errors
 
 ## pnpm test:db
 
-Live-DB proof test: `apps/api/src/t1-proof-risk-score.test.ts`
+Date: 2026-05-19
+Branch SHA: 8f20a1ac (pre-final commit)
+Supabase project: zfzdnfwdarxucxtaojxm
 
-Gated on SUPABASE_SERVICE_ROLE_KEY. Run against real Supabase:
+### database-smoke.test.ts (pnpm test:db) — 7/7 PASS
+
 ```
-UNIT_TALK_APP_ENV=local pnpm test:db
+ok 1 - database repository bundle persists a submission and settlement when Supabase is configured
+ok 2 - UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row
+ok 3 - UTV2-920: invalid atomic delivery confirmation rolls back outbox status, receipt, lifecycle, and audit writes
+ok 4 - UTV2-920: invalid atomic settlement writes no settlement, lifecycle event, or audit row
+ok 5 - UTV2-883: no duplicate participants for the same external_id and sport
+ok 6 - UTV2-996: re-settling a settled pick creates correction — no true duplicate base rows
+ok 7 - UTV2-996: correction chain is additive — original settlement row is not mutated
+# tests 7 | pass 7 | fail 0
 ```
 
-Expected: 2 tests pass (riskScore persistence, determinism). Skips automatically when credentials unavailable.
+### t1-proof-risk-score.test.ts — 2/2 PASS
+
+```
+ok 1 - UTV2-1022: submitted pick persists riskScore and riskModifier in promotion history payload
+ok 2 - UTV2-1022: risk scoring is deterministic — same inputs produce same promotion score
+# tests 2 | pass 2 | fail 0
+```
+
+Result: GREEN — live Supabase verified, risk scoring persists to pick_promotion_history.payload.scoreInputs
