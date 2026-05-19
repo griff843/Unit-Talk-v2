@@ -9,7 +9,7 @@ This file is read by Codex before every task. Follow every rule here exactly.
 - Active repo: `C:\Dev\Unit-Talk-v2-main` (this repo)
 - Legacy repo: `C:\dev\unit-talk-production` — **read-only reference only**. Never copy legacy behavior without explicit re-ratification in V2.
 
-**Execution model:** All Codex lanes run on the **main checkout** (`C:\Dev\Unit-Talk-v2-main`). Do not expect a separate worktree directory — the branch is checked out directly on the main working tree. The `worktree_path` in your lane manifest will always be `"."`. This applies regardless of file scope (see `docs/05_operations/WORKTREE_ISOLATION_POLICY.md`).
+**Execution model:** Parallel lanes run in dedicated git worktrees. The main checkout (`C:\Dev\Unit-Talk-v2-main` / `/home/griff843/code/Unit-Talk-v2`) is the control and merge checkout only. `/dispatch` and `/dispatch-board` must start each executable lane through `pnpm ops:lane-start`, which creates or resumes the lane worktree, records `worktree_path`, reserves the file-scope lock, and verifies the lane cwd. Do not execute parallel lane work by branch-switching the main checkout. Merge, branch-refresh, Linear Done, and lane closeout remain serialized through the merge mutex.
 
 **MCP usage:** Always use the OpenAI developer documentation MCP server (`openaiDeveloperDocs`) when working with OpenAI APIs, ChatGPT Apps SDK, Codex, or related OpenAI docs without requiring an explicit reminder. Use Linear MCP (`linear`) for Linear issue lookup/update workflows when available; fall back to the repo CLI commands only when MCP is unavailable.
 

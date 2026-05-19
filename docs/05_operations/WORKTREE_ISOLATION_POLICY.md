@@ -52,11 +52,13 @@ A lane whose `file_scope_lock` is entirely within one of:
 - `apps/worker/**` — imports from `packages/db`, `packages/contracts`
 - `apps/ingestor/**` — imports from `packages/db`
 
-### Rule 3 — Codex lanes: default to main checkout
+### Rule 3 — Linux lanes: default to worktrees
 
-Until the worktree setup script is rewritten to copy (not junction) `node_modules`, all Codex lanes default to running on the main checkout regardless of file scope. The overhead of a full `pnpm install` in a worktree exceeds the isolation benefit for the current throughput.
+On Linux, parallel Codex and Claude lanes default to dedicated git worktrees. The main checkout is reserved for control, reconciliation, branch refresh, merge, Linear Done, and lane closeout operations.
 
-**Exception:** Codex lanes that are pure docs/scripts (`docs/**`, `scripts/**`) may use a worktree at orchestrator discretion.
+Each lane worktree must have isolated install/build state. Do not junction, symlink, or otherwise share `node_modules` from the main checkout into a lane worktree.
+
+**Exception:** sensitive singleton work still executes under the merge/control discipline when the lane touches Tier C paths, migrations, lifecycle authority, or another path class explicitly marked singleton by governance.
 
 ---
 
@@ -78,24 +80,24 @@ const usesWorktree = (fileScope: string[]): boolean => {
 };
 ```
 
-If `usesWorktree` returns false: check out a branch on main, do **not** call `git worktree add`.
+If `usesWorktree` returns false: do not start the lane in parallel. Route it through the serialized control/merge flow or require PM/orchestrator approval for the singleton execution plan.
 
 ### In lane manifest
 
-The `worktree_path` field must be set to `"."` (main checkout) for all package-touching lanes:
+The `worktree_path` field must identify the lane execution directory for worktree-backed lanes:
 
 ```json
 {
-  "worktree_path": ".",
+  "worktree_path": ".out/worktrees/codex__utv2-###-slug",
   "branch": "codex/utv2-###-slug"
 }
 ```
 
-Setting `worktree_path` to anything other than `"."` on a package-touching lane is a manifest validation error.
+Setting `worktree_path` to `"."` is reserved for the main checkout control/merge flow or a specifically approved singleton lane. It is invalid for normal parallel implementation lanes.
 
 ### In `AGENTS.md`
 
-Codex is instructed not to expect a separate worktree directory. The branch is checked out on the main working tree.
+Codex is instructed to execute lane work from the dedicated worktree path reported by `/dispatch` / `ops:lane-start`. The main checkout is not a parallel lane execution cwd.
 
 ---
 
@@ -111,7 +113,7 @@ When the worktree setup is improved, the correct approach is:
 pnpm install --frozen-lockfile  # inside the worktree
 ```
 
-This requires the worktree to have its own full `pnpm install`. Estimated cost: 60–90 seconds per worktree creation. Acceptable for T1 isolation; not justified for routine T2/T3 Codex lanes.
+This requires the worktree to have its own full `pnpm install`. Estimated cost: 60–90 seconds per worktree creation. This cost is acceptable when the board is executing lanes in parallel because it prevents cross-lane dependency and build-state contamination.
 
 Track fix under a future UTV2 issue if throughput analysis shows worktree isolation is blocking parallel execution.
 
@@ -121,11 +123,12 @@ Track fix under a future UTV2 issue if throughput analysis shows worktree isolat
 
 | Lane type | File scope | Execution location |
 |---|---|---|
-| Touches `packages/**` | any | Main checkout (`worktree_path: "."`) |
-| Touches `apps/api/` or `apps/worker/` | any | Main checkout |
-| App-only UI/docs | `apps/command-center/`, `docs/`, `scripts/`, `.claude/`, `.github/` | Worktree allowed |
-| Codex (any) | any | Main checkout (default until fix) |
-| Claude T1 | sensitive paths | Main checkout (Tier C requires orchestrator direct) |
+| Normal parallel lane | disjoint file scope | Dedicated worktree |
+| Touches `packages/**` | any | Worktree allowed only with isolated install/build state; serialize if ownership risk is high |
+| Touches `apps/api/` or `apps/worker/` | any | Worktree allowed only with isolated install/build state; serialize if runtime risk is high |
+| App-only UI/docs | `apps/command-center/`, `docs/`, `scripts/`, `.claude/`, `.github/` | Dedicated worktree |
+| Merge/control | branch refresh, merge, Linear Done, lane closeout | Main checkout (`worktree_path: "."`) |
+| Tier C / migration / singleton runtime | sensitive paths | Serialized execution plan; PM/orchestrator approval required |
 
 ---
 

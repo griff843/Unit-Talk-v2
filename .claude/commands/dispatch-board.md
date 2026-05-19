@@ -6,6 +6,14 @@ Board-wide autonomous loop. Reads the entire Linear board, routes every executab
 
 All PR merge, PR branch refresh, and post-merge `main` sync operations must go through `pnpm ops:merge-wrapper`. Do not call `gh pr merge`, `gh pr update-branch`, `git pull origin main`, `git merge origin/main`, or `git rebase origin/main` directly; the wrapper owns the merge mutex and records deferred auto-merge state for later reconciliation.
 
+## Parallel lane isolation
+
+`/dispatch-board` may schedule multiple issues in parallel only when each lane runs in its own git worktree. The main checkout is reserved for board control, reconciliation, and serialized merge/closeout operations. Do not dispatch parallel lanes by checking out each branch on the main checkout.
+
+Before counting a lane as active, confirm `/dispatch` started it through `pnpm ops:lane-start` and recorded a lane-specific `worktree_path`/cwd. If worktree creation or isolated install verification fails, do not consume a parallel slot; mark the issue blocked with the specific setup failure.
+
+Worktrees increase execution concurrency, not merge concurrency. PR merge, branch refresh, Linear Done transition, and lane closeout remain one-at-a-time through the merge mutex.
+
 **Usage:**
 - `/dispatch-board` — run all executable issues
 - `/dispatch-board --milestone <id>` — scope to a Linear milestone
@@ -88,12 +96,18 @@ If any T1 in routing:
 
 ## Phase 4: Dispatch
 
-For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, lane manifest, Linear state, file-scope lock, worktree (if Codex), pre-PR verification, R-level check, tier label, PR opening.
+For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, lane manifest, Linear state, file-scope lock, dedicated worktree creation/resume, pre-PR verification, R-level check, tier label, and PR opening.
 
 Dispatch order:
 1. Approved T1 Claude lanes first
 2. Non-T1 Claude lanes — sequentially (default: max 2 active for safe work classes; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
 3. Codex lanes — up to 2 in parallel (default); up to 3 if PM trial includes a third Codex slot
+
+Parallel dispatch guard:
+- Every active implementation lane must have a distinct worktree path.
+- No active implementation lane may use the main checkout as its execution cwd.
+- File-scope locks must be disjoint before dispatching the next lane.
+- Shared merge/control files (`package.json`, `.github/workflows/**`, `.ops/sync/**`, `docs/06_status/lanes/**`) count as overlap unless the board explicitly serializes those lanes.
 
 ---
 

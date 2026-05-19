@@ -6,6 +6,19 @@ One-command lane execution. Pulls from the dispatch queue, routes to the right e
 
 Use `pnpm ops:merge-wrapper` for PR merge, PR branch refresh, and post-merge `main` sync operations. Do not call raw `gh pr merge`, `gh pr update-branch`, `git pull origin main`, `git merge origin/main`, or `git rebase origin/main`; those bypass the merge mutex.
 
+## Lane isolation
+
+Parallel lane execution must use dedicated git worktrees. The main checkout is a control/merge checkout only; do not execute lane implementation by branch-switching the main checkout. `/dispatch` must start each lane through `pnpm ops:lane-start`, and `ops:lane-start` owns worktree creation/resume, branch checkout, manifest creation, file-scope lease reservation, and cwd verification.
+
+Expected layout:
+
+```text
+main checkout: /home/griff843/code/Unit-Talk-v2
+lane cwd:      /home/griff843/code/Unit-Talk-v2/.out/worktrees/<owner>__utv2-###-slug
+```
+
+Each lane worktree must have isolated install/build state. Do not junction, symlink, or otherwise share `node_modules` from the main checkout into a lane worktree.
+
 **Usage:**
 - `/dispatch` — auto-pick the top dispatch candidate and execute
 - `/dispatch UTV2-###` — execute a specific issue
@@ -63,13 +76,13 @@ For each validated target:
 
 1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
 2. Determine file scope from the issue description (look for file paths, package names, or area labels)
-3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose.
+3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose. Do not check out the lane branch on the main checkout.
 
    ```bash
    pnpm ops:merge-wrapper main-sync --issue UTV2-{number} --branch main
    pnpm ops:lane-start UTV2-{number} --tier {T1|T2|T3} --branch {branch} --lane-type {lane_type} --executor {claude|codex-cli|codex-cloud} --files {file_scope_lock[0]} --files {file_scope_lock[1]}
    ```
-   `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification.
+   `ops:lane-start` owns branch/worktree creation, lease reservation, cwd coherence, and isolated install verification. Treat the `cwd`/`worktree_path` it reports as the only valid execution directory for that lane.
 4. Update Linear issue state to "In Claude" or "In Codex" via MCP
 5. Confirm `ops:lane-start` created the lane manifest and per-issue sync file, then commit both to the branch:
    ```bash
@@ -98,11 +111,12 @@ For each validated target:
    ```bash
    pnpm ops:lease heartbeat --issue UTV2-{number} --branch {branch} --executor {claude|codex-cli|codex-cloud} --cwd {lane_start_cwd}
    ```
+   `lane_start_cwd` must be the dedicated lane worktree path reported by `ops:lane-start`, not the main checkout.
 
 ### Phase 4: Execute
 
 **Claude lanes** (T1, T3, T2 with migration/contract, or T2 when Codex unavailable):
-- Execute the work directly in this conversation
+- Execute the work directly in this conversation from the dedicated lane worktree reported by `ops:lane-start`
 - Follow the acceptance criteria from the issue description
 - Run `pnpm verify` after implementation
 
@@ -237,7 +251,14 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
   "lane_type": "governance",
   "executor": "claude",
   "tier": "T3",
-  "worktree_path": ".",
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": ".out/worktrees/claude__utv2-###-slug",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": false
+  },
+  "worktree_path": ".out/worktrees/claude__utv2-###-slug",
   "branch": "claude/utv2-###-slug",
   "base_branch": "main",
   "commit_sha": null,

@@ -163,7 +163,16 @@ export function prepareLaneExecutionDirectory(input: {
     throw new Error(initialErrors.join('; '));
   }
 
-  if (executionLocation.package_install !== 'required') {
+  // On Linux, worktrees have no node_modules without an explicit install — there is no
+  // junction fallback. Run install for any detached worktree (cwd != ROOT) that lacks node_modules,
+  // even for non-package-touching scopes.
+  const isDetachedWorktree =
+    normalizeExecutionCwd(executionLocation.cwd) !== normalizeExecutionCwd(ROOT);
+  const worktreeNeedsInstall =
+    isDetachedWorktree &&
+    !fs.existsSync(path.join(executionLocation.cwd, 'node_modules'));
+
+  if (!worktreeNeedsInstall && executionLocation.package_install !== 'required') {
     return {
       execution_location: executionLocation,
       ran_install: false,
@@ -183,13 +192,16 @@ export function prepareLaneExecutionDirectory(input: {
     );
   }
 
-  const installErrors = validateLaneCwd({
-    cwd: executionLocation.cwd,
-    fileScope: input.fileScope,
-    requireInstallVerified: true,
-  });
-  if (installErrors.length > 0) {
-    throw new Error(installErrors.join('; '));
+  // Strict post-install validation (pnpm dir check) only for package-touching scopes.
+  if (executionLocation.package_install === 'required') {
+    const installErrors = validateLaneCwd({
+      cwd: executionLocation.cwd,
+      fileScope: input.fileScope,
+      requireInstallVerified: true,
+    });
+    if (installErrors.length > 0) {
+      throw new Error(installErrors.join('; '));
+    }
   }
 
   return {
