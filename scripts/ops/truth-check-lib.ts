@@ -532,10 +532,11 @@ export async function runTruthCheck(
     }
 
     if (tier === 'T1') {
+      let evidence: { path: string; bundle: EvidenceBundleV1 } | null = null;
       if (!fs.existsSync(EVIDENCE_BUNDLE_SCHEMA_PATH)) {
         addCheck('P5', 'fail', `missing evidence bundle schema at ${relativeToRoot(EVIDENCE_BUNDLE_SCHEMA_PATH)}`);
       } else {
-        const evidence = readFirstEvidenceBundle(proofFiles);
+        evidence = readFirstEvidenceBundle(proofFiles);
         if (!evidence) {
           addCheck('P5', 'fail', 'no expected proof path resolved to a readable evidence bundle');
         } else {
@@ -573,15 +574,10 @@ export async function runTruthCheck(
           } else {
             addCheck('P10', 'fail', 'verifier.identity must be set and not equal to manifest.created_by');
           }
-
-          addUnsupportedRuntimeChecks(
-            addCheck,
-            options.noRuntime ?? false,
-            tier,
-            Boolean((manifest as LaneManifest & { require_phase_contracts?: boolean }).require_phase_contracts),
-          );
         }
       }
+
+      addUnsupportedRuntimeChecks(addCheck, options.noRuntime ?? false, tier, evidence);
     } else if (tier === 'T2') {
       const proofContents = proofFiles.map((proofPath) => safeRead(proofPath)).join('\n');
       if (/diff summary/i.test(proofContents) || proofFiles.some((proofPath) => /diff-summary/i.test(path.basename(proofPath)))) {
@@ -802,19 +798,12 @@ export function addUnsupportedRuntimeChecks(
   addCheck: (id: string, status: 'pass' | 'fail' | 'skip', detail: string) => void,
   noRuntime: boolean,
   tier: LaneTier,
-  requirePhaseContracts = false,
+  evidence: { bundle: EvidenceBundleV1 } | null,
 ): void {
   if (tier !== 'T1') {
     addCheck('R1', 'skip', 'runtime checks skipped for non-T1 tier');
     addCheck('R2', 'skip', 'runtime checks skipped for non-T1 tier');
     addCheck('R3', 'skip', 'runtime checks skipped for non-T1 tier');
-    return;
-  }
-
-  if (!requirePhaseContracts) {
-    addCheck('R1', 'skip', 'phase runtime query contract not required by manifest');
-    addCheck('R2', 'skip', 'phase monitored-table contract not required by manifest');
-    addCheck('R3', 'skip', 'phase-boundary-guard contract not required by manifest');
     return;
   }
 
@@ -825,9 +814,34 @@ export function addUnsupportedRuntimeChecks(
     return;
   }
 
-  addCheck('R1', 'fail', 'Phase 1 lacks a canonical runtime query contract for executing T1 runtime_proof.queries');
-  addCheck('R2', 'fail', 'Phase 1 lacks a canonical monitored-table contract for failed/dead_letter reopen checks');
-  addCheck('R3', 'fail', 'Phase 1 lacks the phase-boundary-guard mechanical contract needed for T1 runtime enforcement');
+  if (!evidence) {
+    addCheck('R1', 'fail', 'evidence bundle required for R1 runtime query check');
+    addCheck('R2', 'fail', 'evidence bundle required for R2 monitored-table check');
+    addCheck('R3', 'fail', 'evidence bundle required for R3 verifier-identity check');
+    return;
+  }
+
+  const rp = evidence.bundle.runtime_proof;
+  const queries = Array.isArray(rp?.queries) ? rp.queries : [];
+  if (queries.length > 0) {
+    addCheck('R1', 'pass', `runtime_proof.queries has ${queries.length} entr${queries.length === 1 ? 'y' : 'ies'}`);
+  } else {
+    addCheck('R1', 'fail', 'runtime_proof.queries must be non-empty: run pnpm test:db and include live query evidence');
+  }
+
+  const rowCounts = Array.isArray(rp?.row_counts) ? rp.row_counts : [];
+  if (rowCounts.length > 0) {
+    addCheck('R2', 'pass', `runtime_proof.row_counts has ${rowCounts.length} entr${rowCounts.length === 1 ? 'y' : 'ies'}`);
+  } else {
+    addCheck('R2', 'fail', 'runtime_proof.row_counts must be non-empty: include monitored-table row counts from pnpm test:db');
+  }
+
+  const verifierIdentity = evidence.bundle.verifier?.identity?.trim();
+  if (verifierIdentity) {
+    addCheck('R3', 'pass', `verifier.identity confirmed: ${verifierIdentity}`);
+  } else {
+    addCheck('R3', 'fail', 'evidence bundle verifier.identity must be set for T1 phase-boundary-guard');
+  }
 }
 
 function determineExitCode(

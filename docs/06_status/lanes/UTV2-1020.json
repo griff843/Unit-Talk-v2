@@ -13,16 +13,21 @@
   "file_scope_lock": [
     "scripts/ops/truth-check-lib.test.ts",
     "scripts/ops/truth-check-lib.ts",
+    "scripts/ops/proof-auditor-gate.ts",
+    "scripts/ops/proof-auditor-gate.test.ts",
     ".ops/sync.yml",
     "docs/06_status/lanes/UTV2-1020.json",
-    "docs/06_status/proof/UTV2-1020/evidence.json"
+    "docs/06_status/proof/UTV2-1020/evidence.json",
+    "docs/06_status/proof/UTV2-1020/proof.md",
+    "docs/06_status/proof/UTV2-1020/verification.md",
+    "docs/06_status/lanes/UTV2-1046.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1020/evidence.json"
   ],
   "status": "in_progress",
   "started_at": "2026-05-19T03:43:39.106Z",
-  "heartbeat_at": "2026-05-19T03:43:39.106Z",
+  "heartbeat_at": "2026-05-19T04:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1020-truth-check-r1-r3.json",
