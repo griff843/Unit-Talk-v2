@@ -7,7 +7,7 @@
   "worktree_path": ".",
   "branch": "codex/utv2-1046-proof-auditor-gate-clean",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "b820a6efb4f23ace98baf010fb22d350a6c13f4e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/769",
   "files_changed": [],
   "file_scope_lock": [
@@ -19,7 +19,7 @@
     "docs/05_operations/REQUIRED_CI_CHECKS.md"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "execution_location": {
     "mode": "main-control",
     "cwd": ".",
@@ -27,7 +27,7 @@
   },
   "started_at": "2026-05-19T00:15:00.000Z",
   "heartbeat_at": "2026-05-19T01:00:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-19T04:30:00.000Z",
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
