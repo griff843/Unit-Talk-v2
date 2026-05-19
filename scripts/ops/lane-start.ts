@@ -280,6 +280,7 @@ function main(): void {
       created_by: executor === 'claude' ? 'claude' : 'codex-cli',
       status: 'started',
       now,
+      requireExistingPreflightToken: true,
     });
     manifest.execution_location = setup.execution_location;
     writeManifest(manifest);
