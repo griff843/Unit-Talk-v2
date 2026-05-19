@@ -22,7 +22,7 @@ function runLaneLinkPr(args: string[]) {
 
 function withManifest(
   issueId: string,
-  status: 'started' | 'in_progress' | 'in_review' | 'blocked' | 'reopened',
+  status: 'started' | 'in_progress' | 'in_review' | 'merged' | 'done' | 'blocked' | 'reopened',
   laneType: 'codex-cli' | 'claude' | 'codex-cloud' = 'codex-cli',
   mutate?: (manifest: Record<string, unknown>) => void,
 ): string {
@@ -111,10 +111,12 @@ test('lane-link-pr fails branch_mismatch from manifest truth', () => {
   }
 });
 
-test('lane-link-pr returns exit 2 when already in_review', () => {
+test('lane-link-pr is idempotent when already in_review with the same PR URL', () => {
   const issueId = 'UTV2-99103';
   try {
-    withManifest(issueId, 'in_review');
+    withManifest(issueId, 'in_review', 'codex-cli', (manifest) => {
+      manifest.pr_url = 'https://github.com/example/unit-talk/pull/125';
+    });
     const result = runLaneLinkPr([
       issueId,
       '--branch',
@@ -122,11 +124,62 @@ test('lane-link-pr returns exit 2 when already in_review', () => {
       '--pr',
       'https://github.com/example/unit-talk/pull/125',
     ]);
-    assert.strictEqual(result.status, 2);
-    const payload = JSON.parse(result.stdout) as { code: string };
-    assert.strictEqual(payload.code, 'already_in_review');
+    assert.strictEqual(result.status, 0);
+    const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string; pr_url: string };
+    assert.strictEqual(payload.ok, true);
+    assert.strictEqual(payload.code, 'lane_link_pr_noop');
+    assert.strictEqual(payload.status, 'in_review');
+    assert.strictEqual(payload.pr_url, 'https://github.com/example/unit-talk/pull/125');
   } finally {
     cleanup(issueId);
+  }
+});
+
+test('lane-link-pr rejects conflicting PR URL for already in_review lanes', () => {
+  const issueId = 'UTV2-99107';
+  try {
+    withManifest(issueId, 'in_review', 'codex-cli', (manifest) => {
+      manifest.pr_url = 'https://github.com/example/unit-talk/pull/125';
+    });
+    const result = runLaneLinkPr([
+      issueId,
+      '--branch',
+      `codex/${issueId.toLowerCase()}-receive`,
+      '--pr',
+      'https://github.com/example/unit-talk/pull/999',
+    ]);
+    assert.strictEqual(result.status, 1);
+    const payload = JSON.parse(result.stdout) as { code: string };
+    assert.strictEqual(payload.code, 'pr_url_mismatch');
+  } finally {
+    cleanup(issueId);
+  }
+});
+
+test('lane-link-pr is a no-op for merged or done lanes when PR URL matches manifest truth', () => {
+  for (const [issueId, status] of [
+    ['UTV2-99108', 'merged'],
+    ['UTV2-99109', 'done'],
+  ] as const) {
+    try {
+      withManifest(issueId, status, 'codex-cli', (manifest) => {
+        manifest.pr_url = 'https://github.com/example/unit-talk/pull/128';
+      });
+      const result = runLaneLinkPr([
+        issueId,
+        '--branch',
+        `codex/${issueId.toLowerCase()}-receive`,
+        '--pr',
+        'https://github.com/example/unit-talk/pull/128',
+      ]);
+      assert.strictEqual(result.status, 0);
+      const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string };
+      assert.strictEqual(payload.ok, true);
+      assert.strictEqual(payload.code, 'lane_link_pr_noop');
+      assert.strictEqual(payload.status, status);
+    } finally {
+      cleanup(issueId);
+    }
   }
 });
 

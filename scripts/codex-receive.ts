@@ -269,6 +269,19 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
     }
 
     const manifestPath = manifestPathForIssue(issueId);
+    if (manifest.branch !== branch) {
+      const result: ReceiveResult = {
+        ok: false,
+        code: 'branch_mismatch',
+        message: `Manifest branch ${manifest.branch} does not match requested branch ${branch}`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch,
+        status: manifest.status,
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 1;
+    }
     if (manifest.executor !== 'codex-cli' && manifest.lane_type !== 'codex-cli') {
       const result: ReceiveResult = {
         ok: false,
@@ -282,35 +295,85 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
       return 1;
     }
-    if (manifest.status === 'in_review') {
+    const manifestPrUrl = manifest.pr_url ?? undefined;
+    if (manifestPrUrl && manifestPrUrl !== prUrl) {
       const result: ReceiveResult = {
         ok: false,
-        code: 'already_in_review',
-        message: `${issueId} is already in_review`,
+        code: 'pr_url_mismatch',
+        message: `Manifest PR ${manifestPrUrl} does not match requested PR ${prUrl}`,
         issue_id: issueId,
         manifest_path: manifestPath,
         branch: manifest.branch,
-        pr_url: manifest.pr_url ?? prUrl,
+        pr_url: prUrl,
         status: manifest.status,
         heartbeat_at: manifest.heartbeat_at,
       };
       if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
-      return 2;
+      return 1;
+    }
+    if (manifest.status === 'in_review') {
+      if (!manifestPrUrl) {
+        const result: ReceiveResult = {
+          ok: false,
+          code: 'pr_url_missing',
+          message: `${issueId} is in_review but manifest has no PR URL`,
+          issue_id: issueId,
+          manifest_path: manifestPath,
+          branch: manifest.branch,
+          pr_url: prUrl,
+          status: manifest.status,
+          heartbeat_at: manifest.heartbeat_at,
+        };
+        if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+        return 1;
+      }
+      const result: ReceiveResult = {
+        ok: true,
+        code: 'receive_noop',
+        message: `${issueId} is already in_review for ${prUrl}`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch: manifest.branch,
+        pr_url: manifestPrUrl,
+        worktree_path: manifest.worktree_path,
+        status: manifest.status,
+        heartbeat_at: manifest.heartbeat_at,
+        linear_comment: 'skipped',
+      };
+      if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+      return 0;
     }
     if (manifest.status === 'merged' || manifest.status === 'done') {
+      if (!manifestPrUrl) {
+        const result: ReceiveResult = {
+          ok: false,
+          code: 'pr_url_missing',
+          message: `${issueId} is already ${manifest.status} but manifest has no PR URL`,
+          issue_id: issueId,
+          manifest_path: manifestPath,
+          branch: manifest.branch,
+          pr_url: prUrl,
+          status: manifest.status,
+          heartbeat_at: manifest.heartbeat_at,
+        };
+        if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
+        return 1;
+      }
       const result: ReceiveResult = {
-        ok: false,
-        code: 'status_not_applicable',
-        message: `${issueId} is already ${manifest.status}`,
+        ok: true,
+        code: 'receive_noop',
+        message: `${issueId} is already ${manifest.status} for ${prUrl}`,
         issue_id: issueId,
         manifest_path: manifestPath,
         branch: manifest.branch,
-        pr_url: manifest.pr_url ?? prUrl,
+        pr_url: manifestPrUrl,
+        worktree_path: manifest.worktree_path,
         status: manifest.status,
         heartbeat_at: manifest.heartbeat_at,
+        linear_comment: 'skipped',
       };
       if (json) emitJson(result); else process.stderr.write(`${result.message}\n`);
-      return 2;
+      return 0;
     }
     if (manifest.status === 'blocked') {
       const result: ReceiveResult = {

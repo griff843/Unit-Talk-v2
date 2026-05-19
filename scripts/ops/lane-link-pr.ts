@@ -76,33 +76,76 @@ export function main(argv = process.argv.slice(2)): number {
       } satisfies LaneLinkResult);
       return 1;
     }
-    if (manifest.status === 'in_review') {
+    const manifestPrUrl = manifest.pr_url ?? undefined;
+    if (manifestPrUrl && manifestPrUrl !== prUrl) {
       emitJson({
         ok: false,
-        code: 'already_in_review',
-        message: `${issueId} is already in_review`,
+        code: 'pr_url_mismatch',
+        message: `Manifest PR ${manifestPrUrl} does not match requested PR ${prUrl}`,
         issue_id: issueId,
         manifest_path: manifestPath,
         branch,
-        pr_url: manifest.pr_url ?? prUrl,
+        pr_url: prUrl,
         status: manifest.status,
         heartbeat_at: manifest.heartbeat_at,
       } satisfies LaneLinkResult);
-      return 2;
+      return 1;
+    }
+    if (manifest.status === 'in_review') {
+      if (!manifestPrUrl) {
+        emitJson({
+          ok: false,
+          code: 'pr_url_missing',
+          message: `${issueId} is in_review but manifest has no PR URL`,
+          issue_id: issueId,
+          manifest_path: manifestPath,
+          branch,
+          pr_url: prUrl,
+          status: manifest.status,
+          heartbeat_at: manifest.heartbeat_at,
+        } satisfies LaneLinkResult);
+        return 1;
+      }
+      emitJson({
+        ok: true,
+        code: 'lane_link_pr_noop',
+        message: `${issueId} is already in_review for ${prUrl}`,
+        issue_id: issueId,
+        manifest_path: manifestPath,
+        branch,
+        pr_url: manifestPrUrl,
+        status: manifest.status,
+        heartbeat_at: manifest.heartbeat_at,
+      } satisfies LaneLinkResult);
+      return 0;
     }
     if (manifest.status === 'merged' || manifest.status === 'done') {
+      if (!manifestPrUrl) {
+        emitJson({
+          ok: false,
+          code: 'pr_url_missing',
+          message: `${issueId} is already ${manifest.status} but manifest has no PR URL`,
+          issue_id: issueId,
+          manifest_path: manifestPath,
+          branch,
+          pr_url: prUrl,
+          status: manifest.status,
+          heartbeat_at: manifest.heartbeat_at,
+        } satisfies LaneLinkResult);
+        return 1;
+      }
       emitJson({
-        ok: false,
-        code: 'status_not_transitionable',
-        message: `${issueId} is already ${manifest.status}`,
+        ok: true,
+        code: 'lane_link_pr_noop',
+        message: `${issueId} is already ${manifest.status} for ${prUrl}`,
         issue_id: issueId,
         manifest_path: manifestPath,
         branch,
-        pr_url: manifest.pr_url ?? prUrl,
+        pr_url: manifestPrUrl,
         status: manifest.status,
         heartbeat_at: manifest.heartbeat_at,
       } satisfies LaneLinkResult);
-      return 2;
+      return 0;
     }
     if (!['started', 'in_progress', 'reopened'].includes(manifest.status)) {
       emitJson({
