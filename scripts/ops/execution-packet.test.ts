@@ -154,6 +154,13 @@ test('packet cwd guard rejects execution from wrong cwd', () => {
   );
 });
 
+test('repo_brief is present and returns test stub in test mode', () => {
+  process.env.UNIT_TALK_TEST_MODE = '1';
+  const packet = generateExecutionPacket(createTestManifest());
+  assert.strictEqual(packet.repo_brief, '[test-brief-stub]');
+  delete process.env.UNIT_TALK_TEST_MODE;
+});
+
 test('missing expected_proof_paths does not prevent packet generation', () => {
   const packet = generateExecutionPacket(
     createTestManifest({
