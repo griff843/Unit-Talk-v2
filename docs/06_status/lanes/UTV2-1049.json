@@ -6,8 +6,9 @@
   "tier": "T3",
   "branch": "claude/utv2-1049-retire-db-proof-reviewer",
   "base_branch": "main",
-  "status": "started",
-  "file_scope_lock": [
+  "commit_sha": "ecb37295a04b57a0efc69a81a3dd08f8c6cd7596",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/770",
+  "files_changed": [
     ".claude/agents/db-proof-reviewer.md",
     "docs/05_operations/agent-role-contracts.md",
     "docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md",
@@ -15,8 +16,15 @@
     ".lane/lanes/governance.yml",
     ".github/workflows/file-scope-lock-check.yml"
   ],
+  "file_scope_lock": [],
+  "expected_proof_paths": [],
+  "status": "done",
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
   "started_at": "2026-05-18T23:57:16Z",
-  "heartbeat_at": "2026-05-18T23:57:16Z"
+  "heartbeat_at": "2026-05-19T00:58:35Z",
+  "closed_at": "2026-05-19T00:58:35Z",
+  "blocked_by": [],
+  "truth_check_history": [],
+  "reopen_history": []
 }
