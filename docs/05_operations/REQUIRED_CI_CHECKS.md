@@ -153,6 +153,16 @@ The following workflows exist under `.github/workflows/` but are intentionally *
 - **Why excluded:** post-merge automation, triggered by `push` to `main` (i.e. after the merge has already happened). Cannot be a required check for PR merge.
 - **Status:** permanently excluded by design. Do not add.
 
+### 5.6 `Proof Auditor Gate` (`proof-auditor-gate.yml`) — required check candidate
+
+- **Job:** `proof-auditor-gate`
+- **Trigger:** `pull_request` (opened, synchronize, reopened, labeled) when `docs/06_status/proof/**`, `docs/06_status/*EVIDENCE*`, or `docs/06_status/*PROOF*` paths change
+- **What it does:** For each proof directory changed in the PR diff, runs `scripts/ops/proof-auditor-gate.ts` with `--sha` bound to the PR HEAD SHA. Fails if any proof directory has: placeholder text (TODO/TBD/PLACEHOLDER), missing required sections (## Summary / ## Evidence / ## Verification), invalid SHA format, SHA not found in proof files, or missing R-level artifact keywords. Uploads a machine-readable `proof-auditor-gate/v1` JSON artifact on every run.
+- **Required on main:** candidate — promote to required after the first full green run is confirmed on a proof-bearing PR. Configure as `Proof Auditor Gate` in branch protection.
+- **Merge relevance:** structural proof validity gate. Catches incomplete or placeholder proof files, stale SHA bindings, and missing required evidence sections before merge.
+- **db-proof-reviewer scope:** `db-proof-reviewer` remains an operator advisory tool for T1 evidence narrative review. This gate owns automated blocking structural checks. No functional overlap on required checks.
+- **Notes:** only runs when proof directories are changed in the PR diff. PRs that do not touch proof paths are not checked (gate passes trivially). Rationale: UTV2-1046.
+
 ---
 
 ## 6. Change procedure

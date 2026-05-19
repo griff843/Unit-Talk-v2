@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1046",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "branch": "codex/utv2-1046-proof-auditor-gate",
+  "base_branch": "main",
+  "status": "started",
+  "file_scope_lock": [
+    ".github/workflows/proof-auditor-gate.yml",
+    "scripts/ops/proof-auditor-gate.ts",
+    "scripts/ops/proof-auditor-gate.test.ts"
+  ],
+  "preflight_token": "dispatch-auto",
+  "created_by": "codex-cli",
+  "started_at": "2026-05-19T00:15:00.000Z",
+  "heartbeat_at": "2026-05-19T00:15:00.000Z",
+  "blocked_by": [],
+  "reopen_history": []
+}
