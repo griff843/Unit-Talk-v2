@@ -11,6 +11,8 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
+import { buildLeaseStaleReport } from './lease-registry.js';
 import {
   ROOT,
   emitJson,
@@ -21,20 +23,27 @@ import {
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-type DriftKind =
+export type DriftKind =
   | 'pr_merged_lane_open'
   | 'branch_deleted_lane_open'
   | 'linear_done_lane_open'
   | 'done_missing_closed_at'
-  | 'zombie_lane';
+  | 'zombie_lane'
+  | 'lease_stale_reclaim_required';
 
-interface DriftEntry {
+export interface DriftEntry {
   issue_id: string;
   kind: DriftKind;
   detail: string;
   manifest_status: string;
   pr_url: string | null;
   branch: string;
+}
+
+export interface StaleLaneAlertInput {
+  drift: DriftEntry[];
+  infra_errors: string[];
+  run_at: string;
 }
 
 interface StaleLaneReport {
@@ -146,6 +155,21 @@ async function postOpsAlert(message: string): Promise<void> {
   } catch {
     // best-effort
   }
+}
+
+export function buildStaleLaneAlertMessage(input: StaleLaneAlertInput): string {
+  const lines = [
+    `**[stale-lane-alerter] ${input.drift.length} drift item(s) detected** - ${input.run_at}`,
+    '',
+    ...input.drift.map(
+      (entry) =>
+        `- \`${entry.issue_id}\` [${entry.kind}]: ${entry.detail}`,
+    ),
+  ];
+  if (input.infra_errors.length > 0) {
+    lines.push('', `_${input.infra_errors.length} check(s) skipped (no GitHub/Linear token)_`);
+  }
+  return lines.join('\n');
 }
 
 // ── Git helper ─────────────────────────────────────────────────────────────
@@ -282,6 +306,18 @@ async function main(): Promise<void> {
     allDrift.push(...drift);
   }
 
+  const leaseReport = buildLeaseStaleReport(undefined, new Date(runAt));
+  for (const lease of leaseReport.leases) {
+    allDrift.push({
+      issue_id: lease.issue_id,
+      kind: 'lease_stale_reclaim_required',
+      detail: `lease expired at ${lease.expires_at}; explicit reclaim required for locked files: ${lease.file_scope_lock.join(', ')}`,
+      manifest_status: lease.status,
+      pr_url: null,
+      branch: lease.branch,
+    });
+  }
+
   const report: StaleLaneReport = {
     schema_version: 1,
     run_at: runAt,
@@ -321,29 +357,27 @@ async function main(): Promise<void> {
   }
 
   if (allDrift.length > 0) {
-    const lines = [
-      `**[stale-lane-alerter] ${allDrift.length} drift item(s) detected** — ${runAt}`,
-      '',
-      ...allDrift.map(
-        (d) =>
-          `- \`${d.issue_id}\` [${d.kind}]: ${d.detail}`,
-      ),
-    ];
-    if (infraErrors.length > 0) {
-      lines.push('', `_${infraErrors.length} check(s) skipped (no GitHub/Linear token)_`);
-    }
-    await postOpsAlert(lines.join('\n'));
+    await postOpsAlert(
+      buildStaleLaneAlertMessage({
+        drift: allDrift,
+        infra_errors: infraErrors,
+        run_at: runAt,
+      }),
+    );
   }
 
   // Always exit 0 — drift is an alert, not a failure
   process.exitCode = 0;
 }
 
-void main().catch((error: unknown) => {
-  console.error(
-    '[stale-lane-alerter] fatal:',
-    error instanceof Error ? error.message : String(error),
-  );
-  // Still exit 0 — alerter must not block CI
-  process.exitCode = 0;
-});
+const argv1 = process.argv[1] ?? '';
+if (argv1 && import.meta.url === pathToFileURL(path.resolve(argv1)).href) {
+  void main().catch((error: unknown) => {
+    console.error(
+      '[stale-lane-alerter] fatal:',
+      error instanceof Error ? error.message : String(error),
+    );
+    // Still exit 0 — alerter must not block CI
+    process.exitCode = 0;
+  });
+}

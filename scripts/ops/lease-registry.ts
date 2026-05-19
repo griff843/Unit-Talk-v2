@@ -400,6 +400,26 @@ export function heartbeatLease(
     };
   }
 
+  const staleLeases = markExpiredActiveLeases([lease], now, registryDir);
+  if (lease.status === 'stale_reclaim_required') {
+    return {
+      ok: false,
+      code: 'lease_stale_reclaim_required',
+      message: `Expired lease for ${lease.issue_id} requires explicit reclaim`,
+      conflicting_lease: lease,
+      stale_leases: staleLeases,
+    };
+  }
+
+  if (lease.status !== 'active') {
+    return {
+      ok: false,
+      code: 'lease_conflict',
+      message: `Heartbeat requires active lease for ${issueId}, got ${lease.status}`,
+      conflicting_lease: lease,
+    };
+  }
+
   const heartbeatAt = input.heartbeat_at ?? now.toISOString();
   const ttlMs = input.ttl_ms ?? leaseTtlMsForExecutor(lease.executor);
   const updated: DispatchLease = {
@@ -415,7 +435,7 @@ export function heartbeatLease(
     code: 'lease_renewed',
     lease: updated,
     lease_path: relativePathOrAbsolute(leasePath),
-    stale_leases: [],
+    stale_leases: staleLeases,
   };
 }
 
