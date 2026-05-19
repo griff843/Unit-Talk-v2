@@ -21,10 +21,10 @@ Implementation order: Phase 1 → Phase 2 → Phase 3. Do not start Phase 2 unti
 
 | # | Item | File(s) | Status | PR |
 |---|------|---------|--------|-----|
-| 2.1 | Automatic reconciler on session start | `session-start.sh` | 🔄 PR open | #786 |
-| 2.2 | Ops brief injected at session start | `session-start.sh` | 🔄 PR open | #786 |
-| 2.3 | Codex path deterministic — single canonical CLI wrapper | `scripts/ops/codex-exec.ts`, `dispatch.md` | 🔄 PR open | #788 |
-| 2.4 | Post-compact injects slot counts + Codex health | `post-compact-reinjector.sh` | 🔄 PR open | #787 |
+| 2.1 | Automatic reconciler on session start | `session-start.sh` | ✅ merged | #786 |
+| 2.2 | Ops brief injected at session start | `session-start.sh` | ✅ merged | #786 |
+| 2.3 | Codex path deterministic — single canonical CLI wrapper | `scripts/ops/codex-exec.ts`, `dispatch.md` | ✅ merged | #788 |
+| 2.4 | Post-compact injects slot counts + Codex health | `post-compact-reinjector.sh` | ✅ merged | #787 |
 
 ---
 
