@@ -135,6 +135,7 @@ Canonical specs: `docs/05_operations/LANE_MANIFEST_SPEC.md`, `docs/05_operations
 | Skill | When to use |
 |---|---|
 | `/dispatch-board` | "clear the board" — routes entire Linear backlog, runs full loop autonomously |
+| `/loop-dispatch` | continuous dispatch loop — runs /dispatch-board repeatedly until board empty or all blocked |
 | `/dispatch` | execute a specific issue or pick top candidates (single dispatch cycle) |
 | `/three-brain` | executor routing decision for any issue (Claude / Codex / Gemini / QA / Griff) |
 | `/execution-truth` | deciding if work is Done; reconciling narrative vs artifacts |

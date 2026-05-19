@@ -32,10 +32,10 @@ Implementation order: Phase 1 → Phase 2 → Phase 3. Do not start Phase 2 unti
 
 | # | Item | File(s) | Status | PR |
 |---|------|---------|--------|-----|
-| 3.1 | Policy-as-code schema + initial rule objects | `docs/05_operations/policies/`, `scripts/ops/policy-engine.ts` | ⬜ blocked on 2.x | — |
-| 3.2 | Codex-return review trigger (GitHub Actions on codex/ branch PR) | `.github/workflows/codex-return-review.yml` | ⬜ open | — |
-| 3.3 | Post-merge QA enforcement via policy engine | policy-engine.ts + QA trigger hook | ⬜ blocked on 3.1 | — |
-| 3.4 | Continuous dispatch loop (wire /loop to /dispatch-board) | — | ⬜ blocked on 3.2, 3.3 | — |
+| 3.1 | Policy-as-code schema + initial rule objects | `docs/05_operations/policies/`, `scripts/ops/policy-engine.ts` | ✅ merged | #790 |
+| 3.2 | Codex-return review trigger (GitHub Actions on codex/ branch PR) | `.github/workflows/codex-return-review.yml` | ✅ merged | #789 |
+| 3.3 | Post-merge QA enforcement via policy engine | policy-engine.ts + QA trigger hook | ⬜ open | — |
+| 3.4 | Continuous dispatch loop (wire /loop to /dispatch-board) | `.claude/commands/loop-dispatch.md`, `CLAUDE.md` | 🔄 PR open | — |
 
 ---
 
