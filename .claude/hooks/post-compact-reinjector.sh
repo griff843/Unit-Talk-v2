@@ -43,7 +43,7 @@ try {
     .filter(m => m && ACTIVE.has(m.status));
   const claudeUsed = active.filter(m => m.executor === 'claude').length;
   const codexUsed = active.filter(m => ['codex-cli','codex-cloud'].includes(m.executor)).length;
-  process.stdout.write('claude:' + claudeUsed + '/2 codex:' + codexUsed + '/3');
+  process.stdout.write('claude:' + claudeUsed + '/2 codex:' + codexUsed + '/4');
 } catch(e) { process.stdout.write('slots:error'); }
 " 2>/dev/null || echo "slots:unavailable")
 

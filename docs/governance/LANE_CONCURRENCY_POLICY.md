@@ -17,7 +17,7 @@ These limits are hard caps enforced by `ops:lane:start`. The command refuses if 
 
 | Limit | Value | Enforcement |
 |---|---|---|
-| Total active lanes (any type) | **5** | `ops:lane:start` rejects lane 6 |
+| Total active lanes (any type) | **6** | `ops:lane:start` rejects lane 7 |
 | Runtime lanes | **1** | `ops:lane:start` rejects second Runtime |
 | Migration lanes | **1** | `ops:lane:start` rejects second Migration |
 | Modeling lanes | **1** | `ops:lane:start` rejects second Modeling |
@@ -190,8 +190,8 @@ The type-based limits in §1 govern which lane *types* can coexist. This section
 | Executor | Ratified limit | Notes |
 |---|---|---|
 | Claude Code | **2 active lanes** | Safe work classes only; see §10 ineligible list |
-| Codex CLI | **3 active lanes** | Safe work classes only |
-| Total hard cap | **5** | Per §1; type-level limits always apply on top |
+| Codex CLI | **4 active lanes** | Safe work classes only |
+| Total hard cap | **6** | Per §1; type-level limits always apply on top |
 
 Per-cycle PM authorization is required when launching multi-lane waves above 3 total (1 Claude + 2 Codex legacy baseline). Authorization must be explicit in the PM dispatch instruction and does not persist to the next cycle unless re-stated.
 

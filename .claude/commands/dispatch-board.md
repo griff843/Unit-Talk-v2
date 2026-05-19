@@ -45,7 +45,7 @@ T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT.
 2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
    - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
    - **Exclude:** In Claude, In Codex (already active), Done, Cancelled, Blocked, untiered
-3. `cat .claude/lanes.json` — note active lanes, `file_scope_lock[]`, slot usage (default: max 2 Claude, max 3 Codex for safe work classes; total cap 5 — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
+3. `cat .claude/lanes.json` — note active lanes, `file_scope_lock[]`, slot usage (default: max 2 Claude, max 4 Codex for safe work classes; total cap 6 — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
 4. Build candidate list — exclude:
    - File-scope overlap with any active lane
    - Missing tier label
@@ -198,7 +198,7 @@ pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
 - **T2 clear-scope: Claude diff-review is the sole gate.** No PM_VERDICT.
 - **P0 lanes never auto-merge.** Before any merge attempt, run `pnpm ops:p0-detect <UTV2-###>`. If `is_p0: true`, the merge protocol (UTV2-948) overrides tier policy: the orchestrator surfaces the merge gate to PM and waits. PM merges manually. Required artifacts: `docs/06_status/proof/<UTV2-###>/claude-critique.md` and `runtime-verification.md`, both checked by the `P0 Protocol` workflow before merge is allowed.
 - **Auto-skip external-gate labels.** No user qualifier needed.
-- **Default: max 2 Claude lanes, max 3 Codex lanes for safe work classes** (Governance, Hygiene, Verification, Delivery/UI). Total hard cap 5. Runtime, migration, modeling, and data/canonical lanes are singleton per type regardless of executor count. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`. Queue — never stack.
+- **Default: max 2 Claude lanes, max 4 Codex lanes for safe work classes** (Governance, Hygiene, Verification, Delivery/UI). Total hard cap 6. Runtime, migration, modeling, and data/canonical lanes are singleton per type regardless of executor count. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`. Queue — never stack.
 - **No scope overlap.** Check `file_scope_lock` before every dispatch.
 - **Codex lanes are async.** Dispatch and continue. Review on `--check-codex` re-entry.
 - **Board truth over Linear truth.** If `lanes.json` says active but Linear says Done, reconcile before dispatching.
