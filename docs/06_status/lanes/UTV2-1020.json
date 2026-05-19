@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1020-truth-check-r1-r3",
   "branch": "claude/utv2-1020-truth-check-r1-r3",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e7d3216f3e093cc4a9e4b16cae89182f0afc05af",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/773",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/truth-check-lib.test.ts",
@@ -25,10 +25,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1020/evidence.json"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-19T03:43:39.106Z",
-  "heartbeat_at": "2026-05-19T04:30:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-19T11:10:00.000Z",
+  "closed_at": "2026-05-19T11:10:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1020-truth-check-r1-r3.json",
   "created_by": "claude",
