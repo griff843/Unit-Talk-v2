@@ -22,7 +22,7 @@ Each lane worktree must have isolated install/build state. Do not junction, syml
 **Usage:**
 - `/dispatch` — auto-pick the top dispatch candidate and execute
 - `/dispatch UTV2-###` — execute a specific issue
-- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel (up to 2 Claude + up to 3 Codex for safe classes)
+- `/dispatch UTV2-### UTV2-### UTV2-###` — execute multiple in parallel (up to 2 Claude + up to 4 Codex for safe classes)
 - `/dispatch --dry-run` — show what would be dispatched without executing
 
 **Arguments:** `$ARGUMENTS`
@@ -54,7 +54,7 @@ If no issue IDs provided:
 1. Run the daily digest dispatch query by executing: `source local.env && export LINEAR_API_TOKEN && npx tsx scripts/ops/daily-digest.ts --json`
 2. Parse `dispatch_candidates` from the JSON output
 3. If empty: report "No dispatchable issues. Add tier labels to Ready issues in Linear." and stop.
-4. Pick candidates up to capacity: up to 2 Claude lanes + up to 3 Codex lanes for safe work classes (Governance, Hygiene, Verification, Delivery/UI); dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per type — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
+4. Pick candidates up to capacity: up to 2 Claude lanes + up to 4 Codex lanes for safe work classes (Governance, Hygiene, Verification, Delivery/UI); dangerous classes (Runtime, Migration, Modeling, Data/Canonical) remain singleton per type — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
 
 If issue IDs provided:
 1. For each issue ID, query Linear via MCP (`mcp__claude_ai_Linear__get_issue`) to get labels, state, description
@@ -92,7 +92,7 @@ If `healthy: false`:
 For each validated target:
 
 1. Determine branch name: `claude/utv2-{number}-{slug}` or `codex/utv2-{number}-{slug}`
-2. Determine file scope from the issue description (look for file paths, package names, or area labels)
+2. Determine file scope from the issue description (look for explicit file paths first; fall back to package names or area labels). Declare the **narrowest possible scope** — list individual files when known (`apps/worker/src/processor.ts`), not directory globs (`apps/worker/**`), unless the issue explicitly requires changes across the full subtree. Overly broad locks block other lanes unnecessarily.
 3. Start the lane through the kernel. Do not hand-roll worktree eligibility, branch creation, manifest creation, or file-scope locking in prose. Do not check out the lane branch on the main checkout.
 
    ```bash
@@ -254,7 +254,7 @@ Next: merge T3 PR (auto-close fires), then review Codex returns
 
 - **Never dispatch T1 without PM confirmation.** T1 changes require plan approval before execution.
 - **Default: max 2 Claude lanes (safe work classes).** Dangerous classes (Runtime, Migration, Modeling, Data/Canonical) are singleton per type regardless. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
-- **Default: max 3 Codex lanes (safe work classes).** Same dangerous-class restrictions apply. Total hard cap is 5 active lanes across all executors.
+- **Default: max 4 Codex lanes (safe work classes).** Same dangerous-class restrictions apply. Total hard cap is 6 active lanes across all executors.
 - **Never start a lane if file scope overlaps with an active lane.** Check manifests first.
 - **Fail closed.** If any prerequisite is unclear, skip the issue and report why.
 - **Commit message must include issue ID.** Format: `feat|fix|chore(scope): UTV2-### description`

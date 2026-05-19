@@ -9,7 +9,7 @@
     },
     "actions": ["check_slot_limit"],
     "escalate_to_griff": false,
-    "rationale": "LANE_CONCURRENCY_POLICY.md §10: Codex CLI ratified limit = 3 active lanes for safe work classes (Governance, Hygiene, Verification, Delivery/UI). Pre-dispatch gate: pnpm exec tsx scripts/ops/lane-maximizer.ts must show no DISPATCH_LIMIT findings."
+    "rationale": "LANE_CONCURRENCY_POLICY.md §10: Codex CLI ratified limit = 4 active lanes for safe work classes (Governance, Hygiene, Verification, Delivery/UI). Pre-dispatch gate: pnpm exec tsx scripts/ops/lane-maximizer.ts must show no DISPATCH_LIMIT findings."
   },
   {
     "id": "codex-dangerous-class-singleton",
