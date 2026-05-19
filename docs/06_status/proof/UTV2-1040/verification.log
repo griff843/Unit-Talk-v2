@@ -1,0 +1,40 @@
+UTV2-1040 verification log
+timestamp_utc=2026-05-19T19:11:28Z
+head_before_changes=5f396538
+
+Command: pnpm type-check
+Result: PASS
+
+Command: pnpm test
+Result: PASS
+
+Command: npx tsx --eval "<forced providerOffers.resolveProviderMarketKey failure; submit pick through processSubmission; assert metadata.realEdgeSource, edgeProvenance, realEdgeFailure>"
+Result: PASS
+Observed output:
+UTV2-1040 issue verification PASS {
+  realEdgeSource: 'confidence-delta',
+  edgeProvenance: {
+    method: 'confidence-delta',
+    providerCoverageState: 'none',
+    fallbackReason: 'not-applicable'
+  },
+  realEdgeFailure: {
+    stage: 'computeRealEdge',
+    reason: 'UTV2-1040 forced provider lookup failure',
+    errorName: 'Error'
+  }
+}
+
+Command: pnpm verify
+Result: BLOCKED
+Failure:
+[sync-check] MISMATCH: .ops/sync.yml lists "UTV2-1072" but branch "codex/utv2-1040-real-edge-failure-visibility" expects "UTV2-1040".
+Create .ops/sync/UTV2-1040.yml with entities.issues: [UTV2-1040] to fix this permanently.
+Note: fixing this requires touching `.ops/sync.yml` or `.ops/sync/UTV2-1040.yml`, which is outside the execution packet's allowed file scope.
+
+Command: npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+Result: PASS
+Observed output:
+Verdict: PASS
+Changed files: 8
+Rules matched: (none) -- no R-level artifacts required for this diff

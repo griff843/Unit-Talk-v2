@@ -270,8 +270,35 @@ export async function processSubmission(
         domainAnalysis.hasRealEdge = realEdgeResult.hasRealEdge;
         domainAnalysis.realEdgeBookCount = realEdgeResult.bookCount;
       }
-    } catch {
-      // Real edge computation is fail-open — if it fails, confidence delta is used
+    } catch (error) {
+      // Real edge computation is fail-open, but failures must remain visible to operators.
+      const confidenceDelta = Number(
+        (materialized.pick.confidence - americanToImplied(materialized.pick.odds)).toFixed(6),
+      );
+      realEdgeData = {
+        realEdge: confidenceDelta,
+        realEdgeSource: 'confidence-delta',
+        marketProbability: americanToImplied(materialized.pick.odds),
+        hasRealEdge: confidenceDelta > 0,
+        realEdgeBookCount: 0,
+        edgeProvenance: {
+          method: 'confidence-delta',
+          providerCoverageState: 'none',
+          fallbackReason: 'not-applicable',
+        },
+        realEdgeFailure: {
+          stage: 'computeRealEdge',
+          reason: error instanceof Error ? error.message : String(error),
+          errorName: error instanceof Error ? error.name : typeof error,
+        },
+      };
+
+      submissionServiceLogger.warn('real edge computation failed; using confidence-delta fallback', {
+        market: normalizedMarketKey,
+        selection: materialized.pick.selection,
+        errorName: error instanceof Error ? error.name : typeof error,
+        errorMessage: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
