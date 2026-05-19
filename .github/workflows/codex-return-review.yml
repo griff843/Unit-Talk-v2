@@ -1,0 +1,347 @@
+name: Codex Return Review
+
+# Automated static gate for Codex-authored PRs (branch prefix: codex/).
+# Checks R-level compliance, Tier C path touches, scope bleed, and new
+# external dependencies. Posts a structured APPROVE/REJECT comment.
+# The orchestrator must still run the full codex-return-reviewer subagent
+# review before merge approval.
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches-ignore:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  codex-return-review:
+    name: Codex Return Review
+    runs-on: ubuntu-latest
+    if: startsWith(github.head_ref, 'codex/')
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: R-level compliance check
+        id: rlevel
+        run: |
+          npx tsx scripts/ci/r-level-check.ts \
+            --base origin/main \
+            --head HEAD \
+            --output-json /tmp/r-level-result.json 2>&1 || true
+
+          if [ -f /tmp/r-level-result.json ]; then
+            VERDICT=$(node -e "const r=require('/tmp/r-level-result.json'); process.stdout.write(r.verdict);")
+            MISSING=$(node -e "const r=require('/tmp/r-level-result.json'); process.stdout.write(r.missingArtifacts.join(', ') || 'none');")
+            RULES=$(node -e "const r=require('/tmp/r-level-result.json'); process.stdout.write(r.rulesMatched.map(x=>x.id).join(', ') || 'none');")
+          else
+            VERDICT="PASS"
+            MISSING="none"
+            RULES="none"
+          fi
+
+          echo "verdict=${VERDICT}" >> "$GITHUB_OUTPUT"
+          echo "missing=${MISSING}" >> "$GITHUB_OUTPUT"
+          echo "rules=${RULES}" >> "$GITHUB_OUTPUT"
+
+      - name: Tier C path detection
+        id: tierc
+        run: |
+          TIER_C_PATHS=(
+            "supabase/migrations/**"
+            "packages/contracts/src/**"
+            "packages/domain/src/**"
+            "packages/db/src/lifecycle.ts"
+            "packages/db/src/repositories.ts"
+            "packages/db/src/runtime-repositories.ts"
+            "apps/api/src/distribution-service.ts"
+            "apps/worker/**"
+            "apps/api/src/auth.ts"
+          )
+
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+
+          MATCHED_PATHS=""
+          for pattern in "${TIER_C_PATHS[@]}"; do
+            # Convert glob pattern to a grep-compatible extended regex
+            regex=$(echo "$pattern" | sed 's|\*\*|DOUBLESTAR|g; s|\*|[^/]*|g; s|DOUBLESTAR|.*|g')
+            while IFS= read -r file; do
+              if echo "$file" | grep -qE "^${regex}$"; then
+                MATCHED_PATHS="${MATCHED_PATHS}${file}\n"
+              fi
+            done <<< "$CHANGED_FILES"
+          done
+
+          # Deduplicate
+          MATCHED_PATHS=$(printf "%b" "$MATCHED_PATHS" | sort -u | tr '\n' ',' | sed 's/,$//')
+
+          if [ -n "$MATCHED_PATHS" ]; then
+            echo "touched=true" >> "$GITHUB_OUTPUT"
+            echo "paths=${MATCHED_PATHS}" >> "$GITHUB_OUTPUT"
+          else
+            echo "touched=false" >> "$GITHUB_OUTPUT"
+            echo "paths=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Scope bleed detection
+        id: scopebleed
+        run: |
+          BRANCH="${{ github.head_ref }}"
+
+          # Extract issue ID from branch name (e.g. codex/utv2-1234-fix-foo → UTV2-1234)
+          ISSUE_ID=$(echo "$BRANCH" | sed -nE 's|codex/(utv2|UTV2)-([0-9]+).*|UTV2-\2|Ip')
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "issue_id=unknown" >> "$GITHUB_OUTPUT"
+            echo "bleed=false" >> "$GITHUB_OUTPUT"
+            echo "bleed_files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          echo "issue_id=${ISSUE_ID}" >> "$GITHUB_OUTPUT"
+
+          MANIFEST="docs/06_status/lanes/${ISSUE_ID}.json"
+          if [ ! -f "$MANIFEST" ]; then
+            echo "bleed=false" >> "$GITHUB_OUTPUT"
+            echo "bleed_files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Read file_scope_lock from manifest
+          SCOPE_LOCK=$(node -e "
+            const fs = require('fs');
+            const m = JSON.parse(fs.readFileSync('${MANIFEST}', 'utf8'));
+            const locks = m.file_scope_lock || [];
+            process.stdout.write(locks.join('\n'));
+          ")
+
+          if [ -z "$SCOPE_LOCK" ]; then
+            echo "bleed=false" >> "$GITHUB_OUTPUT"
+            echo "bleed_files=" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          CHANGED_FILES=$(git diff --name-only origin/main...HEAD)
+          BLEED_FILES=""
+
+          while IFS= read -r file; do
+            IN_SCOPE=false
+            while IFS= read -r pattern; do
+              [ -z "$pattern" ] && continue
+              regex=$(echo "$pattern" | sed 's|\*\*|DOUBLESTAR|g; s|\*|[^/]*|g; s|DOUBLESTAR|.*|g')
+              if echo "$file" | grep -qE "^${regex}$"; then
+                IN_SCOPE=true
+                break
+              fi
+            done <<< "$SCOPE_LOCK"
+            if [ "$IN_SCOPE" = "false" ]; then
+              BLEED_FILES="${BLEED_FILES}${file},"
+            fi
+          done <<< "$CHANGED_FILES"
+
+          BLEED_FILES="${BLEED_FILES%,}"
+
+          if [ -n "$BLEED_FILES" ]; then
+            echo "bleed=true" >> "$GITHUB_OUTPUT"
+            echo "bleed_files=${BLEED_FILES}" >> "$GITHUB_OUTPUT"
+          else
+            echo "bleed=false" >> "$GITHUB_OUTPUT"
+            echo "bleed_files=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: New dependency check
+        id: newdeps
+        run: |
+          # Get package.json diff from base
+          BASE_DEPS=$(git show origin/main:package.json 2>/dev/null | node -e "
+            let d='';
+            process.stdin.on('data',c=>d+=c);
+            process.stdin.on('end',()=>{
+              try {
+                const p=JSON.parse(d);
+                const deps=Object.assign({},p.dependencies||{},p.devDependencies||{});
+                process.stdout.write(Object.keys(deps).join('\n'));
+              } catch { process.stdout.write(''); }
+            });
+          " || echo "")
+
+          HEAD_DEPS=$(node -e "
+            const fs=require('fs');
+            try {
+              const p=JSON.parse(fs.readFileSync('package.json','utf8'));
+              const deps=Object.assign({},p.dependencies||{},p.devDependencies||{});
+              process.stdout.write(Object.keys(deps).join('\n'));
+            } catch { process.stdout.write(''); }
+          ")
+
+          NEW_DEPS=""
+          while IFS= read -r dep; do
+            [ -z "$dep" ] && continue
+            if ! echo "$BASE_DEPS" | grep -qxF "$dep"; then
+              NEW_DEPS="${NEW_DEPS}${dep},"
+            fi
+          done <<< "$HEAD_DEPS"
+
+          NEW_DEPS="${NEW_DEPS%,}"
+
+          if [ -n "$NEW_DEPS" ]; then
+            echo "new_deps=${NEW_DEPS}" >> "$GITHUB_OUTPUT"
+          else
+            echo "new_deps=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Post review comment
+        id: post-comment
+        uses: actions/github-script@v7
+        env:
+          RLEVEL_VERDICT: ${{ steps.rlevel.outputs.verdict }}
+          RLEVEL_MISSING: ${{ steps.rlevel.outputs.missing }}
+          RLEVEL_RULES: ${{ steps.rlevel.outputs.rules }}
+          TIERC_TOUCHED: ${{ steps.tierc.outputs.touched }}
+          TIERC_PATHS: ${{ steps.tierc.outputs.paths }}
+          SCOPE_BLEED: ${{ steps.scopebleed.outputs.bleed }}
+          SCOPE_BLEED_FILES: ${{ steps.scopebleed.outputs.bleed_files }}
+          ISSUE_ID: ${{ steps.scopebleed.outputs.issue_id }}
+          NEW_DEPS: ${{ steps.newdeps.outputs.new_deps }}
+        with:
+          script: |
+            const branch = context.payload.pull_request.head.ref;
+            const issueId = process.env.ISSUE_ID || 'unknown';
+
+            const rlevelPass = process.env.RLEVEL_VERDICT === 'PASS';
+            const rlevelMissing = process.env.RLEVEL_MISSING || 'none';
+            const rlevelRules = process.env.RLEVEL_RULES || 'none';
+
+            const tiercTouched = process.env.TIERC_TOUCHED === 'true';
+            const tiercPaths = process.env.TIERC_PATHS || '';
+
+            const scopeBleed = process.env.SCOPE_BLEED === 'true';
+            const scopeBleedFiles = process.env.SCOPE_BLEED_FILES || '';
+
+            const newDeps = process.env.NEW_DEPS || '';
+            const hasNewDeps = newDeps.length > 0;
+
+            // Verdict logic:
+            // REJECT if R-level FAIL or scope bleed detected
+            // Tier C touches and new deps are warnings only
+            const isReject = !rlevelPass || scopeBleed;
+            const verdictLine = isReject
+              ? '**Verdict:** REJECT ❌'
+              : '**Verdict:** APPROVE ✅';
+
+            // Build check rows
+            const rlevelRow = rlevelPass
+              ? `| R-level compliance | ✅ PASS | Rules matched: ${rlevelRules} |`
+              : `| R-level compliance | ❌ FAIL | Missing artifacts: ${rlevelMissing} |`;
+
+            const tiercRow = tiercTouched
+              ? `| Tier C path touches | ⚠️ DETECTED | ${tiercPaths.split(',').map(p => `\`${p.trim()}\``).join(', ')} |`
+              : `| Tier C path touches | ✅ None | — |`;
+
+            const bleedRow = scopeBleed
+              ? `| Scope bleed | ❌ BLEED | Files outside declared scope: ${scopeBleedFiles.split(',').map(f => `\`${f.trim()}\``).join(', ')} |`
+              : `| Scope bleed | ✅ Clean | — |`;
+
+            const depsRow = hasNewDeps
+              ? `| New dependencies | ⚠️ ADDED | ${newDeps.split(',').map(d => `\`${d.trim()}\``).join(', ')} |`
+              : `| New dependencies | ✅ None | — |`;
+
+            // Rationale
+            let rationale;
+            if (!rlevelPass && scopeBleed) {
+              rationale = 'R-level artifacts missing and files outside declared scope were detected; orchestrator review required before merge.';
+            } else if (!rlevelPass) {
+              rationale = `R-level compliance failed: missing artifacts (${rlevelMissing}) must be produced before merge.`;
+            } else if (scopeBleed) {
+              rationale = 'Changed files fall outside the declared file_scope_lock for this lane; scope must be reconciled before merge.';
+            } else if (tiercTouched && hasNewDeps) {
+              rationale = 'All required checks passed; Tier C paths touched and new dependencies added — orchestrator should confirm these are intentional.';
+            } else if (tiercTouched) {
+              rationale = 'All required checks passed; Tier C sensitive paths were touched — orchestrator should confirm this is intentional.';
+            } else if (hasNewDeps) {
+              rationale = 'All required checks passed; new dependencies were added — orchestrator should confirm these are intentional.';
+            } else {
+              rationale = 'All static checks passed; no blocking issues detected.';
+            }
+
+            const body = [
+              '## Codex Return Review',
+              '',
+              `**Branch:** \`${branch}\``,
+              `**Issue:** \`${issueId}\``,
+              verdictLine,
+              '',
+              '### Checks',
+              '',
+              '| Check | Result | Detail |',
+              '|-------|--------|--------|',
+              rlevelRow,
+              tiercRow,
+              bleedRow,
+              depsRow,
+              '',
+              '### Verdict rationale',
+              rationale,
+              '',
+              '> This is an automated static check. The orchestrator must still run the full codex-return-reviewer subagent review before merge approval.',
+            ].join('\n');
+
+            // Delete any previous codex-return-review comment from this bot
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.pull_request.number,
+            });
+
+            const existing = comments.find(c =>
+              c.user.login === 'github-actions[bot]' &&
+              c.body.includes('## Codex Return Review')
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body,
+              });
+            }
+
+            core.setOutput('verdict', isReject ? 'REJECT' : 'APPROVE');
+
+      - name: Set exit code
+        run: |
+          VERDICT="${{ steps.post-comment.outputs.verdict }}"
+          if [ "$VERDICT" = "REJECT" ]; then
+            echo "Codex return review verdict: REJECT — check failed."
+            exit 1
+          else
+            echo "Codex return review verdict: APPROVE — all static checks passed."
+            exit 0
+          fi
