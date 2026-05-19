@@ -1146,16 +1146,18 @@ test('approval does not imply best-bets promotion in runtime', async () => {
       source: 'api',
       market: 'NBA points',
       selection: 'Player Over 23.5',
-      confidence: 0.82,
+      odds: -115,
+      confidence: 0.85,
       metadata: {
         sport: 'NBA',
         eventName: 'Knicks vs Heat',
+        // UTV2-1022: scores boosted to survive 15% risk modifier (Kelly computed from odds+confidence)
         promotionScores: {
-          edge: 92,
-          trust: 88,
-          readiness: 84,
-          uniqueness: 76,
-          boardFit: 90,
+          edge: 95,
+          trust: 90,
+          readiness: 87,
+          uniqueness: 80,
+          boardFit: 92,
         },
       },
     },
@@ -1163,7 +1165,7 @@ test('approval does not imply best-bets promotion in runtime', async () => {
   );
 
   assert.equal(result.pickRecord.approval_status, 'approved');
-  // With eager eval at submission, edge=92 trust=88 qualify for exclusive-insights (highest priority).
+  // With eager eval at submission, edge=95 trust=90 qualify for exclusive-insights (highest priority).
   // picks.promotion_target = 'exclusive-insights', not 'best-bets'.
   assert.equal(result.pickRecord.promotion_status, 'qualified');
   assert.equal(result.pickRecord.promotion_target, 'exclusive-insights');
@@ -2023,22 +2025,24 @@ test('duplicate suppression blocks repeated best-bets thesis', async () => {
 test('dual-qualifying pick routes exclusively to trader-insights and is blocked from best-bets', async () => {
   const repositories = createInMemoryRepositoryBundle();
   // Scores clear both trader-insights (edge ≥ 85, trust ≥ 85, overall ≥ 80) and
-  // best-bets (overall ≥ 70) thresholds. Priority order: trader-insights wins.
+  // best-bets (overall ≥ 70) thresholds. Priority order: exclusive-insights wins.
   const result = await processSubmission(
     {
       source: 'api',
       market: 'NBA points',
       selection: 'Player Over 30.5',
+      odds: -115,
       confidence: 0.95,
       metadata: {
         sport: 'NBA',
         eventName: 'Lakers vs Celtics',
+        // UTV2-1022: scores boosted to survive 15% risk modifier (Kelly computed from odds+confidence)
         promotionScores: {
-          edge: 90,
-          trust: 88,
-          readiness: 91,
-          uniqueness: 87,
-          boardFit: 92,
+          edge: 95,
+          trust: 92,
+          readiness: 93,
+          uniqueness: 90,
+          boardFit: 94,
         },
       },
     },
@@ -2083,12 +2087,14 @@ test('exclusive-insights qualifies at its minimum threshold', () => {
     submissionId: 'submission-exclusive-threshold',
     market: 'player.points',
     selection: 'Player Over 30.5',
+    odds: -130,
     confidence: 0.95,
     source: 'api',
     approvalStatus: 'approved',
     promotionStatus: 'not_eligible',
     lifecycleState: 'validated',
-    metadata: { sport: 'NBA' },
+    // UTV2-1022: kellySizing required to avoid risk modifier; low Kelly fraction (safe)
+    metadata: { sport: 'NBA', kellySizing: { fractional_kelly: 0.03 } },
     createdAt: '2026-03-28T00:00:00.000Z',
   };
 
@@ -2190,16 +2196,18 @@ test('exclusive-insights outranks trader-insights in eager evaluation', async ()
       source: 'api',
       market: 'NBA points',
       selection: 'Player Over 31.5',
+      odds: -115,
       confidence: 0.96,
       metadata: {
         sport: 'NBA',
         eventName: 'Lakers vs Celtics',
+        // UTV2-1022: scores boosted to survive 15% risk modifier (Kelly computed from odds+confidence)
         promotionScores: {
-          edge: 95,
-          trust: 92,
-          readiness: 94,
-          uniqueness: 91,
-          boardFit: 93,
+          edge: 96,
+          trust: 93,
+          readiness: 95,
+          uniqueness: 92,
+          boardFit: 94,
         },
       },
     },
@@ -2231,14 +2239,16 @@ test('distribution gate rejects blocked discord:exclusive-insights even for qual
       source: 'api',
       market: 'NBA assists',
       selection: 'Player Over 11.5',
+      odds: -115,
       confidence: 0.95,
       metadata: {
         sport: 'NBA',
         eventName: 'Warriors vs Suns',
+        // UTV2-1022: scores boosted to survive 15% risk modifier (Kelly computed from odds+confidence)
         promotionScores: {
-          edge: 92,
-          trust: 90,
-          readiness: 92,
+          edge: 95,
+          trust: 92,
+          readiness: 93,
           uniqueness: 91,
           boardFit: 94,
         },

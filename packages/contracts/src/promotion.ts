@@ -85,6 +85,16 @@ export interface PromotionScoreInputs {
   readiness: number;
   uniqueness: number;
   boardFit: number;
+  /** UTV2-1022: pre-computed risk quality score (0–100). When present, used directly
+   * instead of recomputing, enabling deterministic replay of stored snapshots. */
+  riskScore?: number | undefined;
+  /** UTV2-1022: individual sub-scores that produced riskScore. */
+  riskComponents?: {
+    varianceScore: number;
+    kellyScore: number;
+    lineMovementScore: number;
+    dispersionScore: number;
+  } | undefined;
 }
 
 export interface PromotionBoardCaps {
@@ -378,6 +388,26 @@ export interface PromotionDecisionSnapshot {
       sameSportMarketCount: number;
       selectionOverlapCount: number;
     } | undefined;
+    /**
+     * Composite risk/volatility quality score (0–100, higher = lower risk).
+     * Added by UTV2-1022 (UTV2-607 spec). Optional for backward compat with pre-v3 snapshots.
+     */
+    riskScore?: number | undefined;
+    /**
+     * Four sub-scores that compose the risk score.
+     * Added by UTV2-1022 (UTV2-607 spec). Optional for backward compat.
+     */
+    riskComponents?: {
+      varianceScore: number;
+      kellyScore: number;
+      lineMovementScore: number;
+      dispersionScore: number;
+    } | undefined;
+    /**
+     * Effective risk modifier applied to the final promotion score (0.85–1.0).
+     * 1.0 means no modifier (pre-v3 replay). Added by UTV2-1022.
+     */
+    riskModifier?: number | undefined;
   };
 
   /** Gate boolean/value inputs at the moment of decision. */

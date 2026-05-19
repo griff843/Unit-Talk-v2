@@ -117,13 +117,16 @@ test('conviction=4: trust=40 qualifies for best-bets (minimumTrust=0)', () => {
     marketStillValid: true,
     riskBlocked: false,
     scoreInputs: {
-      edge: 85,
+      edge: 95,
       trust: 40,
       readiness: 80,
       uniqueness: 80,
       boardFit: 80,
     },
-    // edge=85*0.35 + 40*0.25 + 80*0.2 + 80*0.1 + 80*0.1 = 29.75+10+16+8+8 = 71.75 ≥ 70
+    // edge=95*0.35 + 40*0.25 + 80*0.2 + 80*0.1 + 80*0.1 = 33.25+10+16+8+8 = 75.25
+    // player-prop modifiers (trust×1.1, uniqueness×1.1): 33.25+11+16+8.8+8 = 77.05
+    // riskScore=50 (odds=-140 → varianceScore=100, no kelly → kellyScore=0, rest=50)
+    // modifier=0.925 → 77.05*0.925 = 71.27 ≥ 70
     minimumScore: bestBetsPromotionPolicy.minimumScore,
     boardCaps: { perSlate: 20, perSport: 10, perGame: 5 },
     boardState: { currentBoardCount: 0, sameSportCount: 0, sameGameCount: 0, duplicateCount: 0 },
