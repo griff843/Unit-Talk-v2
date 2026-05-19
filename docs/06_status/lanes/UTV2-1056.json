@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1056-lane-heartbeat-stale-reaper",
   "branch": "codex/utv2-1056-lane-heartbeat-stale-reaper",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e96f37adea6a2f23177f776615c88464ce012049",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/775",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lease-registry.test.ts",
@@ -19,9 +19,9 @@
     "docs/06_status/proof/UTV2-1056/diff-summary.md",
     "docs/06_status/proof/UTV2-1056/verification.log"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-19T11:51:50.181Z",
-  "heartbeat_at": "2026-05-19T11:51:50.181Z",
+  "heartbeat_at": "2026-05-19T13:41:36.740Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1056-lane-heartbeat-stale-reaper.json",

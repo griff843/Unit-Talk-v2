@@ -69,7 +69,12 @@ function manifestPathForIssue(issueId: string): string {
 }
 
 function parseWriterPayload(stdout: string): Record<string, unknown> {
-  return JSON.parse(stdout) as Record<string, unknown>;
+  const trimmed = stdout.trim();
+  const jsonStart = trimmed.indexOf('{');
+  if (jsonStart === -1) {
+    throw new Error('lane-link-pr did not emit a JSON payload');
+  }
+  return JSON.parse(trimmed.slice(jsonStart)) as Record<string, unknown>;
 }
 
 function branchExistsAnywhere(branch: string): { ok: boolean; warning?: string } {

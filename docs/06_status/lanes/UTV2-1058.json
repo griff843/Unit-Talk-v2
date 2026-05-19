@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1058-proof-truth-closeout-gate",
   "branch": "codex/utv2-1058-proof-truth-closeout-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "e99e9ccf62171fa456c8a87a7c75d996b09dc448",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/777",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-close.test.ts",
@@ -20,9 +20,9 @@
     "docs/06_status/proof/UTV2-1058/diff-summary.md",
     "docs/06_status/proof/UTV2-1058/verification.log"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-19T12:34:17.188Z",
-  "heartbeat_at": "2026-05-19T12:37:08.185Z",
+  "heartbeat_at": "2026-05-19T13:41:36.884Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1058-proof-truth-closeout-gate.json",

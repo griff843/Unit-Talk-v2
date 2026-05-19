@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1059-orchestration-state-reconciler",
   "branch": "codex/utv2-1059-orchestration-state-reconciler",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "ee59cff974bd277fe4e4a6bcd4b82bf35537bb8a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/776",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/orchestration-reconciler.test.ts",
@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1059/diff-summary.md",
     "docs/06_status/proof/UTV2-1059/verification.log"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-19T12:04:30.252Z",
-  "heartbeat_at": "2026-05-19T12:04:30.252Z",
+  "heartbeat_at": "2026-05-19T13:41:36.685Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1059-orchestration-state-reconciler.json",
