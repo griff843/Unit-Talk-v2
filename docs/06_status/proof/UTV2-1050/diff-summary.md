@@ -24,3 +24,7 @@ Behavior:
 - `pnpm test`: PASS
 - `pnpm verify`: PASS
 - `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; no R-level artifacts required
+
+## Merge SHA
+
+4a41c8f22efba2ce6b9fec34ba743b515b2c230e

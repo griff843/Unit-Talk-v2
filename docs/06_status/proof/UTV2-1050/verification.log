@@ -67,3 +67,7 @@ Executor: codex-cli
 
 - `pnpm verify` initially failed before the lane branch was fast-forwarded because `.ops/sync.yml` still referenced UTV2-1072. After fast-forwarding to `origin/main`, `pnpm ops:sync-check` passed for UTV2-1050.
 - `pnpm verify` then required worktree credentials. The main checkout helper `npx tsx scripts/link-worktree-env.ts <worktree>` hardlinked `local.env`; no env file was copied.
+
+## Merge SHA
+
+4a41c8f22efba2ce6b9fec34ba743b515b2c230e
