@@ -1,0 +1,22 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1049",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "branch": "claude/utv2-1049-retire-db-proof-reviewer",
+  "base_branch": "main",
+  "status": "started",
+  "file_scope_lock": [
+    ".claude/agents/db-proof-reviewer.md",
+    "docs/05_operations/agent-role-contracts.md",
+    "docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md",
+    ".ops/sync/UTV2-1049.yml",
+    ".lane/lanes/governance.yml",
+    ".github/workflows/file-scope-lock-check.yml"
+  ],
+  "preflight_token": "dispatch-auto",
+  "created_by": "claude",
+  "started_at": "2026-05-18T23:57:16Z",
+  "heartbeat_at": "2026-05-18T23:57:16Z"
+}

@@ -77,23 +77,23 @@ Each agent's markdown body must define:
 
 ---
 
-### 2. `db-proof-reviewer`
+### 2. `db-proof-reviewer` *(advisory only — not a merge gate)*
 
 **File:** `.claude/agents/db-proof-reviewer.md`
 
 | Field | Value |
 |---|---|
 | Owner | `claude-governance` |
-| Authority | **Blocking** — returns VALID or INVALID; INVALID prevents `t1-approved` label |
-| Trigger | After T1 PR opens and evidence bundle is generated; before PM merge gate |
-| Lane types | T1 lanes only |
-| Proof responsibility | Validates T1 evidence bundle completeness, SHA binding, real Supabase evidence |
+| Authority | **Advisory** — operator review aid only; cannot block or authorize merge |
+| Trigger | Optional — operator invokes for detailed T1 evidence narrative review |
+| Lane types | T1 lanes only (optional) |
+| Proof responsibility | None — does not own any required proof artifact |
 
-**Purpose:** Ensures T1 proof bundles are tied to the actual merge SHA (not branch HEAD), all required sections are present, and `pnpm test:db` ran against real Supabase. Guards the T1 merge gate from stale or fabricated proof.
+**Purpose:** Operator diagnostic aid for reviewing T1 evidence bundle narrative completeness. **Not a merge gate.** The hard proof gate is `proof-auditor-gate` (CI) and `pnpm test:db` (required CI check). This agent cannot be cited as enforcement — its output is advisory context only.
 
-**Checks performed:** proof file existence, merge SHA match, required sections (Issue, Merge SHA, Test Output, Verdict, Verifier), real Supabase evidence (not in-memory), `pnpm test:db` PASS in Verdict, SHA chain integrity.
+**Retired as gate (UTV2-1049):** Authority downgraded from Blocking to Advisory after `proof-auditor-gate.yml` CI workflow (UTV2-1046) covers automated structural proof validation. `db-proof-reviewer` is retained as an operator convenience tool for detailed evidence narrative review.
 
-**Classification:** Governance-owned. T1 merge approval depends on this agent. Must never be delegated to Codex.
+**Classification:** Governance-owned. Advisory only — CI and PM policy are the blocking authorities. May be delegated to any executor for read-only review.
 
 ---
 
@@ -142,15 +142,17 @@ Each agent's markdown body must define:
 ```
 Claude/governance-owned (never delegate to Codex):
   codex-return-reviewer   — T2 Codex merge gate
-  db-proof-reviewer       — T1 proof validation
   lane-reconciler         — drift detection (report only)
   pr-risk-reviewer        — risk scoring
 
+Advisory only (may be used by any executor):
+  db-proof-reviewer       — T1 evidence narrative review aid (not a gate, UTV2-1049)
+
 Codex/implementation-owned (support roles):
-  (none currently — all agents are governance-owned)
+  (none currently — all blocking agents are governance-owned)
 ```
 
-All four existing agents hold governance or proof authority. None may be modified by a Codex lane without PM plan approval (Tier C by the self-amendment rule — modifying review authority is equivalent to widening orchestrator autonomy).
+Blocking agents hold governance or proof authority. None may be modified by a Codex lane without PM plan approval (Tier C by the self-amendment rule — modifying review authority is equivalent to widening orchestrator autonomy). Advisory agents (`db-proof-reviewer`) do not hold gate authority and are not subject to this restriction.
 
 ---
 
@@ -158,11 +160,13 @@ All four existing agents hold governance or proof authority. None may be modifie
 
 | Lane type | codex-return-reviewer | db-proof-reviewer | lane-reconciler | pr-risk-reviewer |
 |---|---|---|---|---|
-| T1 / Claude | — | Required before merge gate | On drift | Recommended |
+| T1 / Claude | — | Optional advisory | On drift | Recommended |
 | T2 / Codex | Required | — | On drift | Optional |
 | T2 / Claude | — | — | On drift | Optional |
 | T3 / Claude | — | — | On drift | — |
 | Reconciliation | — | — | Primary | — |
+
+*`db-proof-reviewer` is advisory only — operator invokes at their discretion. The hard T1 proof gate is `proof-auditor-gate` (CI) + `pnpm test:db` (required check). (UTV2-1049)*
 
 ---
 

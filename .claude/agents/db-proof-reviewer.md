@@ -1,6 +1,6 @@
 ---
 name: db-proof-reviewer
-description: Legacy advisory DB proof review aid for T1 evidence bundles and pnpm test:db output. Checks that proof is SHA-bound to the merge SHA (not branch HEAD), all required sections are present, and test ran against real Supabase. This agent is an archive/delete candidate; CI and PM policy remain the blocking authority.
+description: Advisory DB proof review aid for T1 evidence bundles and pnpm test:db output. Checks that proof is SHA-bound to the merge SHA (not branch HEAD), all required sections are present, and test ran against real Supabase. This agent is NOT a merge gate — CI (proof-auditor-gate) and PM policy are the blocking authority. Invoke at operator discretion for detailed evidence narrative review. (UTV2-1049)
 model: claude-sonnet-4-6
 tools:
   - Bash
