@@ -144,3 +144,53 @@ test('warns but passes when a markdown proof file exceeds 100KB', () => {
   assert.deepStrictEqual(result.output.failures, []);
   assert.ok(result.output.warnings.length > 0);
 });
+
+test('fails when sha format is invalid (not 40 hex chars)', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(path.join(proofDir, 'proof.md'), '## Summary\nValid proof.');
+
+  const result = runGate(['--proof-dir', proofDir, '--sha', 'not-a-sha']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /Invalid --sha/);
+});
+
+test('fails r2 r-level check when determinism keyword is absent', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    '## Summary\nProof coverage for r2 gate.\n## Evidence\nSome evidence.\n## Verification\nPassed.',
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--r-level', 'r2']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /determinism/);
+});
+
+test('passes r2 r-level check when determinism keyword is present', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(
+    path.join(proofDir, 'proof.md'),
+    '## Summary\nProof covers determinism guarantees.\n## Evidence\nDeterminism verified.\n## Verification\nAll checks passed.',
+  );
+
+  const result = runGate(['--proof-dir', proofDir, '--r-level', 'r2']);
+
+  assert.strictEqual(result.status, 0);
+  assert.strictEqual(result.output.verdict, 'PASS');
+  assert.deepStrictEqual(result.output.failures, []);
+});
+
+test('fails when r-level format is invalid', () => {
+  const proofDir = makeTempDir();
+  writeFileSync(path.join(proofDir, 'proof.md'), '## Summary\nValid proof.');
+
+  const result = runGate(['--proof-dir', proofDir, '--r-level', 'bad-level']);
+
+  assert.strictEqual(result.status, 1);
+  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.match(result.output.failures.join('\n'), /Invalid --r-level/);
+});
