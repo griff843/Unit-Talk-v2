@@ -37,9 +37,9 @@ No recurring-purpose tool may remain manual as its final state. If a manual tool
 | `pr-risk-reviewer` | Claude prompt agent | Manual tool, transitional | Prompt validates; can consume `scripts/ops/pr-review-packet.ts` output | Transitional review aid until UTV2-1047 automates deterministic risk scoring for T1/T2 PRs | Not automatically invoked and does not block merge. |
 | `ci-triage` | Claude prompt agent | Manual diagnostic | Prompt validates only | Diagnose failed GitHub Actions runs after a red check exists; UTV2-1050 tracks automatic CI failure triage into Linear | Reactive only. Does not auto-watch CI failures or open fixes today. Diagnostic status is acceptable only if no automatic remediation claim is made. |
 | `lane-governor` | Claude prompt agent | Manual tool, transitional | Prompt validates; dispatch flow contains separate concurrency logic | Transitional dispatch aid until UTV2-1048 produces automatic dispatch preflight artifacts | The prompt is not the source of enforcement. Dispatch/manifest policy is the real layer. |
-| `db-proof-reviewer` | Claude prompt agent | Archive/delete candidate | Prompt validates; overlaps proof-auditor and live-DB proof checks | UTV2-1049 retires, archives, or explicitly downgrades it after UTV2-1046 coverage exists | Redundant with proof-auditor intent and DB proof CI/script expectations. Keep only if renamed advisory; otherwise remove. |
+| `db-proof-reviewer` | Claude prompt agent | **Advisory only** (UTV2-1049) | Prompt validates; overlaps proof-auditor and live-DB proof checks | Retained as operator diagnostic for T1 evidence narrative review; NOT a gate or enforcement mechanism | CI (`proof-auditor-gate.yml`) is the automated blocking gate. `db-proof-reviewer` cannot be cited as enforcement. |
 | `scripts/ops/runtime-verifier-gate.ts` | Script | Required gate, limited scope | Auto-runs through `runtime-verifier-gate.yml` on proof-path PRs | Validate proof bundle SHA/runtime evidence when proof changes | Limited trigger scope. Does not run on every runtime PR. |
-| `scripts/ops/proof-auditor-gate.ts` | Script | Manual tool | Exposed as `pnpm ops:proof-auditor-gate` | Validate proof bundle shape and placeholders | Must be wired to CI before it can be called a gate. |
+| `scripts/ops/proof-auditor-gate.ts` | Script | Required gate candidate (UTV2-1046) | Auto-runs through `proof-auditor-gate.yml` on `docs/06_status/proof/**` PRs | Validate proof bundle shape, placeholders, SHA binding, required sections, R-level keywords | Required-check candidate — promote to required after first green run on a proof-bearing PR. |
 | `scripts/ops/reconcile.ts` | Script | Scheduled monitor | Auto-runs daily through `ops-reconcile.yml` | Detect stale/stranded/orphaned lane manifests and apply allowed mutations | Real scheduled monitor. Confirm pushed mutations are visible despite branch protection. |
 | `scripts/ops/pr-review-packet.ts` | Script | Manual tool | Consumed by prompt agents when invoked | Produce deterministic PR review packet | Should be promoted to CI artifact if PR review is expected before merge. |
 | `scripts/ops/agent-scoreboard.ts` | Script | Manual tool | Exposed as `pnpm ops:agent-scoreboard` | Summarize agent/lane outcomes | Not a guarantee unless scheduled and acted on. |
@@ -96,10 +96,10 @@ Archive or delete a tool when any of these are true:
 | Action | Target | Reason |
 | --- | --- | --- |
 | Rename any docs that call prompt agents "gates" unless a workflow enforces them | Agent docs and proof docs | Prevent false confidence |
-| Promote `proof-auditor-gate.ts` to CI if proof completeness is expected before merge | `proof-auditor` | Current script is not a gate |
+| ~~Promote `proof-auditor-gate.ts` to CI~~ **DONE** (UTV2-1046) | `proof-auditor-gate` | `proof-auditor-gate.yml` workflow ships — required-check candidate |
 | Expand or explicitly scope `runtime-verifier-gate.yml` | `runtime-verifier` | Current trigger only covers proof-path changes |
 | Keep `ops-reconcile.yml` as the canonical scheduled lane monitor | `lane-reconciler` | This is the real automated lane-drift actor |
-| Retire or rename `db-proof-reviewer` | `db-proof-reviewer` | Redundant unless preserved as advisory review aid |
+| ~~Retire or rename `db-proof-reviewer`~~ **DONE** (UTV2-1049) | `db-proof-reviewer` | Downgraded to advisory only — CI is the blocking gate |
 | Produce PR review packets automatically for T1/T2 PRs if PM expects mandatory review | `codex-return-reviewer`, `pr-risk-reviewer` | Current review is manual |
 | Add an automation coverage check that fails when a recurring-purpose tool is classified as manual without a promotion/retirement target | All agent/tooling surfaces | Prevent manual babysitting from becoming permanent |
 
@@ -109,10 +109,10 @@ Archive or delete a tool when any of these are true:
 | --- | --- |
 | UTV2-1044 | Automation convergence gate for all recurring-purpose tools |
 | UTV2-1045 | Expand runtime-verifier trigger coverage |
-| UTV2-1046 | Promote proof-auditor to required CI proof gate |
+| UTV2-1046 | Promote proof-auditor to required CI proof gate — **DONE** |
 | UTV2-1047 | Auto-generate PR review and risk packets |
 | UTV2-1048 | Promote lane-governor checks into dispatch preflight artifact |
-| UTV2-1049 | Retire or collapse db-proof-reviewer |
+| UTV2-1049 | Retire or collapse db-proof-reviewer — **DONE** (advisory downgrade) |
 | UTV2-1050 | Automate CI failure triage into Linear |
 
 ## Verdict

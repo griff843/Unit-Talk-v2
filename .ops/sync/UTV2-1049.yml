@@ -1,7 +1,10 @@
-issue_id: UTV2-1049
-branch: claude/utv2-1049-retire-db-proof-reviewer
-executor: claude
-tier: T3
-lane_type: hygiene
-status: started
-created_at: "2026-05-18T23:57:16Z"
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1049
+  findings: []
+  controls: []
+  proofs: []
