@@ -157,11 +157,27 @@ When `ops:lane:start` refuses a new lane due to concurrency conflict:
 
 | Rule | Mechanism |
 |---|---|
+| Dispatch preflight artifact | `ops:preflight` writes the machine-readable preflight result before lane start/dispatch |
 | Hard limits | `ops:lane:start` reads all active manifests and counts by type |
+| Executor limits | Dispatch preflight records active executor lane counts and evaluates them against §10 |
 | Forbidden combinations | `ops:lane:start` checks incoming `lane_type` against active `lane_type` list |
 | File-scope locks | `ops:lane:start` glob-overlap check (see `LANE_MANIFEST_SPEC.md` §6) |
+| Tier C path exposure | Dispatch preflight records candidate Tier C path exposure before the lane can be started |
+| Dependency blockers | Dispatch preflight records branch, token, required-doc, and dependency blockers before the lane can be started |
 | Stale manifest cleanup | `ops:reconcile` (cron or pre-start) transitions heartbeat-expired manifests |
 | Override tracking | `ops:lane:close --override` records in manifest `truth_check_history` |
+
+Every dispatch attempt must have a machine-readable preflight artifact that captures:
+
+- active lane count
+- executor lane count and applicable executor limit
+- forbidden lane-type combination result
+- file-scope overlap result
+- Tier C path exposure result
+- dependency blocker result
+- final dispatch decision
+
+`ops:lane:start` must refuse to proceed when the artifact reports a deterministic blocker. The manual `lane-governor` prompt is an investigation aid only; it is not an enforcement layer and must not be treated as permission to bypass a failed preflight artifact.
 
 No prose enforces these rules. Scripts enforce them. Prose defines the policy that scripts implement.
 
@@ -195,11 +211,12 @@ The type-based limits in §1 govern which lane *types* can coexist. This section
 
 Per-cycle PM authorization is required when launching multi-lane waves above 3 total (1 Claude + 2 Codex legacy baseline). Authorization must be explicit in the PM dispatch instruction and does not persist to the next cycle unless re-stated.
 
-Pre-dispatch gates (both required when running ≥4 total lanes):
+Pre-dispatch gates (all required when running ≥4 total lanes):
 
 1. `pnpm exec tsx scripts/ops/merge-risk.ts` — no `hard_fail` or `block` findings
 2. `pnpm exec tsx scripts/ops/lane-maximizer.ts` — no `DISPATCH_LIMIT` or `OVERLAP` findings
 3. All candidate lanes have execution packets (via `scripts/ops/execution-packet.ts`)
+4. Each lane attempt has a passing dispatch preflight artifact per §8
 
 Example 5-lane topology (safe class mix):
 ```
