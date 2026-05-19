@@ -47,3 +47,14 @@ Result: GREEN
 packages/domain/src/promotion.ts: 0 errors
 packages/contracts/src/promotion.ts: 0 errors
 apps/api/src/promotion-service.ts: 0 errors
+
+## pnpm test:db
+
+Live-DB proof test: `apps/api/src/t1-proof-risk-score.test.ts`
+
+Gated on SUPABASE_SERVICE_ROLE_KEY. Run against real Supabase:
+```
+UNIT_TALK_APP_ENV=local pnpm test:db
+```
+
+Expected: 2 tests pass (riskScore persistence, determinism). Skips automatically when credentials unavailable.

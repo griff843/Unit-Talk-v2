@@ -18,6 +18,7 @@
     "apps/api/src/promotion-edge-integration.test.ts",
     "apps/api/src/promotion-service.ts",
     "apps/api/src/submission-service.test.ts",
+    "apps/api/src/t1-proof-risk-score.test.ts",
     "docs/05_operations/RISK_VOLATILITY_STANDARD.md",
     "docs/06_status/lanes/UTV2-1022.json",
     "docs/06_status/proof/UTV2-1022/diff-summary.md",
