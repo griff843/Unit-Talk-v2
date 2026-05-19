@@ -1,0 +1,23 @@
+[
+  {
+    "id": "tier-c-sensitive-paths",
+    "description": "Dispatch touching Tier C sensitive paths requires PM plan approval and blocks Codex — routes to Claude with mandatory Griff gate",
+    "trigger": "dispatch",
+    "conditions": {
+      "paths": [
+        "supabase/migrations/**",
+        "packages/contracts/src/**",
+        "packages/domain/src/**",
+        "packages/db/src/lifecycle.ts",
+        "packages/db/src/repositories.ts",
+        "packages/db/src/runtime-repositories.ts",
+        "apps/api/src/distribution-service.ts",
+        "apps/worker/**",
+        "apps/api/src/auth.ts"
+      ]
+    },
+    "actions": ["require_pm_plan", "block_codex"],
+    "escalate_to_griff": true,
+    "rationale": "three-brain Rule 2 (Sensitive path: Claude + mandatory Griff gate) and DELEGATION_POLICY.md §Tier C. These paths touch lifecycle FSM, settlement, contracts, or auth — autonomous Codex execution is forbidden."
+  }
+]
