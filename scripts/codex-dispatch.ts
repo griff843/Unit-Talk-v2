@@ -335,6 +335,11 @@ Priority: ${priority}  Project: ${project}  Labels: ${labels}
 Lane manifest: ${manifestPath}
 Branch:        ${manifest.branch}
 Worktree:      ${manifest.worktree_path}
+Worktree entrypoint:
+  cd "${manifest.execution_location?.cwd ?? manifest.worktree_path}"
+  ${manifest.execution_location?.setup_command ?? 'pnpm install --frozen-lockfile'}
+Dependency state: ${manifest.execution_location?.package_install ?? 'required'}
+Main checkout: control and merge only; do not branch-switch it for lane work.
 Tier:          ${manifest.tier}
 Preflight:     ${manifest.preflight_token}
 
@@ -361,6 +366,9 @@ ${verificationSection}
 ### Closeout reminder
 * Canonical proof is expected at:
 ${manifest.expected_proof_paths.length > 0 ? manifest.expected_proof_paths.map((entry) => `  - \`${entry}\``).join('\n') : '  - *(none declared for this tier)*'}
+* After the PR merges, run:
+  - \`pnpm ops:lane-finalize -- --issue ${manifest.issue_id} --pr <pr-url-or-number> --json\`
+  - \`pnpm ops:orchestration-reconcile --current --cleanup-plan --json\`
 
 ---
 
