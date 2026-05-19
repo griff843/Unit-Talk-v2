@@ -1,3 +1,13 @@
+## Summary
+
+Expanded `.github/workflows/runtime-verifier-gate.yml` to trigger on runtime-sensitive paths and lane closeout paths, not just `docs/06_status/proof/**`. The gate now fires on all R-level classified paths (lifecycle-fsm, promotion-scoring, settlement-grading, strategy-bankroll, ingestor-provider, DB runtime repos), lane manifest paths, ops scripts, and artifact outputs.
+
+## Evidence
+
+- `pnpm verify:quick` exit 0 on branch `codex/utv2-1045-expand-runtime-verifier-gate`
+- R-level check: PASS (no runtime artifacts required for a workflow YAML change)
+- PR #794 opened with `tier:T2` label
+
 # Diff Summary — UTV2-1045: Expand Runtime Verifier Gate
 
 ## Change
