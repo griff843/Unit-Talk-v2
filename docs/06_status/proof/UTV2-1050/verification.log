@@ -1,0 +1,69 @@
+# Verification Log - UTV2-1050
+
+Generated: 2026-05-19T21:50:00Z
+Branch: codex/utv2-1050-automate-ci-failure-triage-into-linear-instead-of-manual-ci-triage
+Executor: codex-cli
+
+## Commands
+
+1. YAML parse
+   Command: `node -e "const fs=require('fs'); const YAML=require('yaml'); YAML.parse(fs.readFileSync('.github/workflows/lane-check.yml','utf8')); console.log('yaml ok')"`
+   Result: PASS
+   Output: `yaml ok`
+
+2. Whitespace check
+   Command: `git diff --check`
+   Result: PASS
+
+3. Issue-specific lane authority positive path
+   Command: `pnpm lane:check -- --lane hygiene --file .github/workflows/lane-check.yml`
+   Result: PASS
+   Output: `lane:check PASS lane=hygiene files=1`
+
+4. Issue-specific lane authority negative path
+   Command: `pnpm lane:check -- --lane hygiene --file packages/contracts/src/foo.ts; test "$?" -eq 1`
+   Result: PASS
+   Output included expected failure: `forbidden_path: packages/contracts/src/foo.ts is forbidden for lane hygiene`
+
+5. TypeScript type-check
+   Command: `pnpm type-check`
+   Result: PASS
+
+6. Root test suite
+   Command: `pnpm test`
+   Result: PASS
+
+7. Full gate
+   Command: `pnpm verify`
+   Result: PASS
+   Final output:
+   ```text
+   > @unit-talk/v2@0.1.0 verify:commands /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1050-automate-ci-failure-triage-into-linear-instead-of-manual-ci-triage
+   > pnpm --filter @unit-talk/discord-bot command-manifest:check && node scripts/check-migration-versions.mjs && node scripts/lint-migrations.mjs
+
+   > @unit-talk/discord-bot@0.1.0 command-manifest:check /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1050-automate-ci-failure-triage-into-linear-instead-of-manual-ci-triage/apps/discord-bot
+   > tsx scripts/sync-command-manifest.ts --check
+
+   [command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1050-automate-ci-failure-triage-into-linear-instead-of-manual-ci-triage/apps/discord-bot/command-manifest.json
+   [check-migration-versions] 107 migration file(s) verified - no duplicate versions.
+   [lint-migrations] 107 migration file(s) checked - no findings.
+   ```
+
+8. R-level compliance
+   Command: `npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`
+   Result: PASS
+   Output:
+   ```text
+   Verdict: PASS
+   Changed files: 5
+   Rules matched: (none) - no R-level artifacts required for this diff
+   ```
+
+9. Runtime verifier proof gate
+   Command: `npx tsx scripts/ops/runtime-verifier-gate.ts --proof-dir docs/06_status/proof/UTV2-1050 --sha 1bf82927d3840dcd438dba248d48e5adf3dca594 --json`
+   Result: PASS
+
+## Notes
+
+- `pnpm verify` initially failed before the lane branch was fast-forwarded because `.ops/sync.yml` still referenced UTV2-1072. After fast-forwarding to `origin/main`, `pnpm ops:sync-check` passed for UTV2-1050.
+- `pnpm verify` then required worktree credentials. The main checkout helper `npx tsx scripts/link-worktree-env.ts <worktree>` hardlinked `local.env`; no env file was copied.
