@@ -86,6 +86,7 @@
     "ops:lane-link-pr": "tsx scripts/ops/lane-link-pr.ts",
     "ops:lane-manifest": "tsx scripts/ops/lane-manifest.ts",
     "ops:execution-packet": "tsx scripts/ops/execution-packet.ts",
+    "ops:codex-exec": "tsx scripts/ops/codex-exec.ts",
     "lane:check": "tsx scripts/lane-check.ts",
     "ops:preflight": "tsx scripts/ops/preflight.ts",
     "ops:lane-start": "tsx scripts/ops/lane-start.ts",

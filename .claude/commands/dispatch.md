@@ -168,8 +168,11 @@ Paste the PASS output into PR body under `## R-level compliance`.
 - Post executor-result comment on the PR
 
 **Codex lanes** (T2 clear-scope, only when Codex health check passes):
-- Dispatch via Codex rescue agent with the issue description as the prompt
-- Include: issue ID, acceptance criteria, file scope, branch name
+- Execute via the canonical Codex entry point — never call `codex exec` or `codex run` directly:
+  ```bash
+  npx tsx scripts/ops/codex-exec.ts --issue UTV2-{number}
+  ```
+  This script reads the lane manifest, embeds `agent-brief.md`, validates CWD, and runs Codex with standardized args. `--dry-run` flag previews the prompt without executing.
 - Codex must complete the following before opening the PR:
 
 **Before opening PR — required for all lanes:**
