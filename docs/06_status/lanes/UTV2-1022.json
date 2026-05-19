@@ -22,6 +22,7 @@
     "docs/06_status/lanes/UTV2-1022.json",
     "docs/06_status/proof/UTV2-1022/diff-summary.md",
     "docs/06_status/proof/UTV2-1022/verification.md",
+    "package.json",
     "packages/contracts/src/promotion.ts",
     "packages/domain/src/promotion-conviction.test.ts",
     "packages/domain/src/promotion.ts",
