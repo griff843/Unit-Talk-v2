@@ -1,4 +1,6 @@
 import { spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   ACTIVE_LOCK_STATUSES,
@@ -109,6 +111,48 @@ const DONE_LINEAR_STATE_TYPES = new Set(['completed']);
 const FAIL_CLASS_VERDICTS = new Set<OrchestrationVerdict>(['fail', 'stale_reclaim_required']);
 const CLOSED_MANIFEST_STATUSES = new Set(['merged', 'done']);
 
+export function readConfiguredEnvValue(
+  key: string,
+  root = ROOT,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const fromProcess = env[key]?.trim();
+  if (fromProcess) {
+    return fromProcess;
+  }
+
+  for (const fileName of ['local.env', '.env', '.env.example']) {
+    const value = readEnvFileValue(path.join(root, fileName), key);
+    if (value) {
+      return value;
+    }
+  }
+
+  return '';
+}
+
+function readEnvFileValue(filePath: string, key: string): string {
+  if (!fs.existsSync(filePath)) {
+    return '';
+  }
+  const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith('#')) {
+      continue;
+    }
+    const separator = line.indexOf('=');
+    if (separator <= 0) {
+      continue;
+    }
+    if (line.slice(0, separator).trim() !== key) {
+      continue;
+    }
+    return line.slice(separator + 1).trim().replace(/^['"]|['"]$/g, '');
+  }
+  return '';
+}
+
 function normalizeIssueId(issueId: string): string {
   return issueId.trim().toUpperCase();
 }
@@ -132,6 +176,10 @@ function isManifestActive(manifest: LaneManifest): boolean {
 
 function isLeaseActive(lease: DispatchLease): boolean {
   return lease.status === 'active' || lease.status === 'stale_reclaim_required';
+}
+
+function mapByIssueId<T extends { issue_id: string }>(entries: T[]): Map<string, T> {
+  return new Map(entries.map((entry) => [normalizeIssueId(entry.issue_id), entry]));
 }
 
 function evidence(
@@ -184,10 +232,11 @@ function mergedPrForIssue(
   manifests: LaneManifest[],
   prs: PullRequestSnapshot[],
 ): PullRequestSnapshot | undefined {
-  const manifest = manifests.find((entry) => entry.issue_id === issueId);
+  const normalizedIssueId = normalizeIssueId(issueId);
+  const manifest = manifests.find((entry) => normalizeIssueId(entry.issue_id) === normalizedIssueId);
   return prs.find((pr) => {
     if (pr.state !== 'merged') return false;
-    return issueIdFromBranch(pr.branch) === issueId || manifest?.branch === pr.branch;
+    return issueIdFromBranch(pr.branch) === normalizedIssueId || manifest?.branch === pr.branch;
   });
 }
 
@@ -196,11 +245,12 @@ function mergeShaForIssue(
   manifests: LaneManifest[],
   prs: PullRequestSnapshot[],
 ): string | null {
-  const manifest = manifests.find((entry) => entry.issue_id === issueId);
+  const normalizedIssueId = normalizeIssueId(issueId);
+  const manifest = manifests.find((entry) => normalizeIssueId(entry.issue_id) === normalizedIssueId);
   const historySha = manifest?.truth_check_history
     .map((entry) => entry.merge_sha)
     .find((sha): sha is string => typeof sha === 'string' && sha.trim() !== '');
-  return manifest?.commit_sha ?? historySha ?? mergedPrForIssue(issueId, manifests, prs)?.merge_sha ?? null;
+  return manifest?.commit_sha ?? historySha ?? mergedPrForIssue(normalizedIssueId, manifests, prs)?.merge_sha ?? null;
 }
 
 function addCheck(checks: OrchestrationCheck[], check: OrchestrationCheck): void {
@@ -213,16 +263,10 @@ export function buildOrchestrationReconcilerReport(
   const now = input.now ?? new Date();
   const transitionWindowMinutes = input.transitionWindowMinutes ?? DEFAULT_TRANSITION_WINDOW_MINUTES;
   const transitionWindowMs = transitionWindowMinutes * 60 * 1000;
-  const manifestsByIssue = new Map(input.manifests.map((manifest) => [manifest.issue_id, manifest]));
-  const activeLeasesByIssue = new Map(
-    input.leases.filter(isLeaseActive).map((lease) => [lease.issue_id, lease]),
-  );
-  const activeManifestsByIssue = new Map(
-    input.manifests.filter(isManifestActive).map((manifest) => [manifest.issue_id, manifest]),
-  );
-  const linearByIssue = new Map(
-    input.linearIssues.map((issue) => [normalizeIssueId(issue.issue_id), issue]),
-  );
+  const manifestsByIssue = mapByIssueId(input.manifests);
+  const activeLeasesByIssue = mapByIssueId(input.leases.filter(isLeaseActive));
+  const activeManifestsByIssue = mapByIssueId(input.manifests.filter(isManifestActive));
+  const linearByIssue = mapByIssueId(input.linearIssues);
   const requiredCheckNames = new Set(input.requiredCheckNames ?? []);
   const checks: OrchestrationCheck[] = [];
 
@@ -258,18 +302,20 @@ export function buildOrchestrationReconcilerReport(
   }
 
   for (const lease of input.leases.filter(isLeaseActive)) {
+    const issueId = normalizeIssueId(lease.issue_id);
+    const manifest = activeManifestsByIssue.get(issueId);
     const expired = Date.parse(lease.expires_at) <= now.getTime();
     addCheck(checks, {
       id: 'ORCH-LEASE-BRANCH',
       requirement: 'required',
       verdict: branchExists(input.branches, lease.branch) ? 'pass' : 'fail',
-      issue_id: lease.issue_id,
+      issue_id: issueId,
       branch: lease.branch,
       detail: branchExists(input.branches, lease.branch)
         ? 'Active lease branch exists'
         : 'Active lease branch is missing from local and remote Git refs',
       evidence: [
-        evidence('lease_registry', `.ops/leases/${lease.issue_id}.json`, `status=${lease.status}; expires_at=${lease.expires_at}`),
+        evidence('lease_registry', `.ops/leases/${issueId}.json`, `status=${lease.status}; expires_at=${lease.expires_at}`),
         branchEvidence(input.branches, lease.branch),
       ],
     });
@@ -277,13 +323,47 @@ export function buildOrchestrationReconcilerReport(
       id: 'ORCH-LEASE-EXPIRY',
       requirement: 'required',
       verdict: expired ? 'stale_reclaim_required' : 'pass',
-      issue_id: lease.issue_id,
+      issue_id: issueId,
       branch: lease.branch,
       detail: expired
         ? `Active lease expired at ${lease.expires_at}; explicit reclaim required`
         : `Active lease expires at ${lease.expires_at}`,
       evidence: [
-        evidence('lease_registry', `.ops/leases/${lease.issue_id}.json`, `status=${lease.status}; heartbeat_at=${lease.heartbeat_at}`),
+        evidence('lease_registry', `.ops/leases/${issueId}.json`, `status=${lease.status}; heartbeat_at=${lease.heartbeat_at}`),
+      ],
+    });
+    addCheck(checks, {
+      id: 'ORCH-LEASE-MANIFEST',
+      requirement: 'required',
+      verdict: manifest && manifest.branch === lease.branch ? 'pass' : 'fail',
+      issue_id: issueId,
+      branch: lease.branch,
+      detail: manifest
+        ? manifest.branch === lease.branch
+          ? 'Active lease matches active lane manifest branch'
+          : `Active lease branch ${lease.branch} does not match manifest branch ${manifest.branch}`
+        : 'Active lease has no active lane manifest',
+      evidence: [
+        evidence('lease_registry', `.ops/leases/${issueId}.json`, `branch=${lease.branch}; status=${lease.status}`),
+        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, manifest ? `branch=${manifest.branch}; status=${manifest.status}` : 'missing active manifest'),
+      ],
+    });
+  }
+
+  for (const manifest of input.manifests.filter(isManifestActive)) {
+    const issueId = normalizeIssueId(manifest.issue_id);
+    addCheck(checks, {
+      id: 'ORCH-ACTIVE-MANIFEST-BRANCH',
+      requirement: 'required',
+      verdict: branchExists(input.branches, manifest.branch) ? 'pass' : 'fail',
+      issue_id: issueId,
+      branch: manifest.branch,
+      detail: branchExists(input.branches, manifest.branch)
+        ? 'Active lane manifest branch exists'
+        : 'Active lane manifest branch is missing from local and remote Git refs',
+      evidence: [
+        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, `status=${manifest.status}`),
+        branchEvidence(input.branches, manifest.branch),
       ],
     });
   }
@@ -578,7 +658,7 @@ interface LinearIssueQueryData {
 }
 
 async function fetchLinearIssues(issueIds: string[], infraErrors: string[]): Promise<LinearIssueSnapshot[]> {
-  const token = process.env.LINEAR_API_TOKEN?.trim() || process.env.LINEAR_API_KEY?.trim() || '';
+  const token = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
   if (!token) {
     infraErrors.push('Linear query skipped: LINEAR_API_TOKEN or LINEAR_API_KEY is required');
     return [];
