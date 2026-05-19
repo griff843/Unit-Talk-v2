@@ -16,6 +16,7 @@ import {
   validateActiveLeaseForLane,
   writeLeaseAtomic,
 } from './lease-registry.js';
+import { buildStaleLaneAlertMessage } from './stale-lane-alerter.js';
 
 const OWNER: LeaseOwner = {
   user: 'codex-test',
@@ -290,6 +291,65 @@ test('heartbeat rejects wrong cwd so stale ownership cannot be hidden', () => {
   });
 });
 
+test('heartbeat marks expired active lease stale and refuses to renew it', () => {
+  withTempRegistry((registryDir) => {
+    reserve(
+      registryDir,
+      'UTV2-1056',
+      ['scripts/ops/lease-registry.ts'],
+      '2026-05-18T11:59:59.000Z',
+    );
+
+    const result = heartbeatLease(
+      {
+        issue_id: 'UTV2-1056',
+        branch: 'codex/utv2-1056-lease',
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        heartbeat_at: '2026-05-18T12:00:00.000Z',
+      },
+      { registryDir, now: new Date('2026-05-18T12:00:00.000Z') },
+    );
+    const lease = readAllLeases(registryDir)[0];
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'lease_stale_reclaim_required');
+    assert.strictEqual(lease?.status, 'stale_reclaim_required');
+    assert.strictEqual(lease?.heartbeat_at, '2026-05-18T12:00:00.000Z');
+  });
+});
+
+test('heartbeat cannot revive a released lease', () => {
+  withTempRegistry((registryDir) => {
+    reserve(registryDir, 'UTV2-1056', ['scripts/ops/lease-registry.ts']);
+    releaseLease(
+      {
+        issue_id: 'UTV2-1056',
+        actor: 'codex',
+        reason: 'lane completed',
+      },
+      { registryDir, now: new Date('2026-05-18T12:05:00.000Z') },
+    );
+
+    const result = heartbeatLease(
+      {
+        issue_id: 'UTV2-1056',
+        branch: 'codex/utv2-1056-lease',
+        executor: 'codex-cli',
+        cwd: process.cwd(),
+        heartbeat_at: '2026-05-18T12:10:00.000Z',
+      },
+      { registryDir, now: new Date('2026-05-18T12:10:00.000Z') },
+    );
+    const lease = readAllLeases(registryDir)[0];
+
+    assert.strictEqual(result.ok, false);
+    assert.strictEqual(result.code, 'lease_conflict');
+    assert.strictEqual(lease?.status, 'released');
+    assert.strictEqual(lease?.heartbeat_at, '2026-05-18T12:00:00.000Z');
+  });
+});
+
 test('stale report marks expired active leases and emits visible lease details', () => {
   withTempRegistry((registryDir) => {
     reserve(
@@ -310,6 +370,45 @@ test('stale report marks expired active leases and emits visible lease details',
     assert.strictEqual(report.leases[0]?.cwd, process.cwd().replaceAll('\\', '/'));
     assert.deepStrictEqual(report.leases[0]?.file_scope_lock, ['scripts/ops/lease-registry.ts']);
     assert.strictEqual(staleLease?.status, 'stale_reclaim_required');
+  });
+});
+
+test('stale report is idempotent and does not include released leases', () => {
+  withTempRegistry((registryDir) => {
+    reserve(
+      registryDir,
+      'UTV2-1056',
+      ['scripts/ops/lease-registry.ts'],
+      '2026-05-18T11:00:00.000Z',
+    );
+    reserve(
+      registryDir,
+      'UTV2-1057',
+      ['scripts/ops/lane-start.ts'],
+      '2026-05-18T11:00:00.000Z',
+    );
+    releaseLease(
+      {
+        issue_id: 'UTV2-1057',
+        actor: 'codex',
+        reason: 'lane completed',
+      },
+      { registryDir, now: new Date('2026-05-18T11:30:00.000Z') },
+    );
+
+    const first = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:00:00.000Z'),
+    );
+    const second = buildLeaseStaleReport(
+      registryDir,
+      new Date('2026-05-18T12:05:00.000Z'),
+    );
+
+    assert.strictEqual(first.stale_count, 1);
+    assert.deepStrictEqual(first.leases.map((lease) => lease.issue_id), ['UTV2-1056']);
+    assert.strictEqual(second.stale_count, 1);
+    assert.deepStrictEqual(second.leases.map((lease) => lease.issue_id), ['UTV2-1056']);
   });
 });
 
@@ -428,4 +527,28 @@ test('active lease validation fails closed on missing lease and cwd drift', () =
     assert.match(drift[0] ?? '', /lease cwd mismatch/);
     assert.deepStrictEqual(pass, []);
   });
+});
+
+test('stale lane alert message exposes stale locks and infra skips visibly', () => {
+  const message = buildStaleLaneAlertMessage({
+    run_at: '2026-05-18T12:00:00.000Z',
+    infra_errors: ['GitHub token missing'],
+    drift: [
+      {
+        issue_id: 'UTV2-1056',
+        kind: 'lease_stale_reclaim_required',
+        detail:
+          'lease expired at 2026-05-18T11:00:00.000Z; explicit reclaim required for locked files: scripts/ops/lease-registry.ts',
+        manifest_status: 'stale_reclaim_required',
+        pr_url: null,
+        branch: 'codex/utv2-1056-lane-heartbeat-stale-reaper',
+      },
+    ],
+  });
+
+  assert.match(message, /1 drift item/);
+  assert.match(message, /UTV2-1056/);
+  assert.match(message, /lease_stale_reclaim_required/);
+  assert.match(message, /explicit reclaim required/);
+  assert.match(message, /1 check\(s\) skipped/);
 });
