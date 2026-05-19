@@ -354,7 +354,7 @@ async function main(argv = process.argv.slice(2)): Promise<number> {
       return 0;
     }
 
-    const writer = runPnpm(['ops:lane-link-pr', '--', issueId, '--branch', branch, '--pr', prUrl, '--json']);
+    const writer = runPnpm(['ops:lane-link-pr', issueId, '--branch', branch, '--pr', prUrl, '--json']);
     if (writer.status !== 0) {
       if (writer.stdout) {
         process.stdout.write(`${writer.stdout}\n`);
