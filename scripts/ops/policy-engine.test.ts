@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { conditionsMatch, evaluate, loadPolicies, pathMatchesGlob } from './policy-engine.js';
-import type { Policy, PolicyEvalContext } from './policy-engine.js';
+import type { PolicyEvalContext } from './policy-engine.js';
 
 // ---------------------------------------------------------------------------
 // pathMatchesGlob unit tests
