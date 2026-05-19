@@ -17,6 +17,7 @@ allowed_path_globs:
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
   - docs/06_status/qa-roadmap-expansion.md
+  - docs/06_status/model-performance-log.md
   - docs/archive/**
   - CLAUDE.md
   - package.json

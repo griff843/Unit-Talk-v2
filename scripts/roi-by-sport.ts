@@ -4,13 +4,15 @@
  *
  * Historical rows with missing stake_units are labeled and excluded from ROI.
  *
- * Usage: tsx scripts/roi-by-sport.ts [--after=YYYY-MM-DD]
+ * Usage: tsx scripts/roi-by-sport.ts [--after=YYYY-MM-DD] [--monitor-json] [--state-file=path]
  */
 import { loadEnvironment } from '@unit-talk/config';
 import {
   createDatabaseClientFromConnection,
   createServiceRoleDatabaseConnectionConfig,
 } from '@unit-talk/db';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export interface RoiBySportRow {
@@ -42,6 +44,46 @@ interface SportSummary {
   clvComputed: number;
 }
 
+export type ModelEdgeTier = 'UNPROVEN' | 'DEVELOPING' | 'STRONG' | 'ELITE';
+export type MonitoringAlertReason =
+  | 'tier_changed'
+  | 'roi_threshold_crossed'
+  | 'sample_milestone_reached'
+  | 'negative_roi'
+  | 'low_clv_coverage';
+
+export interface ModelPerformanceSnapshot {
+  generatedAt: string;
+  afterDate: string;
+  tier: ModelEdgeTier;
+  settledRows: number;
+  stakeKnownRows: number;
+  historicalUnknownStakeRows: number;
+  riskedUnits: number;
+  profitUnits: number;
+  roiPercent: number | null;
+  wins: number;
+  losses: number;
+  pushes: number;
+  clvCoveragePercent: number | null;
+  notes: string[];
+}
+
+export interface ModelPerformanceAlert {
+  reason: MonitoringAlertReason;
+  severity: 'warning' | 'critical';
+  message: string;
+}
+
+export interface ModelPerformanceMonitorResult {
+  snapshot: ModelPerformanceSnapshot;
+  previousSnapshot: ModelPerformanceSnapshot | null;
+  alerts: ModelPerformanceAlert[];
+}
+
+const ROI_BOUNDARIES = [0, 2, 4] as const;
+const SAMPLE_MILESTONES = [50, 100, 200, 250, 500] as const;
+
 function pct(n: number, total: number): string {
   if (total === 0) return 'n/a';
   return `${((n / total) * 100).toFixed(1)}%`;
@@ -60,7 +102,9 @@ function round2(value: number): number {
   return Math.round(value * 100) / 100;
 }
 
-export function summarizeStakeIntegrity(rows: RoiBySportRow[]): StakeIntegritySummary {
+export function summarizeStakeIntegrity(
+  rows: RoiBySportRow[],
+): StakeIntegritySummary {
   const canonicalStakeRows = rows.filter(hasMeasurableStake).length;
   return {
     canonicalStakeRows,
@@ -75,7 +119,11 @@ export function computeProfitUnits(row: RoiBySportRow): number | null {
   if (row.result === 'loss') return -row.stakeUnits;
   if (row.result !== 'win') return null;
 
-  if (typeof row.odds === 'number' && Number.isFinite(row.odds) && row.odds !== 0) {
+  if (
+    typeof row.odds === 'number' &&
+    Number.isFinite(row.odds) &&
+    row.odds !== 0
+  ) {
     return row.odds > 0
       ? round2(row.stakeUnits * (row.odds / 100))
       : round2(row.stakeUnits * (100 / Math.abs(row.odds)));
@@ -85,11 +133,19 @@ export function computeProfitUnits(row: RoiBySportRow): number | null {
 }
 
 export function computeRoiPercent(rows: RoiBySportRow[]): number | null {
-  const knownStakeRows = rows.filter((row) => hasMeasurableStake(row) && row.result !== 'push');
-  const riskedUnits = knownStakeRows.reduce((sum, row) => sum + row.stakeUnits, 0);
+  const knownStakeRows = rows.filter(
+    (row) => hasMeasurableStake(row) && row.result !== 'push',
+  );
+  const riskedUnits = knownStakeRows.reduce(
+    (sum, row) => sum + row.stakeUnits,
+    0,
+  );
   if (riskedUnits <= 0) return null;
 
-  const profitUnits = knownStakeRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0);
+  const profitUnits = knownStakeRows.reduce(
+    (sum, row) => sum + (computeProfitUnits(row) ?? 0),
+    0,
+  );
   return (profitUnits / riskedUnits) * 100;
 }
 
@@ -99,8 +155,12 @@ export function buildSportSummaries(rows: RoiBySportRow[]): SportSummary[] {
     const sportRows = rows.filter((row) => (row.sport ?? 'unknown') === sport);
     const knownStakeRows = sportRows.filter(hasMeasurableStake);
     const riskRows = knownStakeRows.filter((row) => row.result !== 'push');
-    const riskedUnits = round2(riskRows.reduce((sum, row) => sum + row.stakeUnits, 0));
-    const profitUnits = round2(riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0));
+    const riskedUnits = round2(
+      riskRows.reduce((sum, row) => sum + row.stakeUnits, 0),
+    );
+    const profitUnits = round2(
+      riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0),
+    );
 
     return {
       sport,
@@ -112,9 +172,171 @@ export function buildSportSummaries(rows: RoiBySportRow[]): SportSummary[] {
       riskedUnits,
       profitUnits,
       roiPercent: riskedUnits > 0 ? (profitUnits / riskedUnits) * 100 : null,
-      clvComputed: sportRows.filter((row) => row.clvStatus === 'computed').length,
+      clvComputed: sportRows.filter((row) => row.clvStatus === 'computed')
+        .length,
     };
   });
+}
+
+export function buildModelPerformanceSnapshot(
+  rows: RoiBySportRow[],
+  afterDate: string,
+  generatedAt = new Date().toISOString(),
+): ModelPerformanceSnapshot {
+  const total = rows.length;
+  const wins = rows.filter((row) => row.result === 'win').length;
+  const losses = rows.filter((row) => row.result === 'loss').length;
+  const pushes = rows.filter((row) => row.result === 'push').length;
+  const knownRows = rows.filter(hasMeasurableStake);
+  const riskRows = knownRows.filter((row) => row.result !== 'push');
+  const riskedUnits = round2(
+    riskRows.reduce((sum, row) => sum + row.stakeUnits, 0),
+  );
+  const profitUnits = round2(
+    riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0),
+  );
+  const roiPercent = riskedUnits > 0 ? (profitUnits / riskedUnits) * 100 : null;
+  const clvComputed = rows.filter((row) => row.clvStatus === 'computed').length;
+  const clvCoveragePercent = total > 0 ? (clvComputed / total) * 100 : null;
+  const stakeIntegrity = summarizeStakeIntegrity(rows);
+  const notes: string[] = [];
+
+  if (total < 50)
+    notes.push('Sample below DEVELOPING minimum of 50 settled bets');
+  if (clvCoveragePercent === null || clvCoveragePercent < 60) {
+    notes.push('CLV coverage below 60% minimum for positive edge labels');
+  }
+  if (roiPercent === null || roiPercent <= 0) notes.push('ROI is not positive');
+  notes.push(
+    'Tier uses observable N, ROI, and CLV coverage gates only; CI, median CLV, calibration, band accuracy, out-of-sample, and freshness gates require separate proof.',
+  );
+
+  return {
+    generatedAt,
+    afterDate,
+    tier: computeObservableModelEdgeTier({
+      settledRows: total,
+      roiPercent,
+      clvCoveragePercent,
+    }),
+    settledRows: total,
+    stakeKnownRows: stakeIntegrity.canonicalStakeRows,
+    historicalUnknownStakeRows: stakeIntegrity.historicalUnknownStakeRows,
+    riskedUnits,
+    profitUnits,
+    roiPercent,
+    wins,
+    losses,
+    pushes,
+    clvCoveragePercent,
+    notes,
+  };
+}
+
+export function computeObservableModelEdgeTier(input: {
+  settledRows: number;
+  roiPercent: number | null;
+  clvCoveragePercent: number | null;
+}): ModelEdgeTier {
+  const { settledRows, roiPercent, clvCoveragePercent } = input;
+  if (roiPercent === null || clvCoveragePercent === null) return 'UNPROVEN';
+  if (settledRows >= 500 && roiPercent >= 4 && clvCoveragePercent >= 90)
+    return 'ELITE';
+  if (settledRows >= 200 && roiPercent >= 2 && clvCoveragePercent >= 80)
+    return 'STRONG';
+  if (settledRows >= 50 && roiPercent > 0 && clvCoveragePercent >= 60)
+    return 'DEVELOPING';
+  return 'UNPROVEN';
+}
+
+export function evaluateModelPerformanceAlerts(
+  snapshot: ModelPerformanceSnapshot,
+  previousSnapshot: ModelPerformanceSnapshot | null,
+): ModelPerformanceAlert[] {
+  const alerts: ModelPerformanceAlert[] = [];
+
+  if (previousSnapshot && previousSnapshot.tier !== snapshot.tier) {
+    alerts.push({
+      reason: 'tier_changed',
+      severity:
+        tierRank(snapshot.tier) < tierRank(previousSnapshot.tier)
+          ? 'critical'
+          : 'warning',
+      message: `Observable edge tier changed from ${previousSnapshot.tier} to ${snapshot.tier}`,
+    });
+  }
+
+  if (
+    previousSnapshot?.roiPercent !== null &&
+    previousSnapshot?.roiPercent !== undefined &&
+    snapshot.roiPercent !== null
+  ) {
+    for (const boundary of ROI_BOUNDARIES) {
+      if (
+        crossedBoundary(
+          previousSnapshot.roiPercent,
+          snapshot.roiPercent,
+          boundary,
+        )
+      ) {
+        alerts.push({
+          reason: 'roi_threshold_crossed',
+          severity: snapshot.roiPercent < boundary ? 'critical' : 'warning',
+          message: `ROI crossed ${formatPercent(boundary)} boundary (${formatPercent(previousSnapshot.roiPercent)} -> ${formatPercent(snapshot.roiPercent)})`,
+        });
+      }
+    }
+  }
+
+  if (previousSnapshot) {
+    for (const milestone of SAMPLE_MILESTONES) {
+      if (
+        previousSnapshot.settledRows < milestone &&
+        snapshot.settledRows >= milestone
+      ) {
+        alerts.push({
+          reason: 'sample_milestone_reached',
+          severity: 'warning',
+          message: `Settled sample reached ${milestone} rows; proof re-run is required`,
+        });
+      }
+    }
+  }
+
+  if (snapshot.roiPercent !== null && snapshot.roiPercent < 0) {
+    alerts.push({
+      reason: 'negative_roi',
+      severity: 'critical',
+      message: `ROI is negative at ${formatPercent(snapshot.roiPercent)}`,
+    });
+  }
+
+  if (
+    snapshot.clvCoveragePercent !== null &&
+    snapshot.clvCoveragePercent < 60
+  ) {
+    alerts.push({
+      reason: 'low_clv_coverage',
+      severity: snapshot.clvCoveragePercent < 50 ? 'critical' : 'warning',
+      message: `CLV coverage is below the 60% edge-label minimum at ${formatPercent(snapshot.clvCoveragePercent)}`,
+    });
+  }
+
+  return alerts;
+}
+
+export function buildMonitorResult(
+  rows: RoiBySportRow[],
+  afterDate: string,
+  previousSnapshot: ModelPerformanceSnapshot | null,
+  generatedAt = new Date().toISOString(),
+): ModelPerformanceMonitorResult {
+  const snapshot = buildModelPerformanceSnapshot(rows, afterDate, generatedAt);
+  return {
+    snapshot,
+    previousSnapshot,
+    alerts: evaluateModelPerformanceAlerts(snapshot, previousSnapshot),
+  };
 }
 
 async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
@@ -124,12 +346,14 @@ async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
 
   const { data, error } = await client
     .from('settlement_records')
-    .select(`
+    .select(
+      `
       result,
       payload,
       settled_at,
       picks!inner(stake_units, odds, metadata)
-    `)
+    `,
+    )
     .gte('settled_at', afterDate)
     .is('corrects_id', null);
 
@@ -144,20 +368,28 @@ async function fetchRows(afterDate: string): Promise<RoiBySportRow[]> {
     return {
       result: typeof row.result === 'string' ? row.result : null,
       sport: typeof metadata?.['sport'] === 'string' ? metadata['sport'] : null,
-      marketType: typeof metadata?.['marketTypeId'] === 'string'
-        ? metadata['marketTypeId']
-        : typeof metadata?.['marketType'] === 'string'
-          ? metadata['marketType']
-          : null,
+      marketType:
+        typeof metadata?.['marketTypeId'] === 'string'
+          ? metadata['marketTypeId']
+          : typeof metadata?.['marketType'] === 'string'
+            ? metadata['marketType']
+            : null,
       odds: readNumber(pick?.odds),
       stakeUnits: readNumber(pick?.stake_units),
-      clvStatus: typeof payload?.['clvStatus'] === 'string' ? payload['clvStatus'] : null,
+      clvStatus:
+        typeof payload?.['clvStatus'] === 'string'
+          ? payload['clvStatus']
+          : null,
       settledAt: row.settled_at,
     };
   });
 }
 
-export function printReport(rows: RoiBySportRow[], afterDate: string, generatedAt = new Date().toISOString()): string {
+export function printReport(
+  rows: RoiBySportRow[],
+  afterDate: string,
+  generatedAt = new Date().toISOString(),
+): string {
   const lines: string[] = [];
   const total = rows.length;
   const wins = rows.filter((row) => row.result === 'win').length;
@@ -165,10 +397,15 @@ export function printReport(rows: RoiBySportRow[], afterDate: string, generatedA
   const pushes = rows.filter((row) => row.result === 'push').length;
   const knownRows = rows.filter(hasMeasurableStake);
   const riskRows = knownRows.filter((row) => row.result !== 'push');
-  const totalRisked = round2(riskRows.reduce((sum, row) => sum + row.stakeUnits, 0));
-  const netUnits = round2(riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0));
+  const totalRisked = round2(
+    riskRows.reduce((sum, row) => sum + row.stakeUnits, 0),
+  );
+  const netUnits = round2(
+    riskRows.reduce((sum, row) => sum + (computeProfitUnits(row) ?? 0), 0),
+  );
   const stakeIntegrity = summarizeStakeIntegrity(rows);
   const roiPercent = totalRisked > 0 ? (netUnits / totalRisked) * 100 : null;
+  const snapshot = buildModelPerformanceSnapshot(rows, afterDate, generatedAt);
 
   lines.push('=== ROI / Win-Rate by Sport ===');
   lines.push(`Query window: settled_at >= ${afterDate}`);
@@ -182,15 +419,27 @@ export function printReport(rows: RoiBySportRow[], afterDate: string, generatedA
   lines.push(`| Losses | ${losses} (${pct(losses, total)}) |`);
   lines.push(`| Pushes | ${pushes} |`);
   lines.push(`| Stake-known rows | ${stakeIntegrity.canonicalStakeRows} |`);
-  lines.push(`| Historical unknown-stake rows | ${stakeIntegrity.historicalUnknownStakeRows} |`);
+  lines.push(
+    `| Historical unknown-stake rows | ${stakeIntegrity.historicalUnknownStakeRows} |`,
+  );
   lines.push(`| Total risked | ${totalRisked.toFixed(2)}u |`);
   lines.push(`| Net units | ${formatUnits(netUnits)} |`);
   lines.push(`| ROI (stake-based) | ${formatPercent(roiPercent)} |`);
-  lines.push(`| Note | Rows with stake_units IS NULL are labeled historical_unknown and excluded from ROI |`);
+  lines.push(`| Observable model edge tier | ${snapshot.tier} |`);
+  lines.push(
+    `| CLV coverage | ${formatPercent(snapshot.clvCoveragePercent)} |`,
+  );
+  lines.push(
+    `| Note | Rows with stake_units IS NULL are labeled historical_unknown and excluded from ROI |`,
+  );
   lines.push('');
   lines.push('## By Sport');
-  lines.push('| Sport | Settled | Stake-known | Unknown stake | Wins | Win% | Losses | Risked | Net | ROI (stake-based) | CLV coverage |');
-  lines.push('|-------|---------|-------------|---------------|------|------|--------|--------|-----|-------------------|-------------|');
+  lines.push(
+    '| Sport | Settled | Stake-known | Unknown stake | Wins | Win% | Losses | Risked | Net | ROI (stake-based) | CLV coverage |',
+  );
+  lines.push(
+    '|-------|---------|-------------|---------------|------|------|--------|--------|-----|-------------------|-------------|',
+  );
 
   for (const summary of buildSportSummaries(rows)) {
     lines.push(
@@ -198,7 +447,13 @@ export function printReport(rows: RoiBySportRow[], afterDate: string, generatedA
     );
   }
 
-  const markets = [...new Set(rows.map((row) => row.marketType).filter((value): value is string => Boolean(value)))].sort();
+  const markets = [
+    ...new Set(
+      rows
+        .map((row) => row.marketType)
+        .filter((value): value is string => Boolean(value)),
+    ),
+  ].sort();
   if (markets.length > 0) {
     lines.push('');
     lines.push('## By Market Type');
@@ -206,28 +461,80 @@ export function printReport(rows: RoiBySportRow[], afterDate: string, generatedA
     lines.push('|--------|---------|-------------|------|-------------------|');
     for (const market of markets) {
       const marketRows = rows.filter((row) => row.marketType === market);
-      lines.push(`| ${market} | ${marketRows.length} | ${marketRows.filter(hasMeasurableStake).length} | ${pct(marketRows.filter((row) => row.result === 'win').length, marketRows.length)} | ${formatPercent(computeRoiPercent(marketRows))} |`);
+      lines.push(
+        `| ${market} | ${marketRows.length} | ${marketRows.filter(hasMeasurableStake).length} | ${pct(marketRows.filter((row) => row.result === 'win').length, marketRows.length)} | ${formatPercent(computeRoiPercent(marketRows))} |`,
+      );
     }
   }
 
   lines.push('');
   lines.push('## Notes');
-  lines.push(`- Data window: ${afterDate} onwards (post-UTV2-877 scorer fix merged 2026-05-10)`);
-  lines.push('- Band data not available here; use band-specific reports when band persistence is required');
-  lines.push('- Market type data may be sparse; marketTypeId is not consistently present in picks.metadata');
-  lines.push('- ROI uses persisted picks.stake_units and persisted pick odds; no flat -110 fallback is used');
-  lines.push('- Run with --after=2026-05-17 on that date for 7-day post-fix window');
+  lines.push(
+    `- Data window: ${afterDate} onwards (post-UTV2-877 scorer fix merged 2026-05-10)`,
+  );
+  lines.push(
+    '- Band data not available here; use band-specific reports when band persistence is required',
+  );
+  lines.push(
+    '- Market type data may be sparse; marketTypeId is not consistently present in picks.metadata',
+  );
+  lines.push(
+    '- ROI uses persisted picks.stake_units and persisted pick odds; no flat -110 fallback is used',
+  );
+  lines.push(
+    '- Observable model edge tier applies only measurable N, ROI, and CLV coverage gates from MODEL_EDGE_ACCEPTANCE_STANDARD.md; statistical proof gates must be reviewed separately',
+  );
+  lines.push(
+    '- Run with --after=2026-05-17 on that date for 7-day post-fix window',
+  );
 
   return lines.join('\n');
 }
 
-function hasMeasurableStake(row: RoiBySportRow): row is RoiBySportRow & { stakeUnits: number } {
-  return typeof row.stakeUnits === 'number' && Number.isFinite(row.stakeUnits) && row.stakeUnits > 0;
+export function printMonitorReport(
+  result: ModelPerformanceMonitorResult,
+): string {
+  const { snapshot, previousSnapshot, alerts } = result;
+  const lines: string[] = [];
+
+  lines.push('=== Model Performance Monitor ===');
+  lines.push(`Generated: ${snapshot.generatedAt}`);
+  lines.push(`Query window: settled_at >= ${snapshot.afterDate}`);
+  lines.push(`Current tier: ${snapshot.tier}`);
+  lines.push(`Previous tier: ${previousSnapshot?.tier ?? 'none'}`);
+  lines.push(`Settled rows: ${snapshot.settledRows}`);
+  lines.push(`Stake-known rows: ${snapshot.stakeKnownRows}`);
+  lines.push(`ROI: ${formatPercent(snapshot.roiPercent)}`);
+  lines.push(`CLV coverage: ${formatPercent(snapshot.clvCoveragePercent)}`);
+  lines.push('');
+  lines.push('## Alerts');
+  if (alerts.length === 0) {
+    lines.push('- none');
+  } else {
+    for (const alert of alerts) {
+      lines.push(`- [${alert.severity}] ${alert.reason}: ${alert.message}`);
+    }
+  }
+  lines.push('');
+  lines.push('## Notes');
+  for (const note of snapshot.notes) lines.push(`- ${note}`);
+
+  return lines.join('\n');
+}
+
+function hasMeasurableStake(
+  row: RoiBySportRow,
+): row is RoiBySportRow & { stakeUnits: number } {
+  return (
+    typeof row.stakeUnits === 'number' &&
+    Number.isFinite(row.stakeUnits) &&
+    row.stakeUnits > 0
+  );
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value)
-    ? value as Record<string, unknown>
+    ? (value as Record<string, unknown>)
     : null;
 }
 
@@ -235,11 +542,104 @@ function readNumber(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+function readStringFlag(name: string): string | null {
+  const value = process.argv
+    .find((arg) => arg.startsWith(`--${name}=`))
+    ?.split('=')[1];
+  return value && value.length > 0 ? value : null;
+}
+
+function hasFlag(name: string): boolean {
+  return process.argv.includes(`--${name}`);
+}
+
+function readPreviousSnapshot(
+  stateFile: string | null,
+): ModelPerformanceSnapshot | null {
+  if (!stateFile || !existsSync(stateFile)) return null;
+  const parsed = JSON.parse(readFileSync(stateFile, 'utf8')) as unknown;
+  return isSnapshot(parsed) ? parsed : null;
+}
+
+function writeSnapshot(
+  stateFile: string,
+  snapshot: ModelPerformanceSnapshot,
+): void {
+  mkdirSync(dirname(stateFile), { recursive: true });
+  writeFileSync(stateFile, `${JSON.stringify(snapshot, null, 2)}\n`);
+}
+
+function isSnapshot(value: unknown): value is ModelPerformanceSnapshot {
+  const record = asRecord(value);
+  return (
+    Boolean(record) &&
+    typeof record?.['generatedAt'] === 'string' &&
+    typeof record?.['afterDate'] === 'string' &&
+    isModelEdgeTier(record?.['tier']) &&
+    typeof record?.['settledRows'] === 'number' &&
+    typeof record?.['stakeKnownRows'] === 'number' &&
+    typeof record?.['historicalUnknownStakeRows'] === 'number' &&
+    typeof record?.['riskedUnits'] === 'number' &&
+    typeof record?.['profitUnits'] === 'number' &&
+    (typeof record?.['roiPercent'] === 'number' ||
+      record?.['roiPercent'] === null) &&
+    typeof record?.['wins'] === 'number' &&
+    typeof record?.['losses'] === 'number' &&
+    typeof record?.['pushes'] === 'number' &&
+    (typeof record?.['clvCoveragePercent'] === 'number' ||
+      record?.['clvCoveragePercent'] === null) &&
+    Array.isArray(record?.['notes'])
+  );
+}
+
+function isModelEdgeTier(value: unknown): value is ModelEdgeTier {
+  return (
+    value === 'UNPROVEN' ||
+    value === 'DEVELOPING' ||
+    value === 'STRONG' ||
+    value === 'ELITE'
+  );
+}
+
+function tierRank(tier: ModelEdgeTier): number {
+  if (tier === 'ELITE') return 3;
+  if (tier === 'STRONG') return 2;
+  if (tier === 'DEVELOPING') return 1;
+  return 0;
+}
+
+function crossedBoundary(
+  previous: number,
+  current: number,
+  boundary: number,
+): boolean {
+  return (
+    (previous < boundary && current >= boundary) ||
+    (previous >= boundary && current < boundary)
+  );
+}
+
 async function main() {
-  const afterArg = process.argv.find((arg) => arg.startsWith('--after='))?.split('=')[1];
+  const afterArg = readStringFlag('after');
   const afterDate = afterArg ?? '2026-05-10';
+  const stateFile = readStringFlag('state-file');
+  const monitorJson = hasFlag('monitor-json');
+  const monitor = hasFlag('monitor') || monitorJson || stateFile !== null;
   const rows = await fetchRows(afterDate);
-  console.log(printReport(rows, afterDate));
+  if (!monitor) {
+    console.log(printReport(rows, afterDate));
+    return;
+  }
+
+  const result = buildMonitorResult(
+    rows,
+    afterDate,
+    readPreviousSnapshot(stateFile),
+  );
+  if (stateFile) writeSnapshot(stateFile, result.snapshot);
+  console.log(
+    monitorJson ? JSON.stringify(result, null, 2) : printMonitorReport(result),
+  );
 }
 
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
