@@ -20,7 +20,6 @@ import {
   validatePreflightToken,
   validateTier,
 } from './ops/shared.js';
-import { defaultLeaseOwner, reserveLease } from './ops/lease-registry.js';
 
 const CANONICAL_LANE_TYPES = new Set([
   'runtime',
@@ -518,37 +517,6 @@ async function main(): Promise<number> {
       return 0;
     }
 
-    const leaseResult = reserveLease({
-      issue_id: issueId,
-      branch,
-      executor: 'codex-cli',
-      cwd: ROOT,
-      file_scope_lock: files,
-      owner: defaultLeaseOwner(),
-    });
-    if (!leaseResult.ok) {
-      const result: DispatchResult = {
-        ok: false,
-        code: leaseResult.code,
-        message: leaseResult.message,
-        issue_id: issueId,
-        tier,
-        branch,
-        details: {
-          overlapping_files: leaseResult.overlapping_files,
-          conflicting_issue_id: leaseResult.conflicting_lease?.issue_id,
-          stale_issues: leaseResult.stale_leases?.map((lease) => lease.issue_id),
-        },
-      };
-      if (json) {
-        emitJson(result);
-      } else {
-        process.stderr.write(`${result.message}\n`);
-      }
-      notifyCodexDispatch('fail', dispatchNotifyDetail(result));
-      return 1;
-    }
-
     const laneStart = runLaneStart(issueId, tier, branch, files, laneType);
     if (laneStart.status !== 0) {
       if (laneStart.stdout) {
@@ -636,7 +604,7 @@ async function main(): Promise<number> {
       worktree_path: manifest.worktree_path,
       packet_path: relativeToRoot(packetPath),
       preflight_token: manifest.preflight_token,
-      lease_path: leaseResult.lease_path,
+      lease_path: String(laneStartJson.lease_path ?? ''),
       file_scope_lock: manifest.file_scope_lock,
       packet: json ? packet : undefined,
     };

@@ -102,6 +102,13 @@ test('codex-dispatch starts canonical lane types with codex-cli executor', () =>
   assert.doesNotMatch(source, /--lane-type', 'codex-cli'/, 'dispatch must not use legacy lane_type=codex-cli');
 });
 
+test('codex-dispatch leaves lease reservation to lane-start', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+  assert.doesNotMatch(source, /reserveLease/, 'dispatch should not pre-reserve a lease before lane-start');
+  assert.doesNotMatch(source, /defaultLeaseOwner/, 'dispatch should not own lease creation');
+  assert.match(source, /laneStartJson\.lease_path/, 'dispatch should report the lease created by lane-start');
+});
+
 test('dispatch skill documents the Codex lane workflow', () => {
   const skill = fs.readFileSync(
     path.join(ROOT, '.agents', 'skills', 'dispatch', 'SKILL.md'),
