@@ -81,6 +81,39 @@ try {
 }
 " 2>/dev/null || echo "  unavailable")
 
+# ── Build compact one-liner for systemMessage ────────────────────────────────
+LANE_COUNT=$(echo "$LANES_OUT" | grep -c '^\s*\[' || echo "0")
+if [ "$LANE_COUNT" -eq 0 ]; then
+  LANE_SUMMARY="no active lanes"
+else
+  LANE_SUMMARY="$LANE_COUNT active lane(s)"
+fi
+
+# Compute dispatch slots from manifests
+SLOT_INFO=$(node -e "
+try {
+  const fs = require('fs');
+  const path = require('path');
+  const dir = '$ROOT/docs/06_status/lanes';
+  if (!fs.existsSync(dir)) { process.stdout.write('slots:unknown'); process.exit(0); }
+  const active = fs.readdirSync(dir)
+    .filter(f => f.endsWith('.json') && f !== 'README.md')
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')); } catch(e) { return null; } })
+    .filter(m => m && ['started','in_progress','in_review','blocked','reopened'].includes(m.status));
+  const claudeUsed = active.filter(m => m.executor === 'claude').length;
+  const codexUsed = active.filter(m => ['codex-cli','codex-cloud'].includes(m.executor)).length;
+  process.stdout.write('claude:' + claudeUsed + '/2 codex:' + codexUsed + '/3');
+} catch(e) { process.stdout.write('slots:error'); }
+" 2>/dev/null || echo "slots:unavailable")
+
+# Codex health check (fast — 5s timeout)
+CODEX_STATUS=$(node -e "
+const { spawnSync } = require('child_process');
+const r = spawnSync('codex', ['--version'], { encoding: 'utf8', stdio: 'pipe', shell: process.platform==='win32', timeout: 5000 });
+if (r.error || r.status !== 0) { process.stdout.write('codex:unavailable'); }
+else { process.stdout.write('codex:ok(' + (r.stdout||'').trim().split('\n')[0] + ')'); }
+" 2>/dev/null || echo "codex:unknown")
+
 # ── Write SYSTEM_STATE.md ────────────────────────────────────────────────────
 mkdir -p "$(dirname "$STATE_FILE")"
 cat > "$STATE_FILE" << STATE
@@ -95,6 +128,12 @@ $MILESTONE
 ## Active Lanes
 $LANES_OUT
 
+## Dispatch Slots
+$SLOT_INFO
+
+## Codex Status
+$CODEX_STATUS
+
 ## Working Tree
 $TREE_LINE
 
@@ -105,15 +144,7 @@ STATE
 # ── Update stamp ─────────────────────────────────────────────────────────────
 date +%s > "$STAMP_FILE"
 
-# ── Build compact one-liner for systemMessage ────────────────────────────────
-LANE_COUNT=$(echo "$LANES_OUT" | grep -c '^\s*\[' || echo "0")
-if [ "$LANE_COUNT" -eq 0 ]; then
-  LANE_SUMMARY="no active lanes"
-else
-  LANE_SUMMARY="$LANE_COUNT active lane(s)"
-fi
-
-MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | tree: $TREE_LINE | Full state: docs/06_status/SYSTEM_STATE.md"
+MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS | tree: $TREE_LINE | Full state: docs/06_status/SYSTEM_STATE.md"
 
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "
