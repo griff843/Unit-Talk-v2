@@ -1,0 +1,71 @@
+UTV2-1048 verification log
+Generated: 2026-05-19
+Branch: codex/utv2-1048-lane-governor-dispatch-preflight
+
+Issue-specific verification:
+
+Command:
+  npx tsx --test scripts/ops/lane-maximizer.test.ts scripts/ops/preflight.test.ts
+
+Result:
+  PASS
+
+Relevant passing coverage:
+  - clean candidate with no overlaps is recommended
+  - candidate whose blocked_by is not done is blocked with BLOCKED_DEP
+  - file scope overlap with active lane is blocked with OVERLAP
+  - claude dispatch limit hit blocks with DISPATCH_LIMIT_CLAUDE
+  - codex dispatch limit hit blocks with DISPATCH_LIMIT_CODEX
+  - dispatch_limits reports the correct active counts
+  - preflight schema dependencies exist
+  - preflight token and result paths share the canonical branch path
+
+Summary:
+  1..22
+  tests 22
+  pass 22
+  fail 0
+
+Required verification:
+
+Command:
+  pnpm type-check
+
+Result:
+  PASS
+
+Command:
+  pnpm test
+
+Result:
+  PASS
+
+Command:
+  pnpm verify
+
+Result:
+  PASS
+
+Final verify lines:
+  > @unit-talk/discord-bot@0.1.0 command-manifest:check /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1048-lane-governor-dispatch-preflight/apps/discord-bot
+  > tsx scripts/sync-command-manifest.ts --check
+  [command-manifest] Verified 14 command definition(s) against /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1048-lane-governor-dispatch-preflight/apps/discord-bot/command-manifest.json
+  [check-migration-versions] 107 migration file(s) verified - no duplicate versions.
+  [lint-migrations] 107 migration file(s) checked - no findings.
+
+Command:
+  npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+
+Result:
+  PASS
+
+Output:
+  Verdict: PASS
+  Changed files: 10
+  Rules matched: (none) - no R-level artifacts required for this diff
+
+Notes:
+  - The first `pnpm verify` attempt failed at `ops:sync-check` because `.ops/sync.yml` referenced UTV2-1072. Added `.ops/sync/UTV2-1048.yml` as per-issue lane metadata.
+  - The second `pnpm verify` attempt failed at `env:check` because this worktree did not have `local.env`. Ran the approved helper from the main checkout:
+    `npx tsx scripts/link-worktree-env.ts /home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1048-lane-governor-dispatch-preflight`
+  - The helper hardlinked `local.env` and did not copy credentials.
