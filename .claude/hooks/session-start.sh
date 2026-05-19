@@ -106,6 +106,41 @@ try {
 } catch(e) { process.stdout.write('slots:error'); }
 " 2>/dev/null || echo "slots:unavailable")
 
+# Ghost lane detection — local only, no network
+GHOST_WARNING=$(node -e "
+try {
+  const fs = require('fs');
+  const path = require('path');
+  const dir = '$ROOT/docs/06_status/lanes';
+  if (!fs.existsSync(dir)) { process.stdout.write(''); process.exit(0); }
+  const cutoff = Date.now() - 48 * 60 * 60 * 1000;
+  const ACTIVE = new Set(['started','in_progress','in_review','blocked','reopened']);
+  const ghosts = fs.readdirSync(dir)
+    .filter(f => f.endsWith('.json') && f !== 'README.md')
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir,f),'utf8')); } catch(e) { return null; } })
+    .filter(m => m && ACTIVE.has(m.status) && m.heartbeat_at && new Date(m.heartbeat_at).getTime() < cutoff);
+  if (ghosts.length === 0) { process.stdout.write(''); }
+  else {
+    const ids = ghosts.map(m => m.issue_id).join(', ');
+    process.stdout.write('⚠ ' + ghosts.length + ' stale lane(s) — run lane-reconciler: ' + ids);
+  }
+} catch(e) { process.stdout.write(''); }
+" 2>/dev/null || echo "")
+
+# Dispatch candidates — read from today's cached digest if available (no network)
+DISPATCH_SUMMARY=$(node -e "
+try {
+  const fs = require('fs');
+  const path = require('path');
+  const today = new Date().toISOString().slice(0,10);
+  const digestPath = path.join('$ROOT', '.out', 'ops', 'digest', today + '.json');
+  if (!fs.existsSync(digestPath)) { process.stdout.write('dispatch:no-digest'); process.exit(0); }
+  const d = JSON.parse(fs.readFileSync(digestPath, 'utf8'));
+  const candidates = (d.dispatch_candidates || []).length;
+  process.stdout.write('dispatch:' + candidates + '-ready');
+} catch(e) { process.stdout.write('dispatch:error'); }
+" 2>/dev/null || echo "dispatch:unavailable")
+
 # Codex health check (fast — 5s timeout)
 CODEX_STATUS=$(node -e "
 const { spawnSync } = require('child_process');
@@ -131,6 +166,12 @@ $LANES_OUT
 ## Dispatch Slots
 $SLOT_INFO
 
+## Ghost Lanes
+${GHOST_WARNING:-none}
+
+## Dispatch Queue
+$DISPATCH_SUMMARY
+
 ## Codex Status
 $CODEX_STATUS
 
@@ -144,7 +185,9 @@ STATE
 # ── Update stamp ─────────────────────────────────────────────────────────────
 date +%s > "$STAMP_FILE"
 
-MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS | tree: $TREE_LINE | Full state: docs/06_status/SYSTEM_STATE.md"
+GHOST_PART=""
+[ -n "$GHOST_WARNING" ] && GHOST_PART=" | $GHOST_WARNING"
+MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE | Full state: docs/06_status/SYSTEM_STATE.md"
 
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "
