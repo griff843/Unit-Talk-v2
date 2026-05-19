@@ -244,6 +244,26 @@ test('fails when Linear Done has no merge SHA evidence', () => {
   assert.match(entry.detail, /no merge SHA/);
 });
 
+test('handles legacy manifests without truth_check_history while checking merge SHA evidence', () => {
+  const legacyManifest = lane({ status: 'done', commit_sha: null }) as LaneManifest & {
+    truth_check_history?: LaneManifest['truth_check_history'];
+  };
+  delete legacyManifest.truth_check_history;
+
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
+    leases: [],
+    manifests: [legacyManifest],
+    branches: [],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  const entry = check(report.checks, 'ORCH-DONE-MERGE-SHA');
+  assert.equal(entry.verdict, 'fail');
+  assert.match(entry.detail, /no merge SHA/);
+});
+
 test('marks active expired lease as stale reclaim required', () => {
   const report = buildOrchestrationReconcilerReport({
     linearIssues: [],

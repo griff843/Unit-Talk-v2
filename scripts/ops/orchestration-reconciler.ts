@@ -247,7 +247,8 @@ function mergeShaForIssue(
 ): string | null {
   const normalizedIssueId = normalizeIssueId(issueId);
   const manifest = manifests.find((entry) => normalizeIssueId(entry.issue_id) === normalizedIssueId);
-  const historySha = manifest?.truth_check_history
+  const history = Array.isArray(manifest?.truth_check_history) ? manifest.truth_check_history : [];
+  const historySha = history
     .map((entry) => entry.merge_sha)
     .find((sha): sha is string => typeof sha === 'string' && sha.trim() !== '');
   return manifest?.commit_sha ?? historySha ?? mergedPrForIssue(normalizedIssueId, manifests, prs)?.merge_sha ?? null;
