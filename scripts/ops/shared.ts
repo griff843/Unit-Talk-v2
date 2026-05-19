@@ -241,6 +241,7 @@ export const REQUIRED_CI_CHECKS_SCHEMA_PATH = path.join(
 
 const ISSUE_PATTERN = /^(?:UTV2|UNI)-\d+$/;
 const BRANCH_PATTERN = /^(?<owner>[a-z]+)\/(?<issue>(?:utv2|uni)-\d+)-(?<slug>[a-z0-9]+(?:-[a-z0-9]+)*)$/;
+const LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN = 'dispatch-auto';
 export const ACTIVE_LOCK_STATUSES = new Set<LaneManifestStatus>([
   'started',
   'in_progress',
@@ -433,6 +434,35 @@ export function normalizeFileScope(pathsToNormalize: string[]): string[] {
   }
 
   return [...seen].sort((left, right) => left.localeCompare(right));
+}
+
+export function validatePreflightTokenPathValue(
+  preflightToken: string,
+  options: { requireExistingFile?: boolean } = {},
+): string {
+  if (preflightToken.trim() === LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN) {
+    throw new Error('preflight_token must reference a real preflight token file, not dispatch-auto');
+  }
+  if (path.win32.isAbsolute(preflightToken)) {
+    throw new Error(`preflight_token must be a repo-relative path: ${preflightToken}`);
+  }
+
+  const normalized = normalizeRepoRelativePath(preflightToken);
+  if (normalized !== preflightToken) {
+    throw new Error(`preflight_token must be canonical: ${preflightToken}`);
+  }
+
+  if (options.requireExistingFile) {
+    const absolute = path.join(ROOT, normalized);
+    if (!fs.existsSync(absolute)) {
+      throw new Error(`preflight_token file does not exist: ${normalized}`);
+    }
+    if (!fs.statSync(absolute).isFile()) {
+      throw new Error(`preflight_token must reference a file, not a directory: ${normalized}`);
+    }
+  }
+
+  return normalized;
 }
 
 export function normalizeRepoRelativePaths(pathsToNormalize: string[]): string[] {
@@ -648,6 +678,22 @@ export function validateManifest(manifest: LaneManifest, filePath?: string): str
   }
   if (!manifest.preflight_token) {
     errors.push(`${sourcePath}: preflight_token is required`);
+  } else {
+    try {
+      validatePreflightTokenPathValue(manifest.preflight_token, {
+        requireExistingFile: ACTIVE_LOCK_STATUSES.has(manifest.status),
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (
+        !(
+          manifest.preflight_token === LEGACY_DISPATCH_AUTO_PREFLIGHT_TOKEN &&
+          (manifest.status === 'merged' || manifest.status === 'done')
+        )
+      ) {
+        errors.push(`${sourcePath}: ${message}`);
+      }
+    }
   }
   if (!manifest.started_at || Number.isNaN(Date.parse(manifest.started_at))) {
     errors.push(`${sourcePath}: started_at must be ISO-8601`);
@@ -766,6 +812,9 @@ export function validatePreflightToken(
   if (!fs.existsSync(tokenPath)) {
     throw new Error(`Missing preflight token: ${relativeToRoot(tokenPath)}`);
   }
+  const tokenRelativePath = validatePreflightTokenPathValue(relativeToRoot(tokenPath), {
+    requireExistingFile: true,
+  });
 
   const token = parseJsonFile<PreflightToken>(tokenPath);
   if (token.schema_version !== 1) {
@@ -793,7 +842,7 @@ export function validatePreflightToken(
   return {
     token,
     tokenPath,
-    tokenRelativePath: relativeToRoot(tokenPath),
+    tokenRelativePath,
   };
 }
 
@@ -828,8 +877,12 @@ export function createManifest(input: {
   created_by?: CreatedBy;
   status?: LaneManifestStatus;
   now?: string;
+  requireExistingPreflightToken?: boolean;
 }): LaneManifest {
   const timestamp = input.now ?? nowIso();
+  const preflightToken = validatePreflightTokenPathValue(input.preflight_token, {
+    requireExistingFile: input.requireExistingPreflightToken,
+  });
   return {
     schema_version: 1,
     issue_id: input.issue_id,
@@ -849,7 +902,7 @@ export function createManifest(input: {
     heartbeat_at: timestamp,
     closed_at: null,
     blocked_by: [],
-    preflight_token: input.preflight_token,
+    preflight_token: preflightToken,
     created_by: input.created_by ?? 'codex-cli',
     truth_check_history: [],
     reopen_history: [],

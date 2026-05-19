@@ -58,6 +58,58 @@ test('validateManifest accepts a canonical done status manifest', () => {
   assert.deepStrictEqual(errors, []);
 });
 
+test('validateManifest rejects dispatch-auto for active lane manifests', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1025',
+    tier: 'T2',
+    branch: 'codex/utv2-1025-preflight-token-validation',
+    worktree_path: worktreePathForBranch('codex/utv2-1025-preflight-token-validation'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1025', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1025-preflight-token-validation.json',
+  });
+  manifest.preflight_token = 'dispatch-auto';
+
+  assert.match(
+    validateManifest(manifest).join('\n'),
+    /preflight_token must reference a real preflight token file, not dispatch-auto/,
+  );
+});
+
+test('validateManifest preserves legacy closed dispatch-auto compatibility', () => {
+  const manifest = createManifest({
+    issue_id: 'UTV2-1026',
+    tier: 'T2',
+    branch: 'codex/utv2-1026-legacy-token',
+    worktree_path: worktreePathForBranch('codex/utv2-1026-legacy-token'),
+    file_scope_lock: ['scripts/ops/shared.ts'],
+    expected_proof_paths: defaultProofPaths('UTV2-1026', 'T2'),
+    preflight_token: '.out/ops/preflight/codex/utv2-1026-legacy-token.json',
+  });
+  manifest.status = 'done';
+  manifest.closed_at = new Date().toISOString();
+  manifest.preflight_token = 'dispatch-auto';
+
+  assert.deepStrictEqual(validateManifest(manifest), []);
+});
+
+test('createManifest can require a real preflight token file for lane starts', () => {
+  assert.throws(
+    () =>
+      createManifest({
+        issue_id: 'UTV2-1027',
+        tier: 'T2',
+        branch: 'codex/utv2-1027-missing-token',
+        worktree_path: worktreePathForBranch('codex/utv2-1027-missing-token'),
+        file_scope_lock: ['scripts/ops/shared.ts'],
+        expected_proof_paths: defaultProofPaths('UTV2-1027', 'T2'),
+        preflight_token: '.out/ops/preflight/codex/utv2-1027-missing-token.json',
+        requireExistingPreflightToken: true,
+      }),
+    /preflight_token file does not exist/,
+  );
+});
+
 test('validateManifest accepts Windows absolute worktree paths on non-Windows runners', () => {
   const manifest = createManifest({
     issue_id: 'UTV2-1062',

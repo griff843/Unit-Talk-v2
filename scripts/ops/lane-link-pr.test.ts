@@ -26,6 +26,11 @@ function withManifest(
   laneType: 'codex-cli' | 'claude' | 'codex-cloud' = 'codex-cli',
   mutate?: (manifest: Record<string, unknown>) => void,
 ): string {
+  const preflightToken = `.out/ops/preflight/${issueId.toLowerCase()}-token.json`;
+  const preflightTokenPath = path.join(ROOT, preflightToken);
+  fs.mkdirSync(path.dirname(preflightTokenPath), { recursive: true });
+  fs.writeFileSync(preflightTokenPath, '{}\n', 'utf8');
+
   const manifest = {
     schema_version: 1,
     issue_id: issueId,
@@ -44,7 +49,7 @@ function withManifest(
     heartbeat_at: '2026-04-11T00:00:00.000Z',
     closed_at: null,
     blocked_by: [],
-    preflight_token: '.out/ops/preflight/token.json',
+    preflight_token: preflightToken,
     created_by: laneType === 'claude' ? 'claude' : 'codex-cli',
     truth_check_history: [],
     reopen_history: [],
@@ -60,6 +65,9 @@ function withManifest(
 
 function cleanup(issueId: string): void {
   fs.rmSync(issueToManifestPath(issueId), { force: true });
+  fs.rmSync(path.join(ROOT, '.out', 'ops', 'preflight', `${issueId.toLowerCase()}-token.json`), {
+    force: true,
+  });
 }
 
 test('lane-link-pr transitions a codex-cli lane to in_review', () => {
