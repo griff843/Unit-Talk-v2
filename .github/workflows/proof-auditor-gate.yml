@@ -1,0 +1,188 @@
+# Proof Auditor Gate
+#
+# Runs proof-auditor-gate.ts as a required blocking status check on PRs that
+# contain proof files or that are labelled as proof-required.
+#
+# Trigger conditions:
+#   - PR opens/synchronizes and touches docs/06_status/proof/ paths
+#   - PR labelled "proof-required" (for manual override)
+#
+# On failure: non-zero exit, CI check reports FAIL, artifact uploaded with
+# machine-readable gate result JSON for downstream consumers.
+#
+# db-proof-reviewer scope: db-proof-reviewer remains an operator advisory tool
+# for T1 evidence narrative review. This gate owns the automated, blocking
+# structural checks (placeholder detection, SHA binding, section presence,
+# R-level artifact requirements). There is no overlap for automated blocking.
+#
+# Required check candidate: "Proof Auditor Gate" — add to branch protection
+# required status checks after first green run on a proof-bearing PR.
+#
+# Spec / rationale: UTV2-1046, docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md
+
+name: Proof Auditor Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+    paths:
+      - 'docs/06_status/proof/**'
+      - 'docs/06_status/*EVIDENCE*'
+      - 'docs/06_status/*PROOF*'
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  proof-auditor-gate:
+    name: Proof Auditor Gate
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Detect proof directories changed in PR
+        id: detect
+        run: |
+          base_sha="${{ github.event.pull_request.base.sha }}"
+          head_sha="${{ github.event.pull_request.head.sha }}"
+
+          # Collect distinct proof directories from the diff
+          changed_proof_dirs=$(git diff --name-only "$base_sha" "$head_sha" \
+            | grep '^docs/06_status/proof/' \
+            | xargs -I{} dirname {} \
+            | sort -u \
+            | tr '\n' ':')
+
+          echo "Changed proof dirs: $changed_proof_dirs"
+          echo "proof_dirs=${changed_proof_dirs}" >> "$GITHUB_OUTPUT"
+
+          if [ -z "$changed_proof_dirs" ]; then
+            echo "No proof directories changed — gate passes trivially."
+            echo "has_proof=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_proof=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Run proof auditor gate per proof directory
+        id: gate
+        if: steps.detect.outputs.has_proof == 'true'
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          overall_verdict="PASS"
+          all_results="[]"
+
+          IFS=':' read -ra proof_dirs <<< "${{ steps.detect.outputs.proof_dirs }}"
+
+          for proof_dir in "${proof_dirs[@]}"; do
+            [ -z "$proof_dir" ] && continue
+            echo "--- Auditing: $proof_dir ---"
+
+            result=$(pnpm exec tsx scripts/ops/proof-auditor-gate.ts \
+              --proof-dir "$proof_dir" \
+              --sha "$HEAD_SHA" \
+              --json 2>&1) || true
+
+            echo "$result"
+
+            verdict=$(echo "$result" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d['verdict'])" 2>/dev/null || echo "FAIL")
+
+            if [ "$verdict" != "PASS" ]; then
+              overall_verdict="FAIL"
+            fi
+
+            # Accumulate results for artifact
+            all_results=$(echo "$all_results" | python3 -c "
+          import sys, json
+          existing = json.load(sys.stdin)
+          result_str = '''$result'''
+          try:
+              new = json.loads(result_str)
+          except Exception:
+              new = {'error': result_str, 'verdict': 'FAIL', 'proofDir': '$proof_dir'}
+          existing.append(new)
+          print(json.dumps(existing))
+          " 2>/dev/null || echo "$all_results")
+          done
+
+          echo "overall_verdict=${overall_verdict}" >> "$GITHUB_OUTPUT"
+
+          # Write machine-readable artifact
+          mkdir -p /tmp/proof-auditor-gate
+          python3 -c "
+          import json, os, sys
+          results = json.loads('''$all_results''') if '''$all_results''' != '[]' else []
+          artifact = {
+            'schema': 'proof-auditor-gate/v1',
+            'workflow_run': '${{ github.run_id }}',
+            'pr': ${{ github.event.pull_request.number }},
+            'head_sha': '$HEAD_SHA',
+            'overall_verdict': '$overall_verdict',
+            'results': results,
+            'checkedAt': '$(date -u +%Y-%m-%dT%H:%M:%SZ)'
+          }
+          print(json.dumps(artifact, indent=2))
+          " > /tmp/proof-auditor-gate/gate-result.json 2>/dev/null || echo '{"schema":"proof-auditor-gate/v1","overall_verdict":"FAIL","error":"artifact generation failed"}' > /tmp/proof-auditor-gate/gate-result.json
+
+          echo "Artifact contents:"
+          cat /tmp/proof-auditor-gate/gate-result.json
+
+      - name: Upload gate result artifact
+        if: steps.detect.outputs.has_proof == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: proof-auditor-gate-result
+          path: /tmp/proof-auditor-gate/gate-result.json
+          retention-days: 14
+
+      - name: Gate result summary
+        if: steps.detect.outputs.has_proof == 'true'
+        run: |
+          echo "## Proof Auditor Gate" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Overall verdict: **${{ steps.gate.outputs.overall_verdict }}**" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Proof directories audited:" >> "$GITHUB_STEP_SUMMARY"
+          IFS=':' read -ra dirs <<< "${{ steps.detect.outputs.proof_dirs }}"
+          for d in "${dirs[@]}"; do
+            [ -z "$d" ] && continue
+            echo "- \`$d\`" >> "$GITHUB_STEP_SUMMARY"
+          done
+
+      - name: Fail on invalid proof
+        if: steps.detect.outputs.has_proof == 'true' && steps.gate.outputs.overall_verdict == 'FAIL'
+        run: |
+          echo "::error title=Proof Auditor Gate::One or more proof directories failed auditing."
+          echo ""
+          echo "Failures detected by proof-auditor-gate.ts. See step output above for details."
+          echo ""
+          echo "Common causes:"
+          echo "  - Placeholder text (TODO, TBD, PLACEHOLDER, INSERT HERE)"
+          echo "  - Missing required sections (## Summary, ## Evidence, ## Verification)"
+          echo "  - SHA not bound in proof files"
+          echo "  - Invalid or stale SHA"
+          echo "  - No markdown files in proof directory"
+          echo "  - Missing R-level artifact keywords (e.g. 'determinism' for r2)"
+          echo ""
+          echo "Fix the proof files and push again."
+          exit 1
