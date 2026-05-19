@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1049",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T3",
   "branch": "claude/utv2-1049-retire-db-proof-reviewer",
@@ -9,8 +9,10 @@
   "status": "started",
   "file_scope_lock": [
     ".claude/agents/db-proof-reviewer.md",
-    "docs/05_operations/",
-    "CLAUDE.md"
+    "docs/05_operations/agent-role-contracts.md",
+    "docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md",
+    ".ops/sync/UTV2-1049.yml",
+    ".lane/lanes/governance.yml"
   ],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
