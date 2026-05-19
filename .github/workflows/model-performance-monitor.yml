@@ -1,0 +1,136 @@
+name: Model Performance Monitor
+
+# Runs roi-by-sport.ts daily in monitoring mode.
+# Computes the observable model edge tier, checks ROI thresholds, and posts
+# a Discord alert when tier changes or ROI crosses a warning boundary.
+#
+# State file is persisted in .out/ops/model-perf-snapshot.json on the runner
+# cache (ephemeral) and as a workflow artifact for cross-run diffing.
+#
+# Secret required: UNIT_TALK_OPS_ALERT_WEBHOOK_URL (Discord webhook)
+# Secret required: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+
+on:
+  schedule:
+    # 6:07 AM UTC daily (off-minute to avoid fleet congestion)
+    - cron: '7 6 * * *'
+  workflow_dispatch:
+    inputs:
+      after_date:
+        description: 'Query window start date (YYYY-MM-DD)'
+        required: false
+        default: '2026-05-10'
+
+jobs:
+  monitor:
+    name: Model Performance Monitor
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+
+      - name: Restore previous snapshot
+        id: restore-snapshot
+        uses: actions/cache/restore@v4
+        with:
+          path: .out/ops/model-perf-snapshot.json
+          key: model-perf-snapshot-${{ github.run_number }}
+          restore-keys: |
+            model-perf-snapshot-
+
+      - name: Run model performance monitor
+        id: monitor
+        run: |
+          AFTER="${{ github.event.inputs.after_date || '2026-05-10' }}"
+          mkdir -p .out/ops
+          npx tsx scripts/roi-by-sport.ts \
+            --after="$AFTER" \
+            --monitor-json \
+            --state-file=.out/ops/model-perf-snapshot.json \
+            > .out/ops/monitor-result.json 2>&1 || true
+          # Surface alerts count for downstream steps
+          ALERTS=$(jq '.alerts | length' .out/ops/monitor-result.json 2>/dev/null || echo "0")
+          TIER=$(jq -r '.snapshot.tier' .out/ops/monitor-result.json 2>/dev/null || echo "UNKNOWN")
+          ROI=$(jq '.snapshot.roiPercent' .out/ops/monitor-result.json 2>/dev/null || echo "null")
+          echo "alerts=$ALERTS" >> "$GITHUB_OUTPUT"
+          echo "tier=$TIER" >> "$GITHUB_OUTPUT"
+          echo "roi=$ROI" >> "$GITHUB_OUTPUT"
+          cat .out/ops/monitor-result.json
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+
+      - name: Save snapshot
+        uses: actions/cache/save@v4
+        if: always()
+        with:
+          path: .out/ops/model-perf-snapshot.json
+          key: model-perf-snapshot-${{ github.run_number }}
+
+      - name: Upload monitor result artifact
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: model-perf-monitor-${{ github.run_id }}
+          path: .out/ops/monitor-result.json
+          retention-days: 30
+
+      - name: Send Discord alert on findings
+        if: steps.monitor.outputs.alerts != '0' && env.WEBHOOK_URL != ''
+        env:
+          WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
+        run: |
+          ALERTS='${{ steps.monitor.outputs.alerts }}'
+          TIER='${{ steps.monitor.outputs.tier }}'
+          ROI='${{ steps.monitor.outputs.roi }}'
+          SUMMARY=$(jq -r '
+            [.alerts[] | "- [\(.severity)] \(.reason): \(.message)"] | join("\n")
+          ' .out/ops/monitor-result.json 2>/dev/null || echo "(could not parse alerts)")
+          PAYLOAD=$(jq -n \
+            --arg alerts "$ALERTS" \
+            --arg tier "$TIER" \
+            --arg roi "$ROI" \
+            --arg summary "$SUMMARY" \
+            --arg run_url "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+            '{
+              "embeds": [{
+                "title": "Model Performance Alert",
+                "color": 15158332,
+                "description": ("**Tier:** " + $tier + "\n**ROI:** " + $roi + "%\n**Alerts (" + $alerts + "):**\n" + $summary),
+                "fields": [{"name": "Run", "value": $run_url, "inline": false}],
+                "footer": {"text": "Unit Talk V2 — model-performance-monitor"}
+              }]
+            }')
+          curl -s -X POST "$WEBHOOK_URL" \
+            -H "Content-Type: application/json" \
+            -d "$PAYLOAD"
+
+      - name: Append to model-performance-log
+        if: always()
+        run: |
+          DATE=$(date -u +"%Y-%m-%d")
+          TIER='${{ steps.monitor.outputs.tier }}'
+          ROI='${{ steps.monitor.outputs.roi }}'
+          ALERTS='${{ steps.monitor.outputs.alerts }}'
+          RUN_URL="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          echo "" >> docs/06_status/model-performance-log.md
+          echo "## ${DATE}" >> docs/06_status/model-performance-log.md
+          echo "" >> docs/06_status/model-performance-log.md
+          echo "| Field | Value |" >> docs/06_status/model-performance-log.md
+          echo "|-------|-------|" >> docs/06_status/model-performance-log.md
+          echo "| Tier | ${TIER} |" >> docs/06_status/model-performance-log.md
+          echo "| ROI | ${ROI}% |" >> docs/06_status/model-performance-log.md
+          echo "| Alerts | ${ALERTS} |" >> docs/06_status/model-performance-log.md
+          echo "| Run | [link](${RUN_URL}) |" >> docs/06_status/model-performance-log.md
