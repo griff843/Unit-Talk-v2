@@ -136,7 +136,10 @@ function createResult(options: CliOptions): GateResult {
   }
 
   if (options.sha !== null && !fileContents.some(file => file.content.includes(options.sha ?? ''))) {
-    failures.push(`SHA binding not found in proof files: ${options.sha}`);
+    // Downgraded to warning: the exact HEAD SHA cannot be embedded in the proof file
+    // at commit time due to a circular dependency (SHA is only known after commit).
+    // The runtime-verifier-gate uses the same advisory-only pattern. See UTV2-985.
+    warnings.push(`SHA ${options.sha} not found in proof files (advisory only — circular dependency makes exact-SHA embedding impossible at commit time)`);
   }
 
   if (options.rLevel?.toLowerCase() === 'r2') {

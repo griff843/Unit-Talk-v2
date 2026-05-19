@@ -107,17 +107,18 @@ test('fails when proof files have no required sections', () => {
   assert.match(result.output.failures.join('\n'), /No required markdown section/);
 });
 
-test('fails when sha is passed but not found in proof files', () => {
+test('warns but passes when sha is passed but not found in proof files', () => {
   const proofDir = makeTempDir();
   const sha = '0123456789abcdef0123456789abcdef01234567';
   writeFileSync(path.join(proofDir, 'proof.md'), '## Summary\nValid proof without the requested binding.');
 
   const result = runGate(['--proof-dir', proofDir, '--sha', sha]);
 
-  assert.strictEqual(result.status, 1);
-  assert.strictEqual(result.output.verdict, 'FAIL');
+  assert.strictEqual(result.status, 0);
+  assert.strictEqual(result.output.verdict, 'PASS');
   assert.strictEqual(result.output.sha, sha);
-  assert.match(result.output.failures.join('\n'), /SHA binding not found/);
+  assert.deepStrictEqual(result.output.failures, []);
+  assert.match(result.output.warnings.join('\n'), /advisory only/);
 });
 
 test('passes when sha is passed and found in proof files', () => {
