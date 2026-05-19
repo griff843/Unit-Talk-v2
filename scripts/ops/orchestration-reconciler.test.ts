@@ -1,7 +1,11 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import test from 'node:test';
 import {
   buildOrchestrationReconcilerReport,
+  readConfiguredEnvValue,
   type BranchSnapshot,
   type LinearIssueSnapshot,
   type PullRequestSnapshot,
@@ -120,6 +124,69 @@ test('fails when an active lease branch is missing', () => {
   const entry = check(report.checks, 'ORCH-LEASE-BRANCH');
   assert.equal(entry.verdict, 'fail');
   assert.match(entry.detail, /branch is missing/);
+});
+
+test('fails when an active manifest branch is missing even without an active lease', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [],
+    manifests: [lane()],
+    branches: [],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  const entry = check(report.checks, 'ORCH-ACTIVE-MANIFEST-BRANCH');
+  assert.equal(entry.verdict, 'fail');
+  assert.match(entry.detail, /branch is missing/);
+  assert.equal(report.exit_code, 1);
+});
+
+test('fails when an active lease has no matching active manifest', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [lease()],
+    manifests: [],
+    branches: [branch()],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  const entry = check(report.checks, 'ORCH-LEASE-MANIFEST');
+  assert.equal(entry.verdict, 'fail');
+  assert.match(entry.detail, /no active lane manifest/);
+});
+
+test('fails when active lease and manifest branches disagree', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [lease({ branch: 'codex/utv2-1059-lease-branch' })],
+    manifests: [lane({ branch: 'codex/utv2-1059-manifest-branch' })],
+    branches: [
+      branch('codex/utv2-1059-lease-branch'),
+      branch('codex/utv2-1059-manifest-branch'),
+    ],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  const entry = check(report.checks, 'ORCH-LEASE-MANIFEST');
+  assert.equal(entry.verdict, 'fail');
+  assert.match(entry.detail, /does not match manifest branch/);
+});
+
+test('matches manifests and leases with normalized issue IDs', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear()],
+    leases: [lease({ issue_id: 'utv2-1059' })],
+    manifests: [lane({ issue_id: 'utv2-1059' })],
+    branches: [branch()],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  assert.equal(check(report.checks, 'ORCH-LINEAR-ACTIVE-RECORD').verdict, 'pass');
+  assert.equal(check(report.checks, 'ORCH-LEASE-MANIFEST').verdict, 'pass');
 });
 
 test('fails when an open PR is not recorded in the manifest PR URL', () => {
@@ -269,4 +336,30 @@ test('passes when Linear, lease, manifest, branch, PR, and checks agree', () => 
   assert.equal(report.exit_code, 0);
   assert.equal(report.summary.fail, 0);
   assert.equal(report.summary.stale_reclaim_required, 0);
+});
+
+test('reads Linear token from repo env files when process env is empty', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-reconcile-env-'));
+  try {
+    fs.writeFileSync(path.join(root, 'local.env'), 'LINEAR_API_TOKEN=\n', 'utf8');
+    fs.writeFileSync(path.join(root, '.env'), 'LINEAR_API_TOKEN=lin_from_env\n', 'utf8');
+
+    assert.equal(readConfiguredEnvValue('LINEAR_API_TOKEN', root, {}), 'lin_from_env');
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('process env wins over repo env files for reconciler token lookup', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'utv2-reconcile-env-'));
+  try {
+    fs.writeFileSync(path.join(root, 'local.env'), 'LINEAR_API_TOKEN=lin_from_file\n', 'utf8');
+
+    assert.equal(
+      readConfiguredEnvValue('LINEAR_API_TOKEN', root, { LINEAR_API_TOKEN: 'lin_from_process' }),
+      'lin_from_process',
+    );
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
 });
