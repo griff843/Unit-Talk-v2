@@ -14,12 +14,20 @@
     "scripts/ops/ops-merge-wrapper.ts",
     "scripts/ops/ops-merge-wrapper.test.ts",
     ".claude/commands/dispatch.md",
-    ".claude/commands/dispatch-board.md"
+    ".claude/commands/dispatch-board.md",
+    ".ops/sync/UTV2-1061.yml",
+    "docs/06_status/lanes/UTV2-1061.json",
+    "package.json"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
+  "execution_location": {
+    "mode": "main-control",
+    "cwd": ".",
+    "package_install": "not_required"
+  },
   "started_at": "2026-05-18T23:56:40.000Z",
-  "heartbeat_at": "2026-05-18T23:56:40.000Z",
+  "heartbeat_at": "2026-05-19T01:00:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": "dispatch-auto",
