@@ -1,0 +1,13 @@
+[
+  {
+    "id": "t1-pm-merge-gate",
+    "description": "T1 PRs require PM verdict (plan approval + merge approval) and DB tests before merge — two explicit PM touchpoints",
+    "trigger": "pr_open",
+    "conditions": {
+      "tier": ["T1"]
+    },
+    "actions": ["require_pm_verdict", "require_test_db"],
+    "escalate_to_griff": true,
+    "rationale": "DELEGATION_POLICY.md §Tier C: T1 runtime changes require plan approval and merge approval. three-brain Rule 1: T1 escalate_to_griff = true (plan + merge). CLAUDE.md verification table: T1 merge authority = PM t1-approved label."
+  }
+]

@@ -1,0 +1,18 @@
+[
+  {
+    "id": "post-merge-qa-runtime-delivery",
+    "description": "After T2/T3 merges touching runtime delivery or UI paths, run QA experience suite to catch surface regressions",
+    "trigger": "post_merge",
+    "conditions": {
+      "tier": ["T2", "T3"],
+      "paths": [
+        "apps/worker/**",
+        "apps/command-center/**",
+        "apps/api/**"
+      ]
+    },
+    "actions": ["pnpm qa:experience"],
+    "escalate_to_griff": false,
+    "rationale": "three-brain Rule 8 (QA Agent: post-merge surface verification): after T2/T3 PRs touching apps/command-center/** or apps/worker/**, trigger pnpm qa:experience. Extended here to include apps/api/** per r1-r5-rules.json operator-ui and lifecycle-fsm scope."
+  }
+]

@@ -1,0 +1,24 @@
+[
+  {
+    "id": "t1-route-to-claude",
+    "description": "T1 issues always route to Claude by default; Codex is only permitted under explicit guardrails described in three-brain Rule 1",
+    "trigger": "dispatch",
+    "conditions": {
+      "tier": ["T1"]
+    },
+    "actions": ["route_to_claude"],
+    "escalate_to_griff": true,
+    "rationale": "three-brain Rule 1: tier:T1 → executor = Claude by default, escalate_to_griff = true (plan + merge). Codex is permitted only when all five Rule 1 guardrails are met; this policy represents the default routing path."
+  },
+  {
+    "id": "dangerous-class-route-to-claude",
+    "description": "Dangerous-class work (Runtime, Migration, Modeling, Data/Canonical) always routes to Claude — Codex is never authorized for these lane types",
+    "trigger": "dispatch",
+    "conditions": {
+      "work_class": ["dangerous"]
+    },
+    "actions": ["route_to_claude"],
+    "escalate_to_griff": false,
+    "rationale": "three-brain Rule 2 and LANE_CONCURRENCY_POLICY.md §10 ineligible work classes: Runtime, Migration, Modeling, and Data/Canonical lanes are Claude-only. Codex CLI is restricted to safe work classes (Governance, Hygiene, Verification, Delivery/UI). DELEGATION_POLICY.md: Codex lane is never authorized for Tier C work."
+  }
+]
