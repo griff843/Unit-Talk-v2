@@ -22,6 +22,17 @@ import {
 } from './ops/shared.js';
 import { defaultLeaseOwner, reserveLease } from './ops/lease-registry.js';
 
+const CANONICAL_LANE_TYPES = new Set([
+  'runtime',
+  'modeling',
+  'verification',
+  'hygiene',
+  'migration',
+  'governance',
+  'delivery-ui',
+  'data-canonical',
+]);
+
 type LinearIssue = {
   id: string;
   identifier: string;
@@ -246,12 +257,35 @@ function runLaneStart(
   tier: string,
   branch: string,
   files: string[],
+  laneType: string,
 ): ChildResult {
-  const args = ['ops:lane-start', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli'];
+  const args = ['ops:lane-start', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli'];
   for (const filePath of files) {
     args.push('--files', filePath);
   }
   return runPnpm(args);
+}
+
+function inferLaneType(issue: LinearIssue, explicitLaneType: string | undefined): string {
+  if (explicitLaneType) {
+    if (!CANONICAL_LANE_TYPES.has(explicitLaneType)) {
+      throw new Error(`Invalid --lane-type ${explicitLaneType}; use one of ${[...CANONICAL_LANE_TYPES].join(', ')}`);
+    }
+    return explicitLaneType;
+  }
+
+  const labels = (issue.labels?.nodes ?? []).map((label) => label.name.toLowerCase());
+  const hasLabel = (pattern: RegExp) => labels.some((label) => pattern.test(label));
+  if (hasLabel(/migration/)) return 'migration';
+  if (hasLabel(/modeling/)) return 'modeling';
+  if (hasLabel(/data|canonical/)) return 'data-canonical';
+  if (hasLabel(/delivery|ui/)) return 'delivery-ui';
+  if (hasLabel(/verification|proof/)) return 'verification';
+  if (hasLabel(/hygiene/)) return 'hygiene';
+  if (hasLabel(/governance|tooling|hardening/)) return 'governance';
+  if (hasLabel(/runtime/)) return 'runtime';
+
+  throw new Error('Missing required --lane-type; unable to infer a canonical lane type from Linear labels');
 }
 
 function buildVerificationLines(manifest: LaneManifest): string[] {
@@ -401,6 +435,7 @@ async function main(): Promise<number> {
     const forbiddenFiles = parseForbiddenCsv(getFlag(flags, 'forbidden'));
     const packetOut = getFlag(flags, 'packet-out');
     const preflightTokenFlag = getFlag(flags, 'preflight-token');
+    const explicitLaneType = getFlag(flags, 'lane-type');
     const env = loadEnvironment();
     const linearToken = env.LINEAR_API_TOKEN?.trim();
 
@@ -419,9 +454,11 @@ async function main(): Promise<number> {
     validateBranchName(branch);
 
     const issue = await fetchIssue(issueId, linearToken);
+    const laneType = inferLaneType(issue, explicitLaneType);
     if (explain) {
       process.stderr.write(`Fetched ${issue.identifier}: ${issue.title}\n`);
       process.stderr.write(`State: ${issue.state?.name ?? 'unknown'}\n`);
+      process.stderr.write(`Lane type: ${laneType}\n`);
     }
 
     let preflightRelativePath = relativeToRoot(preflightTokenPathForBranch(branch));
@@ -464,7 +501,7 @@ async function main(): Promise<number> {
         branch,
         preflight_token: preflightRelativePath,
         details: {
-          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', 'codex-cli', ...files.flatMap((entry) => ['--files', entry])],
+          would_run_lane_start: ['pnpm', 'ops:lane-start', '--', issueId, '--tier', tier, '--branch', branch, '--lane-type', laneType, '--executor', 'codex-cli', ...files.flatMap((entry) => ['--files', entry])],
           would_write_packet: relativeToRoot(packetPathForIssue(issueId, packetOut)),
           tier_verification_hint: readTierVerificationHint(tier),
         },
@@ -512,7 +549,7 @@ async function main(): Promise<number> {
       return 1;
     }
 
-    const laneStart = runLaneStart(issueId, tier, branch, files);
+    const laneStart = runLaneStart(issueId, tier, branch, files, laneType);
     if (laneStart.status !== 0) {
       if (laneStart.stdout) {
         process.stdout.write(`${laneStart.stdout}\n`);

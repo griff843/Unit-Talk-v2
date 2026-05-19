@@ -95,6 +95,13 @@ test('codex-dispatch forwards --fast to ops:preflight', () => {
   assert.match(source, /args\.push\('--fast'\)/, 'dispatch should forward --fast to preflight');
 });
 
+test('codex-dispatch starts canonical lane types with codex-cli executor', () => {
+  const source = fs.readFileSync(path.join(ROOT, 'scripts', 'codex-dispatch.ts'), 'utf8');
+  assert.match(source, /inferLaneType/, 'dispatch should infer or accept a canonical lane type');
+  assert.match(source, /--executor', 'codex-cli'/, 'lane-start should receive executor=codex-cli');
+  assert.doesNotMatch(source, /--lane-type', 'codex-cli'/, 'dispatch must not use legacy lane_type=codex-cli');
+});
+
 test('dispatch skill documents the Codex lane workflow', () => {
   const skill = fs.readFileSync(
     path.join(ROOT, '.agents', 'skills', 'dispatch', 'SKILL.md'),
