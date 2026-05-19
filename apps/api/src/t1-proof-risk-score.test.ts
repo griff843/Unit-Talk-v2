@@ -81,7 +81,7 @@ test('UTV2-1022: submitted pick persists riskScore and riskModifier in promotion
   const fixtureId = `utv2-1022-risk-${runId}`;
 
   const submission: SubmissionPayload = {
-    source: 'manual',
+    source: 'smart-form',
     market: 'nba-spread',
     selection: `UTV2-1022 RISK PROOF ${fixtureId}`,
     line: -3.5,
@@ -141,7 +141,7 @@ test('UTV2-1022: risk scoring is deterministic — same inputs produce same prom
   const runId = randomUUID();
 
   const makePayload = (suffix: string): SubmissionPayload => ({
-    source: 'manual',
+    source: 'smart-form',
     market: 'nfl-spread',
     selection: `UTV2-1022 DETERMINISM ${suffix}`,
     line: 3.0,
