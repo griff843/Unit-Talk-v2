@@ -17,7 +17,8 @@ on:
 
 permissions:
   contents: read
-  pull-requests: read
+  pull-requests: write
+  issues: write
 
 jobs:
   check:
@@ -118,12 +119,16 @@ jobs:
               'Resolve by: waiting for the other lane to merge, or coordinating scope with the lane owner.'
             ];
 
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.payload.pull_request.number,
-              body: lines.join('\n')
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.payload.pull_request.number,
+                body: lines.join('\n')
+              });
+            } catch (commentErr) {
+              core.warning(`Could not post conflict comment: ${commentErr.message}`);
+            }
 
             core.setFailed(
               `File scope conflict: ${conflicts.length} file(s) overlap with active lane locks.`

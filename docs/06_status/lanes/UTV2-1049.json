@@ -12,7 +12,8 @@
     "docs/05_operations/agent-role-contracts.md",
     "docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md",
     ".ops/sync/UTV2-1049.yml",
-    ".lane/lanes/governance.yml"
+    ".lane/lanes/governance.yml",
+    ".github/workflows/file-scope-lock-check.yml"
   ],
   "preflight_token": "dispatch-auto",
   "created_by": "claude",
