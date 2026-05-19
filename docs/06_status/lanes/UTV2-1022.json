@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".lane/lanes/modeling.yml",
     ".ops/sync/UTV2-1022.yml",
     "apps/api/src/golden-regression.test.ts",
     "apps/api/src/model-registry.test.ts",

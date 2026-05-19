@@ -1,4 +1,4 @@
-# UTV2-1022 Diff Summary
+## Summary — UTV2-1022
 
 **Issue:** Implement `computeRiskScore()` per `RISK_VOLATILITY_STANDARD.md`
 **Branch:** `codex/utv2-1022-implement-computeriskscore`
