@@ -1,4 +1,4 @@
-# Runtime Verification — UTV2-1024
+## Runtime Verification — UTV2-1024
 
 Implementation SHA: 00fecb8de87d465752e910164204338302849e6c
 

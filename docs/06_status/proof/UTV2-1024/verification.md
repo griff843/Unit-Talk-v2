@@ -1,4 +1,5 @@
-pnpm verify — UTV2-1024
+## Verification — UTV2-1024
+
 Branch: codex/utv2-1024-encode-t1-checklist-as-failing-ci
 SHA: 00fecb8de87d465752e910164204338302849e6c
 Date: 2026-05-19
