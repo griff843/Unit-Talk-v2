@@ -1,4 +1,4 @@
-# System State — 2026-05-18 16:13
+# System State — 2026-05-19 04:08
 
 ## Branch
 
@@ -13,8 +13,8 @@ Phase 7A
 Clean
 
 ## Recent Commits
-b261880 Merge pull request #758 from griff843/codex/utv2-1053-dispatch-time-local-lease-registry
-19cb7a3 chore(ops): UTV2-1053 refresh required checks
-1d9a47b feat(ops): UTV2-1053 add dispatch lease registry
-b880b29 feat(ops): UTV2-1044 add automation coverage gate
-642c50d chore(lanes): close UTV2-1017, UTV2-1039 — T1 manifests sealed with merge SHAs
+b820a6e Merge pull request #769 from griff843/codex/utv2-1046-proof-auditor-gate-clean
+177a987 feat(governance): UTV2-1046 proof-auditor automatic required gate
+dcb9162 feat(ops): UTV2-1061 mandatory merge mutex wrapper (#768)
+313543b fix(lanes): sync UTV2-1046/1061 manifests on main with expanded file_scope_lock
+59d7a94 fix(ops): patch orchestration tooling and manifest validation
