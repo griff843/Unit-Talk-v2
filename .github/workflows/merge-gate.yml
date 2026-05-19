@@ -9,7 +9,9 @@
 # or missing approval = no merge.
 #
 # T1: requires t1-approved label + PM_VERDICT: APPROVED from CODEOWNERS
-# T2: requires GitHub PR review approval (Claude `gh pr review --approve` satisfies this — no PM_VERDICT)
+# T2: pm-verdict/v1 APPROVED comment from CODEOWNERS is the canonical approval path
+#   (ratified 2026-05-18, UTV2-979). GitHub PR review approval is also accepted.
+#   Auto-merge via `gh pr merge --auto --squash` triggers once verdict + all checks pass.
 # T3: passes automatically (CI + executor-result-validator are separate gates)
 #
 # governance:pause label on PR = hard block regardless of tier.
@@ -151,9 +153,8 @@ jobs:
                 return;
               }
 
-              // ── 6. T2: GitHub PR review approval (no PM_VERDICT required) ──
-              // Fallback: pm-verdict/v1 APPROVED from CODEOWNERS satisfies T2 for P0 lanes
-              // where PM = executor and GitHub's self-approval restriction applies.
+              // ── 6. T2: pm-verdict/v1 is the canonical approval path (UTV2-979, 2026-05-18) ──
+              // GitHub PR review approval is also accepted. Either satisfies the gate.
               if (tier === 'T2') {
                 const { data: reviews } = await github.rest.pulls.listReviews({
                   owner, repo, pull_number: prNumber, per_page: 100
@@ -172,9 +173,9 @@ jobs:
                   });
                   if (!hasPmVerdictApproval) {
                     errors.push(
-                      'T2 requires at least one GitHub PR review approval, or a pm-verdict/v1 APPROVED comment from a CODEOWNERS member. ' +
-                      'Executor must run `gh pr review <number> --approve` after diff review ' +
-                      '(or PM posts pm-verdict/v1 when self-approval is structurally blocked).'
+                      'T2 requires a pm-verdict/v1 APPROVED comment from a CODEOWNERS member, ' +
+                      'or a GitHub PR review approval. ' +
+                      'PM posts pm-verdict/v1 as the canonical path; executor runs `gh pr review <number> --approve` as the equivalent.'
                     );
                   }
                 }

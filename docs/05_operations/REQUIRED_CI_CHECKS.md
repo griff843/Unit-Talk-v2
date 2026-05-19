@@ -90,6 +90,32 @@ Use the workflow's job id as the `name` — GitHub's branch protection UI lists 
 - **Merge relevance:** proof regression gate for lifecycle, submission, settlement, promotion, scoring, delivery, recap, and member-lifecycle changes.
 - **Notes:** live proof execution requires Supabase credentials; when they are absent, the workflow reports a notice and skips live proof scripts.
 
+### 4.3 `Merge Gate`
+
+- **Owning workflow:** `.github/workflows/merge-gate.yml`
+- **Job:** `gate`
+- **Trigger:** `pull_request` (synchronize, reopened, labeled), `pull_request_review` (submitted), `issue_comment` containing `PM_VERDICT:`, `workflow_dispatch`
+- **Required on main:** yes, always.
+- **Merge relevance:** tier-aware authorization gate. Enforces approval policy per tier before merge is allowed.
+
+**Tier approval policy (solo-maintainer context, ratified 2026-05-18, UTV2-979):**
+
+| Tier | Canonical approval path | Also accepted |
+|------|------------------------|---------------|
+| T1 | `t1-approved` label + `PM_VERDICT: APPROVED` (schema: pm-verdict/v1) from CODEOWNERS | none — both required |
+| T2 | `PM_VERDICT: APPROVED` comment (schema: pm-verdict/v1) from CODEOWNERS | GitHub PR review approval |
+| T3 | Auto-pass | — |
+
+**pm-verdict/v1 comment format:**
+```
+PM_VERDICT: APPROVED
+schema: pm-verdict/v1
+Issue: UTV2-###
+```
+Must be posted by a member listed in `.github/CODEOWNERS`. Bot-authored comments are rejected.
+
+**Auto-merge:** Repository auto-merge is enabled (`allow_auto_merge: true`). After pm-verdict/v1 triggers a Merge Gate re-evaluation and all required checks pass, the PR merges automatically. Enable auto-merge when opening each T2 PR: `gh pr merge --auto --squash <PR>`.
+
 ---
 
 ## 5. Workflows present but NOT in the required inventory
