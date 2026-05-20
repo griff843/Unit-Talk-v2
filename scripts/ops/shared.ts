@@ -464,7 +464,21 @@ export function normalizeRepoRelativePath(
   return normalized;
 }
 
+const PROOF_PATH_PREFIX = 'docs/06_status/proof/';
+
+/**
+ * Normalize a file-scope path. Paths under `docs/06_status/proof/**` are
+ * intent declarations — the lane will create them — so the existence check
+ * is skipped for those entries. All other paths must already exist on disk.
+ */
 export function normalizeFileScopePath(input: string): string {
+  // Perform structural normalization first (without existence check).
+  const normalized = normalizeRepoRelativePath(input);
+  // Proof paths are intent declarations; skip the existence check.
+  if (normalized.startsWith(PROOF_PATH_PREFIX)) {
+    return normalized;
+  }
+  // All other paths must exist on disk.
   return normalizeRepoRelativePath(input, { requireExistingFile: true });
 }
 
