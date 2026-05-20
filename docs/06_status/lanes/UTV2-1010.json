@@ -11,10 +11,13 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "docs/06_status/proof/UTV2-1010"
+    "docs/06_status/proof/UTV2-1010",
+    "docs/06_status/lanes/UTV2-1010.json",
+    ".ops/sync/UTV2-1010.yml"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1010/evidence.json"
+    "docs/06_status/proof/UTV2-1010/evidence.json",
+    "docs/06_status/proof/UTV2-1010/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-20T06:15:15.220Z",
