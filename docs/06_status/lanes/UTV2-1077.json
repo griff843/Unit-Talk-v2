@@ -14,13 +14,13 @@
   "file_scope_lock": [
     "scripts/ops/generate-preflight-token.ts",
     "docs/06_status/proof/UTV2-1077/diff-summary.md",
-    "docs/06_status/proof/UTV2-1077/verification.log",
+    "docs/06_status/proof/UTV2-1077/verification.md",
     "docs/06_status/lanes/UTV2-1077.json",
     ".ops/sync/UTV2-1077.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1077/diff-summary.md",
-    "docs/06_status/proof/UTV2-1077/verification.log"
+    "docs/06_status/proof/UTV2-1077/verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-05-20T03:41:12.171Z",
