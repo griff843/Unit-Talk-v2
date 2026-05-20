@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1038",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1038-atomic-path-failure-injection-proof",
+  "branch": "codex/utv2-1038-atomic-path-failure-injection-proof",
+  "base_branch": "main",
+  "commit_sha": "854e658c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/811",
+  "files_changed": [
+    "apps/api/src/run-audit-service.ts",
+    "apps/api/src/run-audit-service.test.ts"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/run-audit-service.ts",
+    "apps/api/src/submission-service.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/api/src/run-audit-service.test.ts",
+    "docs/06_status/lanes/UTV2-1038.json",
+    ".ops/sync/UTV2-1038.yml",
+    "docs/06_status/proof/UTV2-1038/evidence.json",
+    "docs/06_status/proof/UTV2-1038/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1038/evidence.json",
+    "docs/06_status/proof/UTV2-1038/verification.md"
+  ],
+  "status": "pr-open",
+  "started_at": "2026-05-20T06:29:01.950Z",
+  "heartbeat_at": "2026-05-20T06:29:01.950Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1038-atomic-path-failure-injection-proof.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1038-atomic-path-failure-injection-proof",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
