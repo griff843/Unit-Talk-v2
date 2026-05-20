@@ -1,14 +1,16 @@
 # UTV2-1079 — Verification
 
-## pnpm verify: PASS
-Tests: 113 pass, 0 fail
+Branch: claude/utv2-1079-add-gha-reconcile-stale-lanes
+SHA: 393b0e6e
 
-## R-level compliance: PASS
-No R-level artifacts required for this diff.
+## Verification
 
-## Acceptance criteria
-- [x] Workflow file exists at .github/workflows/reconcile-stale-lanes.yml
-- [x] Runs on schedule (cron: '0 */6 * * *') and workflow_dispatch
+pnpm verify: PASS — 113 tests pass, 0 fail
+R-level: PASS — no artifacts required
+
+Acceptance criteria:
+- [x] .github/workflows/reconcile-stale-lanes.yml created
+- [x] Runs on cron '0 */6 * * *' and workflow_dispatch
 - [x] Calls pnpm ops:reconcile --apply
-- [x] Commits changed manifests (no-op if nothing changed)
+- [x] No-op commit guard (git diff --cached --quiet)
 - [x] pnpm verify green
