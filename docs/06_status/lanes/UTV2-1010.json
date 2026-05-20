@@ -22,10 +22,10 @@
     "docs/06_status/proof/UTV2-1010/evidence.json",
     "docs/06_status/proof/UTV2-1010/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T06:15:15.220Z",
-  "heartbeat_at": "2026-05-20T07:11:22.451Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T07:12:07.807Z",
+  "closed_at": "2026-05-20T07:12:07.807Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1010-resolve-dead-letter-outbox-rows.json",
   "created_by": "claude",
@@ -73,6 +73,21 @@
       "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T07:12:03.797Z",
+      "verdict": "pass",
+      "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-20T07:12:07.807Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "55a9c9b4da25ad20292dab213288fd5e8d571634",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
     }
   ],
   "reopen_history": [],
