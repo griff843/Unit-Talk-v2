@@ -1,5 +1,9 @@
 # Diff Summary — UTV2-1078
 
+## Summary
+
+Fix: `normalizeFileScopePath` in `scripts/ops/shared.ts` now accepts an `allowMissing` option. When set, the function returns the path as-is if the file doesn't exist instead of throwing `ENOENT`. This prevents `ops:lane-start` from crashing when `expected_proof_paths` reference files that haven't been created yet at lane start time.
+
 ## Issue
 Allow non-existent proof paths in `normalizeFileScopePath` so `ops:lane-start` does not crash when `expected_proof_paths` reference files that don't exist yet at lane creation time.
 
