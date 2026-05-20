@@ -83,6 +83,12 @@ function branchExistsAnywhere(branch: string): { ok: boolean; warning?: string }
     return { ok: true };
   }
 
+  // Fallback: git branch --list is more reliable in concurrent test environments
+  const list = git(['branch', '--list', branch]);
+  if (list.ok && list.stdout.trim().length > 0) {
+    return { ok: true };
+  }
+
   const remote = git(['ls-remote', '--exit-code', '--heads', 'origin', branch]);
   if (remote.ok) {
     return { ok: true };
