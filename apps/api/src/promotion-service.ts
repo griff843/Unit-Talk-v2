@@ -19,6 +19,7 @@ import {
 import {
   applyBandDowngrades,
   computeBoardFitScore,
+  computeRiskScore,
   computeUniquenessWithMeta,
   evaluatePromotionEligibility,
   generatePickNarrative,
@@ -297,6 +298,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
   const winnerReason = summarizePromotionReason(winnerDecision);
   const winnerBand = computeDeterministicBand(canonicalPick, scoreInputs, winnerDecision);
 
+  // Compute risk score once for this pick (pure fn, same result for all policies)
+  const riskResult = computeRiskScore(canonicalPick, scoreInputs);
+
   const makeSnapshot = (
     policy: PromotionPolicy,
     boardState: (typeof boardStates)[number],
@@ -322,6 +326,9 @@ export async function evaluateAllPoliciesEagerAndPersist(
       ...(scoreInputs.uniquenessInputs
         ? { uniquenessInputs: scoreInputs.uniquenessInputs }
         : {}),
+      riskScore: riskResult.score,
+      riskComponents: riskResult.components,
+      riskModifier: riskResult.modifier,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -578,6 +585,9 @@ async function buildSmartFormQualifiedResult(
     policies.map((policy, index) => [policy.target, decisions[index]!] as const),
   );
 
+  // Compute risk score once for this pick (pure fn, same result for all policies)
+  const smartFormRiskResult = computeRiskScore(canonicalPick, scoreInputs);
+
   const makeSnapshot = (
     policy: PromotionPolicy,
     boardState: (typeof boardStates)[number],
@@ -598,6 +608,9 @@ async function buildSmartFormQualifiedResult(
         : {}),
       edgeMethod: scoreInputs.edgeMethod,
       providerCoverageState: scoreInputs.providerCoverageState,
+      riskScore: smartFormRiskResult.score,
+      riskComponents: smartFormRiskResult.components,
+      riskModifier: smartFormRiskResult.modifier,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,
@@ -864,6 +877,7 @@ async function persistPromotionDecisionForPick(
 
   const reason = summarizePromotionReason(decision);
   const band = computeDeterministicBand(canonicalPick, scoreInputs, decision);
+  const overrideRiskResult = computeRiskScore(canonicalPick, scoreInputs);
   const snapshot: PromotionDecisionSnapshot = {
     band,
     scoringProfile: activeScoringProfile.name,
@@ -887,6 +901,9 @@ async function persistPromotionDecisionForPick(
       ...(scoreInputs.uniquenessInputs
         ? { uniquenessInputs: scoreInputs.uniquenessInputs }
         : {}),
+      riskScore: overrideRiskResult.score,
+      riskComponents: overrideRiskResult.components,
+      riskModifier: overrideRiskResult.modifier,
     },
     gateInputs: {
       approvalStatus: canonicalPick.approvalStatus,

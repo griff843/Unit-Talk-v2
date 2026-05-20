@@ -78,9 +78,12 @@ test('calculateScore uses best-bets weights for best-bets policy', () => {
   const decision = evaluatePromotionEligibility(input, bestBetsPromotionPolicy);
   // edge=90, trust=90, readiness=80, uniqueness=84, boardFit=89
   // BB weights: edge=0.35, trust=0.25, readiness=0.20, uniqueness=0.10, boardFit=0.10
-  // expected total: 90*0.35 + 90*0.25 + 80*0.20 + 84*0.10 + 89*0.10
-  //               = 31.5 + 22.5 + 16 + 8.4 + 8.9 = 87.3
-  assert.ok(Math.abs(decision.score - 87.3) < 0.01, `Expected ~87.3 got ${decision.score}`);
+  // raw total: 90*0.35 + 90*0.25 + 80*0.20 + 84*0.10 + 89*0.10 = 31.5+22.5+16+8.4+8.9 = 87.3
+  // riskScore (no odds/kelly): varianceScore=50, kellyScore=0, lineMovement=50, dispersion=50
+  //   = 50*0.35 + 0*0.35 + 50*0.20 + 50*0.10 = 32.5
+  // modifier = 1 - 0.15 + 0.15*(32.5/100) = 0.89875
+  // modified total: 87.3 * 0.89875 ≈ 78.53
+  assert.ok(Math.abs(decision.score - 78.52635) < 0.01, `Expected ~78.53 got ${decision.score}`);
   assert.deepEqual(decision.explanation.weights, bestBetsPromotionPolicy.weights);
 });
 
@@ -88,9 +91,9 @@ test('calculateScore uses trader-insights weights for trader-insights policy', (
   const input = makeBaseInput(traderInsightsPromotionPolicy);
   const decision = evaluatePromotionEligibility(input, traderInsightsPromotionPolicy);
   // Same inputs, but TI weights: edge=0.40, trust=0.30, readiness=0.15, uniqueness=0.10, boardFit=0.05
-  // expected total: 90*0.40 + 90*0.30 + 80*0.15 + 84*0.10 + 89*0.05
-  //               = 36 + 27 + 12 + 8.4 + 4.45 = 87.85
-  assert.ok(Math.abs(decision.score - 87.85) < 0.01, `Expected ~87.85 got ${decision.score}`);
+  // raw total: 90*0.40 + 90*0.30 + 80*0.15 + 84*0.10 + 89*0.05 = 36+27+12+8.4+4.45 = 87.85
+  // riskScore=32.5, modifier=0.89875 → modified: 87.85 * 0.89875 ≈ 79.02
+  assert.ok(Math.abs(decision.score - 79.02107) < 0.01, `Expected ~79.02 got ${decision.score}`);
   assert.deepEqual(decision.explanation.weights, traderInsightsPromotionPolicy.weights);
 });
 
@@ -100,10 +103,9 @@ test('calculateScore uses exclusive-insights weights for exclusive-insights poli
   const eiInput = { ...input, pick: { ...input.pick, confidence: 0.95 } };
   const decision = evaluatePromotionEligibility(eiInput, exclusiveInsightsPromotionPolicy);
   // EI weights: edge=0.45, trust=0.30, readiness=0.10, uniqueness=0.10, boardFit=0.05
-  // edge=90 < 90 threshold (fails minimumEdge=90), so this should be suppressed
-  // But the score itself should still use EI weights:
-  // 90*0.45 + 90*0.30 + 80*0.10 + 84*0.10 + 89*0.05 = 40.5 + 27 + 8 + 8.4 + 4.45 = 88.35
-  assert.ok(Math.abs(decision.score - 88.35) < 0.01, `Expected ~88.35 got ${decision.score}`);
+  // raw total: 90*0.45 + 90*0.30 + 80*0.10 + 84*0.10 + 89*0.05 = 40.5+27+8+8.4+4.45 = 88.35
+  // riskScore=32.5, modifier=0.89875 → modified: 88.35 * 0.89875 ≈ 79.47
+  assert.ok(Math.abs(decision.score - 79.470825) < 0.01, `Expected ~79.47 got ${decision.score}`);
   assert.deepEqual(decision.explanation.weights, exclusiveInsightsPromotionPolicy.weights);
 });
 

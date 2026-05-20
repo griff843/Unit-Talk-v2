@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1022",
+  "lane_type": "modeling",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1022-implement-computeriskscore",
+  "branch": "codex/utv2-1022-implement-computeriskscore",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/lanes/modeling.yml",
+    ".ops/sync/UTV2-1022.yml",
+    "apps/api/src/golden-regression.test.ts",
+    "apps/api/src/model-registry.test.ts",
+    "apps/api/src/promotion-edge-integration.test.ts",
+    "apps/api/src/promotion-service.ts",
+    "apps/api/src/submission-service.test.ts",
+    "apps/api/src/t1-proof-risk-score.test.ts",
+    "docs/05_operations/RISK_VOLATILITY_STANDARD.md",
+    "docs/06_status/lanes/UTV2-1022.json",
+    "docs/06_status/proof/UTV2-1022/diff-summary.md",
+    "docs/06_status/proof/UTV2-1022/verification.md",
+    "package.json",
+    "packages/contracts/src/promotion.ts",
+    "packages/domain/src/promotion-conviction.test.ts",
+    "packages/domain/src/promotion.ts",
+    "packages/domain/src/risk-score.test.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1022/diff-summary.md",
+    "docs/06_status/proof/UTV2-1022/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-19T22:34:11.673Z",
+  "heartbeat_at": "2026-05-19T22:34:11.673Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1022-implement-computeriskscore.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1022-implement-computeriskscore",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

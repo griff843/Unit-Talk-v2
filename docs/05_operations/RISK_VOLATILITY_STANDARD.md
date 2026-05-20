@@ -1,6 +1,6 @@
 # Risk / Volatility Standard
 
-**Status:** RATIFIED 2026-04-15
+**Status:** SHIPPED 2026-05-19 (UTV2-1022)
 **Authority:** UTV2-607 — audit prerequisite: add an explicit risk/volatility component to the routing score.
 **Depends on:** `packages/contracts/src/promotion.ts` (PromotionScoreInputs, PromotionScoreBreakdown), `packages/domain/src/promotion.ts` (calculateScore, evaluatePromotionEligibility), `packages/domain/src/risk/kelly-sizer.ts`, `packages/domain/src/bands/thresholds.ts`
 
@@ -170,15 +170,9 @@ This means:
 
 The modifier constant `RISK_MODIFIER_WEIGHT = 0.15` is version-stamped and must be updated in the score version string when changed.
 
-### Score version bump
+### Score version bump (deferred)
 
-When the risk modifier is activated, bump the policy version strings:
-
-- `best-bets-v2` → `best-bets-v3`
-- `trader-insights-v2` → `trader-insights-v3`
-- `exclusive-insights-v2` → `exclusive-insights-v3`
-
-All existing `PromotionDecisionSnapshot` rows written under v2 remain valid for replay against v2 policies. Replay against v3 requires the `riskScore` field to be present in the snapshot.
+The risk modifier was shipped under the existing v2 policy version strings (`best-bets-v2`, `trader-insights-v2`, `exclusive-insights-v2`). The v2 → v3 bump is deferred to a follow-on ticket to avoid broad snapshot replay migration at this time. The `riskScore`, `riskComponents`, and `riskModifier` fields are optional in `PromotionDecisionSnapshot.scoreInputs` for backward compatibility.
 
 ---
 
@@ -345,3 +339,4 @@ Snapshots written before v3 are replay-compatible with v2 policies only. Replayi
 | Date | Change | Authority |
 |------|--------|-----------|
 | 2026-04-15 | Initial ratification: 4-signal composite risk modifier, hard thresholds, snapshot extension, enforcement point | UTV2-607 |
+| 2026-05-19 | Shipped: `computeRiskScore()` implemented in `packages/domain/src/promotion.ts`, wired into `promotion-service.ts`, contracts extended, unit tests added, spec status updated to SHIPPED | UTV2-1022 |

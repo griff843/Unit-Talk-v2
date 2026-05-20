@@ -83,8 +83,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.65,
       promotionStatus: 'qualified',
       promotionTarget: 'exclusive-insights',
-      promotionScore: 97.19000000000001,
-      promotionReason: 'hard eligibility checks passed | promotion score 97.19 meets threshold 90.00',
+      promotionScore: 93.69116000000001,
+      promotionReason: 'hard eligibility checks passed | promotion score 93.69 meets threshold 90.00',
       promotionVersion: 'exclusive-insights-v2',
       metadata: {
         sport: 'NBA',
@@ -162,8 +162,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.72,
       promotionStatus: 'qualified',
       promotionTarget: 'best-bets',
-      promotionScore: 84.645,
-      promotionReason: 'hard eligibility checks passed | promotion score 84.64 meets threshold 70.00',
+      promotionScore: 76.1381775,
+      promotionReason: 'hard eligibility checks passed | promotion score 76.14 meets threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'MLB',
@@ -214,8 +214,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       confidence: 0.6,
       promotionStatus: 'suppressed',
       promotionTarget: null,
-      promotionScore: 60.49000000000001,
-      promotionReason: 'promotion score 60.49 is below threshold 70.00',
+      promotionScore: 55.953250000000004,
+      promotionReason: 'promotion score 55.95 is below threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'NFL',
@@ -288,8 +288,8 @@ const GOLDEN_SCENARIOS: GoldenScenario[] = [
       // UTV2-985 fail-closed: no odds → no market data → edge=0 → suppressed
       promotionStatus: 'suppressed',
       promotionTarget: null,
-      promotionScore: 60.49000000000001,
-      promotionReason: 'promotion score 60.49 is below threshold 70.00',
+      promotionScore: 54.41075500000001,
+      promotionReason: 'promotion score 54.41 is below threshold 70.00',
       promotionVersion: 'best-bets-v2',
       metadata: {
         sport: 'NHL',
