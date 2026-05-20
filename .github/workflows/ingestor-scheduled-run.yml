@@ -5,9 +5,9 @@ name: Ingestor Scheduled Run
 # Remove or disable this workflow once the daemon is running on Hetzner.
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'
   workflow_dispatch:
+    # Cron schedule removed 2026-05-20: persistent ingestor daemon on Hetzner replaced this bridge.
+    # Keep for manual diagnostic runs only.
 
 concurrency:
   group: ingestor-scheduled-run
