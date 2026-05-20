@@ -7,9 +7,13 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1079-add-gha-reconcile-stale-lanes",
   "branch": "claude/utv2-1079-add-gha-reconcile-stale-lanes",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "69bd106b183eb7eeb219ef3383b56e13baa7938a",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/813",
+  "files_changed": [
+    ".github/workflows/reconcile-stale-lanes.yml",
+    "docs/06_status/proof/UTV2-1079/diff-summary.md",
+    "docs/06_status/proof/UTV2-1079/verification.md"
+  ],
   "file_scope_lock": [
     ".claude/.state-stamp",
     ".github/workflows/reconcile-stale-lanes.yml",
@@ -19,9 +23,9 @@
     "docs/06_status/proof/UTV2-1079/diff-summary.md",
     "docs/06_status/proof/UTV2-1079/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-20T16:05:16.951Z",
-  "heartbeat_at": "2026-05-20T16:05:16.951Z",
+  "heartbeat_at": "2026-05-20T17:55:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1079-add-gha-reconcile-stale-lanes.json",
