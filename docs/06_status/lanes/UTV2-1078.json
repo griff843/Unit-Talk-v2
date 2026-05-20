@@ -12,7 +12,12 @@
   "pr_number": 804,
   "files_changed": [],
   "file_scope_lock": [
-    "scripts/ops/shared.ts"
+    "scripts/ops/shared.ts",
+    "scripts/ops/shared.test.ts",
+    "docs/06_status/proof/UTV2-1078/diff-summary.md",
+    "docs/06_status/proof/UTV2-1078/verification.log",
+    "docs/06_status/lanes/UTV2-1078.json",
+    ".ops/sync/UTV2-1078.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1078/diff-summary.md",
