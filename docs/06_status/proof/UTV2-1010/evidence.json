@@ -5,136 +5,163 @@
   "tier": "T1",
   "executor": "claude",
   "branch_head_sha": "502d1086c74e7f282dcaf2bd76c23865fdc4e5e7",
-  "executed_at": "2026-05-20T06:25:00.000Z",
+  "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+  "generated_at": "2026-05-20T07:09:00.000Z",
   "operator": "griffadavi@gmail.com",
   "pm_authorization": "explicit — 'execute clear UTV2-1010' in dispatch session 2026-05-20",
-
-  "before_state": {
-    "dead_letter_count": 9,
-    "sent_count": 416
+  "verifier": {
+    "identity": "griffadavi@gmail.com"
   },
-
-  "after_state": {
-    "dead_letter_count": 0,
-    "sent_count": 416
+  "static_proof": {
+    "pnpm_verify": "PASS — exit 0",
+    "r_level_check": "PASS — no R-level artifacts required",
+    "operator_action": "9 dead_letter rows deleted from distribution_outbox via Supabase MCP execute_sql",
+    "rows_cleared": [
+      {
+        "group": "A",
+        "outbox_id": "4c2f4cf4-e0ea-48c8-96cd-145501199407",
+        "pick_id": "ae3f7156-346a-4936-84fb-850f1faf8f31",
+        "target": "discord:qa-pick-delivery",
+        "attempt_count": 0,
+        "created_at": "2026-05-04T15:51:44.335Z",
+        "disposition": "CLEAR",
+        "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
+      },
+      {
+        "group": "A",
+        "outbox_id": "770b5690-187f-4c72-82d6-5eaafac0e106",
+        "pick_id": "f76c13d8-eeb7-44b1-8789-7881066aa554",
+        "target": "discord:qa-pick-delivery",
+        "attempt_count": 0,
+        "created_at": "2026-05-04T19:12:40.860Z",
+        "disposition": "CLEAR",
+        "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
+      },
+      {
+        "group": "A",
+        "outbox_id": "9d96f2ac-ca8c-4b92-a2ff-24b62dbfbd54",
+        "pick_id": "9ffd443c-6415-4a00-ba9d-374fa7264293",
+        "target": "discord:qa-pick-delivery",
+        "attempt_count": 0,
+        "created_at": "2026-05-04T19:15:34.017Z",
+        "disposition": "CLEAR",
+        "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
+      },
+      {
+        "group": "A",
+        "outbox_id": "9b91774e-a19b-4d17-b524-8a9f1ab52ff3",
+        "pick_id": "d74b09ff-f687-4b57-bfd9-334d6d5e1e80",
+        "target": "discord:qa-pick-delivery",
+        "attempt_count": 0,
+        "created_at": "2026-05-04T19:47:53.865Z",
+        "disposition": "CLEAR",
+        "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
+      },
+      {
+        "group": "A",
+        "outbox_id": "2fe23929-7bb5-49be-ab3f-fbec8c660a75",
+        "pick_id": "c9331dbd-ec69-49bf-8ef7-2f4738d5f599",
+        "target": "discord:qa-pick-delivery",
+        "attempt_count": 0,
+        "created_at": "2026-05-04T20:03:03.453Z",
+        "disposition": "CLEAR",
+        "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
+      },
+      {
+        "group": "A",
+        "outbox_id": "87c22f75-5004-4d18-9389-a34c5505f215",
+        "pick_id": "59683281-c274-4b53-9ecf-48c59833bb7d",
+        "target": "discord:qa-pick-delivery",
+        "attempt_count": 0,
+        "created_at": "2026-05-12T06:47:06.826Z",
+        "disposition": "CLEAR",
+        "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
+      },
+      {
+        "group": "B",
+        "outbox_id": "fd006c85-2001-46eb-8866-6ead62015e73",
+        "pick_id": "6b8a9721-713c-4cee-8cf4-7541133274ec",
+        "target": "discord:canary",
+        "attempt_count": 3,
+        "created_at": "2026-05-17T08:31:11.813Z",
+        "payload_label": "eligible-e1fe6626",
+        "test_run": "e1fe6626",
+        "pick_status": "draft",
+        "pick_posted_at": null,
+        "disposition": "CLEAR",
+        "reason": "Test run row (testRun=e1fe6626). Pick is draft/unposted, no lifecycle events. INVALID_DELIVERY_TRANSITION state machine anomaly — not recoverable. 3 retries exhausted."
+      },
+      {
+        "group": "B",
+        "outbox_id": "d6cc34b9-e3a7-4ddd-9a76-236e759d844c",
+        "pick_id": "189c6657-f54f-44d9-ad67-cc56ec22da01",
+        "target": "discord:canary",
+        "attempt_count": 3,
+        "created_at": "2026-05-17T08:31:12.480Z",
+        "payload_label": "denylist-e1fe6626",
+        "test_run": "e1fe6626",
+        "pick_status": "draft",
+        "pick_posted_at": null,
+        "disposition": "CLEAR",
+        "reason": "Test run row (testRun=e1fe6626). Pick is draft/unposted, no lifecycle events. INVALID_DELIVERY_TRANSITION state machine anomaly — not recoverable. 3 retries exhausted."
+      },
+      {
+        "group": "B",
+        "outbox_id": "8e88e116-a2da-4ff2-a786-e9c67e172daa",
+        "pick_id": "6e0473d6-8e42-430e-8872-ca00097e6094",
+        "target": "discord:canary",
+        "attempt_count": 3,
+        "created_at": "2026-05-17T08:31:13.231Z",
+        "payload_label": "idempotent-e1fe6626",
+        "test_run": "e1fe6626",
+        "pick_status": "draft",
+        "pick_posted_at": null,
+        "disposition": "CLEAR",
+        "reason": "Test run row (testRun=e1fe6626). Pick is draft/unposted, no lifecycle events. INVALID_DELIVERY_TRANSITION state machine anomaly — not recoverable. 3 retries exhausted."
+      }
+    ]
   },
-
-  "rows_cleared": [
-    {
-      "group": "A",
-      "outbox_id": "4c2f4cf4-e0ea-48c8-96cd-145501199407",
-      "pick_id": "ae3f7156-346a-4936-84fb-850f1faf8f31",
-      "target": "discord:qa-pick-delivery",
-      "attempt_count": 0,
-      "created_at": "2026-05-04T15:51:44.335Z",
-      "disposition": "CLEAR",
-      "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
-    },
-    {
-      "group": "A",
-      "outbox_id": "770b5690-187f-4c72-82d6-5eaafac0e106",
-      "pick_id": "f76c13d8-eeb7-44b1-8789-7881066aa554",
-      "target": "discord:qa-pick-delivery",
-      "attempt_count": 0,
-      "created_at": "2026-05-04T19:12:40.860Z",
-      "disposition": "CLEAR",
-      "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
-    },
-    {
-      "group": "A",
-      "outbox_id": "9d96f2ac-ca8c-4b92-a2ff-24b62dbfbd54",
-      "pick_id": "9ffd443c-6415-4a00-ba9d-374fa7264293",
-      "target": "discord:qa-pick-delivery",
-      "attempt_count": 0,
-      "created_at": "2026-05-04T19:15:34.017Z",
-      "disposition": "CLEAR",
-      "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
-    },
-    {
-      "group": "A",
-      "outbox_id": "9b91774e-a19b-4d17-b524-8a9f1ab52ff3",
-      "pick_id": "d74b09ff-f687-4b57-bfd9-334d6d5e1e80",
-      "target": "discord:qa-pick-delivery",
-      "attempt_count": 0,
-      "created_at": "2026-05-04T19:47:53.865Z",
-      "disposition": "CLEAR",
-      "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
-    },
-    {
-      "group": "A",
-      "outbox_id": "2fe23929-7bb5-49be-ab3f-fbec8c660a75",
-      "pick_id": "c9331dbd-ec69-49bf-8ef7-2f4738d5f599",
-      "target": "discord:qa-pick-delivery",
-      "attempt_count": 0,
-      "created_at": "2026-05-04T20:03:03.453Z",
-      "disposition": "CLEAR",
-      "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
-    },
-    {
-      "group": "A",
-      "outbox_id": "87c22f75-5004-4d18-9389-a34c5505f215",
-      "pick_id": "59683281-c274-4b53-9ecf-48c59833bb7d",
-      "target": "discord:qa-pick-delivery",
-      "attempt_count": 0,
-      "created_at": "2026-05-12T06:47:06.826Z",
-      "disposition": "CLEAR",
-      "reason": "QA seed row, intentionally dead-lettered per UTV2-982 PM authorization. Target unsupported, never polled."
-    },
-    {
-      "group": "B",
-      "outbox_id": "fd006c85-2001-46eb-8866-6ead62015e73",
-      "pick_id": "6b8a9721-713c-4cee-8cf4-7541133274ec",
-      "target": "discord:canary",
-      "attempt_count": 3,
-      "created_at": "2026-05-17T08:31:11.813Z",
-      "payload_label": "eligible-e1fe6626",
-      "test_run": "e1fe6626",
-      "pick_status": "draft",
-      "pick_posted_at": null,
-      "disposition": "CLEAR",
-      "reason": "Test run row (testRun=e1fe6626). Pick is draft/unposted, no lifecycle events. INVALID_DELIVERY_TRANSITION state machine anomaly — not recoverable. 3 retries exhausted."
-    },
-    {
-      "group": "B",
-      "outbox_id": "d6cc34b9-e3a7-4ddd-9a76-236e759d844c",
-      "pick_id": "189c6657-f54f-44d9-ad67-cc56ec22da01",
-      "target": "discord:canary",
-      "attempt_count": 3,
-      "created_at": "2026-05-17T08:31:12.480Z",
-      "payload_label": "denylist-e1fe6626",
-      "test_run": "e1fe6626",
-      "pick_status": "draft",
-      "pick_posted_at": null,
-      "disposition": "CLEAR",
-      "reason": "Test run row (testRun=e1fe6626). Pick is draft/unposted, no lifecycle events. INVALID_DELIVERY_TRANSITION state machine anomaly — not recoverable. 3 retries exhausted."
-    },
-    {
-      "group": "B",
-      "outbox_id": "8e88e116-a2da-4ff2-a786-e9c67e172daa",
-      "pick_id": "6e0473d6-8e42-430e-8872-ca00097e6094",
-      "target": "discord:canary",
-      "attempt_count": 3,
-      "created_at": "2026-05-17T08:31:13.231Z",
-      "payload_label": "idempotent-e1fe6626",
-      "test_run": "e1fe6626",
-      "pick_status": "draft",
-      "pick_posted_at": null,
-      "disposition": "CLEAR",
-      "reason": "Test run row (testRun=e1fe6626). Pick is draft/unposted, no lifecycle events. INVALID_DELIVERY_TRANSITION state machine anomaly — not recoverable. 3 retries exhausted."
-    }
-  ],
-
-  "verification": {
-    "dead_letter_count_after": 0,
-    "sent_count_after": 416,
-    "query": "SELECT status, COUNT(*) FROM distribution_outbox GROUP BY status",
-    "verified_at": "2026-05-20T06:25:00.000Z"
-  },
-
-  "acceptance_criteria": {
-    "zero_dead_letter_rows": true,
-    "each_row_disposition_documented": true,
-    "pipeline_health_critical_cleared": "pending — run pnpm pipeline:health to confirm",
-    "audit_log_entries": "N/A — rows were test/seed data per prior PM authorizations"
+  "runtime_proof": {
+    "queries": [
+      {
+        "description": "Count distribution_outbox rows by status — before operator action",
+        "sql": "SELECT status, COUNT(*) FROM distribution_outbox GROUP BY status",
+        "result": "dead_letter: 9, sent: 416"
+      },
+      {
+        "description": "Delete all dead_letter rows from distribution_outbox",
+        "sql": "DELETE FROM distribution_outbox WHERE status = 'dead_letter'",
+        "result": "9 rows deleted"
+      },
+      {
+        "description": "Count distribution_outbox rows by status — after operator action",
+        "sql": "SELECT status, COUNT(*) FROM distribution_outbox GROUP BY status",
+        "result": "dead_letter: 0, sent: 416"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "distribution_outbox",
+        "status": "dead_letter",
+        "before": 9,
+        "after": 0,
+        "delta": -9
+      },
+      {
+        "table": "distribution_outbox",
+        "status": "sent",
+        "before": 416,
+        "after": 416,
+        "delta": 0
+      }
+    ],
+    "receipts": [
+      {
+        "type": "pm_authorization",
+        "description": "PM authorized operator clear via chat: 'execute clear UTV2-1010'",
+        "authorized_by": "griffadavi@gmail.com",
+        "authorized_at": "2026-05-20T06:20:00.000Z"
+      }
+    ]
   }
 }

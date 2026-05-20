@@ -7,9 +7,12 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1010-resolve-dead-letter-outbox-rows",
   "branch": "claude/utv2-1010-resolve-dead-letter-outbox-rows",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/809",
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1010/evidence.json",
+    "docs/06_status/proof/UTV2-1010/verification.md"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1010",
     "docs/06_status/lanes/UTV2-1010.json",
@@ -19,14 +22,59 @@
     "docs/06_status/proof/UTV2-1010/evidence.json",
     "docs/06_status/proof/UTV2-1010/verification.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-20T06:15:15.220Z",
-  "heartbeat_at": "2026-05-20T06:15:15.220Z",
+  "heartbeat_at": "2026-05-20T07:11:22.451Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1010-resolve-dead-letter-outbox-rows.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T07:09:01.270Z",
+      "verdict": "fail",
+      "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T07:10:58.006Z",
+      "verdict": "fail",
+      "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T07:11:05.935Z",
+      "verdict": "fail",
+      "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T07:11:22.451Z",
+      "verdict": "pass",
+      "merge_sha": "4bea3aceff8411f3010dcccca08a341257605066",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

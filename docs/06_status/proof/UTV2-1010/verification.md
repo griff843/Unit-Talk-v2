@@ -3,6 +3,8 @@
 **Tier:** T1  
 **Executor:** Claude  
 **Branch:** claude/utv2-1010-resolve-dead-letter-outbox-rows  
+**Branch HEAD SHA:** 502d1086c74e7f282dcaf2bd76c23865fdc4e5e7  
+**Merge SHA:** 4bea3aceff8411f3010dcccca08a341257605066  
 **Executed:** 2026-05-20  
 
 ## Summary
