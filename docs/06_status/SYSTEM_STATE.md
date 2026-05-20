@@ -1,16 +1,16 @@
-# System State — 2026-05-20 01:07
+# System State — 2026-05-20 08:08
 
 ## Branch
-main
+
 
 ## Active Milestone
 Phase 7A 
 
 ## Active Lanes
-  lanes.json unreadable: ENOENT: no such file or directory, open '/home/griff843/code/Unit-Talk-v2/.claude/lanes.json'
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
 
 ## Dispatch Slots
-claude:1/2 codex:3/4
+claude:0/2 codex:0/4
 
 ## Ghost Lanes
 none
@@ -19,14 +19,14 @@ none
 dispatch:no-digest
 
 ## Codex Status
-codex:ok(codex-cli 0.131.0)
+codex:unavailable
 
 ## Working Tree
-10 file(s) modified/untracked
+Clean
 
 ## Recent Commits
-dbf324b1 chore(lanes): close UTV2-1018 — PR #803 merged (50b0c9e6)
-50b0c9e6 fix(api): UTV2-1018 wrap promotion eval in try/catch + stranded pick reconciler (#803)
-3434f1f1 chore(lanes): close UTV2-1022 manifest — PR #801 merged (c781ff7a)
-7d952f1f chore(lanes): start UTV2-1076, UTV2-1077, UTV2-1078 worktree lanes
-c781ff7a feat(modeling): UTV2-1022 implement computeRiskScore and risk modifier (#801)
+db1fbd0 Merge remote-tracking branch 'origin/main'
+9b10fd5 fix(domain): UTV2-1037 exclude opening-line fallbacks from CLV weight tuning (#810)
+43a5ab4 chore(lanes): close UTV2-1010 — PR #809 merged, lane done
+ff8a928 chore(lanes): close UTV2-1010 — lane closed, sync file removed
+55a9c9b chore(proof): UTV2-1010 restructure evidence.json with runtime_proof/verifier sections; add merge SHA to verification.md
