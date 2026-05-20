@@ -1,21 +1,12 @@
 # UTV2-1081 — Verification
 
 Branch: claude/utv2-1081-fix-codex-exec-ts
+SHA: 7a573356
 
-## pnpm verify
+## Verification
 
-Result: PASS
-Tests: 113 pass, 0 fail, 0 cancelled, 0 skipped
-Suites: 13
-Duration: ~954ms
+pnpm verify: PASS — 113 tests pass, 0 fail
+R-level: PASS — no artifacts required for this diff
 
-## R-level compliance
-
-Verdict: PASS
-Changed files: 4
-Rules matched: (none) — no R-level artifacts required for this diff
-
-## Scope audit
-
-No `codex run`, `--prompt-file`, or `promptFile` references remain in scripts/ops/codex-exec.ts.
+Scope audit: no `codex run`, `--prompt-file`, or `promptFile` references in scripts/ops/codex-exec.ts
 Dry-run path confirmed intact.
