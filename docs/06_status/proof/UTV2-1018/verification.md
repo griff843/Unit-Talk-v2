@@ -52,3 +52,5 @@ Scope-widening commit SHA: aa661371529cf1648c5c3a37f6c919f622046b78
 ## Verification
 
 All pre-merge checks passed. pnpm verify green (113/113). pnpm test:db green (7/7). T1 proof green (4/4). R-level PASS. Scope widened to include reconciler, test, proof, and lane infrastructure files. PM_VERDICT received and t1-approved label applied.
+
+Merge SHA: 50b0c9e6dcc20d709dfa13d97460c1461d1c399d

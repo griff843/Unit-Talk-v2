@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1018-fix-promotion-eval-outside-atomic",
   "branch": "claude/utv2-1018-fix-promotion-eval-outside-atomic",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "50b0c9e6dcc20d709dfa13d97460c1461d1c399d",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/803",
   "files_changed": [],
   "file_scope_lock": [
     "apps/api/src/submission-service.ts",
@@ -28,16 +28,34 @@
     "docs/06_status/proof/UTV2-1018/verification.md",
     "docs/06_status/proof/UTV2-1018/evidence-bundle.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "pr_number": 803,
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/803",
   "started_at": "2026-05-20T02:27:49.552Z",
-  "heartbeat_at": "2026-05-20T02:27:49.552Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T04:29:59.704Z",
+  "closed_at": "2026-05-20T04:29:59.704Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1018-fix-promotion-eval-outside-atomic.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T04:29:17.006Z",
+      "verdict": "fail",
+      "merge_sha": "50b0c9e6dcc20d709dfa13d97460c1461d1c399d",
+      "failures": [
+        "P3",
+        "C4",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T04:29:50.158Z",
+      "verdict": "pass",
+      "merge_sha": "50b0c9e6dcc20d709dfa13d97460c1461d1c399d",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

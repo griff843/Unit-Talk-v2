@@ -4,7 +4,7 @@
   "tier": "T1",
   "branch": "claude/utv2-1018-fix-promotion-eval-outside-atomic",
   "branch_head_sha": "e8b67dd3869a5a826c60c4c050bb59157308998d",
-  "merge_sha": null,
+  "merge_sha": "50b0c9e6dcc20d709dfa13d97460c1461d1c399d",
   "generated_at": "2026-05-20T02:50:00.000Z",
   "verifier": {
     "identity": "claude-sonnet-4-6/dispatch-board",
@@ -16,26 +16,36 @@
     "lint": "PASS",
     "build": "PASS",
     "test_run_logs": "113 tests, 0 failures (apps/api + packages)",
-    "r_level_check": "PASS — no R-level artifacts required"
+    "r_level_check": "PASS \u2014 no R-level artifacts required"
   },
   "runtime_proof": {
-    "test_db_result": "PASS — 7/7 tests",
-    "t1_proof_result": "PASS — 4/4 tests",
+    "test_db_result": "PASS \u2014 7/7 tests",
+    "t1_proof_result": "PASS \u2014 4/4 tests",
     "t1_proof_file": "apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts",
     "queries": [
-      "processSubmission() against live Supabase — pick created and not stranded",
-      "detectStrandedPicks() — returns array with correct shape",
-      "auditStrandedPicks() — writes audit record with correct fields",
-      "picks table schema probe — promotion_target column exists",
+      "processSubmission() against live Supabase \u2014 pick created and not stranded",
+      "detectStrandedPicks() \u2014 returns array with correct shape",
+      "auditStrandedPicks() \u2014 writes audit record with correct fields",
+      "picks table schema probe \u2014 promotion_target column exists",
       "Live observation: 196 stranded picks detected in DB (confirms pre-existing bug)"
     ],
-    "row_counts": {
-      "t1_proof_tests_pass": 4,
-      "t1_proof_tests_fail": 0,
-      "test_db_pass": 7,
-      "test_db_fail": 0,
-      "stranded_picks_detected_in_live_db": 196
-    }
+    "row_counts": [
+      {
+        "table": "picks",
+        "label": "stranded_picks_detected",
+        "count": 196
+      },
+      {
+        "table": "audit_log",
+        "label": "t1_proof_audit_records",
+        "count": 1
+      },
+      {
+        "table": "test_db",
+        "label": "test_db_pass",
+        "count": 7
+      }
+    ]
   },
   "acceptance_criteria": {
     "promotion_eval_failures_observable": true,
