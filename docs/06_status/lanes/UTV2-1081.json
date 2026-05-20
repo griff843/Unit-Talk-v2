@@ -28,10 +28,10 @@
     "docs/06_status/proof/UTV2-1081/diff-summary.md",
     "docs/06_status/proof/UTV2-1081/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T15:56:58.327Z",
-  "heartbeat_at": "2026-05-20T17:17:35.568Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T17:20:31.417Z",
+  "closed_at": "2026-05-20T17:20:31.417Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1081-fix-codex-exec-ts.json",
   "created_by": "claude",
@@ -44,6 +44,21 @@
         "P12"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T17:20:25.047Z",
+      "verdict": "pass",
+      "merge_sha": "c4d58729ba8a2c1a29b264e4fb7a1c2a401b2206",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-20T17:20:31.417Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "d4993e9c413e951151bee53ecf3f87911d4bb78d",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
     }
   ],
   "reopen_history": [],
