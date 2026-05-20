@@ -30,3 +30,5 @@ pnpm build — exit 0
 [lint-migrations] 107 migration file(s) checked — no findings.
 
 pnpm verify — EXIT 0
+
+Merge SHA: f0472d1ee7665d6e498ef49e13c19519b1e41b8b

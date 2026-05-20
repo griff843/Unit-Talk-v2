@@ -43,3 +43,5 @@ Sync file required by the ops:sync-check to tie this branch to issue UTV2-1024.
 - [x] `pnpm verify` exits 0 on this branch
 - [x] `pnpm type-check` exits 0 (YAML only — no TS compiled)
 - [x] `pnpm test` exits 0 (479 pass, 0 fail)
+
+Merge SHA: f0472d1ee7665d6e498ef49e13c19519b1e41b8b

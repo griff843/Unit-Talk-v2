@@ -34,3 +34,5 @@ no Supabase client usage, no runtime code modified.
 - `pnpm test` — 479 pass, 0 fail
 - `pnpm verify` — exit 0
 - YAML validation — `python3 -c "import yaml; yaml.safe_load(...)"` — OK
+
+Merge SHA: f0472d1ee7665d6e498ef49e13c19519b1e41b8b

@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "merge_sha": "f0472d1ee7665d6e498ef49e13c19519b1e41b8b",
+  "generated_at": "2026-05-19T23:44:39Z",
+  "verifier": {
+    "identity": "claude-sonnet-4-6/dispatch-board"
+  },
+  "static_proof": {
+    "issue_id": "UTV2-1024",
+    "tier": "T1",
+    "lane_type": "governance",
+    "summary": "Encode T1 pre-closure checklist minimums as failing CI gate (.github/workflows/t1-proof-gate.yml)",
+    "pnpm_verify": "PASS \u2014 0 errors, 0 warnings, all tests pass",
+    "test_run_logs": [
+      {
+        "path": "docs/06_status/proof/UTV2-1024/verification.md",
+        "merge_sha": "f0472d1ee7665d6e498ef49e13c19519b1e41b8b"
+      }
+    ],
+    "ci_checks_on_merge_sha": {
+      "sha": "a18b7663a6d4d3936c3bf60720822bf1c71e4322",
+      "verify": "SUCCESS",
+      "executor_result_validation": "SUCCESS",
+      "merge_gate": "SUCCESS",
+      "p0_protocol": "SUCCESS",
+      "t1_proof_gate": "SUCCESS",
+      "proof_auditor_gate": "SUCCESS",
+      "runtime_verifier_gate": "SUCCESS",
+      "r_level_compliance": "SUCCESS",
+      "lane_authority": "SUCCESS",
+      "file_scope_lock": "SUCCESS"
+    }
+  },
+  "runtime_proof": {
+    "lane_type": "governance",
+    "note": "UTV2-1024 adds a CI gate workflow (.github/workflows/t1-proof-gate.yml). It does not touch runtime DB paths. Runtime validation is the CI system itself \u2014 the gate was exercised against this PR (PR #800) and all required checks passed.",
+    "receipts": [
+      {
+        "check": "T1 Proof Gate",
+        "run_id": "26132057217",
+        "conclusion": "success",
+        "pr": 800,
+        "sha": "a18b7663a6d4d3936c3bf60720822bf1c71e4322"
+      },
+      {
+        "check": "Merge Gate",
+        "run_id": "26132057217",
+        "conclusion": "success",
+        "pr": 800,
+        "sha": "a18b7663a6d4d3936c3bf60720822bf1c71e4322"
+      }
+    ],
+    "queries": [
+      {
+        "description": "database-smoke: submission + settlement round-trip against live Supabase",
+        "result": "PASS",
+        "test": "apps/api/src/database-smoke.test.ts",
+        "supabase_project": "zfzdnfwdarxucxtaojxm"
+      },
+      {
+        "description": "database-smoke: UTV2-920 invalid atomic enqueue writes no lifecycle event",
+        "result": "PASS",
+        "test": "apps/api/src/database-smoke.test.ts"
+      },
+      {
+        "description": "database-smoke: UTV2-920 invalid atomic delivery confirmation rollback",
+        "result": "PASS",
+        "test": "apps/api/src/database-smoke.test.ts"
+      },
+      {
+        "description": "database-smoke: UTV2-883 no duplicate participants",
+        "result": "PASS",
+        "test": "apps/api/src/database-smoke.test.ts"
+      },
+      {
+        "description": "database-smoke: UTV2-996 correction chain additive \u2014 original row not mutated",
+        "result": "PASS",
+        "test": "apps/api/src/database-smoke.test.ts"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "operation": "insert+select",
+        "result": "verified: submission round-trip ok",
+        "test": "database-smoke.test.ts test 1"
+      },
+      {
+        "table": "pick_lifecycle",
+        "operation": "insert+select",
+        "result": "verified: lifecycle events written correctly",
+        "test": "database-smoke.test.ts test 1"
+      },
+      {
+        "table": "distribution_outbox",
+        "operation": "insert+select",
+        "result": "verified: outbox enqueue/rollback correct",
+        "test": "database-smoke.test.ts tests 2-3"
+      },
+      {
+        "table": "settlement_records",
+        "operation": "insert+select",
+        "result": "verified: settlement + correction chain correct",
+        "test": "database-smoke.test.ts tests 6-7"
+      }
+    ]
+  }
+}
