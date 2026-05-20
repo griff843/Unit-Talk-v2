@@ -47,3 +47,8 @@ ok 4 - UTV2-1018: picks table has promotion_target column (schema invariant)
 detectStrandedPicks() found 196 existing stranded picks in the live database (picks in validated state older than 5 minutes with promotion_target = null), confirming the bug predated this fix.
 
 Branch HEAD SHA: e8b67dd3869a5a826c60c4c050bb59157308998d
+Scope-widening commit SHA: aa661371529cf1648c5c3a37f6c919f622046b78
+
+## Verification
+
+All pre-merge checks passed. pnpm verify green (113/113). pnpm test:db green (7/7). T1 proof green (4/4). R-level PASS. Scope widened to include reconciler, test, proof, and lane infrastructure files. PM_VERDICT received and t1-approved label applied.
