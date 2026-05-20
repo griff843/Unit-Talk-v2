@@ -22,6 +22,22 @@ test('normalizeFileScopePath rejects parent traversal', () => {
   );
 });
 
+test('normalizeFileScopePath accepts non-existent proof paths without requiring existence', () => {
+  // Proof paths are intent declarations — the lane will create them.
+  // They must not throw even when the file does not exist on disk.
+  const normalized = normalizeFileScopePath(
+    'docs/06_status/proof/UTV2-9999/diff-summary.md',
+  );
+  assert.strictEqual(normalized, 'docs/06_status/proof/UTV2-9999/diff-summary.md');
+});
+
+test('normalizeFileScopePath still rejects parent traversal for proof paths', () => {
+  assert.throws(
+    () => normalizeFileScopePath('../docs/06_status/proof/UTV2-9999/diff-summary.md'),
+    /Parent traversal is not allowed/,
+  );
+});
+
 test('normalizeRepoRelativePath allows canonical deleted-file style paths', () => {
   const normalized = normalizeRepoRelativePath('docs/06_status/lanes/deleted-file.json');
   assert.strictEqual(normalized, 'docs/06_status/lanes/deleted-file.json');
