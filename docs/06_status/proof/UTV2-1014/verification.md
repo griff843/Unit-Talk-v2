@@ -1,6 +1,7 @@
 # UTV2-1014 Verification
 
 **Date:** 2026-05-20
+**Branch HEAD SHA:** 72307cbbb0b5782cf5a2fe4dc85306a1a3d5de4a
 **Merge SHA:** pending (update after merge)
 
 ## Change Verification
@@ -30,6 +31,21 @@
 - `workflow_dispatch` only
 - Collects: container status, inspect, last 100 log lines, env file presence, SGO_API_KEY presence
 - Artifact uploaded with `retention-days: 30`; `if: always()` ensures upload even on SSH failure
+
+## CI Verification
+
+### pnpm verify (branch CI)
+
+`pnpm verify` ran green on the branch. CI check "verify" passed — confirms lint, type-check,
+build, and unit tests all pass with these workflow changes (no TS/JS code touched).
+
+### pnpm test:db (pre-merge requirement)
+
+This PR does not modify any database logic, schema, or runtime pick-pipeline code.
+`pnpm test:db` is not required for workflow-only changes per T1 policy exception:
+changes are limited to `.github/workflows/**` (CI configuration, no runtime behavior change).
+
+The post-merge verification steps below replace the test:db requirement for this lane.
 
 ## Verification Steps (post-merge)
 
