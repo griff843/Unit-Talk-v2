@@ -76,3 +76,5 @@ ok 2 - UTV2-1022: risk scoring is deterministic — same inputs produce same pro
 ```
 
 Result: GREEN — live Supabase verified, risk scoring persists to pick_promotion_history.payload.scoreInputs
+
+Branch HEAD SHA: b2e13b15e4f650610dacf4268495e8b2d704dc94
