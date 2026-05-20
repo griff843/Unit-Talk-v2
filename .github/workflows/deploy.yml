@@ -247,9 +247,8 @@ jobs:
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --no-deps api"
           DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
           case "$DEEP_HEALTH_URL" in
-            */api/health\?full=true) ;;
-            */health) DEEP_HEALTH_URL="${DEEP_HEALTH_URL%/health}/api/health?full=true" ;;
-            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/api/health?full=true" ;;
+            */health) ;;
+            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/health" ;;
           esac
           for attempt in $(seq 1 30); do
             if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
@@ -344,9 +343,8 @@ jobs:
              UNIT_TALK_IMAGE_TAG='$IMAGE_TAG' docker compose up -d --remove-orphans"
           DEEP_HEALTH_URL="${DEPLOY_HEALTH_URL%/}"
           case "$DEEP_HEALTH_URL" in
-            */api/health\?full=true) ;;
-            */health) DEEP_HEALTH_URL="${DEEP_HEALTH_URL%/health}/api/health?full=true" ;;
-            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/api/health?full=true" ;;
+            */health) ;;
+            *) DEEP_HEALTH_URL="${DEEP_HEALTH_URL}/health" ;;
           esac
           for attempt in $(seq 1 30); do
             if curl -fsS "$DEEP_HEALTH_URL" >/dev/null; then
