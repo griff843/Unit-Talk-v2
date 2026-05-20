@@ -18,14 +18,22 @@
     "scripts/ops/lane-close.ts"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T05:35:58.043Z",
-  "heartbeat_at": "2026-05-20T05:35:58.043Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T06:07:21.087Z",
+  "closed_at": "2026-05-20T06:07:21.087Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1080-lane-close-auto-acquire-merge-lock.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T06:06:49.493Z",
+      "verdict": "pass",
+      "merge_sha": "60e7e9955eeab666942620de2cde55365f935a6c",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

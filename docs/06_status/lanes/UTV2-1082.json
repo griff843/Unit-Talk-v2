@@ -20,14 +20,22 @@
     "scripts/ops/runtime-contract-check.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T05:37:58.858Z",
-  "heartbeat_at": "2026-05-20T05:37:58.858Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T06:07:28.805Z",
+  "closed_at": "2026-05-20T06:07:28.805Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1082-runtime-contract-check.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T06:06:53.885Z",
+      "verdict": "pass",
+      "merge_sha": "95ecab3468623eecf07d74de9d3e581ff62ad9d2",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
