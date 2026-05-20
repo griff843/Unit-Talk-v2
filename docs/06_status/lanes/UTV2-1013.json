@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1013",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-ab0ca21f72dbbf6b2",
+  "branch": "worktree-agent-ab0ca21f72dbbf6b2",
+  "base_branch": "main",
+  "commit_sha": "6ef3356e8223c2682473221de2b45d2b9b3f41af",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/819",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/PROGRAM_STATUS.md",
+    "docs/05_operations/HETZNER_PROVISIONING_CHECKLIST.md",
+    "docs/06_status/lanes/UTV2-1013.json"
+  ],
+  "expected_proof_paths": [],
+  "status": "in_review",
+  "started_at": "2026-05-20T00:00:00.000Z",
+  "heartbeat_at": "2026-05-20T18:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-ab0ca21f72dbbf6b2",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
