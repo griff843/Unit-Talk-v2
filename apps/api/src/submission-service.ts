@@ -395,13 +395,36 @@ export async function processSubmission(
   // Eager promotion evaluation — all policies evaluated in priority order.
   // picks.promotion_target is set to the highest-priority qualified target (or null).
   // settlements passed to enable CLV-based trust adjustment.
-  const eagerResult = await evaluateAllPoliciesEagerAndPersist(
-    pickRecord.id,
-    'system',
-    repositories.picks,
-    repositories.audit,
-    repositories.settlements,
-  );
+  // UTV2-1018: wrapped in try/catch so failures are observable and picks are detectable
+  // as stranded (stuck in 'submitted' with no promotion_target) rather than silently lost.
+  let eagerResult: Awaited<ReturnType<typeof evaluateAllPoliciesEagerAndPersist>>;
+  try {
+    eagerResult = await evaluateAllPoliciesEagerAndPersist(
+      pickRecord.id,
+      'system',
+      repositories.picks,
+      repositories.audit,
+      repositories.settlements,
+    );
+  } catch (err) {
+    submissionServiceLogger.error('promotion-eval-failed', {
+      pickId: pickRecord.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    await repositories.audit.record({
+      entityType: 'pick',
+      entityId: pickRecord.id,
+      entityRef: pickRecord.id,
+      action: 'promotion_eval_failed',
+      actor: 'system',
+      payload: {
+        pickId: pickRecord.id,
+        error: err instanceof Error ? err.message : String(err),
+        strandedAt: new Date().toISOString(),
+      },
+    });
+    throw err;
+  }
 
   return {
     submission,
