@@ -1,11 +1,15 @@
 # UTV2-1012 — Verification Instructions
 
+## Summary
+
 **Issue:** UTV2-1012 — Supervisor verification tooling  
 **Tier:** T2  
 
+## Verification
+
 ---
 
-## How to run the verification
+### How to run the verification
 
 ### 1. Trigger the workflow
 

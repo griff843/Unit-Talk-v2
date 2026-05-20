@@ -1,8 +1,21 @@
 # UTV2-1012 — Diff Summary
 
+## Summary
+
 **Issue:** UTV2-1012 — Supervisor verification tooling  
 **Tier:** T2  
 **Branch:** `feat/utv2-1012-supervisor-verification`  
+
+Adds SSH-based supervisor verification script and GHA workflow. Inspects all 4 unit-talk
+containers on Hetzner, records state/health/restartCount, and uploads a machine-readable
+JSON verdict artifact.
+
+## Evidence
+
+| File | Change |
+|------|--------|
+| `scripts/ops/verify-supervisor.sh` | NEW: docker inspect all 4 containers, verdict JSON |
+| `.github/workflows/ops-supervisor-status.yml` | NEW: workflow_dispatch trigger, artifact upload |
 
 ---
 
