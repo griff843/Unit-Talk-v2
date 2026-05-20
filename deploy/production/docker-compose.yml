@@ -1,8 +1,21 @@
+configs:
+  grafana_loki_datasource:
+    content: |
+      apiVersion: 1
+      datasources:
+        - name: Loki
+          type: loki
+          access: proxy
+          url: http://loki:3100
+          isDefault: true
+
 services:
   api:
     image: ghcr.io/griff843/unit-talk-v2/api:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
     env_file:
       - .env.production
+    environment:
+      - LOKI_URL=http://loki:3100
     ports:
       - "${UNIT_TALK_API_HOST_PORT:-4000}:4000"
     restart: unless-stopped
@@ -24,6 +37,8 @@ services:
     image: ghcr.io/griff843/unit-talk-v2/worker:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
     env_file:
       - .env.production
+    environment:
+      - LOKI_URL=http://loki:3100
     restart: unless-stopped
     depends_on:
       api:
@@ -40,6 +55,8 @@ services:
     image: ghcr.io/griff843/unit-talk-v2/ingestor:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
     env_file:
       - .env.production
+    environment:
+      - LOKI_URL=http://loki:3100
     restart: unless-stopped
     depends_on:
       api:
@@ -56,6 +73,8 @@ services:
     image: ghcr.io/griff843/unit-talk-v2/discord-bot:${UNIT_TALK_IMAGE_TAG:?UNIT_TALK_IMAGE_TAG required}
     env_file:
       - .env.production
+    environment:
+      - LOKI_URL=http://loki:3100
     restart: on-failure
     depends_on:
       api:
@@ -68,6 +87,52 @@ services:
           memory: 128m
           cpus: '0.1'
 
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    ports:
+      - "127.0.0.1:3100:3100"
+    volumes:
+      - loki-data:/loki
+    command: -config.file=/etc/loki/local-config.yaml
+    restart: unless-stopped
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 256m
+          cpus: '0.25'
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    ports:
+      - "127.0.0.1:3200:3000"
+    environment:
+      - GF_AUTH_ANONYMOUS_ENABLED=true
+      - GF_AUTH_ANONYMOUS_ORG_ROLE=Admin
+      - GF_AUTH_DISABLE_LOGIN_FORM=true
+    volumes:
+      - grafana-data:/var/lib/grafana
+    configs:
+      - source: grafana_loki_datasource
+        target: /etc/grafana/provisioning/datasources/loki.yml
+    restart: unless-stopped
+    depends_on:
+      - loki
+    networks:
+      - unit-talk
+    deploy:
+      resources:
+        limits:
+          memory: 128m
+          cpus: '0.1'
+
 networks:
   unit-talk:
     driver: bridge
+
+volumes:
+  loki-data:
+  grafana-data:

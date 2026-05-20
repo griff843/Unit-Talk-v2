@@ -6,7 +6,7 @@
 #
 # Version: matched to UNIT_TALK_IMAGE_TAG at deploy time.
 
-version: 1
+version: 2
 
 services:
   api:
@@ -24,6 +24,8 @@ services:
       - UNIT_TALK_API_RUNTIME_MODE
       - UNIT_TALK_API_KEY_OPERATOR
       - UNIT_TALK_API_KEY_WORKER
+    injected_env:
+      - LOKI_URL
 
   worker:
     image: ghcr.io/griff843/unit-talk-v2/worker
@@ -38,6 +40,8 @@ services:
       - UNIT_TALK_WORKER_RUNTIME_MODE
       - UNIT_TALK_DISTRIBUTION_TARGETS
       - UNIT_TALK_WORKER_API_KEY
+    injected_env:
+      - LOKI_URL
 
   ingestor:
     image: ghcr.io/griff843/unit-talk-v2/ingestor
@@ -52,6 +56,8 @@ services:
       - UNIT_TALK_INGESTOR_RUNTIME_MODE
       - UNIT_TALK_INGESTOR_API_KEY
       - SGO_API_KEY
+    injected_env:
+      - LOKI_URL
 
   discord-bot:
     image: ghcr.io/griff843/unit-talk-v2/discord-bot
@@ -65,10 +71,41 @@ services:
       - DISCORD_CLIENT_ID
       - UNIT_TALK_DISCORD_BOT_RUNTIME_MODE
       - UNIT_TALK_BOT_API_KEY
+    injected_env:
+      - LOKI_URL
+
+  loki:
+    image: grafana/loki:3.0.0
+    container_name: loki
+    port: 3100
+    bind: 127.0.0.1
+    restart: unless-stopped
+    resource_limits:
+      memory: 256m
+      cpus: '0.25'
+    notes: >
+      Centralized log aggregation. Bound to localhost only — not publicly exposed.
+      Loki default local config retains logs for minimum 7 days.
+
+  grafana:
+    image: grafana/grafana:11.0.0
+    container_name: grafana
+    port: 3200
+    bind: 127.0.0.1
+    restart: unless-stopped
+    depends_on: [loki]
+    resource_limits:
+      memory: 128m
+      cpus: '0.1'
+    notes: >
+      Operator log exploration UI. Anonymous admin access enabled (internal-only port).
+      Loki datasource auto-provisioned via Docker Compose configs: block — no SCP
+      of provisioning directory required.
 
 network:
   name: unit-talk
   driver: bridge
+  members: [api, worker, ingestor, discord-bot, loki, grafana]
 
 # Drift policy:
 # Any addition or removal of services must update both this spec and the compose file.
