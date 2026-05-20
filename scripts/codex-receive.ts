@@ -74,7 +74,12 @@ function parseWriterPayload(stdout: string): Record<string, unknown> {
   if (jsonStart === -1) {
     throw new Error('lane-link-pr did not emit a JSON payload');
   }
-  return JSON.parse(trimmed.slice(jsonStart)) as Record<string, unknown>;
+  // pnpm may emit warning text before or after the JSON object — extract only the {...}
+  const jsonEnd = trimmed.lastIndexOf('}');
+  if (jsonEnd === -1 || jsonEnd < jsonStart) {
+    throw new Error('lane-link-pr JSON payload is malformed (no closing brace)');
+  }
+  return JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
 }
 
 function branchExistsAnywhere(branch: string): { ok: boolean; warning?: string } {
