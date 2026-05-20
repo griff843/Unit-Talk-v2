@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1041",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a789ccb460e1753b1",
+  "branch": "utv2-1041-burn-in-infra",
+  "base_branch": "main",
+  "commit_sha": "5ea798b4b099c124aa0f6a675baafa6a8e46e636",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/820",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/ops/burn-in-snapshot.ts",
+    "scripts/ops/burn-in-report.ts",
+    ".github/workflows/ops-burn-in-monitor.yml",
+    "docs/06_status/lanes/UTV2-1041.json",
+    "docs/06_status/proof/UTV2-1041/diff-summary.md",
+    "docs/06_status/proof/UTV2-1041/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1041/diff-summary.md",
+    "docs/06_status/proof/UTV2-1041/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-20T00:00:00.000Z",
+  "heartbeat_at": "2026-05-20T18:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": ["UTV2-1014"],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a789ccb460e1753b1",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
