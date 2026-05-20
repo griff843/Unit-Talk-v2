@@ -8,7 +8,8 @@
   "branch": "codex/utv2-1078-lane-start-non-existent-proof-paths",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/804",
+  "pr_number": 804,
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/shared.ts"
@@ -17,7 +18,7 @@
     "docs/06_status/proof/UTV2-1078/diff-summary.md",
     "docs/06_status/proof/UTV2-1078/verification.log"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-20T03:41:00.095Z",
   "heartbeat_at": "2026-05-20T03:41:00.095Z",
   "closed_at": null,
