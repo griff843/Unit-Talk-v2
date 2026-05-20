@@ -3,7 +3,7 @@
 **Issue:** UTV2-1038 — Production atomic path failure-injection proof  
 **Branch:** `codex/utv2-1038-atomic-path-failure-injection-proof`  
 **Tier:** T1  
-**Merge SHA:** `15a277adbe3d56be2a0803dca2d8ae93bab2e80b`  
+**Merge SHA:** `15a277ad146e379531bb15c07042047edb95c0c0`  
 **Verifier:** griffadavi@gmail.com  
 
 ## Summary
