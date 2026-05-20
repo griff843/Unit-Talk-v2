@@ -7,16 +7,20 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1082-runtime-contract-check",
   "branch": "claude/utv2-1082-runtime-contract-check",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "95ecab3468623eecf07d74de9d3e581ff62ad9d2",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/808",
+  "files_changed": [
+    "package.json",
+    "scripts/ops/runtime-contract-check.ts",
+    "scripts/ops/runtime-contract-check.test.ts"
+  ],
   "file_scope_lock": [
     "package.json",
     "scripts/ops/runtime-contract-check.ts",
     "scripts/ops/runtime-contract-check.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-20T05:37:58.858Z",
   "heartbeat_at": "2026-05-20T05:37:58.858Z",
   "closed_at": null,
