@@ -1,16 +1,16 @@
-# System State — 2026-05-20 00:05
+# System State — 2026-05-20 01:07
 
 ## Branch
-
+main
 
 ## Active Milestone
 Phase 7A 
 
 ## Active Lanes
-  lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/griff843/code/Unit-Talk-v2/.claude/lanes.json'
 
 ## Dispatch Slots
-claude:0/2 codex:1/4
+claude:1/2 codex:3/4
 
 ## Ghost Lanes
 none
@@ -19,14 +19,14 @@ none
 dispatch:no-digest
 
 ## Codex Status
-codex:unavailable
+codex:ok(codex-cli 0.131.0)
 
 ## Working Tree
-Clean
+10 file(s) modified/untracked
 
 ## Recent Commits
-f0472d1 feat(ci): UTV2-1024 encode T1 pre-closure checklist minimums as failing CI gate (#800)
-00fecb8 chore(lanes): close UTV2-1026, UTV2-1040, UTV2-1045, UTV2-1047, UTV2-1048, UTV2-1050 — Cycle 1+2 complete
-1fed04d chore(lanes): close UTV2-1050 — lane closed, sync file removed
-db60692 chore(proof): bind merge SHA to UTV2-1050 runtime-verification.md
-b53f69a chore(proof): bind merge SHA to UTV2-1050 proof bundle
+dbf324b1 chore(lanes): close UTV2-1018 — PR #803 merged (50b0c9e6)
+50b0c9e6 fix(api): UTV2-1018 wrap promotion eval in try/catch + stranded pick reconciler (#803)
+3434f1f1 chore(lanes): close UTV2-1022 manifest — PR #801 merged (c781ff7a)
+7d952f1f chore(lanes): start UTV2-1076, UTV2-1077, UTV2-1078 worktree lanes
+c781ff7a feat(modeling): UTV2-1022 implement computeRiskScore and risk modifier (#801)
