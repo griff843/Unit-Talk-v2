@@ -3,7 +3,7 @@
   "issue_id": "UTV2-1038",
   "branch": "codex/utv2-1038-atomic-path-failure-injection-proof",
   "branch_head_sha": "32707b2f057db15c6d340856d2275442d9095ac3",
-  "merge_sha": "PENDING",
+  "merge_sha": "15a277adbe3d56be2a0803dca2d8ae93bab2e80b",
   "created_by": "claude",
   "verifier": {
     "identity": "griffadavi@gmail.com"
