@@ -30,12 +30,22 @@
   ],
   "status": "merged",
   "started_at": "2026-05-20T15:56:58.327Z",
-  "heartbeat_at": "2026-05-20T17:16:32.310458Z",
+  "heartbeat_at": "2026-05-20T17:17:35.568Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1081-fix-codex-exec-ts.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T17:17:35.568Z",
+      "verdict": "fail",
+      "merge_sha": "c4d58729ba8a2c1a29b264e4fb7a1c2a401b2206",
+      "failures": [
+        "P12"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
