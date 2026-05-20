@@ -199,7 +199,7 @@ async function main(): Promise<void> {
   try {
     const manifest = readManifest(issueId);
     const lock = ensureCloseoutMergeLock(manifest, {
-      acquireLock: bools.has('acquire-lock'),
+      acquireLock: !bools.has('no-acquire-lock'),
     });
     if (!lock.ok) {
       emitJson({
@@ -207,8 +207,8 @@ async function main(): Promise<void> {
         code: lock.code,
         outcome: 'blocked' satisfies CloseoutOutcome,
         remediation:
-          `Acquire the merge mutex before closeout or pass --acquire-lock: pnpm ops:merge-lock acquire --issue ${issueId} ` +
-          `--branch ${manifest.branch} --reason ops:lane-close`,
+          `Merge lock auto-acquire failed. Retry, or pre-acquire manually: pnpm ops:merge-lock acquire --issue ${issueId} ` +
+          `--branch ${manifest.branch} --reason ops:lane-close. Pass --no-acquire-lock to skip auto-acquire.`,
         issue_id: issueId,
         merge_lock: lock,
       });
