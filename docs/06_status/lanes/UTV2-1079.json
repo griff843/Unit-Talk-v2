@@ -23,14 +23,32 @@
     "docs/06_status/proof/UTV2-1079/diff-summary.md",
     "docs/06_status/proof/UTV2-1079/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T16:05:16.951Z",
-  "heartbeat_at": "2026-05-20T17:55:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T16:50:45.249Z",
+  "closed_at": "2026-05-20T16:50:45.249Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1079-add-gha-reconcile-stale-lanes.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T16:50:10.979Z",
+      "verdict": "fail",
+      "merge_sha": "69bd106b183eb7eeb219ef3383b56e13baa7938a",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T16:50:32.152Z",
+      "verdict": "pass",
+      "merge_sha": "69bd106b183eb7eeb219ef3383b56e13baa7938a",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
