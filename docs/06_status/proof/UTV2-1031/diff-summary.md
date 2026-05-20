@@ -1,8 +1,20 @@
 # UTV2-1031 Diff Summary — Rollback Drill Infrastructure
 
+## Summary
+
 **Issue:** UTV2-1031 — Live rollback drill: deploy bad image → health fails → rollback restores  
 **Branch:** `feat/utv2-1031-rollback-drill`  
 **Tier:** T2  
+
+Delivers an end-to-end rollback drill script and GHA workflow that proves the stop-and-restore
+production code path works before a live incident requires it.
+
+## Evidence
+
+| File | Change |
+|------|--------|
+| `deploy/rollback-drill.sh` | NEW: full stop/restore drill with verdict JSON |
+| `.github/workflows/ops-rollback-drill.yml` | NEW: workflow_dispatch trigger, artifact upload |
 
 ## What was built
 

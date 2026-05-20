@@ -1,11 +1,15 @@
 # UTV2-1031 Verification
 
+## Summary
+
 **Issue:** UTV2-1031 — Live rollback drill: deploy bad image → health fails → rollback restores  
 **Branch:** `feat/utv2-1031-rollback-drill`  
 **Tier:** T2  
 **Verifier:** griffadavi@gmail.com  
 
-## How to run the drill
+## Verification
+
+### How to run the drill
 
 ### Via GitHub Actions (primary path)
 
