@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1037",
+  "lane_type": "modeling",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1037-audit-fix-clv-methodology",
+  "branch": "claude/utv2-1037-audit-fix-clv-methodology",
+  "base_branch": "main",
+  "commit_sha": "8a5f4b75",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/810",
+  "files_changed": [
+    "packages/domain/src/clv-weight-tuner.ts",
+    "packages/domain/src/clv-weight-tuner.test.ts",
+    "packages/domain/src/edge-validation/clv-analyzer.ts",
+    "packages/domain/src/edge-validation/edge-validation.test.ts",
+    "docs/06_status/proof/UTV2-1037/evidence.json",
+    "docs/06_status/proof/UTV2-1037/verification.md"
+  ],
+  "file_scope_lock": [
+    "packages/domain/src/clv-weight-tuner.test.ts",
+    "packages/domain/src/clv-weight-tuner.ts",
+    "packages/domain/src/edge-validation/clv-analyzer.ts",
+    "packages/domain/src/edge-validation/edge-validation.test.ts",
+    "packages/domain/src/edge-validation/edge-validator.ts",
+    "packages/domain/src/models/clv-forecast.test.ts",
+    "packages/domain/src/models/clv-forecast.ts",
+    "packages/domain/src/scoring/closing-leakage-guard.test.ts",
+    "docs/06_status/lanes/UTV2-1037.json",
+    ".ops/sync/UTV2-1037.yml",
+    "docs/06_status/proof/UTV2-1037/evidence.json",
+    "docs/06_status/proof/UTV2-1037/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1037/evidence.json",
+    "docs/06_status/proof/UTV2-1037/verification.md"
+  ],
+  "status": "pr_open",
+  "started_at": "2026-05-20T06:32:52.741Z",
+  "heartbeat_at": "2026-05-20T06:32:52.741Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1037-audit-fix-clv-methodology.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1037-audit-fix-clv-methodology",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

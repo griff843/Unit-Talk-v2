@@ -21,6 +21,12 @@ export interface ScoredPickOutcome {
   clvPercent: number;
   /** Whether the pick won */
   won: boolean;
+  /**
+   * True when clvPercent was computed against the opening line rather than the
+   * true closing market snapshot. Opening-line rows must NOT be included in
+   * weight tuning — they are not syndicate-grade CLV evidence.
+   */
+  isOpeningLineFallback?: boolean;
 }
 
 export interface WeightEffectivenessReport {
@@ -32,8 +38,10 @@ export interface WeightEffectivenessReport {
     uniqueness: ComponentCorrelation;
     boardFit: ComponentCorrelation;
   };
-  /** Overall sample size */
+  /** Count of rows used in analysis (opening-line fallbacks excluded) */
   sampleSize: number;
+  /** Count of rows excluded because isOpeningLineFallback === true */
+  openingLineFallbacksExcluded: number;
   /** Suggested weight adjustments based on correlations */
   suggestedAdjustments: {
     edge: number;
@@ -63,7 +71,10 @@ export interface ComponentCorrelation {
 export function analyzeWeightEffectiveness(
   outcomes: ScoredPickOutcome[],
 ): WeightEffectivenessReport {
-  const sampleSize = outcomes.length;
+  // Opening-line fallback rows are not syndicate-grade CLV — exclude them.
+  const closingLineOutcomes = outcomes.filter((o) => !o.isOpeningLineFallback);
+  const openingLineFallbacksExcluded = outcomes.length - closingLineOutcomes.length;
+  const sampleSize = closingLineOutcomes.length;
 
   let confidence: 'high' | 'medium' | 'low' | 'insufficient' = 'insufficient';
   if (sampleSize >= 100) confidence = 'high';
@@ -74,13 +85,13 @@ export function analyzeWeightEffectiveness(
   const correlations: Record<string, ComponentCorrelation> = {};
 
   for (const component of components) {
-    const values = outcomes.map((o) => o.scoreInputs[component]);
-    const clvValues = outcomes.map((o) => o.clvPercent);
+    const values = closingLineOutcomes.map((o) => o.scoreInputs[component]);
+    const clvValues = closingLineOutcomes.map((o) => o.clvPercent);
 
     const corr = sampleSize >= 5 ? pearsonCorrelation(values, clvValues) : 0;
 
     // Quartile analysis
-    const sorted = outcomes
+    const sorted = closingLineOutcomes
       .map((o, i) => ({ score: o.scoreInputs[component], clv: o.clvPercent, idx: i }))
       .sort((a, b) => a.score - b.score);
 
@@ -127,6 +138,7 @@ export function analyzeWeightEffectiveness(
       boardFit: correlations['boardFit']!,
     },
     sampleSize,
+    openingLineFallbacksExcluded,
     suggestedAdjustments: {
       edge: normalizedAdjustments['edge']!,
       trust: normalizedAdjustments['trust']!,

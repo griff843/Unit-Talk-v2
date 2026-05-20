@@ -43,6 +43,36 @@ export type CLVAnalysisResult =
 
 export const MIN_CLV_SAMPLE = 10;
 
+// ── Closing-line guard ───────────────────────────────────────────────────────
+
+/**
+ * Shape for records that carry closing-line source metadata. Any record
+ * passed to CLV analysis must satisfy this — null fields indicate an
+ * opening-line fallback that must be excluded upstream.
+ */
+export interface WithClosingSource {
+  closingSnapshotAt: string | null;
+  closingProviderKey: string | null;
+}
+
+/**
+ * Throws if any record lacks closing-line provenance. Call this before
+ * feeding rows into analyzeCLV or analyzeWeightEffectiveness to catch
+ * opening-line fallbacks that would corrupt the analysis.
+ */
+export function assertClosingSourcePresent(records: WithClosingSource[]): void {
+  const missing = records.filter(
+    (r) => r.closingSnapshotAt === null || r.closingProviderKey === null,
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `CLV analysis requires closing-line source on every record. ` +
+        `${missing.length} record(s) have null closingSnapshotAt or closingProviderKey. ` +
+        `Filter out opening-line fallbacks before calling assertClosingSourcePresent.`,
+    );
+  }
+}
+
 // ── Core Function ───────────────────────────────────────────────────────────
 
 /**
