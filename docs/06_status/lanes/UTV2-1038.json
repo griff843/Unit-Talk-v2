@@ -27,14 +27,30 @@
     "docs/06_status/proof/UTV2-1038/evidence.json",
     "docs/06_status/proof/UTV2-1038/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T06:29:01.950Z",
-  "heartbeat_at": "2026-05-20T06:29:01.950Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T14:31:31.334Z",
+  "closed_at": "2026-05-20T14:31:31.334Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1038-atomic-path-failure-injection-proof.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T14:31:26.563Z",
+      "verdict": "pass",
+      "merge_sha": "15a277ad146e379531bb15c07042047edb95c0c0",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-20T14:31:31.334Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "cfd51095cac0119a1ec079ef229edcf9e08d15cd",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
