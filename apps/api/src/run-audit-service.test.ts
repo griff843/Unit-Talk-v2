@@ -169,3 +169,147 @@ function restoreEnvValue(name: string, value: string | undefined) {
 
   process.env[name] = value;
 }
+
+// ---------------------------------------------------------------------------
+// UTV2-1038: Atomic path failure injection — real DB errors must not silently
+// fall back to sequential writes in enqueueDistributionWithRunTracking
+// ---------------------------------------------------------------------------
+
+function makeValidatedPick(overrides: Partial<CanonicalPick> = {}): CanonicalPick {
+  return {
+    id: 'pick-atomic-injection-1',
+    submissionId: 'sub-atomic-injection-1',
+    market: 'NBA points',
+    selection: 'Player Over 18.5',
+    source: 'api',
+    approvalStatus: 'approved',
+    promotionStatus: 'qualified',
+    promotionTarget: 'best-bets',
+    lifecycleState: 'validated',
+    metadata: {
+      sport: 'NBA',
+      promotionScores: { edge: 92, trust: 88, readiness: 85, uniqueness: 85, boardFit: 90 },
+    },
+    createdAt: new Date().toISOString(),
+    ...overrides,
+  };
+}
+
+test('enqueueDistributionWithRunTracking: real DB errors (constraint violation) rethrow — no silent sequential fallback', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makeValidatedPick({ id: 'pick-db-error-1' });
+  await repositories.picks.savePick(pick);
+
+  const dbError = new Error('duplicate key value violates unique constraint "distribution_outbox_pkey"');
+  repositories.outbox.enqueueDistributionAtomic = async () => {
+    throw dbError;
+  };
+
+  await assert.rejects(
+    () =>
+      enqueueDistributionWithRunTracking(
+        pick,
+        'discord:canary',
+        'test-actor',
+        repositories.picks,
+        repositories.outbox,
+        repositories.runs,
+        repositories.audit,
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(err.message, dbError.message);
+      return true;
+    },
+  );
+
+  // No outbox row must exist — sequential fallback must not have run
+  const outboxRows = await repositories.outbox.listByPickId(pick.id);
+  assert.equal(outboxRows.length, 0, 'sequential fallback must not have created an outbox row');
+});
+
+test('enqueueDistributionWithRunTracking: network timeout rethrows — no silent sequential fallback', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makeValidatedPick({ id: 'pick-network-timeout-1' });
+  await repositories.picks.savePick(pick);
+
+  const networkError = new Error('fetch failed: connection timed out');
+  repositories.outbox.enqueueDistributionAtomic = async () => {
+    throw networkError;
+  };
+
+  await assert.rejects(
+    () =>
+      enqueueDistributionWithRunTracking(
+        pick,
+        'discord:canary',
+        'test-actor',
+        repositories.picks,
+        repositories.outbox,
+        repositories.runs,
+        repositories.audit,
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(err.message, networkError.message);
+      return true;
+    },
+  );
+
+  const outboxRows = await repositories.outbox.listByPickId(pick.id);
+  assert.equal(outboxRows.length, 0, 'sequential fallback must not have created an outbox row');
+});
+
+test('enqueueDistributionWithRunTracking: PGRST202 (RPC not found) rethrows — no silent sequential fallback', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makeValidatedPick({ id: 'pick-pgrst202-1' });
+  await repositories.picks.savePick(pick);
+
+  const pgrst202Error = new Error('Could not find the function public.enqueue_distribution_atomic');
+  repositories.outbox.enqueueDistributionAtomic = async () => {
+    throw pgrst202Error;
+  };
+
+  await assert.rejects(
+    () =>
+      enqueueDistributionWithRunTracking(
+        pick,
+        'discord:canary',
+        'test-actor',
+        repositories.picks,
+        repositories.outbox,
+        repositories.runs,
+        repositories.audit,
+      ),
+    (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal(err.message, pgrst202Error.message);
+      return true;
+    },
+  );
+
+  const outboxRows = await repositories.outbox.listByPickId(pick.id);
+  assert.equal(outboxRows.length, 0, 'sequential fallback must not have created an outbox row');
+});
+
+test('enqueueDistributionWithRunTracking: InMemory sentinel allows sequential fallback (expected dev/test path)', async () => {
+  const repositories = createInMemoryRepositoryBundle();
+  const pick = makeValidatedPick({ id: 'pick-inmemory-sentinel-1' });
+  await repositories.picks.savePick(pick);
+
+  // The InMemory repo already throws the sentinel message — this test
+  // exercises the real InMemory path end-to-end, confirming sequential
+  // fallback is permitted only for the sentinel error.
+  const result = await enqueueDistributionWithRunTracking(
+    pick,
+    'discord:canary',
+    'test-actor',
+    repositories.picks,
+    repositories.outbox,
+    repositories.runs,
+    repositories.audit,
+  );
+
+  assert.ok(result.run, 'should have a completed run record');
+  assert.equal(result.pickId, pick.id);
+});
