@@ -1,0 +1,77 @@
+name: Ops — API Diagnose
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  diagnose:
+    name: Diagnose API container
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Run diagnostics
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            DEPLOY_PATH='$DEPLOY_PATH'
+            echo '=== ALL CONTAINER STATUS ==='
+            docker ps -a --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'
+
+            echo ''
+            echo '=== API CONTAINER INSPECT ==='
+            docker inspect unit-talk-api-1 --format '{{.State.Status}} restarts={{.RestartCount}} exitCode={{.State.ExitCode}} error={{.State.Error}}' 2>/dev/null || echo 'Container not found'
+
+            echo ''
+            echo '=== LAST 100 API LOG LINES ==='
+            docker logs unit-talk-api-1 --tail 100 2>&1 || echo 'No logs available'
+
+            echo ''
+            echo '=== ENV FILE CHECK ==='
+            ls -la \"\$DEPLOY_PATH/.env.production\" 2>/dev/null || echo 'MISSING: .env.production does not exist'
+
+            echo ''
+            echo '=== KEY ENV VARS IN .env.production ==='
+            for key in UNIT_TALK_API_RATE_LIMIT_STORE SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY NODE_ENV; do
+              if grep -q \"^\$key=\" \"\$DEPLOY_PATH/.env.production\" 2>/dev/null; then
+                val=\$(grep \"^\$key=\" \"\$DEPLOY_PATH/.env.production\" | cut -d= -f2 | head -c 20)
+                echo \"\$key=\$val...\"
+              else
+                echo \"MISSING: \$key\"
+              fi
+            done
+          " | tee api-diagnose-${{ github.run_id }}.txt
+
+      - name: Upload diagnostic artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-diagnose-${{ github.run_id }}.txt
+          path: api-diagnose-${{ github.run_id }}.txt
+          retention-days: 30
