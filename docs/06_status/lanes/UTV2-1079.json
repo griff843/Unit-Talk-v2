@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1079",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T3",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1079-add-gha-reconcile-stale-lanes",
+  "branch": "claude/utv2-1079-add-gha-reconcile-stale-lanes",
+  "base_branch": "main",
+  "commit_sha": "33a2a7b979d4442baa4206613324aadf71b418b8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/813",
+  "files_changed": [
+    ".github/workflows/reconcile-stale-lanes.yml",
+    "docs/06_status/proof/UTV2-1079/diff-summary.md",
+    "docs/06_status/proof/UTV2-1079/verification.md"
+  ],
+  "file_scope_lock": [
+    ".claude/.state-stamp",
+    ".github/workflows/reconcile-stale-lanes.yml",
+    "docs/06_status/SYSTEM_STATE.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1079/diff-summary.md",
+    "docs/06_status/proof/UTV2-1079/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-20T16:05:16.951Z",
+  "heartbeat_at": "2026-05-20T17:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1079-add-gha-reconcile-stale-lanes.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1079-add-gha-reconcile-stale-lanes",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

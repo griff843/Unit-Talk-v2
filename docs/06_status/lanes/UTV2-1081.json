@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1081",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1081-fix-codex-exec-ts",
+  "branch": "claude/utv2-1081-fix-codex-exec-ts",
+  "base_branch": "main",
+  "commit_sha": "693c24bfc284cfc691f6e124d1d36caa383b312c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/812",
+  "files_changed": [
+    "scripts/ops/codex-exec.ts",
+    "docs/06_status/proof/UTV2-1081/diff-summary.md",
+    "docs/06_status/proof/UTV2-1081/verification.md"
+  ],
+  "file_scope_lock": [
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/codex-health-check.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1081/diff-summary.md",
+    "docs/06_status/proof/UTV2-1081/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-20T15:56:58.327Z",
+  "heartbeat_at": "2026-05-20T17:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1081-fix-codex-exec-ts.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1081-fix-codex-exec-ts",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
