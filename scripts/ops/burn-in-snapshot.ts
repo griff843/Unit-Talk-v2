@@ -134,7 +134,6 @@ async function collectApiHealth(): Promise<ApiResult> {
       };
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const body: Record<string, unknown> = await response.json() as Record<string, unknown>;
 
     const queueHealthRaw = body['queueHealth'] as Record<string, unknown> | null | undefined;

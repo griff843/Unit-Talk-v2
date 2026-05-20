@@ -44,7 +44,7 @@ const REQUIRED_DEPLOY_SERVICES = [
   'ingestor',
   'discord-bot',
 ] as const;
-const DEEP_HEALTH_CHECK_PATTERN = /\/api\/health\?full=true/;
+const DEEP_HEALTH_CHECK_PATTERN = /DEEP_HEALTH_URL.*\/health/s;
 const REQUIRED_DEPLOY_SECRETS = [
   'UNIT_TALK_DEPLOY_HOST',
   'UNIT_TALK_DEPLOY_USER',
