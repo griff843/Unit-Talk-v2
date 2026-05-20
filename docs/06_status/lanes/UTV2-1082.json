@@ -11,7 +11,9 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    "package.json"
+    "package.json",
+    "scripts/ops/runtime-contract-check.ts",
+    "scripts/ops/runtime-contract-check.test.ts"
   ],
   "expected_proof_paths": [],
   "status": "started",
