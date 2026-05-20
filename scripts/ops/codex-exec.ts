@@ -51,6 +51,26 @@ function checkCodexHealth(): { healthy: boolean; version: string | null; error: 
   return { healthy: true, version: r.stdout.trim().split('\n')[0] ?? null, error: null };
 }
 
+function checkExecSubcommand(): { available: boolean; error: string | null } {
+  // Guard against future CLI drift: fail fast if `exec` subcommand is missing
+  const r = spawnSync('codex', ['exec', '--help'], {
+    encoding: 'utf8',
+    stdio: 'pipe',
+    shell: process.platform === 'win32',
+    timeout: 10_000,
+  });
+  if (r.error || r.status === null) {
+    return { available: false, error: r.error?.message ?? 'spawn failed' };
+  }
+  // codex exec --help may exit non-zero on some versions; treat it as available
+  // as long as it doesn't report ENOENT or "unknown command"
+  const combined = (r.stdout ?? '') + (r.stderr ?? '');
+  if (/unknown command|invalid command|not a valid/i.test(combined)) {
+    return { available: false, error: `'codex exec' subcommand not recognised by this CLI version. Update codex-cli.` };
+  }
+  return { available: true, error: null };
+}
+
 function buildCodexPrompt(packet: ExecutionPacket): string {
   return [
     `# Unit Talk V2 — Lane Execution Packet`,
@@ -127,6 +147,19 @@ async function main(): Promise<void> {
     process.exit(1);
   }
 
+  // Guard against future CLI drift — confirm `exec` subcommand exists
+  const execCheck = checkExecSubcommand();
+  if (!execCheck.available) {
+    emitJson({
+      ok: false,
+      code: 'CODEX_UNAVAILABLE',
+      issue_id: issueId,
+      branch: manifest.branch,
+      message: `Codex 'exec' subcommand unavailable: ${execCheck.error}`,
+    } satisfies CodexExecResult);
+    process.exit(1);
+  }
+
   // Build packet and prompt
   const packet = generateExecutionPacket(manifest);
   const prompt = buildCodexPrompt(packet);
@@ -160,20 +193,13 @@ async function main(): Promise<void> {
     process.exit(2);
   }
 
-  // Write prompt to temp file
-  const promptFile = path.join(resolvedCwd, '.codex-prompt.md');
-  fs.writeFileSync(promptFile, prompt, 'utf8');
-
-  // Execute Codex
-  const child = spawnSync('codex', ['run', '--prompt-file', promptFile], {
+  // Execute Codex — pass prompt as CLI argument (codex exec <PROMPT>)
+  const child = spawnSync('codex', ['exec', prompt], {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
-    timeout: 30 * 60 * 1000, // 30 minute max
+    timeout: 30 * 60 * 1000,
   });
-
-  // Clean up prompt file
-  try { fs.unlinkSync(promptFile); } catch { /* ignore */ }
 
   if (child.error || child.status !== 0) {
     emitJson({
