@@ -11,13 +11,23 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "apps/api/src/submission-service.ts",
     "apps/api/src/submission-service.test.ts",
-    "apps/api/src/submission-service.ts"
+    "apps/api/src/stranded-pick-reconciler.ts",
+    "apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts",
+    "apps/api/package.json",
+    "docs/06_status/proof/UTV2-1018/diff-summary.md",
+    "docs/06_status/proof/UTV2-1018/verification.md",
+    "docs/06_status/proof/UTV2-1018/evidence-bundle.json"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1018/evidence.json"
+    "docs/06_status/proof/UTV2-1018/diff-summary.md",
+    "docs/06_status/proof/UTV2-1018/verification.md",
+    "docs/06_status/proof/UTV2-1018/evidence-bundle.json"
   ],
-  "status": "started",
+  "status": "in_review",
+  "pr_number": 803,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/803",
   "started_at": "2026-05-20T02:27:49.552Z",
   "heartbeat_at": "2026-05-20T02:27:49.552Z",
   "closed_at": null,
