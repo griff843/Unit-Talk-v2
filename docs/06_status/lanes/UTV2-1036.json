@@ -9,16 +9,30 @@
   "base_branch": "main",
   "commit_sha": null,
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "scripts/scoring-integrity-proof.ts",
+    "apps/api/src/t1-proof-scoring-integrity.test.ts",
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md",
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json",
+    "package.json"
+  ],
   "file_scope_lock": [
-    "docs/06_status/proof/UTV2-1036/verification.md"
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md",
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json",
+    "scripts/scoring-integrity-proof.ts",
+    "apps/api/src/t1-proof-scoring-integrity.test.ts",
+    "package.json"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1036/evidence.json"
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json",
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md"
   ],
-  "status": "started",
+  "status": "in_progress",
   "started_at": "2026-05-20T02:27:42.019Z",
-  "heartbeat_at": "2026-05-20T02:27:42.019Z",
+  "heartbeat_at": "2026-05-20T02:40:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1036-scoring-integrity-acceptance-gate.json",
