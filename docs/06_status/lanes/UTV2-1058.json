@@ -20,10 +20,10 @@
     "docs/06_status/proof/UTV2-1058/diff-summary.md",
     "docs/06_status/proof/UTV2-1058/verification.log"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-19T12:34:17.188Z",
   "heartbeat_at": "2026-05-19T13:41:36.884Z",
-  "closed_at": null,
+  "closed_at": "2026-05-20T17:00:16.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1058-proof-truth-closeout-gate.json",
   "created_by": "codex-cli",

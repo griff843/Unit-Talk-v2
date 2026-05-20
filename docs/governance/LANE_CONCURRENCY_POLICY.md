@@ -7,7 +7,7 @@
 
 This document defines the concurrency rules for simultaneous execution of lanes in Unit Talk V2. It supplements the lane taxonomy with the enforcement mechanism for safe parallel execution.
 
-The goal is to scale from 3 active lanes to 5 safely, with a clear path to 6–8.
+The goal is to scale from 3 active lanes to 5 safely, with a clear path to 6–8. Sprint override 2026-05-20 (PM-authorized): total raised to 8, Hygiene to 4, to support the 7-lane infrastructure sprint (4 Codex + 3 Claude).
 
 ---
 
@@ -17,12 +17,12 @@ These limits are hard caps enforced by `ops:lane:start`. The command refuses if 
 
 | Limit | Value | Enforcement |
 |---|---|---|
-| Total active lanes (any type) | **6** | `ops:lane:start` rejects lane 7 |
+| Total active lanes (any type) | **8** | `ops:lane:start` rejects lane 9 |
 | Runtime lanes | **1** | `ops:lane:start` rejects second Runtime |
 | Migration lanes | **1** | `ops:lane:start` rejects second Migration |
 | Modeling lanes | **1** | `ops:lane:start` rejects second Modeling |
 | Data/Canonical lanes | **1** | `ops:lane:start` rejects second Data/Canonical |
-| Hygiene lanes | **3** | `ops:lane:start` rejects fourth Hygiene |
+| Hygiene lanes | **4** | `ops:lane:start` rejects fifth Hygiene |
 | Governance lanes | **3** | `ops:lane:start` rejects fourth Governance |
 | Delivery/UI lanes per app | **1** | `ops:lane:start` rejects second lane touching same app path |
 | Verification lanes per target issue | **1** | `ops:lane:start` rejects second Verification for same target |

@@ -26,7 +26,7 @@
   "status": "done",
   "started_at": "2026-05-20T16:05:16.951Z",
   "heartbeat_at": "2026-05-20T16:50:45.249Z",
-  "closed_at": "2026-05-20T16:50:45.249Z",
+  "closed_at": "2026-05-20T17:00:16.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1079-add-gha-reconcile-stale-lanes.json",
   "created_by": "claude",
