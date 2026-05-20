@@ -185,6 +185,43 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
 
+      - name: Write .env.production to server
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
+          UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+          SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+        run: |
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "UNIT_TALK_APP_ENV=production" \
+            "SUPABASE_URL=$SUPABASE_URL" \
+            "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+            "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+            "UNIT_TALK_API_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_INGESTOR_AUTORUN=true" \
+            "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
+            "UNIT_TALK_WORKER_AUTORUN=true" \
+            "UNIT_TALK_WORKER_MAX_CYCLES=0" \
+            "UNIT_TALK_WORKER_ADAPTER=discord" \
+            "UNIT_TALK_WORKER_DRY_RUN=false" \
+            "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
+            "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
+            "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
+            "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
+            "SGO_API_KEY=$SGO_API_KEY" \
+            "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
+
       - name: Upload compose manifest
         run: |
           ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH'"
@@ -248,6 +285,43 @@ jobs:
           printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Write .env.production to server
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
+          DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
+          UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+          SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+        run: |
+          printf '%s\n' \
+            "NODE_ENV=production" \
+            "UNIT_TALK_APP_ENV=production" \
+            "SUPABASE_URL=$SUPABASE_URL" \
+            "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
+            "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
+            "UNIT_TALK_API_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_INGESTOR_AUTORUN=true" \
+            "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
+            "UNIT_TALK_WORKER_AUTORUN=true" \
+            "UNIT_TALK_WORKER_MAX_CYCLES=0" \
+            "UNIT_TALK_WORKER_ADAPTER=discord" \
+            "UNIT_TALK_WORKER_DRY_RUN=false" \
+            "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
+            "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
+            "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
+            "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
+            "SGO_API_KEY=$SGO_API_KEY" \
+            "SGO_API_KEY_FALLBACK=${SGO_API_KEY_FALLBACK:-}" \
+            | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+                "cat > '$DEPLOY_PATH/.env.production' && chmod 600 '$DEPLOY_PATH/.env.production' && echo 'env.production written'"
 
       - name: Authenticate GHCR on remote
         env:

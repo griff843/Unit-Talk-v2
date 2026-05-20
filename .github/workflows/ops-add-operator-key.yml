@@ -1,0 +1,56 @@
+name: Ops — Add Operator SSH Key
+
+on:
+  workflow_dispatch:
+    inputs:
+      public_key:
+        description: "ed25519 public key content to add to authorized_keys"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+
+jobs:
+  add-key:
+    name: Add operator key to server
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY not configured"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Add public key (idempotent)
+        env:
+          OPERATOR_PUBLIC_KEY: ${{ inputs.public_key }}
+        run: |
+          printf '%s\n' "$OPERATOR_PUBLIC_KEY" | ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            'KEY=$(cat)
+            mkdir -p ~/.ssh && chmod 700 ~/.ssh
+            touch ~/.ssh/authorized_keys && chmod 600 ~/.ssh/authorized_keys
+            if grep -qF "$KEY" ~/.ssh/authorized_keys 2>/dev/null; then
+              echo "Key already present"
+            else
+              printf "%s\n" "$KEY" >> ~/.ssh/authorized_keys
+              echo "Key added"
+            fi'
