@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1027",
-  "lane_type": "delivery-ui",
+  "lane_type": "governance",
   "executor": "codex-cli",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1027-clv-dashboard",
