@@ -1,0 +1,42 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1024",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1024-encode-t1-checklist-as-failing-ci",
+  "branch": "codex/utv2-1024-encode-t1-checklist-as-failing-ci",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    ".github/workflows/t1-proof-gate.yml",
+    ".ops/sync/UTV2-1024.yml",
+    "docs/06_status/lanes/UTV2-1024.json",
+    "docs/06_status/proof/UTV2-1024/diff-summary.md",
+    "docs/06_status/proof/UTV2-1024/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1024/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1024/diff-summary.md",
+    "docs/06_status/proof/UTV2-1024/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1024/verification.md"
+  ],
+  "status": "started",
+  "started_at": "2026-05-19T22:20:00.000Z",
+  "heartbeat_at": "2026-05-19T22:20:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1024-encode-t1-checklist-as-failing-ci.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1024-encode-t1-checklist-as-failing-ci",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

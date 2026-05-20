@@ -1,0 +1,299 @@
+# T1 Proof Gate
+#
+# Encodes the T1 pre-closure checklist (CLAUDE.md, 7-step) as a failing CI check.
+# Fires on PRs with a tier:T1 label. Fail-closed: any missing required proof file
+# causes the workflow to fail with a message naming the missing artifact.
+#
+# Checks enforced:
+#   C1 — pnpm verify proof: docs/06_status/proof/<ISSUE_ID>/verification.md exists
+#         and contains "pnpm verify"
+#   C2 — pnpm test:db proof: a file in the proof dir references "pnpm test:db" or "test:db"
+#   C3 — R-level compliance: informational only (enforced by r-level-compliance-check.yml)
+#   C4 — SHA-bound proof: at least one proof file contains a 40-char hex SHA string
+#   C5 — Tier label present: informational only (enforced by tier-label-check.yml)
+#   C6 — Expected proof paths: all paths listed in expected_proof_paths of the lane
+#         manifest must exist in the repo
+#
+# Issue ID is extracted from the branch name (pattern: utv2-\d+, case-insensitive).
+# If no issue ID is found, all checks are skipped with a neutral conclusion.
+# If the lane manifest is missing, the workflow fails with an actionable message.
+#
+# Spec / rationale: UTV2-1024
+# Related checks: r-level-compliance-check.yml, tier-label-check.yml, proof-auditor-gate.yml
+
+name: T1 Proof Gate
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  t1-proof-gate:
+    name: T1 Proof Gate
+    # Only run for T1 PRs
+    if: contains(github.event.pull_request.labels.*.name, 'tier:T1')
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Extract issue ID from branch name
+        id: extract_issue
+        run: |
+          branch="${{ github.event.pull_request.head.ref }}"
+          echo "Branch: $branch"
+
+          # Match utv2-NNNN (case insensitive)
+          issue_id=$(echo "$branch" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+
+          if [ -z "$issue_id" ]; then
+            echo "No issue ID found in branch name '$branch' — skipping T1 proof checks."
+            echo "issue_id=" >> "$GITHUB_OUTPUT"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Issue ID: $issue_id"
+            echo "issue_id=${issue_id}" >> "$GITHUB_OUTPUT"
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Skip message (no issue ID)
+        if: steps.extract_issue.outputs.skip == 'true'
+        run: |
+          echo "## T1 Proof Gate — Skipped" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "No issue ID found in branch name. T1 proof checks require a branch name" >> "$GITHUB_STEP_SUMMARY"
+          echo "matching the pattern \`utv2-NNNN\` (e.g. \`codex/utv2-1024-my-feature\`)." >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "If this is a T1 lane, rename the branch to include the issue ID." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Check lane manifest exists
+        id: manifest
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          manifest_path="docs/06_status/lanes/${issue_id}.json"
+
+          if [ ! -f "$manifest_path" ]; then
+            echo "::error title=T1 Proof Gate - Missing Lane Manifest::Lane manifest not found: $manifest_path"
+            echo ""
+            echo "T1 lanes require a lane manifest before merging."
+            echo "Run 'ops:lane:start ${issue_id}' to create the manifest."
+            echo ""
+            echo "If this PR is not a lane (e.g., a hotfix), remove the tier:T1 label"
+            echo "and add tier:T2 or tier:T3 as appropriate."
+            exit 1
+          fi
+
+          echo "manifest_path=${manifest_path}" >> "$GITHUB_OUTPUT"
+          echo "Lane manifest found: $manifest_path"
+
+      - name: C1 — pnpm verify proof
+        id: c1
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          proof_dir="docs/06_status/proof/${issue_id}"
+          verification_log="${proof_dir}/verification.md"
+
+          echo "Checking C1: pnpm verify proof at $verification_log"
+
+          if [ ! -f "$verification_log" ]; then
+            echo "::error title=T1 Proof Gate - C1 FAIL::Missing verification.md: $verification_log"
+            echo ""
+            echo "T1 lanes require a verification log at:"
+            echo "  $verification_log"
+            echo ""
+            echo "The file must contain the string 'pnpm verify' to prove the full"
+            echo "verification suite was run. Create the file with output from:"
+            echo "  pnpm verify"
+            exit 1
+          fi
+
+          if ! grep -qi 'pnpm verify' "$verification_log"; then
+            echo "::error title=T1 Proof Gate - C1 FAIL::verification.md exists but does not contain 'pnpm verify'"
+            echo ""
+            echo "File found: $verification_log"
+            echo "Required: file must contain the string 'pnpm verify' as evidence the"
+            echo "full verification suite was run on this branch."
+            exit 1
+          fi
+
+          echo "C1 PASS: verification.md exists and contains 'pnpm verify'"
+
+      - name: C2 — pnpm test:db proof
+        id: c2
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          proof_dir="docs/06_status/proof/${issue_id}"
+
+          echo "Checking C2: pnpm test:db proof in $proof_dir"
+
+          if [ ! -d "$proof_dir" ]; then
+            echo "::error title=T1 Proof Gate - C2 FAIL::Proof directory missing: $proof_dir"
+            echo ""
+            echo "T1 lanes require a proof directory at $proof_dir with test:db evidence."
+            exit 1
+          fi
+
+          # Search all files in the proof dir for test:db reference
+          testdb_found=false
+          for f in "$proof_dir"/*; do
+            if [ -f "$f" ] && grep -qi 'test:db\|pnpm test:db' "$f"; then
+              testdb_found=true
+              echo "C2: test:db reference found in: $f"
+              break
+            fi
+          done
+
+          if [ "$testdb_found" = "false" ]; then
+            echo "::error title=T1 Proof Gate - C2 FAIL::No file in $proof_dir references 'pnpm test:db' or 'test:db'"
+            echo ""
+            echo "T1 lanes require runtime DB proof. Add a file to $proof_dir"
+            echo "that references 'pnpm test:db' or 'test:db' with pass evidence."
+            echo ""
+            echo "Example: $proof_dir/runtime-verification.md with output from:"
+            echo "  pnpm test:db"
+            exit 1
+          fi
+
+          echo "C2 PASS: test:db evidence present in $proof_dir"
+
+      - name: C3 — R-level compliance (informational)
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          echo "C3 INFO: R-level compliance is enforced by the separate 'R-Level Compliance Check'"
+          echo "workflow (r-level-compliance-check.yml). Ensure that check is green before merging."
+          echo ""
+          echo "C3: Informational — not re-checked here to avoid duplication."
+
+      - name: C4 — SHA-bound proof
+        id: c4
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          proof_dir="docs/06_status/proof/${issue_id}"
+
+          echo "Checking C4: SHA-bound proof in $proof_dir"
+
+          if [ ! -d "$proof_dir" ]; then
+            echo "::error title=T1 Proof Gate - C4 FAIL::Proof directory missing: $proof_dir"
+            exit 1
+          fi
+
+          # Look for any 40-char hex string (a git SHA) in any proof file
+          sha_found=false
+          for f in "$proof_dir"/*; do
+            if [ -f "$f" ] && grep -qE '[0-9a-f]{40}' "$f"; then
+              sha_found=true
+              echo "C4: SHA string found in: $f"
+              break
+            fi
+          done
+
+          if [ "$sha_found" = "false" ]; then
+            echo "::error title=T1 Proof Gate - C4 FAIL::No proof file in $proof_dir contains a 40-char hex SHA"
+            echo ""
+            echo "T1 proof must be SHA-bound. At least one file in $proof_dir must"
+            echo "contain a full 40-character git SHA (e.g., the branch HEAD SHA at"
+            echo "the time of verification, or the merge SHA after merging)."
+            echo ""
+            echo "Note: The merge SHA is not known at PR time. Record the branch HEAD"
+            echo "SHA in your proof file. After merge, ops:truth-check validates the"
+            echo "merge SHA binding."
+            exit 1
+          fi
+
+          echo "C4 PASS: SHA-bound proof present"
+
+      - name: C5 — Tier label (informational)
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          echo "C5 INFO: Tier label presence is enforced by the separate 'Tier Label Check'"
+          echo "workflow (tier-label-check.yml). This PR already has tier:T1 (required to"
+          echo "reach this workflow). C5 is satisfied."
+
+      - name: C6 — Expected proof paths from lane manifest
+        id: c6
+        if: steps.extract_issue.outputs.skip == 'false'
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          manifest_path="${{ steps.manifest.outputs.manifest_path }}"
+
+          echo "Checking C6: expected_proof_paths from $manifest_path"
+
+          # Extract expected_proof_paths array using python (available on ubuntu-latest)
+          expected_paths=$(python3 -c "
+          import json, sys
+          with open('$manifest_path') as f:
+              manifest = json.load(f)
+          paths = manifest.get('expected_proof_paths', [])
+          for p in paths:
+              print(p)
+          " 2>&1)
+
+          if [ $? -ne 0 ]; then
+            echo "::error title=T1 Proof Gate - C6 FAIL::Failed to parse lane manifest: $manifest_path"
+            echo "Parse error: $expected_paths"
+            exit 1
+          fi
+
+          if [ -z "$expected_paths" ]; then
+            echo "C6 INFO: No expected_proof_paths declared in lane manifest."
+            echo "Consider adding expected_proof_paths to $manifest_path for stronger verification."
+            echo "C6 PASS (no paths to check)"
+            exit 0
+          fi
+
+          echo "Expected proof paths:"
+          echo "$expected_paths"
+
+          missing_paths=""
+          while IFS= read -r path; do
+            [ -z "$path" ] && continue
+            if [ ! -f "$path" ]; then
+              missing_paths="${missing_paths}  - $path\n"
+              echo "MISSING: $path"
+            else
+              echo "FOUND: $path"
+            fi
+          done <<< "$expected_paths"
+
+          if [ -n "$missing_paths" ]; then
+            echo "::error title=T1 Proof Gate - C6 FAIL::Missing expected proof paths declared in lane manifest"
+            echo ""
+            echo "The following paths listed in expected_proof_paths of $manifest_path"
+            echo "do not exist in the repository:"
+            echo ""
+            echo -e "$missing_paths"
+            echo "Create these files before this PR can merge."
+            exit 1
+          fi
+
+          echo "C6 PASS: all expected_proof_paths present"
+
+      - name: Gate summary
+        if: steps.extract_issue.outputs.skip == 'false' && always()
+        run: |
+          issue_id="${{ steps.extract_issue.outputs.issue_id }}"
+          echo "## T1 Proof Gate — ${issue_id}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Check | Description | Status |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|-------|-------------|--------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C1 | pnpm verify proof (verification.log) | ${{ steps.c1.outcome == 'success' && '✓ PASS' || steps.c1.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C2 | pnpm test:db proof present | ${{ steps.c2.outcome == 'success' && '✓ PASS' || steps.c2.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C3 | R-level compliance (r-level-compliance-check.yml) | ℹ INFO |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C4 | SHA-bound proof | ${{ steps.c4.outcome == 'success' && '✓ PASS' || steps.c4.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C5 | Tier label present (tier-label-check.yml) | ℹ INFO |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| C6 | Expected proof paths from lane manifest | ${{ steps.c6.outcome == 'success' && '✓ PASS' || steps.c6.outcome == 'skipped' && '— SKIP' || '✗ FAIL' }} |" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Proof directory: \`docs/06_status/proof/${issue_id}/\`" >> "$GITHUB_STEP_SUMMARY"
+          echo "Lane manifest: \`docs/06_status/lanes/${issue_id}.json\`" >> "$GITHUB_STEP_SUMMARY"
