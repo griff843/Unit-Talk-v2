@@ -69,17 +69,37 @@ function manifestPathForIssue(issueId: string): string {
 }
 
 function parseWriterPayload(stdout: string): Record<string, unknown> {
-  const trimmed = stdout.trim();
-  const jsonStart = trimmed.indexOf('{');
-  if (jsonStart === -1) {
+  // emitJson uses JSON.stringify(value, null, 2) which puts '{' alone on the first line
+  // and '}' alone (unindented) on the last line. pnpm may emit text or single-line JSON
+  // (e.g. {"version":"10.29"}) before and after — we find the multi-line JSON block by
+  // locating '{' alone on a line and the matching '}' alone on a subsequent line.
+  const lines = stdout.split('\n');
+
+  let jsonStartLine = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (lines[i].trim() === '{') {
+      jsonStartLine = i;
+      break;
+    }
+  }
+
+  if (jsonStartLine === -1) {
     throw new Error('lane-link-pr did not emit a JSON payload');
   }
-  // pnpm may emit warning text before or after the JSON object — extract only the {...}
-  const jsonEnd = trimmed.lastIndexOf('}');
-  if (jsonEnd === -1 || jsonEnd < jsonStart) {
+
+  let jsonEndLine = -1;
+  for (let i = jsonStartLine + 1; i < lines.length; i++) {
+    if (lines[i] === '}') {
+      jsonEndLine = i;
+      break;
+    }
+  }
+
+  if (jsonEndLine === -1) {
     throw new Error('lane-link-pr JSON payload is malformed (no closing brace)');
   }
-  return JSON.parse(trimmed.slice(jsonStart, jsonEnd + 1)) as Record<string, unknown>;
+
+  return JSON.parse(lines.slice(jsonStartLine, jsonEndLine + 1).join('\n')) as Record<string, unknown>;
 }
 
 function branchExistsAnywhere(branch: string): { ok: boolean; warning?: string } {
