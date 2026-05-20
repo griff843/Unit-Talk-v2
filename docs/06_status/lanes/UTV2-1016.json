@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1016",
+  "lane_type": "hygiene",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a86dba13026c63f10",
+  "branch": "worktree-agent-a86dba13026c63f10",
+  "base_branch": "main",
+  "commit_sha": "9b02105f3fe0c8515455a20877c61e6f7d78aff8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/816",
+  "files_changed": [],
+  "file_scope_lock": [
+    "deploy/monitoring/provision-kuma-monitors.sh",
+    ".github/workflows/deploy-monitoring.yml",
+    "docs/06_status/lanes/UTV2-1016.json",
+    "docs/06_status/proof/UTV2-1016/diff-summary.md",
+    "docs/06_status/proof/UTV2-1016/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1016/diff-summary.md",
+    "docs/06_status/proof/UTV2-1016/verification.md"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-20T00:00:00.000Z",
+  "heartbeat_at": "2026-05-20T18:30:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": null,
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a86dba13026c63f10",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
