@@ -207,6 +207,7 @@ jobs:
             "UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed" \
             "UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed" \
             "UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc" \
             "UNIT_TALK_INGESTOR_AUTORUN=true" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_AUTORUN=true" \
@@ -308,6 +309,7 @@ jobs:
             "UNIT_TALK_INGESTOR_RUNTIME_MODE=fail_closed" \
             "UNIT_TALK_WORKER_RUNTIME_MODE=fail_closed" \
             "UNIT_TALK_DISCORD_BOT_RUNTIME_MODE=fail_closed" \
+            "UNIT_TALK_API_RATE_LIMIT_STORE=supabase_rpc" \
             "UNIT_TALK_INGESTOR_AUTORUN=true" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_AUTORUN=true" \
