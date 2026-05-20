@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1018",
+  "tier": "T1",
+  "branch": "claude/utv2-1018-fix-promotion-eval-outside-atomic",
+  "branch_head_sha": "e8b67dd3869a5a826c60c4c050bb59157308998d",
+  "merge_sha": null,
+  "generated_at": "2026-05-20T02:50:00.000Z",
+  "verifier": {
+    "identity": "claude-sonnet-4-6/dispatch-board",
+    "run_id": "utv2-1018-proof-run-1"
+  },
+  "static_proof": {
+    "pnpm_verify": "PASS",
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "test_run_logs": "113 tests, 0 failures (apps/api + packages)",
+    "r_level_check": "PASS — no R-level artifacts required"
+  },
+  "runtime_proof": {
+    "test_db_result": "PASS — 7/7 tests",
+    "t1_proof_result": "PASS — 4/4 tests",
+    "t1_proof_file": "apps/api/src/t1-proof-utv2-1018-stranded-picks.test.ts",
+    "queries": [
+      "processSubmission() against live Supabase — pick created and not stranded",
+      "detectStrandedPicks() — returns array with correct shape",
+      "auditStrandedPicks() — writes audit record with correct fields",
+      "picks table schema probe — promotion_target column exists",
+      "Live observation: 196 stranded picks detected in DB (confirms pre-existing bug)"
+    ],
+    "row_counts": {
+      "t1_proof_tests_pass": 4,
+      "t1_proof_tests_fail": 0,
+      "test_db_pass": 7,
+      "test_db_fail": 0,
+      "stranded_picks_detected_in_live_db": 196
+    }
+  },
+  "acceptance_criteria": {
+    "promotion_eval_failures_observable": true,
+    "structured_log_on_failure": true,
+    "audit_record_on_failure": true,
+    "audit_action": "promotion_eval_failed",
+    "stranded_pick_detection_working": true,
+    "stranded_pick_audit_working": true,
+    "schema_invariant_verified": true
+  }
+}
