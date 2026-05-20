@@ -4,8 +4,9 @@ approval:
   skip_sync_required: false
 entities:
   issues:
-    - UTV2-1010
+    - UTV2-1037
   findings: []
   controls: []
   proofs:
-    - docs/06_status/proof/UTV2-1010/evidence.json
+    - docs/06_status/proof/UTV2-1037/evidence.json
+    - docs/06_status/proof/UTV2-1037/verification.md

@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1037",
+  "title": "Audit and fix CLV methodology — exclude opening-line fallbacks from weight tuning",
+  "tier": "T1",
+  "branch": "claude/utv2-1037-audit-fix-clv-methodology",
+  "branch_head_sha": "c57ade96a364c190562fbca0f3e3126f0b288b41",
+  "merge_sha": null,
+  "generated_at": "2026-05-20T09:00:00.000Z",
+  "executor": "claude",
+  "verification": {
+    "pnpm_verify": "PASS",
+    "r_level_check": "PASS — no R-level artifacts required (Changed files: 2, Rules matched: none)",
+    "pnpm_test_db": "PASS — 7/7 live-DB smoke tests passed",
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": "PASS"
+  },
+  "files_changed": [
+    "packages/domain/src/clv-weight-tuner.ts",
+    "packages/domain/src/clv-weight-tuner.test.ts",
+    "packages/domain/src/edge-validation/clv-analyzer.ts",
+    "packages/domain/src/edge-validation/edge-validation.test.ts"
+  ],
+  "changes": [
+    {
+      "file": "packages/domain/src/clv-weight-tuner.ts",
+      "description": "Added isOpeningLineFallback?: boolean to ScoredPickOutcome interface. Added openingLineFallbacksExcluded: number to WeightEffectivenessReport. Updated analyzeWeightEffectiveness() to filter opening-line fallback rows before computing Pearson correlations."
+    },
+    {
+      "file": "packages/domain/src/edge-validation/clv-analyzer.ts",
+      "description": "Added WithClosingSource interface and assertClosingSourcePresent() guard function after MIN_CLV_SAMPLE constant. Callers can use this to fail-closed when feeding data to CLV analysis."
+    },
+    {
+      "file": "packages/domain/src/clv-weight-tuner.test.ts",
+      "description": "Added 3 tests for opening-line fallback exclusion: mixed closing+fallback rows (sampleSize=30, excluded=10), all closing rows (excluded=0), all fallback rows (sampleSize=0, confidence=insufficient)."
+    },
+    {
+      "file": "packages/domain/src/edge-validation/edge-validation.test.ts",
+      "description": "Added 5 tests for assertClosingSourcePresent(): valid records (no throw), null closingSnapshotAt (throws), null closingProviderKey (throws), multiple missing records (count in message), empty array (no throw)."
+    }
+  ],
+  "audit_findings": [
+    {
+      "finding": "clv-weight-tuner.ts accepted ScoredPickOutcome rows without checking isOpeningLineFallback",
+      "severity": "high",
+      "disposition": "fixed — opening-line fallbacks filtered before Pearson correlation computation"
+    },
+    {
+      "finding": "clv-analyzer.ts had no guard for callers passing records without closing-line provenance",
+      "severity": "medium",
+      "disposition": "fixed — assertClosingSourcePresent() added as fail-closed guard"
+    },
+    {
+      "finding": "Settlement CLV path in apps/api/src/clv-service.ts confirmed as TRUE CLOSING-LINE (closingSnapshotAt + providerKey), with isOpeningLineFallback: true on fallbacks",
+      "severity": "info",
+      "disposition": "confirmed correct — no change needed in clv-service.ts"
+    }
+  ],
+  "test_db_evidence": {
+    "tests_run": 7,
+    "tests_passed": 7,
+    "tests_failed": 0,
+    "duration_ms": 256547,
+    "summary": "All live-DB smoke tests passed against real Supabase (project ref: zfzdnfwdarxucxtaojxm)"
+  }
+}
