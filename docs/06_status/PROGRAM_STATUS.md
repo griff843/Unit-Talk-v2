@@ -7,12 +7,12 @@
 
 ## Last Updated
 
-2026-05-16 — board cleared after high-velocity lane close sprint (14 issues merged since 2026-05-14 status).
+2026-05-20 — PM topology decision recorded; 7-lane parallel infrastructure sprint underway.
 
-- Repo health is GREEN: `pnpm ops:health` reports HEALTHY after lane manifest reconciliation.
-- Board is clean: 0 active lanes, 0 stale manifests, 0 missing `closed_at`.
-- Working tree is clean: all docs and proof artifacts committed.
-- Only UTV2-770 (Hetzner cutover gate) remains open — blocked by `needs:hetzner`.
+- **PM Decision (2026-05-20):** Single-node Hetzner at 46.225.14.123 is the authoritative production target. Multi-server topology (EX44/CCX23/BX11) deferred to future scale milestone.
+- Single node provisioned and services deployed (last deploy 2026-05-17, SHA `bd952fd7`).
+- 7 active infra lanes in parallel push toward runtime truth + 72h burn-in.
+- Runtime readiness: NOT READY — burn-in not complete, ingestor freshness failing.
 
 ---
 
@@ -24,11 +24,19 @@
 | Active operating mode | Phase 7A — Governance Brake active |
 | Static baseline | `pnpm verify` PASS |
 | Repo health | `pnpm ops:health` HEALTHY |
-| Active Codex lanes | none |
-| Active Claude lanes | none |
-| Active worktrees | 1 — `C:/Dev/Unit-Talk-v2-main` (main checkout) |
-| Local branches | `main` only |
-| Open PRs | none |
+| Hetzner node | Single node at 46.225.14.123 — provisioned, services deployed |
+| Last deploy SHA | `bd952fd7` (2026-05-17) |
+| Services deployed | api, worker, ingestor, discord-bot (docker-compose via GHCR) |
+| Active Codex lanes | 4 (infrastructure sprint) |
+| Active Claude lanes | 3 (infrastructure sprint) |
+| Runtime readiness | NOT READY — burn-in not complete |
+| Ingestor freshness | FAILING — root cause identified, fix in UTV2-1014 |
+
+---
+
+## Topology Decision
+
+**2026-05-20 PM Decision:** Single-node Hetzner deployment at 46.225.14.123 is the authoritative production target. Multi-server topology (EX44 primary / CCX23 DB / BX11 monitoring) is deferred to a future scale/resilience milestone when current scale justifies it. This decision unblocks UTV2-1013 and all downstream runtime readiness work.
 
 ---
 
@@ -36,7 +44,13 @@
 
 | Priority | Issue | Status | Notes |
 |---:|---|---|---|
-| 1 | UTV2-770 | In Claude | Hetzner cutover gate; blocked by `needs:hetzner`; ingestion freshness proof required before production |
+| 1 | UTV2-1014 | In Progress | Fix .env.production delivery + SSH operator key access |
+| 2 | UTV2-1015 | In Progress | Loki + Grafana centralized logging deploy |
+| 3 | UTV2-1016 | In Progress | Uptime Kuma full 5-monitor setup (1/5 configured) |
+| 4 | UTV2-1031 | In Progress | Live rollback drill — not yet executed |
+| 5 | UTV2-1041 | In Progress | 72h burn-in evidence collection — blocked on above |
+| 6 | UTV2-1012 | In Progress | Supervisor verification |
+| 7 | UTV2-1013 | Done (this lane) | PM decision recorded — single-node topology confirmed |
 
 ---
 
@@ -66,11 +80,14 @@
 | Gate | Status | Current Truth |
 |---|---|---|
 | Repo hygiene | Green | `ops:health` HEALTHY |
-| Lane registry | Green | 0 active lanes, 0 stale, 0 missing `closed_at` |
+| Lane registry | Green | All lanes tracked |
 | Working tree | Green | Clean — all changes committed |
-| Runtime readiness | Not asserted | Static verify does not equal runtime proof |
-| MLB production-readiness | Open | Data/proof gated; separate from hygiene work |
-| Hetzner cutover | Open | UTV2-770 in Claude; ingestion freshness proof still required |
+| Hetzner node | Green | Single node at 46.225.14.123 provisioned; services deployed 2026-05-17 SHA `bd952fd7` |
+| Ingestor freshness | Red | Staleness alert failing — root cause identified, fix in UTV2-1014 |
+| Centralized logging | Red | Loki not yet deployed — UTV2-1015 in progress |
+| Monitoring completeness | Amber | 1/5 Uptime Kuma monitors configured — UTV2-1016 in progress |
+| Rollback drill | Red | Not executed — UTV2-1031 in progress |
+| 72h burn-in | Not Started | Blocked on ingestor freshness, logging, monitoring, rollback drill |
 
 ---
 
@@ -78,17 +95,21 @@
 
 | Risk | Severity | Status / Action |
 |---|---:|---|
-| UTV2-770 blocked on infra | High | Needs Hetzner provisioning before cutover gate can close |
+| Ingestor freshness failing | High | .env.production delivery broken; UTV2-1014 in progress |
+| No local SSH operator key | High | Ops-add-operator-key workflow being built in UTV2-1014 |
+| 72h burn-in not started | High | Blocked on UTV2-1014, UTV2-1015, UTV2-1016, UTV2-1031 |
+| Uptime Kuma incomplete | Medium | 4/5 monitors unconfigured — UTV2-1016 in progress |
+| Loki not deployed | Medium | No centralized log aggregation until UTV2-1015 closes |
+| Rollback drill not executed | Medium | Production readiness gate; UTV2-1031 in progress |
 | Runtime proof gap | High | Static verify is not runtime readiness; do not conflate |
-| Deferred outbox rows | Medium | 6 deferred pending rows outside worker targets; not stuck |
 
 ---
 
 ## Next PM Actions
 
-1. Resolve UTV2-770: provide Hetzner access or re-scope ingestion freshness proof path.
-2. Monitor outbox deferred rows — 6 rows outside worker targets (oldest ~283h).
-3. Queue next sprint once UTV2-770 is unblocked or a scope decision is made.
+1. Monitor 7-lane infra sprint: UTV2-1014 is the critical-path unblock for ingestor freshness and SSH access.
+2. 72h burn-in (UTV2-1041) cannot start until UTV2-1014, UTV2-1015, UTV2-1016, and UTV2-1031 all close.
+3. No production runtime assertion until burn-in completes and runtime proof is assembled.
 
 ---
 
