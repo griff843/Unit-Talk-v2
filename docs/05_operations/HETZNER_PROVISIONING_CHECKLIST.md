@@ -4,20 +4,27 @@
 **Production cutover:** NO-GO until all UTV2-770 gates pass  
 **Parent:** UTV2-770 (Hetzner self-hosted migration track)
 
+> **2026-05-20:** Single-node topology adopted (PM decision). Items referencing EX44/CCX23/BX11 multi-server topology are deferred to a future scale milestone. The active production node is a single Hetzner server at 46.225.14.123. Sections 1 (EX44), 3 (BX11), and 5 (private networking) below are deferred and do not apply to the current deployment target.
+
 > **Warning:** Completing this checklist does not authorise production cutover. DNS, Discord env, provider env, and production DB write-path changes are blocked until the PM authorisation block in the migration runbook (`docs/05_operations/contracts/migration-runbook-v1.md` §9) is signed.
 
 ---
 
 ## Architecture baseline
 
-| Server | Role | Spec | Price |
-|--------|------|------|-------|
-| CCX23 | App + worker host | 4 vCPU, 16 GB RAM, 240 GB NVMe | ~€17/mo |
-| EX44 | Database (PG16) | 4-core, 64 GB RAM, 2×512 GB NVMe | €49/mo + €109 setup |
-| BX11 | Storage Box (backup target) | 1 TB HDD | ~€4/mo |
-| Off-site | Object storage (R2 or equivalent) | second backup copy | variable |
+### Active (2026-05-20 PM decision)
 
-Regions: FSN1 (Falkenstein) or HEL1 (Helsinki) — both available for EX44. Use the same region for CCX23 + EX44 to avoid cross-region egress costs on private networking.
+| Server | Role | IP | Status |
+|--------|------|----|--------|
+| Single Hetzner node | App + worker + ingestor + discord-bot | 46.225.14.123 | Provisioned, services deployed 2026-05-17 |
+
+### Deferred (future scale milestone)
+
+| Server | Role | Spec | Deferred Reason |
+|--------|------|------|-----------------|
+| EX44 | Database (PG16) | 4-core, 64 GB RAM, 2×512 GB NVMe | Multi-server topology deferred |
+| CCX23 | App + worker host | 4 vCPU, 16 GB RAM, 240 GB NVMe | Multi-server topology deferred |
+| BX11 | Storage Box (backup target) | 1 TB HDD | Multi-server topology deferred |
 
 ---
 
