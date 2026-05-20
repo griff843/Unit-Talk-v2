@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1012",
-  "lane_type": "hygiene",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T2",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a4990f2a679e22ca2",
