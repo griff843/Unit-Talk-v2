@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1077-generate-preflight-token-script",
   "branch": "codex/utv2-1077-generate-preflight-token-script",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "2cec59c62f94c3f0d24d21fc5933b056007116d1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/806",
   "pr_number": 806,
   "files_changed": [],
@@ -22,14 +22,42 @@
     "docs/06_status/proof/UTV2-1077/diff-summary.md",
     "docs/06_status/proof/UTV2-1077/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-20T03:41:12.171Z",
-  "heartbeat_at": "2026-05-20T03:41:12.171Z",
+  "heartbeat_at": "2026-05-20T05:18:09.996Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1077-generate-preflight-token-script.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T05:16:52.604Z",
+      "verdict": "fail",
+      "merge_sha": "2cec59c62f94c3f0d24d21fc5933b056007116d1",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T05:17:54.019Z",
+      "verdict": "fail",
+      "merge_sha": "2cec59c62f94c3f0d24d21fc5933b056007116d1",
+      "failures": [
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T05:18:09.996Z",
+      "verdict": "pass",
+      "merge_sha": "2cec59c62f94c3f0d24d21fc5933b056007116d1",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

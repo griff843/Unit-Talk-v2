@@ -2,17 +2,23 @@
 
 **Generated:** 2026-05-20T03:44:43Z
 **Branch:** `codex/utv2-1077-generate-preflight-token-script`
+**Merge SHA:** `2cec59c62f94c3f0d24d21fc5933b056007116d1`
 **Executor:** codex-cli
 **Tier:** T2
 
 ## Verification
 
-### Type-check
+### pnpm type-check
 
 ```
-Command: pnpm type-check
-Result: PASS
-Output: No TypeScript errors. tsc -b tsconfig.json exited 0.
+pnpm type-check: PASS
+No TypeScript errors. tsc -b tsconfig.json exited 0.
+```
+
+### pnpm test
+
+```
+pnpm test: PASS
 ```
 
 ### pnpm verify

@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1078-lane-start-non-existent-proof-paths",
   "branch": "codex/utv2-1078-lane-start-non-existent-proof-paths",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "974efc6a3c176bfcf83997a3e89748d9a61f054b",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/804",
   "pr_number": 804,
   "files_changed": [],
@@ -23,14 +23,44 @@
     "docs/06_status/proof/UTV2-1078/diff-summary.md",
     "docs/06_status/proof/UTV2-1078/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-20T03:41:00.095Z",
-  "heartbeat_at": "2026-05-20T03:41:00.095Z",
+  "heartbeat_at": "2026-05-20T05:17:49.752Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1078-lane-start-non-existent-proof-paths.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T05:16:48.169Z",
+      "verdict": "fail",
+      "merge_sha": "974efc6a3c176bfcf83997a3e89748d9a61f054b",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T05:17:01.258Z",
+      "verdict": "fail",
+      "merge_sha": "974efc6a3c176bfcf83997a3e89748d9a61f054b",
+      "failures": [
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T05:17:49.752Z",
+      "verdict": "pass",
+      "merge_sha": "974efc6a3c176bfcf83997a3e89748d9a61f054b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

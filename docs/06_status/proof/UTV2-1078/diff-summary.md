@@ -1,5 +1,7 @@
 # Diff Summary — UTV2-1078
 
+**Merge SHA:** `974efc6a3c176bfcf83997a3e89748d9a61f054b`
+
 ## Summary
 
 Fix: `normalizeFileScopePath` in `scripts/ops/shared.ts` now accepts an `allowMissing` option. When set, the function returns the path as-is if the file doesn't exist instead of throwing `ENOENT`. This prevents `ops:lane-start` from crashing when `expected_proof_paths` reference files that haven't been created yet at lane start time.

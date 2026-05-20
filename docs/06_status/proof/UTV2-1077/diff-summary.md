@@ -1,5 +1,7 @@
 # Diff Summary — UTV2-1077
 
+**Merge SHA:** `2cec59c62f94c3f0d24d21fc5933b056007116d1`
+
 **Issue:** UTV2-1077 — Add generate-preflight-token script for Claude-executed lanes
 **Tier:** T2
 **Branch:** codex/utv2-1077-generate-preflight-token-script
