@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1022-implement-computeriskscore",
   "branch": "codex/utv2-1022-implement-computeriskscore",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "c781ff7a8c3f5479aa29b6956734fa3088e7de77",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/801",
   "files_changed": [],
   "file_scope_lock": [
     ".lane/lanes/modeling.yml",
@@ -31,16 +31,41 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1022/diff-summary.md",
-    "docs/06_status/proof/UTV2-1022/verification.md"
+    "docs/06_status/proof/UTV2-1022/verification.md",
+    "docs/06_status/proof/UTV2-1022/evidence-bundle.json"
   ],
-  "status": "started",
+  "status": "done",
+  "pr_number": 801,
   "started_at": "2026-05-19T22:34:11.673Z",
-  "heartbeat_at": "2026-05-19T22:34:11.673Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T02:11:54.948Z",
+  "closed_at": "2026-05-20T02:11:54.948Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1022-implement-computeriskscore.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T02:10:23.383Z",
+      "verdict": "fail",
+      "merge_sha": "c781ff7a8c3f5479aa29b6956734fa3088e7de77",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P5",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T02:11:16.751Z",
+      "verdict": "pass",
+      "merge_sha": "c781ff7a8c3f5479aa29b6956734fa3088e7de77",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -34,3 +34,5 @@
 3. **Version bump deferred**: Policy versions remain at `best-bets-v2`, `trader-insights-v2`, `exclusive-insights-v2`. The v2→v3 bump is deferred to avoid snapshot replay migration.
 
 4. **`domainAnalysis.kellyFraction` fallback**: `computeKellyScore` reads from both `metadata.kellySizing.fractional_kelly` and `metadata.domainAnalysis.kellyFraction`, the latter computed by `domain-analysis-service` from odds+confidence when provider offers exist.
+
+Merge SHA: c781ff7a8c3f5479aa29b6956734fa3088e7de77

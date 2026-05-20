@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-1022",
+  "merge_sha": "c781ff7a8c3f5479aa29b6956734fa3088e7de77",
+  "verifier": {
+    "identity": "claude-sonnet-4-6/dispatch-board"
+  },
+  "static_proof": {
+    "pnpm_verify": "pass",
+    "typescript_errors": 0,
+    "eslint_errors": 0,
+    "tests_pass": 113,
+    "tests_fail": 0,
+    "test_run_logs": [
+      {
+        "path": "docs/06_status/proof/UTV2-1022/verification.md",
+        "merge_sha": "c781ff7a8c3f5479aa29b6956734fa3088e7de77"
+      }
+    ]
+  },
+  "runtime_proof": {
+    "receipts": [
+      {
+        "check": "Merge Gate",
+        "run_id": "26136669514",
+        "conclusion": "success"
+      },
+      {
+        "check": "T1 Proof Gate",
+        "run_id": "26136669501",
+        "conclusion": "success"
+      },
+      {
+        "check": "Runtime Verifier Gate",
+        "run_id": "26136669558",
+        "conclusion": "success"
+      }
+    ],
+    "queries": [
+      {
+        "description": "database repository bundle persists a submission and settlement when Supabase is configured",
+        "result": "pass",
+        "duration_ms": 45632
+      },
+      {
+        "description": "UTV2-920: invalid atomic enqueue writes no lifecycle event or outbox row",
+        "result": "pass",
+        "duration_ms": 44576
+      },
+      {
+        "description": "UTV2-920: invalid atomic delivery confirmation rolls back outbox status",
+        "result": "pass",
+        "duration_ms": 43220
+      },
+      {
+        "description": "UTV2-883: no duplicate participants for the same external_id and sport",
+        "result": "pass",
+        "duration_ms": 539
+      },
+      {
+        "description": "UTV2-1022: submitted pick persists riskScore and riskModifier in promotion history payload",
+        "result": "pass",
+        "duration_ms": 41696
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "picks",
+        "operation": "insert",
+        "count": 3
+      },
+      {
+        "table": "pick_promotion_history",
+        "operation": "insert",
+        "count": 3
+      },
+      {
+        "table": "outbox",
+        "operation": "insert",
+        "count": 3
+      },
+      {
+        "table": "pick_lifecycle",
+        "operation": "insert",
+        "count": 3
+      }
+    ]
+  }
+}
