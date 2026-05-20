@@ -11,6 +11,8 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".claude/.state-stamp",
+    "docs/06_status/SYSTEM_STATE.md",
     "scripts/ops/codex-exec.ts",
     "scripts/ops/codex-health-check.ts"
   ],
