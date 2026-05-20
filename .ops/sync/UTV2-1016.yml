@@ -1,0 +1,7 @@
+schema_version: 1
+issue_id: UTV2-1016
+status: done
+tier: T2
+merge_sha: 42ba4c84
+pr: 816
+closed_at: "2026-05-20T19:30:00.000Z"

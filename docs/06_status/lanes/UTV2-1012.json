@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.claude/worktrees/agent-a4990f2a679e22ca2",
   "branch": "worktree-agent-a4990f2a679e22ca2",
   "base_branch": "main",
-  "commit_sha": "1f066ac574199b9d2e5ce79ca1b42b8fc5aa44c2",
+  "commit_sha": "871e9d1e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/818",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,24 @@
     "docs/06_status/proof/UTV2-1012/diff-summary.md",
     "docs/06_status/proof/UTV2-1012/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-20T00:00:00.000Z",
   "heartbeat_at": "2026-05-20T18:30:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-20T19:30:00.000Z",
   "blocked_by": [],
   "preflight_token": null,
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-20T19:30:00.000Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "871e9d1e",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": [],
+      "note": "Infra sprint closeout \u2014 PR merged to main, governance validated via Merge Gate"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

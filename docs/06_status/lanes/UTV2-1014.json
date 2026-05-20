@@ -7,7 +7,7 @@
   "worktree_path": null,
   "branch": "UTV2-1014-env-production-delivery",
   "base_branch": "main",
-  "commit_sha": "60876e8fea49869eb25c2b6577e8c1601bef67d4",
+  "commit_sha": "e97c2bc0",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/814",
   "files_changed": [],
   "file_scope_lock": [
@@ -23,14 +23,24 @@
     "docs/06_status/proof/UTV2-1014/diff-summary.md",
     "docs/06_status/proof/UTV2-1014/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-20T00:00:00.000Z",
   "heartbeat_at": "2026-05-20T18:30:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-20T19:30:00.000Z",
   "blocked_by": [],
   "preflight_token": null,
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "timestamp": "2026-05-20T19:30:00.000Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "e97c2bc0",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": [],
+      "note": "Infra sprint closeout \u2014 PR merged to main, governance validated via Merge Gate"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "main",

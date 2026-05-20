@@ -1,0 +1,7 @@
+schema_version: 1
+issue_id: UTV2-1041
+status: done
+tier: T2
+merge_sha: 370b31db
+pr: 820
+closed_at: "2026-05-20T19:30:00.000Z"
