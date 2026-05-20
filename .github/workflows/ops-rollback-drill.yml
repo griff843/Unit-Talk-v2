@@ -1,0 +1,100 @@
+name: Ops — Rollback Drill
+
+on:
+  workflow_dispatch:
+    inputs:
+      api_container:
+        description: 'Docker container name for the API service'
+        required: false
+        default: 'unit-talk-api-1'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rollback-drill
+  cancel-in-progress: false
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  rollback-drill:
+    name: Run rollback drill on production host
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
+          test -n "${{ secrets.UNIT_TALK_DEPLOY_HOST }}"    || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "${{ secrets.UNIT_TALK_DEPLOY_USER }}"    || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "${{ secrets.UNIT_TALK_DEPLOY_PATH }}"    || missing+=(UNIT_TALK_DEPLOY_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+          echo "All required secrets present."
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload rollback-drill.sh to server
+        run: |
+          # Upload to a scripts subdirectory under DEPLOY_PATH
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/scripts'"
+          scp deploy/rollback-drill.sh "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/scripts/rollback-drill.sh"
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "chmod +x '$DEPLOY_PATH/scripts/rollback-drill.sh'"
+          echo "rollback-drill.sh uploaded to $DEPLOY_HOST:$DEPLOY_PATH/scripts/"
+
+      - name: Run rollback drill via SSH
+        env:
+          API_CONTAINER: ${{ inputs.api_container }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "bash '$DEPLOY_PATH/scripts/rollback-drill.sh' \
+              --deploy-path '$DEPLOY_PATH' \
+              --api-container '${API_CONTAINER:-unit-talk-api-1}'"
+
+      - name: Download drill result from server
+        if: always()
+        run: |
+          scp "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/rollback-drill-result.json" rollback-drill-result.json
+          echo "=== Drill result ==="
+          cat rollback-drill-result.json
+
+      - name: Check drill verdict
+        if: always()
+        run: |
+          if [ ! -f rollback-drill-result.json ]; then
+            echo "::error::rollback-drill-result.json not found — drill did not complete"
+            exit 1
+          fi
+          VERDICT=$(python3 -c "import json; d=json.load(open('rollback-drill-result.json')); print(d.get('verdict','MISSING'))")
+          if [ "$VERDICT" != "PASS" ]; then
+            FAIL_REASON=$(python3 -c "import json; d=json.load(open('rollback-drill-result.json')); print(d.get('fail_reason','unknown'))" 2>/dev/null || echo "unknown")
+            echo "::error::Rollback drill FAILED — reason: $FAIL_REASON"
+            exit 1
+          fi
+          DURATION=$(python3 -c "import json; d=json.load(open('rollback-drill-result.json')); print(d.get('duration_seconds','?'))" 2>/dev/null || echo "?")
+          echo "Rollback drill PASSED in ${DURATION}s"
+
+      - name: Upload drill result artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rollback-drill-result-${{ github.run_id }}.json
+          path: rollback-drill-result.json
+          retention-days: 30
