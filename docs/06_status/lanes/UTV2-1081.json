@@ -7,9 +7,13 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1081-fix-codex-exec-ts",
   "branch": "claude/utv2-1081-fix-codex-exec-ts",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "c4d58729ba8a2c1a29b264e4fb7a1c2a401b2206",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/812",
-  "files_changed": [],
+  "files_changed": [
+    "scripts/ops/codex-exec.ts",
+    "docs/06_status/proof/UTV2-1081/diff-summary.md",
+    "docs/06_status/proof/UTV2-1081/verification.md"
+  ],
   "file_scope_lock": [
     ".claude/.state-stamp",
     "docs/06_status/SYSTEM_STATE.md",
@@ -24,9 +28,9 @@
     "docs/06_status/proof/UTV2-1081/diff-summary.md",
     "docs/06_status/proof/UTV2-1081/verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-20T15:56:58.327Z",
-  "heartbeat_at": "2026-05-20T17:55:00.000Z",
+  "heartbeat_at": "2026-05-20T17:16:32.310458Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1081-fix-codex-exec-ts.json",

@@ -2,6 +2,7 @@
 
 Branch: claude/utv2-1081-fix-codex-exec-ts
 SHA: 7a573356
+Merge SHA: c4d58729ba8a2c1a29b264e4fb7a1c2a401b2206
 
 ## Verification
 

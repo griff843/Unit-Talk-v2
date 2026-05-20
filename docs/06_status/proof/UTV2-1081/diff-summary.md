@@ -1,4 +1,6 @@
 # UTV2-1081 — Diff Summary
+Merge SHA: c4d58729ba8a2c1a29b264e4fb7a1c2a401b2206
+
 
 **Branch:** claude/utv2-1081-fix-codex-exec-ts  
 **Issue:** Fix codex-exec.ts — replace invalid `codex run --prompt-file` with `codex exec`
