@@ -230,3 +230,47 @@ test('testAllComponentSignificance respects custom alpha threshold', () => {
     `loose alpha should produce at least as many significant results as strict alpha (${looseSigCount} vs ${strictSigCount})`,
   );
 });
+
+// ── Opening-line fallback exclusion ───────────────────────────────────────────
+
+test('analyzeWeightEffectiveness excludes opening-line fallback rows from analysis', () => {
+  const closing: ScoredPickOutcome[] = Array.from({ length: 30 }, (_, i) => ({
+    scoreInputs: { edge: 50 + i, trust: 70, readiness: 70, uniqueness: 70, boardFit: 70 },
+    clvPercent: i * 0.2,
+    won: i > 15,
+  }));
+  const fallbacks: ScoredPickOutcome[] = Array.from({ length: 10 }, (_, i) => ({
+    scoreInputs: { edge: 50 + i, trust: 70, readiness: 70, uniqueness: 70, boardFit: 70 },
+    clvPercent: i * 0.2,
+    won: i > 5,
+    isOpeningLineFallback: true,
+  }));
+  const mixed = [...closing, ...fallbacks];
+  const report = analyzeWeightEffectiveness(mixed);
+  assert.equal(report.sampleSize, 30, 'sampleSize must count only closing-line rows');
+  assert.equal(report.openingLineFallbacksExcluded, 10, 'must report how many fallbacks were excluded');
+});
+
+test('analyzeWeightEffectiveness with zero fallbacks reports openingLineFallbacksExcluded=0', () => {
+  const outcomes: ScoredPickOutcome[] = Array.from({ length: 25 }, (_, i) => ({
+    scoreInputs: { edge: 50 + i, trust: 70, readiness: 70, uniqueness: 70, boardFit: 70 },
+    clvPercent: (i - 12) * 0.3,
+    won: i > 12,
+  }));
+  const report = analyzeWeightEffectiveness(outcomes);
+  assert.equal(report.openingLineFallbacksExcluded, 0);
+  assert.equal(report.sampleSize, 25);
+});
+
+test('analyzeWeightEffectiveness returns insufficient confidence when all rows are opening-line fallbacks', () => {
+  const fallbacksOnly: ScoredPickOutcome[] = Array.from({ length: 30 }, (_, i) => ({
+    scoreInputs: { edge: 50 + i, trust: 70, readiness: 70, uniqueness: 70, boardFit: 70 },
+    clvPercent: i * 0.2,
+    won: i > 15,
+    isOpeningLineFallback: true,
+  }));
+  const report = analyzeWeightEffectiveness(fallbacksOnly);
+  assert.equal(report.sampleSize, 0);
+  assert.equal(report.openingLineFallbacksExcluded, 30);
+  assert.equal(report.confidence, 'insufficient');
+});

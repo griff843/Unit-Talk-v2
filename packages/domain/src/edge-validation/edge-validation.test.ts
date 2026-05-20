@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 
 import { computeConfidenceInterval } from './edge-calibrator.js';
-import { analyzeCLV } from './clv-analyzer.js';
+import { analyzeCLV, assertClosingSourcePresent, type WithClosingSource } from './clv-analyzer.js';
 import {
   validateEdge,
   MIN_EDGE_SAMPLE_SIZE,
@@ -175,5 +175,50 @@ describe('validateEdge', () => {
 
   it('exports MIN_EDGE_SAMPLE_SIZE', () => {
     assert.equal(MIN_EDGE_SAMPLE_SIZE, 30);
+  });
+});
+
+// ── assertClosingSourcePresent ───────────────────────────────────────────────
+
+describe('assertClosingSourcePresent', () => {
+  it('does not throw when all records have closing-line provenance', () => {
+    const records: WithClosingSource[] = [
+      { closingSnapshotAt: '2026-01-01T00:00:00Z', closingProviderKey: 'draftkings' },
+      { closingSnapshotAt: '2026-01-02T00:00:00Z', closingProviderKey: 'fanduel' },
+    ];
+    assert.doesNotThrow(() => assertClosingSourcePresent(records));
+  });
+
+  it('throws when any record has null closingSnapshotAt', () => {
+    const records: WithClosingSource[] = [
+      { closingSnapshotAt: '2026-01-01T00:00:00Z', closingProviderKey: 'draftkings' },
+      { closingSnapshotAt: null, closingProviderKey: 'fanduel' },
+    ];
+    assert.throws(
+      () => assertClosingSourcePresent(records),
+      /1 record\(s\) have null closingSnapshotAt or closingProviderKey/,
+    );
+  });
+
+  it('throws when any record has null closingProviderKey', () => {
+    const records: WithClosingSource[] = [
+      { closingSnapshotAt: '2026-01-01T00:00:00Z', closingProviderKey: null },
+    ];
+    assert.throws(() => assertClosingSourcePresent(records), /CLV analysis requires closing-line source/);
+  });
+
+  it('throws listing the correct count when multiple records are missing', () => {
+    const records: WithClosingSource[] = Array.from({ length: 5 }, (_, i) => ({
+      closingSnapshotAt: i < 2 ? null : '2026-01-01T00:00:00Z',
+      closingProviderKey: 'draftkings',
+    }));
+    assert.throws(
+      () => assertClosingSourcePresent(records),
+      /2 record\(s\) have null/,
+    );
+  });
+
+  it('does not throw for an empty array', () => {
+    assert.doesNotThrow(() => assertClosingSourcePresent([]));
   });
 });
