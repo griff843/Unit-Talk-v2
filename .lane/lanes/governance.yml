@@ -42,7 +42,7 @@ forbidden_path_globs:
   - packages/**/database.types.ts
 required_proof_artifacts:
   - diff-summary.md
-  - verification.log
+  - verification.md
 ci_requirements:
   - pnpm verify
 merge_policy: Requires explicit issue scope for changes that affect CI or lane policy.
