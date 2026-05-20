@@ -1,6 +1,6 @@
 # UTV2-1079 — Diff Summary
 
-## Changes
+## Summary
 
 ### .github/workflows/reconcile-stale-lanes.yml (new)
 Scheduled workflow (every 6 hours + workflow_dispatch) that runs `pnpm ops:reconcile --apply` and commits any stale manifest mutations directly to main.

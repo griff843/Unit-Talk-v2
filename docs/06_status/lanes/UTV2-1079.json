@@ -11,9 +11,12 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/deploy-monitoring.yml"
+    ".github/workflows/reconcile-stale-lanes.yml"
   ],
-  "expected_proof_paths": [],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1079/diff-summary.md",
+    "docs/06_status/proof/UTV2-1079/verification.log"
+  ],
   "status": "started",
   "started_at": "2026-05-20T16:05:16.951Z",
   "heartbeat_at": "2026-05-20T16:05:16.951Z",
