@@ -8,13 +8,14 @@
   "branch": "codex/utv2-1076-auto-link-env-in-lane-start",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/805",
+  "pr_number": 805,
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-start.ts"
   ],
   "expected_proof_paths": [],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-20T03:40:51.311Z",
   "heartbeat_at": "2026-05-20T03:40:51.311Z",
   "closed_at": null,

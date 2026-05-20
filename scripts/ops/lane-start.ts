@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -102,6 +103,35 @@ function buildSyncYml(issueId: string): string {
     '  proofs: []',
     '',
   ].join('\n');
+}
+
+/**
+ * Link env files from the main worktree into a newly-created lane worktree.
+ * Non-fatal: if link-worktree-env.ts is missing or errors, we warn and continue
+ * so that lane creation itself is not blocked.
+ */
+function linkWorktreeEnv(worktreePath: string): void {
+  const scriptPath = path.join(ROOT, 'scripts', 'link-worktree-env.ts');
+  if (!fs.existsSync(scriptPath)) {
+    process.stderr.write(`[lane-start] warn: link-worktree-env.ts not found at ${scriptPath}; skipping env link\n`);
+    return;
+  }
+  const result = spawnSync(
+    'npx',
+    ['tsx', scriptPath, worktreePath],
+    { cwd: ROOT, stdio: 'pipe', encoding: 'utf8', shell: process.platform === 'win32' },
+  );
+  if (result.error) {
+    process.stderr.write(`[lane-start] warn: link-worktree-env failed: ${result.error.message}\n`);
+    return;
+  }
+  if (result.status !== 0) {
+    process.stderr.write(`[lane-start] warn: link-worktree-env exited ${result.status ?? 1}:\n${result.stderr ?? ''}\n`);
+    return;
+  }
+  if (result.stdout) {
+    process.stdout.write(result.stdout);
+  }
 }
 
 function main(): void {
@@ -242,6 +272,7 @@ function main(): void {
 
     if (!branchAlreadyExists && !worktreeAlreadyExists) {
       createBranchAndWorktree(branch, worktreePath);
+      linkWorktreeEnv(worktreePath);
     }
     const setup = prepareLaneExecutionDirectory({
       cwd: worktreePath,
