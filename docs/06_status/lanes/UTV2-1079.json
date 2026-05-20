@@ -11,11 +11,13 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
-    ".github/workflows/reconcile-stale-lanes.yml"
+    ".claude/.state-stamp",
+    ".github/workflows/reconcile-stale-lanes.yml",
+    "docs/06_status/SYSTEM_STATE.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1079/diff-summary.md",
-    "docs/06_status/proof/UTV2-1079/verification.log"
+    "docs/06_status/proof/UTV2-1079/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-20T16:05:16.951Z",
