@@ -58,8 +58,10 @@ jobs:
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/scripts/container-health-watch.sh"
           scp deploy/monitoring/disk-alert.sh \
             "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/scripts/disk-alert.sh"
+          scp deploy/monitoring/provision-kuma-monitors.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/scripts/provision-kuma-monitors.sh"
           ssh "$DEPLOY_USER@$DEPLOY_HOST" \
-            "chmod +x '$DEPLOY_PATH/scripts/container-health-watch.sh' '$DEPLOY_PATH/scripts/disk-alert.sh'"
+            "chmod +x '$DEPLOY_PATH/scripts/container-health-watch.sh' '$DEPLOY_PATH/scripts/disk-alert.sh' '$DEPLOY_PATH/scripts/provision-kuma-monitors.sh'"
 
       - name: Write .env.monitoring on server
         env:
@@ -95,55 +97,18 @@ jobs:
             exit 1
           "
 
-      - name: Configure Uptime Kuma (admin + API health monitor)
+      - name: Provision all Uptime Kuma monitors and notifications
         env:
           UPTIME_KUMA_ADMIN_PASSWORD: ${{ secrets.UPTIME_KUMA_ADMIN_PASSWORD }}
         run: |
-          # Write password to temp file on runner, SCP to server, use it, delete it
-          # Avoids the password appearing in any command-line argument or shell expansion
-          printf '%s' "$UPTIME_KUMA_ADMIN_PASSWORD" > /tmp/kuma-admin-pass
-          chmod 600 /tmp/kuma-admin-pass
-          scp -q /tmp/kuma-admin-pass "$DEPLOY_USER@$DEPLOY_HOST:/tmp/kuma-admin-pass"
-          rm -f /tmp/kuma-admin-pass
-
-          ssh "$DEPLOY_USER@$DEPLOY_HOST" 'bash -s' << 'SSHEOF'
-          set -euo pipefail
-          KUMA_PASS="$(cat /tmp/kuma-admin-pass)"
-          rm -f /tmp/kuma-admin-pass
-
-          # Helper: build JSON safely via Python (handles special chars in password)
-          make_auth_json() {
-            python3 -c "import json,sys;print(json.dumps({'username':'admin','password':sys.argv[1]}))" "$KUMA_PASS"
-          }
-
-          # Initial admin setup — idempotent, no-op if admin already exists
-          SETUP_STATUS=$(curl -sf -X POST http://localhost:3001/setup \
-            -H 'Content-Type: application/json' \
-            -d "$(make_auth_json)" \
-            -w '%{http_code}' -o /dev/null 2>/dev/null || echo '000')
-          echo "Admin setup: HTTP $SETUP_STATUS"
-
-          # Login to get auth token
-          TOKEN=$(curl -sf -X POST http://localhost:3001/api/login \
-            -H 'Content-Type: application/json' \
-            -d "$(make_auth_json)" \
-            2>/dev/null \
-            | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('token',''))" \
-            2>/dev/null || echo '')
-
-          if [ -z "$TOKEN" ]; then
-            echo "WARNING: Could not get auth token — add monitors manually via web UI"
-            exit 0
-          fi
-
-          # Add Unit Talk API health monitor
-          MON_STATUS=$(curl -sf -X POST http://localhost:3001/api/monitors \
-            -H "Authorization: Bearer $TOKEN" \
-            -H 'Content-Type: application/json' \
-            -d '{"name":"Unit Talk API Health","type":"http","url":"http://api:4000/health","method":"GET","interval":60,"retryInterval":30,"maxretries":3,"active":1}' \
-            -w '%{http_code}' -o /dev/null 2>/dev/null || echo '000')
-          echo "API health monitor: HTTP $MON_STATUS"
-          SSHEOF
+          # Write password to temp file on runner, SCP to server, let script read+delete it.
+          # Secret never appears in command-line arguments or shell expansion.
+          printf '%s' "$UPTIME_KUMA_ADMIN_PASSWORD" > /tmp/kuma-pass
+          chmod 600 /tmp/kuma-pass
+          scp -q /tmp/kuma-pass "$DEPLOY_USER@$DEPLOY_HOST:/tmp/kuma-pass"
+          rm -f /tmp/kuma-pass
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "DEPLOY_PATH='$DEPLOY_PATH' bash '$DEPLOY_PATH/scripts/provision-kuma-monitors.sh'"
 
       - name: Install cron jobs
         run: |
@@ -178,12 +143,13 @@ jobs:
           echo "SSH tunnel: ssh -L 3001:localhost:3001 $DEPLOY_USER@$DEPLOY_HOST"
           echo "Then open:  http://localhost:3001"
           echo ""
-          echo "=== MANUAL STEPS REMAINING ==="
-          echo "1. SSH tunnel to server and open http://localhost:3001"
-          echo "2. Log in (admin / UPTIME_KUMA_ADMIN_PASSWORD secret)"
-          echo "3. Settings -> Notifications -> Add Discord webhook"
-          echo "4. Assign the notification to the 'Unit Talk API Health' monitor"
-          echo "5. Optionally add: host ping, ingestor/worker/discord-bot port monitors"
+          echo "=== PROVISIONED (automated) ==="
+          echo "1. Discord Ops notification (webhook from DISCORD_OPS_WEBHOOK_URL secret)"
+          echo "2. Unit Talk API Health        — HTTP http://api:4000/health          60s"
+          echo "3. Unit Talk Host Ping         — Ping 46.225.14.123                   60s"
+          echo "4. Unit Talk Worker Liveness   — HTTP http://api:4000/health?full=true 60s"
+          echo "5. Unit Talk Ingestor Freshness — HTTP http://api:4000/health?full=true 60s"
+          echo "6. Unit Talk Discord Bot        — Docker container or HTTP fallback     60s"
           echo ""
           echo "=== DISABLE ALERTS ==="
           echo "Cron scripts: ssh $DEPLOY_USER@$DEPLOY_HOST 'crontab -e'  # comment out unit-talk lines"
