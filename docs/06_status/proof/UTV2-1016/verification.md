@@ -1,6 +1,8 @@
 # UTV2-1016 Verification — Uptime Kuma full provisioning automation
 
-## How to Verify (post-merge)
+## Verification
+
+### How to Verify (post-merge)
 
 ### 1. SSH tunnel to the Hetzner node
 

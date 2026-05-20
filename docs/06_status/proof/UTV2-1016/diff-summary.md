@@ -1,10 +1,17 @@
 # UTV2-1016 Diff Summary — Automate full Uptime Kuma 5-monitor + Discord notification provisioning
 
-## Issue
+## Summary
 
 `deploy-monitoring.yml` deployed Uptime Kuma but left 4 of 5 monitors and Discord notification
 wiring as "MANUAL STEPS REMAINING" in the workflow output. Operators had to SSH-tunnel and
-configure via the web UI after every deploy.
+configure via the web UI after every deploy. This lane automates full provisioning idempotently.
+
+## Evidence
+
+| File | Change |
+|------|--------|
+| `deploy/monitoring/provision-kuma-monitors.sh` | NEW: full idempotent provisioning script |
+| `.github/workflows/deploy-monitoring.yml` | Replace single-monitor step with two-step automated provisioning |
 
 ## Files Changed
 
