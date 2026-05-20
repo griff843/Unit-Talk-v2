@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1036",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1036-scoring-integrity-acceptance-gate",
+  "branch": "claude/utv2-1036-scoring-integrity-acceptance-gate",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [
+    "scripts/scoring-integrity-proof.ts",
+    "apps/api/src/t1-proof-scoring-integrity.test.ts",
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md",
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json",
+    "package.json"
+  ],
+  "file_scope_lock": [
+    "apps/api/src/t1-proof-scoring-integrity.test.ts",
+    "scripts/scoring-integrity-proof.ts",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md",
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json",
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/lanes/UTV2-1036.json",
+    ".ops/sync/UTV2-1036.yml",
+    "package.json"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json",
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-20T02:27:42.019Z",
+  "heartbeat_at": "2026-05-20T02:40:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1036-scoring-integrity-acceptance-gate.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1036-scoring-integrity-acceptance-gate",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -1,0 +1,72 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1036",
+  "tier": "T1",
+  "branch": "claude/utv2-1036-scoring-integrity-acceptance-gate",
+  "branch_head_sha": "e452ddb9114c7948b67e74f5bd0bfa17862ecbd0",
+  "merge_sha": null,
+  "proof_generated_at": "2026-05-20T02:32:33.218Z",
+  "proof_type": "scoring-integrity-acceptance-gate",
+  "status": "FAIL",
+  "failure_reason": "C2: readiness fallback rate 94.21% exceeds 5% threshold — kelly gradient data absent from upstream pick submissions",
+  "criteria": [
+    {
+      "id": "C1",
+      "description": "confidence-proxy rate <= 10% for post-fix cohort",
+      "threshold": "<= 10%",
+      "measured": "4.87%",
+      "status": "PASS"
+    },
+    {
+      "id": "C2",
+      "description": "readiness fallback rate (readiness=60 default) <= 5%",
+      "threshold": "<= 5%",
+      "measured": "94.21%",
+      "status": "FAIL"
+    },
+    {
+      "id": "C3",
+      "description": "uniqueness distribution: > 1 distinct value, no hardcoded default dominance",
+      "threshold": "> 1 value; uniqueness=50 rate <= 50%",
+      "measured": "7 values; fallback(50)=0%",
+      "status": "PASS"
+    },
+    {
+      "id": "C4",
+      "description": "band missing rate = 0 for post-fix promoted picks",
+      "threshold": "0 missing",
+      "measured": "0 missing",
+      "status": "PASS"
+    },
+    {
+      "id": "C5",
+      "description": "no qualified pick lacks a deterministic promotion target",
+      "threshold": "0 missing",
+      "measured": "0 missing",
+      "status": "PASS"
+    }
+  ],
+  "cohort": {
+    "window_days": 30,
+    "start": "2026-04-20T02:32:33.218Z",
+    "end": "2026-05-20T02:32:33.218Z",
+    "pph_rows": 1000,
+    "picks_with_promo": 1000
+  },
+  "files_added": [
+    "scripts/scoring-integrity-proof.ts",
+    "apps/api/src/t1-proof-scoring-integrity.test.ts",
+    "docs/06_status/proof/UTV2-1036/verification.md",
+    "docs/06_status/proof/UTV2-1036/diff-summary.md",
+    "docs/06_status/proof/UTV2-1036/evidence-bundle.json"
+  ],
+  "notes": [
+    "C2 failure is an honest measurement of an upstream data gap, not a code defect in this lane",
+    "Kelly gradient readiness defaults to 60 when metadata.kellySizing.fractional_kelly is absent",
+    "Board-construction and system-pick-scanner do not currently write kelly sizing data to pick metadata",
+    "C1 PASS confirms confidence-proxy rate is within bounds (4.87% < 10%)",
+    "C3 PASS confirms uniqueness is driven by real open-picks data (7 distinct values, 0% fallback at default 50)",
+    "C4 PASS confirms all promoted picks have a resolvable band via score thresholds",
+    "C5 PASS confirms all qualified picks have a deterministic routing target"
+  ]
+}
