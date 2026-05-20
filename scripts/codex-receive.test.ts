@@ -240,7 +240,7 @@ test('codex-receive parses lane-link-pr JSON when pnpm emits text before JSON', 
       '--no-linear',
       '--json',
     ]);
-    assert.strictEqual(result.status, 0, result.stderr);
+    assert.strictEqual(result.status, 0, result.stdout || result.stderr);
     const payload = JSON.parse(result.stdout) as { ok: boolean; code: string; status: string; pr_url: string };
     assert.strictEqual(payload.ok, true);
     assert.strictEqual(payload.code, 'receive_recorded');
