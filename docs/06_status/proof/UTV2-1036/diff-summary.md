@@ -4,6 +4,7 @@
 **Lane type:** T1 verification
 **Branch:** `claude/utv2-1036-scoring-integrity-acceptance-gate`
 **Branch HEAD SHA:** `e452ddb9114c7948b67e74f5bd0bfa17862ecbd0`
+**Merge SHA:** `053637d9d264670e9f607a8d8bec59ed0e414a8c`
 
 ---
 

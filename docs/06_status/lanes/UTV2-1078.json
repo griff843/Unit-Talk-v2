@@ -23,10 +23,10 @@
     "docs/06_status/proof/UTV2-1078/diff-summary.md",
     "docs/06_status/proof/UTV2-1078/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T03:41:00.095Z",
-  "heartbeat_at": "2026-05-20T05:17:49.752Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T05:18:51.406Z",
+  "closed_at": "2026-05-20T05:18:51.406Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1078-lane-start-non-existent-proof-paths.json",
   "created_by": "codex-cli",

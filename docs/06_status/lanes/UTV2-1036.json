@@ -7,8 +7,9 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1036-scoring-integrity-acceptance-gate",
   "branch": "claude/utv2-1036-scoring-integrity-acceptance-gate",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "053637d9d264670e9f607a8d8bec59ed0e414a8c",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/802",
+  "pr_number": 802,
   "files_changed": [
     "scripts/scoring-integrity-proof.ts",
     "apps/api/src/t1-proof-scoring-integrity.test.ts",
@@ -32,14 +33,38 @@
     "docs/06_status/proof/UTV2-1036/verification.md",
     "docs/06_status/proof/UTV2-1036/diff-summary.md"
   ],
-  "status": "in_progress",
+  "status": "done",
   "started_at": "2026-05-20T02:27:42.019Z",
-  "heartbeat_at": "2026-05-20T02:40:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T05:32:26.834Z",
+  "closed_at": "2026-05-20T05:32:26.834Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1036-scoring-integrity-acceptance-gate.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T05:30:33.951Z",
+      "verdict": "fail",
+      "merge_sha": "053637d9d264670e9f607a8d8bec59ed0e414a8c",
+      "failures": [
+        "P3",
+        "C4",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T05:32:12.713Z",
+      "verdict": "pass",
+      "merge_sha": "053637d9d264670e9f607a8d8bec59ed0e414a8c",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

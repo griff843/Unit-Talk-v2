@@ -143,6 +143,7 @@ The scoring integrity proof script (`scripts/scoring-integrity-proof.ts`) and T1
 ## Verification
 
 **Branch HEAD SHA:** `0f53cb7e7b0e5b82f8482d10edcdcc71ea1a5716`
+**Merge SHA:** `053637d9d264670e9f607a8d8bec59ed0e414a8c`
 
 ### pnpm verify
 

@@ -22,10 +22,10 @@
     "docs/06_status/proof/UTV2-1077/diff-summary.md",
     "docs/06_status/proof/UTV2-1077/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T03:41:12.171Z",
-  "heartbeat_at": "2026-05-20T05:18:09.996Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T05:19:02.810Z",
+  "closed_at": "2026-05-20T05:19:02.810Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1077-generate-preflight-token-script.json",
   "created_by": "codex-cli",

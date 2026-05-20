@@ -4,11 +4,14 @@
   "tier": "T1",
   "branch": "claude/utv2-1036-scoring-integrity-acceptance-gate",
   "branch_head_sha": "e452ddb9114c7948b67e74f5bd0bfa17862ecbd0",
-  "merge_sha": null,
+  "merge_sha": "053637d9d264670e9f607a8d8bec59ed0e414a8c",
   "proof_generated_at": "2026-05-20T02:32:33.218Z",
   "proof_type": "scoring-integrity-acceptance-gate",
   "status": "FAIL",
   "failure_reason": "C2: readiness fallback rate 94.21% exceeds 5% threshold — kelly gradient data absent from upstream pick submissions",
+  "verifier": {
+    "identity": "claude/utv2-1036-scoring-integrity-2026-05-20"
+  },
   "criteria": [
     {
       "id": "C1",
@@ -52,6 +55,64 @@
     "end": "2026-05-20T02:32:33.218Z",
     "pph_rows": 1000,
     "picks_with_promo": 1000
+  },
+  "static_proof": {
+    "test_run_logs": [
+      {
+        "path": "apps/api/src/t1-proof-scoring-integrity.test.ts",
+        "merge_sha": "053637d9d264670e9f607a8d8bec59ed0e414a8c",
+        "result": "7/7 pass"
+      }
+    ],
+    "pnpm_verify": "PASS",
+    "pnpm_test": "PASS — 113/113 tests",
+    "pnpm_type_check": "PASS",
+    "r_level_compliance": "PASS — no R-level artifacts required"
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "table": "pick_promotion_history",
+        "operation": "select",
+        "filter": "created_at >= now() - interval '30 days'",
+        "rows_returned": 1000,
+        "description": "30-day PPH cohort for scoring integrity measurement"
+      },
+      {
+        "table": "picks",
+        "operation": "select",
+        "filter": "join on pick_promotion_history.pick_id where promotion_status is not null",
+        "rows_returned": 1000,
+        "description": "Picks with promotion data joined for scoring input analysis"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "pick_promotion_history",
+        "count": 1000,
+        "window": "last 30 days",
+        "measured_at": "2026-05-20T02:32:33.218Z"
+      },
+      {
+        "table": "picks",
+        "count": 1000,
+        "filter": "promotion_status is not null",
+        "measured_at": "2026-05-20T02:32:33.218Z"
+      }
+    ],
+    "receipts": [
+      {
+        "test_file": "apps/api/src/t1-proof-scoring-integrity.test.ts",
+        "result": "7 tests / 7 pass / 0 fail",
+        "supabase_project": "zfzdnfwdarxucxtaojxm",
+        "ran_at": "2026-05-20T02:32:33.218Z"
+      }
+    ],
+    "pph_score_inputs_with_data": 985,
+    "confidence_proxy_rate": "4.87%",
+    "readiness_fallback_rate": "94.21%",
+    "uniqueness_distinct_values": 7,
+    "uniqueness_fallback_rate": "0%"
   },
   "files_added": [
     "scripts/scoring-integrity-proof.ts",
