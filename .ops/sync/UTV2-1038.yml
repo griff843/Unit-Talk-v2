@@ -1,0 +1,12 @@
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1038
+  findings: []
+  controls: []
+  proofs:
+    - docs/06_status/proof/UTV2-1038/evidence.json
+    - docs/06_status/proof/UTV2-1038/verification.md
