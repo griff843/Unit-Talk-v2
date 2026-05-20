@@ -1,0 +1,90 @@
+name: Ops — Supervisor Status
+
+# UTV2-1012: Verify docker-compose services are UP and healthy on the production host.
+# Equivalent of `pnpm api:status`, `pnpm worker:status`, `pnpm ingestor:status`.
+# Run on demand; artifact `supervisor-status-<run_id>` captures the JSON result.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+  DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+  DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+
+jobs:
+  check-supervisor:
+    name: Verify production supervisor
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate required secrets
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST" || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER" || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH" || missing+=(UNIT_TALK_DEPLOY_PATH)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets are not configured: ${missing[*]}"
+            exit 1
+          fi
+          echo "All required secrets present."
+
+      - name: Install SSH key
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          test -n "$DEPLOY_SSH_KEY" || { echo "ERROR: UNIT_TALK_DEPLOY_SSH_KEY is not set"; exit 1; }
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Upload verify-supervisor.sh to server
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "mkdir -p '$DEPLOY_PATH/scripts'"
+          scp scripts/ops/verify-supervisor.sh \
+            "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/scripts/verify-supervisor.sh"
+
+      - name: Run verify-supervisor.sh on server
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "chmod +x '$DEPLOY_PATH/scripts/verify-supervisor.sh' && \
+             DEPLOY_PATH='$DEPLOY_PATH' '$DEPLOY_PATH/scripts/verify-supervisor.sh'"
+
+      - name: Download supervisor-status.json
+        run: |
+          scp "$DEPLOY_USER@$DEPLOY_HOST:$DEPLOY_PATH/supervisor-status.json" \
+            supervisor-status.json
+          echo "--- supervisor-status.json ---"
+          cat supervisor-status.json
+
+      - name: Check verdict and fail if FAIL
+        run: |
+          verdict=$(python3 -c "import json,sys; d=json.load(open('supervisor-status.json')); print(d['verdict'])")
+          echo "Verdict: $verdict"
+          if [ "$verdict" != "PASS" ]; then
+            echo "::error::Supervisor status check FAILED. Review failures in supervisor-status.json artifact."
+            python3 -c "
+import json
+d = json.load(open('supervisor-status.json'))
+for f in d.get('failures', []):
+    print(f'::error::{f}')
+"
+            exit 1
+          fi
+          echo "All services UP and healthy."
+
+      - name: Upload supervisor-status artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: supervisor-status-${{ github.run_id }}
+          path: supervisor-status.json
+          retention-days: 30
