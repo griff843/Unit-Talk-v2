@@ -30,6 +30,16 @@ export interface DistributionRunResult {
   pickId: string;
 }
 
+function getEnqueueAtomicFallbackReason(err: unknown): 'in_memory_sentinel' | null {
+  const message = err instanceof Error ? err.message : String(err);
+  if (message.includes('enqueueDistributionAtomic is not supported in InMemory mode')) {
+    return 'in_memory_sentinel';
+  }
+  // All other errors (PGRST202, schema-cache miss, network failures, DB constraints)
+  // must rethrow — sequential fallback on real DB risks partial durable writes.
+  return null;
+}
+
 export async function enqueueDistributionWithRunTracking(
   pick: CanonicalPick,
   target: string,
@@ -157,8 +167,12 @@ export async function enqueueDistributionWithRunTracking(
         outboxRecord = atomicResult.outbox;
         queuedLifecycleEventId = atomicResult.lifecycleEvent.id;
       }
-    } catch {
-      // Sequential fallback (InMemory mode or RPC not deployed).
+    } catch (err) {
+      // Sequential fallback is only safe in InMemory mode (tests/dev).
+      // Real database errors (constraint violations, network timeouts, PGRST202,
+      // schema-cache misses) must rethrow — silent fallback risks partial
+      // durable writes and double-enqueue on the real DB.
+      if (!getEnqueueAtomicFallbackReason(err)) throw err;
       // enqueueDistributionWork handles validation + outbox insert.
       const queuedTransition = await ensurePickLifecycleState(
         pickRepository,
