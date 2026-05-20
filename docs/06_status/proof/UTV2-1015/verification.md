@@ -1,5 +1,20 @@
 # UTV2-1015 — Pre-Merge Verification Checklist
 
+## Summary
+
+**Branch HEAD SHA:** 1cd84192703c6abd32f7fe026b33f8b786490967
+
+## CI Verification
+
+`pnpm verify` ran green on the branch (lint, type-check, build, unit tests all pass).
+No TS/JS source code was modified — only Docker Compose configuration files.
+
+`pnpm test:db` is not required for this change: UTV2-1015 touches only
+`deploy/production/docker-compose.yml` and `deploy/production/topology-spec.yml`.
+No database schema, migration, or runtime pick-pipeline code was modified.
+
+## Verification
+
 ## Compose Syntax Valid
 
 - [ ] `docker compose config -f deploy/production/docker-compose.yml` exits 0 with no
