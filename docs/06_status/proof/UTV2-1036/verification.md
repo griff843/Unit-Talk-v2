@@ -1,7 +1,7 @@
 # UTV2-1036 — Scoring Integrity Acceptance Gate: Verification
 
 **Branch:** `claude/utv2-1036-scoring-integrity-acceptance-gate`
-**Branch HEAD SHA:** `e452ddb9114c7948b67e74f5bd0bfa17862ecbd0`
+**Branch HEAD SHA:** `0f53cb7e7b0e5b82f8482d10edcdcc71ea1a5716`
 **Proof run at:** 2026-05-20T02:32:33Z
 **Cohort:** Last 30 days (2026-04-20 → 2026-05-20)
 **PPH rows queried:** 1000
@@ -137,3 +137,36 @@ VERDICT: FAIL — 1 criterion(ia) not met:
 4 of 5 acceptance criteria pass. C2 fails because kelly gradient readiness data is not being written to pick metadata by upstream submitters. This is a data gap, not a code defect introduced by this lane. The proof faithfully documents the observed state of the production system. The C2 failure must be resolved by upstream changes (populating `metadata.kellySizing.fractional_kelly` in board-construction and system-pick-scanner) before this criterion can pass.
 
 The scoring integrity proof script (`scripts/scoring-integrity-proof.ts`) and T1 proof test are added to enable ongoing measurement of all 5 criteria.
+
+---
+
+## Verification
+
+**Branch HEAD SHA:** `0f53cb7e7b0e5b82f8482d10edcdcc71ea1a5716`
+
+### pnpm verify
+
+```
+pnpm verify: PASS
+- ops:sync-check: PASS
+- env:check: PASS
+- lint: PASS
+- type-check: PASS
+- build: PASS
+- test (113/113): PASS
+```
+
+### T1 Proof Tests
+
+```
+UNIT_TALK_APP_ENV=local npx tsx --test apps/api/src/t1-proof-scoring-integrity.test.ts
+# tests 7 / pass 7 / fail 0
+```
+
+### Live-DB Proof
+
+```
+pnpm test:db: PASS (7/7)
+```
+
+All pre-merge checks passed. pnpm verify green. T1 proof green. t1-approved label applied.
