@@ -4,6 +4,7 @@
   "title": "[M1] Review and resolve 9 dead_letter outbox rows",
   "tier": "T1",
   "executor": "claude",
+  "branch_head_sha": "502d1086c74e7f282dcaf2bd76c23865fdc4e5e7",
   "executed_at": "2026-05-20T06:25:00.000Z",
   "operator": "griffadavi@gmail.com",
   "pm_authorization": "explicit — 'execute clear UTV2-1010' in dispatch session 2026-05-20",
