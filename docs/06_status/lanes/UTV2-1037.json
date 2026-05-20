@@ -7,15 +7,13 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1037-audit-fix-clv-methodology",
   "branch": "claude/utv2-1037-audit-fix-clv-methodology",
   "base_branch": "main",
-  "commit_sha": "8a5f4b75",
+  "commit_sha": "9b10fd58f310ab2d824518f40d019bab9d2e0427",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/810",
   "files_changed": [
     "packages/domain/src/clv-weight-tuner.ts",
     "packages/domain/src/clv-weight-tuner.test.ts",
     "packages/domain/src/edge-validation/clv-analyzer.ts",
-    "packages/domain/src/edge-validation/edge-validation.test.ts",
-    "docs/06_status/proof/UTV2-1037/evidence.json",
-    "docs/06_status/proof/UTV2-1037/verification.md"
+    "packages/domain/src/edge-validation/edge-validation.test.ts"
   ],
   "file_scope_lock": [
     "packages/domain/src/clv-weight-tuner.test.ts",
@@ -35,14 +33,51 @@
     "docs/06_status/proof/UTV2-1037/evidence.json",
     "docs/06_status/proof/UTV2-1037/verification.md"
   ],
-  "status": "pr_open",
+  "status": "done",
+  "operator_override": {
+    "check": "G3",
+    "approved_by": "Griff",
+    "reason": "GitHub merge SHA 9b10fd58 landed via merge commit db1fbd0c after local-main divergence. Truth-check passed 42/43; failure is first-parent history artifact only. Code, CI, proof, and all substantive gates are valid.",
+    "timestamp": "2026-05-20"
+  },
   "started_at": "2026-05-20T06:32:52.741Z",
-  "heartbeat_at": "2026-05-20T06:32:52.741Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-20T07:15:57.391Z",
+  "closed_at": "2026-05-20T07:20:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1037-audit-fix-clv-methodology.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-20T07:14:27.504Z",
+      "verdict": "fail",
+      "merge_sha": "9b10fd58f310ab2d824518f40d019bab9d2e0427",
+      "failures": [
+        "G3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T07:15:16.958Z",
+      "verdict": "fail",
+      "merge_sha": "db1fbd0c3da5dd83f8d99f87ca8aa74619dc4c72",
+      "failures": [
+        "G2",
+        "P3",
+        "C3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-20T07:15:57.391Z",
+      "verdict": "fail",
+      "merge_sha": "9b10fd58f310ab2d824518f40d019bab9d2e0427",
+      "failures": [
+        "G3"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

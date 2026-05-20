@@ -5,9 +5,45 @@
   "tier": "T1",
   "branch": "claude/utv2-1037-audit-fix-clv-methodology",
   "branch_head_sha": "c57ade96a364c190562fbca0f3e3126f0b288b41",
-  "merge_sha": null,
+  "merge_sha": "9b10fd58f310ab2d824518f40d019bab9d2e0427",
+  "merge_sha_note": "squash-merge SHA from GitHub PR #810; landed on main via merge commit db1fbd0c3da5dd83f8d99f87ca8aa74619dc4c72 due to local-main divergence at sync time",
   "generated_at": "2026-05-20T09:00:00.000Z",
   "executor": "claude",
+  "verifier": {
+    "identity": "griffadavi@gmail.com"
+  },
+  "static_proof": {
+    "pnpm_verify": "PASS — exit 0",
+    "r_level_check": "PASS — no R-level artifacts required",
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": "PASS"
+  },
+  "runtime_proof": {
+    "queries": [
+      {
+        "description": "pnpm test:db — live Supabase smoke tests",
+        "result": "7/7 tests passed, duration_ms 256547, project ref zfzdnfwdarxucxtaojxm"
+      }
+    ],
+    "row_counts": [
+      {
+        "description": "DB smoke test suite",
+        "tests_run": 7,
+        "tests_passed": 7,
+        "tests_failed": 0
+      }
+    ],
+    "receipts": [
+      {
+        "type": "pm_verdict",
+        "description": "PM posted pm-verdict/v1 APPROVED comment on PR #810",
+        "authorized_by": "griffadavi@gmail.com",
+        "authorized_at": "2026-05-20T07:05:00.000Z"
+      }
+    ]
+  },
   "verification": {
     "pnpm_verify": "PASS",
     "r_level_check": "PASS — no R-level artifacts required (Changed files: 2, Rules matched: none)",

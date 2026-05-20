@@ -11,6 +11,7 @@ with `isOpeningLineFallback: true`.
 
 **Branch:** `claude/utv2-1037-audit-fix-clv-methodology`
 **Branch HEAD SHA:** `c57ade96a364c190562fbca0f3e3126f0b288b41`
+**Merge SHA:** `9b10fd58f310ab2d824518f40d019bab9d2e0427`
 
 ## Evidence
 
