@@ -1,0 +1,199 @@
+name: Ops — Burn-in Monitor (UTV2-1041)
+
+# Runs every 6 hours to collect one evidence snapshot.
+# When triggered manually with generate_report=true, aggregates all
+# collected snapshots into a final burn-in verdict report.
+
+on:
+  schedule:
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
+    inputs:
+      generate_report:
+        description: 'Generate final burn-in report from all collected snapshots'
+        type: boolean
+        default: false
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Snapshot job — runs on each scheduled tick (or manual dispatch without report)
+  # ---------------------------------------------------------------------------
+  snapshot:
+    name: Collect burn-in snapshot
+    if: ${{ github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && inputs.generate_report != true) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+      SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+      UNIT_TALK_DEPLOY_HEALTH_URL: ${{ secrets.UNIT_TALK_DEPLOY_HEALTH_URL }}
+      BURN_IN_DEPLOYMENT_SHA: ${{ vars.BURN_IN_DEPLOYMENT_SHA || 'bd952fd7211d92eab782da273f11fa386dc22ca0' }}
+      STALE_THRESHOLD_MINUTES: '30'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Collect snapshot
+        run: |
+          mkdir -p artifacts/snapshots
+          pnpm exec tsx scripts/ops/burn-in-snapshot.ts \
+            --index "${{ github.run_number }}" \
+            --output "artifacts/snapshots/snap-${{ github.run_number }}.json"
+
+      - name: Upload snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: burn-in-snapshot-${{ github.run_number }}
+          path: artifacts/snapshots/snap-${{ github.run_number }}.json
+          retention-days: 30
+
+      - name: Post snapshot status to Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
+        run: |
+          SNAPSHOT_FILE="artifacts/snapshots/snap-${{ github.run_number }}.json"
+          if [ ! -f "$SNAPSHOT_FILE" ]; then
+            STATUS="ERROR — snapshot file missing"
+            COLOR=15158332
+          else
+            PASSING=$(node -e "const fs=require('fs'); const s=JSON.parse(fs.readFileSync('$SNAPSHOT_FILE','utf8')); console.log(s.passing)")
+            FAILURES=$(node -e "const fs=require('fs'); const s=JSON.parse(fs.readFileSync('$SNAPSHOT_FILE','utf8')); console.log((s.failures||[]).join(', '))")
+            if [ "$PASSING" = "true" ]; then
+              STATUS="PASS"
+              COLOR=3066993
+            else
+              STATUS="FAIL — $FAILURES"
+              COLOR=15158332
+            fi
+          fi
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -s -X POST "$DISCORD_WEBHOOK" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"Burn-in Snapshot #${{ github.run_number }}\",\"description\":\"Status: $STATUS\",\"color\":$COLOR,\"footer\":{\"text\":\"UTV2-1041 | SHA: ${BURN_IN_DEPLOYMENT_SHA:0:8}\"}}]}" \
+              || echo "Discord notification failed (non-fatal)"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # Report job — runs only when manually triggered with generate_report=true
+  # ---------------------------------------------------------------------------
+  report:
+    name: Generate burn-in report
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.generate_report == true }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    env:
+      BURN_IN_DEPLOYMENT_SHA: ${{ vars.BURN_IN_DEPLOYMENT_SHA || 'bd952fd7211d92eab782da273f11fa386dc22ca0' }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Download all burn-in snapshots
+        uses: actions/download-artifact@v4
+        with:
+          pattern: burn-in-snapshot-*
+          path: artifacts/raw-snapshots
+          merge-multiple: false
+
+      - name: Flatten snapshots into artifacts/snapshots/
+        run: |
+          mkdir -p artifacts/snapshots
+          # Each artifact is downloaded into its own subdirectory.
+          # Rename each snap file to snap-<run_number>.json in a flat directory.
+          find artifacts/raw-snapshots -name 'snap-*.json' | while read -r src; do
+            basename=$(basename "$src")
+            dest="artifacts/snapshots/$basename"
+            echo "Copying $src -> $dest"
+            cp "$src" "$dest"
+          done
+          echo "Snapshots found:"
+          ls -la artifacts/snapshots/ || echo "(none)"
+
+      - name: Generate burn-in report
+        run: |
+          pnpm exec tsx scripts/ops/burn-in-report.ts \
+            --snapshots-dir artifacts/snapshots \
+            --output artifacts/burn-in-report.json \
+            --deployment-sha "$BURN_IN_DEPLOYMENT_SHA" \
+            --fail-on-fail
+
+      - name: Upload burn-in report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: burn-in-report-${{ github.run_number }}
+          path: artifacts/burn-in-report.json
+          retention-days: 90
+
+      - name: Post final verdict to Discord
+        if: always()
+        env:
+          DISCORD_WEBHOOK: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}
+        run: |
+          REPORT_FILE="artifacts/burn-in-report.json"
+          if [ ! -f "$REPORT_FILE" ]; then
+            VERDICT="ERROR — report file missing"
+            COLOR=15158332
+            SUMMARY=""
+          else
+            VERDICT=$(node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('$REPORT_FILE','utf8')); console.log(r.verdict)")
+            DURATION=$(node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('$REPORT_FILE','utf8')); console.log(r.durationHours)")
+            SNAPSHOTS=$(node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('$REPORT_FILE','utf8')); console.log(r.snapshotCount + '/' + r.requiredSnapshots)")
+            FAILED=$(node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('$REPORT_FILE','utf8')); console.log(r.failedSnapshots)")
+            SUMMARY="Duration: ${DURATION}h | Snapshots: ${SNAPSHOTS} | Failed: ${FAILED}"
+            case "$VERDICT" in
+              PASS)    COLOR=3066993  ;;
+              FAIL)    COLOR=15158332 ;;
+              *)       COLOR=16776960 ;;
+            esac
+          fi
+          if [ -n "$DISCORD_WEBHOOK" ]; then
+            curl -s -X POST "$DISCORD_WEBHOOK" \
+              -H "Content-Type: application/json" \
+              -d "{\"embeds\":[{\"title\":\"72h Burn-in Report — ${VERDICT}\",\"description\":\"${SUMMARY}\",\"color\":${COLOR},\"footer\":{\"text\":\"UTV2-1041 | SHA: ${BURN_IN_DEPLOYMENT_SHA:0:8}\"}}]}" \
+              || echo "Discord notification failed (non-fatal)"
+          fi
+
+      - name: Fail workflow if verdict is FAIL
+        if: always()
+        run: |
+          REPORT_FILE="artifacts/burn-in-report.json"
+          if [ -f "$REPORT_FILE" ]; then
+            VERDICT=$(node -e "const fs=require('fs'); const r=JSON.parse(fs.readFileSync('$REPORT_FILE','utf8')); console.log(r.verdict)")
+            if [ "$VERDICT" = "FAIL" ]; then
+              echo "ERROR: Burn-in verdict is FAIL. See report artifact for details."
+              exit 1
+            fi
+          fi
