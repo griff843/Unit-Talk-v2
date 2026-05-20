@@ -1,5 +1,7 @@
 # UTV2-1079 — Diff Summary
 
+Merge SHA: 69bd106b183eb7eeb219ef3383b56e13baa7938a
+
 ## Summary
 
 ### .github/workflows/reconcile-stale-lanes.yml (new)
