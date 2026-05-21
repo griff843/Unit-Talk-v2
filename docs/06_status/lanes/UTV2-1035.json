@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1035",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1035-board-truth-reset",
+  "branch": "claude/utv2-1035-board-truth-reset",
+  "base_branch": "main",
+  "commit_sha": "293c6cb4",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/823",
+  "files_changed": [
+    ".ops/sync/UTV2-1035.yml",
+    "docs/06_status/proof/UTV2-1035/board-summary.md",
+    "docs/06_status/proof/UTV2-1035/diff-summary.md",
+    "docs/06_status/proof/UTV2-1035/verification.md"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/lanes/UTV2-1035.json",
+    ".ops/sync/UTV2-1035.yml",
+    "docs/06_status/proof/UTV2-1035/board-summary.md",
+    "docs/06_status/proof/UTV2-1035/diff-summary.md",
+    "docs/06_status/proof/UTV2-1035/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1035/diff-summary.md",
+    "docs/06_status/proof/UTV2-1035/verification.md"
+  ],
+  "status": "in_progress",
+  "started_at": "2026-05-21T12:13:25.028Z",
+  "heartbeat_at": "2026-05-21T12:13:25.028Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1035-board-truth-reset.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1035-board-truth-reset",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
