@@ -71,12 +71,7 @@ jobs:
           echo "Verdict: $verdict"
           if [ "$verdict" != "PASS" ]; then
             echo "::error::Supervisor status check FAILED. Review failures in supervisor-status.json artifact."
-            python3 -c "
-import json
-d = json.load(open('supervisor-status.json'))
-for f in d.get('failures', []):
-    print(f'::error::{f}')
-"
+            python3 -c "import json; d=json.load(open('supervisor-status.json')); [print(f'::error::{f}') for f in d.get('failures',[])]"
             exit 1
           fi
           echo "All services UP and healthy."
