@@ -258,6 +258,13 @@ const MANIFEST_STATUSES = new Set<LaneManifestStatus>([
   'blocked',
   'reopened',
 ]);
+const LEGACY_LANE_TYPE_TO_EXECUTOR: Partial<Record<LegacyLaneType, LaneExecutor>> = {
+  claude: 'claude',
+  codex: 'codex-cli',
+  'codex-cli': 'codex-cli',
+  'codex-cloud': 'codex-cloud',
+};
+const CODEX_EXECUTORS = new Set<LaneExecutor>(['codex-cli', 'codex-cloud']);
 const TRANSITIONS: Record<LaneManifestStatus, LaneManifestStatus[]> = {
   started: ['in_progress', 'blocked', 'reopened', 'started'],
   in_progress: ['in_review', 'blocked', 'reopened', 'in_progress'],
@@ -403,6 +410,19 @@ export function validateTier(tier: string): LaneTier {
   }
 
   throw new Error(`Invalid tier: ${tier}`);
+}
+
+export function resolveLaneExecutor(manifest: Pick<LaneManifest, 'executor' | 'lane_type'>): LaneExecutor | null {
+  if (manifest.executor) {
+    return manifest.executor;
+  }
+
+  return LEGACY_LANE_TYPE_TO_EXECUTOR[manifest.lane_type as LegacyLaneType] ?? null;
+}
+
+export function isCodexLane(manifest: Pick<LaneManifest, 'executor' | 'lane_type'>): boolean {
+  const executor = resolveLaneExecutor(manifest);
+  return executor ? CODEX_EXECUTORS.has(executor) : false;
 }
 
 export function validateBranchName(branch: string): void {

@@ -2,6 +2,7 @@ import { pathToFileURL } from 'node:url';
 import {
   emitJson,
   getFlag,
+  isCodexLane,
   parseArgs,
   readManifest,
   relativeToRoot,
@@ -65,11 +66,11 @@ export function main(argv = process.argv.slice(2)): number {
       } satisfies LaneLinkResult);
       return 1;
     }
-    if (manifest.executor !== 'codex-cli' && manifest.lane_type !== 'codex-cli') {
+    if (!isCodexLane(manifest)) {
       emitJson({
         ok: false,
         code: 'lane_type_mismatch',
-        message: `Manifest executor must be codex-cli, found executor=${manifest.executor ?? 'missing'} lane_type=${manifest.lane_type}`,
+        message: `Manifest executor must be a Codex executor, found executor=${manifest.executor ?? 'missing'} lane_type=${manifest.lane_type}`,
         issue_id: issueId,
         branch,
         manifest_path: manifestPath,
