@@ -205,15 +205,19 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
-          # Resolve worker distribution target. Explicit secret wins; DISCORD_CAPPER_CHANNEL_ID
-          # (raw snowflake) matches /^discord:\d+$/ so no target-map entry is needed. Fall back
-          # to discord:0 (a valid-format placeholder) so the worker starts without crash-looping
-          # when Discord channel secrets haven't been configured yet.
+          # Resolve worker distribution target and promotion target coverage.
+          # The worker must cover all *enabled* promotion targets (default: best-bets,
+          # trader-insights). When channel secrets aren't configured we disable all
+          # promotion targets so coverage check passes and the worker starts cleanly.
           _dist_targets="${UNIT_TALK_DISTRIBUTION_TARGETS:-}"
+          _enabled_targets="${UNIT_TALK_ENABLED_TARGETS:-}"
           if [ -z "$_dist_targets" ] && [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ]; then
             _dist_targets="discord:${DISCORD_CAPPER_CHANNEL_ID}"
           elif [ -z "$_dist_targets" ]; then
+            # No channel IDs configured: use a valid-format placeholder and disable
+            # all promotion targets so the target-coverage check doesn't block startup.
             _dist_targets="discord:0"
+            [ -z "$_enabled_targets" ] && _enabled_targets="none"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
           # Discord bot requires non-empty strings for guild/role/channel IDs.
@@ -246,6 +250,7 @@ jobs:
             "UNIT_TALK_WORKER_DRY_RUN=false" \
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
+            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets,trader-insights}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
@@ -344,15 +349,19 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
-          # Resolve worker distribution target. Explicit secret wins; DISCORD_CAPPER_CHANNEL_ID
-          # (raw snowflake) matches /^discord:\d+$/ so no target-map entry is needed. Fall back
-          # to discord:0 (a valid-format placeholder) so the worker starts without crash-looping
-          # when Discord channel secrets haven't been configured yet.
+          # Resolve worker distribution target and promotion target coverage.
+          # The worker must cover all *enabled* promotion targets (default: best-bets,
+          # trader-insights). When channel secrets aren't configured we disable all
+          # promotion targets so coverage check passes and the worker starts cleanly.
           _dist_targets="${UNIT_TALK_DISTRIBUTION_TARGETS:-}"
+          _enabled_targets="${UNIT_TALK_ENABLED_TARGETS:-}"
           if [ -z "$_dist_targets" ] && [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ]; then
             _dist_targets="discord:${DISCORD_CAPPER_CHANNEL_ID}"
           elif [ -z "$_dist_targets" ]; then
+            # No channel IDs configured: use a valid-format placeholder and disable
+            # all promotion targets so the target-coverage check doesn't block startup.
             _dist_targets="discord:0"
+            [ -z "$_enabled_targets" ] && _enabled_targets="none"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
           # Discord bot requires non-empty strings for guild/role/channel IDs.
@@ -385,6 +394,7 @@ jobs:
             "UNIT_TALK_WORKER_DRY_RUN=false" \
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
+            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets,trader-insights}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
