@@ -1,5 +1,11 @@
-UTV2-1064 verification log
-Generated: 2026-05-21
+# UTV2-1064 Verification
+
+**Issue:** UTV2-1064 — Executor compatibility cleanup  
+**Tier:** T2  
+**Branch:** `codex/utv2-1064-executor-compat-cleanup`  
+**Generated:** 2026-05-21
+
+## Verification
 
 Commands:
 
