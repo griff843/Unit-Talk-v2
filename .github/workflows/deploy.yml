@@ -192,14 +192,23 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+          DISCORD_CAPPER_ROLE_ID: ${{ secrets.DISCORD_CAPPER_ROLE_ID }}
+          DISCORD_VIP_ROLE_ID: ${{ secrets.DISCORD_VIP_ROLE_ID }}
+          DISCORD_VIP_PLUS_ROLE_ID: ${{ secrets.DISCORD_VIP_PLUS_ROLE_ID }}
+          DISCORD_CAPPER_CHANNEL_ID: ${{ secrets.DISCORD_CAPPER_CHANNEL_ID }}
+          DISCORD_OPERATOR_ROLE_ID: ${{ secrets.DISCORD_OPERATOR_ROLE_ID }}
           UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
           UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          UNIT_TALK_DISTRIBUTION_TARGETS: ${{ secrets.UNIT_TALK_DISTRIBUTION_TARGETS }}
+          UNIT_TALK_DISCORD_TARGET_MAP: ${{ secrets.UNIT_TALK_DISCORD_TARGET_MAP }}
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
           printf '%s\n' \
             "NODE_ENV=production" \
             "UNIT_TALK_APP_ENV=production" \
+            "UNIT_TALK_API_URL=http://api:4000" \
             "SUPABASE_URL=$SUPABASE_URL" \
             "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
             "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
@@ -211,12 +220,21 @@ jobs:
             "UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity" \
             "UNIT_TALK_INGESTOR_AUTORUN=true" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
+            "UNIT_TALK_WORKER_ID=worker-prod" \
             "UNIT_TALK_WORKER_AUTORUN=true" \
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_ADAPTER=discord" \
             "UNIT_TALK_WORKER_DRY_RUN=false" \
+            "UNIT_TALK_DISTRIBUTION_TARGETS=${UNIT_TALK_DISTRIBUTION_TARGETS:-discord:best-bets}" \
+            "UNIT_TALK_DISCORD_TARGET_MAP=${UNIT_TALK_DISCORD_TARGET_MAP:-{}}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
+            "DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}" \
+            "DISCORD_CAPPER_ROLE_ID=${DISCORD_CAPPER_ROLE_ID:-}" \
+            "DISCORD_VIP_ROLE_ID=${DISCORD_VIP_ROLE_ID:-}" \
+            "DISCORD_VIP_PLUS_ROLE_ID=${DISCORD_VIP_PLUS_ROLE_ID:-}" \
+            "DISCORD_CAPPER_CHANNEL_ID=${DISCORD_CAPPER_CHANNEL_ID:-}" \
+            "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
@@ -294,14 +312,23 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           DISCORD_BOT_TOKEN: ${{ secrets.DISCORD_BOT_TOKEN }}
           DISCORD_CLIENT_ID: ${{ secrets.DISCORD_CLIENT_ID }}
+          DISCORD_GUILD_ID: ${{ secrets.DISCORD_GUILD_ID }}
+          DISCORD_CAPPER_ROLE_ID: ${{ secrets.DISCORD_CAPPER_ROLE_ID }}
+          DISCORD_VIP_ROLE_ID: ${{ secrets.DISCORD_VIP_ROLE_ID }}
+          DISCORD_VIP_PLUS_ROLE_ID: ${{ secrets.DISCORD_VIP_PLUS_ROLE_ID }}
+          DISCORD_CAPPER_CHANNEL_ID: ${{ secrets.DISCORD_CAPPER_CHANNEL_ID }}
+          DISCORD_OPERATOR_ROLE_ID: ${{ secrets.DISCORD_OPERATOR_ROLE_ID }}
           UNIT_TALK_BOT_API_KEY: ${{ secrets.UNIT_TALK_BOT_API_KEY }}
           UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
+          UNIT_TALK_DISTRIBUTION_TARGETS: ${{ secrets.UNIT_TALK_DISTRIBUTION_TARGETS }}
+          UNIT_TALK_DISCORD_TARGET_MAP: ${{ secrets.UNIT_TALK_DISCORD_TARGET_MAP }}
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
           printf '%s\n' \
             "NODE_ENV=production" \
             "UNIT_TALK_APP_ENV=production" \
+            "UNIT_TALK_API_URL=http://api:4000" \
             "SUPABASE_URL=$SUPABASE_URL" \
             "SUPABASE_ANON_KEY=$SUPABASE_ANON_KEY" \
             "SUPABASE_SERVICE_ROLE_KEY=$SUPABASE_SERVICE_ROLE_KEY" \
@@ -313,12 +340,21 @@ jobs:
             "UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY=authenticated_identity" \
             "UNIT_TALK_INGESTOR_AUTORUN=true" \
             "UNIT_TALK_INGESTOR_MAX_CYCLES=0" \
+            "UNIT_TALK_WORKER_ID=worker-prod" \
             "UNIT_TALK_WORKER_AUTORUN=true" \
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_ADAPTER=discord" \
             "UNIT_TALK_WORKER_DRY_RUN=false" \
+            "UNIT_TALK_DISTRIBUTION_TARGETS=${UNIT_TALK_DISTRIBUTION_TARGETS:-discord:best-bets}" \
+            "UNIT_TALK_DISCORD_TARGET_MAP=${UNIT_TALK_DISCORD_TARGET_MAP:-{}}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
+            "DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}" \
+            "DISCORD_CAPPER_ROLE_ID=${DISCORD_CAPPER_ROLE_ID:-}" \
+            "DISCORD_VIP_ROLE_ID=${DISCORD_VIP_ROLE_ID:-}" \
+            "DISCORD_VIP_PLUS_ROLE_ID=${DISCORD_VIP_PLUS_ROLE_ID:-}" \
+            "DISCORD_CAPPER_CHANNEL_ID=${DISCORD_CAPPER_CHANNEL_ID:-}" \
+            "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
