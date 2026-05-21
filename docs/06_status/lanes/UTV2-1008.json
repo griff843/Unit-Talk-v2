@@ -22,14 +22,49 @@
     "docs/06_status/proof/UTV2-1008/diff-summary.md",
     "docs/06_status/proof/UTV2-1008/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-21T13:58:17.376Z",
-  "heartbeat_at": "2026-05-21T13:58:23.275Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-21T14:18:40.598Z",
+  "closed_at": "2026-05-21T14:18:40.598Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1008-agent-guarantee-classification.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-21T14:12:30.749Z",
+      "verdict": "fail",
+      "merge_sha": "4ad6d0629017411b697dc4cd8d9e0b39b1a3549b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T14:12:55.489Z",
+      "verdict": "fail",
+      "merge_sha": "4ad6d0629017411b697dc4cd8d9e0b39b1a3549b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T14:13:03.968Z",
+      "verdict": "fail",
+      "merge_sha": "4ad6d0629017411b697dc4cd8d9e0b39b1a3549b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T14:18:21.948Z",
+      "verdict": "pass",
+      "merge_sha": "4ad6d0629017411b697dc4cd8d9e0b39b1a3549b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
