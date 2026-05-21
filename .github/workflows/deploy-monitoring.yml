@@ -76,11 +76,15 @@ jobs:
         env:
           FORCE_RECREATE: ${{ inputs.force_recreate }}
         run: |
-          COMPOSE_FLAGS=""
-          [ "$FORCE_RECREATE" = "true" ] && COMPOSE_FLAGS="--force-recreate"
+          if [ "$FORCE_RECREATE" = "true" ]; then
+            # Wipe data volume so admin credentials reset cleanly
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+              "cd '$DEPLOY_PATH/monitoring' && \
+               docker compose -f docker-compose.monitoring.yml down -v --remove-orphans 2>/dev/null || true"
+          fi
           ssh "$DEPLOY_USER@$DEPLOY_HOST" \
             "cd '$DEPLOY_PATH/monitoring' && \
-             docker compose -f docker-compose.monitoring.yml up -d $COMPOSE_FLAGS"
+             docker compose -f docker-compose.monitoring.yml up -d"
 
       - name: Wait for Uptime Kuma to be ready
         run: |

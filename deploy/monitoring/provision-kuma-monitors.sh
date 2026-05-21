@@ -83,15 +83,17 @@ import json, sys
 print(json.dumps({'username': 'admin', 'password': sys.argv[1]}))
 " "$KUMA_PASS")"
 
-SETUP_STATUS="$(curl -sf --max-time 15 -X POST "${KUMA_BASE}/setup" \
+# Kuma v2 setup endpoint; capture HTTP code cleanly (no || echo '000' which
+# double-prints when curl also writes --write-out before failing with -f).
+SETUP_HTTP="$(curl --max-time 15 -s -o /dev/null -w '%{http_code}' \
+  -X POST "${KUMA_BASE}/api/v1/auth/setup" \
   -H 'Content-Type: application/json' \
-  -d "$SETUP_BODY" \
-  -w '%{http_code}' -o /dev/null 2>/dev/null || echo '000')"
+  -d "$SETUP_BODY" 2>/dev/null || true)"
 
-echo "Admin setup: HTTP $SETUP_STATUS (200=created, 4xx=already exists — both OK)"
+echo "Admin setup: HTTP ${SETUP_HTTP:-000} (201=created, 4xx=already exists — both OK)"
 
 # ---------------------------------------------------------------------------
-# 4. Login and obtain Bearer token
+# 4. Login and obtain Bearer token (Kuma v2: /api/v1/auth/login → access_token)
 # ---------------------------------------------------------------------------
 
 LOGIN_BODY="$(make_json "
@@ -99,8 +101,8 @@ import json, sys
 print(json.dumps({'username': 'admin', 'password': sys.argv[1]}))
 " "$KUMA_PASS")"
 
-LOGIN_RESPONSE="$(curl -sf --max-time 15 \
-  -X POST "${KUMA_BASE}/api/login" \
+LOGIN_RESPONSE="$(curl -s --max-time 15 \
+  -X POST "${KUMA_BASE}/api/v1/auth/login" \
   -H 'Content-Type: application/json' \
   -d "$LOGIN_BODY" 2>/dev/null || echo '')"
 
@@ -108,13 +110,16 @@ TOKEN="$(echo "$LOGIN_RESPONSE" | python3 -c "
 import json, sys
 try:
   d = json.load(sys.stdin)
-  print(d.get('token', ''))
+  # Kuma v2 returns access_token; v1 fallback uses token
+  print(d.get('access_token', '') or d.get('token', ''))
 except Exception:
   print('')
 " 2>/dev/null || echo '')"
 
 if [ -z "$TOKEN" ]; then
-  echo "ERROR: Failed to obtain Uptime Kuma auth token. Check admin password and that Kuma is running."
+  echo "ERROR: Failed to obtain Uptime Kuma auth token."
+  echo "Response: $LOGIN_RESPONSE"
+  echo "Check UPTIME_KUMA_ADMIN_PASSWORD secret and that Kuma is running."
   exit 1
 fi
 
@@ -124,7 +129,7 @@ echo "Login: OK (token obtained)"
 # 5. Fetch existing monitors to enable idempotent creation
 # ---------------------------------------------------------------------------
 
-EXISTING_MONITORS="$(kuma_get '/api/monitors' "$TOKEN" 2>/dev/null || echo '{}')"
+EXISTING_MONITORS="$(kuma_get '/api/v1/monitors' "$TOKEN" 2>/dev/null || echo '{}')"
 
 monitor_exists() {
   local name="$1"
@@ -159,7 +164,7 @@ print(json.dumps({
 }))
 " "$DISCORD_WEBHOOK")"
 
-NOTIF_RESPONSE="$(kuma_post '/api/notifications' "$NOTIF_BODY" "$TOKEN" 2>/dev/null || echo '')"
+NOTIF_RESPONSE="$(kuma_post '/api/v1/notifications' "$NOTIF_BODY" "$TOKEN" 2>/dev/null || echo '')"
 NOTIF_ID="$(echo "$NOTIF_RESPONSE" | python3 -c "
 import json, sys
 try:
@@ -201,7 +206,7 @@ create_monitor_if_missing() {
   body="$(eval "$body_expr")"
 
   local response
-  response="$(kuma_post '/api/monitors' "$body" "$TOKEN" 2>/dev/null || echo '')"
+  response="$(kuma_post '/api/v1/monitors' "$body" "$TOKEN" 2>/dev/null || echo '')"
 
   local mon_id
   mon_id="$(echo "$response" | python3 -c "
@@ -379,7 +384,7 @@ fi
 echo ""
 echo "=== Final monitor status ==="
 
-FINAL_MONITORS="$(kuma_get '/api/monitors' "$TOKEN" 2>/dev/null || echo '{}')"
+FINAL_MONITORS="$(kuma_get '/api/v1/monitors' "$TOKEN" 2>/dev/null || echo '{}')"
 
 echo "$FINAL_MONITORS" | python3 -c "
 import json, sys
