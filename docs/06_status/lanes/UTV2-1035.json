@@ -16,6 +16,7 @@
     "docs/06_status/proof/UTV2-1035/verification.md"
   ],
   "file_scope_lock": [
+    "docs/06_status/lanes/UTV2-1035.json",
     ".ops/sync/UTV2-1035.yml",
     "docs/06_status/proof/UTV2-1035/board-summary.md",
     "docs/06_status/proof/UTV2-1035/diff-summary.md",
@@ -23,7 +24,7 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1035/diff-summary.md",
-    "docs/06_status/proof/UTV2-1035/verification.log"
+    "docs/06_status/proof/UTV2-1035/verification.md"
   ],
   "status": "in_progress",
   "started_at": "2026-05-21T12:13:25.028Z",
