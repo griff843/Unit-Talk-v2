@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1035",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1035-board-truth-reset",
+  "branch": "claude/utv2-1035-board-truth-reset",
+  "base_branch": "main",
+  "commit_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/823",
+  "files_changed": [
+    ".ops/sync/UTV2-1035.yml",
+    "docs/06_status/proof/UTV2-1035/board-summary.md",
+    "docs/06_status/proof/UTV2-1035/diff-summary.md",
+    "docs/06_status/proof/UTV2-1035/verification.md"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/lanes/UTV2-1035.json",
+    ".ops/sync/UTV2-1035.yml",
+    "docs/06_status/proof/UTV2-1035/board-summary.md",
+    "docs/06_status/proof/UTV2-1035/diff-summary.md",
+    "docs/06_status/proof/UTV2-1035/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1035/diff-summary.md",
+    "docs/06_status/proof/UTV2-1035/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-05-21T12:13:25.028Z",
+  "heartbeat_at": "2026-05-21T12:58:51.853Z",
+  "closed_at": "2026-05-21T12:58:51.853Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1035-board-truth-reset.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-21T12:56:58.338Z",
+      "verdict": "fail",
+      "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
+      "failures": [
+        "P3",
+        "C4",
+        "C6",
+        "P12"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T12:58:46.963Z",
+      "verdict": "pass",
+      "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-21T12:58:51.853Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "a08203fdc08cde67eb949f4f31035849e21e4ee0",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1035-board-truth-reset",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

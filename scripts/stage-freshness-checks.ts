@@ -149,8 +149,8 @@ async function checkStage(
 
 async function main(): Promise<void> {
   const checks: Array<() => Promise<StageResult>> = [
-    // 1. Offers ingestion
-    () => checkStage('Offers', 'provider_offers', 'snapshot_at', 60),
+    // 1. Offers ingestion — query provider_offer_current (post-UTV2-772 cutover table)
+    () => checkStage('Offers', 'provider_offer_current', 'updated_at', 60),
 
     // 2. Market universe materialization
     () => checkStage('Market Universe', 'market_universe', 'refreshed_at', 120),

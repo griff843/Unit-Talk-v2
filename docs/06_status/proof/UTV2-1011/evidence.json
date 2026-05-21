@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1011",
+  "lane_type": "runtime",
+  "tier": "T1",
+  "merge_sha": "287d05aa1dc26cb8904ffe69fc4cd1ff0605b17b",
+  "generated_at": "2026-05-21T12:17:55Z",
+
+  "verifier": {
+    "identity": "claude/dac278b7-lane-utv2-1011",
+    "checked_at": "2026-05-21T13:10:00Z"
+  },
+
+  "static_proof": {
+    "pnpm_type_check": "PASS (tsc -b tsconfig.json exits 0)",
+    "pnpm_test": "PASS — 481 tests, 0 fail, 0 skip",
+    "pnpm_test_db": "PASS (exit code 0, live Supabase project zfzdnfwdarxucxtaojxm)",
+    "pnpm_stage_freshness_offers": "FRESH (5m ago, 11854 rows in window)",
+    "pnpm_runtime_health_provider": "HEALTHY",
+    "scripts_fixed": [
+      {
+        "file": "scripts/stage-freshness-checks.ts",
+        "change": "provider_offers.snapshot_at → provider_offer_current.updated_at",
+        "reason": "provider_offers.snapshot_at no longer updated after UTV2-772 cutover"
+      },
+      {
+        "file": "scripts/runtime-health.ts",
+        "change": "db.from('provider_offers').select('snapshot_at') → db.from('provider_offer_current').select('updated_at')",
+        "reason": "Same cutover alignment"
+      }
+    ]
+  },
+
+  "runtime_proof": {
+    "queries": [
+      "SELECT updated_at FROM provider_offer_current ORDER BY updated_at DESC LIMIT 1",
+      "SELECT COUNT(*) FROM provider_offer_current",
+      "SELECT updated_at FROM provider_offer_history ORDER BY updated_at DESC LIMIT 1",
+      "SELECT COUNT(*) FROM provider_offer_history"
+    ],
+    "row_counts": [
+      { "table": "provider_offer_current", "count": 255808, "latest": "2026-05-21T12:12:56Z" },
+      { "table": "provider_offer_history", "count": 648410, "latest": "2026-05-21T12:09:15Z" },
+      { "table": "provider_offers", "count": 8191206, "latest": "2026-04-29T13:04:29Z", "note": "legacy — no longer updated after UTV2-772 cutover" }
+    ],
+    "receipts": [
+      "pnpm test:db PASS (exit code 0, Supabase project zfzdnfwdarxucxtaojxm)",
+      "stage:freshness Offers FRESH age=5m 11854 rows (threshold 60m)",
+      "runtime:health Provider HEALTHY latest offer 5m ago"
+    ],
+    "sgo_auth": {
+      "endpoint": "https://api.sportsgameodds.com/v2/account/usage",
+      "http_status": 200,
+      "is_active": true,
+      "tier": "pro"
+    },
+    "before_state": {
+      "provider_offer_current_age_minutes": 31624,
+      "stage_freshness_offers": "STALE",
+      "runtime_health_provider": "FAILED"
+    },
+    "after_state": {
+      "provider_offer_current_age_minutes": 5,
+      "stage_freshness_offers": "FRESH",
+      "runtime_health_provider": "HEALTHY"
+    }
+  },
+
+  "distinction": {
+    "auth_failure": false,
+    "scheduler_failure": false,
+    "runtime_failure": false,
+    "architecture_mismatch": true,
+    "note": "SGO auth is valid (200 OK, isActive: true, pro tier). Ingestor scheduler ran successfully. Staleness was reported by scripts that checked legacy provider_offers table instead of post-cutover provider_offer_current."
+  }
+}
