@@ -1,5 +1,7 @@
 # UTV2-1027 Diff Summary
 
+Merge SHA: 9ac698bee8e1140adf6a785bf97f3a9f1907a1c7
+
 ## Summary
 - Added `scripts/clv-dashboard.ts`, a read-only operator CLV dashboard export script.
 - The script segments settled-pick CLV by overall cohort, sport, band, model version, and CLV source class.
