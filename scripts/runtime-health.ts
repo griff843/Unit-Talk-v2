@@ -174,28 +174,29 @@ async function main() {
 
   // ── 3. Provider Freshness ─────────────────────────────────────────────────
   {
+    // Query provider_offer_current (post-UTV2-772 cutover table; provider_offers is legacy)
     const { data: latest, error } = await db
-      .from('provider_offers')
-      .select('id, snapshot_at, sport_key, provider_key')
-      .order('snapshot_at', { ascending: false })
+      .from('provider_offer_current')
+      .select('id, updated_at, sport_key, provider_key')
+      .order('updated_at', { ascending: false })
       .limit(1)
       .single()
 
     if (error && error.code !== 'PGRST116') {
       subsystems.push({ name: 'Provider Freshness', state: 'UNKNOWN', value: 'query failed', detail: error.message })
     } else if (!latest) {
-      subsystems.push({ name: 'Provider Freshness', state: 'FAILED', value: 'no offers', detail: 'provider_offers table is empty — ingestor has never run or data was cleared' })
-      failed.push('Provider: no offers in provider_offers')
+      subsystems.push({ name: 'Provider Freshness', state: 'FAILED', value: 'no offers', detail: 'provider_offer_current table is empty — ingestor has never run or data was cleared' })
+      failed.push('Provider: no offers in provider_offer_current')
     } else {
-      const m = ageMin(latest.snapshot_at)
+      const m = ageMin(latest.updated_at)
       const state: SubsystemState = m > T.providerCritMin ? 'FAILED' : m > T.providerWarnMin ? 'DEGRADED' : 'HEALTHY'
 
       subsystems.push({
         name: 'Provider Freshness',
         state,
-        value: `latest offer ${ageFmt(latest.snapshot_at)} ago`,
-        detail: `sport=${latest.sport_key}; provider=${latest.provider_key}; snapshot_at=${latest.snapshot_at}`,
-        freshness: ageFmt(latest.snapshot_at),
+        value: `latest offer ${ageFmt(latest.updated_at)} ago`,
+        detail: `sport=${latest.sport_key}; provider=${latest.provider_key}; updated_at=${latest.updated_at}`,
+        freshness: ageFmt(latest.updated_at),
       })
       if (state === 'FAILED') failed.push(`Provider: stale ${m}m ago (>${T.providerCritMin}m threshold)`)
       if (state === 'DEGRADED') degraded.push(`Provider: stale ${m}m ago (>${T.providerWarnMin}m warn)`)

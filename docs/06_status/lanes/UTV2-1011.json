@@ -13,6 +13,8 @@
   "file_scope_lock": [
     "scripts/ingestor-supervisor.ts",
     "scripts/ingestor-status.mjs",
+    "scripts/stage-freshness-checks.ts",
+    "scripts/runtime-health.ts",
     "docs/06_status/lanes/UTV2-1011.json",
     "docs/06_status/proof/UTV2-1011/evidence.json",
     "docs/06_status/proof/UTV2-1011/diff-summary.md",
