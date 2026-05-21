@@ -1,9 +1,54 @@
 # Agent Tooling Classification
 
 > **Status:** Active authority.
-> **Created:** 2026-05-18.
+> **Created:** 2026-05-18. **Revised:** 2026-05-21 (UTV2-1008 enforcement disposition ratification).
 > **Authority tier:** Tier 4 - Operating Policy.
 > **Owner:** Program Owner.
+
+## PM-Ratified Enforcement Disposition (UTV2-1008)
+
+The following enforcement tiers are PM-ratified as of 2026-05-21. This disposition is authoritative for any claim about whether a prompt agent enforces a guarantee.
+
+### Prompt-only reviewers — advisory only
+
+These agents provide operator value and MUST NOT be cited as autonomous enforcement. They do not run automatically, do not block merges, and do not validate runtime truth. Their output informs operator decisions only.
+
+| Agent | File | Rationale |
+|-------|------|-----------|
+| `codex-return-reviewer` | `.claude/agents/codex-return-reviewer.md` | Advisory review aid — no CI wiring, no merge block |
+| `pr-risk-reviewer` | `.claude/agents/pr-risk-reviewer.md` | Advisory risk aid — no CI wiring, no merge block |
+| `ci-triage` | `.claude/agents/ci-triage.md` | Reactive diagnostic — invoked after a failure exists, never preventive |
+
+### CI/script enforcement candidates
+
+These must become mandatory deterministic enforcement paths. The logic must be encoded as required CI checks, not prompt-only behavior.
+
+| Agent/Script | Current state | Target |
+|---|---|---|
+| `runtime-verifier` / `runtime-verifier-gate.ts` | Workflow exists; limited trigger scope | Expand trigger coverage (UTV2-1045) |
+| `proof-auditor` / `proof-auditor-gate.ts` | Workflow ships as required-check candidate | Promote to required status check on all proof-path PRs (UTV2-1046 ✅) |
+
+### Scheduled monitor candidates
+
+These must evolve into recurring automated monitors with durable credentials and visible failure signals.
+
+| Agent/Script | Current state | Target |
+|---|---|---|
+| `lane-reconciler` | `ops-reconcile.yml` daily cron is the real actor | Maintain and verify daily cron pushes mutations visibly |
+| `lane-governor` | Dispatch-embedded concurrency logic is the real layer | Promote governance logic into dispatch preflight artifact (UTV2-1048) |
+
+### Persistent-service candidates
+
+**None currently approved.** Persistent runtime service escalation requires all of:
+
+- Production infrastructure maturity
+- Runtime trust stabilization under sustained load
+- Proven reconciliation correctness
+- Operational burn-in under 5-lane load (UTV2-1071)
+
+No agent may be described as a continuously running autonomous service until these conditions are met and PM explicitly promotes it.
+
+---
 
 ## Purpose
 
@@ -105,15 +150,16 @@ Archive or delete a tool when any of these are true:
 
 ## Tracking Issues
 
-| Issue | Purpose |
-| --- | --- |
-| UTV2-1044 | Automation convergence gate for all recurring-purpose tools |
-| UTV2-1045 | Expand runtime-verifier trigger coverage |
-| UTV2-1046 | Promote proof-auditor to required CI proof gate — **DONE** |
-| UTV2-1047 | Auto-generate PR review and risk packets |
-| UTV2-1048 | Promote lane-governor checks into dispatch preflight artifact |
-| UTV2-1049 | Retire or collapse db-proof-reviewer — **DONE** (advisory downgrade) |
-| UTV2-1050 | Automate CI failure triage into Linear |
+| Issue | Purpose | Status |
+| --- | --- | --- |
+| UTV2-1008 | Ratify enforcement disposition for all agent/tooling surfaces | **DONE** (this doc) |
+| UTV2-1044 | Automation convergence gate for all recurring-purpose tools | Open |
+| UTV2-1045 | Expand runtime-verifier trigger coverage | Open |
+| UTV2-1046 | Promote proof-auditor to required CI proof gate | **DONE** |
+| UTV2-1047 | Auto-generate PR review and risk packets | Open |
+| UTV2-1048 | Promote lane-governor checks into dispatch preflight artifact | Open |
+| UTV2-1049 | Retire or collapse db-proof-reviewer | **DONE** (advisory downgrade) |
+| UTV2-1050 | Automate CI failure triage into Linear | Open |
 
 ## Verdict
 
