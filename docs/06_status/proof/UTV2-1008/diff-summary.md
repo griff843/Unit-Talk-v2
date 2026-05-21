@@ -3,7 +3,7 @@
 **Issue:** UTV2-1008 — Agent guarantee classification: ratify enforcement disposition for all agent/tooling surfaces
 **Tier:** T2
 **Branch:** claude/utv2-1008-agent-guarantee-classification
-**Merge SHA:** (to be set post-merge)
+**Merge SHA:** 4ad6d0629017411b697dc4cd8d9e0b39b1a3549b
 
 ### Changes
 

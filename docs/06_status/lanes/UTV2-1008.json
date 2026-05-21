@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1008",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1008-agent-guarantee-classification",
+  "branch": "claude/utv2-1008-agent-guarantee-classification",
+  "base_branch": "main",
+  "commit_sha": "4ad6d0629017411b697dc4cd8d9e0b39b1a3549b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/827",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".claude/agents/ci-triage.md",
+    ".claude/agents/codex-return-reviewer.md",
+    ".claude/agents/pr-risk-reviewer.md",
+    "docs/05_operations/AGENT_TOOLING_CLASSIFICATION.md",
+    "docs/06_status/proof/UTV2-1008/diff-summary.md",
+    "docs/06_status/proof/UTV2-1008/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1008/diff-summary.md",
+    "docs/06_status/proof/UTV2-1008/verification.md"
+  ],
+  "status": "merged",
+  "started_at": "2026-05-21T13:58:17.376Z",
+  "heartbeat_at": "2026-05-21T13:58:23.275Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1008-agent-guarantee-classification.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1008-agent-guarantee-classification",
+    "package_install": "not_required",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}
