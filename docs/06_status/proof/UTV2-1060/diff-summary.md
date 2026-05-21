@@ -1,6 +1,6 @@
 # UTV2-1060 Diff Summary
 
-Merge SHA: (to be set post-merge)
+Merge SHA: b1c97d27782544f2ad8c41bfaf961c6d498b9531
 
 ## Summary
 

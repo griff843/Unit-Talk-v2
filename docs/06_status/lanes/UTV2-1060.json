@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1060-stale-check-pollution",
   "branch": "claude/utv2-1060-stale-check-pollution",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "b1c97d27782544f2ad8c41bfaf961c6d498b9531",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/826",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/proof-auditor-gate.yml",
@@ -19,16 +19,24 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1060/diff-summary.md",
-    "docs/06_status/proof/UTV2-1060/verification.log"
+    "docs/06_status/proof/UTV2-1060/verification.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-21T12:08:01.857Z",
-  "heartbeat_at": "2026-05-21T12:08:01.857Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-21T13:37:31.987Z",
+  "closed_at": "2026-05-21T13:37:31.987Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1060-stale-check-pollution.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-21T13:37:20.278Z",
+      "verdict": "pass",
+      "merge_sha": "b1c97d27782544f2ad8c41bfaf961c6d498b9531",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
