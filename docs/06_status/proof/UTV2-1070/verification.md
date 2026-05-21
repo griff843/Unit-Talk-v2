@@ -2,6 +2,7 @@
 
 Date: 2026-05-21
 Branch: `codex/utv2-1070-pnpm-state-isolation`
+**Merge SHA:** 8e7273f9b7c7e1beb509de4644731ec4143a12db
 
 ## Commands
 

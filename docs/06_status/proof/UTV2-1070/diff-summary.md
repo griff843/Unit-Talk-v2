@@ -1,5 +1,7 @@
 # UTV2-1070 Diff Summary
 
+**Merge SHA:** 8e7273f9b7c7e1beb509de4644731ec4143a12db
+
 ## Summary
 
 - Added worktree-local pnpm and Corepack state isolation for lane setup installs launched by `scripts/ops/lane-start.ts`.
