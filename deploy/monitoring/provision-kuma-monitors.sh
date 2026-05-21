@@ -52,11 +52,12 @@ echo ""
 echo "=== Checking uptime-kuma-api Python library ==="
 if ! python3 -c "import uptime_kuma_api" 2>/dev/null; then
   echo "Installing uptime-kuma-api..."
-  # Bootstrap pip if missing (some minimal server images ship without it)
+  # Bootstrap pip if missing (some server images ship without it)
   if ! python3 -m pip --version >/dev/null 2>&1; then
-    echo "  pip not found — bootstrapping via ensurepip..."
-    python3 -m ensurepip --upgrade 2>/dev/null || true
-    python3 -m pip install --upgrade pip --quiet 2>/dev/null || true
+    echo "  pip not found — bootstrapping via get-pip.py..."
+    curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
+    python3 /tmp/get-pip.py --quiet
+    rm -f /tmp/get-pip.py
   fi
   python3 -m pip install --quiet uptime-kuma-api
   echo "Installed."
