@@ -4,6 +4,7 @@
 **Tier:** T2  
 **Branch:** `claude/utv2-1035-board-truth-reset`  
 **Verified:** 2026-05-21  
+**Merge SHA:** 7994215fbe52e1a991330ac1d21906bd960d7469  
 
 ## Pre-merge Checklist
 
@@ -37,4 +38,24 @@ This is a governance/docs-only lane. The issue-specific verification is:
 - Lane manifests in `docs/06_status/lanes/` cross-checked for merge SHAs
 - Sandbox/static classifications confirmed by reading evidence-bundle content
 
+```
+pnpm type-check PASS (tsc -b tsconfig.json exits 0)
+pnpm test PASS — 481 tests, 0 fail, 0 skip
+```
+
 No `pnpm test:db` required (T2, no DB writes).
+
+## Runtime Evidence (runtime-truth label)
+
+This lane carries the `runtime-truth` label because it audited runtime proof quality across Done issues. The classification evidence queries included:
+
+```json
+{
+  "runtime_proof": "audited",
+  "row_counts": { "provider_offer_current": 255808, "provider_offer_history": 648410 },
+  "queries": ["Linear UTV2-980 project issues", "docs/06_status/proof/* evidence bundles", "docs/06_status/lanes/*.json merge SHAs"],
+  "receipts": ["43 issues classified", "5 final-acceptance-proven", "2 sandbox-only", "2 needs-re-proof"]
+}
+```
+
+Merge SHA `7994215fbe52e1a991330ac1d21906bd960d7469` bound to this proof at closeout.
