@@ -21,14 +21,22 @@
     "docs/06_status/proof/UTV2-1070/diff-summary.md",
     "docs/06_status/proof/UTV2-1070/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-21T13:47:00.000Z",
-  "heartbeat_at": "2026-05-21T13:47:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-21T14:47:23.367Z",
+  "closed_at": "2026-05-21T14:47:23.367Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1070-pnpm-state-isolation.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-21T14:47:09.323Z",
+      "verdict": "pass",
+      "merge_sha": "8e7273f9b7c7e1beb509de4644731ec4143a12db",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
