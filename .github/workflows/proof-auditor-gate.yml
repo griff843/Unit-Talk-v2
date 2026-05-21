@@ -66,8 +66,9 @@ jobs:
           base_sha="${{ github.event.pull_request.base.sha }}"
           head_sha="${{ github.event.pull_request.head.sha }}"
 
-          # Collect distinct proof directories from the diff
-          changed_proof_dirs=$(git diff --name-only "$base_sha" "$head_sha" \
+          # Collect distinct proof directories from the diff (ACM = Added/Copied/Modified only;
+          # excludes Deleted files so closed-lane proof dirs don't cause spurious gate failures)
+          changed_proof_dirs=$(git diff --diff-filter=ACM --name-only "$base_sha" "$head_sha" \
             | grep '^docs/06_status/proof/' \
             | xargs -I{} dirname {} \
             | sort -u \
