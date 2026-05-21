@@ -28,26 +28,34 @@
   ],
   "status": "done",
   "started_at": "2026-05-21T11:47:00.313Z",
-  "heartbeat_at": "2026-05-21T13:13:38.217Z",
-  "closed_at": "2026-05-21T13:13:38.217Z",
+  "heartbeat_at": "2026-05-21T13:13:33.113Z",
+  "closed_at": "2026-05-21T13:13:33.113Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1011-restore-provider-freshness.json",
   "created_by": "claude",
   "truth_check_history": [
     {
-      "checked_at": "2026-05-21T13:13:31.758Z",
+      "checked_at": "2026-05-21T13:12:13.112Z",
+      "verdict": "fail",
+      "merge_sha": "287d05aa1dc26cb8904ffe69fc4cd1ff0605b17b",
+      "failures": [
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T13:13:15.212Z",
       "verdict": "pass",
       "merge_sha": "287d05aa1dc26cb8904ffe69fc4cd1ff0605b17b",
       "failures": [],
       "runner": "manual"
-    },
-    {
-      "timestamp": "2026-05-21T13:13:38.217Z",
-      "runner": "post-merge-lane-close",
-      "merge_sha": "187d6ff820e0a8d3a4ee4fc6db4f8bb174ac3dfd",
-      "verdict": "pass",
-      "exit_code": 0,
-      "checks": []
     }
   ],
   "reopen_history": [],
