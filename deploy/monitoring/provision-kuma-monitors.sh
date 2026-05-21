@@ -49,21 +49,20 @@ echo "Secrets loaded."
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "=== Checking uptime-kuma-api Python library ==="
-if ! python3 -c "import uptime_kuma_api" 2>/dev/null; then
-  echo "Installing uptime-kuma-api..."
-  # Bootstrap pip if missing (some server images ship without it)
-  if ! python3 -m pip --version >/dev/null 2>&1; then
-    echo "  pip not found — bootstrapping via get-pip.py..."
-    curl -sS https://bootstrap.pypa.io/get-pip.py -o /tmp/get-pip.py
-    python3 /tmp/get-pip.py --quiet
-    rm -f /tmp/get-pip.py
-  fi
-  python3 -m pip install --quiet uptime-kuma-api
-  echo "Installed."
-else
-  echo "uptime-kuma-api already present."
+echo "=== Setting up Python venv with uptime-kuma-api ==="
+KUMA_VENV=/tmp/kuma-venv
+if [ ! -f "$KUMA_VENV/bin/python3" ]; then
+  echo "  Creating venv at $KUMA_VENV..."
+  python3 -m venv "$KUMA_VENV"
 fi
+if ! "$KUMA_VENV/bin/python3" -c "import uptime_kuma_api" 2>/dev/null; then
+  echo "  Installing uptime-kuma-api into venv..."
+  "$KUMA_VENV/bin/pip" install --quiet uptime-kuma-api
+  echo "  Installed."
+else
+  echo "  uptime-kuma-api already present in venv."
+fi
+PYTHON3="$KUMA_VENV/bin/python3"
 
 # ---------------------------------------------------------------------------
 # 3. Wait for Kuma to be ready (Socket.IO connect can fail if not fully up)
@@ -91,7 +90,7 @@ done
 echo ""
 echo "=== Provisioning monitors via uptime-kuma-api ==="
 
-python3 - "$KUMA_BASE" "$KUMA_PASS" "$DISCORD_WEBHOOK" <<'PYEOF'
+"$PYTHON3" - "$KUMA_BASE" "$KUMA_PASS" "$DISCORD_WEBHOOK" <<'PYEOF'
 import sys
 import time
 
