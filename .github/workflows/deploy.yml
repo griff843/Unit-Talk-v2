@@ -205,15 +205,25 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
-          # Resolve worker distribution target: explicit secret wins; fall back to raw
-          # snowflake channel ID (matches /^discord:\d+$/ — no target map entry needed).
+          # Resolve worker distribution target. Explicit secret wins; DISCORD_CAPPER_CHANNEL_ID
+          # (raw snowflake) matches /^discord:\d+$/ so no target-map entry is needed. Fall back
+          # to discord:0 (a valid-format placeholder) so the worker starts without crash-looping
+          # when Discord channel secrets haven't been configured yet.
           _dist_targets="${UNIT_TALK_DISTRIBUTION_TARGETS:-}"
           if [ -z "$_dist_targets" ] && [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ]; then
             _dist_targets="discord:${DISCORD_CAPPER_CHANNEL_ID}"
           elif [ -z "$_dist_targets" ]; then
-            _dist_targets="discord:best-bets"
+            _dist_targets="discord:0"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
+          # Discord bot requires non-empty strings for guild/role/channel IDs.
+          # Use "0" as a placeholder when secrets aren't configured so the bot starts
+          # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
+          _guild_id="${DISCORD_GUILD_ID:-0}"
+          _capper_role="${DISCORD_CAPPER_ROLE_ID:-0}"
+          _vip_role="${DISCORD_VIP_ROLE_ID:-0}"
+          _vip_plus_role="${DISCORD_VIP_PLUS_ROLE_ID:-0}"
+          _capper_channel="${DISCORD_CAPPER_CHANNEL_ID:-0}"
           printf '%s\n' \
             "NODE_ENV=production" \
             "UNIT_TALK_APP_ENV=production" \
@@ -238,12 +248,12 @@ jobs:
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
-            "DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}" \
-            "DISCORD_CAPPER_ROLE_ID=${DISCORD_CAPPER_ROLE_ID:-}" \
-            "DISCORD_VIP_ROLE_ID=${DISCORD_VIP_ROLE_ID:-}" \
-            "DISCORD_VIP_PLUS_ROLE_ID=${DISCORD_VIP_PLUS_ROLE_ID:-}" \
-            "DISCORD_CAPPER_CHANNEL_ID=${DISCORD_CAPPER_CHANNEL_ID:-}" \
-            "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-}" \
+            "DISCORD_GUILD_ID=$_guild_id" \
+            "DISCORD_CAPPER_ROLE_ID=$_capper_role" \
+            "DISCORD_VIP_ROLE_ID=$_vip_role" \
+            "DISCORD_VIP_PLUS_ROLE_ID=$_vip_plus_role" \
+            "DISCORD_CAPPER_CHANNEL_ID=$_capper_channel" \
+            "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-0}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \
@@ -334,15 +344,25 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
-          # Resolve worker distribution target: explicit secret wins; fall back to raw
-          # snowflake channel ID (matches /^discord:\d+$/ — no target map entry needed).
+          # Resolve worker distribution target. Explicit secret wins; DISCORD_CAPPER_CHANNEL_ID
+          # (raw snowflake) matches /^discord:\d+$/ so no target-map entry is needed. Fall back
+          # to discord:0 (a valid-format placeholder) so the worker starts without crash-looping
+          # when Discord channel secrets haven't been configured yet.
           _dist_targets="${UNIT_TALK_DISTRIBUTION_TARGETS:-}"
           if [ -z "$_dist_targets" ] && [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ]; then
             _dist_targets="discord:${DISCORD_CAPPER_CHANNEL_ID}"
           elif [ -z "$_dist_targets" ]; then
-            _dist_targets="discord:best-bets"
+            _dist_targets="discord:0"
           fi
           _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
+          # Discord bot requires non-empty strings for guild/role/channel IDs.
+          # Use "0" as a placeholder when secrets aren't configured so the bot starts
+          # instead of crash-looping; deliveries to placeholder IDs will fail gracefully.
+          _guild_id="${DISCORD_GUILD_ID:-0}"
+          _capper_role="${DISCORD_CAPPER_ROLE_ID:-0}"
+          _vip_role="${DISCORD_VIP_ROLE_ID:-0}"
+          _vip_plus_role="${DISCORD_VIP_PLUS_ROLE_ID:-0}"
+          _capper_channel="${DISCORD_CAPPER_CHANNEL_ID:-0}"
           printf '%s\n' \
             "NODE_ENV=production" \
             "UNIT_TALK_APP_ENV=production" \
@@ -367,12 +387,12 @@ jobs:
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
-            "DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}" \
-            "DISCORD_CAPPER_ROLE_ID=${DISCORD_CAPPER_ROLE_ID:-}" \
-            "DISCORD_VIP_ROLE_ID=${DISCORD_VIP_ROLE_ID:-}" \
-            "DISCORD_VIP_PLUS_ROLE_ID=${DISCORD_VIP_PLUS_ROLE_ID:-}" \
-            "DISCORD_CAPPER_CHANNEL_ID=${DISCORD_CAPPER_CHANNEL_ID:-}" \
-            "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-}" \
+            "DISCORD_GUILD_ID=$_guild_id" \
+            "DISCORD_CAPPER_ROLE_ID=$_capper_role" \
+            "DISCORD_VIP_ROLE_ID=$_vip_role" \
+            "DISCORD_VIP_PLUS_ROLE_ID=$_vip_plus_role" \
+            "DISCORD_CAPPER_CHANNEL_ID=$_capper_channel" \
+            "DISCORD_OPERATOR_ROLE_ID=${DISCORD_OPERATOR_ROLE_ID:-0}" \
             "UNIT_TALK_BOT_API_KEY=$UNIT_TALK_BOT_API_KEY" \
             "UNIT_TALK_INGESTOR_API_KEY=$UNIT_TALK_INGESTOR_API_KEY" \
             "SGO_API_KEY=$SGO_API_KEY" \

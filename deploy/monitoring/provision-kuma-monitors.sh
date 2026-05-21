@@ -52,7 +52,7 @@ echo ""
 echo "=== Checking uptime-kuma-api Python library ==="
 if ! python3 -c "import uptime_kuma_api" 2>/dev/null; then
   echo "Installing uptime-kuma-api..."
-  pip3 install --quiet uptime-kuma-api
+  python3 -m pip install --quiet uptime-kuma-api
   echo "Installed."
 else
   echo "uptime-kuma-api already present."
