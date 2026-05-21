@@ -1,0 +1,59 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1064",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1064-executor-compat-cleanup",
+  "branch": "codex/utv2-1064-executor-compat-cleanup",
+  "base_branch": "main",
+  "commit_sha": "5970cc918848a78635479e3abba4d7827e2383c3",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/825",
+  "files_changed": [],
+  "file_scope_lock": [
+    "scripts/codex-receive.ts",
+    "scripts/ops/lane-link-pr.ts",
+    "scripts/ops/shared.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1064/diff-summary.md",
+    "docs/06_status/proof/UTV2-1064/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-05-21T12:07:47.546Z",
+  "heartbeat_at": "2026-05-21T13:31:27.398Z",
+  "closed_at": "2026-05-21T13:31:27.398Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1064-executor-compat-cleanup.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-21T13:30:33.482Z",
+      "verdict": "fail",
+      "merge_sha": "5970cc918848a78635479e3abba4d7827e2383c3",
+      "failures": [
+        "P1",
+        "P2",
+        "P3",
+        "P4",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T13:31:11.313Z",
+      "verdict": "pass",
+      "merge_sha": "5970cc918848a78635479e3abba4d7827e2383c3",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1064-executor-compat-cleanup",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

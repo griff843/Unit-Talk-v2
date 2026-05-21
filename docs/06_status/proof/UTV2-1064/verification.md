@@ -3,6 +3,7 @@
 **Issue:** UTV2-1064 — Executor compatibility cleanup  
 **Tier:** T2  
 **Branch:** `codex/utv2-1064-executor-compat-cleanup`  
+**Merge SHA:** 5970cc918848a78635479e3abba4d7827e2383c3  
 **Generated:** 2026-05-21
 
 ## Verification

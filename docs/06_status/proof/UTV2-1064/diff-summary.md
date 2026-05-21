@@ -1,5 +1,7 @@
 # UTV2-1064 Diff Summary
 
+Merge SHA: 5970cc918848a78635479e3abba4d7827e2383c3
+
 ## Scope
 - Added shared Codex executor resolution in `scripts/ops/shared.ts`.
 - Updated `scripts/ops/lane-link-pr.ts` and `scripts/codex-receive.ts` to use executor-aware Codex lane detection.
