@@ -53,6 +53,14 @@ jobs:
             docker logs unit-talk-api-1 --tail 100 2>&1 || echo 'No logs available'
 
             echo ''
+            echo '=== LAST 50 WORKER LOG LINES ==='
+            docker logs unit-talk-worker-1 --tail 50 2>&1 || echo 'No worker logs available'
+
+            echo ''
+            echo '=== LAST 20 DISCORD-BOT LOG LINES ==='
+            docker logs unit-talk-discord-bot-1 --tail 20 2>&1 || echo 'No discord-bot logs available'
+
+            echo ''
             echo '=== ENV FILE CHECK ==='
             ls -la \"\$DEPLOY_PATH/.env.production\" 2>/dev/null || echo 'MISSING: .env.production does not exist'
 
