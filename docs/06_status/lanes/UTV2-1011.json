@@ -26,14 +26,30 @@
     "docs/06_status/proof/UTV2-1011/diff-summary.md",
     "docs/06_status/proof/UTV2-1011/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-21T11:47:00.313Z",
-  "heartbeat_at": "2026-05-21T11:47:00.313Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-21T13:13:38.217Z",
+  "closed_at": "2026-05-21T13:13:38.217Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1011-restore-provider-freshness.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-21T13:13:31.758Z",
+      "verdict": "pass",
+      "merge_sha": "287d05aa1dc26cb8904ffe69fc4cd1ff0605b17b",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-21T13:13:38.217Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "187d6ff820e0a8d3a4ee4fc6db4f8bb174ac3dfd",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
