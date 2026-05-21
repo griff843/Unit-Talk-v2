@@ -12,6 +12,8 @@
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/lane-start.ts",
+    "scripts/ops/codex-exec.ts",
+    "scripts/ops/codex-wrapper.ts",
     "docs/06_status/proof/UTV2-1070/diff-summary.md",
     "docs/06_status/proof/UTV2-1070/verification.md"
   ],
