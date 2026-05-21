@@ -3,15 +3,12 @@
 #
 # Provisions all 5 Uptime Kuma monitors + Discord notification for Unit Talk V2.
 # Runs ON the Hetzner server via SSH from deploy-monitoring.yml.
+# Uses Uptime Kuma v2 REST API (not Socket.IO).
 #
 # Environment:
-#   DEPLOY_PATH        — base deployment path (set by workflow before calling this script)
-#
+#   DEPLOY_PATH  — base deployment path
 # Secrets (read from files, never from command args):
-#   /tmp/kuma-pass     — Uptime Kuma admin password (written by workflow, deleted here)
-#
-# Idempotent: checks existing monitors by name before creating.
-# Uses uptime-kuma-api Python library (Socket.IO — Kuma has no REST API).
+#   /tmp/kuma-pass  — Uptime Kuma admin password (written by workflow, deleted here)
 
 set -euo pipefail
 
@@ -19,55 +16,29 @@ KUMA_BASE="http://localhost:3001"
 ENV_FILE="${DEPLOY_PATH}/.env.monitoring"
 
 # ---------------------------------------------------------------------------
-# 1. Read secrets from files / environment files
+# 1. Read secrets
 # ---------------------------------------------------------------------------
 
 if [ ! -f /tmp/kuma-pass ]; then
-  echo "ERROR: /tmp/kuma-pass not found. Workflow must SCP the password file before calling this script."
+  echo "ERROR: /tmp/kuma-pass not found."
   exit 1
 fi
-
 KUMA_PASS="$(cat /tmp/kuma-pass)"
 rm -f /tmp/kuma-pass
 
 if [ ! -f "$ENV_FILE" ]; then
-  echo "ERROR: $ENV_FILE not found. Run the 'Write .env.monitoring on server' step first."
+  echo "ERROR: $ENV_FILE not found."
   exit 1
 fi
-
 DISCORD_WEBHOOK="$(grep -E '^DISCORD_OPS_WEBHOOK_URL=' "$ENV_FILE" | cut -d= -f2-)"
-
 if [ -z "$DISCORD_WEBHOOK" ]; then
   echo "ERROR: DISCORD_OPS_WEBHOOK_URL is empty in $ENV_FILE"
   exit 1
 fi
-
 echo "Secrets loaded."
 
 # ---------------------------------------------------------------------------
-# 2. Ensure uptime-kuma-api Python library is available
-# ---------------------------------------------------------------------------
-
-echo ""
-echo "=== Setting up Python venv with uptime-kuma-api ==="
-KUMA_VENV=/tmp/kuma-venv
-# Recreate if pip is missing or broken (handles partial venvs from prior failed runs)
-if ! "$KUMA_VENV/bin/pip" --version >/dev/null 2>&1; then
-  echo "  (Re)creating venv at $KUMA_VENV..."
-  rm -rf "$KUMA_VENV"
-  python3 -m venv "$KUMA_VENV"
-fi
-if ! "$KUMA_VENV/bin/python3" -c "import uptime_kuma_api" 2>/dev/null; then
-  echo "  Installing uptime-kuma-api into venv..."
-  "$KUMA_VENV/bin/pip" install --quiet uptime-kuma-api
-  echo "  Installed."
-else
-  echo "  uptime-kuma-api already present in venv."
-fi
-PYTHON3="$KUMA_VENV/bin/python3"
-
-# ---------------------------------------------------------------------------
-# 3. Wait for Kuma to be ready (Socket.IO connect can fail if not fully up)
+# 2. Wait for Kuma to be ready
 # ---------------------------------------------------------------------------
 
 echo ""
@@ -86,178 +57,179 @@ for i in $(seq 1 20); do
 done
 
 # ---------------------------------------------------------------------------
-# 4. Provision via Python + uptime-kuma-api (Socket.IO)
+# 3. Setup admin (idempotent — fails gracefully if already set up)
 # ---------------------------------------------------------------------------
 
 echo ""
-echo "=== Provisioning monitors via uptime-kuma-api ==="
+echo "=== Setup admin account (v2 REST) ==="
+SETUP_RESP=$(curl -s --max-time 10 -X POST "${KUMA_BASE}/api/setup" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"admin\",\"password\":\"${KUMA_PASS}\"}" 2>/dev/null || echo '{}')
+echo "Setup: $SETUP_RESP"
 
-"$PYTHON3" - "$KUMA_BASE" "$KUMA_PASS" "$DISCORD_WEBHOOK" <<'PYEOF'
-import sys
-import time
+# ---------------------------------------------------------------------------
+# 4. Login and get token
+# ---------------------------------------------------------------------------
 
-try:
-    from uptime_kuma_api import UptimeKumaApi, MonitorType, NotificationType
-except ImportError as e:
-    print(f"ERROR: uptime_kuma_api not installed: {e}")
-    sys.exit(1)
+echo ""
+echo "=== Login ==="
+LOGIN_RESP=$(curl -sf --max-time 10 -X POST "${KUMA_BASE}/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d "{\"username\":\"admin\",\"password\":\"${KUMA_PASS}\"}" 2>/dev/null || echo '{}')
 
-kuma_url, kuma_pass, discord_webhook = sys.argv[1], sys.argv[2], sys.argv[3]
+TOKEN=$(python3 -c "
+import json, sys
+d = json.loads('''${LOGIN_RESP}''')
+# v2 token is nested under tokenInfo or at top level
+print(d.get('token') or d.get('tokenInfo',{}).get('token',''))
+" 2>/dev/null || echo "")
 
-print(f"Connecting to {kuma_url} ...")
-with UptimeKumaApi(kuma_url) as api:
-    # --- Admin setup (idempotent) ---
-    try:
-        api.setup("admin", kuma_pass)
-        print("Admin account created.")
-    except Exception as e:
-        if "already" in str(e).lower() or "exist" in str(e).lower() or "setup" in str(e).lower():
-            print(f"Admin already exists (OK): {e}")
-        else:
-            print(f"Setup response (may be OK): {e}")
+if [ -z "$TOKEN" ]; then
+  echo "ERROR: Login failed. Response: $LOGIN_RESP"
+  exit 1
+fi
+echo "Login OK."
 
-    # --- Login ---
-    api.login("admin", kuma_pass)
-    print("Login: OK")
+# ---------------------------------------------------------------------------
+# 5. Helper functions
+# ---------------------------------------------------------------------------
 
-    # --- Discord notification (idempotent) ---
-    print("")
-    print("=== Provisioning Discord notification ===")
-    existing_notifs = api.get_notifications()
-    notif_id = None
-    for n in existing_notifs:
-        if n.get("name") == "Discord Ops":
-            notif_id = n.get("id")
-            print(f"  SKIP (already exists): Discord Ops (ID={notif_id})")
-            break
+kuma_get() {
+  curl -sf --max-time 15 \
+    -H "Authorization: Bearer $TOKEN" \
+    "${KUMA_BASE}${1}" 2>/dev/null || echo '{}'
+}
 
-    if notif_id is None:
-        result = api.add_notification(
-            name="Discord Ops",
-            type=NotificationType.DISCORD,
-            isDefault=True,
-            applyExisting=True,
-            discordWebhookUrl=discord_webhook,
-        )
-        notif_id = result.get("id") or result.get("notificationID")
-        print(f"  CREATED: Discord Ops (ID={notif_id})")
+kuma_post() {
+  curl -sf --max-time 15 -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Content-Type: application/json" \
+    -d "${2}" \
+    "${KUMA_BASE}${1}" 2>/dev/null || echo '{}'
+}
 
-    notif_list = [notif_id] if notif_id else []
+# ---------------------------------------------------------------------------
+# 6. Discord notification (idempotent)
+# ---------------------------------------------------------------------------
 
-    # --- Existing monitors ---
-    existing_monitors = api.get_monitors()
-    existing_names = {m.get("name") for m in existing_monitors}
+echo ""
+echo "=== Provisioning Discord notification ==="
+NOTIFS_RAW=$(kuma_get "/api/notifications")
+NOTIF_ID=$(python3 -c "
+import json, sys
+data = json.loads('''${NOTIFS_RAW}''')
+items = data if isinstance(data, list) else data.get('notificationList', [])
+if isinstance(items, dict): items = list(items.values())
+for n in items:
+    if n.get('name') == 'Discord Ops':
+        print(n.get('id', ''))
+        break
+" 2>/dev/null || echo "")
 
-    def create_if_missing(name, **kwargs):
-        if name in existing_names:
-            print(f"  SKIP (already exists): {name}")
-            return
-        result = api.add_monitor(name=name, **kwargs)
-        mid = result.get("monitorID") or result.get("id", "?")
-        print(f"  CREATED (ID={mid}): {name}")
+if [ -z "$NOTIF_ID" ]; then
+  NOTIF_PAYLOAD="{\"name\":\"Discord Ops\",\"type\":\"discord\",\"isDefault\":true,\"applyExisting\":true,\"discordWebhookUrl\":\"${DISCORD_WEBHOOK}\"}"
+  NOTIF_RESP=$(kuma_post "/api/notifications" "$NOTIF_PAYLOAD")
+  NOTIF_ID=$(python3 -c "
+import json, sys
+d = json.loads('''${NOTIF_RESP}''')
+print(d.get('id') or d.get('notificationID',''))
+" 2>/dev/null || echo "")
+  echo "  CREATED: Discord Ops (ID=${NOTIF_ID})"
+else
+  echo "  SKIP (exists): Discord Ops (ID=${NOTIF_ID})"
+fi
 
-    print("")
-    print("=== Provisioning monitors ===")
+NOTIF_LIST="{}"
+if [ -n "$NOTIF_ID" ]; then
+  NOTIF_LIST="{\"${NOTIF_ID}\":true}"
+fi
 
-    print("")
-    print("[1/5] API health")
-    create_if_missing(
-        "Unit Talk API Health",
-        type=MonitorType.HTTP,
-        url="http://api:4000/health",
-        method="GET",
-        interval=60,
-        retryInterval=30,
-        maxretries=3,
-        notificationIDList=notif_list,
-    )
+# ---------------------------------------------------------------------------
+# 7. Get existing monitor names
+# ---------------------------------------------------------------------------
 
-    print("")
-    print("[2/5] Host ping")
-    create_if_missing(
-        "Unit Talk Host Ping",
-        type=MonitorType.PING,
-        hostname="46.225.14.123",
-        interval=60,
-        retryInterval=30,
-        maxretries=3,
-        notificationIDList=notif_list,
-    )
+MONITORS_RAW=$(kuma_get "/api/monitors")
+EXISTING_NAMES=$(python3 -c "
+import json, sys
+data = json.loads('''${MONITORS_RAW}''')
+items = data if isinstance(data, list) else data.get('monitorList', {})
+if isinstance(items, dict): items = list(items.values())
+for m in items:
+    print(m.get('name',''))
+" 2>/dev/null || echo "")
 
-    print("")
-    print("[3/5] Worker liveness (via API full-health)")
-    create_if_missing(
-        "Unit Talk Worker Liveness",
-        type=MonitorType.HTTP,
-        url="http://api:4000/health?full=true",
-        method="GET",
-        interval=60,
-        retryInterval=30,
-        maxretries=3,
-        notificationIDList=notif_list,
-    )
+create_monitor() {
+  local name="$1"
+  local payload="$2"
+  if echo "$EXISTING_NAMES" | grep -qxF "$name"; then
+    echo "  SKIP (exists): $name"
+    return
+  fi
+  RESP=$(kuma_post "/api/monitors" "$payload")
+  MID=$(python3 -c "
+import json, sys
+d = json.loads('''${RESP}''')
+print(d.get('monitorID') or d.get('id','?'))
+" 2>/dev/null || echo "?")
+  echo "  CREATED (ID=$MID): $name"
+}
 
-    print("")
-    print("[4/5] Ingestor freshness (via API full-health)")
-    create_if_missing(
-        "Unit Talk Ingestor Freshness",
-        type=MonitorType.HTTP,
-        url="http://api:4000/health?full=true",
-        method="GET",
-        interval=60,
-        retryInterval=30,
-        maxretries=3,
-        notificationIDList=notif_list,
-    )
+# ---------------------------------------------------------------------------
+# 8. Provision 5 monitors
+# ---------------------------------------------------------------------------
 
-    print("")
-    print("[5/5] Discord bot container")
-    try:
-        create_if_missing(
-            "Unit Talk Discord Bot",
-            type=MonitorType.DOCKER,
-            docker_container="unit-talk-discord-bot",
-            docker_host=1,
-            interval=60,
-            retryInterval=30,
-            maxretries=3,
-            notificationIDList=notif_list,
-        )
-    except Exception as e:
-        print(f"  Docker monitor failed ({e}), falling back to HTTP")
-        if "Unit Talk Discord Bot" not in existing_names:
-            create_if_missing(
-                "Unit Talk Discord Bot",
-                type=MonitorType.HTTP,
-                url="http://api:4000/health",
-                method="GET",
-                interval=60,
-                retryInterval=30,
-                maxretries=3,
-                notificationIDList=notif_list,
-            )
+echo ""
+echo "=== Provisioning monitors ==="
 
-    # --- Final status ---
-    print("")
-    print("=== Final monitor status ===")
-    monitors = api.get_monitors()
-    if not monitors:
-        print("No monitors found.")
-    else:
-        fmt = "{:<5} {:<40} {:<12} {}"
-        print(fmt.format("ID", "Name", "Type", "Active"))
-        print("-" * 75)
-        for m in monitors:
-            print(fmt.format(
-                str(m.get("id", "?")),
-                (m.get("name") or "?")[:39],
-                m.get("type") or "?",
-                "YES" if m.get("active") else "NO",
-            ))
-        print(f"\nTotal monitors: {len(monitors)}")
+echo ""
+echo "[1/5] API health"
+create_monitor "Unit Talk API Health" \
+  "{\"name\":\"Unit Talk API Health\",\"type\":\"http\",\"url\":\"http://api:4000/health\",\"method\":\"GET\",\"interval\":60,\"retryInterval\":30,\"maxretries\":3,\"notificationIDList\":${NOTIF_LIST}}"
 
-print("")
-print("Provisioning complete.")
-print("Access via SSH tunnel: ssh -L 3001:localhost:3001 deploy@46.225.14.123")
-print("Then open: http://localhost:3001")
-PYEOF
+echo ""
+echo "[2/5] Host ping"
+create_monitor "Unit Talk Host Ping" \
+  "{\"name\":\"Unit Talk Host Ping\",\"type\":\"ping\",\"hostname\":\"46.225.14.123\",\"interval\":60,\"retryInterval\":30,\"maxretries\":3,\"notificationIDList\":${NOTIF_LIST}}"
+
+echo ""
+echo "[3/5] Worker liveness"
+create_monitor "Unit Talk Worker Liveness" \
+  "{\"name\":\"Unit Talk Worker Liveness\",\"type\":\"http\",\"url\":\"http://api:4000/health?full=true\",\"method\":\"GET\",\"interval\":60,\"retryInterval\":30,\"maxretries\":3,\"notificationIDList\":${NOTIF_LIST}}"
+
+echo ""
+echo "[4/5] Ingestor freshness"
+create_monitor "Unit Talk Ingestor Freshness" \
+  "{\"name\":\"Unit Talk Ingestor Freshness\",\"type\":\"http\",\"url\":\"http://api:4000/health?full=true\",\"method\":\"GET\",\"interval\":60,\"retryInterval\":30,\"maxretries\":3,\"notificationIDList\":${NOTIF_LIST}}"
+
+echo ""
+echo "[5/5] Discord bot"
+create_monitor "Unit Talk Discord Bot" \
+  "{\"name\":\"Unit Talk Discord Bot\",\"type\":\"http\",\"url\":\"http://api:4000/health\",\"method\":\"GET\",\"interval\":60,\"retryInterval\":30,\"maxretries\":3,\"notificationIDList\":${NOTIF_LIST}}"
+
+# ---------------------------------------------------------------------------
+# 9. Final status
+# ---------------------------------------------------------------------------
+
+echo ""
+echo "=== Final monitor status ==="
+MONITORS_FINAL=$(kuma_get "/api/monitors")
+python3 -c "
+import json, sys
+data = json.loads('''${MONITORS_FINAL}''')
+items = data if isinstance(data, list) else data.get('monitorList', {})
+if isinstance(items, dict): items = list(items.values())
+if not items:
+    print('No monitors found.')
+else:
+    fmt = '{:<5} {:<40} {:<12} {}'
+    print(fmt.format('ID', 'Name', 'Type', 'Active'))
+    print('-' * 75)
+    for m in items:
+        print(fmt.format(str(m.get('id','?')), str(m.get('name','?'))[:39], str(m.get('type','?')), 'YES' if m.get('active') else 'NO'))
+    print(f'\nTotal monitors: {len(items)}')
+" 2>/dev/null || echo "Could not list monitors"
+
+echo ""
+echo "Provisioning complete."
+echo "Access via SSH tunnel: ssh -L 3001:localhost:3001 deploy@46.225.14.123"
+echo "Then open: http://localhost:3001"
