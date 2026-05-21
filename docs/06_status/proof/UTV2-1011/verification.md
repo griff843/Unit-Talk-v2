@@ -41,7 +41,7 @@ Provider Freshness: HEALTHY.
 pnpm test:db
 ```
 
-Result: PENDING (running; to be filled before PR opens).
+Result: PASS (exit code 0, run against live Supabase project zfzdnfwdarxucxtaojxm).
 
 ## Live DB Evidence
 

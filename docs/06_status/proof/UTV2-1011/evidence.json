@@ -74,7 +74,7 @@
   "checks": {
     "pnpm_type_check": "PASS",
     "pnpm_test": "PASS — 481 tests, 0 fail",
-    "pnpm_test_db": "PENDING",
+    "pnpm_test_db": "PASS (exit code 0, live Supabase project zfzdnfwdarxucxtaojxm)",
     "pnpm_stage_freshness_offers": "FRESH (5m ago, 11854 rows in window)",
     "pnpm_runtime_health_provider": "HEALTHY"
   }
