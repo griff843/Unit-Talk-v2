@@ -34,10 +34,10 @@
     "docs/06_status/proof/UTV2-1027/diff-summary.md",
     "docs/06_status/proof/UTV2-1027/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-20T20:20:00.000Z",
-  "heartbeat_at": "2026-05-21T12:02:45.712Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-21T12:05:24.019Z",
+  "closed_at": "2026-05-21T12:05:24.019Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1027-clv-dashboard.json",
   "created_by": "codex-cli",
@@ -88,6 +88,21 @@
         "G5"
       ],
       "runner": "ops:lane:close"
+    },
+    {
+      "checked_at": "2026-05-21T12:05:19.600Z",
+      "verdict": "pass",
+      "merge_sha": "9ac698bee8e1140adf6a785bf97f3a9f1907a1c7",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-21T12:05:24.019Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "7f64936c72c7a6e2008b2897cffa38f8494a115a",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
     }
   ],
   "reopen_history": [
