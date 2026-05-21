@@ -38,6 +38,33 @@ interface CodexExecResult {
   dry_run?: boolean;
 }
 
+function buildCodexChildEnv(cwd: string): NodeJS.ProcessEnv {
+  const stateRoot = path.join(cwd, '.out', 'codex-pnpm-state');
+  const dirs = {
+    home: path.join(stateRoot, 'home'),
+    store: path.join(stateRoot, 'store'),
+    cache: path.join(stateRoot, 'cache'),
+    state: path.join(stateRoot, 'state'),
+    corepack: path.join(stateRoot, 'corepack'),
+  };
+
+  for (const dir of Object.values(dirs)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  return {
+    ...process.env,
+    PNPM_HOME: dirs.home,
+    COREPACK_HOME: dirs.corepack,
+    NPM_CONFIG_CACHE: dirs.cache,
+    NPM_CONFIG_STORE_DIR: dirs.store,
+    NPM_CONFIG_STATE_DIR: dirs.state,
+    npm_config_cache: dirs.cache,
+    npm_config_store_dir: dirs.store,
+    npm_config_state_dir: dirs.state,
+  };
+}
+
 function checkCodexHealth(): { healthy: boolean; version: string | null; error: string | null } {
   const r = spawnSync('codex', ['--version'], {
     encoding: 'utf8',
@@ -198,6 +225,7 @@ async function main(): Promise<void> {
     cwd: resolvedCwd,
     stdio: 'inherit',
     shell: process.platform === 'win32',
+    env: buildCodexChildEnv(resolvedCwd),
     timeout: 30 * 60 * 1000,
   });
 

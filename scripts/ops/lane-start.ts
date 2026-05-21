@@ -105,6 +105,44 @@ function buildSyncYml(issueId: string): string {
   ].join('\n');
 }
 
+function buildPnpmStateEnv(cwd: string): NodeJS.ProcessEnv {
+  const stateRoot = path.join(cwd, '.out', 'pnpm-state');
+  const dirs = {
+    home: path.join(stateRoot, 'home'),
+    store: path.join(stateRoot, 'store'),
+    cache: path.join(stateRoot, 'cache'),
+    state: path.join(stateRoot, 'state'),
+    corepack: path.join(stateRoot, 'corepack'),
+  };
+
+  for (const dir of Object.values(dirs)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  return {
+    ...process.env,
+    PNPM_HOME: dirs.home,
+    COREPACK_HOME: dirs.corepack,
+    NPM_CONFIG_CACHE: dirs.cache,
+    NPM_CONFIG_STORE_DIR: dirs.store,
+    NPM_CONFIG_STATE_DIR: dirs.state,
+    npm_config_cache: dirs.cache,
+    npm_config_store_dir: dirs.store,
+    npm_config_state_dir: dirs.state,
+  };
+}
+
+function prepareLaneWithIsolatedPnpm(worktreePath: string, fileScope: string[]) {
+  return prepareLaneExecutionDirectory({
+    cwd: worktreePath,
+    fileScope,
+    runner: (command, args, options) => spawnSync(command, args, {
+      ...options,
+      env: buildPnpmStateEnv(worktreePath),
+    }),
+  });
+}
+
 /**
  * Link env files from the main worktree into a newly-created lane worktree.
  * Non-fatal: if link-worktree-env.ts is missing or errors, we warn and continue
@@ -227,10 +265,7 @@ function main(): void {
         throw new Error(`Existing manifest execution cwd is incoherent: ${cwdErrors.join('; ')}`);
       }
 
-      const setup = prepareLaneExecutionDirectory({
-        cwd: worktreePath,
-        fileScope: normalizedFiles,
-      });
+      const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
       const lease = reserveLease({
         issue_id: issueId,
         branch,
@@ -274,10 +309,7 @@ function main(): void {
       createBranchAndWorktree(branch, worktreePath);
       linkWorktreeEnv(worktreePath);
     }
-    const setup = prepareLaneExecutionDirectory({
-      cwd: worktreePath,
-      fileScope: normalizedFiles,
-    });
+    const setup = prepareLaneWithIsolatedPnpm(worktreePath, normalizedFiles);
     const lease = reserveLease({
       issue_id: issueId,
       branch,
