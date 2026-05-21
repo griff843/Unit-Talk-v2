@@ -58,7 +58,7 @@ jobs:
 
             echo ''
             echo '=== KEY ENV VARS IN .env.production ==='
-            for key in UNIT_TALK_API_RATE_LIMIT_STORE SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY NODE_ENV; do
+            for key in UNIT_TALK_API_RATE_LIMIT_STORE UNIT_TALK_API_RATE_LIMIT_KEY_STRATEGY SUPABASE_URL SUPABASE_SERVICE_ROLE_KEY NODE_ENV; do
               if grep -q \"^\$key=\" \"\$DEPLOY_PATH/.env.production\" 2>/dev/null; then
                 val=\$(grep \"^\$key=\" \"\$DEPLOY_PATH/.env.production\" | cut -d= -f2 | head -c 20)
                 echo \"\$key=\$val...\"
@@ -66,6 +66,10 @@ jobs:
                 echo \"MISSING: \$key\"
               fi
             done
+
+            echo ''
+            echo '=== HEALTH ENDPOINT RESPONSE ==='
+            curl -s --max-time 30 http://localhost:4000/health | python3 -m json.tool 2>/dev/null || echo 'health endpoint unreachable or non-JSON'
           " | tee api-diagnose-${{ github.run_id }}.txt
 
       - name: Upload diagnostic artifact
