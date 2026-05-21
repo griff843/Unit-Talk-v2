@@ -1,7 +1,10 @@
-schema_version: 1
-issue_id: UTV2-1041
-status: done
-tier: T2
-merge_sha: 370b31db
-pr: 820
-closed_at: "2026-05-20T19:30:00.000Z"
+version: 1
+approval:
+  allow_multiple_issues: false
+  skip_sync_required: false
+entities:
+  issues:
+    - UTV2-1041
+  findings: []
+  controls: []
+  proofs: []
