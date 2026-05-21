@@ -48,9 +48,9 @@ echo "Secrets loaded."
 # ---------------------------------------------------------------------------
 
 make_json() {
-  # Usage: make_json <python_expression_returning_dict>
-  # Allows callers to pass multi-line Python; avoids quoting hell in bash.
-  python3 -c "$1"
+  # Usage: make_json <python_expression_returning_dict> [args...]
+  # Extra args are forwarded to Python as sys.argv[1], sys.argv[2], etc.
+  python3 -c "$1" "${@:2}"
 }
 
 kuma_post() {
