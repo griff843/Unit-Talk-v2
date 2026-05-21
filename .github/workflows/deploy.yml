@@ -205,6 +205,15 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
+          # Resolve worker distribution target: explicit secret wins; fall back to raw
+          # snowflake channel ID (matches /^discord:\d+$/ — no target map entry needed).
+          _dist_targets="${UNIT_TALK_DISTRIBUTION_TARGETS:-}"
+          if [ -z "$_dist_targets" ] && [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ]; then
+            _dist_targets="discord:${DISCORD_CAPPER_CHANNEL_ID}"
+          elif [ -z "$_dist_targets" ]; then
+            _dist_targets="discord:best-bets"
+          fi
+          _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
           printf '%s\n' \
             "NODE_ENV=production" \
             "UNIT_TALK_APP_ENV=production" \
@@ -225,8 +234,8 @@ jobs:
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_ADAPTER=discord" \
             "UNIT_TALK_WORKER_DRY_RUN=false" \
-            "UNIT_TALK_DISTRIBUTION_TARGETS=${UNIT_TALK_DISTRIBUTION_TARGETS:-discord:best-bets}" \
-            "UNIT_TALK_DISCORD_TARGET_MAP=${UNIT_TALK_DISCORD_TARGET_MAP:-{}}" \
+            "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
+            "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}" \
@@ -325,6 +334,15 @@ jobs:
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
+          # Resolve worker distribution target: explicit secret wins; fall back to raw
+          # snowflake channel ID (matches /^discord:\d+$/ — no target map entry needed).
+          _dist_targets="${UNIT_TALK_DISTRIBUTION_TARGETS:-}"
+          if [ -z "$_dist_targets" ] && [ -n "${DISCORD_CAPPER_CHANNEL_ID:-}" ]; then
+            _dist_targets="discord:${DISCORD_CAPPER_CHANNEL_ID}"
+          elif [ -z "$_dist_targets" ]; then
+            _dist_targets="discord:best-bets"
+          fi
+          _target_map="${UNIT_TALK_DISCORD_TARGET_MAP:-{}}"
           printf '%s\n' \
             "NODE_ENV=production" \
             "UNIT_TALK_APP_ENV=production" \
@@ -345,8 +363,8 @@ jobs:
             "UNIT_TALK_WORKER_MAX_CYCLES=0" \
             "UNIT_TALK_WORKER_ADAPTER=discord" \
             "UNIT_TALK_WORKER_DRY_RUN=false" \
-            "UNIT_TALK_DISTRIBUTION_TARGETS=${UNIT_TALK_DISTRIBUTION_TARGETS:-discord:best-bets}" \
-            "UNIT_TALK_DISCORD_TARGET_MAP=${UNIT_TALK_DISCORD_TARGET_MAP:-{}}" \
+            "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
+            "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=${DISCORD_GUILD_ID:-}" \

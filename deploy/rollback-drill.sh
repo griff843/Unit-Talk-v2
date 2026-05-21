@@ -81,11 +81,15 @@ now_epoch() {
 }
 
 http_status() {
-  curl -so /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 10 "$1" 2>/dev/null || echo "000"
+  # --write-out always emits the code, even on connection failure (gives "000").
+  # Do NOT add || echo "000" — that double-prints when curl exits non-zero,
+  # turning "000" into "000000" which no status-check branch handles correctly.
+  # The health endpoint runs DB probes and can take up to 30s; set max-time to 35.
+  curl -so /dev/null -w '%{http_code}' --connect-timeout 5 --max-time 35 "$1" 2>/dev/null || true
 }
 
 health_body() {
-  curl -sf --connect-timeout 5 --max-time 10 "$1" 2>/dev/null || echo '{}'
+  curl -sf --connect-timeout 5 --max-time 35 "$1" 2>/dev/null || echo '{}'
 }
 
 write_fail_result() {
