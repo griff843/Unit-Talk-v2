@@ -26,10 +26,10 @@
     "docs/06_status/proof/UTV2-1035/diff-summary.md",
     "docs/06_status/proof/UTV2-1035/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-21T12:13:25.028Z",
-  "heartbeat_at": "2026-05-21T12:56:58.338Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-21T12:58:51.853Z",
+  "closed_at": "2026-05-21T12:58:51.853Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1035-board-truth-reset.json",
   "created_by": "claude",
@@ -45,6 +45,21 @@
         "P12"
       ],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-21T12:58:46.963Z",
+      "verdict": "pass",
+      "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "timestamp": "2026-05-21T12:58:51.853Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "a08203fdc08cde67eb949f4f31035849e21e4ee0",
+      "verdict": "pass",
+      "exit_code": 0,
+      "checks": []
     }
   ],
   "reopen_history": [],
