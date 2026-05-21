@@ -202,6 +202,7 @@ jobs:
           UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           UNIT_TALK_DISTRIBUTION_TARGETS: ${{ secrets.UNIT_TALK_DISTRIBUTION_TARGETS }}
           UNIT_TALK_DISCORD_TARGET_MAP: ${{ secrets.UNIT_TALK_DISCORD_TARGET_MAP }}
+          UNIT_TALK_ENABLED_TARGETS: ${{ secrets.UNIT_TALK_ENABLED_TARGETS }}
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
@@ -250,7 +251,7 @@ jobs:
             "UNIT_TALK_WORKER_DRY_RUN=false" \
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
-            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets,trader-insights}" \
+            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
@@ -346,6 +347,7 @@ jobs:
           UNIT_TALK_INGESTOR_API_KEY: ${{ secrets.UNIT_TALK_INGESTOR_API_KEY }}
           UNIT_TALK_DISTRIBUTION_TARGETS: ${{ secrets.UNIT_TALK_DISTRIBUTION_TARGETS }}
           UNIT_TALK_DISCORD_TARGET_MAP: ${{ secrets.UNIT_TALK_DISCORD_TARGET_MAP }}
+          UNIT_TALK_ENABLED_TARGETS: ${{ secrets.UNIT_TALK_ENABLED_TARGETS }}
           SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
           SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
         run: |
@@ -394,7 +396,7 @@ jobs:
             "UNIT_TALK_WORKER_DRY_RUN=false" \
             "UNIT_TALK_DISTRIBUTION_TARGETS=$_dist_targets" \
             "UNIT_TALK_DISCORD_TARGET_MAP=$_target_map" \
-            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets,trader-insights}" \
+            "UNIT_TALK_ENABLED_TARGETS=${_enabled_targets:-best-bets}" \
             "DISCORD_BOT_TOKEN=$DISCORD_BOT_TOKEN" \
             "DISCORD_CLIENT_ID=$DISCORD_CLIENT_ID" \
             "DISCORD_GUILD_ID=$_guild_id" \
