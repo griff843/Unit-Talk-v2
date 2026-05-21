@@ -1,81 +1,76 @@
 {
-  "schema": "evidence-bundle/v1",
+  "schema_version": 1,
   "issue_id": "UTV2-1011",
   "lane_type": "runtime",
   "tier": "T1",
-  "generated_at": "2026-05-21T12:17:55Z",
   "merge_sha": "287d05aa1dc26cb8904ffe69fc4cd1ff0605b17b",
+  "generated_at": "2026-05-21T12:17:55Z",
 
-  "findings": {
-    "root_cause": "Health scripts queried provider_offers.snapshot_at (legacy archive table). After the UTV2-772 cutover migration, the ingestor writes to provider_offer_current (hot table) and provider_offer_history. provider_offers is no longer updated. The freshness staleness was a script/architecture mismatch, not an auth or scheduler failure.",
+  "verifier": {
+    "identity": "claude/dac278b7-lane-utv2-1011",
+    "checked_at": "2026-05-21T13:10:00Z"
+  },
+
+  "static_proof": {
+    "pnpm_type_check": "PASS (tsc -b tsconfig.json exits 0)",
+    "pnpm_test": "PASS — 481 tests, 0 fail, 0 skip",
+    "pnpm_test_db": "PASS (exit code 0, live Supabase project zfzdnfwdarxucxtaojxm)",
+    "pnpm_stage_freshness_offers": "FRESH (5m ago, 11854 rows in window)",
+    "pnpm_runtime_health_provider": "HEALTHY",
+    "scripts_fixed": [
+      {
+        "file": "scripts/stage-freshness-checks.ts",
+        "change": "provider_offers.snapshot_at → provider_offer_current.updated_at",
+        "reason": "provider_offers.snapshot_at no longer updated after UTV2-772 cutover"
+      },
+      {
+        "file": "scripts/runtime-health.ts",
+        "change": "db.from('provider_offers').select('snapshot_at') → db.from('provider_offer_current').select('updated_at')",
+        "reason": "Same cutover alignment"
+      }
+    ]
+  },
+
+  "runtime_proof": {
+    "queries": [
+      "SELECT updated_at FROM provider_offer_current ORDER BY updated_at DESC LIMIT 1",
+      "SELECT COUNT(*) FROM provider_offer_current",
+      "SELECT updated_at FROM provider_offer_history ORDER BY updated_at DESC LIMIT 1",
+      "SELECT COUNT(*) FROM provider_offer_history"
+    ],
+    "row_counts": [
+      { "table": "provider_offer_current", "count": 255808, "latest": "2026-05-21T12:12:56Z" },
+      { "table": "provider_offer_history", "count": 648410, "latest": "2026-05-21T12:09:15Z" },
+      { "table": "provider_offers", "count": 8191206, "latest": "2026-04-29T13:04:29Z", "note": "legacy — no longer updated after UTV2-772 cutover" }
+    ],
+    "receipts": [
+      "pnpm test:db PASS (exit code 0, Supabase project zfzdnfwdarxucxtaojxm)",
+      "stage:freshness Offers FRESH age=5m 11854 rows (threshold 60m)",
+      "runtime:health Provider HEALTHY latest offer 5m ago"
+    ],
     "sgo_auth": {
-      "status": "active",
       "endpoint": "https://api.sportsgameodds.com/v2/account/usage",
       "http_status": 200,
-      "key_id": "d7d0860c0f872160373880fa3deb18d0a24ca8fbd6b118459c8270df5c46d03d",
-      "customer_email": "griffadavi@gmail.com",
       "is_active": true,
-      "tier": "pro",
-      "rate_limits": {
-        "per_minute": 300,
-        "per_hour": 50000,
-        "per_day": 500000
-      }
+      "tier": "pro"
     },
-    "ingestor_cycle": {
-      "ran_at": "2026-05-21T12:09:15Z",
-      "result": "success",
-      "provider_offer_current_latest": "2026-05-21T12:12:56Z",
-      "provider_offer_current_rows": 255808,
-      "provider_offer_history_latest": "2026-05-21T12:09:15Z",
-      "provider_offer_history_rows": 648410,
-      "provider_offers_latest": "2026-04-29T13:04:29Z",
-      "provider_offers_status": "legacy — no longer updated after UTV2-772 cutover"
+    "before_state": {
+      "provider_offer_current_age_minutes": 31624,
+      "stage_freshness_offers": "STALE",
+      "runtime_health_provider": "FAILED"
+    },
+    "after_state": {
+      "provider_offer_current_age_minutes": 5,
+      "stage_freshness_offers": "FRESH",
+      "runtime_health_provider": "HEALTHY"
     }
   },
-
-  "before_state": {
-    "provider_offer_current_age_minutes": 31624,
-    "stage_freshness_offers": "STALE",
-    "runtime_health_provider": "FAILED",
-    "runtime_health_verdict": "FAILED — 2 subsystems down"
-  },
-
-  "after_state": {
-    "provider_offer_current_age_minutes": 5,
-    "provider_offer_history_age_minutes": 6,
-    "stage_freshness_offers": "FRESH",
-    "stage_freshness_market_universe": "FRESH",
-    "runtime_health_provider": "HEALTHY",
-    "runtime_health_verdict": "FAILED — 1 subsystem down (Discord delivery — not provider-related)"
-  },
-
-  "scripts_fixed": [
-    {
-      "file": "scripts/stage-freshness-checks.ts",
-      "change": "checkStage('Offers', 'provider_offers', 'snapshot_at', 60) → checkStage('Offers', 'provider_offer_current', 'updated_at', 60)",
-      "reason": "provider_offers.snapshot_at no longer updated after UTV2-772 cutover"
-    },
-    {
-      "file": "scripts/runtime-health.ts",
-      "change": "db.from('provider_offers').select('snapshot_at') → db.from('provider_offer_current').select('updated_at')",
-      "reason": "Same cutover alignment"
-    }
-  ],
 
   "distinction": {
     "auth_failure": false,
     "scheduler_failure": false,
     "runtime_failure": false,
     "architecture_mismatch": true,
-    "note": "SGO auth is valid (200 OK). Ingestor scheduler ran successfully. The staleness was reported by scripts that checked the legacy provider_offers table instead of the post-cutover provider_offer_current table."
-  },
-
-  "checks": {
-    "pnpm_type_check": "PASS",
-    "pnpm_test": "PASS — 481 tests, 0 fail",
-    "pnpm_test_db": "PASS (exit code 0, live Supabase project zfzdnfwdarxucxtaojxm)",
-    "pnpm_stage_freshness_offers": "FRESH (5m ago, 11854 rows in window)",
-    "pnpm_runtime_health_provider": "HEALTHY"
+    "note": "SGO auth is valid (200 OK, isActive: true, pro tier). Ingestor scheduler ran successfully. Staleness was reported by scripts that checked legacy provider_offers table instead of post-cutover provider_offer_current."
   }
 }
