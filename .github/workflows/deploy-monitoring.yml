@@ -101,6 +101,11 @@ jobs:
             exit 1
           "
 
+      - name: Install Python venv support on server
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" \
+            "sudo apt-get install -y -q python3-venv 2>/dev/null && echo 'python3-venv ready' || echo 'apt install skipped (may already be present or no sudo)'"
+
       - name: Provision all Uptime Kuma monitors and notifications
         env:
           UPTIME_KUMA_ADMIN_PASSWORD: ${{ secrets.UPTIME_KUMA_ADMIN_PASSWORD }}
