@@ -1,4 +1,4 @@
-# System State — 2026-05-20 20:01
+# System State — 2026-05-21 20:01
 
 ## Branch
 
@@ -25,8 +25,8 @@ codex:unavailable
 Clean
 
 ## Recent Commits
-57468b0 fix(ops): add git branch --list fallback in branchExistsAnywhere
-5c42b60 chore(lanes): close 7-lane infra sprint — UTV2-1012/1013/1014/1015/1016/1031/1041
-42ba4c8 feat(infra): UTV2-1016 automate full Uptime Kuma 5-monitor + Discord notification provisioning (#816)
-871e9d1 feat(infra): UTV2-1012 supervisor verification script + GHA workflow (#818)
-370b31d feat(infra): UTV2-1041 burn-in snapshot + report scripts + 72h monitoring workflow (#820)
+df99a9e chore(lanes): close UTV2-1070 — lane closed, sync file removed
+624a303 chore(lanes): UTV2-1070 post-merge — bind proof to merge SHA 8e7273f9, status merged
+8e7273f feat(ops): UTV2-1070 isolate pnpm state for parallel lane verification (#828)
+aa96671 chore(lanes): close UTV2-1008 — lane closed, sync file removed
+06f1998 chore(lanes): UTV2-1008 post-merge — bind proof to merge SHA 4ad6d062, status merged
