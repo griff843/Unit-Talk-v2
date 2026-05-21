@@ -21,7 +21,14 @@
     "docs/06_status/lanes/UTV2-1027.json",
     "docs/06_status/proof/UTV2-1027/diff-summary.md",
     "docs/06_status/proof/UTV2-1027/verification.md",
-    ".ops/sync/UTV2-1027.yml"
+    ".ops/sync/UTV2-1027.yml",
+    ".ops/sync/UTV2-1012.yml",
+    ".ops/sync/UTV2-1013.yml",
+    ".ops/sync/UTV2-1014.yml",
+    ".ops/sync/UTV2-1015.yml",
+    ".ops/sync/UTV2-1016.yml",
+    ".ops/sync/UTV2-1031.yml",
+    ".ops/sync/UTV2-1041.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1027/diff-summary.md",
