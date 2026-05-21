@@ -51,8 +51,10 @@ echo "Secrets loaded."
 echo ""
 echo "=== Setting up Python venv with uptime-kuma-api ==="
 KUMA_VENV=/tmp/kuma-venv
-if [ ! -f "$KUMA_VENV/bin/python3" ]; then
-  echo "  Creating venv at $KUMA_VENV..."
+# Recreate if pip is missing or broken (handles partial venvs from prior failed runs)
+if ! "$KUMA_VENV/bin/pip" --version >/dev/null 2>&1; then
+  echo "  (Re)creating venv at $KUMA_VENV..."
+  rm -rf "$KUMA_VENV"
   python3 -m venv "$KUMA_VENV"
 fi
 if ! "$KUMA_VENV/bin/python3" -c "import uptime_kuma_api" 2>/dev/null; then
