@@ -4,7 +4,7 @@
   "lane_type": "runtime",
   "tier": "T1",
   "generated_at": "2026-05-21T12:17:55Z",
-  "merge_sha": null,
+  "merge_sha": "287d05aa1dc26cb8904ffe69fc4cd1ff0605b17b",
 
   "findings": {
     "root_cause": "Health scripts queried provider_offers.snapshot_at (legacy archive table). After the UTV2-772 cutover migration, the ingestor writes to provider_offer_current (hot table) and provider_offer_history. provider_offers is no longer updated. The freshness staleness was a script/architecture mismatch, not an auth or scheduler failure.",
