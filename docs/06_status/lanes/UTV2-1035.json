@@ -28,8 +28,8 @@
   ],
   "status": "done",
   "started_at": "2026-05-21T12:13:25.028Z",
-  "heartbeat_at": "2026-05-21T13:03:10.207Z",
-  "closed_at": "2026-05-21T13:03:10.207Z",
+  "heartbeat_at": "2026-05-21T12:58:51.853Z",
+  "closed_at": "2026-05-21T12:58:51.853Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1035-board-truth-reset.json",
   "created_by": "claude",
@@ -47,54 +47,22 @@
       "runner": "manual"
     },
     {
-      "checked_at": "2026-05-21T12:58:18.248Z",
+      "checked_at": "2026-05-21T12:58:46.963Z",
       "verdict": "pass",
       "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
       "failures": [],
       "runner": "manual"
     },
     {
-      "checked_at": "2026-05-21T12:58:36.105Z",
-      "verdict": "reopen",
-      "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
-      "failures": [
-        "G5"
-      ],
-      "runner": "ops:lane:close"
-    },
-    {
-      "checked_at": "2026-05-21T13:00:49.605Z",
+      "timestamp": "2026-05-21T12:58:51.853Z",
+      "runner": "post-merge-lane-close",
+      "merge_sha": "a08203fdc08cde67eb949f4f31035849e21e4ee0",
       "verdict": "pass",
-      "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
-      "failures": [],
-      "runner": "manual"
-    },
-    {
-      "checked_at": "2026-05-21T13:01:05.765Z",
-      "verdict": "reopen",
-      "merge_sha": "7994215fbe52e1a991330ac1d21906bd960d7469",
-      "failures": [
-        "G5"
-      ],
-      "runner": "ops:lane:close"
+      "exit_code": 0,
+      "checks": []
     }
   ],
-  "reopen_history": [
-    {
-      "timestamp": "2026-05-21T12:58:36.105Z",
-      "reasons": [
-        "commits touched locked files after merge without linked follow-up issue: a08203fdc08cde67eb949f4f31035849e21e4ee0"
-      ],
-      "detected_by": "ops:lane:close"
-    },
-    {
-      "timestamp": "2026-05-21T13:01:05.765Z",
-      "reasons": [
-        "commits touched locked files after merge without linked follow-up issue: a08203fdc08cde67eb949f4f31035849e21e4ee0"
-      ],
-      "detected_by": "ops:lane:close"
-    }
-  ],
+  "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1035-board-truth-reset",
