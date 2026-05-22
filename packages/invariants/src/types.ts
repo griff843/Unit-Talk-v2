@@ -1,8 +1,8 @@
-/**
- * Re-export canonical invariant types from @unit-talk/contracts.
- * Types are defined in contracts so callers can depend on the contract
- * without pulling in the Node.js fs-based registry loader.
- */
+import type {
+  InvariantRegistryEntry,
+  InvariantStatus,
+} from '@unit-talk/contracts';
+
 export type {
   InvariantRegistryEntry,
   InvariantSeverity,

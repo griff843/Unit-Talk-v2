@@ -1,4 +1,3 @@
-import { createReadStream } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
