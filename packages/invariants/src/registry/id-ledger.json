@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "description": "Append-only ledger of all allocated invariant IDs. IDs are never reused. Allocating a new invariant requires adding an entry here before the registry entry is created.",
+  "entries": [
+    { "id": "INV-0001", "title": "main is shipped truth", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0002", "title": "No lane without preflight; no Done without truth-check", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0003", "title": "One issue → one lane → one branch → one PR", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0004", "title": "Proof must tie to merge SHA", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0005", "title": "Tier label required before Ready", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0006", "title": "Lane manifest is sole authority for active lane state", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0007", "title": "Domain package is pure — no I/O", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0008", "title": "Dependency boundary: packages do not import from apps", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0009", "title": "Postgres outbox is the only delivery queue", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0010", "title": "Fail closed — no silent fallback to qualified/pass/done", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0011", "title": "Mechanical enforcement required for all invariants", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0012", "title": "Pick writer authority: field-level ownership", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0013", "title": "No truth-surface migration without tested rollback", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0014", "title": "Audit log is append-only and immutable", "allocated_at": "2026-05-22", "status": "active" },
+    { "id": "INV-0015", "title": "Pick lifecycle transitions are immutable once terminal", "allocated_at": "2026-05-22", "status": "active" }
+  ]
+}
