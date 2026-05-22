@@ -173,7 +173,7 @@ function linkWorktreeEnv(worktreePath: string): void {
 }
 
 function main(): void {
-  const { positionals, flags } = parseArgs(process.argv.slice(2));
+  const { positionals, flags, bools } = parseArgs(process.argv.slice(2));
   const issueId = requireIssueId(positionals[0] ?? '');
   const tierInput = flags.get('tier')?.at(-1);
   const branch = flags.get('branch')?.at(-1);
@@ -214,7 +214,7 @@ function main(): void {
     }
     const normalizedFiles = normalizeFileScope(fileArgs);
     const singletonPaths = normalizedFiles.filter(isSingletonPath);
-    const singletonApproved = flags.has('singleton-approved');
+    const singletonApproved = flags.has('singleton-approved') || bools.has('singleton-approved');
     if (singletonPaths.length > 0 && !singletonApproved) {
       emitJson({
         ok: false,
