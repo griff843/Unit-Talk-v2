@@ -1,0 +1,16 @@
+-- Down script for 202605130002_utv2_920_db_invariant_rpc_guards
+--
+-- IRREVERSIBLE: This migration replaced three RPC functions
+-- (enqueue_distribution_atomic, confirm_delivery_atomic, settle_pick_atomic)
+-- with fail-closed variants that return null when the owning pick transition
+-- affects zero rows. The pre-920 function bodies are not preserved in git
+-- history in a form that can be cleanly restored here.
+--
+-- Constitutional rollback procedure:
+--   Use Supabase PITR to restore to the point-in-time snapshot taken immediately
+--   before this migration was applied.
+--   Refer to docs/05_operations/DB_ROLLBACK_RUNBOOK.md.
+--
+-- IMPORTANT: Rolling back 920 re-exposes the fail-open behavior (dependent writes
+-- may succeed even when the owning pick transition fails). Do not apply this
+-- rollback in production without a confirmed incident requiring it.

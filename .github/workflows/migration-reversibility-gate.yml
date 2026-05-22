@@ -1,0 +1,156 @@
+name: migration-reversibility-gate
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+
+permissions:
+  contents: read
+
+jobs:
+  reversibility-check:
+    name: Down-script presence check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check down-script presence (fail-closed)
+        run: |
+          npx tsx scripts/ci/migration-reversibility-gate.ts \
+            --base origin/${{ github.base_ref }} \
+            --json | tee /tmp/reversibility-result.json
+          # Re-run without --json for human-readable output
+          npx tsx scripts/ci/migration-reversibility-gate.ts \
+            --base origin/${{ github.base_ref }}
+
+  schema-roundtrip-drill:
+    name: Schema round-trip drill (scratch Postgres)
+    runs-on: ubuntu-latest
+    # Only runs when migrations are present on the PR.
+    # Uses a scratch local Postgres — no org secrets required.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: '10'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install postgresql-client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Detect new migrations on this PR
+        id: detect
+        run: |
+          NEW=$(git diff --name-only --diff-filter=A origin/${{ github.base_ref }}...HEAD \
+                -- supabase/migrations/ | grep '\.sql$' | head -1)
+          echo "migration=${NEW}" >> "$GITHUB_OUTPUT"
+          echo "has_migration=$([[ -n "$NEW" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+
+      - name: Apply all migrations to scratch DB
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          for f in supabase/migrations/*.sql; do
+            psql "$POSTGRES_URL" -f "$f" --quiet
+          done
+
+      - name: Capture pre-rollback schema hash
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          npx tsx scripts/ci/schema-roundtrip-hash.ts --output /tmp/hash-after-up.txt
+
+      - name: Apply down script for newest migration
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          MIGRATION="${{ steps.detect.outputs.migration }}"
+          BASE=$(basename "$MIGRATION" .sql)
+          DOWN="db/migrations-rollback/${BASE}.down.sql"
+          if [[ ! -f "$DOWN" ]]; then
+            echo "ERROR: Down script missing: $DOWN"
+            exit 1
+          fi
+          # Check for IRREVERSIBLE marker — skip drill, emit advisory warning.
+          if grep -q '-- IRREVERSIBLE:' "$DOWN"; then
+            echo "ADVISORY: Migration marked IRREVERSIBLE — drill skipped."
+            echo "Refer to PITR runbook: docs/05_operations/DB_ROLLBACK_RUNBOOK.md"
+            exit 0
+          fi
+          psql "$POSTGRES_URL" -f "$DOWN"
+
+      - name: Re-apply up migration
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          MIGRATION="${{ steps.detect.outputs.migration }}"
+          if grep -q '-- IRREVERSIBLE:' "db/migrations-rollback/$(basename "$MIGRATION" .sql).down.sql" 2>/dev/null; then
+            echo "Skipping re-apply for IRREVERSIBLE migration"
+            exit 0
+          fi
+          psql "$POSTGRES_URL" -f "$MIGRATION"
+
+      - name: Verify schema hash matches post-roundtrip
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          MIGRATION="${{ steps.detect.outputs.migration }}"
+          if grep -q '-- IRREVERSIBLE:' "db/migrations-rollback/$(basename "$MIGRATION" .sql).down.sql" 2>/dev/null; then
+            echo "Hash check skipped for IRREVERSIBLE migration"
+            exit 0
+          fi
+          npx tsx scripts/ci/schema-roundtrip-hash.ts --output /tmp/hash-after-roundtrip.txt
+          BEFORE=$(cat /tmp/hash-after-up.txt)
+          AFTER=$(cat /tmp/hash-after-roundtrip.txt)
+          if [[ "$BEFORE" != "$AFTER" ]]; then
+            echo "FAIL: Schema hash mismatch after down+up roundtrip"
+            echo "  before: $BEFORE"
+            echo "  after:  $AFTER"
+            exit 1
+          fi
+          echo "PASS: Schema hash matches — down script is correctly reversible"
+          echo "  hash: $BEFORE"
