@@ -1,13 +1,14 @@
 {
-  "schema": "evidence-bundle/v1",
+  "schema_version": 2,
   "issue_id": "UTV2-1084",
   "title": "Raw Provider Payload Store — Pre-Transformation Hashing",
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "46b90804832c967d31d9361a005c96c74bd7eff7",
-    "sha_type": "branch_head",
-    "note": "SHA bound to CI-gate-fix commit. Merge SHA must be recorded post-merge.",
+    "verified_source_sha": "4e187122b04a504c6ed62801f179f751ee376f35",
+    "verified_source_note": "Last substantive commit after rebase — all implementation + CI gate fixes; only proof files change after this SHA",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
@@ -24,17 +25,22 @@
   },
   "deliverables": {
     "migration": "supabase/migrations/20260523001_utv2_1084_raw_payload_store.sql",
+    "rollback": "db/migrations-rollback/20260523001_utv2_1084_raw_payload_store.down.sql",
     "source_files": [
       "apps/ingestor/src/raw-provider-payload-archive.ts",
       "apps/ingestor/src/ingest-league.ts",
       "apps/ingestor/src/ingest-odds-api.ts",
       "apps/ingestor/src/provider-ingestion-policy.ts",
+      "apps/ingestor/src/odds-api-fetcher.ts",
+      "apps/ingestor/src/sgo-fetcher.ts",
       "packages/db/src/repositories.ts",
       "packages/db/src/runtime-repositories.ts"
     ],
     "tests": [
       "apps/ingestor/src/raw-provider-payload-archive.test.ts",
-      "apps/ingestor/src/provider-ingestion-policy.test.ts"
+      "apps/ingestor/src/provider-ingestion-policy.test.ts",
+      "apps/ingestor/src/ingest-odds-api.test.ts",
+      "apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts"
     ]
   },
   "verification": {
@@ -50,19 +56,29 @@
       "status": "PASS",
       "tests_pass": 7,
       "tests_fail": 0,
-      "note": "Existing DB smoke tests passed. raw_payloads table test requires migration to be applied to Supabase — validated post-merge."
+      "note": "DB smoke tests passed. raw_payloads migration applied to production Supabase zfzdnfwdarxucxtaojxm."
+    },
+    "t1_proof_live_db": {
+      "status": "PASS",
+      "tests_pass": 3,
+      "tests_fail": 0,
+      "note": "apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts — INSERT/UPDATE-block/DELETE-block PASS against live Supabase"
     },
     "adversarial_tests": [
       "archiveRawProviderPayload — DB failure throws (fail-closed)",
-      "archiveRawProviderPayload — SHA-256 is pre-transformation",
+      "archiveRawProviderPayload — SHA-256 is pre-transformation (raw HTTP response bytes)",
       "archiveRawProviderPayload — hash changes on payload mutation",
-      "shouldBlockOnArchiveFailure — fail_closed/fail_open semantics"
+      "shouldBlockOnArchiveFailure — fail_closed/fail_open semantics",
+      "ingestOddsApiLeague — archive failure blocks ingestion when fail_closed",
+      "ingestOddsApiLeague — archive failure non-terminal when fail_open",
+      "ingestOddsApiLeague — hash equals SHA-256(raw HTTP response text)",
+      "resolveProviderPayloadArchivePolicy — defaults fail-closed; explicit fail_open env opt-out respected"
     ]
   },
   "constitutional_claims": [
-    "Invariant 10 (fail-closed): archive write is now DB-primary and throws on failure — no silent skip",
+    "Invariant 10 (fail-closed): archive write is DB-primary and throws on failure — no silent skip",
     "Invariant 11 (mechanical enforcement): fail_closed is the default; opt-out requires explicit env var",
-    "WS-1.1 substrate: raw payload + hash captured before normalization — immutable market truth anchor"
+    "WS-1.1 substrate: raw payload + SHA-256 hash captured from response.text() before JSON.parse() — immutable market truth anchor"
   ],
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/831",
   "merge_sha": null
