@@ -45,10 +45,20 @@ Local run post-rebase (exit 0):
   "schema_version": 2,
   "gate": "proof-binding-v2",
   "issue_id": "UTV2-1088",
-  "verified_source_sha": "f2ee226187b3133d73d0ad7e6a116ddf9de9fc1c",
+  "verified_source_sha": "3df415ac802c3e3479b0ed5779d3abbf1cff6df8",
   "resolved_evidence_commit_sha": "(resolved by CI from git log)",
   "resolved_current_pr_head_sha": "(resolved by CI from GITHUB_SHA)",
   "violations": [],
   "ok": true
 }
 ```
+
+## Verification
+
+All required T1 artifacts present and passing:
+
+- `pnpm verify` PASS (lint + type-check + build + test, 113/113)
+- `pnpm test:db` PASS (7/7 against live Supabase `zfzdnfwdarxucxtaojxm`)
+- `invariant-registry-gate` PASS (15 active invariants, registry hash bound)
+- `proof-binding-validator` PASS (schema v2, verified_source_sha ancestor check passes)
+- `id-ledger.json` present (15 entries, no duplicate IDs)

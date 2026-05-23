@@ -7,10 +7,10 @@
   "phase": "A",
   "phase_description": "Additive scaffolding — registry JSON, id-ledger, source-manifest, loader, contracts type, CI gate",
   "sha_binding": {
-    "verified_source_sha": "f2ee226187b3133d73d0ad7e6a116ddf9de9fc1c",
-    "verified_source_note": "Last complete-state commit — governance.yml expanded, diff-summary added, all proof artifacts present",
-    "evidence_commit_sha": "f2ee226187b3133d73d0ad7e6a116ddf9de9fc1c",
-    "current_pr_head_sha": "f2ee226187b3133d73d0ad7e6a116ddf9de9fc1c"
+    "verified_source_sha": "3df415ac802c3e3479b0ed5779d3abbf1cff6df8",
+    "verified_source_note": "Last complete-state commit — governance.yml expanded, diff-summary added, all proof artifacts present (post-rebase anchor)",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   },
   "merge_sha": null,
   "evidence": {
