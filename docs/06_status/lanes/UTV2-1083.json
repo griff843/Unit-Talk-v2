@@ -8,17 +8,30 @@
   "branch": "claude/utv2-1083-reversible-migration-capability",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/829",
   "files_changed": [],
   "file_scope_lock": [
     ".github/workflows/migration-reversibility-gate.yml",
-    "db/migrations-rollback/.gitkeep",
-    "docs/06_status/proof/UTV2-1083/PROOF.md",
+    ".ops/sync/UTV2-1083.yml",
+    "db/migrations-rollback/202605090003_utv2_871_provider_offers_quarantine_prune_fix.down.sql",
+    "db/migrations-rollback/202605120001_utv2_883_link_market_universe_participant_ids.down.sql",
+    "db/migrations-rollback/202605130001_utv2_921_audit_log_retention_immutability.down.sql",
+    "db/migrations-rollback/202605130002_utv2_920_db_invariant_rpc_guards.down.sql",
+    "db/migrations-rollback/202605140001_utv2_912_market_type_id_alias_backfill.down.sql",
+    "db/migrations-rollback/README.md",
+    "db/migrations-rollback/irreversible-exemption-registry.json",
+    "docs/06_status/lanes/UTV2-1083.json",
+    "docs/06_status/proof/UTV2-1083/evidence.json",
+    "docs/06_status/proof/UTV2-1083/proof.md",
+    "docs/06_status/proof/UTV2-1083/verification.md",
+    "scripts/ci/migration-reversibility-gate.test.ts",
     "scripts/ci/migration-reversibility-gate.ts",
+    "scripts/ci/proof-binding-validator.ts",
     "scripts/ci/schema-roundtrip-hash.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1083/evidence.json"
+    "docs/06_status/proof/UTV2-1083/evidence.json",
+    "docs/06_status/proof/UTV2-1083/verification.md"
   ],
   "status": "started",
   "started_at": "2026-05-22T21:38:13.447Z",
@@ -33,7 +46,7 @@
     "mode": "worktree",
     "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1083-reversible-migration-capability",
     "package_install": "verified",
-    "setup_command": null,
+    "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
   }
 }
