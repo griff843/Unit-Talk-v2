@@ -1,0 +1,68 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1084",
+  "title": "Raw Provider Payload Store — Pre-Transformation Hashing",
+  "tier": "T1",
+  "lane_type": "migration",
+  "sha_binding": {
+    "verified_source_sha": "18d2853ccebea08849b8278883583eca47a6d08f",
+    "sha_type": "branch_head",
+    "note": "Proof captured on branch HEAD. Merge SHA must be recorded post-merge and this bundle re-validated.",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS",
+      "pnpm_test_db": "PASS",
+      "test_count": 488,
+      "db_test_count": 7
+    }
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-23T18:30:00.000Z",
+  "r_level": {
+    "level": "R2",
+    "reason": "Migration lane — append-only table, no existing table modified, no backfill required"
+  },
+  "deliverables": {
+    "migration": "supabase/migrations/20260523001_utv2_1084_raw_payload_store.sql",
+    "source_files": [
+      "apps/ingestor/src/raw-provider-payload-archive.ts",
+      "apps/ingestor/src/ingest-league.ts",
+      "apps/ingestor/src/ingest-odds-api.ts",
+      "apps/ingestor/src/provider-ingestion-policy.ts",
+      "packages/db/src/repositories.ts",
+      "packages/db/src/runtime-repositories.ts"
+    ],
+    "tests": [
+      "apps/ingestor/src/raw-provider-payload-archive.test.ts",
+      "apps/ingestor/src/provider-ingestion-policy.test.ts"
+    ]
+  },
+  "verification": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests_pass": 488,
+      "tests_fail": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "note": "Existing DB smoke tests passed. raw_payloads table test requires migration to be applied to Supabase — validated post-merge."
+    },
+    "adversarial_tests": [
+      "archiveRawProviderPayload — DB failure throws (fail-closed)",
+      "archiveRawProviderPayload — SHA-256 is pre-transformation",
+      "archiveRawProviderPayload — hash changes on payload mutation",
+      "shouldBlockOnArchiveFailure — fail_closed/fail_open semantics"
+    ]
+  },
+  "constitutional_claims": [
+    "Invariant 10 (fail-closed): archive write is now DB-primary and throws on failure — no silent skip",
+    "Invariant 11 (mechanical enforcement): fail_closed is the default; opt-out requires explicit env var",
+    "WS-1.1 substrate: raw payload + hash captured before normalization — immutable market truth anchor"
+  ],
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/831",
+  "merge_sha": null
+}
