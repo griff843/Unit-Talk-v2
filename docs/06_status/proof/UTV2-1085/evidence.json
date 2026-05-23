@@ -5,7 +5,7 @@
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "1f984ebf83e599e55100e7ae91741c72ef37962a",
+    "verified_source_sha": "ceab00e8af45d7bc47896da6b6b1db6c12fe2656",
     "verified_source_note": "Implementation commit — all code + migration + proof docs; only evidence.json changes after this SHA",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
