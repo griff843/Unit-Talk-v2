@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1083",
+  "title": "INIT-1.1.0 — Reversible Migration Capability",
+  "tier": "T1",
+  "executor": "claude",
+  "phase": "A",
+  "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
+  "branch_head_sha": "edce093ccc55f6204ac834ca579cf39257c07e67",
+  "merge_sha": null,
+  "evidence": {
+    "pnpm_verify": {
+      "result": "PASS",
+      "note": "lint + type-check + build + test all green in worktree"
+    },
+    "pnpm_test_db": {
+      "result": "PASS",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "note": "Retry 2 — first run had transient network failure on UTV2-996; second run 7/7 PASS"
+    },
+    "r_level_check": {
+      "result": "PASS",
+      "rules_matched": 0,
+      "artifacts_required": []
+    },
+    "migration_reversibility_gate": {
+      "result": "PASS",
+      "checked": 0,
+      "note": "No new migrations in this PR — gate passes trivially. Gate is the deliverable, not a migration."
+    },
+    "adversarial_fixtures": {
+      "result": "PASS",
+      "note": "scripts/ci/migration-reversibility-gate.test.ts — 7 fixtures cover missing down, comment-only, IRREVERSIBLE-without-ratification, invalid base ref, valid reversible, IRREVERSIBLE-with-ratification, zero migrations"
+    },
+    "gate_local_validation": {
+      "result": "PASS",
+      "note": "Gate executed locally, exits nonzero on missing down, comment-only, IRREVERSIBLE without exemption registry entry, and invalid base ref"
+    },
+    "irreversible_exemption_registry": {
+      "result": "PASS",
+      "exemptions": 2,
+      "entries": [
+        "202605120001_utv2_883_link_market_universe_participant_ids",
+        "202605130002_utv2_920_db_invariant_rpc_guards"
+      ]
+    }
+  },
+  "audit_gap_closed": "#40",
+  "constitutional_invariant_created": "INV-0013",
+  "generated_at": "2026-05-22",
+  "generated_by": "claude"
+}

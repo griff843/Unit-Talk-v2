@@ -6,8 +6,13 @@
  * verifies that a corresponding executable down script exists at:
  *   db/migrations-rollback/<basename>.down.sql
  *
- * Exit 0  → all new migrations have down scripts (gate passes).
- * Exit 1  → one or more migrations are missing down scripts (gate fails).
+ * For scripts marked IRREVERSIBLE, verifies a machine-readable ratification
+ * record exists in db/migrations-rollback/irreversible-exemption-registry.json.
+ *
+ * Exit 0  → all new migrations have valid down scripts (gate passes).
+ * Exit 1  → one or more migrations are missing down scripts, or have
+ *            IRREVERSIBLE markers without a ratification record (gate fails).
+ * Exit 2  → infrastructure error (invalid base ref, unreadable files).
  *
  * Usage:
  *   tsx scripts/ci/migration-reversibility-gate.ts [--base <ref>] [--json]
@@ -24,6 +29,7 @@ import { basename } from 'node:path';
 
 const MIGRATIONS_DIR = 'supabase/migrations';
 const ROLLBACK_DIR = 'db/migrations-rollback';
+const EXEMPTION_REGISTRY = `${ROLLBACK_DIR}/irreversible-exemption-registry.json`;
 
 interface ParsedArgs {
   base: string;
@@ -47,11 +53,37 @@ function parseArgs(argv: string[]): ParsedArgs {
   return { base, json, dryRun };
 }
 
+interface IrreversibleExemption {
+  migration: string;
+  reason: string;
+  pitr_runbook_ref: string;
+  ratified_at: string;
+  ratified_by: string;
+}
+
+interface IrreversibleExemptionRegistry {
+  schema_version: 1;
+  exemptions: IrreversibleExemption[];
+}
+
+function loadExemptionRegistry(): IrreversibleExemptionRegistry {
+  if (!existsSync(EXEMPTION_REGISTRY)) {
+    return { schema_version: 1, exemptions: [] };
+  }
+  try {
+    return JSON.parse(readFileSync(EXEMPTION_REGISTRY, 'utf8')) as IrreversibleExemptionRegistry;
+  } catch {
+    return { schema_version: 1, exemptions: [] };
+  }
+}
+
 interface MigrationCheck {
   migration: string;
   down_script: string;
   exists: boolean;
   non_empty: boolean;
+  is_irreversible: boolean;
+  irreversible_ratified: boolean;
   pass: boolean;
   reason?: string;
 }
@@ -68,59 +100,82 @@ interface GateResult {
   migrations: MigrationCheck[];
 }
 
+/**
+ * Returns the list of SQL files added relative to base..HEAD.
+ * Exits with code 2 if the base ref cannot be resolved (fail-closed on infra error).
+ */
 function getAddedMigrations(base: string): string[] {
   try {
-    const raw = execSync(
-      `git diff --name-only --diff-filter=A "${base}"...HEAD -- "${MIGRATIONS_DIR}/"`,
-      { encoding: 'utf8' },
-    ).trim();
-    if (!raw) return [];
-    return raw.split('\n').filter((l) => l.endsWith('.sql'));
+    // Verify the base ref is resolvable before running the diff.
+    execSync(`git rev-parse --verify "${base}"`, { encoding: 'utf8', stdio: 'pipe' });
   } catch {
-    // Fallback: check against HEAD~1 for single-commit context
-    try {
-      const raw = execSync(
-        `git diff --name-only --diff-filter=A HEAD~1...HEAD -- "${MIGRATIONS_DIR}/"`,
-        { encoding: 'utf8' },
-      ).trim();
-      if (!raw) return [];
-      return raw.split('\n').filter((l) => l.endsWith('.sql'));
-    } catch {
-      return [];
-    }
+    process.stderr.write(
+      `migration-reversibility-gate: INFRA_ERROR — cannot resolve base ref: ${base}\n` +
+      `  If running locally, ensure you have fetched: git fetch origin\n`,
+    );
+    process.exit(2);
   }
+
+  const raw = execSync(
+    `git diff --name-only --diff-filter=A "${base}"...HEAD -- "${MIGRATIONS_DIR}/"`,
+    { encoding: 'utf8' },
+  ).trim();
+  if (!raw) return [];
+  return raw.split('\n').filter((l) => l.endsWith('.sql'));
 }
 
-function checkDownScript(migrationPath: string): MigrationCheck {
+function checkDownScript(
+  migrationPath: string,
+  exemptions: IrreversibleExemptionRegistry,
+): MigrationCheck {
   const base = basename(migrationPath, '.sql');
   const downPath = `${ROLLBACK_DIR}/${base}.down.sql`;
   const exists = existsSync(downPath);
 
   let nonEmpty = false;
+  let isIrreversible = false;
+  let irreversibleRatified = false;
   let reason: string | undefined;
 
   if (!exists) {
     reason = `Missing down script: ${downPath}`;
   } else {
     const content = readFileSync(downPath, 'utf8').trim();
-    // A down script must contain actual SQL (not just comments).
-    // A file with only comments or blank lines is considered non-empty only
-    // if it explicitly declares IRREVERSIBLE with the PITR rationale.
-    const linesWithoutComments = content
-      .split('\n')
-      .filter((l) => !l.trim().startsWith('--') && l.trim() !== '');
-    nonEmpty = linesWithoutComments.length > 0 || content.includes('-- IRREVERSIBLE:');
-    if (!nonEmpty) {
-      reason = `Down script is empty or comment-only: ${downPath}`;
+    isIrreversible = content.includes('-- IRREVERSIBLE:');
+
+    if (isIrreversible) {
+      // IRREVERSIBLE is only valid with a machine-readable ratification record.
+      const entry = exemptions.exemptions.find(
+        (e) => e.migration === base || e.migration === `${base}.sql`,
+      );
+      irreversibleRatified = entry !== undefined;
+      nonEmpty = true; // content exists
+
+      if (!irreversibleRatified) {
+        reason =
+          `Down script marked IRREVERSIBLE but no ratification record found in ` +
+          `${EXEMPTION_REGISTRY}. Add an exemption entry with ratified_at + ratified_by.`;
+      }
+    } else {
+      // Non-IRREVERSIBLE: must have executable SQL (not just comments/blank lines).
+      const linesWithoutComments = content
+        .split('\n')
+        .filter((l) => !l.trim().startsWith('--') && l.trim() !== '');
+      nonEmpty = linesWithoutComments.length > 0;
+      if (!nonEmpty) {
+        reason = `Down script is empty or comment-only: ${downPath}`;
+      }
     }
   }
 
-  const pass = exists && nonEmpty;
+  const pass = isIrreversible ? (exists && nonEmpty && irreversibleRatified) : (exists && nonEmpty);
   return {
     migration: migrationPath,
-    down_script: `${ROLLBACK_DIR}/${basename(migrationPath, '.sql')}.down.sql`,
+    down_script: `${ROLLBACK_DIR}/${base}.down.sql`,
     exists,
     non_empty: nonEmpty,
+    is_irreversible: isIrreversible,
+    irreversible_ratified: irreversibleRatified,
     pass,
     ...(reason ? { reason } : {}),
   };
@@ -128,6 +183,7 @@ function checkDownScript(migrationPath: string): MigrationCheck {
 
 function main(): void {
   const args = parseArgs(process.argv.slice(2));
+  const exemptions = loadExemptionRegistry();
   const migrations = getAddedMigrations(args.base);
 
   if (migrations.length === 0) {
@@ -150,7 +206,7 @@ function main(): void {
     process.exit(0);
   }
 
-  const checks = migrations.map(checkDownScript);
+  const checks = migrations.map((m) => checkDownScript(m, exemptions));
   const passed = checks.filter((c) => c.pass).length;
   const failed = checks.filter((c) => !c.pass).length;
   const ok = failed === 0;
@@ -177,7 +233,7 @@ function main(): void {
         process.stdout.write(`         → ${c.reason}\n`);
       }
     }
-    const summary = ok ? 'PASS' : `FAIL — ${failed} migration(s) missing executable down scripts`;
+    const summary = ok ? 'PASS' : `FAIL — ${failed} migration(s) missing valid down scripts`;
     process.stdout.write(`migration-reversibility-gate: ${summary}\n`);
   }
 
