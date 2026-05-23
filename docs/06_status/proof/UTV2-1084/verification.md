@@ -5,7 +5,7 @@ PR: https://github.com/griff843/Unit-Talk-v2/pull/831
 Worktree: /tmp/utv2-pr831
 Verified at: 2026-05-23
 
-## Commands
+## Verification
 
 ```bash
 tsx --test scripts/ci/schema-roundtrip-hash.test.ts scripts/ci/migration-reversibility-gate.test.ts
