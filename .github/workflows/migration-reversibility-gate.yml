@@ -1,0 +1,247 @@
+name: migration-reversibility-gate
+
+on:
+  pull_request:
+    paths:
+      - 'supabase/migrations/**'
+      - 'db/migrations-rollback/**'
+      - 'scripts/ci/migration-reversibility-gate.ts'
+      - 'scripts/ci/schema-roundtrip-hash.ts'
+      - '.github/workflows/migration-reversibility-gate.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  reversibility-check:
+    name: Down-script presence check (fail-closed)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Check down-script presence (fail-closed)
+        run: |
+          npx tsx scripts/ci/migration-reversibility-gate.ts \
+            --base origin/${{ github.base_ref }} \
+            --json | tee /tmp/reversibility-result.json
+          # Re-run without --json for human-readable annotation
+          npx tsx scripts/ci/migration-reversibility-gate.ts \
+            --base origin/${{ github.base_ref }}
+
+      - name: Run adversarial gate tests
+        run: npx tsx --test scripts/ci/migration-reversibility-gate.test.ts
+
+      - name: Validate schema v2 proof binding (fail-closed)
+        run: |
+          npx tsx scripts/ci/proof-binding-validator.ts \
+            --proof-dir docs/06_status/proof/UTV2-1083 \
+            --json | tee /tmp/proof-binding-result.json
+          npx tsx scripts/ci/proof-binding-validator.ts \
+            --proof-dir docs/06_status/proof/UTV2-1083
+
+  schema-roundtrip-drill:
+    name: Schema round-trip drill (scratch Postgres — all new migrations)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+        ports:
+          - 5432:5432
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.29.3
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install postgresql-client
+        run: sudo apt-get install -y postgresql-client
+
+      - name: Detect new migrations on this PR
+        id: detect
+        run: |
+          # Validate base ref is resolvable; fail closed if not.
+          if ! git rev-parse --verify "origin/${{ github.base_ref }}" > /dev/null 2>&1; then
+            echo "ERROR: Cannot resolve origin/${{ github.base_ref }}" >&2
+            exit 2
+          fi
+          # grep exits 1 when there are no matches; || true prevents bash -e from
+          # treating "zero new migrations" as a step failure.
+          NEW=$(git diff --name-only --diff-filter=A \
+                "origin/${{ github.base_ref }}...HEAD" \
+                -- supabase/migrations/ | grep '\.sql$' || true)
+          echo "migrations<<EOF" >> "$GITHUB_OUTPUT"
+          echo "$NEW" >> "$GITHUB_OUTPUT"
+          echo "EOF" >> "$GITHUB_OUTPUT"
+          if [[ -n "$NEW" ]]; then
+            echo "has_migration=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_migration=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Adversarial round-trip fixture — invalid SQL down script caught by psql
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Defence-in-depth: prove psql rejects syntactically invalid SQL.
+          # This fixture runs regardless of whether there are new migrations.
+          psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE IF NOT EXISTS _adv_invalid_sql_tbl (id uuid primary key);"
+
+          echo "THIS IS NOT SQL — adversarial fixture for UTV2-1083;" \
+            > /tmp/adv-invalid.down.sql
+
+          # psql with ON_ERROR_STOP=1 must exit non-zero on invalid SQL.
+          if psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f /tmp/adv-invalid.down.sql 2>/dev/null; then
+            echo "FAIL: psql accepted invalid SQL — round-trip drill would not catch bad down scripts"
+            exit 1
+          fi
+          echo "PASS: psql correctly rejected invalid SQL down script (exit $(echo $?))"
+
+          psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 \
+            -c "DROP TABLE IF EXISTS _adv_invalid_sql_tbl;"
+
+      - name: Apply all baseline migrations to scratch DB
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Apply all migrations EXCEPT the new ones — establishes baseline state.
+          NEW_LIST="${{ steps.detect.outputs.migrations }}"
+          for f in supabase/migrations/*.sql; do
+            if echo "$NEW_LIST" | grep -qF "$(basename "$f")"; then
+              echo "Skipping new migration (not yet applied): $f"
+            else
+              psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$f" --quiet
+            fi
+          done
+
+      - name: Round-trip drill for each new migration
+        if: steps.detect.outputs.has_migration == 'true'
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          FAIL=0
+
+          while IFS= read -r MIGRATION; do
+            [[ -z "$MIGRATION" ]] && continue
+            BASE=$(basename "$MIGRATION" .sql)
+            DOWN="db/migrations-rollback/${BASE}.down.sql"
+
+            echo "=== Drilling: $BASE ==="
+
+            if [[ ! -f "$DOWN" ]]; then
+              echo "FAIL: Down script missing: $DOWN"
+              FAIL=1
+              continue
+            fi
+
+            # Check for IRREVERSIBLE — validate ratification, then skip drill.
+            if grep -q '-- IRREVERSIBLE:' "$DOWN"; then
+              # Ratification check: gate script already verified this; re-check here for defence-in-depth.
+              if ! npx tsx scripts/ci/migration-reversibility-gate.ts \
+                    --base "origin/${{ github.base_ref }}" \
+                    --json 2>/dev/null \
+                    | python3 -c "import sys,json; d=json.load(sys.stdin); \
+                        m=[x for x in d['migrations'] if '${BASE}' in x['migration']]; \
+                        exit(0 if m and m[0]['pass'] else 1)"; then
+                echo "FAIL: IRREVERSIBLE migration failed gate check: $MIGRATION"
+                FAIL=1
+              else
+                echo "ADVISORY: Migration marked IRREVERSIBLE with ratification — drill skipped."
+                echo "  Refer to PITR runbook: docs/05_operations/DB_ROLLBACK_RUNBOOK.md"
+              fi
+              continue
+            fi
+
+            # 1. Capture PRE-UP hash (baseline before this migration).
+            npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-pre-up-${BASE}.txt"
+            PRE_UP=$(cat "/tmp/hash-pre-up-${BASE}.txt")
+            echo "  pre-up hash: $PRE_UP"
+
+            # 2. Apply up migration (fail closed on SQL error).
+            psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+
+            # 3. Capture POST-UP hash.
+            npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-post-up-${BASE}.txt"
+            POST_UP=$(cat "/tmp/hash-post-up-${BASE}.txt")
+            echo "  post-up hash: $POST_UP"
+
+            # 4. Apply down script (fail closed on SQL error).
+            psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$DOWN"
+
+            # 5. Capture POST-DOWN hash — must equal PRE-UP.
+            npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-post-down-${BASE}.txt"
+            POST_DOWN=$(cat "/tmp/hash-post-down-${BASE}.txt")
+            echo "  post-down hash: $POST_DOWN"
+
+            if [[ "$POST_DOWN" != "$PRE_UP" ]]; then
+              echo "FAIL: post-down hash does not match pre-up baseline for $BASE"
+              echo "  pre-up:    $PRE_UP"
+              echo "  post-down: $POST_DOWN"
+              echo "  The down script does not correctly restore the schema to its prior state."
+              FAIL=1
+              # Do not re-apply up — leave DB in consistent state for remaining migrations.
+              continue
+            fi
+
+            # 6. Re-apply up migration.
+            psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION"
+
+            # 7. Capture POST-REUP hash — must equal POST-UP.
+            npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-post-reup-${BASE}.txt"
+            POST_REUP=$(cat "/tmp/hash-post-reup-${BASE}.txt")
+            echo "  post-reup hash: $POST_REUP"
+
+            if [[ "$POST_REUP" != "$POST_UP" ]]; then
+              echo "FAIL: post-reup hash does not match post-up for $BASE (non-deterministic migration)"
+              echo "  post-up:   $POST_UP"
+              echo "  post-reup: $POST_REUP"
+              FAIL=1
+              continue
+            fi
+
+            echo "PASS: $BASE (pre-up → post-down verified; round-trip verified)"
+
+          done <<< "${{ steps.detect.outputs.migrations }}"
+
+          if [[ $FAIL -ne 0 ]]; then
+            echo ""
+            echo "FAIL: One or more migrations failed the round-trip drill."
+            exit 1
+          fi
+          echo ""
+          echo "PASS: All new migrations passed the schema round-trip drill."
