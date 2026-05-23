@@ -52,14 +52,18 @@ jobs:
           ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
 
           if [ -z "$ISSUE_ID" ]; then
-            echo "No UTV2 issue ID in branch name — skipping proof binding validation."
-            exit 0
+            # Fail-closed: migration PRs must have a UTV2 issue ID in the branch name.
+            echo "::error title=proof-binding::No UTV2 issue ID found in branch name '${BRANCH}'."
+            echo "Migration PRs must use branch name format: <prefix>/utv2-NNN-<description>"
+            exit 1
           fi
 
           PROOF_DIR="docs/06_status/proof/${ISSUE_ID}"
           if [ ! -d "$PROOF_DIR" ]; then
-            echo "No proof directory at $PROOF_DIR — skipping proof binding validation."
-            exit 0
+            # Fail-closed: migration PRs must have a proof bundle.
+            echo "::error title=proof-binding::Proof directory missing: $PROOF_DIR"
+            echo "T1 migration lanes require a proof bundle at docs/06_status/proof/${ISSUE_ID}/evidence.json"
+            exit 1
           fi
 
           echo "Validating proof binding for $ISSUE_ID at $PROOF_DIR"

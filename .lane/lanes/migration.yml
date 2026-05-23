@@ -13,9 +13,9 @@ allowed_path_globs:
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
   - db/migrations-rollback/**
-  - apps/**
+  - apps/ingestor/**
   - package.json
-  - .github/workflows/**
+  - .github/workflows/migration-reversibility-gate.yml
 forbidden_path_globs:
   - apps/worker/**
 required_proof_artifacts:
