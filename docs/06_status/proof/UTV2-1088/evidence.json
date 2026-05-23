@@ -7,8 +7,8 @@
   "phase": "A",
   "phase_description": "Additive scaffolding — registry JSON, id-ledger, source-manifest, loader, contracts type, CI gate",
   "sha_binding": {
-    "verified_source_sha": "7ece212e447fedefc9e69408c5b39d89a980c820",
-    "verified_source_note": "Last substantive code commit — ledger mutation detection + fresh-ratification binding",
+    "verified_source_sha": "12250564ae4a27d4b821f1ccd57e1e88dc45811e",
+    "verified_source_note": "Last substantive commit — proof-binding-validator.ts, proof.md, workflow binding step",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "validated-by-ci-at-runtime"
   },
