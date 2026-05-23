@@ -11,8 +11,8 @@ Phase A additive scaffolding for reversible migration infrastructure. Deliverabl
 - `.github/workflows/migration-reversibility-gate.yml` — presence check + round-trip drill
 
 Schema v2 proof binding:
-- `verified_source_sha`: `4fa06d8ab0c0a726140cca6e8a17f7df419a584f`
-- Last substantive commit (post-rebase): proof-binding-validator.ts, proof.md, workflow binding step
+- `verified_source_sha`: `176d9dba71c5a588856e02dbcf24ca3974467aca`
+- Last complete-state commit: governance.yml expanded, diff-summary added, lane reclassified to governance
 - Post-substantive commits: evidence.json only (verified by proof-binding-validator)
 
 ## Evidence

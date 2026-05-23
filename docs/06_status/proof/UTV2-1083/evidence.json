@@ -7,10 +7,10 @@
   "phase": "A",
   "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
   "sha_binding": {
-    "verified_source_sha": "4fa06d8ab0c0a726140cca6e8a17f7df419a584f",
-    "verified_source_note": "Last substantive commit (post-rebase) — proof-binding-validator.ts, proof.md, workflow binding step",
-    "evidence_commit_sha": "7d59d9147660955e9589f147c0fcc9f991fab210",
-    "current_pr_head_sha": "7d59d9147660955e9589f147c0fcc9f991fab210"
+    "verified_source_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca",
+    "verified_source_note": "Last complete-state commit — governance.yml expanded, diff-summary added, lane reclassified to governance",
+    "evidence_commit_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca",
+    "current_pr_head_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca"
   },
   "merge_sha": null,
   "evidence": {
