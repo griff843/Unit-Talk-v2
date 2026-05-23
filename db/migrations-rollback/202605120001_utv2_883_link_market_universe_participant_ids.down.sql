@@ -1,0 +1,26 @@
+-- Down script for 202605120001_utv2_883_link_market_universe_participant_ids
+--
+-- IRREVERSIBLE: This migration backfills participant_id using participants.external_id
+-- as the resolution key. The up migration only touched rows where participant_id WAS NULL
+-- (idempotent guard). Setting those rows back to NULL is semantically safe but loses the
+-- backfill work; any rows that were legitimately populated by the application after the
+-- migration ran cannot be distinguished from the backfill writes.
+--
+-- Constitutional rollback procedure:
+--   Use Supabase PITR to restore to the point-in-time snapshot taken immediately before
+--   this migration was applied. Refer to docs/05_operations/DB_ROLLBACK_RUNBOOK.md.
+--   PITR window for this migration: captured in the migration proof bundle.
+--
+-- If a best-effort structural revert is acceptable (data loss acceptable):
+--   Uncomment the statement below, understanding that it will NULL out ALL market_universe
+--   rows where the participant_id matches a participant with a non-null external_id that
+--   also had a corresponding NULL in market_universe at migration time. This is approximate.
+--
+-- UPDATE market_universe mu
+-- SET participant_id = NULL
+-- FROM participants p
+-- WHERE mu.participant_id = p.id
+--   AND p.external_id = mu.provider_participant_id
+--   AND mu.updated_at >= '2026-05-12'::timestamptz;
+--
+-- RECOMMENDATION: Use PITR. Do not apply the approximate revert in production.

@@ -35,6 +35,8 @@ allowed_path_globs:
   - packages/contracts/**
   - packages/db/src/**
   - packages/domain/src/**
+  - packages/invariants/**
+  - db/migrations-rollback/**
   - apps/api/src/t1-proof-*.test.ts
 forbidden_path_globs:
   - supabase/migrations/**

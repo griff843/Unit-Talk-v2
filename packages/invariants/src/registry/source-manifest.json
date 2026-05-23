@@ -1,0 +1,99 @@
+{
+  "schema_version": 1,
+  "description": "PM-ratified source manifest. Documents which authoritative sources each invariant derives from. This file is the constitutional crosswalk between invariant IDs and their canonical documentation.",
+  "ratified_at": "2026-05-22",
+  "ratified_by": "griff843",
+  "ratification_ref": "UTV2-1088 / INIT-1.3.1 Phase A PM ratification",
+  "sources": [
+    {
+      "invariant_id": "INV-0001",
+      "canonical_docs": ["CLAUDE.md §Core invariants #1", "docs/05_operations/EXECUTION_TRUTH_MODEL.md"],
+      "code_refs": [],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0002",
+      "canonical_docs": ["CLAUDE.md §Core invariants #2", "docs/05_operations/TRUTH_CHECK_SPEC.md", "docs/05_operations/LANE_MANIFEST_SPEC.md"],
+      "code_refs": ["scripts/ops/preflight.ts", "scripts/ops/truth-check.ts"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0003",
+      "canonical_docs": ["CLAUDE.md §Core invariants #3", "docs/05_operations/LANE_MANIFEST_SPEC.md"],
+      "code_refs": ["scripts/ops/lane-start.ts"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0004",
+      "canonical_docs": ["CLAUDE.md §Core invariants #4", "docs/05_operations/EVIDENCE_BUNDLE_TEMPLATE.md"],
+      "code_refs": ["scripts/ops/proof-auditor-gate.ts"],
+      "ci_enforced_by": [".github/workflows/proof-auditor-gate.yml"]
+    },
+    {
+      "invariant_id": "INV-0005",
+      "canonical_docs": ["CLAUDE.md §Core invariants #5", "docs/05_operations/DELEGATION_POLICY.md"],
+      "code_refs": [],
+      "ci_enforced_by": [".github/workflows/tier-label-check.yml"]
+    },
+    {
+      "invariant_id": "INV-0006",
+      "canonical_docs": ["CLAUDE.md §Core invariants #6", "docs/05_operations/LANE_MANIFEST_SPEC.md"],
+      "code_refs": ["scripts/ops/lane-start.ts"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0007",
+      "canonical_docs": ["CLAUDE.md §Core invariants #7", "docs/CODEBASE_GUIDE.md"],
+      "code_refs": [],
+      "ci_enforced_by": [".github/workflows/ci.yml"]
+    },
+    {
+      "invariant_id": "INV-0008",
+      "canonical_docs": ["CLAUDE.md §Core invariants #8", "docs/CODEBASE_GUIDE.md"],
+      "code_refs": [],
+      "ci_enforced_by": [".github/workflows/ci.yml"]
+    },
+    {
+      "invariant_id": "INV-0009",
+      "canonical_docs": ["CLAUDE.md §Core invariants #9"],
+      "code_refs": ["packages/db/src/lifecycle.ts", "apps/worker/src/delivery-adapter.ts"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0010",
+      "canonical_docs": ["CLAUDE.md §Core invariants #10"],
+      "code_refs": ["packages/verification/src/engine/replay-lifecycle-runner.ts"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0011",
+      "canonical_docs": ["CLAUDE.md §Core invariants #11", "docs/02_architecture/CONVERGENCE_EXECUTION_ARCHITECTURE.md"],
+      "code_refs": ["packages/invariants/src/registry/invariant-registry.json"],
+      "ci_enforced_by": [".github/workflows/invariant-registry-gate.yml"]
+    },
+    {
+      "invariant_id": "INV-0012",
+      "canonical_docs": ["docs/05_operations/EXECUTION_TRUTH_MODEL.md"],
+      "code_refs": ["packages/db/src/writer-authority.ts"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0013",
+      "canonical_docs": ["UTV2-1083 / INIT-1.1.0", "docs/05_operations/DB_ROLLBACK_RUNBOOK.md"],
+      "code_refs": ["scripts/ci/migration-reversibility-gate.ts"],
+      "ci_enforced_by": [".github/workflows/migration-reversibility-gate.yml"]
+    },
+    {
+      "invariant_id": "INV-0014",
+      "canonical_docs": ["UTV2-921"],
+      "code_refs": ["supabase/migrations/202605130001_utv2_921_audit_log_retention_immutability.sql"],
+      "ci_enforced_by": []
+    },
+    {
+      "invariant_id": "INV-0015",
+      "canonical_docs": [],
+      "code_refs": ["packages/contracts/src/picks.ts"],
+      "ci_enforced_by": []
+    }
+  ]
+}

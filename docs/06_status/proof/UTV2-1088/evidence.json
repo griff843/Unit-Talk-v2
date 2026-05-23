@@ -1,0 +1,69 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1088",
+  "title": "INIT-1.3.1 — Machine-Readable Invariant Registry Substrate",
+  "tier": "T1",
+  "executor": "claude",
+  "phase": "A",
+  "phase_description": "Additive scaffolding — registry JSON, id-ledger, source-manifest, loader, contracts type, CI gate",
+  "sha_binding": {
+    "verified_source_sha": "451bc8ef04f99ef137c468f78d5a6dbd74cd77dd",
+    "verified_source_note": "Last complete-state commit — validator updated with explicit placeholder contract (post-rebase onto main/bd2a8e9b)",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "merge_sha": "2194b018fab116ad803a8b967b4b3fc9173cf4b6",
+  "evidence": {
+    "pnpm_verify": {
+      "result": "PASS",
+      "note": "lint + type-check + build + test all green in worktree (re-verified on 7ece212e)"
+    },
+    "pnpm_test_db": {
+      "result": "PASS",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "note": "7/7 PASS against live Supabase"
+    },
+    "r_level_check": {
+      "result": "PASS",
+      "rules_matched": 0,
+      "artifacts_required": []
+    },
+    "invariant_registry_gate": {
+      "result": "PASS",
+      "registry_hash": "45cf55bf7903336ccfeeef6311028def49b7e192211fad87b9b69625784ac78b",
+      "invariant_count": 15,
+      "active_count": 15,
+      "violations": 0,
+      "note": "Gate validates: closed-schema, ledger allocation, source-manifest bidirectional coverage, append-only ledger (deletion + mutation), fresh ratification binding, mechanical enforcement. Local run: exit 0."
+    },
+    "gate_amendments": {
+      "result": "PASS",
+      "findings_addressed": [
+        "F1: pnpm version corrected to 10.29.3; fetch-depth: 0 added",
+        "F2: closed-schema validation — unknown fields in registry/ledger/manifest cause gate to fail",
+        "F3: source-manifest bidirectional coverage — every registry ID must have a manifest entry and vice versa",
+        "F4: append-only ledger — IDs cannot be deleted OR have immutable fields (title, allocated_at) mutated",
+        "F5: fresh ratification binding — when registry/ledger content changes vs base, ratification_ref + ratified_at must also change",
+        "F6: workflow path filter corrected",
+        "F7: this proof artifact, schema_version 2 with sha_binding block"
+      ]
+    },
+    "source_manifest": {
+      "result": "PASS",
+      "entries": 15,
+      "ratified_by": "griff843",
+      "ratified_at": "2026-05-22",
+      "ratification_ref": "UTV2-1088 / INIT-1.3.1 Phase A PM ratification"
+    },
+    "id_ledger": {
+      "result": "PASS",
+      "allocated_ids": 15,
+      "range": "INV-0001..INV-0015"
+    }
+  },
+  "constitutional_invariant_created": "INV-0013",
+  "generated_at": "2026-05-22",
+  "generated_by": "claude"
+}

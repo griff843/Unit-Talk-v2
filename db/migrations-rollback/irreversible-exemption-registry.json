@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "description": "PM-ratified exemptions for migrations whose down scripts are marked IRREVERSIBLE. Each entry proves the irreversibility determination was reviewed and approved. An IRREVERSIBLE down script without a corresponding entry here causes the migration-reversibility-gate to fail.",
+  "exemptions": [
+    {
+      "migration": "202605120001_utv2_883_link_market_universe_participant_ids",
+      "reason": "Data backfill from external_id resolution. NULL-to-value writes cannot be safely reversed without distinguishing backfill rows from application-written rows that postdate the migration. PITR is the only safe rollback path.",
+      "pitr_runbook_ref": "docs/05_operations/DB_ROLLBACK_RUNBOOK.md",
+      "ratified_at": "2026-05-22",
+      "ratified_by": "griff843"
+    },
+    {
+      "migration": "202605130002_utv2_920_db_invariant_rpc_guards",
+      "reason": "Three RPC functions replaced with fail-closed variants. The pre-920 function bodies re-expose fail-open behavior (dependent writes succeed even when owning pick transition affects zero rows). Restoration would re-introduce the known defect. PITR is the only safe rollback path.",
+      "pitr_runbook_ref": "docs/05_operations/DB_ROLLBACK_RUNBOOK.md",
+      "ratified_at": "2026-05-22",
+      "ratified_by": "griff843"
+    }
+  ]
+}
