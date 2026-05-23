@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1085",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1085-immutable-oddssnapshot-table-and-triggers",
+  "branch": "claude/utv2-1085-immutable-oddssnapshot-table-and-triggers",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/832",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/lanes/migration.yml",
+    ".lane/migration-lock.yml",
+    ".ops/sync/UTV2-1085.yml",
+    "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/ingest-odds-api.ts",
+    "apps/ingestor/src/t1-proof-utv2-1085-odds-snapshot.test.ts",
+    "db/migrations-rollback/20260523002_utv2_1085_odds_snapshots.down.sql",
+    "docs/06_status/proof/UTV2-1085/evidence.json",
+    "docs/06_status/proof/UTV2-1085/PROOF.md",
+    "docs/06_status/proof/UTV2-1085/runtime-verification.md",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "supabase/migrations/20260523002_utv2_1085_odds_snapshots.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1085/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-23T22:24:50.792Z",
+  "heartbeat_at": "2026-05-23T22:40:00.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1085-immutable-oddssnapshot-table-and-triggers.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1085-immutable-oddssnapshot-table-and-triggers",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
