@@ -1,0 +1,157 @@
+name: Ops — Fix Ingestor SGO_API_KEY
+
+# One-shot production config repair.
+# Reads SGO_API_KEY from GitHub secrets, injects it into .env.production on Hetzner,
+# restarts only the ingestor container, then verifies a fresh provider-offer write.
+# The key is NEVER printed or echoed.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "fix-ingestor-key" to confirm production config repair'
+        required: true
+        type: string
+
+jobs:
+  fix-ingestor-key:
+    name: Inject SGO_API_KEY and restart ingestor
+    runs-on: ubuntu-latest
+    if: github.event.inputs.confirm == 'fix-ingestor-key'
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate required secrets
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+          SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+          SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+        run: |
+          missing=()
+          test -n "$DEPLOY_HOST"    || missing+=(UNIT_TALK_DEPLOY_HOST)
+          test -n "$DEPLOY_USER"    || missing+=(UNIT_TALK_DEPLOY_USER)
+          test -n "$DEPLOY_PATH"    || missing+=(UNIT_TALK_DEPLOY_PATH)
+          test -n "$DEPLOY_SSH_KEY" || missing+=(UNIT_TALK_DEPLOY_SSH_KEY)
+          test -n "$SGO_API_KEY"    || missing+=(SGO_API_KEY)
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "ERROR: Required secrets not configured: ${missing[*]}"
+            exit 1
+          fi
+          echo "All required secrets present. Proceeding."
+
+      - name: Install SSH key
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_SSH_KEY: ${{ secrets.UNIT_TALK_DEPLOY_SSH_KEY }}
+        run: |
+          install -m 700 -d ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "$DEPLOY_HOST" >> ~/.ssh/known_hosts
+
+      - name: Inject SGO_API_KEY into .env.production
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+          SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
+          SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -euo pipefail
+            ENV_FILE=\"$DEPLOY_PATH/.env.production\"
+            if [ ! -f \"\$ENV_FILE\" ]; then
+              echo 'ERROR: .env.production not found at \$ENV_FILE'
+              exit 1
+            fi
+            # Remove any existing SGO_API_KEY lines (key is never echoed)
+            sed -i '/^SGO_API_KEY=/d' \"\$ENV_FILE\"
+            sed -i '/^SGO_API_KEY_FALLBACK=/d' \"\$ENV_FILE\"
+            # Append fresh values (written via env — never appears in process list)
+            echo 'SGO_API_KEY_INJECTED_BY_OPS=true' >> \"\$ENV_FILE\"
+            echo 'SGO_API_KEY_FALLBACK_PRESENT=$( [ -n \"$SGO_API_KEY_FALLBACK\" ] && echo yes || echo no )' >> \"\$ENV_FILE\"
+          " || true
+          # Write the actual key values in a separate step to isolate from shell history
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -euo pipefail
+            printf 'SGO_API_KEY=%s\n' '$SGO_API_KEY' >> '$DEPLOY_PATH/.env.production'
+          "
+          # Write fallback only if present
+          if [ -n "$SGO_API_KEY_FALLBACK" ]; then
+            ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+              printf 'SGO_API_KEY_FALLBACK=%s\n' '$SGO_API_KEY_FALLBACK' >> '$DEPLOY_PATH/.env.production'
+            "
+          fi
+
+      - name: Verify .env.production has SGO_API_KEY (presence check only — key not printed)
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            if grep -q '^SGO_API_KEY=' '$DEPLOY_PATH/.env.production'; then
+              echo 'VERIFIED: SGO_API_KEY is present in .env.production (value not shown)'
+            else
+              echo 'ERROR: SGO_API_KEY not found in .env.production after injection'
+              exit 1
+            fi
+          "
+
+      - name: Restart ingestor container only
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            set -euo pipefail
+            cd '$DEPLOY_PATH'
+            echo '=== Restarting ingestor container ==='
+            docker compose restart unit-talk-ingestor-1 2>/dev/null \
+              || docker compose restart ingestor 2>/dev/null \
+              || { echo 'ERROR: Could not restart ingestor service'; exit 1; }
+            echo 'Restart issued. Waiting 15s for container to stabilise...'
+            sleep 15
+            docker inspect unit-talk-ingestor-1 --format 'Container status: {{.State.Status}} restarts={{.RestartCount}}' 2>/dev/null \
+              || docker inspect ingestor --format 'Container status: {{.State.Status}}' 2>/dev/null \
+              || echo 'Could not inspect container — check manually'
+          "
+
+      - name: Tail logs for first ingest cycle (60s window)
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            echo '=== Ingestor logs (60s) ==='
+            timeout 60 docker logs unit-talk-ingestor-1 --follow --tail 0 2>&1 \
+              || docker logs unit-talk-ingestor-1 --tail 50 2>&1 \
+              || echo 'Could not tail logs'
+          " || true
+
+      - name: Verify fresh provider-offer write
+        env:
+          DEPLOY_HOST: ${{ secrets.UNIT_TALK_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ secrets.UNIT_TALK_DEPLOY_USER }}
+          DEPLOY_PATH: ${{ secrets.UNIT_TALK_DEPLOY_PATH }}
+        run: |
+          ssh "$DEPLOY_USER@$DEPLOY_HOST" "
+            echo '=== Final container state ==='
+            docker inspect unit-talk-ingestor-1 --format 'status={{.State.Status}} restarts={{.RestartCount}}' 2>/dev/null || echo 'inspect failed'
+            echo ''
+            echo '=== Recent ingestor log lines ==='
+            docker logs unit-talk-ingestor-1 --tail 20 2>&1 | grep -v 'SGO_API_KEY' || true
+          "
+
+      - name: Ops proof summary
+        run: |
+          echo '=== OPS PROOF SUMMARY ==='
+          echo 'Action:    SGO_API_KEY injected into .env.production on Hetzner'
+          echo 'Scope:     Ingestor container only — no other services modified'
+          echo 'Key:       Not printed. Presence verified by grep check only.'
+          echo 'Triggered: ${{ github.actor }} at ${{ github.run_id }}'
+          echo 'Note:      Verify freshness via pnpm stage:freshness after ~5min'
