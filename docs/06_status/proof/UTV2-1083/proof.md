@@ -11,8 +11,8 @@ Phase A additive scaffolding for reversible migration infrastructure. Deliverabl
 - `.github/workflows/migration-reversibility-gate.yml` — presence check + round-trip drill
 
 Schema v2 proof binding:
-- `verified_source_sha`: `46c9abc816de27f1719c1fbb65301d9d5ab62924`
-- Last substantive commit: workflow grep fix, ON_ERROR_STOP=1, invalid-SQL adversarial fixture
+- `verified_source_sha`: `4fa06d8ab0c0a726140cca6e8a17f7df419a584f`
+- Last substantive commit (post-rebase): proof-binding-validator.ts, proof.md, workflow binding step
 - Post-substantive commits: evidence.json only (verified by proof-binding-validator)
 
 ## Evidence
@@ -40,15 +40,15 @@ IRREVERSIBLE exemption registry: 2 PM-ratified entries
   - 202605130002_utv2_920_db_invariant_rpc_guards
 
 proof-binding-validator (schema v2):
-  verified_source_sha: 46c9abc816de27f1...
-  evidence_commit_sha: 69237b05bef7fa71... (resolved by CI from git log)
+  verified_source_sha: 4fa06d8ab0c0a726... (post-rebase)
+  evidence_commit_sha: (resolved by CI from git log)
   current_pr_head_sha: (resolved by CI from GITHUB_SHA at runtime)
   proof-binding-validator: PASS
 ```
 
 ## Verification
 
-Binding integrity: `verified_source_sha` `46c9abc8` is an ancestor of PR head. All commits
+Binding integrity: `verified_source_sha` `4fa06d8a` (post-rebase) is an ancestor of PR head. All commits
 between `verified_source_sha` and HEAD touch only `docs/06_status/proof/UTV2-1083/evidence.json`
 — verified mechanically by `scripts/ci/proof-binding-validator.ts`.
 
