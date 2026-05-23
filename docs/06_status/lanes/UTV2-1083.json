@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
   "issue_id": "UTV2-1083",
-  "lane_type": "migration",
+  "lane_type": "governance",
   "executor": "claude",
   "tier": "T1",
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1083-reversible-migration-capability",
@@ -23,7 +23,9 @@
     "docs/06_status/lanes/UTV2-1083.json",
     "docs/06_status/proof/UTV2-1083/evidence.json",
     "docs/06_status/proof/UTV2-1083/proof.md",
+    "docs/06_status/proof/UTV2-1083/diff-summary.md",
     "docs/06_status/proof/UTV2-1083/verification.md",
+    ".lane/lanes/governance.yml",
     "scripts/ci/migration-reversibility-gate.test.ts",
     "scripts/ci/migration-reversibility-gate.ts",
     "scripts/ci/proof-binding-validator.ts",
@@ -31,7 +33,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1083/evidence.json",
-    "docs/06_status/proof/UTV2-1083/verification.md"
+    "docs/06_status/proof/UTV2-1083/verification.md",
+    "docs/06_status/proof/UTV2-1083/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-05-22T21:38:13.447Z",
