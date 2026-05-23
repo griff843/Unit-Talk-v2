@@ -6,12 +6,12 @@
   "executor": "claude",
   "phase": "A",
   "phase_description": "Additive scaffolding — registry JSON, id-ledger, source-manifest, loader, contracts type, CI gate",
-  "branch_head_sha": "5cc0d791195a8bf3655ca7cc7a958db5d77674e9",
+  "branch_head_sha": "7ece212e447fedefc9e69408c5b39d89a980c820",
   "merge_sha": null,
   "evidence": {
     "pnpm_verify": {
       "result": "PASS",
-      "note": "lint + type-check + build + test all green in worktree"
+      "note": "lint + type-check + build + test all green in worktree (re-verified on head 7ece212e)"
     },
     "pnpm_test_db": {
       "result": "PASS",
@@ -27,21 +27,22 @@
     },
     "invariant_registry_gate": {
       "result": "PASS",
+      "registry_hash": "45cf55bf7903336ccfeeef6311028def49b7e192211fad87b9b69625784ac78b",
       "invariant_count": 15,
       "active_count": 15,
       "violations": 0,
-      "note": "Gate validates: closed-schema, ledger allocation, source-manifest bidirectional coverage, append-only ledger, ratification record, mechanical enforcement"
+      "note": "Gate validates: closed-schema, ledger allocation, source-manifest bidirectional coverage, append-only ledger (deletion + mutation), fresh ratification binding, mechanical enforcement. Local run: exit 0."
     },
     "gate_amendments": {
       "result": "PASS",
       "findings_addressed": [
-        "F1: pnpm version corrected to 10.29.3",
+        "F1: pnpm version corrected to 10.29.3; fetch-depth: 0 added",
         "F2: closed-schema validation — unknown fields in registry/ledger/manifest cause gate to fail",
         "F3: source-manifest bidirectional coverage — every registry ID must have a manifest entry and vice versa",
-        "F4: append-only ledger enforcement — IDs present at base cannot be deleted",
-        "F5: machine-readable ratification record — source-manifest must carry ratified_by, ratified_at, ratification_ref",
+        "F4: append-only ledger enforcement — IDs present at base cannot be deleted OR have immutable fields (title, allocated_at) mutated",
+        "F5: fresh ratification binding — when registry/ledger content changes vs base, source-manifest ratification_ref + ratified_at must also change",
         "F6: workflow path filter corrected — adds scripts/ci/invariant-registry-gate.ts, .github/workflows/invariant-registry-gate.yml, packages/contracts/src/index.ts",
-        "F7: this proof artifact"
+        "F7: this proof artifact, bound to current head SHA"
       ]
     },
     "source_manifest": {
