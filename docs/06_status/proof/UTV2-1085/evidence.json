@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1085",
   "title": "INIT-1.1.2 — Immutable OddsSnapshot Table and Triggers",
   "tier": "T1",
@@ -7,8 +7,8 @@
   "sha_binding": {
     "verified_source_sha": "ceab00e8af45d7bc47896da6b6b1db6c12fe2656",
     "verified_source_note": "Implementation commit — all code + migration + proof docs; only evidence.json changes after this SHA",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "evidence_commit_sha": "efcb3eef",
+    "current_pr_head_sha": "efcb3eef"
   },
   "executor": "claude",
   "executed_at": "2026-05-23T22:20:00.000Z",
@@ -87,6 +87,6 @@
     "Correction model: corrections append new rows with prior_snapshot_id — never mutate prior snapshots",
     "Gap #6 closed: odds_snapshots provides the immutable truth basis for deterministic replay"
   ],
-  "pr_url": null,
-  "merge_sha": null
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/832",
+  "merge_sha": "8b528be3a6c8bdebc3be09991e3f8c3c2b01c2ff"
 }
