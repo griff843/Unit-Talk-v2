@@ -1,5 +1,5 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "UTV2-1085",
   "title": "INIT-1.1.2 — Immutable OddsSnapshot Table and Triggers",
   "tier": "T1",

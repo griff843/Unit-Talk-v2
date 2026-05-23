@@ -78,9 +78,21 @@ CREATE INDEX idx_odds_snapshots_prior_snapshot_id
 ALTER TABLE odds_snapshots ENABLE ROW LEVEL SECURITY;
 ALTER TABLE odds_snapshot_corrections ENABLE ROW LEVEL SECURITY;
 
--- Service role has full access; anonymous access is denied by default.
-CREATE POLICY "service role full access" ON odds_snapshots
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+-- Service role bypasses RLS in Supabase by default.
+-- These policies allow read and append access for ingestor/service contexts.
+-- UPDATE and DELETE are enforced at the trigger level regardless of RLS.
+CREATE POLICY odds_snapshots_select
+  ON odds_snapshots FOR SELECT
+  USING (true);
 
-CREATE POLICY "service role full access" ON odds_snapshot_corrections
-  FOR ALL TO service_role USING (true) WITH CHECK (true);
+CREATE POLICY odds_snapshots_insert
+  ON odds_snapshots FOR INSERT
+  WITH CHECK (true);
+
+CREATE POLICY odds_snapshot_corrections_select
+  ON odds_snapshot_corrections FOR SELECT
+  USING (true);
+
+CREATE POLICY odds_snapshot_corrections_insert
+  ON odds_snapshot_corrections FOR INSERT
+  WITH CHECK (true);
