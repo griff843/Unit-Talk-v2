@@ -111,9 +111,11 @@ jobs:
             set -euo pipefail
             cd '$DEPLOY_PATH'
             echo '=== Restarting ingestor container ==='
-            docker compose restart unit-talk-ingestor-1 2>/dev/null \
-              || docker compose restart ingestor 2>/dev/null \
-              || { echo 'ERROR: Could not restart ingestor service'; exit 1; }
+            # Try service name first (compose v2), then container name fallback
+            docker compose restart ingestor 2>/dev/null \
+              || docker compose restart unit-talk-ingestor-1 2>/dev/null \
+              || docker restart unit-talk-ingestor-1 2>/dev/null \
+              || { echo 'ERROR: Could not restart ingestor service'; docker compose ps; exit 1; }
             echo 'Restart issued. Waiting 15s for container to stabilise...'
             sleep 15
             docker inspect unit-talk-ingestor-1 --format 'Container status: {{.State.Status}} restarts={{.RestartCount}}' 2>/dev/null \
