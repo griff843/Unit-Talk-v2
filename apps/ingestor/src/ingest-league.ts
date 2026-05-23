@@ -238,6 +238,25 @@ export async function ingestLeague(
         );
       }
 
+      // Write immutable OddsSnapshot (WS-1.1 — UTV2-1085).
+      // Best-effort: non-fatal until fail-closed policy is ratified in follow-on lane.
+      try {
+        await repositories.oddsSnapshots.insert({
+          providerKey: 'sgo',
+          marketKey: 'odds',
+          league,
+          runId: run.id,
+          snapshotAt,
+          priceBlob: fetched.rawPayloads,
+        });
+      } catch (snapshotError) {
+        options.logger?.warn?.(
+          `[ingestor] odds_snapshot write failed for sgo/${league} (non-fatal): ${
+            snapshotError instanceof Error ? snapshotError.message : String(snapshotError)
+          }`,
+        );
+      }
+
       resolved = await resolveSgoEntities(fetched.events, repositories, {
         ...(options.logger ? { logger: options.logger } : {}),
         providerKey: 'sgo',

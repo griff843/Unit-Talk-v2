@@ -142,6 +142,26 @@ export async function ingestOddsApiLeague(
       }
       logger?.warn?.(`[odds-api] archive fail-open for ${league}: ${archiveFailure}`);
     }
+
+    // Write immutable OddsSnapshot (WS-1.1 — UTV2-1085).
+    // Best-effort: snapshot write failure is non-fatal to avoid blocking ingestion
+    // until full fail-closed policy is ratified in a follow-on lane.
+    try {
+      await repositories.oddsSnapshots.insert({
+        providerKey: 'odds-api',
+        marketKey: (options.markets ?? [...DEFAULT_ODDS_API_MARKETS]).join(','),
+        league,
+        runId: run.id,
+        snapshotAt,
+        priceBlob: result.events,
+      });
+    } catch (snapshotError) {
+      logger?.warn?.(
+        `[odds-api] odds_snapshot write failed for ${league} (non-fatal): ${
+          snapshotError instanceof Error ? snapshotError.message : String(snapshotError)
+        }`,
+      );
+    }
     await resolveOddsApiEvents(result.events, league, repositories, logger);
     const offers = normalizeOddsApiToOffers(result.events, snapshotAt);
 
