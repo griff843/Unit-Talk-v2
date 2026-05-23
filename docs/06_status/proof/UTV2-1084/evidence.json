@@ -5,9 +5,9 @@
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "9d923e8be3f26677b76f3908a725a290f4a11baa",
+    "verified_source_sha": "46b90804832c967d31d9361a005c96c74bd7eff7",
     "sha_type": "branch_head",
-    "note": "SHA will be updated to the final commit SHA after this amendment commit lands. Merge SHA must be recorded post-merge.",
+    "note": "SHA bound to CI-gate-fix commit. Merge SHA must be recorded post-merge.",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
