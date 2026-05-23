@@ -45,9 +45,9 @@ Local run post-rebase (exit 0):
   "schema_version": 2,
   "gate": "proof-binding-v2",
   "issue_id": "UTV2-1088",
-  "verified_source_sha": "d875ba1b251dcac22ef4c3d3a53cf5272d700f6f",
-  "resolved_evidence_commit_sha": "d0d6edbf5fe92a425a0f8417e51940ce32a98750",
-  "resolved_current_pr_head_sha": "d0d6edbf5fe92a425a0f8417e51940ce32a98750",
+  "verified_source_sha": "f2ee226187b3133d73d0ad7e6a116ddf9de9fc1c",
+  "resolved_evidence_commit_sha": "(resolved by CI from git log)",
+  "resolved_current_pr_head_sha": "(resolved by CI from GITHUB_SHA)",
   "violations": [],
   "ok": true
 }

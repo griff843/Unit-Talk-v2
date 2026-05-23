@@ -13,8 +13,8 @@ Phase A additive scaffolding for the constitutional invariant registry. Delivera
 - `.github/workflows/invariant-registry-gate.yml` — blocking CI check
 
 Schema v2 proof binding:
-- `verified_source_sha`: `d875ba1b251dcac22ef4c3d3a53cf5272d700f6f`
-- Last complete-state commit (post-rebase): sentinel values resolved; gate + tests all green at this SHA
+- `verified_source_sha`: `f2ee226187b3133d73d0ad7e6a116ddf9de9fc1c`
+- Last complete-state commit: governance.yml expanded, diff-summary added, all proof artifacts present
 - Post-substantive commits: evidence.json only (verified by proof-binding-validator)
 
 ## Evidence
