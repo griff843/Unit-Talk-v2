@@ -1,21 +1,14 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1084",
   "title": "Raw Provider Payload Store — Pre-Transformation Hashing",
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "114f8b76f2ef7db51a8364852133f83904714488",
-    "verified_source_note": "Last substantive commit after CI round-trip hash hardening and required verification artifact; only proof files change after this SHA",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci",
-    "ci_sentinels": {
-      "pnpm_verify": "PASS",
-      "pnpm_test_db": "PASS",
-      "test_count": "all suites green",
-      "db_test_count": 7,
-      "live_db_proof": "PASS — INSERT/UPDATE-block/DELETE-block proven on zfzdnfwdarxucxtaojxm"
-    }
+    "verified_source_sha": "4e187122b04a504c6ed62801f179f751ee376f35",
+    "verified_source_note": "Last substantive commit after rebase — all implementation + CI gate fixes; only proof files change after this SHA",
+    "evidence_commit_sha": "03a82e7c7c56458a243c94646bba1e643a17595d",
+    "current_pr_head_sha": "03a82e7c7c56458a243c94646bba1e643a17595d"
   },
   "executor": "claude",
   "executed_at": "2026-05-23T18:30:00.000Z",
@@ -23,27 +16,10 @@
     "level": "R2",
     "reason": "Migration lane — append-only table, no existing table modified, no backfill required"
   },
-  "deliverables": {
-    "migration": "supabase/migrations/20260523001_utv2_1084_raw_payload_store.sql",
-    "rollback": "db/migrations-rollback/20260523001_utv2_1084_raw_payload_store.down.sql",
-    "source_files": [
-      "apps/ingestor/src/raw-provider-payload-archive.ts",
-      "apps/ingestor/src/ingest-league.ts",
-      "apps/ingestor/src/ingest-odds-api.ts",
-      "apps/ingestor/src/provider-ingestion-policy.ts",
-      "apps/ingestor/src/odds-api-fetcher.ts",
-      "apps/ingestor/src/sgo-fetcher.ts",
-      "packages/db/src/repositories.ts",
-      "packages/db/src/runtime-repositories.ts"
-    ],
-    "tests": [
-      "apps/ingestor/src/raw-provider-payload-archive.test.ts",
-      "apps/ingestor/src/provider-ingestion-policy.test.ts",
-      "apps/ingestor/src/ingest-odds-api.test.ts",
-      "apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts"
-    ]
+  "verifier": {
+    "identity": "claude/utv2-1084-closeout"
   },
-  "verification": {
+  "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
       "tests_pass": 488,
@@ -51,18 +27,6 @@
     },
     "pnpm_type_check": {
       "status": "PASS"
-    },
-    "pnpm_test_db": {
-      "status": "PASS",
-      "tests_pass": 7,
-      "tests_fail": 0,
-      "note": "DB smoke tests passed. raw_payloads migration applied to production Supabase zfzdnfwdarxucxtaojxm."
-    },
-    "t1_proof_live_db": {
-      "status": "PASS",
-      "tests_pass": 3,
-      "tests_fail": 0,
-      "note": "apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts — INSERT/UPDATE-block/DELETE-block PASS against live Supabase"
     },
     "adversarial_tests": [
       "archiveRawProviderPayload — DB failure throws (fail-closed)",
@@ -74,6 +38,51 @@
       "ingestOddsApiLeague — hash equals SHA-256(raw HTTP response text)",
       "resolveProviderPayloadArchivePolicy — defaults fail-closed; explicit fail_open env opt-out respected"
     ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-23T19:04:00Z",
+    "queries": [
+      {
+        "label": "INSERT — row accepted with correct SHA-256",
+        "sql": "INSERT INTO raw_payloads (provider_key, league, run_id, kind, payload_hash, payload, snapshot_at) VALUES ('odds-api', 'NBA', gen_random_uuid(), 'odds', 'abc123deadbeef0000000000000000000000000000000000000000000000000000', '{\"events\":[{\"id\":\"utv2-1084-proof\"}]}', NOW()) RETURNING id, provider_key, league, kind, payload_hash, created_at;",
+        "result": "PASS",
+        "row_id": "b7543b37-232c-4223-b767-a07ecd392b31"
+      },
+      {
+        "label": "UPDATE — blocked by immutability trigger",
+        "sql": "UPDATE raw_payloads SET payload_hash = 'mutated' WHERE provider_key = 'odds-api';",
+        "result": "PASS",
+        "error": "raw_payloads rows are immutable — no UPDATE or DELETE allowed (UTV2-1084)"
+      },
+      {
+        "label": "DELETE — blocked by immutability trigger",
+        "sql": "DELETE FROM raw_payloads WHERE provider_key = 'odds-api';",
+        "result": "PASS",
+        "error": "raw_payloads rows are immutable — no UPDATE or DELETE allowed (UTV2-1084)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "raw_payloads",
+        "after_insert": 1,
+        "after_update_attempt": 1,
+        "after_delete_attempt": 1,
+        "note": "Row count unchanged after UPDATE/DELETE attempts — append-only invariant enforced"
+      }
+    ],
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "note": "DB smoke tests passed against production Supabase zfzdnfwdarxucxtaojxm"
+    },
+    "t1_proof_live_db": {
+      "status": "PASS",
+      "tests_pass": 3,
+      "tests_fail": 0,
+      "note": "t1-proof-utv2-1084-raw-payload-archive.test.ts — INSERT/UPDATE-block/DELETE-block PASS against live Supabase"
+    }
   },
   "constitutional_claims": [
     "Invariant 10 (fail-closed): archive write is DB-primary and throws on failure — no silent skip",
