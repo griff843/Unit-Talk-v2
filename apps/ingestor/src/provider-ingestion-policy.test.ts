@@ -40,11 +40,23 @@ test('resolveProviderIngestionDbWritePolicy parses configured limits and retries
   });
 });
 
-test('resolveProviderPayloadArchivePolicy defaults fail-open and respects fail-closed', () => {
+test('resolveProviderPayloadArchivePolicy defaults fail-closed; explicit fail_open env opt-out respected', () => {
+  // UTV2-1084: default is now fail_closed — fail-open must be explicit
   assert.deepEqual(resolveProviderPayloadArchivePolicy({}), {
-    mode: 'fail_open',
+    mode: 'fail_closed',
     spoolDir: 'out/provider-payload-archive',
   });
+
+  // Explicit opt-out: fail_open is allowed when env var is set
+  assert.deepEqual(
+    resolveProviderPayloadArchivePolicy({
+      UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_MODE: 'fail_open',
+    }),
+    {
+      mode: 'fail_open',
+      spoolDir: 'out/provider-payload-archive',
+    },
+  );
 
   assert.deepEqual(
     resolveProviderPayloadArchivePolicy({

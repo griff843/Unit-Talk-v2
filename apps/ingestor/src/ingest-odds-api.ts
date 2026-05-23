@@ -133,6 +133,7 @@ export async function ingestOddsApiLeague(
         payload: result.events,
         spoolDir: providerPayloadArchivePolicy.spoolDir,
         rawPayloadsRepository: repositories.rawPayloads,
+        rawBody: result.rawBody,
       });
     } catch (error) {
       archiveFailure = error instanceof Error ? error.message : String(error);

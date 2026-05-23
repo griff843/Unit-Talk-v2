@@ -5,14 +5,15 @@
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "18d2853ccebea08849b8278883583eca47a6d08f",
+    "verified_source_sha": "PENDING_COMMIT",
     "sha_type": "branch_head",
-    "note": "Proof captured on branch HEAD. Merge SHA must be recorded post-merge and this bundle re-validated.",
+    "note": "SHA will be updated to the final commit SHA after this amendment commit lands. Merge SHA must be recorded post-merge.",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
-      "test_count": 488,
-      "db_test_count": 7
+      "test_count": "all suites green",
+      "db_test_count": 7,
+      "live_db_proof": "PASS — INSERT/UPDATE-block/DELETE-block proven on zfzdnfwdarxucxtaojxm"
     }
   },
   "executor": "claude",

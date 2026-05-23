@@ -33,6 +33,7 @@ export interface SGOFetchResult {
   events: SGOResolvedEvent[];
   pairedProps: SGOPairedProp[];
   rawPayloads: unknown[];
+  rawBodies: string[];
   requestTelemetry: SGORequestTelemetry;
 }
 
@@ -182,7 +183,7 @@ export async function fetchAndPairSGOProps(
 ): Promise<SGOFetchResult> {
   const url = buildSgoOddsRequestUrl(options);
 
-  const { payloads, telemetry } = await fetchSgoPages({
+  const { payloads, rawBodies, telemetry } = await fetchSgoPages({
     endpoint: 'odds',
     url,
     fetchImpl: options.fetchImpl ?? fetch,
@@ -206,6 +207,7 @@ export async function fetchAndPairSGOProps(
     events,
     pairedProps,
     rawPayloads: payloads,
+    rawBodies,
     requestTelemetry: telemetry,
   };
 }
@@ -262,11 +264,12 @@ export async function fetchSGOResultsWithTelemetry(
 ): Promise<{
   results: SGOEventResult[];
   rawPayloads: unknown[];
+  rawBodies: string[];
   requestTelemetry: SGORequestTelemetry;
 }> {
   const url = buildSgoResultsRequestUrl(options);
 
-  const { payloads, telemetry } = await fetchSgoPages({
+  const { payloads, rawBodies, telemetry } = await fetchSgoPages({
     endpoint: 'results',
     url,
     fetchImpl: options.fetchImpl ?? fetch,
@@ -283,6 +286,7 @@ export async function fetchSGOResultsWithTelemetry(
       .map(extractEventResult)
       .filter((event): event is SGOEventResult => event !== null),
     rawPayloads: payloads,
+    rawBodies,
     requestTelemetry: telemetry,
   };
 }
@@ -302,6 +306,7 @@ async function fetchSgoPages(input: {
 }) {
   const telemetry = createEmptyTelemetry(input.endpoint);
   const payloads: unknown[] = [];
+  const rawBodies: string[] = [];
   const seenCursors = new Set<string>();
   let nextCursor: string | null = null;
   const maxFetchMs = input.maxFetchMs ?? DEFAULT_MAX_FETCH_MS;
@@ -313,7 +318,7 @@ async function fetchSgoPages(input: {
       console.warn(
         `[sgo-fetcher] ${input.endpoint} fetch budget exhausted after ${Math.round(elapsedMs / 1000)}s — returning ${payloads.length} pages (page ${page}/${MAX_SGO_PAGINATION_PAGES})`,
       );
-      return { payloads, telemetry };
+      return { payloads, rawBodies, telemetry };
     }
     const pageUrl = new URL(input.url.toString());
     if (nextCursor) {
@@ -328,13 +333,14 @@ async function fetchSgoPages(input: {
     });
     mergeTelemetry(telemetry, result.telemetry);
     if (result.endOfResults) {
-      return { payloads, telemetry };
+      return { payloads, rawBodies, telemetry };
     }
     payloads.push(result.payload);
+    rawBodies.push(result.rawBody ?? '');
 
     nextCursor = extractNextCursor(result.payload);
     if (!nextCursor) {
-      return { payloads, telemetry };
+      return { payloads, rawBodies, telemetry };
     }
     if (seenCursors.has(nextCursor)) {
       throw new Error(
@@ -378,8 +384,8 @@ async function fetchSgoJson(input: {
 
     if (response.ok) {
       telemetry.successfulRequests += 1;
-      const text = await response.text();
-      const payload = text.length === 0 ? null : JSON.parse(text);
+      const rawBody = await response.text();
+      const payload = rawBody.length === 0 ? null : JSON.parse(rawBody);
       const completedAtMs = Date.now();
       await input.requestObserver?.({
         provider: 'sgo',
@@ -393,11 +399,12 @@ async function fetchSgoJson(input: {
         status: response.status,
         headers: headersToObject(response.headers),
         payload,
-        responseBytes: text.length,
+        responseBytes: rawBody.length,
         endOfResults: false,
       });
       return {
         payload,
+        rawBody,
         telemetry,
         endOfResults: false,
       };

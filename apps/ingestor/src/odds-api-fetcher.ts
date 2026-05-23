@@ -72,6 +72,7 @@ export interface OddsApiFetchResult {
   events: OddsApiEvent[];
   eventsCount: number;
   telemetry: OddsApiTelemetry;
+  rawBody: string;
 }
 
 export interface OddsApiTelemetry {
@@ -110,6 +111,7 @@ export async function fetchOddsApiOdds(
     return {
       events: [],
       eventsCount: 0,
+      rawBody: '',
       telemetry: {
         provider: 'odds-api',
         endpoint: 'odds',
@@ -139,16 +141,18 @@ export async function fetchOddsApiOdds(
   const creditsRemaining = response.headers.get('x-requests-remaining');
   const creditsLast = response.headers.get('x-requests-last');
 
+  const rawBody = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Odds API error ${response.status}: ${errorText}`);
+    throw new Error(`Odds API error ${response.status}: ${rawBody}`);
   }
 
-  const events = (await response.json()) as OddsApiEvent[];
+  const events = JSON.parse(rawBody) as OddsApiEvent[];
 
   return {
     events,
     eventsCount: events.length,
+    rawBody,
     telemetry: {
       provider: 'odds-api',
       endpoint: 'odds',
@@ -174,6 +178,7 @@ export async function fetchOddsApiHistorical(
     return {
       events: [],
       eventsCount: 0,
+      rawBody: '',
       telemetry: {
         provider: 'odds-api',
         endpoint: 'historical',
@@ -203,17 +208,19 @@ export async function fetchOddsApiHistorical(
   const creditsRemaining = response.headers.get('x-requests-remaining');
   const creditsLast = response.headers.get('x-requests-last');
 
+  const rawBody = await response.text();
+
   if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Odds API historical error ${response.status}: ${errorText}`);
+    throw new Error(`Odds API historical error ${response.status}: ${rawBody}`);
   }
 
-  const body = (await response.json()) as { data?: OddsApiEvent[] };
+  const body = JSON.parse(rawBody) as { data?: OddsApiEvent[] };
   const events = body.data ?? (Array.isArray(body) ? body as OddsApiEvent[] : []);
 
   return {
     events,
     eventsCount: events.length,
+    rawBody,
     telemetry: {
       provider: 'odds-api',
       endpoint: 'historical',

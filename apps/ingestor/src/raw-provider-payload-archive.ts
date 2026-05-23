@@ -15,6 +15,8 @@ export interface RawProviderPayloadArchiveInput {
   payload: unknown;
   spoolDir: string;
   rawPayloadsRepository: RawPayloadRepository;
+  /** Raw HTTP response text captured before JSON.parse — used as the hash source. */
+  rawBody?: string;
 }
 
 export interface RawProviderPayloadArchiveResult {
@@ -30,8 +32,12 @@ function sha256Hex(value: string): string {
 export async function archiveRawProviderPayload(
   input: RawProviderPayloadArchiveInput,
 ): Promise<RawProviderPayloadArchiveResult> {
-  const serialized = JSON.stringify(input.payload);
-  const payloadHash = sha256Hex(serialized);
+  // Hash the raw provider response bytes before any transformation.
+  // rawBody is the unparsed HTTP response text; fall back to JSON.stringify only
+  // when rawBody is unavailable (e.g. in tests that don't go through the HTTP layer).
+  const hashSource = input.rawBody ?? JSON.stringify(input.payload);
+  const payloadHash = sha256Hex(hashSource);
+  const serialized = input.rawBody ?? JSON.stringify(input.payload);
 
   // DB write is primary and fail-closed: throws on failure, callers must not swallow
   await input.rawPayloadsRepository.insert({
