@@ -81,5 +81,5 @@
     "WS-1.1 substrate: raw payload + SHA-256 hash captured from response.text() before JSON.parse() — immutable market truth anchor"
   ],
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/831",
-  "merge_sha": null
+  "merge_sha": "56ed83c8bd5dc6e2648afe69bc651671e9f04642"
 }
