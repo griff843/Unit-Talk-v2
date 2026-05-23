@@ -26,6 +26,7 @@
     "docs/06_status/proof/UTV2-1084/evidence.json",
     "docs/06_status/proof/UTV2-1084/PROOF.md",
     "docs/06_status/proof/UTV2-1084/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1084/verification.md",
     "package.json",
     "packages/db/src/repositories.ts",
     "packages/db/src/runtime-repositories.ts",

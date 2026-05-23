@@ -24,5 +24,10 @@ scope:
   - .github/workflows/migration-reversibility-gate.yml
   - scripts/ci/schema-roundtrip-hash.ts
   - scripts/ci/schema-roundtrip-hash.test.ts
+  - docs/06_status/lanes/UTV2-1084.json
+  - docs/06_status/proof/UTV2-1084/PROOF.md
+  - docs/06_status/proof/UTV2-1084/evidence.json
+  - docs/06_status/proof/UTV2-1084/runtime-verification.md
+  - docs/06_status/proof/UTV2-1084/verification.md
   - package.json
 release_after: merge
