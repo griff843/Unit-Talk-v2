@@ -6,7 +6,7 @@
   "executor": "claude",
   "phase": "A",
   "phase_description": "Additive scaffolding — registry JSON, id-ledger, source-manifest, loader, contracts type, CI gate",
-  "branch_head_sha": "7ece212e447fedefc9e69408c5b39d89a980c820",
+  "branch_head_sha": "6028754b28c52ee48c0d78eca07a46eef5d36087",
   "merge_sha": null,
   "evidence": {
     "pnpm_verify": {
