@@ -43,12 +43,29 @@
   ],
   "status": "done",
   "started_at": "2026-05-23T17:58:20.664Z",
-  "heartbeat_at": "2026-05-23T22:08:05.000Z",
-  "closed_at": "2026-05-23T22:08:05.000Z",
+  "heartbeat_at": "2026-05-23T22:11:16.404Z",
+  "closed_at": "2026-05-23T22:11:16.404Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1084-raw-payload-store-pre-transformation-hashing.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-23T22:09:12.972Z",
+      "verdict": "fail",
+      "merge_sha": "56ed83c8bd5dc6e2648afe69bc651671e9f04642",
+      "failures": [
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "ops:lane:close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
