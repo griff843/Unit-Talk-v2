@@ -5,8 +5,8 @@
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "4e187122b04a504c6ed62801f179f751ee376f35",
-    "verified_source_note": "Last substantive commit after rebase — all implementation + CI gate fixes; only proof files change after this SHA",
+    "verified_source_sha": "114f8b76f2ef7db51a8364852133f83904714488",
+    "verified_source_note": "Last substantive commit after CI round-trip hash hardening and required verification artifact; only proof files change after this SHA",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci",
     "ci_sentinels": {
