@@ -33,7 +33,9 @@
     ".ops/sync/UTV2-1084.yml",
     ".lane/migration-lock.yml",
     ".lane/lanes/migration.yml",
-    ".github/workflows/migration-reversibility-gate.yml"
+    ".github/workflows/migration-reversibility-gate.yml",
+    "scripts/ci/schema-roundtrip-hash.ts",
+    "scripts/ci/schema-roundtrip-hash.test.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1084/evidence.json"

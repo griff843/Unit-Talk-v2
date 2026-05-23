@@ -14,6 +14,7 @@
 import { createHash } from 'node:crypto';
 import { execSync } from 'node:child_process';
 import { writeFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 function usage(): void {
   process.stderr.write('Usage: tsx scripts/ci/schema-roundtrip-hash.ts [--output <path>] [--json]\n');
@@ -51,6 +52,13 @@ function getConnectionString(): string {
   return url;
 }
 
+export function normalizePgDumpSchemaDump(input: string): string {
+  return input
+    .replace(/^--.*\n/gm, '')
+    .replace(/^\\(?:un)?restrict\b.*\n/gm, '')
+    .trim();
+}
+
 function dumpPublicSchema(connectionString: string): string {
   // pg_dump with --schema-only --schema=public produces reproducible DDL
   // sorted by object name via --no-owner --no-acl --no-comments.
@@ -61,8 +69,8 @@ function dumpPublicSchema(connectionString: string): string {
     '--no-publications --no-subscriptions',
     { encoding: 'utf8', maxBuffer: 32 * 1024 * 1024 },
   );
-  // Strip header comment (includes timestamp) to make output deterministic.
-  return result.replace(/^--.*\n/gm, '').trim();
+  // Strip pg_dump comments and session guards to make output deterministic.
+  return normalizePgDumpSchemaDump(result);
 }
 
 function sha256(input: string): string {
@@ -112,4 +120,7 @@ function main(): void {
   }
 }
 
-main();
+const invokedPath = process.argv[1] ? pathToFileURL(process.argv[1]).href : '';
+if (import.meta.url === invokedPath) {
+  main();
+}

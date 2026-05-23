@@ -194,7 +194,7 @@ jobs:
             fi
 
             # Check for IRREVERSIBLE — validate ratification, then skip drill.
-            if grep -q '-- IRREVERSIBLE:' "$DOWN"; then
+            if grep -q -- '-- IRREVERSIBLE:' "$DOWN"; then
               # Ratification check: gate script already verified this; re-check here for defence-in-depth.
               if ! npx tsx scripts/ci/migration-reversibility-gate.ts \
                     --base "origin/${{ github.base_ref }}" \

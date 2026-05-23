@@ -22,5 +22,7 @@ scope:
   - .lane/migration-lock.yml
   - .lane/lanes/migration.yml
   - .github/workflows/migration-reversibility-gate.yml
+  - scripts/ci/schema-roundtrip-hash.ts
+  - scripts/ci/schema-roundtrip-hash.test.ts
   - package.json
 release_after: merge
