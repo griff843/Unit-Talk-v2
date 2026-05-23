@@ -1,0 +1,92 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1085",
+  "title": "INIT-1.1.2 — Immutable OddsSnapshot Table and Triggers",
+  "tier": "T1",
+  "lane_type": "migration",
+  "sha_binding": {
+    "verified_source_sha": "1f984ebf83e599e55100e7ae91741c72ef37962a",
+    "verified_source_note": "Implementation commit — all code + migration + proof docs; only evidence.json changes after this SHA",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-23T22:20:00.000Z",
+  "r_level": {
+    "level": "R2",
+    "reason": "Migration lane — new append-only tables, no existing table modified, no backfill required"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1085-closeout"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests_pass": 489,
+      "tests_fail": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "adversarial_tests": [
+      "odds_snapshots: INSERT succeeds via repository",
+      "odds_snapshots: correction appends new row with prior_snapshot_id lineage",
+      "odds_snapshots: UPDATE blocked by immutability trigger",
+      "odds_snapshots: DELETE blocked by immutability trigger"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-23T22:35:00Z",
+    "queries": [
+      {
+        "label": "INSERT — row accepted with correct fields",
+        "table": "odds_snapshots",
+        "result": "PASS",
+        "note": "Repository insert returns row with id, provider_key, league, run_id"
+      },
+      {
+        "label": "Correction INSERT — new row with prior_snapshot_id lineage",
+        "table": "odds_snapshots",
+        "result": "PASS",
+        "note": "bab47417→79f79830 lineage confirmed in live DB"
+      },
+      {
+        "label": "UPDATE — blocked by trg_odds_snapshots_immutable",
+        "sql": "UPDATE odds_snapshots SET market_key = 'mutated' WHERE provider_key = 'odds-api';",
+        "result": "PASS",
+        "error": "odds_snapshots rows are immutable — no UPDATE or DELETE allowed (UTV2-1085)"
+      },
+      {
+        "label": "DELETE — blocked by trg_odds_snapshots_immutable",
+        "sql": "DELETE FROM odds_snapshots WHERE provider_key = 'odds-api';",
+        "result": "PASS",
+        "error": "odds_snapshots rows are immutable — no UPDATE or DELETE allowed (UTV2-1085)"
+      }
+    ],
+    "row_counts": [
+      {
+        "table": "odds_snapshots",
+        "proof_rows_inserted": 5,
+        "rows_after_update_attempt": 5,
+        "rows_after_delete_attempt": 5,
+        "note": "Row count unchanged after UPDATE/DELETE attempts — append-only invariant enforced"
+      }
+    ],
+    "t1_proof_live_db": {
+      "status": "PASS",
+      "tests_pass": 4,
+      "tests_fail": 0,
+      "note": "t1-proof-utv2-1085-odds-snapshot.test.ts — all 4 tests PASS against live Supabase"
+    }
+  },
+  "constitutional_claims": [
+    "Invariant 10 (fail-closed): trigger raises EXCEPTION on UPDATE/DELETE — no silent bypass",
+    "Invariant 11 (mechanical enforcement): immutability enforced at DB layer, not application layer",
+    "WS-1.1 substrate: every price observation is captured as an immutable lineage-bearing snapshot",
+    "Correction model: corrections append new rows with prior_snapshot_id — never mutate prior snapshots",
+    "Gap #6 closed: odds_snapshots provides the immutable truth basis for deterministic replay"
+  ],
+  "pr_url": null,
+  "merge_sha": null
+}
