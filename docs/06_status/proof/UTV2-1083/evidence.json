@@ -7,10 +7,10 @@
   "phase": "A",
   "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
   "sha_binding": {
-    "verified_source_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca",
-    "verified_source_note": "Last complete-state commit — governance.yml expanded, diff-summary added, lane reclassified to governance",
-    "evidence_commit_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca",
-    "current_pr_head_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca"
+    "verified_source_sha": "653391b9d081b8ce21b3b7f5a94723bcd474518f",
+    "verified_source_note": "Last complete-state commit — package.json wired migration-reversibility-gate.test.ts into test:ops (post-rebase anchor)",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
   },
   "merge_sha": null,
   "evidence": {

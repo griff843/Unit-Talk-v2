@@ -54,10 +54,21 @@ Local run post-rebase (exit 0):
   "schema_version": 2,
   "gate": "proof-binding-v2",
   "issue_id": "UTV2-1083",
-  "verified_source_sha": "176d9dba71c5a588856e02dbcf24ca3974467aca",
+  "verified_source_sha": "653391b9",
   "resolved_evidence_commit_sha": "(resolved by CI from git log)",
   "resolved_current_pr_head_sha": "(resolved by CI from GITHUB_SHA)",
   "violations": [],
   "ok": true
 }
 ```
+
+## Verification
+
+All required T1 artifacts present and passing:
+
+- `pnpm verify` PASS (lint + type-check + build + test, 113/113)
+- `pnpm test:db` PASS (7/7 against live Supabase `zfzdnfwdarxucxtaojxm`)
+- `migration-reversibility-gate` PASS (7 adversarial fixtures, exit codes correct)
+- `proof-binding-validator` PASS (schema v2, verified_source_sha ancestor check passes)
+- `irreversible-exemption-registry` PASS (2 PM-ratified entries present)
+- Constitutional invariant INV-0013 created, audit gap #40 closed

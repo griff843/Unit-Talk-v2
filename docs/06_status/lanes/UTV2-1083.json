@@ -29,7 +29,8 @@
     "scripts/ci/migration-reversibility-gate.test.ts",
     "scripts/ci/migration-reversibility-gate.ts",
     "scripts/ci/proof-binding-validator.ts",
-    "scripts/ci/schema-roundtrip-hash.ts"
+    "scripts/ci/schema-roundtrip-hash.ts",
+    "package.json"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1083/evidence.json",
