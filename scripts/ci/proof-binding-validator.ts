@@ -11,6 +11,13 @@
  *   6. current_pr_head_sha resolves at runtime from GITHUB_SHA or git rev-parse HEAD
  *   7. No sentinel values ("set-by-ci", "validated-by-ci-at-runtime") remain in the resolved output
  *
+ * CI-resolved placeholder contract:
+ *   evidence_commit_sha and current_pr_head_sha in evidence.json are CI-resolved placeholders.
+ *   Storing "set-by-ci" as their value is explicitly allowed — the validator IGNORES the stored
+ *   string and resolves both fields at runtime (from git log and GITHUB_SHA respectively).
+ *   Rules 5–7 then validate that the RESOLVED values are real 40-char SHAs and not sentinels.
+ *   If CI fails to resolve either field, the gate exits 1 — placeholder values never pass silently.
+ *
  * Exit 0 → binding valid.
  * Exit 1 → binding invalid (gate fails).
  * Exit 2 → infrastructure error (missing files, bad args).
@@ -60,6 +67,8 @@ interface BindingResult {
   verified_source_sha: string;
   resolved_evidence_commit_sha: string;
   resolved_current_pr_head_sha: string;
+  /** True when both CI-resolved fields were successfully populated from git/GITHUB_SHA (not placeholders). */
+  placeholder_fields_resolved: boolean;
   violations: string[];
   ok: boolean;
 }
@@ -203,13 +212,19 @@ function emit(
   violations: string[],
 ): void {
   const ok = violations.length === 0;
+  const placeholderFieldsResolved =
+    SHA_RE.test(resolvedEvidenceSha) &&
+    !SENTINELS.has(resolvedEvidenceSha) &&
+    SHA_RE.test(resolvedHeadSha) &&
+    !SENTINELS.has(resolvedHeadSha);
   const result: BindingResult = {
     schema_version: 2,
     gate: 'proof-binding-v2',
     issue_id: evidence.issue_id ?? 'unknown',
     verified_source_sha: evidence.sha_binding?.verified_source_sha ?? '',
-    resolved_evidence_commit_sha: resolvedEvidenceSha,
-    resolved_current_pr_head_sha: resolvedHeadSha,
+    resolved_evidence_commit_sha: resolvedEvidenceSha || '(unresolved)',
+    resolved_current_pr_head_sha: resolvedHeadSha || '(unresolved)',
+    placeholder_fields_resolved: placeholderFieldsResolved,
     violations,
     ok,
   };
@@ -218,10 +233,11 @@ function emit(
     process.stdout.write(JSON.stringify(result, null, 2) + '\n');
   } else {
     process.stdout.write(`proof-binding-validator\n`);
-    process.stdout.write(`  issue:               ${result.issue_id}\n`);
-    process.stdout.write(`  verified_source_sha: ${result.verified_source_sha.slice(0, 16) || '(missing)'}...\n`);
-    process.stdout.write(`  evidence_commit_sha: ${result.resolved_evidence_commit_sha.slice(0, 16) || '(unresolved)'}...\n`);
-    process.stdout.write(`  current_pr_head_sha: ${result.resolved_current_pr_head_sha.slice(0, 16) || '(unresolved)'}...\n`);
+    process.stdout.write(`  issue:                      ${result.issue_id}\n`);
+    process.stdout.write(`  verified_source_sha:        ${result.verified_source_sha.slice(0, 16) || '(missing)'}...\n`);
+    process.stdout.write(`  evidence_commit_sha:        ${result.resolved_evidence_commit_sha.slice(0, 16)}... [CI-resolved]\n`);
+    process.stdout.write(`  current_pr_head_sha:        ${result.resolved_current_pr_head_sha.slice(0, 16)}... [CI-resolved]\n`);
+    process.stdout.write(`  placeholder_fields_resolved: ${placeholderFieldsResolved ? 'yes' : 'NO — gate will fail'}\n`);
     if (violations.length > 0) {
       process.stdout.write(`\nVIOLATIONS (${violations.length}):\n`);
       for (const v of violations) {
