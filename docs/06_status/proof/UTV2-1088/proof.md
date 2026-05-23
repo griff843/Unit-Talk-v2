@@ -13,8 +13,8 @@ Phase A additive scaffolding for the constitutional invariant registry. Delivera
 - `.github/workflows/invariant-registry-gate.yml` — blocking CI check
 
 Schema v2 proof binding:
-- `verified_source_sha`: `7ece212e447fedefc9e69408c5b39d89a980c820`
-- Last substantive commit: ledger mutation detection + fresh-ratification binding
+- `verified_source_sha`: `d875ba1b251dcac22ef4c3d3a53cf5272d700f6f`
+- Last complete-state commit (post-rebase): sentinel values resolved; gate + tests all green at this SHA
 - Post-substantive commits: evidence.json only (verified by proof-binding-validator)
 
 ## Evidence
@@ -40,16 +40,16 @@ Gate rules enforced:
   - Mechanical enforcement: active invariants must have a non-governance enforcing layer
 
 proof-binding-validator (schema v2):
-  verified_source_sha: 7ece212e447fedef...
-  evidence_commit_sha: e218cf06edeb0648... (resolved by CI from git log)
+  verified_source_sha: d875ba1b251dcac2... (post-rebase, last complete-state commit)
+  evidence_commit_sha: (resolved by CI from git log)
   current_pr_head_sha: (resolved by CI from GITHUB_SHA at runtime)
   proof-binding-validator: PASS
 ```
 
 ## Verification
 
-Binding integrity: `verified_source_sha` `7ece212e` is an ancestor of PR head. All commits
-between `verified_source_sha` and HEAD touch only `docs/06_status/proof/UTV2-1088/evidence.json`
+Binding integrity: `verified_source_sha` `d875ba1b` (post-rebase, last complete-state commit) is an ancestor of PR head. All commits
+between `verified_source_sha` and HEAD touch only `docs/06_status/proof/UTV2-1088/` paths
 — verified mechanically by `scripts/ci/proof-binding-validator.ts`.
 
 Gate correctness: local adversarial checks confirmed —
