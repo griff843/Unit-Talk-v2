@@ -798,6 +798,39 @@ export interface RawPayloadRepository {
   insert(input: RawPayloadInsert): Promise<RawPayloadRecord>;
 }
 
+// ─── OddsSnapshot (UTV2-1085) ────────────────────────────────────────────────
+
+export interface OddsSnapshotInsert {
+  providerKey: string;
+  marketKey: string;
+  league: string;
+  runId: string;
+  rawPayloadId?: string | null;
+  snapshotAt: string;
+  priceBlob: unknown;
+  priorSnapshotId?: string | null;
+}
+
+export interface OddsSnapshotRecord {
+  id: string;
+  provider_key: string;
+  market_key: string;
+  league: string;
+  run_id: string;
+  raw_payload_id: string | null;
+  snapshot_at: string;
+  price_blob: unknown;
+  prior_snapshot_id: string | null;
+  created_at: string;
+}
+
+export interface OddsSnapshotRepository {
+  insert(input: OddsSnapshotInsert): Promise<OddsSnapshotRecord>;
+  findLatestByProviderLeague(providerKey: string, league: string): Promise<OddsSnapshotRecord | null>;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 export interface AuditLogCreateInput {
   entityType: string;
   entityId?: string | null | undefined;
@@ -1146,6 +1179,7 @@ export interface IngestorRepositoryBundle {
   participants: ParticipantRepository;
   gradeResults: GradeResultRepository;
   rawPayloads: RawPayloadRepository;
+  oddsSnapshots: OddsSnapshotRepository;
 }
 
 export interface MemberTierActivateInput {

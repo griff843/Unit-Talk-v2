@@ -109,6 +109,9 @@ import type {
   RawPayloadInsert,
   RawPayloadRecord,
   RawPayloadRepository,
+  OddsSnapshotInsert,
+  OddsSnapshotRecord,
+  OddsSnapshotRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -8239,6 +8242,90 @@ export class DatabaseRawPayloadRepository implements RawPayloadRepository {
   }
 }
 
+// ---------------------------------------------------------------------------
+// OddsSnapshotRepository implementations (UTV2-1085)
+// ---------------------------------------------------------------------------
+
+export class InMemoryOddsSnapshotRepository implements OddsSnapshotRepository {
+  private readonly records: OddsSnapshotRecord[] = [];
+
+  async insert(input: OddsSnapshotInsert): Promise<OddsSnapshotRecord> {
+    const record: OddsSnapshotRecord = {
+      id: crypto.randomUUID(),
+      provider_key: input.providerKey,
+      market_key: input.marketKey,
+      league: input.league,
+      run_id: input.runId,
+      raw_payload_id: input.rawPayloadId ?? null,
+      snapshot_at: input.snapshotAt,
+      price_blob: input.priceBlob,
+      prior_snapshot_id: input.priorSnapshotId ?? null,
+      created_at: new Date().toISOString(),
+    };
+    this.records.push(record);
+    return record;
+  }
+
+  async findLatestByProviderLeague(providerKey: string, league: string): Promise<OddsSnapshotRecord | null> {
+    const matches = this.records
+      .filter((r) => r.provider_key === providerKey && r.league === league)
+      .sort((a, b) => b.snapshot_at.localeCompare(a.snapshot_at));
+    return matches[0] ?? null;
+  }
+}
+
+export class DatabaseOddsSnapshotRepository implements OddsSnapshotRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async insert(input: OddsSnapshotInsert): Promise<OddsSnapshotRecord> {
+    const { data, error } = await this.client
+      .from('odds_snapshots')
+      .insert({
+        provider_key: input.providerKey,
+        market_key: input.marketKey,
+        league: input.league,
+        run_id: input.runId,
+        raw_payload_id: input.rawPayloadId ?? null,
+        snapshot_at: input.snapshotAt,
+        price_blob: input.priceBlob,
+        prior_snapshot_id: input.priorSnapshotId ?? null,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `odds_snapshots insert failed: ${error?.message ?? 'unknown error'}`,
+      );
+    }
+
+    return data as OddsSnapshotRecord;
+  }
+
+  async findLatestByProviderLeague(providerKey: string, league: string): Promise<OddsSnapshotRecord | null> {
+    const { data, error } = await this.client
+      .from('odds_snapshots')
+      .select('*')
+      .eq('provider_key', providerKey)
+      .eq('league', league)
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(
+        `odds_snapshots query failed: ${error.message}`,
+      );
+    }
+
+    return data as OddsSnapshotRecord | null;
+  }
+}
+
 export function createInMemoryIngestorRepositoryBundle(): IngestorRepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
   return {
@@ -8249,6 +8336,7 @@ export function createInMemoryIngestorRepositoryBundle(): IngestorRepositoryBund
     participants: new InMemoryParticipantRepository(seededTeams),
     gradeResults: new InMemoryGradeResultRepository(),
     rawPayloads: new InMemoryRawPayloadRepository(),
+    oddsSnapshots: new InMemoryOddsSnapshotRepository(),
   };
 }
 
@@ -8263,6 +8351,7 @@ export function createDatabaseIngestorRepositoryBundle(
     participants: new DatabaseParticipantRepository(connection),
     gradeResults: new DatabaseGradeResultRepository(connection),
     rawPayloads: new DatabaseRawPayloadRepository(connection),
+    oddsSnapshots: new DatabaseOddsSnapshotRepository(connection),
   };
 }
 

@@ -1,0 +1,21 @@
+schema_version: 1
+issue_id: UTV2-1085
+lane_type: migration
+owner: claude
+acquired_at: 2026-05-23T22:15:00.000Z
+scope:
+  - supabase/migrations/20260523002_utv2_1085_odds_snapshots.sql
+  - db/migrations-rollback/20260523002_utv2_1085_odds_snapshots.down.sql
+  - packages/db/src/repositories.ts
+  - packages/db/src/runtime-repositories.ts
+  - apps/ingestor/src/ingest-odds-api.ts
+  - apps/ingestor/src/ingest-league.ts
+  - apps/ingestor/src/t1-proof-utv2-1085-odds-snapshot.test.ts
+  - docs/06_status/lanes/UTV2-1085.json
+  - docs/06_status/proof/UTV2-1085/evidence.json
+  - docs/06_status/proof/UTV2-1085/PROOF.md
+  - docs/06_status/proof/UTV2-1085/runtime-verification.md
+  - .ops/sync/UTV2-1085.yml
+  - .lane/migration-lock.yml
+  - .lane/lanes/migration.yml
+release_after: merge
