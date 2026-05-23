@@ -37,10 +37,10 @@
     "docs/06_status/proof/UTV2-1083/verification.md",
     "docs/06_status/proof/UTV2-1083/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-22T21:38:13.447Z",
-  "heartbeat_at": "2026-05-22T21:38:13.447Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-23T14:30:00.000Z",
+  "closed_at": "2026-05-23T14:30:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1083-reversible-migration-capability.json",
   "created_by": "claude",

@@ -41,10 +41,10 @@
     "docs/06_status/proof/UTV2-1088/verification.md",
     "docs/06_status/proof/UTV2-1088/diff-summary.md"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-22T21:39:05.404Z",
-  "heartbeat_at": "2026-05-22T21:39:05.404Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-23T14:45:00.000Z",
+  "closed_at": "2026-05-23T14:45:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1088-invariant-registry-substrate.json",
   "created_by": "claude",

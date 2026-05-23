@@ -12,7 +12,7 @@
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "set-by-ci"
   },
-  "merge_sha": null,
+  "merge_sha": "2194b018fab116ad803a8b967b4b3fc9173cf4b6",
   "evidence": {
     "pnpm_verify": {
       "result": "PASS",
