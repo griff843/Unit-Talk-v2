@@ -1204,7 +1204,7 @@ async function fetchCommitChecks(
     }),
     fetchJson<{
       check_runs?: Array<{ name?: string; conclusion?: string | null; status?: string }>;
-    }>(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/check-runs`, {
+    }>(`https://api.github.com/repos/${owner}/${repo}/commits/${sha}/check-runs?per_page=100`, {
       headers: {
         ...githubHeaders(token),
         Accept: 'application/vnd.github+json',

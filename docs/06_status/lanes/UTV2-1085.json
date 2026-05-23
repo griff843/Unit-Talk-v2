@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1085-immutable-oddssnapshot-table-and-triggers",
   "branch": "claude/utv2-1085-immutable-oddssnapshot-table-and-triggers",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "8b528be3a6c8bdebc3be09991e3f8c3c2b01c2ff",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/832",
   "files_changed": [],
   "file_scope_lock": [
@@ -28,14 +28,50 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1085/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-23T22:24:50.792Z",
-  "heartbeat_at": "2026-05-23T22:40:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-23T23:31:33.361Z",
+  "closed_at": "2026-05-23T23:31:33.361Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1085-immutable-oddssnapshot-table-and-triggers.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-23T23:23:59.038Z",
+      "verdict": "fail",
+      "merge_sha": "8b528be3a6c8bdebc3be09991e3f8c3c2b01c2ff",
+      "failures": [
+        "L2",
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-23T23:25:07.684Z",
+      "verdict": "fail",
+      "merge_sha": "8b528be3a6c8bdebc3be09991e3f8c3c2b01c2ff",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-23T23:29:08.702Z",
+      "verdict": "fail",
+      "merge_sha": "8b528be3a6c8bdebc3be09991e3f8c3c2b01c2ff",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-23T23:31:24.067Z",
+      "verdict": "pass",
+      "merge_sha": "8b528be3a6c8bdebc3be09991e3f8c3c2b01c2ff",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
