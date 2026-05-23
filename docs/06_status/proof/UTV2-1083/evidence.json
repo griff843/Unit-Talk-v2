@@ -1,17 +1,22 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "issue_id": "UTV2-1083",
   "title": "INIT-1.1.0 — Reversible Migration Capability",
   "tier": "T1",
   "executor": "claude",
   "phase": "A",
   "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
-  "branch_head_sha": "b78bd16e01c91effa345b331bd0aa656e4bf2e75",
+  "sha_binding": {
+    "verified_source_sha": "46c9abc816de27f1719c1fbb65301d9d5ab62924",
+    "verified_source_note": "Last substantive code commit — workflow grep fix + invalid-SQL round-trip fixture + ON_ERROR_STOP=1",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "validated-by-ci-at-runtime"
+  },
   "merge_sha": null,
   "evidence": {
     "pnpm_verify": {
       "result": "PASS",
-      "note": "lint + type-check + build + test all green in worktree (re-verified on head 46c9abc8)"
+      "note": "lint + type-check + build + test all green in worktree (re-verified on 46c9abc8)"
     },
     "pnpm_test_db": {
       "result": "PASS",
@@ -35,11 +40,11 @@
       "tests": 7,
       "passed": 7,
       "failed": 0,
-      "note": "scripts/ci/migration-reversibility-gate.test.ts — F1: missing down (exit 1), F2: comment-only (exit 1), F3: IRREVERSIBLE-without-ratification (exit 1), F4: invalid base ref (exit 2), F5: valid reversible (exit 0), F6: IRREVERSIBLE-with-ratification (exit 0), F7: zero migrations (exit 0)"
+      "note": "F1: missing down (exit 1), F2: comment-only (exit 1), F3: IRREVERSIBLE-without-ratification (exit 1), F4: invalid base ref (exit 2), F5: valid reversible (exit 0), F6: IRREVERSIBLE-with-ratification (exit 0), F7: zero migrations (exit 0)"
     },
     "gate_local_validation": {
       "result": "PASS",
-      "note": "Gate executed locally, exits nonzero on missing down, comment-only, IRREVERSIBLE without exemption registry entry, and invalid base ref"
+      "note": "Gate exits nonzero on missing down, comment-only, IRREVERSIBLE without exemption registry entry, and invalid base ref"
     },
     "irreversible_exemption_registry": {
       "result": "PASS",
@@ -52,8 +57,8 @@
     "round_trip_workflow_fixes": {
       "result": "PASS",
       "fixes": [
-        "grep '.\\.sql$' || true — prevents bash -e from treating zero-migration detection as failure",
-        "ON_ERROR_STOP=1 added to all psql invocations — SQL errors propagate as non-zero exit",
+        "grep '\\.sql$' || true — prevents bash -e failing the detect step on zero-migration PRs",
+        "ON_ERROR_STOP=1 on all psql calls — SQL errors propagate as non-zero exit",
         "Adversarial round-trip fixture step — proves psql rejects invalid SQL down scripts"
       ]
     }
