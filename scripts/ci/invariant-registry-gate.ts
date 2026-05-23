@@ -225,13 +225,82 @@ function validateLedgerAppendOnly(ledger: InvariantIdLedger, base: string, ledge
   const baseLedger = readBaseJson<InvariantIdLedger>(base, ledgerPath);
   if (!baseLedger) return violations; // new file at base — no baseline to enforce
 
-  const currentIds = new Set(ledger.entries.map((e) => e.id));
+  const currentById = new Map(ledger.entries.map((e) => [e.id, e]));
   for (const entry of baseLedger.entries) {
-    if (!currentIds.has(entry.id)) {
+    if (!currentById.has(entry.id)) {
       violations.push({
         invariant_id: entry.id,
         rule: 'ledger-deletion',
         detail: `${entry.id} was allocated at base but is missing from current ledger — ledger is append-only; IDs cannot be deleted`,
+      });
+      continue;
+    }
+    // Immutable fields: id, title, allocated_at. Only status may change.
+    const current = currentById.get(entry.id)!;
+    if (current.title !== entry.title) {
+      violations.push({
+        invariant_id: entry.id,
+        rule: 'ledger-mutation',
+        detail: `${entry.id}.title mutated from "${entry.title}" to "${current.title}" — ledger entries are immutable (title, allocated_at cannot change)`,
+      });
+    }
+    if (current.allocated_at !== entry.allocated_at) {
+      violations.push({
+        invariant_id: entry.id,
+        rule: 'ledger-mutation',
+        detail: `${entry.id}.allocated_at mutated from "${entry.allocated_at}" to "${current.allocated_at}" — ledger entries are immutable`,
+      });
+    }
+  }
+  return violations;
+}
+
+function fileContentChangedVsBase(base: string, gitPath: string, absPath: string): boolean {
+  try {
+    const baseRaw = execSync(`git show "${base}:${gitPath}"`, { encoding: 'utf8', stdio: 'pipe' });
+    const currentRaw = readFileSync(absPath, 'utf8');
+    // Normalise through JSON parse/stringify to ignore whitespace-only changes.
+    return JSON.stringify(JSON.parse(baseRaw)) !== JSON.stringify(JSON.parse(currentRaw));
+  } catch {
+    return true; // file new at base or unreadable — treat as changed
+  }
+}
+
+function validateFreshRatification(
+  manifest: SourceManifest,
+  base: string,
+  registryAbsPath: string,
+  ledgerAbsPath: string,
+): GateViolation[] {
+  const violations: GateViolation[] = [];
+
+  const registryChanged = fileContentChangedVsBase(
+    base, 'packages/invariants/src/registry/invariant-registry.json', registryAbsPath,
+  );
+  const ledgerChanged = fileContentChangedVsBase(
+    base, 'packages/invariants/src/registry/id-ledger.json', ledgerAbsPath,
+  );
+
+  if (!registryChanged && !ledgerChanged) return violations; // nothing to re-ratify
+
+  // If registry or ledger changed, the source-manifest's ratification metadata must also
+  // have changed vs base — proving this specific diff was PM-ratified, not an old approval.
+  const baseManifest = readBaseJson<SourceManifest>(
+    base, 'packages/invariants/src/registry/source-manifest.json',
+  );
+  if (baseManifest) {
+    const ratificationUnchanged =
+      manifest.ratification_ref === baseManifest.ratification_ref &&
+      manifest.ratified_at === baseManifest.ratified_at;
+
+    if (ratificationUnchanged) {
+      violations.push({
+        invariant_id: 'source-manifest',
+        rule: 'fresh-ratification',
+        detail:
+          'Registry or ledger changed but source-manifest ratification metadata ' +
+          '(ratification_ref, ratified_at) is unchanged from base — update both fields ' +
+          'to reflect PM ratification of this specific diff before merging',
       });
     }
   }
@@ -331,6 +400,7 @@ function main(): void {
     ...validateLedgerSchema(ledger as unknown as Record<string, unknown>),
     ...validateManifestRatification(manifest),
     ...validateLedgerAppendOnly(ledger, args.base, 'packages/invariants/src/registry/id-ledger.json'),
+    ...validateFreshRatification(manifest, args.base, registryPath, ledgerPath),
     ...validateRegistryEntries(registry, ledger, manifest),
   ];
 
