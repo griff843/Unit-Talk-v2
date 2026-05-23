@@ -7,8 +7,8 @@
   "phase": "A",
   "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
   "sha_binding": {
-    "verified_source_sha": "46c9abc816de27f1719c1fbb65301d9d5ab62924",
-    "verified_source_note": "Last substantive code commit — workflow grep fix + invalid-SQL round-trip fixture + ON_ERROR_STOP=1",
+    "verified_source_sha": "eeabefa0a4d5c476d41e57bb5d10843dce0522ac",
+    "verified_source_note": "Last substantive commit — proof-binding-validator.ts, proof.md, workflow binding step",
     "evidence_commit_sha": "set-by-ci",
     "current_pr_head_sha": "validated-by-ci-at-runtime"
   },
