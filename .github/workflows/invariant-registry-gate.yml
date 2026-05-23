@@ -42,6 +42,14 @@ jobs:
           npx tsx scripts/ci/invariant-registry-gate.ts \
             --base origin/${{ github.base_ref }}
 
+      - name: Validate schema v2 proof binding (fail-closed)
+        run: |
+          npx tsx scripts/ci/proof-binding-validator.ts \
+            --proof-dir docs/06_status/proof/UTV2-1088 \
+            --json | tee /tmp/proof-binding-result.json
+          npx tsx scripts/ci/proof-binding-validator.ts \
+            --proof-dir docs/06_status/proof/UTV2-1088
+
       - name: Emit registry hash as step summary
         if: always()
         run: |
