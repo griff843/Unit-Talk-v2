@@ -4,6 +4,7 @@
     { "path": "./packages/alert-runtime" },
     { "path": "./packages/config" },
     { "path": "./packages/contracts" },
+    { "path": "./packages/invariants" },
     { "path": "./packages/db" },
     { "path": "./packages/domain" },
 { "path": "./packages/observability" },
