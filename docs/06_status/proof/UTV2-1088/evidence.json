@@ -9,8 +9,8 @@
   "sha_binding": {
     "verified_source_sha": "12250564ae4a27d4b821f1ccd57e1e88dc45811e",
     "verified_source_note": "Last substantive commit — proof-binding-validator.ts, proof.md, workflow binding step",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "validated-by-ci-at-runtime"
+    "evidence_commit_sha": "ec69f626da360a2f198b5eedc6507ead55c23fab",
+    "current_pr_head_sha": "ec69f626da360a2f198b5eedc6507ead55c23fab"
   },
   "merge_sha": null,
   "evidence": {
