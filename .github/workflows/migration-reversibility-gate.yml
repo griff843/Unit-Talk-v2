@@ -45,6 +45,14 @@ jobs:
       - name: Run adversarial gate tests
         run: npx tsx --test scripts/ci/migration-reversibility-gate.test.ts
 
+      - name: Validate schema v2 proof binding (fail-closed)
+        run: |
+          npx tsx scripts/ci/proof-binding-validator.ts \
+            --proof-dir docs/06_status/proof/UTV2-1083 \
+            --json | tee /tmp/proof-binding-result.json
+          npx tsx scripts/ci/proof-binding-validator.ts \
+            --proof-dir docs/06_status/proof/UTV2-1083
+
   schema-roundtrip-drill:
     name: Schema round-trip drill (scratch Postgres — all new migrations)
     runs-on: ubuntu-latest
