@@ -18,7 +18,9 @@
     "docs/06_status/lanes/UTV2-1088.json",
     "docs/06_status/proof/UTV2-1088/evidence.json",
     "docs/06_status/proof/UTV2-1088/proof.md",
+    "docs/06_status/proof/UTV2-1088/diff-summary.md",
     "docs/06_status/proof/UTV2-1088/verification.md",
+    ".lane/lanes/governance.yml",
     "packages/contracts/src/index.ts",
     "packages/contracts/src/invariant-registry.ts",
     "packages/invariants/package.json",
@@ -36,7 +38,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1088/evidence.json",
-    "docs/06_status/proof/UTV2-1088/verification.md"
+    "docs/06_status/proof/UTV2-1088/verification.md",
+    "docs/06_status/proof/UTV2-1088/diff-summary.md"
   ],
   "status": "started",
   "started_at": "2026-05-22T21:39:05.404Z",
