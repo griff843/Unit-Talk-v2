@@ -106,6 +106,9 @@ import type {
   TeamSearchResult,
   PickReviewCreateInput,
   PickReviewRepository,
+  RawPayloadInsert,
+  RawPayloadRecord,
+  RawPayloadRepository,
 } from './repositories.js';
 import type {
   AlertDetectionRecord,
@@ -8180,6 +8183,62 @@ export function createDatabaseRepositoryBundle(
   };
 }
 
+// ---------------------------------------------------------------------------
+// RawPayloadRepository implementations (UTV2-1084)
+// ---------------------------------------------------------------------------
+
+export class InMemoryRawPayloadRepository implements RawPayloadRepository {
+  private readonly records: RawPayloadRecord[] = [];
+
+  async insert(input: RawPayloadInsert): Promise<RawPayloadRecord> {
+    const record: RawPayloadRecord = {
+      id: crypto.randomUUID(),
+      provider_key: input.providerKey,
+      league: input.league,
+      run_id: input.runId,
+      kind: input.kind,
+      payload_hash: input.payloadHash,
+      payload: input.payload,
+      snapshot_at: input.snapshotAt,
+      created_at: new Date().toISOString(),
+    };
+    this.records.push(record);
+    return record;
+  }
+}
+
+export class DatabaseRawPayloadRepository implements RawPayloadRepository {
+  private readonly client: UnitTalkSupabaseClient;
+
+  constructor(connection: DatabaseConnectionConfig) {
+    this.client = createDatabaseClientFromConnection(connection);
+  }
+
+  async insert(input: RawPayloadInsert): Promise<RawPayloadRecord> {
+    const { data, error } = await this.client
+      .from('raw_payloads')
+      .insert({
+        provider_key: input.providerKey,
+        league: input.league,
+        run_id: input.runId,
+        kind: input.kind,
+        payload_hash: input.payloadHash,
+        payload: input.payload,
+        snapshot_at: input.snapshotAt,
+      })
+      .select()
+      .single();
+
+    if (error || !data) {
+      throw new Error(
+        `raw_payloads insert failed: ${error?.message ?? 'unknown error'}`,
+      );
+    }
+
+    return data as RawPayloadRecord;
+  }
+}
+
 export function createInMemoryIngestorRepositoryBundle(): IngestorRepositoryBundle {
   const seededTeams = createSeededTeamParticipants();
   return {
@@ -8189,6 +8248,7 @@ export function createInMemoryIngestorRepositoryBundle(): IngestorRepositoryBund
     eventParticipants: new InMemoryEventParticipantRepository(),
     participants: new InMemoryParticipantRepository(seededTeams),
     gradeResults: new InMemoryGradeResultRepository(),
+    rawPayloads: new InMemoryRawPayloadRepository(),
   };
 }
 
@@ -8202,6 +8262,7 @@ export function createDatabaseIngestorRepositoryBundle(
     eventParticipants: new DatabaseEventParticipantRepository(connection),
     participants: new DatabaseParticipantRepository(connection),
     gradeResults: new DatabaseGradeResultRepository(connection),
+    rawPayloads: new DatabaseRawPayloadRepository(connection),
   };
 }
 

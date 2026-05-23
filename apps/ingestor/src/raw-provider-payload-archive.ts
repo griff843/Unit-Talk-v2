@@ -1,5 +1,8 @@
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+
+import type { RawPayloadRepository } from '@unit-talk/db';
 
 import type { ProviderPayloadArchiveMode } from './provider-ingestion-policy.js';
 
@@ -11,31 +14,59 @@ export interface RawProviderPayloadArchiveInput {
   kind: 'odds' | 'results';
   payload: unknown;
   spoolDir: string;
+  rawPayloadsRepository: RawPayloadRepository;
 }
 
 export interface RawProviderPayloadArchiveResult {
-  archivePath: string;
+  archivePath: string | null;
   archivedAt: string;
+  payloadHash: string;
+}
+
+function sha256Hex(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 export async function archiveRawProviderPayload(
   input: RawProviderPayloadArchiveInput,
 ): Promise<RawProviderPayloadArchiveResult> {
-  const stamp = input.snapshotAt.replace(/[:.]/g, '-');
-  const dir = path.join(input.spoolDir, input.providerKey, input.league);
-  await fs.promises.mkdir(dir, { recursive: true });
-  const archivePath = path.join(
-    dir,
-    `${input.runId}-${input.kind}-${stamp}.json`,
-  );
-  await fs.promises.writeFile(
-    archivePath,
-    `${JSON.stringify(input.payload, null, 2)}\n`,
-    'utf8',
-  );
+  const serialized = JSON.stringify(input.payload);
+  const payloadHash = sha256Hex(serialized);
+
+  // DB write is primary and fail-closed: throws on failure, callers must not swallow
+  await input.rawPayloadsRepository.insert({
+    providerKey: input.providerKey,
+    league: input.league,
+    runId: input.runId,
+    kind: input.kind,
+    payloadHash,
+    payload: input.payload,
+    snapshotAt: input.snapshotAt,
+  });
+
+  // Disk spool is secondary / best-effort — never blocks ingestion
+  let archivePath: string | null = null;
+  try {
+    const stamp = input.snapshotAt.replace(/[:.]/g, '-');
+    const dir = path.join(input.spoolDir, input.providerKey, input.league);
+    await fs.promises.mkdir(dir, { recursive: true });
+    archivePath = path.join(
+      dir,
+      `${input.runId}-${input.kind}-${stamp}.json`,
+    );
+    await fs.promises.writeFile(
+      archivePath,
+      `${serialized}\n`,
+      'utf8',
+    );
+  } catch {
+    archivePath = null;
+  }
+
   return {
     archivePath,
     archivedAt: new Date().toISOString(),
+    payloadHash,
   };
 }
 

@@ -220,6 +220,7 @@ export async function ingestLeague(
           kind: 'odds',
           payload: fetched.rawPayloads,
           spoolDir: providerPayloadArchivePolicy.spoolDir,
+          rawPayloadsRepository: repositories.rawPayloads,
         });
       } catch (error) {
         const message =
@@ -480,6 +481,7 @@ export async function ingestLeague(
           kind: 'results',
           payload: fetchedResults.rawPayloads,
           spoolDir: providerPayloadArchivePolicy.spoolDir,
+          rawPayloadsRepository: repositories.rawPayloads,
         });
       } catch (error) {
         const message =

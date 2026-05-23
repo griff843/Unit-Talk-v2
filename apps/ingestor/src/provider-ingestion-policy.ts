@@ -67,9 +67,9 @@ export function resolveProviderPayloadArchivePolicy(
   return {
     mode:
       env.UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_MODE?.trim().toLowerCase() ===
-      'fail_closed'
-        ? 'fail_closed'
-        : 'fail_open',
+      'fail_open'
+        ? 'fail_open'
+        : 'fail_closed',
     spoolDir:
       env.UNIT_TALK_PROVIDER_PAYLOAD_ARCHIVE_DIR?.trim() ||
       'out/provider-payload-archive',

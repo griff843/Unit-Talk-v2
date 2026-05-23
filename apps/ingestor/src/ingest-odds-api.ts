@@ -98,7 +98,7 @@ export async function ingestOddsApiLeague(
     retryBackoffMs: 1_000,
   };
   const providerPayloadArchivePolicy = options.providerPayloadArchivePolicy ?? {
-    mode: 'fail_open' as const,
+    mode: 'fail_closed' as const,
     spoolDir: 'out/provider-payload-archive',
   };
   const run = await repositories.runs.startRun({
@@ -132,6 +132,7 @@ export async function ingestOddsApiLeague(
         kind: 'odds',
         payload: result.events,
         spoolDir: providerPayloadArchivePolicy.spoolDir,
+        rawPayloadsRepository: repositories.rawPayloads,
       });
     } catch (error) {
       archiveFailure = error instanceof Error ? error.message : String(error);

@@ -1,8 +1,11 @@
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import test from 'node:test';
+
+import type { RawPayloadInsert, RawPayloadRecord, RawPayloadRepository } from '@unit-talk/db';
 
 import { archiveRawProviderPayload, shouldBlockOnArchiveFailure } from './raw-provider-payload-archive.js';
 import { chunkByPolicy, withProviderDbRetry } from './provider-ingestion-db.js';
@@ -153,6 +156,21 @@ test('withProviderDbRetry retries retryable DB failures and chunkByPolicy preser
 });
 
 test('archiveRawProviderPayload writes spool files and archive mode can block', async () => {
+  const rawPayloadsRepository: RawPayloadRepository = {
+    async insert(input: RawPayloadInsert): Promise<RawPayloadRecord> {
+      return {
+        id: crypto.randomUUID(),
+        provider_key: input.providerKey,
+        league: input.league,
+        run_id: input.runId,
+        kind: input.kind,
+        payload_hash: input.payloadHash,
+        payload: input.payload,
+        snapshot_at: input.snapshotAt,
+        created_at: new Date().toISOString(),
+      };
+    },
+  };
   const spoolDir = fs.mkdtempSync(path.join(os.tmpdir(), 'provider-payload-archive-'));
   const result = await archiveRawProviderPayload({
     providerKey: 'sgo',
@@ -162,12 +180,14 @@ test('archiveRawProviderPayload writes spool files and archive mode can block', 
     kind: 'odds',
     payload: [{ market: 'player_points' }],
     spoolDir,
+    rawPayloadsRepository,
   });
 
   assert.equal(shouldBlockOnArchiveFailure('fail_open'), false);
   assert.equal(shouldBlockOnArchiveFailure('fail_closed'), true);
-  assert.equal(fs.existsSync(result.archivePath), true);
-  assert.match(fs.readFileSync(result.archivePath, 'utf8'), /player_points/);
+  assert.ok(result.archivePath !== null, 'archivePath should be set when disk write succeeds');
+  assert.equal(fs.existsSync(result.archivePath!), true);
+  assert.match(fs.readFileSync(result.archivePath!, 'utf8'), /player_points/);
 
   fs.rmSync(spoolDir, { recursive: true, force: true });
 });
