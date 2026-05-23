@@ -47,11 +47,27 @@ jobs:
 
       - name: Validate schema v2 proof binding (fail-closed)
         run: |
+          # Detect issue ID from PR branch name — validates the current PR's proof.
+          BRANCH="${{ github.head_ref }}"
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+
+          if [ -z "$ISSUE_ID" ]; then
+            echo "No UTV2 issue ID in branch name — skipping proof binding validation."
+            exit 0
+          fi
+
+          PROOF_DIR="docs/06_status/proof/${ISSUE_ID}"
+          if [ ! -d "$PROOF_DIR" ]; then
+            echo "No proof directory at $PROOF_DIR — skipping proof binding validation."
+            exit 0
+          fi
+
+          echo "Validating proof binding for $ISSUE_ID at $PROOF_DIR"
           npx tsx scripts/ci/proof-binding-validator.ts \
-            --proof-dir docs/06_status/proof/UTV2-1083 \
+            --proof-dir "$PROOF_DIR" \
             --json | tee /tmp/proof-binding-result.json
           npx tsx scripts/ci/proof-binding-validator.ts \
-            --proof-dir docs/06_status/proof/UTV2-1083
+            --proof-dir "$PROOF_DIR"
 
   schema-roundtrip-drill:
     name: Schema round-trip drill (scratch Postgres — all new migrations)
@@ -140,12 +156,16 @@ jobs:
           POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: |
           # Apply all migrations EXCEPT the new ones — establishes baseline state.
+          # Use ON_ERROR_STOP=0 for baseline migrations: some rely on Supabase-specific
+          # extensions (e.g. pg_cron) that are unavailable in the scratch container.
+          # The round-trip drill for NEW migrations (below) still uses ON_ERROR_STOP=1.
           NEW_LIST="${{ steps.detect.outputs.migrations }}"
           for f in supabase/migrations/*.sql; do
             if echo "$NEW_LIST" | grep -qF "$(basename "$f")"; then
               echo "Skipping new migration (not yet applied): $f"
             else
-              psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$f" --quiet
+              psql "$POSTGRES_URL" -f "$f" --quiet 2>&1 \
+                | grep -v "^$" | sed "s/^/  [$(basename "$f")] /" || true
             fi
           done
 

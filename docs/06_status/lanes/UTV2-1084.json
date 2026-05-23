@@ -8,7 +8,7 @@
   "branch": "claude/utv2-1084-raw-payload-store-pre-transformation-hashing",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/831",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/ingest-league.ts",
@@ -20,7 +20,9 @@
     "apps/ingestor/src/raw-provider-payload-archive.ts",
     "apps/ingestor/src/raw-provider-payload-archive.test.ts",
     "apps/ingestor/src/sgo-fetcher.ts",
+    "apps/ingestor/src/t1-proof-utv2-1084-raw-payload-archive.test.ts",
     "db/migrations-rollback/20260523001_utv2_1084_raw_payload_store.down.sql",
+    "docs/06_status/lanes/UTV2-1084.json",
     "docs/06_status/proof/UTV2-1084/evidence.json",
     "docs/06_status/proof/UTV2-1084/PROOF.md",
     "docs/06_status/proof/UTV2-1084/runtime-verification.md",
@@ -28,14 +30,17 @@
     "packages/db/src/repositories.ts",
     "packages/db/src/runtime-repositories.ts",
     "supabase/migrations/20260523001_utv2_1084_raw_payload_store.sql",
-    ".ops/sync/UTV2-1084.yml"
+    ".ops/sync/UTV2-1084.yml",
+    ".lane/migration-lock.yml",
+    ".lane/lanes/migration.yml",
+    ".github/workflows/migration-reversibility-gate.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1084/evidence.json"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-23T17:58:20.664Z",
-  "heartbeat_at": "2026-05-23T17:58:20.664Z",
+  "heartbeat_at": "2026-05-23T19:30:00.000Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1084-raw-payload-store-pre-transformation-hashing.json",

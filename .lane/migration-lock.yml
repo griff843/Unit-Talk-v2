@@ -1,0 +1,10 @@
+schema_version: 1
+issue_id: UTV2-1084
+lane_type: migration
+owner: claude
+acquired_at: 2026-05-23T18:00:00.000Z
+scope:
+  - supabase/migrations/20260523001_utv2_1084_raw_payload_store.sql
+  - packages/db/src/repositories.ts
+  - packages/db/src/runtime-repositories.ts
+release_after: merge
