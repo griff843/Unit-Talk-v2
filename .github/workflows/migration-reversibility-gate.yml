@@ -90,13 +90,41 @@ jobs:
             echo "ERROR: Cannot resolve origin/${{ github.base_ref }}" >&2
             exit 2
           fi
+          # grep exits 1 when there are no matches; || true prevents bash -e from
+          # treating "zero new migrations" as a step failure.
           NEW=$(git diff --name-only --diff-filter=A \
                 "origin/${{ github.base_ref }}...HEAD" \
-                -- supabase/migrations/ | grep '\.sql$')
+                -- supabase/migrations/ | grep '\.sql$' || true)
           echo "migrations<<EOF" >> "$GITHUB_OUTPUT"
           echo "$NEW" >> "$GITHUB_OUTPUT"
           echo "EOF" >> "$GITHUB_OUTPUT"
-          echo "has_migration=$([[ -n "$NEW" ]] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          if [[ -n "$NEW" ]]; then
+            echo "has_migration=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_migration=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Adversarial round-trip fixture — invalid SQL down script caught by psql
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
+        run: |
+          # Defence-in-depth: prove psql rejects syntactically invalid SQL.
+          # This fixture runs regardless of whether there are new migrations.
+          psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 \
+            -c "CREATE TABLE IF NOT EXISTS _adv_invalid_sql_tbl (id uuid primary key);"
+
+          echo "THIS IS NOT SQL — adversarial fixture for UTV2-1083;" \
+            > /tmp/adv-invalid.down.sql
+
+          # psql with ON_ERROR_STOP=1 must exit non-zero on invalid SQL.
+          if psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f /tmp/adv-invalid.down.sql 2>/dev/null; then
+            echo "FAIL: psql accepted invalid SQL — round-trip drill would not catch bad down scripts"
+            exit 1
+          fi
+          echo "PASS: psql correctly rejected invalid SQL down script (exit $(echo $?))"
+
+          psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 \
+            -c "DROP TABLE IF EXISTS _adv_invalid_sql_tbl;"
 
       - name: Apply all baseline migrations to scratch DB
         if: steps.detect.outputs.has_migration == 'true'
@@ -109,7 +137,7 @@ jobs:
             if echo "$NEW_LIST" | grep -qF "$(basename "$f")"; then
               echo "Skipping new migration (not yet applied): $f"
             else
-              psql "$POSTGRES_URL" -f "$f" --quiet
+              psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$f" --quiet
             fi
           done
 
@@ -156,16 +184,16 @@ jobs:
             PRE_UP=$(cat "/tmp/hash-pre-up-${BASE}.txt")
             echo "  pre-up hash: $PRE_UP"
 
-            # 2. Apply up migration.
-            psql "$POSTGRES_URL" -f "$MIGRATION"
+            # 2. Apply up migration (fail closed on SQL error).
+            psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION"
 
             # 3. Capture POST-UP hash.
             npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-post-up-${BASE}.txt"
             POST_UP=$(cat "/tmp/hash-post-up-${BASE}.txt")
             echo "  post-up hash: $POST_UP"
 
-            # 4. Apply down script.
-            psql "$POSTGRES_URL" -f "$DOWN"
+            # 4. Apply down script (fail closed on SQL error).
+            psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$DOWN"
 
             # 5. Capture POST-DOWN hash — must equal PRE-UP.
             npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-post-down-${BASE}.txt"
@@ -183,7 +211,7 @@ jobs:
             fi
 
             # 6. Re-apply up migration.
-            psql "$POSTGRES_URL" -f "$MIGRATION"
+            psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$MIGRATION"
 
             # 7. Capture POST-REUP hash — must equal POST-UP.
             npx tsx scripts/ci/schema-roundtrip-hash.ts --output "/tmp/hash-post-reup-${BASE}.txt"
