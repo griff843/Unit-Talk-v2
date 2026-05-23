@@ -768,6 +768,36 @@ export interface GradeResultRepository {
   listByEvent(eventId: string): Promise<GradeResultRecord[]>;
 }
 
+// ---------------------------------------------------------------------------
+// Raw Provider Payload Archive (UTV2-1084)
+// ---------------------------------------------------------------------------
+
+export interface RawPayloadInsert {
+  providerKey: string;
+  league: string;
+  runId: string;
+  kind: 'odds' | 'results';
+  payloadHash: string;
+  payload: unknown;
+  snapshotAt: string;
+}
+
+export interface RawPayloadRecord {
+  id: string;
+  provider_key: string;
+  league: string;
+  run_id: string;
+  kind: 'odds' | 'results';
+  payload_hash: string;
+  payload: unknown;
+  snapshot_at: string;
+  created_at: string;
+}
+
+export interface RawPayloadRepository {
+  insert(input: RawPayloadInsert): Promise<RawPayloadRecord>;
+}
+
 export interface AuditLogCreateInput {
   entityType: string;
   entityId?: string | null | undefined;
@@ -1115,6 +1145,7 @@ export interface IngestorRepositoryBundle {
   eventParticipants: EventParticipantRepository;
   participants: ParticipantRepository;
   gradeResults: GradeResultRepository;
+  rawPayloads: RawPayloadRepository;
 }
 
 export interface MemberTierActivateInput {

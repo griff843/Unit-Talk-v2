@@ -149,7 +149,7 @@ export async function ingestLeague(
     retryBackoffMs: 1_000,
   };
   const providerPayloadArchivePolicy = options.providerPayloadArchivePolicy ?? {
-    mode: 'fail_open' as const,
+    mode: 'fail_closed' as const,
     spoolDir: 'out/provider-payload-archive',
   };
   const providerOfferStagingMode = options.providerOfferStagingMode ?? 'off';
@@ -220,6 +220,8 @@ export async function ingestLeague(
           kind: 'odds',
           payload: fetched.rawPayloads,
           spoolDir: providerPayloadArchivePolicy.spoolDir,
+          rawPayloadsRepository: repositories.rawPayloads,
+          rawBody: fetched.rawBodies.join('\n'),
         });
       } catch (error) {
         const message =
@@ -428,6 +430,7 @@ export async function ingestLeague(
     const emptyResults = {
       results: [],
       rawPayloads: [],
+      rawBodies: [],
       requestTelemetry: createEmptyRequestTelemetry('results'),
     };
     let fetchedResults: Awaited<
@@ -480,6 +483,8 @@ export async function ingestLeague(
           kind: 'results',
           payload: fetchedResults.rawPayloads,
           spoolDir: providerPayloadArchivePolicy.spoolDir,
+          rawPayloadsRepository: repositories.rawPayloads,
+          rawBody: fetchedResults.rawBodies.join('\n'),
         });
       } catch (error) {
         const message =
@@ -682,6 +687,7 @@ function createEmptyFetchResult(_snapshotAt: string): SGOFetchResult {
     events: [],
     pairedProps: [],
     rawPayloads: [],
+    rawBodies: [],
     requestTelemetry: createEmptyRequestTelemetry('odds'),
   };
 }

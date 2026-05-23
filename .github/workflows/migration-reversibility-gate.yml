@@ -47,11 +47,31 @@ jobs:
 
       - name: Validate schema v2 proof binding (fail-closed)
         run: |
+          # Detect issue ID from PR branch name — validates the current PR's proof.
+          BRANCH="${{ github.head_ref }}"
+          ISSUE_ID=$(echo "$BRANCH" | grep -oiE 'utv2-[0-9]+' | head -1 | tr '[:lower:]' '[:upper:]')
+
+          if [ -z "$ISSUE_ID" ]; then
+            # Fail-closed: migration PRs must have a UTV2 issue ID in the branch name.
+            echo "::error title=proof-binding::No UTV2 issue ID found in branch name '${BRANCH}'."
+            echo "Migration PRs must use branch name format: <prefix>/utv2-NNN-<description>"
+            exit 1
+          fi
+
+          PROOF_DIR="docs/06_status/proof/${ISSUE_ID}"
+          if [ ! -d "$PROOF_DIR" ]; then
+            # Fail-closed: migration PRs must have a proof bundle.
+            echo "::error title=proof-binding::Proof directory missing: $PROOF_DIR"
+            echo "T1 migration lanes require a proof bundle at docs/06_status/proof/${ISSUE_ID}/evidence.json"
+            exit 1
+          fi
+
+          echo "Validating proof binding for $ISSUE_ID at $PROOF_DIR"
           npx tsx scripts/ci/proof-binding-validator.ts \
-            --proof-dir docs/06_status/proof/UTV2-1083 \
+            --proof-dir "$PROOF_DIR" \
             --json | tee /tmp/proof-binding-result.json
           npx tsx scripts/ci/proof-binding-validator.ts \
-            --proof-dir docs/06_status/proof/UTV2-1083
+            --proof-dir "$PROOF_DIR"
 
   schema-roundtrip-drill:
     name: Schema round-trip drill (scratch Postgres — all new migrations)
@@ -140,12 +160,16 @@ jobs:
           POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/postgres
         run: |
           # Apply all migrations EXCEPT the new ones — establishes baseline state.
+          # Use ON_ERROR_STOP=0 for baseline migrations: some rely on Supabase-specific
+          # extensions (e.g. pg_cron) that are unavailable in the scratch container.
+          # The round-trip drill for NEW migrations (below) still uses ON_ERROR_STOP=1.
           NEW_LIST="${{ steps.detect.outputs.migrations }}"
           for f in supabase/migrations/*.sql; do
             if echo "$NEW_LIST" | grep -qF "$(basename "$f")"; then
               echo "Skipping new migration (not yet applied): $f"
             else
-              psql "$POSTGRES_URL" -v ON_ERROR_STOP=1 -f "$f" --quiet
+              psql "$POSTGRES_URL" -f "$f" --quiet 2>&1 \
+                | grep -v "^$" | sed "s/^/  [$(basename "$f")] /" || true
             fi
           done
 
@@ -170,7 +194,7 @@ jobs:
             fi
 
             # Check for IRREVERSIBLE — validate ratification, then skip drill.
-            if grep -q '-- IRREVERSIBLE:' "$DOWN"; then
+            if grep -q -- '-- IRREVERSIBLE:' "$DOWN"; then
               # Ratification check: gate script already verified this; re-check here for defence-in-depth.
               if ! npx tsx scripts/ci/migration-reversibility-gate.ts \
                     --base "origin/${{ github.base_ref }}" \
