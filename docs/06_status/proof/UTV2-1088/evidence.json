@@ -1,0 +1,63 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1088",
+  "title": "INIT-1.3.1 — Machine-Readable Invariant Registry Substrate",
+  "tier": "T1",
+  "executor": "claude",
+  "phase": "A",
+  "phase_description": "Additive scaffolding — registry JSON, id-ledger, source-manifest, loader, contracts type, CI gate",
+  "branch_head_sha": "5cc0d791195a8bf3655ca7cc7a958db5d77674e9",
+  "merge_sha": null,
+  "evidence": {
+    "pnpm_verify": {
+      "result": "PASS",
+      "note": "lint + type-check + build + test all green in worktree"
+    },
+    "pnpm_test_db": {
+      "result": "PASS",
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "note": "7/7 PASS against live Supabase"
+    },
+    "r_level_check": {
+      "result": "PASS",
+      "rules_matched": 0,
+      "artifacts_required": []
+    },
+    "invariant_registry_gate": {
+      "result": "PASS",
+      "invariant_count": 15,
+      "active_count": 15,
+      "violations": 0,
+      "note": "Gate validates: closed-schema, ledger allocation, source-manifest bidirectional coverage, append-only ledger, ratification record, mechanical enforcement"
+    },
+    "gate_amendments": {
+      "result": "PASS",
+      "findings_addressed": [
+        "F1: pnpm version corrected to 10.29.3",
+        "F2: closed-schema validation — unknown fields in registry/ledger/manifest cause gate to fail",
+        "F3: source-manifest bidirectional coverage — every registry ID must have a manifest entry and vice versa",
+        "F4: append-only ledger enforcement — IDs present at base cannot be deleted",
+        "F5: machine-readable ratification record — source-manifest must carry ratified_by, ratified_at, ratification_ref",
+        "F6: workflow path filter corrected — adds scripts/ci/invariant-registry-gate.ts, .github/workflows/invariant-registry-gate.yml, packages/contracts/src/index.ts",
+        "F7: this proof artifact"
+      ]
+    },
+    "source_manifest": {
+      "result": "PASS",
+      "entries": 15,
+      "ratified_by": "griff843",
+      "ratified_at": "2026-05-22",
+      "ratification_ref": "UTV2-1088 / INIT-1.3.1 Phase A PM ratification"
+    },
+    "id_ledger": {
+      "result": "PASS",
+      "allocated_ids": 15,
+      "range": "INV-0001..INV-0015"
+    }
+  },
+  "constitutional_invariant_created": "INV-0013",
+  "generated_at": "2026-05-22",
+  "generated_by": "claude"
+}
