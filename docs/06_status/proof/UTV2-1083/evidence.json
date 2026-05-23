@@ -6,12 +6,12 @@
   "executor": "claude",
   "phase": "A",
   "phase_description": "Additive scaffolding — gate, convention, hash tool, example down scripts",
-  "branch_head_sha": "edce093ccc55f6204ac834ca579cf39257c07e67",
+  "branch_head_sha": "46c9abc816de27f1719c1fbb65301d9d5ab62924",
   "merge_sha": null,
   "evidence": {
     "pnpm_verify": {
       "result": "PASS",
-      "note": "lint + type-check + build + test all green in worktree"
+      "note": "lint + type-check + build + test all green in worktree (re-verified on head 46c9abc8)"
     },
     "pnpm_test_db": {
       "result": "PASS",
@@ -32,7 +32,10 @@
     },
     "adversarial_fixtures": {
       "result": "PASS",
-      "note": "scripts/ci/migration-reversibility-gate.test.ts — 7 fixtures cover missing down, comment-only, IRREVERSIBLE-without-ratification, invalid base ref, valid reversible, IRREVERSIBLE-with-ratification, zero migrations"
+      "tests": 7,
+      "passed": 7,
+      "failed": 0,
+      "note": "scripts/ci/migration-reversibility-gate.test.ts — F1: missing down (exit 1), F2: comment-only (exit 1), F3: IRREVERSIBLE-without-ratification (exit 1), F4: invalid base ref (exit 2), F5: valid reversible (exit 0), F6: IRREVERSIBLE-with-ratification (exit 0), F7: zero migrations (exit 0)"
     },
     "gate_local_validation": {
       "result": "PASS",
@@ -44,6 +47,14 @@
       "entries": [
         "202605120001_utv2_883_link_market_universe_participant_ids",
         "202605130002_utv2_920_db_invariant_rpc_guards"
+      ]
+    },
+    "round_trip_workflow_fixes": {
+      "result": "PASS",
+      "fixes": [
+        "grep '.\\.sql$' || true — prevents bash -e from treating zero-migration detection as failure",
+        "ON_ERROR_STOP=1 added to all psql invocations — SQL errors propagate as non-zero exit",
+        "Adversarial round-trip fixture step — proves psql rejects invalid SQL down scripts"
       ]
     }
   },
