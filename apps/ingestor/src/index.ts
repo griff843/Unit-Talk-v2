@@ -202,7 +202,7 @@ export function createIngestorRuntimeSummary() {
     apiKeyConfigured: runtime.sgoApiKeys.length > 0,
     apiUrlConfigured: Boolean(runtime.apiUrl),
     nextStep: runtime.autorun
-      ? 'ingestor cycles will execute with the configured SGO provider settings'
+      ? 'ingestor cycles will execute with the configured provider settings'
       : 'set UNIT_TALK_INGESTOR_AUTORUN=true to execute ingestor cycles',
   };
 }
@@ -305,19 +305,19 @@ async function postOpsAlert(webhookUrl: string, message: string): Promise<void> 
 }
 
 // Fail-closed startup guard: a daemon that loops while ingesting nothing is a
-// constitutional violation (invariant 10). Halt before the first cycle if no
-// SGO credentials are configured so the container shows Exited(1) rather than
-// appearing healthy while producing zero writes.
-if (runtime.autorun && runtime.sgoApiKeys.length === 0) {
+// constitutional violation (invariant 10). Halt before the first cycle only
+// when no configured provider mode exists. Odds API-only autorun remains valid
+// unless PM explicitly ratifies "SGO required for all autorun."
+if (runtime.autorun && runtime.sgoApiKeys.length === 0 && !runtime.oddsApiKey) {
   console.error(
     JSON.stringify(
       {
         ...createIngestorRuntimeSummary(),
         status: 'fatal',
         error:
-          'ingestor.startup_secret_missing: SGO_API_KEY (or SGO_API_KEY_FALLBACK / SGO_API_KEYS) ' +
-          'is not configured. Daemon cannot ingest from primary provider. ' +
-          'Set SGO_API_KEY in .env.production and restart.',
+          'ingestor.startup_provider_missing: no SGO_API_KEY (or SGO_API_KEY_FALLBACK / SGO_API_KEYS) ' +
+          'and no ODDS_API_KEY configured. Daemon cannot ingest from any provider. ' +
+          'Set SGO_API_KEY or ODDS_API_KEY in .env.production and restart.',
       },
       null,
       2,
