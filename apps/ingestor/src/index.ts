@@ -304,6 +304,28 @@ async function postOpsAlert(webhookUrl: string, message: string): Promise<void> 
   }
 }
 
+// Fail-closed startup guard: a daemon that loops while ingesting nothing is a
+// constitutional violation (invariant 10). Halt before the first cycle if no
+// SGO credentials are configured so the container shows Exited(1) rather than
+// appearing healthy while producing zero writes.
+if (runtime.autorun && runtime.sgoApiKeys.length === 0) {
+  console.error(
+    JSON.stringify(
+      {
+        ...createIngestorRuntimeSummary(),
+        status: 'fatal',
+        error:
+          'ingestor.startup_secret_missing: SGO_API_KEY (or SGO_API_KEY_FALLBACK / SGO_API_KEYS) ' +
+          'is not configured. Daemon cannot ingest from primary provider. ' +
+          'Set SGO_API_KEY in .env.production and restart.',
+      },
+      null,
+      2,
+    ),
+  );
+  process.exit(1);
+}
+
 if (runtime.autorun) {
   resolveActiveSgoApiKey(runtime.sgoApiKeys)
     .then(async (sgoSelection) => {
