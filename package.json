@@ -68,7 +68,9 @@
     "codex:status": "tsx scripts/codex-status.ts",
     "codex:health": "tsx scripts/ops/codex-health-check.ts",
     "ops:proof-auditor-gate": "tsx scripts/ops/proof-auditor-gate.ts",
+
     "ops:proof-check": "tsx scripts/ops/proof-check.ts",
+    "ops:tier-sync": "tsx scripts/ops/tier-sync.ts",
     "ops:queue-grooming": "tsx scripts/ops/queue-grooming.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
     "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
