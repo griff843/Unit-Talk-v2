@@ -15,16 +15,17 @@
     "apps/ingestor/src/ingest-odds-api.ts",
     "apps/ingestor/src/ingest-fail-closed.test.ts",
     "apps/ingestor/package.json",
+    "package.json",
     ".ops/sync/UTV2-1155.yml",
     "docs/06_status/lanes/UTV2-1155.json",
     "docs/06_status/proof/UTV2-1155/diff-summary.md",
-    "docs/06_status/proof/UTV2-1155/verification.log",
+    "docs/06_status/proof/UTV2-1155/verification.md",
     "docs/06_status/proof/UTV2-1155/canonical-diff.json",
     ".lane/lanes/data-canonical.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1155/diff-summary.md",
-    "docs/06_status/proof/UTV2-1155/verification.log",
+    "docs/06_status/proof/UTV2-1155/verification.md",
     "docs/06_status/proof/UTV2-1155/canonical-diff.json"
   ],
   "status": "started",

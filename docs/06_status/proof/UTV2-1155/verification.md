@@ -29,7 +29,7 @@ Changed files: 2
 Rules matched: (none) — no R-level artifacts required for this diff
 ```
 
-## Acceptance Criteria Verification
+## Verification
 
 - [x] Daemon exits non-zero on startup if `SGO_API_KEY` is absent
   - Added: `if (runtime.autorun && runtime.sgoApiKeys.length === 0)` → `process.exit(1)` in `index.ts`
