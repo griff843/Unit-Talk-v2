@@ -209,7 +209,7 @@ export async function runCandidatePickScan(
         snapshot_age_ms: freshnessInfo.snapshotAgeMs,
         snapshot_at: universe.last_offer_snapshot_at,
         proximity_tier: freshnessInfo.proximityTier,
-        data_freshness: 'fresh' as const,
+        data_freshness: freshnessInfo.staleAtScanTime ? 'stale' : ('fresh' as const),
       },
     };
 
