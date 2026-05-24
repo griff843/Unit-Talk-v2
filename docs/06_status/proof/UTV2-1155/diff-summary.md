@@ -3,7 +3,9 @@
 **Issue:** Ingestor daemon must fail-closed when required provider secrets are missing  
 **Tier:** T2  
 **Branch:** claude/utv2-1155-ingestor-fail-closed-missing-secrets  
-**Status:** Implementation complete, pnpm verify green
+**Merge SHA:** `04055ee44642b3246c801104e01c2c88cd049c97`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/837  
+**Status:** Merged
 
 ## Changes
 

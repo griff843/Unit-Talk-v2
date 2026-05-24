@@ -32,5 +32,7 @@
   "no_write_path_changes": true,
   "no_schema_changes": true,
   "no_migration_required": true,
-  "generated_at": "2026-05-24T01:58:00.000Z"
+  "generated_at": "2026-05-24T01:58:00.000Z",
+  "merge_sha": "04055ee44642b3246c801104e01c2c88cd049c97",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/837"
 }
