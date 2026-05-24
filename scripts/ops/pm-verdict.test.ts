@@ -11,7 +11,6 @@ import os from 'node:os';
 import path from 'node:path';
 import {
   makeEmptyReviewState,
-  writeReviewState,
   type ReviewStateV1,
   type ReviewFinding,
 } from './review-state-schema.js';

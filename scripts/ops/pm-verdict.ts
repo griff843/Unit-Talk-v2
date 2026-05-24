@@ -19,6 +19,7 @@
  *   - PM actor unauthorized (not in AUTHORIZED_ACTORS)
  */
 
+import fs from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import {
   ROOT,
@@ -236,7 +237,6 @@ function run(options: CliOptions): PmVerdictResult {
   ];
   const proofExists = proofPaths.some(p => {
     try {
-      const fs = require('node:fs') as typeof import('node:fs');
       return fs.existsSync(p);
     } catch {
       return false;
