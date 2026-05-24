@@ -5,8 +5,8 @@
   "tier": "T1",
   "lane_type": "migration",
   "sha_binding": {
-    "verified_source_sha": "135d8f7e8bd00dd365e27c6dd476a6c96bbc028a",
-    "verified_source_note": "Last non-proof substantive commit on branch (CI gate fixes including test wiring)",
+    "verified_source_sha": "90ab556c03de35a8954a8ad7b528951d9f0f9888",
+    "verified_source_note": "Last non-proof substantive commit on branch (CI gate fixes: pr-review-packet monorepo path detection + scope lock)",
     "evidence_commit_sha": "BIND_ON_MERGE",
     "current_pr_head_sha": "BIND_ON_MERGE"
   },
