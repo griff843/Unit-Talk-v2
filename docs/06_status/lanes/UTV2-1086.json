@@ -11,6 +11,7 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    "apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts",
     "docs/06_status/proof/UTV2-1086/evidence.json",
     "docs/06_status/proof/UTV2-1086/verification-log.md",
     "packages/db/src/repositories.ts",
