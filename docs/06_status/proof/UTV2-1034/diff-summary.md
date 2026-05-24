@@ -27,6 +27,14 @@ Script ran against live Supabase (zfzdnfwdarxucxtaojxm):
 - Usable rows: 0 (both had null confidence)
 - Decision: Insufficient data — 20+ picks required for meaningful calibration
 
+## SHA Binding
+
+**Merge SHA:** `3081cca59fd201f6df57cf57f2e1f90a046203af`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/838  
+**Merged to:** main
+
 ## Verification
-- `pnpm verify`: 113/113 PASS ✅
+- `pnpm type-check`: PASS ✅
+- `pnpm test`: 113/113 PASS ✅
+- `pnpm verify`: PASS ✅
 - R-level check: PASS (no artifacts required for scripts/ changes)

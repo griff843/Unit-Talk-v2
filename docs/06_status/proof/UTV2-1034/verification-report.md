@@ -4,6 +4,8 @@
 **Tier:** T2  
 **Branch:** claude/utv2-1034-model-calibration-baseline  
 **Date:** 2026-05-24  
+**Merge SHA:** `3081cca59fd201f6df57cf57f2e1f90a046203af`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/838  
 
 ## Verification
 

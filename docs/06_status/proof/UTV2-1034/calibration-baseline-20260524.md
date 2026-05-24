@@ -2,6 +2,8 @@
 
 **Generated:** 2026-05-24T01:58:00.318Z  
 **After date:** 2026-05-11 (post-fix settlements)  
+**Merge SHA:** `3081cca59fd201f6df57cf57f2e1f90a046203af`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/838  
 **Total rows queried:** 2  
 **Usable rows (win/loss, non-null confidence):** 0  
 **Excluded (push):** 0  

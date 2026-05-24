@@ -2,7 +2,15 @@
 
 Date: 2026-05-24
 Branch: claude/utv2-1034-model-calibration-baseline
+Merge SHA: 3081cca59fd201f6df57cf57f2e1f90a046203af
+PR: https://github.com/griff843/Unit-Talk-v2/pull/838
 Executor: claude
+
+## pnpm type-check
+PASS — TypeScript project-references build clean
+
+## pnpm test
+All 113 tests pass
 
 ## pnpm verify
 All 113 tests pass. Type-check, lint, build all clean.
