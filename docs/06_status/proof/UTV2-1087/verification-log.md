@@ -5,6 +5,7 @@
 **Executor:** claude
 **Branch:** claude/utv2-1087-freshness-honesty-and-provider-auto-quarantine
 **Verified at:** 2026-05-24T22:30:00Z
+**SHA:** bace9cf452ee4d7bbed124ea81fbd5146b896ee0
 
 ## Verification
 

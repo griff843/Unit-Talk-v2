@@ -14,6 +14,19 @@ Three gaps from the system blueprint closed:
 
 **Gap #49** (`provider-quarantine.ts`): New `ProviderQuarantineRegistry` tracks quarantined providers in-memory. Wired into `ingest-league.ts` — when a `CircuitOpenError` is caught, the provider is auto-quarantined with structured JSON audit logging.
 
+## Verification
+
+| Check | Result |
+|---|---|
+| pnpm verify | PASS — 497/497 tests, type-check clean, lint clean |
+| T1 live-DB proof | PASS — 5/5 tests against live Supabase zfzdnfwdarxucxtaojxm |
+| R-level | PASS — no artifacts required (R0) |
+| Adversarial: stale snapshot | PASS — 25h-old snapshot → data_freshness: 'stale' |
+| Adversarial: fresh snapshot | PASS — 5min-old snapshot → data_freshness: 'fresh' |
+| Adversarial: null snapshotAt | PASS — null → data_freshness: 'stale' |
+| Adversarial: fail-closed circuit | PASS — CircuitOpenError thrown |
+| Implementation SHA | bace9cf452ee4d7bbed124ea81fbd5146b896ee0 |
+
 ## Live-DB Proof
 
 5/5 tests passed against Supabase project `zfzdnfwdarxucxtaojxm`:
