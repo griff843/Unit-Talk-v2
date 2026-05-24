@@ -62,6 +62,14 @@ Rules matched: ingestor-provider
 
 Exit code: 0
 
+## Runtime Evidence
+
+The startup provider-check guard is exercised directly via subprocess tests against the real ingestor module (not mocked). Evidence:
+
+- queries: [collectConfiguredSgoApiKeyCandidates({SGO_API_KEY: undefined}) → length=0; subprocess fork of index.ts with no providers configured → exit code 1]
+- row_counts: [ingest cycles completed with no configured provider before guard fires = 0]
+- receipts: [ingest-fail-closed.test.ts passed: 6/6 tests green; guard emits fatal JSON with startup_provider_missing; odds-only and non-autorun paths exit cleanly (code 0)]
+
 ## Verification
 
 - [x] Daemon exits non-zero on startup when no provider mode is configured
