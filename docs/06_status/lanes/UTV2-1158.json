@@ -20,10 +20,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1158.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-23T23:47:36.000Z",
-  "heartbeat_at": "2026-05-24T00:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-24T00:55:19.000Z",
+  "closed_at": "2026-05-24T00:55:19Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1158-wfr-v2-c-review-packet-verdict.json",
   "created_by": "claude",
