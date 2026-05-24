@@ -1,0 +1,36 @@
+{
+  "schema": "canonical-diff/v1",
+  "issue": "UTV2-1155",
+  "branch": "claude/utv2-1155-ingestor-fail-closed-missing-secrets",
+  "ingestion_path_changes": [
+    {
+      "file": "apps/ingestor/src/index.ts",
+      "change_type": "modified",
+      "description": "Added startup fail-closed guard: process.exit(1) when autorun=true and SGO_API_KEY is absent",
+      "affected_providers": ["sgo"],
+      "constitutional_invariant": "10 — fail closed, no silent fallback"
+    },
+    {
+      "file": "apps/ingestor/src/ingest-odds-api.ts",
+      "change_type": "modified",
+      "description": "Changed OddsApiIngestOptions.apiKey from required string to optional string; added explicit warning log when key absent",
+      "affected_providers": ["odds-api"],
+      "constitutional_invariant": "10 — fail closed"
+    }
+  ],
+  "new_test_files": [
+    {
+      "file": "apps/ingestor/src/ingest-fail-closed.test.ts",
+      "tests": 3,
+      "coverage": [
+        "ingestLeague returns skipped with warning when SGO_API_KEY absent",
+        "ingestOddsApiLeague emits warning log when ODDS_API_KEY absent",
+        "collectConfiguredSgoApiKeyCandidates returns empty array when no SGO env vars set"
+      ]
+    }
+  ],
+  "no_write_path_changes": true,
+  "no_schema_changes": true,
+  "no_migration_required": true,
+  "generated_at": "2026-05-24T01:58:00.000Z"
+}

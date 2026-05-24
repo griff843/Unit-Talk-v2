@@ -43,7 +43,7 @@ const DEFAULT_ODDS_API_MARKETS = [
 ] as const;
 
 export interface OddsApiIngestOptions {
-  apiKey: string;
+  apiKey?: string;
   league: string;
   repositories: IngestorRepositoryBundle;
   bookmakers?: string[];
@@ -76,6 +76,9 @@ export async function ingestOddsApiLeague(
   const { apiKey, league, repositories, logger } = options;
 
   if (!apiKey) {
+    logger?.warn?.(
+      `[ingest-odds-api] ODDS_API_KEY not configured; skipping Odds API ingest for ${league}`,
+    );
     return {
       league,
       provider: 'odds-api',

@@ -1,0 +1,41 @@
+# UTV2-1155 Verification Log
+
+Date: 2026-05-24
+Branch: claude/utv2-1155-ingestor-fail-closed-missing-secrets
+Executor: claude
+
+## pnpm verify
+
+```
+> @unit-talk/v2@0.1.0 verify
+> pnpm ops:sync-check && ... && pnpm test && ...
+
+[sync-check] OK (per-issue): branch "claude/utv2-1155-ingestor-fail-closed-missing-secrets" <-> .ops/sync/UTV2-1155.yml
+[system-alignment] verdict=PASS fail=0 warn=0
+[automation-coverage] verdict=PASS fail=0 warn=0 classified=15
+Environment files passed validation.
+# tests 113
+# pass 113
+# fail 0
+```
+
+Exit code: 0 ✅
+
+## R-level check
+
+```
+Verdict: PASS
+Changed files: 2
+Rules matched: (none) — no R-level artifacts required for this diff
+```
+
+## Verification
+
+- [x] Daemon exits non-zero on startup if `SGO_API_KEY` is absent
+  - Added: `if (runtime.autorun && runtime.sgoApiKeys.length === 0)` → `process.exit(1)` in `index.ts`
+- [x] A test covers the startup secret-check path
+  - `ingest-fail-closed.test.ts`: 3 tests, all pass
+- [x] Runtime health check correctly detects "container exited" vs "container running but not ingesting"
+  - Container now exits with code 1 → supervisor/Docker health shows `Exited (1)`
+- [x] No cycle completes with 0 provider writes without triggering an alert or exit
+  - Startup guard prevents the daemon from starting autorun when SGO credentials are absent
