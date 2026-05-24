@@ -1,4 +1,4 @@
-# System State — 2026-05-24 00:08
+# System State — 2026-05-24 12:03
 
 ## Branch
 
@@ -25,8 +25,8 @@ codex:unavailable
 Clean
 
 ## Recent Commits
-1d723de chore(lane): release migration lock after UTV2-1085 merge
-19cb766 chore(ops): close UTV2-1085 lane + fix truth-check G4 pagination
-f0c2a2a chore(proof): UTV2-1085 bind proof to merge SHA 8b528be3
-8b528be feat(UTV2-1085): INIT-1.1.2 — Immutable OddsSnapshot Table and Triggers (#832)
-7b29ef1 chore(lanes): UTV2-1085 in_review — PR #832 open
+2a55be1 chore(ops): close UTV2-1155 + bind proof to merge SHA 04055ee4
+04055ee fix(ingestor): UTV2-1155 fail-closed on missing SGO_API_KEY at startup
+eadafd0 chore(ops): close UTV2-1034 + governance exception documented
+e14e60f chore(ops): UTV2-1034 proof SHA binding + manifest status update
+3081cca feat(analytics): UTV2-1034 calibration baseline script + live DB run (squash)
