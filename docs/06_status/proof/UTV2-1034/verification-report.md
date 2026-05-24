@@ -41,4 +41,4 @@
 
 ## Data Gate Confirmation
 
-The script correctly defers tier-label decisions when sample size < 20. Script infrastructure is production-ready; calibration metrics will be generated automatically once sufficient confidence-bearing settled picks accumulate post-ingestor recovery (tracked in UTV2-1032).
+The script correctly defers tier-label decisions when sample size < 20. Script infrastructure is production-ready; calibration metrics will be generated when the script is rerun after sufficient confidence-bearing settled picks accumulate post-ingestor recovery (tracked in UTV2-1032).

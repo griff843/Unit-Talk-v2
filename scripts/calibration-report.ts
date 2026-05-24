@@ -16,7 +16,7 @@
  *   tsx scripts/calibration-report.ts [--after=YYYY-MM-DD] [--output=path.md] [--json]
  *
  * Default --after: 2026-05-11 (post-fix baseline)
- * Default --output: docs/06_status/proof/calibration-baseline-YYYYMMDD.md
+ * Default --output: docs/06_status/proof/UTV2-1034/calibration-baseline-YYYYMMDD.md
  */
 
 import { createClient } from '@supabase/supabase-js';
@@ -285,7 +285,7 @@ async function main() {
   const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
   const defaultOutput = resolve(
     __dirname,
-    `../docs/06_status/proof/calibration-baseline-${today}.md`,
+    `../docs/06_status/proof/UTV2-1034/calibration-baseline-${today}.md`,
   );
   const outputPath =
     process.argv.find((a) => a.startsWith('--output='))?.split('=')[1] ?? defaultOutput;

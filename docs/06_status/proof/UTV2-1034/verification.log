@@ -17,7 +17,7 @@ tsx scripts/calibration-report.ts --after=2026-05-11
 - DB connected: ✅ (Supabase project zfzdnfwdarxucxtaojxm)
 - Total rows queried: 2
 - Usable rows: 0 (null confidence)
-- Output written: docs/06_status/proof/calibration-baseline-20260524.md
+- Output written: docs/06_status/proof/UTV2-1034/calibration-baseline-20260524.md
 - Follow-on required: No (insufficient data gate)
 
 ## Acceptance Criteria
