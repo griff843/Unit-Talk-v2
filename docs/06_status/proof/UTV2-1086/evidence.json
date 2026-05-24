@@ -7,8 +7,8 @@
   "sha_binding": {
     "verified_source_sha": "90ab556c03de35a8954a8ad7b528951d9f0f9888",
     "verified_source_note": "Last non-proof substantive commit on branch (CI gate fixes: pr-review-packet monorepo path detection + scope lock)",
-    "evidence_commit_sha": "BIND_ON_MERGE",
-    "current_pr_head_sha": "BIND_ON_MERGE"
+    "evidence_commit_sha": "c3648740d766bb4d07f374c42c84205c9a07a7f0",
+    "current_pr_head_sha": "c3648740d766bb4d07f374c42c84205c9a07a7f0"
   },
   "executor": "claude",
   "executed_at": "2026-05-24T16:30:00.000Z",
