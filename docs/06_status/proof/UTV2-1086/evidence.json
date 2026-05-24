@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1086",
   "title": "INIT-1.1.3 — Snapshot Cutover and Point-in-Time Reconstruction",
   "tier": "T1",
@@ -55,7 +55,17 @@
       "status": "PASS",
       "verified_sql": "SELECT obj_description('public.provider_offer_current'::regclass, 'pg_class') AS table_comment",
       "result": "DERIVED PROJECTION — not truth. Materialized hot-current view of provider odds, maintained for pick-pipeline operational reads. Canonical truth for point-in-time reconstruction is odds_snapshots (UTV2-1085). Do not treat this table as authoritative for historical market state. Demoted per INIT-1.1.3 / UTV2-1086."
-    }
+    },
+    "queries": [
+      { "table": "odds_snapshots", "operation": "queryAtTimestamp", "count": 50, "note": "50 point-in-time queries across 50 distinct timestamps — all returned correct snapshot" },
+      { "table": "odds_snapshots", "operation": "queryAtTimestamp (null check)", "count": 1, "note": "query before any data returns null" },
+      { "table": "odds_snapshots", "operation": "queryAtTimestamp (adversarial)", "count": 1, "note": "later snapshot not visible at earlier timestamp" },
+      { "table": "provider_offer_current", "operation": "obj_description", "count": 1, "note": "confirmed COMMENT ON TABLE applied live — DERIVED PROJECTION label present" }
+    ],
+    "row_counts": [
+      { "table": "odds_snapshots", "count": 57 },
+      { "table": "provider_offer_current", "count": 256357 }
+    ]
   },
   "constitutional_claims": [
     "Blueprint Layer 3.2 satisfied: point-in-time query interface added to OddsSnapshotRepository",
