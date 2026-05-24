@@ -10,3 +10,4 @@ entities:
   proofs:
     - docs/06_status/proof/UTV2-1155/diff-summary.md
     - docs/06_status/proof/UTV2-1155/verification.log
+    - docs/06_status/proof/UTV2-1155/canonical-diff.json
