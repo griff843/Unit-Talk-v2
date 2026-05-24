@@ -30,7 +30,7 @@
   ],
   "status": "done",
   "started_at": "2026-05-24T01:33:12.209Z",
-  "heartbeat_at": "2026-05-24T15:07:56.276Z",
+  "heartbeat_at": "2026-05-24T15:08:49.341Z",
   "closed_at": "2026-05-24T08:25:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1155-ingestor-fail-closed-missing-secrets.json",
@@ -72,6 +72,18 @@
       "failures": [
         "G4",
         "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-24T15:08:49.341Z",
+      "verdict": "fail",
+      "merge_sha": "3944ec01b6c9935c610bc26b57cbb72549dd06fd",
+      "failures": [
+        "G3",
+        "P3",
+        "P4",
         "C4"
       ],
       "runner": "manual"
