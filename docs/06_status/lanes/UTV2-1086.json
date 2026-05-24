@@ -14,6 +14,7 @@
     ".lane/migration-lock.yml",
     ".ops/sync/UTV2-1086.yml",
     "apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts",
+    "apps/ingestor/package.json",
     "db/migrations-rollback/20260524001_utv2_1086_snapshot_cutover.down.sql",
     "docs/06_status/lanes/UTV2-1086.json",
     "docs/06_status/lanes/UTV2-1157-codex.json",
