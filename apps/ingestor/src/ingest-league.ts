@@ -1,8 +1,11 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import {
   CircuitBreaker,
+  CircuitOpenError,
   type CircuitBreakerOptions,
+  type CircuitBreakerSnapshot,
 } from './circuit-breaker.js';
+import { type ProviderQuarantineRegistry } from './provider-quarantine.js';
 import { archiveRawProviderPayload, shouldBlockOnArchiveFailure } from './raw-provider-payload-archive.js';
 import { resolveSgoEntities } from './entity-resolver.js';
 import {
@@ -73,6 +76,8 @@ export interface IngestLeagueOptions {
   providerOfferProofStatus?: 'required' | 'verified' | 'waived';
   providerOfferFreshnessMaxAgeMs?: number;
   replayCaptureSession?: ProviderOfferReplayCaptureSession;
+  /** Optional quarantine registry — receives circuit-open events for this provider. */
+  quarantineRegistry?: ProviderQuarantineRegistry;
 }
 
 export interface IngestQuotaSummary {
@@ -167,6 +172,8 @@ export async function ingestLeague(
   });
 
   try {
+    options.quarantineRegistry?.assertAvailable('sgo');
+
     let fetched: SGOFetchResult;
     let resolved = { resolvedEventsCount: 0, resolvedParticipantsCount: 0 };
     let upsert = { insertedCount: 0, updatedCount: 0 };
@@ -209,7 +216,7 @@ export async function ingestLeague(
           createEmptyFetchResult(snapshotAt),
           options.circuitBreaker,
         );
-      fetched = await oddsCb.call();
+      fetched = await oddsCb.call(oddsFetchFn);
 
       try {
         await archiveRawProviderPayload({
@@ -492,7 +499,7 @@ export async function ingestLeague(
           emptyResults,
           options.circuitBreaker,
         );
-      fetchedResults = await resultsCb.call();
+      fetchedResults = await resultsCb.call(resultsFetchFn);
       try {
         await archiveRawProviderPayload({
           providerKey: 'sgo',
@@ -605,6 +612,14 @@ export async function ingestLeague(
       quota,
     };
   } catch (error) {
+    if (error instanceof CircuitOpenError && options.quarantineRegistry) {
+      const snap = selectCircuitOpenSnapshot(options.circuitBreakers);
+      options.quarantineRegistry.quarantine('sgo', 'circuit_open', {
+        failureCount: snap?.totalFailures ?? 0,
+        league,
+        openedAt: error.openedAt,
+      });
+    }
     const failure = classifyProviderIngestionFailure(error, {
       providerKey: 'sgo',
       sportKey: league,
@@ -641,6 +656,20 @@ export async function ingestLeague(
     });
     throw error;
   }
+}
+
+function selectCircuitOpenSnapshot(
+  circuitBreakers: IngestLeagueOptions['circuitBreakers'],
+): CircuitBreakerSnapshot | undefined {
+  const snapshots = [
+    circuitBreakers?.odds?.snapshot(),
+    circuitBreakers?.results?.snapshot(),
+  ].filter((snapshot): snapshot is CircuitBreakerSnapshot => snapshot !== undefined);
+  return (
+    snapshots.find((snapshot) => snapshot.state === 'open') ??
+    snapshots.find((snapshot) => snapshot.state === 'half-open') ??
+    snapshots.sort((left, right) => right.totalFailures - left.totalFailures)[0]
+  );
 }
 
 function summarizeQuotaTelemetry(

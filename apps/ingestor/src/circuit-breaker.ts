@@ -3,20 +3,36 @@
  *
  * States:
  *   closed   — normal operation, calls pass through
- *   open     — circuit tripped after consecutive failures, calls return fallback
+ *   open     — circuit tripped after consecutive failures
  *   half-open — cooldown expired, next call is a probe; success closes, failure re-opens
  *
- * Fail-open: when the circuit is open, the wrapped function is NOT called and the
- * configured fallback value is returned instead (graceful degradation).
+ * Default (fail-open): when the circuit is open, returns the configured fallback value.
+ * Fail-closed (failClosed: true): when open, throws CircuitOpenError instead of degrading.
  */
 
 export type CircuitBreakerState = 'closed' | 'open' | 'half-open';
+
+export class CircuitOpenError extends Error {
+  readonly providerKey: string | undefined;
+  readonly openedAt: number | null;
+  constructor(message: string, options: { providerKey?: string; openedAt: number | null } = { openedAt: null }) {
+    super(message);
+    this.name = 'CircuitOpenError';
+    this.providerKey = options.providerKey;
+    this.openedAt = options.openedAt;
+  }
+}
 
 export interface CircuitBreakerOptions {
   /** Consecutive failures required to open the circuit (default: 3). */
   failureThreshold?: number;
   /** Milliseconds before an open circuit transitions to half-open (default: 60_000). */
   cooldownMs?: number;
+  /**
+   * When true, throw CircuitOpenError when the circuit is open instead of returning fallback.
+   * Use for provider calls where silent degradation is unacceptable (Gap #19).
+   */
+  failClosed?: boolean;
   /** Optional clock override for testing. */
   now?: () => number;
 }
@@ -34,6 +50,7 @@ export interface CircuitBreakerSnapshot {
 export class CircuitBreaker<T> {
   private readonly failureThreshold: number;
   private readonly cooldownMs: number;
+  private readonly failClosed: boolean;
   private readonly now: () => number;
 
   private consecutiveFailures = 0;
@@ -50,6 +67,7 @@ export class CircuitBreaker<T> {
   ) {
     this.failureThreshold = options.failureThreshold ?? 3;
     this.cooldownMs = options.cooldownMs ?? 60_000;
+    this.failClosed = options.failClosed ?? false;
     this.now = options.now ?? (() => Date.now());
   }
 
@@ -75,29 +93,46 @@ export class CircuitBreaker<T> {
     };
   }
 
-  async call(): Promise<T> {
+  async call(fnOverride?: () => Promise<T>): Promise<T> {
     const currentState = this.state;
 
     if (currentState === 'open') {
+      if (this.failClosed) {
+        throw new CircuitOpenError(
+          `Circuit is open — provider call rejected (fail-closed)`,
+          { openedAt: this.openedAt },
+        );
+      }
       this.totalFallbacks += 1;
       return this.fallback;
     }
 
     // closed or half-open — attempt the call
     try {
-      const result = await this.fn();
+      const result = await (fnOverride ?? this.fn)();
       this.onSuccess();
       return result;
     } catch (error: unknown) {
       this.onFailure();
-      // In half-open, the probe failed — circuit stays open, return fallback
+      // In half-open, the probe failed — circuit stays open
       if (currentState === 'half-open') {
+        if (this.failClosed) {
+          throw new CircuitOpenError(
+            `Circuit re-opened on half-open probe failure (fail-closed)`,
+            { openedAt: this.openedAt },
+          );
+        }
         this.totalFallbacks += 1;
         return this.fallback;
       }
-      // In closed state, if we just opened the circuit return fallback;
-      // otherwise propagate the error so the caller sees transient failures.
+      // In closed state, if we just opened the circuit:
       if (this.state === 'open') {
+        if (this.failClosed) {
+          throw new CircuitOpenError(
+            `Circuit opened after consecutive failures (fail-closed)`,
+            { openedAt: this.openedAt },
+          );
+        }
         this.totalFallbacks += 1;
         return this.fallback;
       }
