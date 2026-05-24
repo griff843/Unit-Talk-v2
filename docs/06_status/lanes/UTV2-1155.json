@@ -2,13 +2,13 @@
   "schema_version": 1,
   "issue_id": "UTV2-1155",
   "lane_type": "data-canonical",
-  "executor": "claude",
+  "executor": "codex",
   "tier": "T2",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1155-ingestor-fail-closed-missing-secrets",
-  "branch": "claude/utv2-1155-ingestor-fail-closed-missing-secrets",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1155-clean-remediation",
+  "branch": "codex/utv2-1155-clean-remediation",
   "base_branch": "main",
-  "commit_sha": "04055ee44642b3246c801104e01c2c88cd049c97",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/837",
+  "commit_sha": "3944ec01b6c9935c610bc26b57cbb72549dd06fd",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/840",
   "files_changed": [],
   "file_scope_lock": [
     "apps/ingestor/src/index.ts",
@@ -30,9 +30,8 @@
   ],
   "status": "done",
   "started_at": "2026-05-24T01:33:12.209Z",
-  "heartbeat_at": "2026-05-24T08:25:00.000Z",
+  "heartbeat_at": "2026-05-24T15:07:56.276Z",
   "closed_at": "2026-05-24T08:25:00.000Z",
-  "admin_merge_reason": "PM verbally approved (#837) in session. Merge Gate CI failed because no PM_VERDICT comment was posted to the PR before admin merge. All other checks passed (verify, Executor Result Validation, P0 Protocol, all gates). Constitutional T2 fix (kind:runtime, truth-critical). Governance exception documented per CLAUDE.md.",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1155-ingestor-fail-closed-missing-secrets.json",
   "created_by": "claude",
@@ -51,16 +50,31 @@
       "checked_at": "2026-05-24T08:23:14.211Z",
       "verdict": "fail",
       "merge_sha": "04055ee44642b3246c801104e01c2c88cd049c97",
-      "failures": ["G4"],
+      "failures": [
+        "G4"
+      ],
       "runner": "manual"
     },
     {
       "checked_at": "2026-05-24T08:25:00.000Z",
       "verdict": "governance_exception",
       "merge_sha": "04055ee44642b3246c801104e01c2c88cd049c97",
-      "failures": ["G4"],
+      "failures": [
+        "G4"
+      ],
       "runner": "manual",
       "note": "G4 blocked by Merge Gate failure on admin-merged PR. All other checks pass including C6 runtime evidence. Admin merge documented in admin_merge_reason field."
+    },
+    {
+      "checked_at": "2026-05-24T15:07:56.276Z",
+      "verdict": "fail",
+      "merge_sha": "04055ee44642b3246c801104e01c2c88cd049c97",
+      "failures": [
+        "G4",
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
