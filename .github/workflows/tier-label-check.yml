@@ -2,48 +2,133 @@ name: Tier Label Check
 
 on:
   pull_request:
-    types: [reopened, labeled, unlabeled, ready_for_review]
+    types: [opened, synchronize, reopened, labeled, unlabeled, ready_for_review]
 
 permissions:
+  contents: read
+  issues: write
   pull-requests: write
 
 jobs:
   check-tier-label:
-    name: Require tier label
+    name: Sync tier label
     runs-on: ubuntu-latest
     steps:
-      - name: Check for tier label
+      - name: Sync PR tier label from lane manifest
         uses: actions/github-script@v7
         with:
           script: |
-            const labels = context.payload.pull_request.labels.map(l => l.name);
-            const validTierLabels = new Set(['tier:T1', 'tier:T2', 'tier:T3']);
-            const tierLabels = labels.filter(l => l.startsWith('tier:'));
+            const pr = context.payload.pull_request;
+            const labels = pr.labels.map(l => l.name).filter(Boolean);
+            const issueMatch = pr.head.ref.match(/(?:^|\/)((?:utv2|uni)-\d+)/i) ||
+              (pr.title || '').match(/((?:UTV2|UNI)-\d+)/i);
+            const issueId = issueMatch ? issueMatch[1].toUpperCase() : null;
 
-            if (tierLabels.length === 1 && validTierLabels.has(tierLabels[0])) {
-              console.log('Tier label present:', tierLabels[0]);
+            if (!issueId) {
+              core.setFailed('No issue ID found in PR branch or title. Cannot resolve authoritative tier.');
               return;
             }
 
-            const reason =
-              tierLabels.length === 0
-                ? 'Tier label missing.'
-                : tierLabels.length > 1
-                  ? `Multiple tier labels present: ${tierLabels.join(', ')}.`
-                  : `Invalid tier label present: ${tierLabels[0]}.`;
+            async function readManifest(ref) {
+              try {
+                const { data } = await github.rest.repos.getContent({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  path: `docs/06_status/lanes/${issueId}.json`,
+                  ref,
+                });
+                if (Array.isArray(data) || !data.content) return null;
+                return JSON.parse(Buffer.from(data.content, data.encoding || 'base64').toString('utf8'));
+              } catch (error) {
+                if (error.status === 404) return null;
+                throw error;
+              }
+            }
 
+            const manifest = await readManifest(pr.head.sha) || await readManifest(pr.base.sha);
+            const tier = manifest && /^(T1|T2|T3)$/.test(String(manifest.tier))
+              ? String(manifest.tier).toUpperCase()
+              : null;
+
+            if (!tier) {
+              core.setFailed(
+                `No authoritative tier found for ${issueId}. ` +
+                'GitHub tier labels are evidence only; add/fix the lane manifest tier from Linear.'
+              );
+              return;
+            }
+
+            if (manifest.issue_id && String(manifest.issue_id).toUpperCase() !== issueId) {
+              core.setFailed(`Lane manifest issue_id ${manifest.issue_id} does not match PR issue ${issueId}.`);
+              return;
+            }
+
+            const expected = `tier:${tier}`;
+            const tierLabels = labels.filter(l => /^tier:T[123]$/i.test(l));
+            const normalizedTierLabels = [...new Set(tierLabels.map(l => {
+              const match = l.match(/^tier:(T[123])$/i);
+              return `tier:${match[1].toUpperCase()}`;
+            }))];
+
+            if (normalizedTierLabels.length === 0) {
+              await github.rest.issues.addLabels({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                labels: [expected],
+              });
+              core.notice(`Applied ${expected} from authoritative lane manifest for ${issueId}.`);
+              return;
+            }
+
+            const unexpected = normalizedTierLabels.filter(l => l !== expected);
+            if (unexpected.length > 0 || normalizedTierLabels.length > 1) {
+              for (const label of unexpected) {
+                await github.rest.issues.removeLabel({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  name: label,
+                }).catch(error => {
+                  if (error.status !== 404) throw error;
+                });
+              }
+              if (!normalizedTierLabels.includes(expected)) {
+                await github.rest.issues.addLabels({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  issue_number: pr.number,
+                  labels: [expected],
+                });
+              }
+              core.setFailed(
+                `Tier drift corrected but this run fails closed: authoritative ${expected}, ` +
+                `PR had ${normalizedTierLabels.join(', ')}. Re-run after label sync completes.`
+              );
+              return;
+            }
+
+            if (normalizedTierLabels[0] !== expected) {
+              core.setFailed(`Tier mismatch: authoritative ${expected}, PR has ${normalizedTierLabels[0]}.`);
+              return;
+            }
+
+            core.notice(`Tier label consistent: ${expected} mirrors lane manifest for ${issueId}.`);
+
+      - name: Comment on blocked tier state
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
             const body = [
-              `**${reason}**`,
+              '**Tier label synchronization blocked**',
               '',
-              'Add one of the following before this PR can merge:',
-              '- `tier:T1` — production-critical path (requires `t1-approved` from PM)',
-              '- `tier:T2` — moderate impact with tests',
-              '- `tier:T3` — low impact / tooling / docs',
+              'GitHub tier labels are required evidence, but they are not authoritative.',
+              'Fix the Linear/lane manifest tier first; automation will mirror the matching `tier:T*` label.',
               '',
-              'The Merge Gate will block without a tier label.',
+              'PM is not required to manually apply or reapply the GitHub tier label.'
             ].join('\n');
 
-            // Only post if no existing tier-check comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -52,7 +137,7 @@ jobs:
 
             const existing = comments.find(c =>
               c.user.login === 'github-actions[bot]' &&
-              c.body.includes('Tier label')
+              c.body.includes('Tier label synchronization blocked')
             );
 
             if (!existing) {
@@ -63,5 +148,3 @@ jobs:
                 body,
               });
             }
-
-            core.setFailed(reason);
