@@ -2,29 +2,34 @@
 
 **Issue:** Ingestor daemon must fail-closed when required provider secrets are missing  
 **Tier:** T2  
-**Branch:** claude/utv2-1155-ingestor-fail-closed-missing-secrets  
-**Merge SHA:** `04055ee44642b3246c801104e01c2c88cd049c97`  
-**PR:** https://github.com/griff843/Unit-Talk-v2/pull/837  
-**Status:** Merged
+**Branch:** codex/utv2-1155-clean-remediation
+**Base:** current `origin/main` after merged PR #837
+**Status:** Clean urgent remediation for #837 overbroad startup guard
 
 ## Changes
 
 ### `apps/ingestor/src/index.ts`
-Added startup fail-closed guard before the autorun block:
-- When `runtime.autorun === true` AND `runtime.sgoApiKeys.length === 0`
+Narrowed the already-merged startup fail-closed guard before the autorun block:
+- When `runtime.autorun === true` AND no SGO credential exists AND `ODDS_API_KEY` is absent
 - Daemon logs a fatal JSON message to stderr and calls `process.exit(1)`
-- Container shows `Exited (1)` instead of running while ingesting nothing
+- Odds API-only autorun remains valid unless PM ratifies "SGO required for all autorun"
+- Container shows `Exited (1)` only when no provider mode is configured
 
-### `apps/ingestor/src/ingest-odds-api.ts`
-- `OddsApiIngestOptions.apiKey` typed as `?: string` (was `string`) to match the existing `!apiKey` runtime guard
-- Added explicit `logger?.warn?.(...)` when ODDS_API_KEY is absent (was silent skip)
-
-### `apps/ingestor/src/ingest-fail-closed.test.ts` (new)
-3 tests covering the startup secret-check path:
+### `apps/ingestor/src/ingest-fail-closed.test.ts`
+Expanded the merged fail-closed test file to 6 tests covering provider-missing behavior and startup-path enforcement:
 1. `ingestLeague returns skipped with warning when SGO_API_KEY is absent`
 2. `ingestOddsApiLeague emits warning log when ODDS_API_KEY is absent`
-3. `collectConfiguredSgoApiKeyCandidates returns empty array when no SGO env vars set` — this is the exact condition checked by the startup guard
+3. `collectConfiguredSgoApiKeyCandidates returns empty array when no SGO env vars set`
+4. Subprocess import of `apps/ingestor/src/index.ts` exits non-zero and emits fatal JSON for autorun with no SGO and no Odds API key
+5. Subprocess import preserves Odds API-only autorun and does not emit fatal startup JSON
+6. Subprocess import preserves non-autorun startup with no SGO key and does not emit fatal startup JSON
+
+### Proof Files
+- Updated this proof packet to distinguish merged #837 behavior from this clean remediation PR.
+- No lane metadata, sync files, package scripts, replay, outbox, lifecycle, settlement, queue, or schema files are changed by this remediation PR.
 
 ## Verification
-- `pnpm verify`: 113/113 tests PASS, 0 failures
-- `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS (no R-level artifacts required for ingestor-provider rule)
+- Targeted: `tsx --test apps/ingestor/src/ingest-fail-closed.test.ts`
+- Relevant package: `pnpm --filter @unit-talk/ingestor test`
+- Full gate: `pnpm verify`
+- R-level check: `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD` PASS (`ingestor-provider`)
