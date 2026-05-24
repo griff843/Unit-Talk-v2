@@ -5,10 +5,10 @@
   "tier": "T1",
   "lane_type": "runtime",
   "sha_binding": {
-    "verified_source_sha": "96aceb727f968e6f0dce60ac389d31310f2e1b29",
-    "verified_source_note": "Last non-proof substantive commit — adversarial review fixes for fail-closed breaker, quarantine enforcement, audit events, and scanner freshness coverage",
+    "verified_source_sha": "08b9d179a765f0ca7a5f507e42e39acd47049adf",
+    "verified_source_note": "Last non-proof substantive commit — scope lock expansion + candidate-pick-scanner.test.ts wired to test suite; all 3 gaps implemented and adversarial-tested",
     "evidence_commit_sha": "BIND_ON_MERGE",
-    "current_pr_head_sha": "96aceb727f968e6f0dce60ac389d31310f2e1b29"
+    "current_pr_head_sha": "08b9d179a765f0ca7a5f507e42e39acd47049adf"
   },
   "executor": "claude",
   "executed_at": "2026-05-24T22:30:00.000Z",
