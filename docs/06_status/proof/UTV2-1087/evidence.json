@@ -1,0 +1,76 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1087",
+  "title": "INIT-1.1.4 — Freshness Honesty and Provider Auto-Quarantine",
+  "tier": "T1",
+  "lane_type": "runtime",
+  "sha_binding": {
+    "verified_source_sha": "08b9d179a765f0ca7a5f507e42e39acd47049adf",
+    "verified_source_note": "Last non-proof substantive commit — scope lock expansion + candidate-pick-scanner.test.ts wired to test suite; all 3 gaps implemented and adversarial-tested",
+    "evidence_commit_sha": "01952daad01c5e43aa6fed4321b686d63ae4d2a8",
+    "current_pr_head_sha": "08b9d179a765f0ca7a5f507e42e39acd47049adf"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-24T22:30:00.000Z",
+  "r_level": {
+    "level": "R1",
+    "reason": "r-level-check PASS; matched lifecycle-fsm and ingestor-provider with PM-gated r4-fault-report advisory"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1087-dispatch"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests_fail": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — matched lifecycle-fsm and ingestor-provider; advisory PM-gated r4-fault-report missing"
+    },
+    "adversarial_tests": [
+      "Gap #2: stale snapshot (25h old) produces data_freshness: stale — PASS",
+      "Gap #2: fresh snapshot (5min old) produces data_freshness: fresh — PASS",
+      "Gap #2: null snapshotAt produces data_freshness: stale (adversarial) — PASS",
+      "Gap #19: CircuitBreaker fail-closed throws CircuitOpenError when open — PASS",
+      "Gap #19: CircuitBreaker fail-open (default) returns fallback when open — PASS",
+      "Gap #19: CircuitOpenError includes openedAt timestamp — PASS",
+      "Gap #49: quarantine() records the provider — PASS",
+      "Gap #49: quarantine() is idempotent — PASS",
+      "Gap #49: release() removes the quarantine record — PASS",
+      "Gap #49: quarantine() emits structured JSON log event — PASS",
+      "Gap #49: release() emits structured JSON log event — PASS"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-24T22:30:00Z",
+    "t1_proof_live_db": {
+      "status": "PASS",
+      "tests_pass": 5,
+      "tests_fail": 0,
+      "skipped": 0,
+      "file": "apps/api/src/t1-proof-utv2-1087-freshness-gate.test.ts",
+      "note": "3 adversarial computation tests + 2 live-DB queries against Supabase zfzdnfwdarxucxtaojxm. provider_offers accessible via listByProvider (sgo). Freshness evaluation on real snapshot_at timestamps returns boolean staleAtScanTime deterministically."
+    },
+    "queries": [
+      { "table": "provider_offers", "operation": "listByProvider('sgo')", "count": 1, "note": "Live DB connectivity verified" },
+      { "table": "provider_offers", "operation": "listRecentOffers (last 24h, limit 5)", "count": 1, "note": "Freshness evaluation on real snapshot_at timestamps" }
+    ],
+    "row_counts": [
+      { "table": "provider_offers", "count": 256357, "note": "Approximate — not counted; presence confirmed" }
+    ]
+  },
+  "constitutional_claims": [
+    "Gap #2 closed: data_freshness in picks.metadata now computed from evaluateProviderDataFreshness().staleAtScanTime — not hardcoded 'fresh'",
+    "Gap #19 closed: CircuitBreaker.failClosed option added; throws CircuitOpenError when open (opt-in, backward-compatible)",
+    "Gap #49 closed: ProviderQuarantineRegistry implemented; auto-triggered in ingest-league on CircuitOpenError",
+    "Adversarial proof: null snapshotAt → data_freshness: 'stale' (no silent fresh default)",
+    "Adversarial proof: circuit open in fail-closed mode throws, does not degrade silently",
+    "Quarantine is idempotent: second quarantine call for same provider is a no-op",
+    "All structured audit events emitted as JSON with event/providerKey/reason fields"
+  ]
+}

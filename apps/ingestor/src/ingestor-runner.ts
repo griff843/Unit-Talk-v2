@@ -1,6 +1,8 @@
 import type { DatabaseConnectionConfig, EventRow, IngestorRepositoryBundle } from '@unit-talk/db';
+import { CircuitBreaker, type CircuitBreakerOptions } from './circuit-breaker.js';
 import { ingestLeague, type IngestLeagueSummary } from './ingest-league.js';
 import { ingestOddsApiLeague, type OddsApiIngestSummary } from './ingest-odds-api.js';
+import { ProviderQuarantineRegistry } from './provider-quarantine.js';
 import type {
   ProviderIngestionDbWritePolicy,
   ProviderPayloadArchivePolicy,
@@ -9,7 +11,12 @@ import {
   runProviderOfferHistoryRetention,
   type ProviderOfferHistoryRetentionResult,
 } from './provider-offer-history-retention.js';
-import { fetchSGOAccountUsage, type SGOAccountUsage } from './sgo-fetcher.js';
+import {
+  fetchSGOAccountUsage,
+  fetchSGOResultsWithTelemetry,
+  type SGOAccountUsage,
+  type SGOFetchResult,
+} from './sgo-fetcher.js';
 import {
   formatSchedulerLog,
   resolveCurrentPollIntervalMs,
@@ -39,6 +46,8 @@ export interface IngestorRunnerOptions {
   /** Max total time for the results pagination loop (ms). Defaults to 300_000 in sgo-fetcher. */
   resultsMaxFetchMs?: number;
   logger?: Pick<Console, 'warn' | 'info'>;
+  /** Production runtime forces failClosed=true when constructing provider breakers. */
+  circuitBreaker?: CircuitBreakerOptions;
   providerDbWritePolicy?: ProviderIngestionDbWritePolicy;
   providerPayloadArchivePolicy?: ProviderPayloadArchivePolicy;
   triggerGradingRun?: typeof triggerGradingRun;
@@ -76,6 +85,15 @@ const CYCLE_GAP_WARN_MS = 10 * 60 * 1000;
 const DEFAULT_RESULTS_LOOKBACK_HOURS = 48;
 const FINALIZED_REPOLL_BATCH_SIZE = 25;
 
+type SgoResultsFetchResult = Awaited<
+  ReturnType<typeof fetchSGOResultsWithTelemetry>
+>;
+
+interface SgoCircuitBreakers {
+  odds: CircuitBreaker<SGOFetchResult>;
+  results: CircuitBreaker<SgoResultsFetchResult>;
+}
+
 export async function runIngestorCycles(
   options: IngestorRunnerOptions,
 ): Promise<IngestorCycleSummary[]> {
@@ -86,6 +104,10 @@ export async function runIngestorCycles(
   const sleep = options.sleep ?? defaultSleep;
   const summaries: IngestorCycleSummary[] = [];
   let lastCycleEndMs: number | null = null;
+  const quarantineRegistry = new ProviderQuarantineRegistry({
+    ...(options.logger ? { logger: options.logger } : {}),
+  });
+  const sgoCircuitBreakers = createSgoCircuitBreakers(options.circuitBreaker);
 
   for (let cycle = 1; cycle <= maxCycles; cycle += 1) {
     if (lastCycleEndMs !== null) {
@@ -123,6 +145,12 @@ export async function runIngestorCycles(
             ...(options.providerPayloadArchivePolicy
               ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
               : {}),
+            circuitBreaker: {
+              ...options.circuitBreaker,
+              failClosed: true,
+            },
+            circuitBreakers: sgoCircuitBreakers,
+            quarantineRegistry,
           }),
         );
       } catch (leagueError: unknown) {
@@ -135,6 +163,10 @@ export async function runIngestorCycles(
     const finalizedRepolls = await runFinalizedRepollsForCycle(
       cycleSnapshotAt,
       options,
+      {
+        circuitBreakers: sgoCircuitBreakers,
+        quarantineRegistry,
+      },
     );
 
     // Odds API ingest (Pinnacle + multi-book consensus) — runs alongside SGO
@@ -230,6 +262,10 @@ export async function runIngestorCycles(
 async function runFinalizedRepollsForCycle(
   snapshotAt: string,
   options: IngestorRunnerOptions,
+  runtime: {
+    circuitBreakers: SgoCircuitBreakers;
+    quarantineRegistry: ProviderQuarantineRegistry;
+  },
 ): Promise<IngestLeagueSummary[]> {
   if (!options.apiKey || options.skipResults) {
     return [];
@@ -292,12 +328,79 @@ async function runFinalizedRepollsForCycle(
           ...(options.providerPayloadArchivePolicy
             ? { providerPayloadArchivePolicy: options.providerPayloadArchivePolicy }
             : {}),
+          circuitBreaker: {
+            ...options.circuitBreaker,
+            failClosed: true,
+          },
+          circuitBreakers: runtime.circuitBreakers,
+          quarantineRegistry: runtime.quarantineRegistry,
         }),
       );
     }
   }
 
   return repolls;
+}
+
+function createSgoCircuitBreakers(
+  options: CircuitBreakerOptions = {},
+): SgoCircuitBreakers {
+  const breakerOptions = {
+    ...options,
+    failClosed: true,
+  };
+  return {
+    odds: new CircuitBreaker(
+      async () => createEmptySgoFetchResult(),
+      createEmptySgoFetchResult(),
+      breakerOptions,
+    ),
+    results: new CircuitBreaker(
+      async () => createEmptySgoResultsFetchResult(),
+      createEmptySgoResultsFetchResult(),
+      breakerOptions,
+    ),
+  };
+}
+
+function createEmptySgoFetchResult(): SGOFetchResult {
+  return {
+    eventsCount: 0,
+    events: [],
+    pairedProps: [],
+    rawPayloads: [],
+    rawBodies: [],
+    requestTelemetry: createEmptySgoRequestTelemetry('odds'),
+  };
+}
+
+function createEmptySgoResultsFetchResult(): SgoResultsFetchResult {
+  return {
+    results: [],
+    rawPayloads: [],
+    rawBodies: [],
+    requestTelemetry: createEmptySgoRequestTelemetry('results'),
+  };
+}
+
+function createEmptySgoRequestTelemetry(endpoint: 'odds' | 'results') {
+  return {
+    provider: 'sgo' as const,
+    endpoint,
+    requestCount: 0,
+    successfulRequests: 0,
+    creditsUsed: 0,
+    limit: null,
+    remaining: null,
+    resetAt: null,
+    lastStatus: null,
+    rateLimitHitCount: 0,
+    backoffCount: 0,
+    backoffMs: 0,
+    retryAfterMs: null,
+    throttled: false,
+    headersSeen: false,
+  };
 }
 
 function readEventStartsAt(event: EventRow) {
