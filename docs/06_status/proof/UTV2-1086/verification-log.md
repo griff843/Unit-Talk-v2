@@ -88,6 +88,16 @@ SELECT obj_description('public.provider_offer_current'::regclass, 'pg_class') AS
 
 None.
 
+## Verification
+
+| Check | Result |
+|---|---|
+| pnpm verify | PASS — 113/113 tests, type-check clean, lint clean |
+| T1 live-DB proof | PASS — 3/3 tests against live Supabase zfzdnfwdarxucxtaojxm |
+| Migration applied | PASS — COMMENT ON TABLE confirmed live |
+| R-level | PASS — no artifacts required |
+| Adversarial | PASS — later snapshot not visible at earlier query timestamp |
+
 ## Sign-off
 
 | Field | Value |
