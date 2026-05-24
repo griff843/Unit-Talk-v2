@@ -71,6 +71,8 @@
 
     "ops:proof-check": "tsx scripts/ops/proof-check.ts",
     "ops:tier-sync": "tsx scripts/ops/tier-sync.ts",
+    "ops:review": "tsx scripts/ops/review.ts",
+    "ops:review-verdict": "tsx scripts/ops/review-verdict.ts",
     "ops:queue-grooming": "tsx scripts/ops/queue-grooming.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
     "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
