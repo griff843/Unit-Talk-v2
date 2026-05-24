@@ -26,10 +26,13 @@
   "file_scope_lock": [
     "apps/api/package.json",
     "apps/api/src/candidate-pick-scanner.ts",
+    "apps/api/src/candidate-pick-scanner.test.ts",
     "apps/api/src/t1-proof-utv2-1087-freshness-gate.test.ts",
     "apps/ingestor/package.json",
     "apps/ingestor/src/circuit-breaker.ts",
     "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/ingestor-runner.ts",
+    "apps/ingestor/src/ingestor.test.ts",
     "apps/ingestor/src/provider-quarantine.test.ts",
     "apps/ingestor/src/provider-quarantine.ts",
     "docs/06_status/proof/UTV2-1087/evidence.json",
