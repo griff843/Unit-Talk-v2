@@ -6,8 +6,8 @@
     {
       "file": "apps/ingestor/src/index.ts",
       "change_type": "modified",
-      "description": "Added startup fail-closed guard: process.exit(1) when autorun=true and SGO_API_KEY is absent",
-      "affected_providers": ["sgo"],
+      "description": "Narrowed startup fail-closed guard: process.exit(1) only when autorun=true and no SGO_API_KEY/SGO_API_KEY_FALLBACK/SGO_API_KEYS or ODDS_API_KEY is configured. Odds API-only autorun is explicitly preserved.",
+      "affected_providers": ["sgo", "odds-api"],
       "constitutional_invariant": "10 — fail closed, no silent fallback"
     },
     {
@@ -21,14 +21,18 @@
   "new_test_files": [
     {
       "file": "apps/ingestor/src/ingest-fail-closed.test.ts",
-      "tests": 3,
+      "tests": 6,
       "coverage": [
         "ingestLeague returns skipped with warning when SGO_API_KEY absent",
         "ingestOddsApiLeague emits warning log when ODDS_API_KEY absent",
-        "collectConfiguredSgoApiKeyCandidates returns empty array when no SGO env vars set"
+        "collectConfiguredSgoApiKeyCandidates returns empty array when no SGO env vars set",
+        "subprocess startup exits non-zero with fatal JSON when autorun has no configured provider",
+        "subprocess startup preserves Odds API-only autorun without fatal startup JSON",
+        "subprocess startup preserves non-autorun without SGO key"
       ]
     }
   ],
+  "odds_api_only_autorun_preserved": true,
   "no_write_path_changes": true,
   "no_schema_changes": true,
   "no_migration_required": true,
