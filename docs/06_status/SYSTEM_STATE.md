@@ -1,4 +1,4 @@
-# System State — 2026-05-23 20:09
+# System State — 2026-05-24 00:08
 
 ## Branch
 
@@ -10,7 +10,7 @@ Phase 7A
   lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
 
 ## Dispatch Slots
-claude:1/2 codex:0/4
+claude:0/2 codex:0/4
 
 ## Ghost Lanes
 none
@@ -25,8 +25,8 @@ codex:unavailable
 Clean
 
 ## Recent Commits
-6422624 chore(lanes): expand UTV2-1084 scope — fetchers, rollback, runtime proof, package.json
-b546a6e chore(lanes): expand UTV2-1084 file_scope_lock for full implementation
-307cf71 ops: fix ingestor restart — use service name before container name
-f350cd4 ops: add one-shot ingestor SGO_API_KEY injection workflow + update state
-6d9bcef Merge remote-tracking branch 'origin/main'
+1d723de chore(lane): release migration lock after UTV2-1085 merge
+19cb766 chore(ops): close UTV2-1085 lane + fix truth-check G4 pagination
+f0c2a2a chore(proof): UTV2-1085 bind proof to merge SHA 8b528be3
+8b528be feat(UTV2-1085): INIT-1.1.2 — Immutable OddsSnapshot Table and Triggers (#832)
+7b29ef1 chore(lanes): UTV2-1085 in_review — PR #832 open
