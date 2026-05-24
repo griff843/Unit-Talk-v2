@@ -1,8 +1,10 @@
 import type { IngestorRepositoryBundle } from '@unit-talk/db';
 import {
   CircuitBreaker,
+  CircuitOpenError,
   type CircuitBreakerOptions,
 } from './circuit-breaker.js';
+import { type ProviderQuarantineRegistry } from './provider-quarantine.js';
 import { archiveRawProviderPayload, shouldBlockOnArchiveFailure } from './raw-provider-payload-archive.js';
 import { resolveSgoEntities } from './entity-resolver.js';
 import {
@@ -73,6 +75,8 @@ export interface IngestLeagueOptions {
   providerOfferProofStatus?: 'required' | 'verified' | 'waived';
   providerOfferFreshnessMaxAgeMs?: number;
   replayCaptureSession?: ProviderOfferReplayCaptureSession;
+  /** Optional quarantine registry — receives circuit-open events for this provider. */
+  quarantineRegistry?: ProviderQuarantineRegistry;
 }
 
 export interface IngestQuotaSummary {
@@ -605,6 +609,14 @@ export async function ingestLeague(
       quota,
     };
   } catch (error) {
+    if (error instanceof CircuitOpenError && options.quarantineRegistry) {
+      const snap = options.circuitBreakers?.odds?.snapshot() ?? options.circuitBreakers?.results?.snapshot();
+      options.quarantineRegistry.quarantine('sgo', 'circuit_open', {
+        failureCount: snap?.totalFailures ?? 0,
+        league,
+        openedAt: error.openedAt,
+      });
+    }
     const failure = classifyProviderIngestionFailure(error, {
       providerKey: 'sgo',
       sportKey: league,
