@@ -1,0 +1,21 @@
+schema_version: 1
+issue_id: UTV2-1086
+lane_type: migration
+owner: claude
+acquired_at: 2026-05-24T16:20:00.000Z
+scope:
+  - supabase/migrations/20260524001_utv2_1086_snapshot_cutover.sql
+  - db/migrations-rollback/20260524001_utv2_1086_snapshot_cutover.down.sql
+  - packages/db/src/repositories.ts
+  - packages/db/src/runtime-repositories.ts
+  - apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts
+  - apps/ingestor/package.json
+  - scripts/ops/pr-review-packet.ts
+  - docs/06_status/lanes/UTV2-1086.json
+  - docs/06_status/lanes/UTV2-1157-codex.json
+  - docs/06_status/proof/UTV2-1086/evidence.json
+  - docs/06_status/proof/UTV2-1086/verification-log.md
+  - docs/06_status/proof/UTV2-1086/verification.md
+  - .ops/sync/UTV2-1086.yml
+  - .lane/migration-lock.yml
+release_after: merge

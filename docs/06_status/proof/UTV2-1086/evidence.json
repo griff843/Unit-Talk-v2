@@ -1,0 +1,70 @@
+{
+  "schema_version": 2,
+  "issue_id": "UTV2-1086",
+  "title": "INIT-1.1.3 — Snapshot Cutover and Point-in-Time Reconstruction",
+  "tier": "T1",
+  "lane_type": "migration",
+  "sha_binding": {
+    "verified_source_sha": "90ab556c03de35a8954a8ad7b528951d9f0f9888",
+    "verified_source_note": "Last non-proof substantive commit on branch (CI gate fixes: pr-review-packet monorepo path detection + scope lock)",
+    "evidence_commit_sha": "BIND_ON_MERGE",
+    "current_pr_head_sha": "BIND_ON_MERGE"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-24T16:30:00.000Z",
+  "r_level": {
+    "level": "R0",
+    "reason": "No R-level artifacts triggered — migration is a COMMENT only, no schema or data changes"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1086-dispatch"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests_pass": 113,
+      "tests_fail": 0,
+      "skipped": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required for this diff"
+    },
+    "adversarial_tests": [
+      "queryAtTimestamp: 50-timestamp point-in-time reconstruction — PASS",
+      "queryAtTimestamp: returns null before earliest snapshot — PASS",
+      "queryAtTimestamp: adversarial — later snapshot not visible at earlier timestamp — PASS"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-24T16:30:00Z",
+    "t1_proof_live_db": {
+      "status": "PASS",
+      "tests_pass": 3,
+      "tests_fail": 0,
+      "skipped": 0,
+      "file": "apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts",
+      "note": "50 snapshots inserted at distinct 1-minute intervals; queryAtTimestamp returned correct snapshot for each of the 50 timestamps. Adversarial: snapshot inserted after query timestamp did not appear. Null check: query before any data returns null."
+    },
+    "migration_applied": {
+      "label": "COMMENT ON TABLE provider_offer_current — derived projection label",
+      "status": "PASS",
+      "verified_sql": "SELECT obj_description('public.provider_offer_current'::regclass, 'pg_class') AS table_comment",
+      "result": "DERIVED PROJECTION — not truth. Materialized hot-current view of provider odds, maintained for pick-pipeline operational reads. Canonical truth for point-in-time reconstruction is odds_snapshots (UTV2-1085). Do not treat this table as authoritative for historical market state. Demoted per INIT-1.1.3 / UTV2-1086."
+    }
+  },
+  "constitutional_claims": [
+    "Blueprint Layer 3.2 satisfied: point-in-time query interface added to OddsSnapshotRepository",
+    "provider_offer_current demoted: labeled as derived projection at DB layer via COMMENT",
+    "Truth reads routed to snapshot store: queryAtTimestamp reads odds_snapshots (immutable)",
+    "50-timestamp reconstruction proven against live Supabase",
+    "Adversarial validation: later snapshot not visible at earlier timestamp query",
+    "No downstream layer treats the projection as canonical truth — enforcement via label + interface routing",
+    "Gap #6 (cutover completion): closed — snapshot store is the truth authority",
+    "Dependency: INIT-1.1.2 (UTV2-1085) confirmed Done (completedAt: 2026-05-23T23:21:49Z)"
+  ]
+}

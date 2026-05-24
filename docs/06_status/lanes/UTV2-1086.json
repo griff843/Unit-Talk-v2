@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1086",
+  "lane_type": "migration",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1086-snapshot-cutover-point-in-time",
+  "branch": "claude/utv2-1086-snapshot-cutover-point-in-time",
+  "base_branch": "main",
+  "commit_sha": "aecc3b81306d793de53decbeb9fd7bc3edd00e22",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/842",
+  "files_changed": [],
+  "file_scope_lock": [
+    ".lane/migration-lock.yml",
+    ".ops/sync/UTV2-1086.yml",
+    "apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts",
+    "apps/ingestor/package.json",
+    "scripts/ops/pr-review-packet.ts",
+    "db/migrations-rollback/20260524001_utv2_1086_snapshot_cutover.down.sql",
+    "docs/06_status/lanes/UTV2-1086.json",
+    "docs/06_status/lanes/UTV2-1157-codex.json",
+    "docs/06_status/proof/UTV2-1086/evidence.json",
+    "docs/06_status/proof/UTV2-1086/verification-log.md",
+    "docs/06_status/proof/UTV2-1086/verification.md",
+    "packages/db/src/repositories.ts",
+    "packages/db/src/runtime-repositories.ts",
+    "supabase/migrations/20260524001_utv2_1086_snapshot_cutover.sql"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1086/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-24T16:20:44.465Z",
+  "heartbeat_at": "2026-05-24T16:20:44.465Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1086-snapshot-cutover-point-in-time.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1086-snapshot-cutover-point-in-time",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

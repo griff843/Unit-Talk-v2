@@ -827,6 +827,12 @@ export interface OddsSnapshotRecord {
 export interface OddsSnapshotRepository {
   insert(input: OddsSnapshotInsert): Promise<OddsSnapshotRecord>;
   findLatestByProviderLeague(providerKey: string, league: string): Promise<OddsSnapshotRecord | null>;
+  /** Point-in-time reconstruction (INIT-1.1.3): latest snapshot at or before timestamp. */
+  queryAtTimestamp(
+    timestamp: string,
+    providerKey: string,
+    league: string,
+  ): Promise<OddsSnapshotRecord | null>;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

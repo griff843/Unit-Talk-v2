@@ -8272,6 +8272,22 @@ export class InMemoryOddsSnapshotRepository implements OddsSnapshotRepository {
       .sort((a, b) => b.snapshot_at.localeCompare(a.snapshot_at));
     return matches[0] ?? null;
   }
+
+  async queryAtTimestamp(
+    timestamp: string,
+    providerKey: string,
+    league: string,
+  ): Promise<OddsSnapshotRecord | null> {
+    const matches = this.records
+      .filter(
+        (r) =>
+          r.provider_key === providerKey &&
+          r.league === league &&
+          r.snapshot_at <= timestamp,
+      )
+      .sort((a, b) => b.snapshot_at.localeCompare(a.snapshot_at));
+    return matches[0] ?? null;
+  }
 }
 
 export class DatabaseOddsSnapshotRepository implements OddsSnapshotRepository {
@@ -8319,6 +8335,30 @@ export class DatabaseOddsSnapshotRepository implements OddsSnapshotRepository {
     if (error) {
       throw new Error(
         `odds_snapshots query failed: ${error.message}`,
+      );
+    }
+
+    return data as OddsSnapshotRecord | null;
+  }
+
+  async queryAtTimestamp(
+    timestamp: string,
+    providerKey: string,
+    league: string,
+  ): Promise<OddsSnapshotRecord | null> {
+    const { data, error } = await this.client
+      .from('odds_snapshots')
+      .select('*')
+      .eq('provider_key', providerKey)
+      .eq('league', league)
+      .lte('snapshot_at', timestamp)
+      .order('snapshot_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (error) {
+      throw new Error(
+        `odds_snapshots point-in-time query failed: ${error.message}`,
       );
     }
 
