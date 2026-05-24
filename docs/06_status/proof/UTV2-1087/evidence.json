@@ -5,10 +5,10 @@
   "tier": "T1",
   "lane_type": "runtime",
   "sha_binding": {
-    "verified_source_sha": "f6720b7506f297fb5dd1687866e186123762b590",
-    "verified_source_note": "Implementation commit — data_freshness fix + circuit-breaker fail-closed + ProviderQuarantineRegistry",
+    "verified_source_sha": "2eb631a2f694f3e5e6b0e2046ad1af978c4ee97c",
+    "verified_source_note": "Last non-proof substantive commit — CI fixes: lane manifest on branch + ## Verification section in proof files",
     "evidence_commit_sha": "BIND_ON_MERGE",
-    "current_pr_head_sha": "f6720b7506f297fb5dd1687866e186123762b590"
+    "current_pr_head_sha": "2eb631a2f694f3e5e6b0e2046ad1af978c4ee97c"
   },
   "executor": "claude",
   "executed_at": "2026-05-24T22:30:00.000Z",
