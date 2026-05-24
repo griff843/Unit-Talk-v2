@@ -7,7 +7,7 @@
   "worktree_path": null,
   "branch": "codex/tier-sync-automation",
   "base_branch": "main",
-  "commit_sha": "60956790cf77f1a4a3035b3c012aaa10344e4b65",
+  "commit_sha": "2f275186ae0dfdfeaa181e7946402291fffe93a3",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/841",
   "files_changed": [
     ".github/workflows/merge-gate.yml",
@@ -26,10 +26,10 @@
     "scripts/ops/workflow-hardening.test.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-24T00:00:00.000Z",
-  "heartbeat_at": "2026-05-24T00:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-24T16:09:06.000Z",
+  "closed_at": "2026-05-24T16:09:06.000Z",
   "blocked_by": [],
   "preflight_token": null,
   "created_by": "codex",
