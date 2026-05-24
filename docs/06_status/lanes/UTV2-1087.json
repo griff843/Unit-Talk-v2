@@ -19,6 +19,7 @@
     "apps/ingestor/src/provider-quarantine.ts",
     "apps/ingestor/src/provider-quarantine.test.ts",
     ".ops/sync/UTV2-1087.yml",
+    "docs/06_status/lanes/UTV2-1087.json",
     "docs/06_status/proof/UTV2-1087/evidence.json",
     "docs/06_status/proof/UTV2-1087/verification.md",
     "docs/06_status/proof/UTV2-1087/verification-log.md"

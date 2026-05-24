@@ -12,7 +12,7 @@
 | Check | Result |
 |---|---|
 | pnpm verify | PASS — env, lint, type-check, build, test, smart-form verify, command checks |
-| T1 live-DB proof | PASS — 5/5 tests against live Supabase zfzdnfwdarxucxtaojxm |
+| pnpm test:db | PASS — 5/5 tests against live Supabase zfzdnfwdarxucxtaojxm (apps/api/src/t1-proof-utv2-1087-freshness-gate.test.ts) |
 | R-level | PASS — lifecycle-fsm and ingestor-provider matched; PM-gated r4-fault-report advisory |
 | Adversarial (stale snapshot) | PASS — 25h-old snapshot → data_freshness: 'stale' |
 | Adversarial (fresh snapshot) | PASS — 5min-old snapshot → data_freshness: 'fresh' |
