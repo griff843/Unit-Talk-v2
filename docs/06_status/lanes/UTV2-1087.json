@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1087-freshness-honesty-and-provider-auto-quarantine",
   "branch": "claude/utv2-1087-freshness-honesty-and-provider-auto-quarantine",
   "base_branch": "main",
-  "commit_sha": "bace9cf4",
+  "commit_sha": "01952daad01c5e43aa6fed4321b686d63ae4d2a8",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/843",
   "files_changed": [
     "apps/api/package.json",
@@ -44,10 +44,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1087/evidence.json"
   ],
-  "status": "in_progress",
+  "status": "merged",
   "started_at": "2026-05-24T22:11:03.909Z",
-  "heartbeat_at": "2026-05-24T22:11:03.909Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-24T23:41:00.000Z",
+  "closed_at": "2026-05-24T23:41:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1087-freshness-honesty-and-provider-auto-quarantine.json",
   "created_by": "claude",
