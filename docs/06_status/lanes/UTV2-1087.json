@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1087",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1087-freshness-honesty-and-provider-auto-quarantine",
+  "branch": "claude/utv2-1087-freshness-honesty-and-provider-auto-quarantine",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": null,
+  "files_changed": [],
+  "file_scope_lock": [
+    "apps/api/package.json",
+    "apps/api/src/candidate-pick-scanner.ts",
+    "apps/api/src/t1-proof-utv2-1087-freshness-gate.test.ts",
+    "apps/ingestor/package.json",
+    "apps/ingestor/src/circuit-breaker.ts",
+    "apps/ingestor/src/ingest-league.ts",
+    "apps/ingestor/src/provider-quarantine.test.ts",
+    "apps/ingestor/src/provider-quarantine.ts",
+    "docs/06_status/proof/UTV2-1087/evidence.json",
+    "docs/06_status/proof/UTV2-1087/verification-log.md",
+    "docs/06_status/proof/UTV2-1087/verification.md"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1087/evidence.json"
+  ],
+  "status": "started",
+  "started_at": "2026-05-24T22:11:03.909Z",
+  "heartbeat_at": "2026-05-24T22:11:03.909Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1087-freshness-honesty-and-provider-auto-quarantine.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1087-freshness-honesty-and-provider-auto-quarantine",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
