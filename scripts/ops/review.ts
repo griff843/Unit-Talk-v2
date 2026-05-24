@@ -245,7 +245,7 @@ function run(options: CliOptions): ReviewPacketResult {
   const existingStatePath = reviewStatePath(issueId, ROOT);
   const prNum = prNumber ?? 0;
 
-  let reviewState = makeEmptyReviewState(issueId, prNum, executor, tier as 'T1' | 'T2' | 'T3', laneType, lockScope);
+  const reviewState = makeEmptyReviewState(issueId, prNum, executor, tier as 'T1' | 'T2' | 'T3', laneType, lockScope);
   reviewState.reviewer = reviewer;
   reviewState.reviewed_head_sha = prHeadSha;
   reviewState.changed_files = changedFiles;

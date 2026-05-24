@@ -10,7 +10,6 @@ import path from 'node:path';
 import {
   makeEmptyReviewState,
   writeReviewState,
-  readReviewState,
   isSelfCertification,
   isReviewStale,
   type ReviewStateV1,

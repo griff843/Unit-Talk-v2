@@ -21,7 +21,6 @@ import {
   getFlag,
   getFlags,
   requireIssueId,
-  readManifest,
 } from './shared.js';
 import {
   readReviewState,
@@ -109,7 +108,7 @@ function run(options: CliOptions): VerdictResult {
   const executor = state.executor;
 
   // --- Determine reviewer ---
-  let reviewer: Executor = options.reviewer ?? state.reviewer ?? ('claude' as Executor);
+  const reviewer: Executor = options.reviewer ?? state.reviewer ?? ('claude' as Executor);
 
   // --- Self-certification check ---
   const candidateState: ReviewStateV1 = { ...state, reviewer };
