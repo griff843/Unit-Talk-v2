@@ -80,7 +80,7 @@
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1155-ingestor-fail-closed-missing-secrets",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1155-clean-remediation",
     "package_install": "verified",
     "setup_command": "pnpm install --frozen-lockfile",
     "main_checkout_control_only": true
