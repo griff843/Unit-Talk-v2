@@ -10,7 +10,6 @@ import {
   makeEmptyReviewState,
   writeReviewState,
   readReviewState,
-  REVIEW_STATE_SCHEMA_VERSION,
   type ReviewStateV1,
 } from './review-state-schema.js';
 
