@@ -10,6 +10,7 @@ scope:
   - packages/db/src/runtime-repositories.ts
   - apps/ingestor/src/t1-proof-utv2-1086-snapshot-cutover.test.ts
   - apps/ingestor/package.json
+  - scripts/ops/pr-review-packet.ts
   - docs/06_status/lanes/UTV2-1086.json
   - docs/06_status/lanes/UTV2-1157-codex.json
   - docs/06_status/proof/UTV2-1086/evidence.json

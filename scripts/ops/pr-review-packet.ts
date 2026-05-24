@@ -549,15 +549,39 @@ function buildPackageTestDrift(input: {
 }
 
 function buildTestFileWiring(file: string, scripts: Record<string, string>): TestFileWiring {
-  const matchedScripts = Object.entries(scripts)
+  const rootMatchedScripts = Object.entries(scripts)
     .filter(([name, script]) => isTestScript(name, script) && scriptReferencesFile(script, file))
     .map(([name]) => name)
     .sort((left, right) => left.localeCompare(right));
-  return {
-    file,
-    wired: matchedScripts.length > 0,
-    matched_scripts: matchedScripts,
-  };
+  if (rootMatchedScripts.length > 0) {
+    return { file, wired: true, matched_scripts: rootMatchedScripts };
+  }
+  // Monorepo fallback: check the owning package's package.json using package-relative path.
+  // Root package.json scripts use repo-relative paths; per-package scripts use src-relative paths.
+  const pkgDirMatch = /^((?:apps|packages)\/[^/]+)\//u.exec(file);
+  if (pkgDirMatch) {
+    const pkgDir = pkgDirMatch[1] as string;
+    const pkgRelFile = file.slice(pkgDir.length + 1);
+    try {
+      const pkgJson = JSON.parse(
+        fs.readFileSync(path.join(ROOT, pkgDir, 'package.json'), 'utf8'),
+      ) as PackageJsonSnapshot;
+      const pkgScripts = pkgJson.scripts ?? {};
+      const pkgMatchedScripts = Object.entries(pkgScripts)
+        .filter(([name, script]) =>
+          isTestScript(name, script) &&
+          (scriptReferencesFile(script, pkgRelFile) || scriptReferencesFile(script, file)),
+        )
+        .map(([name]) => `${pkgDir}#${name}`)
+        .sort((left, right) => left.localeCompare(right));
+      if (pkgMatchedScripts.length > 0) {
+        return { file, wired: true, matched_scripts: pkgMatchedScripts };
+      }
+    } catch {
+      // package.json not found or unreadable — fall through
+    }
+  }
+  return { file, wired: false, matched_scripts: [] };
 }
 
 function buildUntrackedArtifactScan(files: string[]): UntrackedArtifactScan {
