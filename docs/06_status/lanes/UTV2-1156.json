@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1156-wfr-v2-a-canonical-proof-schema",
   "branch": "griffadavi/utv2-1156-wfr-v2-a-canonical-proof-schema",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "4d0ea2ee7d88b2bc5ea64724b19090d2df0b7474",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/833",
   "files_changed": [],
   "file_scope_lock": [
     "package.json",
@@ -20,10 +20,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1156.md"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-23T23:47:36.000Z",
   "heartbeat_at": "2026-05-24T00:00:00.000Z",
-  "closed_at": null,
+  "closed_at": "2026-05-24T00:31:08Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1156-wfr-v2-a-canonical-proof-schema.json",
   "created_by": "claude",
