@@ -10,6 +10,7 @@ allowed_path_globs:
   - docs/06_status/lanes/**
   - docs/06_status/proof/**
   - .lane/lanes/**
+  - package.json
 forbidden_path_globs:
   - supabase/migrations/**
   - database/migrations/**
