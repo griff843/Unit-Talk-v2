@@ -11,8 +11,8 @@
 | Owner | claude/utv2-1086-dispatch |
 | Date | 2026-05-24 |
 | Verifier Identity | claude/utv2-1086-dispatch |
-| Commit SHA(s) | BIND_ON_MERGE |
-| Related PRs | TBD (open below) |
+| Commit SHA(s) | aecc3b81 (bind to merge SHA at closeout) |
+| Related PRs | #842 |
 
 ## Scope
 

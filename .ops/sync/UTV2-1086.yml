@@ -9,3 +9,4 @@ entities:
   controls: []
   proofs:
     - docs/06_status/proof/UTV2-1086/evidence.json
+    - docs/06_status/proof/UTV2-1086/verification.md
