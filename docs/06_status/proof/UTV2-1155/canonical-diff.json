@@ -33,6 +33,6 @@
   "no_replay_outbox_lifecycle_settlement_or_queue_changes": true,
   "no_lane_metadata_or_sync_files_included": true,
   "generated_at": "2026-05-24T00:00:00.000Z",
-  "merge_sha": "04055ee44642b3246c801104e01c2c88cd049c97",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/837"
+  "merge_sha": "3944ec01b6c9935c610bc26b57cbb72549dd06fd",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/840"
 }

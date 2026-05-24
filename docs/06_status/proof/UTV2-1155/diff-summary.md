@@ -2,9 +2,10 @@
 
 **Issue:** Ingestor daemon must fail-closed when required provider secrets are missing  
 **Tier:** T2  
-**Branch:** codex/utv2-1155-clean-remediation
-**Base:** current `origin/main` after merged PR #837
-**Status:** Clean urgent remediation for #837 overbroad startup guard
+**Branch:** codex/utv2-1155-clean-remediation  
+**Merge SHA:** `3944ec01b6c9935c610bc26b57cbb72549dd06fd`  
+**PR:** https://github.com/griff843/Unit-Talk-v2/pull/840  
+**Status:** Merged
 
 ## Changes
 

@@ -2,10 +2,19 @@
 
 Date: 2026-05-24
 Branch: codex/utv2-1155-clean-remediation
-Base: current origin/main after merged PR #837
+Merge SHA: 3944ec01b6c9935c610bc26b57cbb72549dd06fd
+PR: https://github.com/griff843/Unit-Talk-v2/pull/840
 Executor: codex
 
-## Targeted startup test
+## pnpm type-check
+
+TypeScript project-references build: PASS
+
+## pnpm test
+
+110/110 tests pass (0 failures); 6 targeted ingest-fail-closed tests all pass
+
+## pnpm verify
 
 ```
 tsx --test apps/ingestor/src/ingest-fail-closed.test.ts
