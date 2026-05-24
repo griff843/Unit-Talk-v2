@@ -5,7 +5,9 @@
 **Branch:** claude/utv2-1034-model-calibration-baseline  
 **Date:** 2026-05-24  
 
-## Script Validation
+## Verification
+
+### Script Validation
 
 ### `scripts/calibration-report.ts`
 
