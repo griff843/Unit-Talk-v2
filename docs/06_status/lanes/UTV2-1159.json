@@ -19,10 +19,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1159.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-23T23:47:36.000Z",
-  "heartbeat_at": "2026-05-24T00:00:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-24T01:06:34.000Z",
+  "closed_at": "2026-05-24T01:06:34Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1159-wfr-v2-d-pm-verdict-merge-gate.json",
   "created_by": "claude",
