@@ -72,16 +72,26 @@ test('branch discipline warns without failing on multiple issue IDs', () => {
   assert.match(result.warning ?? '', /UTV2-123, UTV2-124/);
 });
 
-test('required PR check workflows do not create stale failed contexts on opened events', () => {
-  for (const workflow of ['merge-gate.yml', 'tier-label-check.yml']) {
-    const content = fs.readFileSync(path.join(ROOT, '.github', 'workflows', workflow), 'utf8');
-    const pullRequestBlock = content.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
+test('required PR check workflows do not create stale merge-gate contexts on opened events', () => {
+  const mergeGate = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'merge-gate.yml'), 'utf8');
+  const mergeGatePullRequestBlock = mergeGate.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
 
-    assert.ok(pullRequestBlock, `${workflow} must declare explicit pull_request types`);
-    assert.doesNotMatch(
-      pullRequestBlock[1] ?? '',
-      /(^|,\s*)opened(\s*,|$)/,
-      `${workflow} must not run required checks on pull_request.opened before labels settle`,
-    );
-  }
+  assert.ok(mergeGatePullRequestBlock, 'merge-gate.yml must declare explicit pull_request types');
+  assert.doesNotMatch(
+    mergeGatePullRequestBlock[1] ?? '',
+    /(^|,\s*)opened(\s*,|$)/,
+    'merge-gate.yml must not run required checks on pull_request.opened before labels settle',
+  );
+});
+
+test('tier label sync runs on opened so PM does not manually apply GitHub tier labels', () => {
+  const workflow = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'tier-label-check.yml'), 'utf8');
+  const pullRequestBlock = workflow.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
+
+  assert.ok(pullRequestBlock, 'tier-label-check.yml must declare explicit pull_request types');
+  assert.match(
+    pullRequestBlock[1] ?? '',
+    /(^|,\s*)opened(\s*,|$)/,
+    'tier-label-check.yml must run on pull_request.opened to apply missing tier evidence automatically',
+  );
 });
