@@ -5,16 +5,16 @@
   "tier": "T1",
   "lane_type": "runtime",
   "sha_binding": {
-    "verified_source_sha": "2eb631a2f694f3e5e6b0e2046ad1af978c4ee97c",
-    "verified_source_note": "Last non-proof substantive commit — CI fixes: lane manifest on branch + ## Verification section in proof files",
+    "verified_source_sha": "96aceb727f968e6f0dce60ac389d31310f2e1b29",
+    "verified_source_note": "Last non-proof substantive commit — adversarial review fixes for fail-closed breaker, quarantine enforcement, audit events, and scanner freshness coverage",
     "evidence_commit_sha": "BIND_ON_MERGE",
-    "current_pr_head_sha": "2eb631a2f694f3e5e6b0e2046ad1af978c4ee97c"
+    "current_pr_head_sha": "96aceb727f968e6f0dce60ac389d31310f2e1b29"
   },
   "executor": "claude",
   "executed_at": "2026-05-24T22:30:00.000Z",
   "r_level": {
-    "level": "R0",
-    "reason": "No R-level artifacts triggered — runtime changes only, no schema or scoring logic changes"
+    "level": "R1",
+    "reason": "r-level-check PASS; matched lifecycle-fsm and ingestor-provider with PM-gated r4-fault-report advisory"
   },
   "verifier": {
     "identity": "claude/utv2-1087-dispatch"
@@ -22,16 +22,14 @@
   "static_proof": {
     "pnpm_verify": {
       "status": "PASS",
-      "tests_pass": 497,
-      "tests_fail": 0,
-      "skipped": 0
+      "tests_fail": 0
     },
     "pnpm_type_check": {
       "status": "PASS"
     },
     "r_level_check": {
       "status": "PASS",
-      "verdict": "PASS — no R-level artifacts required for this diff"
+      "verdict": "PASS — matched lifecycle-fsm and ingestor-provider; advisory PM-gated r4-fault-report missing"
     },
     "adversarial_tests": [
       "Gap #2: stale snapshot (25h old) produces data_freshness: stale — PASS",

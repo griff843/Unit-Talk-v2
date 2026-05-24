@@ -2,30 +2,31 @@
 
 **Issue:** INIT-1.1.4 — Freshness Honesty and Provider Auto-Quarantine
 **Tier:** T1
-**SHA:** f6720b7506f297fb5dd1687866e186123762b590 (implementation commit)
+**SHA:** 96aceb727f968e6f0dce60ac389d31310f2e1b29 (latest substantive implementation commit)
 
 ## What Changed
 
-Three gaps from the system blueprint closed:
+Three original gaps from the system blueprint closed, plus the adversarial PR review bypasses:
 
 **Gap #2** (`candidate-pick-scanner.ts:212`): `data_freshness` was hardcoded `'fresh'` for all picks submitted by the candidate scanner. Fixed to compute from `evaluateProviderDataFreshness().staleAtScanTime`. Stale provider data now produces `data_freshness: 'stale'` in `picks.metadata`.
 
-**Gap #19** (`circuit-breaker.ts`): Circuit breaker was fail-open by default with no opt-out. Added `failClosed?: boolean` option and `CircuitOpenError` class. When `failClosed: true`, an open circuit throws rather than silently returning a fallback. Existing callers unchanged (backward-compatible).
+**Gap #19** (`circuit-breaker.ts`, `ingestor-runner.ts`): Circuit breaker was fail-open by default with no production wiring. The SGO runner now uses persistent fail-closed breakers across cycles, and open circuits throw rather than silently returning fallback data.
 
-**Gap #49** (`provider-quarantine.ts`): New `ProviderQuarantineRegistry` tracks quarantined providers in-memory. Wired into `ingest-league.ts` — when a `CircuitOpenError` is caught, the provider is auto-quarantined with structured JSON audit logging.
+**Gap #49** (`provider-quarantine.ts`, `ingest-league.ts`): `ProviderQuarantineRegistry` now gates provider calls before fetch, auto-quarantines on circuit-open failures, emits structured JSON events for duplicate/no-op actions, and blocks future calls while quarantine is active.
 
 ## Verification
 
 | Check | Result |
 |---|---|
-| pnpm verify | PASS — 497/497 tests, type-check clean, lint clean |
+| pnpm verify | PASS — env, lint, type-check, build, test, smart-form verify, command checks |
 | T1 live-DB proof | PASS — 5/5 tests against live Supabase zfzdnfwdarxucxtaojxm |
-| R-level | PASS — no artifacts required (R0) |
+| R-level | PASS — lifecycle-fsm and ingestor-provider matched; PM-gated r4-fault-report advisory |
 | Adversarial: stale snapshot | PASS — 25h-old snapshot → data_freshness: 'stale' |
 | Adversarial: fresh snapshot | PASS — 5min-old snapshot → data_freshness: 'fresh' |
 | Adversarial: null snapshotAt | PASS — null → data_freshness: 'stale' |
-| Adversarial: fail-closed circuit | PASS — CircuitOpenError thrown |
-| Implementation SHA | bace9cf452ee4d7bbed124ea81fbd5146b896ee0 |
+| Adversarial: fail-closed circuit | PASS — persistent runner breaker quarantines and blocks later calls |
+| Adversarial: scanner metadata | PASS — runCandidatePickScan writes stale/fresh metadata end-to-end |
+| Implementation SHA | 96aceb727f968e6f0dce60ac389d31310f2e1b29 |
 
 ## Live-DB Proof
 
