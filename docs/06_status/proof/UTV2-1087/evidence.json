@@ -7,7 +7,7 @@
   "sha_binding": {
     "verified_source_sha": "08b9d179a765f0ca7a5f507e42e39acd47049adf",
     "verified_source_note": "Last non-proof substantive commit — scope lock expansion + candidate-pick-scanner.test.ts wired to test suite; all 3 gaps implemented and adversarial-tested",
-    "evidence_commit_sha": "BIND_ON_MERGE",
+    "evidence_commit_sha": "01952daad01c5e43aa6fed4321b686d63ae4d2a8",
     "current_pr_head_sha": "08b9d179a765f0ca7a5f507e42e39acd47049adf"
   },
   "executor": "claude",
