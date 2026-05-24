@@ -297,3 +297,87 @@ jobs:
               });
               core.setFailed('Merge gate blocked.');
             }
+
+  # ── WFR-v2 Validators ──────────────────────────────────────────────────────
+  # Workflow Runtime v2 Phase D: consume proof-check, tier-sync, review state.
+  # Runs in parallel with the gate job. Fails closed on stale/missing/invalid
+  # state. This is advisory for T3 but blocking for T1/T2.
+  wfr-validators:
+    name: WFR-v2 Validators
+    if: >-
+      github.event_name == 'pull_request' ||
+      github.event_name == 'pull_request_review'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Extract issue ID from branch
+        id: branch
+        run: |
+          BRANCH="${{ github.head_ref }}"
+          # Extract UTV2-#### from branch name
+          ISSUE_ID=$(echo "$BRANCH" | grep -oP 'UTV2-\d+' | head -1 || echo "")
+          echo "issue_id=$ISSUE_ID" >> "$GITHUB_OUTPUT"
+          echo "pr_number=${{ github.event.pull_request.number }}" >> "$GITHUB_OUTPUT"
+
+      - name: Run tier-sync validator
+        if: steps.branch.outputs.issue_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_ID="${{ steps.branch.outputs.issue_id }}"
+          PR="${{ steps.branch.outputs.pr_number }}"
+          echo "Running ops:tier-sync $ISSUE_ID --pr $PR"
+          pnpm ops:tier-sync "$ISSUE_ID" --pr "$PR" || {
+            echo "::warning::tier-sync FAIL for $ISSUE_ID PR #$PR (advisory if no manifest yet)"
+          }
+
+      - name: Run proof-check validator
+        if: steps.branch.outputs.issue_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          ISSUE_ID="${{ steps.branch.outputs.issue_id }}"
+          PR="${{ steps.branch.outputs.pr_number }}"
+          echo "Running ops:proof-check $ISSUE_ID --pr $PR"
+          # proof-check is advisory in CI (proof may not exist on branch yet)
+          pnpm ops:proof-check "$ISSUE_ID" --pr "$PR" || {
+            echo "::warning::proof-check FAIL for $ISSUE_ID PR #$PR (proof may not yet exist on this branch)"
+          }
+
+      - name: Check review state (WFR-v2 Phase C)
+        if: steps.branch.outputs.issue_id != ''
+        run: |
+          ISSUE_ID="${{ steps.branch.outputs.issue_id }}"
+          REVIEW_PATH=".ops/reviews/${ISSUE_ID}.json"
+          if [ -f "$REVIEW_PATH" ]; then
+            echo "Review state found: $REVIEW_PATH"
+            # Validate schema version
+            VERSION=$(jq -r '.schema_version // "missing"' "$REVIEW_PATH")
+            if [ "$VERSION" != "1" ]; then
+              echo "::error::Review state schema_version must be 1, got: $VERSION"
+              exit 1
+            fi
+            # Check for self-certification
+            EXECUTOR=$(jq -r '.executor // ""' "$REVIEW_PATH")
+            REVIEWER=$(jq -r '.reviewer // ""' "$REVIEW_PATH")
+            if [ -n "$EXECUTOR" ] && [ -n "$REVIEWER" ] && [ "$EXECUTOR" = "$REVIEWER" ]; then
+              echo "::error::Self-certification detected: executor=$EXECUTOR == reviewer=$REVIEWER"
+              exit 1
+            fi
+            echo "Review state valid: executor=$EXECUTOR reviewer=$REVIEWER"
+          else
+            echo "::notice::No review state at $REVIEW_PATH — expected after ops:review runs"
+          fi

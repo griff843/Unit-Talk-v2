@@ -73,6 +73,7 @@
     "ops:tier-sync": "tsx scripts/ops/tier-sync.ts",
     "ops:review": "tsx scripts/ops/review.ts",
     "ops:review-verdict": "tsx scripts/ops/review-verdict.ts",
+    "ops:pm-verdict": "tsx scripts/ops/pm-verdict.ts",
     "ops:queue-grooming": "tsx scripts/ops/queue-grooming.ts",
     "ops:brief": "tsx scripts/ops-brief.ts",
     "ops:branch-discipline": "tsx scripts/ops/branch-discipline-guard.ts",
