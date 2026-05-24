@@ -10,3 +10,5 @@ entities:
   proofs:
     - docs/06_status/proof/UTV2-1034/diff-summary.md
     - docs/06_status/proof/UTV2-1034/verification.log
+    - docs/06_status/proof/UTV2-1034/validation-report.md
+    - docs/06_status/proof/UTV2-1034/calibration-baseline-20260524.md
