@@ -1,5 +1,5 @@
 {
-  "schema_version": 2,
+  "schema_version": 1,
   "issue_id": "UTV2-1087",
   "title": "INIT-1.1.4 — Freshness Honesty and Provider Auto-Quarantine",
   "tier": "T1",
