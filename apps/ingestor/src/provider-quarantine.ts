@@ -22,6 +22,20 @@ export interface ProviderQuarantineEvent {
   details: Record<string, unknown>;
 }
 
+export class ProviderQuarantinedError extends Error {
+  readonly providerKey: string;
+  readonly quarantinedAt: string;
+
+  constructor(record: ProviderQuarantineRecord) {
+    super(
+      `Provider ${record.providerKey} is quarantined since ${record.quarantinedAt}: ${record.reason}`,
+    );
+    this.name = 'ProviderQuarantinedError';
+    this.providerKey = record.providerKey;
+    this.quarantinedAt = record.quarantinedAt;
+  }
+}
+
 export class ProviderQuarantineRegistry {
   private readonly records = new Map<string, ProviderQuarantineRecord>();
   private readonly logger: Pick<Console, 'info' | 'warn'> | undefined;
@@ -35,25 +49,32 @@ export class ProviderQuarantineRegistry {
     reason: string,
     details: { failureCount?: number; [key: string]: unknown } = {},
   ): void {
-    if (this.records.has(providerKey)) {
-      return;
-    }
     const { failureCount = 0, ...rest } = details;
-    const record: ProviderQuarantineRecord = {
-      providerKey,
-      quarantinedAt: new Date().toISOString(),
-      reason,
-      failureCount,
-      details: rest,
-    };
-    this.records.set(providerKey, record);
+    const existing = this.records.get(providerKey);
+    const record =
+      existing ??
+      {
+        providerKey,
+        quarantinedAt: new Date().toISOString(),
+        reason,
+        failureCount,
+        details: rest,
+      };
+    if (!existing) {
+      this.records.set(providerKey, record);
+    }
 
     const event: ProviderQuarantineEvent = {
       event: 'quarantine',
       providerKey,
-      at: record.quarantinedAt,
+      at: new Date().toISOString(),
       reason,
-      details: { failureCount, ...rest },
+      details: {
+        failureCount,
+        ...rest,
+        active: !existing,
+        ...(existing ? { existingQuarantinedAt: existing.quarantinedAt } : {}),
+      },
     };
     this.logger?.warn?.(JSON.stringify(event));
   }
@@ -66,18 +87,28 @@ export class ProviderQuarantineRegistry {
     return this.records.get(providerKey);
   }
 
-  release(providerKey: string, reason = 'manual_release'): void {
-    if (!this.records.has(providerKey)) {
-      return;
+  assertAvailable(providerKey: string): void {
+    const record = this.records.get(providerKey);
+    if (record) {
+      throw new ProviderQuarantinedError(record);
     }
-    this.records.delete(providerKey);
+  }
+
+  release(providerKey: string, reason = 'manual_release'): void {
+    const existing = this.records.get(providerKey);
+    if (existing) {
+      this.records.delete(providerKey);
+    }
 
     const event: ProviderQuarantineEvent = {
       event: 'release',
       providerKey,
       at: new Date().toISOString(),
       reason,
-      details: {},
+      details: {
+        released: existing !== undefined,
+        ...(existing ? { quarantinedAt: existing.quarantinedAt } : {}),
+      },
     };
     this.logger?.info?.(JSON.stringify(event));
   }

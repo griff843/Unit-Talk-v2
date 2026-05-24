@@ -1340,6 +1340,53 @@ test('runIngestorCycles polls across cycles and leagues', async () => {
   assert.deepEqual(sleeps, [1234]);
 });
 
+test('runIngestorCycles persists fail-closed SGO breaker state and blocks quarantined calls', async () => {
+  const repositories = createInMemoryIngestorRepositoryBundle();
+  const warnings: string[] = [];
+  let fetchCalls = 0;
+
+  await runIngestorCycles({
+    repositories,
+    leagues: ['NBA'],
+    apiKey: 'test-key',
+    maxCycles: 3,
+    pollIntervalMs: 1,
+    skipResults: true,
+    circuitBreaker: {
+      failureThreshold: 2,
+      cooldownMs: 60_000,
+    },
+    sleep: async () => {},
+    logger: {
+      info() {},
+      warn(message) {
+        warnings.push(message);
+      },
+    },
+    fetchImpl: async () => {
+      fetchCalls += 1;
+      throw new Error('provider down');
+    },
+  });
+
+  assert.equal(fetchCalls, 2);
+  assert.equal(
+    warnings.some((warning) => {
+      try {
+        const parsed = JSON.parse(warning) as { event?: string; providerKey?: string };
+        return parsed.event === 'quarantine' && parsed.providerKey === 'sgo';
+      } catch {
+        return false;
+      }
+    }),
+    true,
+  );
+  assert.equal(
+    warnings.some((warning) => warning.includes('Provider sgo is quarantined')),
+    true,
+  );
+});
+
 test('runIngestorCycles triggers grading once per cycle when completed results are present', async () => {
   const repositories = createInMemoryIngestorRepositoryBundle();
   const triggeredUrls: string[] = [];

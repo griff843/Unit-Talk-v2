@@ -93,7 +93,7 @@ export class CircuitBreaker<T> {
     };
   }
 
-  async call(): Promise<T> {
+  async call(fnOverride?: () => Promise<T>): Promise<T> {
     const currentState = this.state;
 
     if (currentState === 'open') {
@@ -109,7 +109,7 @@ export class CircuitBreaker<T> {
 
     // closed or half-open — attempt the call
     try {
-      const result = await this.fn();
+      const result = await (fnOverride ?? this.fn)();
       this.onSuccess();
       return result;
     } catch (error: unknown) {

@@ -115,6 +115,50 @@ function makeCandidate(overrides: Partial<PickCandidateRow> = {}): PickCandidate
   };
 }
 
+function isoMinutesAgo(minutes: number): string {
+  return new Date(Date.now() - minutes * 60_000).toISOString();
+}
+
+function isoMinutesFromNow(minutes: number): string {
+  return new Date(Date.now() + minutes * 60_000).toISOString();
+}
+
+async function scanSingleCandidatePick(
+  universe: MarketUniverseRow,
+  candidate: PickCandidateRow,
+) {
+  const repos = createInMemoryRepositoryBundle();
+  const muRepo = repos.marketUniverse as InMemoryMarketUniverseRepository;
+  const pcRepo = repos.pickCandidates as InMemoryPickCandidateRepository;
+
+  seedUniverseRows(muRepo, [universe]);
+  seedCandidateRows(pcRepo, [candidate]);
+
+  const result = await runCandidatePickScan({
+    pickCandidates: repos.pickCandidates,
+    marketUniverse: repos.marketUniverse,
+    picks: repos.picks,
+    submissions: repos.submissions,
+    audit: repos.audit,
+    participants: repos.participants,
+    events: repos.events,
+    providerOffers: repos.providerOffers,
+  });
+
+  assert.equal(result.scanned, 1);
+  assert.equal(result.submitted, 1);
+  assert.equal(result.skipped, 0);
+  assert.equal(result.errors, 0);
+
+  const qualified = await repos.pickCandidates.findByStatus('qualified');
+  const linked = qualified.find((row) => row.id === candidate.id);
+  assert.ok(linked?.pick_id, 'pick_id must be linked after successful scan');
+
+  const pick = await repos.picks.findPickById(linked.pick_id);
+  assert.ok(pick, 'pick record must exist in DB');
+  return pick;
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -163,6 +207,50 @@ test('candidate-pick-scanner: happy path — qualified+scored candidate becomes 
   const metadata = pick!.metadata as Record<string, unknown>;
   assert.equal(metadata['scoredCandidateId'], candidate.id);
   assert.equal(metadata['marketUniverseId'], universe.id);
+});
+
+test('candidate-pick-scanner: stale market universe snapshot writes pick metadata data_freshness=stale', async () => {
+  const eventStartsAt = isoMinutesFromNow(120);
+  const universe = makeUniverseRow({
+    id: 'universe-stale-snapshot',
+    last_offer_snapshot_at: isoMinutesAgo(121),
+    is_stale: false,
+  });
+  const candidate = makeCandidate({
+    id: 'cand-stale-snapshot',
+    universe_id: universe.id,
+    provenance: { event_starts_at: eventStartsAt },
+  });
+
+  const pick = await scanSingleCandidatePick(universe, candidate);
+
+  const metadata = pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['data_freshness'], 'stale');
+  assert.equal(metadata['snapshot_at'], universe.last_offer_snapshot_at);
+  assert.equal(metadata['proximity_tier'], 'game-day');
+  assert.equal(typeof metadata['snapshot_age_ms'], 'number');
+});
+
+test('candidate-pick-scanner: fresh market universe snapshot writes pick metadata data_freshness=fresh', async () => {
+  const eventStartsAt = isoMinutesFromNow(120);
+  const universe = makeUniverseRow({
+    id: 'universe-fresh-snapshot',
+    last_offer_snapshot_at: isoMinutesAgo(5),
+    is_stale: false,
+  });
+  const candidate = makeCandidate({
+    id: 'cand-fresh-snapshot',
+    universe_id: universe.id,
+    provenance: { event_starts_at: eventStartsAt },
+  });
+
+  const pick = await scanSingleCandidatePick(universe, candidate);
+
+  const metadata = pick.metadata as Record<string, unknown>;
+  assert.equal(metadata['data_freshness'], 'fresh');
+  assert.equal(metadata['snapshot_at'], universe.last_offer_snapshot_at);
+  assert.equal(metadata['proximity_tier'], 'game-day');
+  assert.equal(typeof metadata['snapshot_age_ms'], 'number');
 });
 
 test('candidate-pick-scanner: duplicate prevention — candidate with pick_id already set is skipped', async () => {
