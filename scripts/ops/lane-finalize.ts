@@ -11,7 +11,12 @@ import {
 } from './shared.js';
 
 export interface LaneFinalizeStep {
-  id: 'record_merge' | 'generate_proof' | 'close_lane' | 'reconcile_current';
+  id:
+    | 'record_merge'
+    | 'generate_proof'
+    | 'generate_t2_proof_bundle'
+    | 'close_lane'
+    | 'reconcile_current';
   command: string;
   args: string[];
   required: boolean;
@@ -75,6 +80,25 @@ export function buildLaneFinalizePlan(input: {
       ],
       required: true,
     });
+    if (shouldGenerateT2ProofBundle(input.manifest)) {
+      steps.push({
+        id: 'generate_t2_proof_bundle',
+        command: 'pnpm',
+        args: [
+          'exec',
+          'tsx',
+          'scripts/ops/t2-proof-bundle.ts',
+          issueId,
+          '--json',
+          '--force',
+          '--diff-summary',
+          standardProofPath(issueId, 'diff-summary.md'),
+          '--verification-log',
+          standardProofPath(issueId, 'runtime-verification.md'),
+        ],
+        required: true,
+      });
+    }
     steps.push({
       id: 'close_lane',
       command: 'pnpm',
@@ -106,6 +130,9 @@ export function resolveLaneFinalizeInput(input: {
   manifest: LaneManifest;
 }): { issueId: string; pr: string } {
   const issueId = requireIssueId(input.issueId ?? input.manifest.issue_id);
+  if (issueId !== input.manifest.issue_id) {
+    throw new Error(`Issue ${issueId} does not match manifest issue ${input.manifest.issue_id}.`);
+  }
   const pr = input.pr ?? extractPrNumber(input.manifest.pr_url);
   if (!pr) {
     throw new Error('Missing required --pr and manifest.pr_url does not contain a PR number.');
@@ -124,6 +151,19 @@ function normalizePrUrl(pr: string): string {
   return pr.startsWith('http')
     ? pr
     : `https://github.com/griff843/Unit-Talk-v2/pull/${pr}`;
+}
+
+function standardProofPath(issueId: string, fileName: 'diff-summary.md' | 'runtime-verification.md'): string {
+  return `docs/06_status/proof/${issueId}/${fileName}`;
+}
+
+function shouldGenerateT2ProofBundle(manifest: LaneManifest): boolean {
+  if (manifest.tier !== 'T2') {
+    return false;
+  }
+  return ['governance', 'hygiene', 'verification', 'delivery-ui', 'codex-cli'].includes(
+    manifest.lane_type,
+  );
 }
 
 export function runLaneFinalizePlan(
