@@ -206,7 +206,7 @@ An agent file is valid if ALL of the following hold:
 4. **Governance agents do not include Edit/Write/Agent:** any agent whose body describes APPROVE/REJECT, VALID/INVALID, or report-only authority must not list Edit, Write, or Agent in its tools.
 5. **Body defines authority boundary:** the agent body must identify whether it is enforced by automation or only advisory/manual.
 6. **Body defines output format:** the agent body must include a structured output format section.
-7. **No second source of execution truth:** agents must read canonical state from `.claude/lanes.json` (lane state), Linear MCP (issue state), and GitHub (PR/branch state). Agents must not maintain their own lane registry.
+7. **No second source of execution truth:** agents must read canonical state from `docs/06_status/lanes/*.json` (lane state), Linear MCP (issue state), and GitHub (PR/branch state). Agents must not maintain their own lane registry.
 
 These rules can be mechanically validated with a script. Implementation is deferred to UTV2-967 (agent and skill schema contracts).
 
@@ -216,7 +216,7 @@ These rules can be mechanically validated with a script. Implementation is defer
 
 Per the registry reconciliation (UTV2-962, Done 2026-05-15):
 
-- **Lane state:** `.claude/lanes.json` is canonical
+- **Lane state:** `docs/06_status/lanes/*.json` is canonical
 - **Issue state:** Linear is canonical
 - **PR/branch state:** GitHub is canonical
 - **Proof state:** `docs/06_status/proof/` tied to merge SHA

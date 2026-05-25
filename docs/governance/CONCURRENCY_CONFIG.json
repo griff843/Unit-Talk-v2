@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "total": 6,
+  "executors": {
+    "claude": 2,
+    "codex": 4
+  },
+  "merge_serialized_max": 1,
+  "singleton_types": ["runtime", "migration", "modeling", "data-canonical"],
+  "forbidden_combinations": [
+    ["migration", "runtime"],
+    ["migration", "migration"],
+    ["migration", "data-canonical"],
+    ["runtime", "runtime"],
+    ["modeling", "modeling"]
+  ]
+}

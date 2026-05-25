@@ -220,7 +220,7 @@ async function main(): Promise<void> {
       issueId,
       json: true,
       explain: bools.has('explain'),
-      runner: 'ops:lane:close',
+      runner: 'ops:lane-close',
     });
 
     if (result.exit_code !== 0) {

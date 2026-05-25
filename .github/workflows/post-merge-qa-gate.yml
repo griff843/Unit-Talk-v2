@@ -247,14 +247,17 @@ jobs:
           # Extract matched policy IDs from output for attribution
           policy_ids=$(echo "$POLICY_OUTPUT" | grep -o '"policy_id":"[^"]*"' | sed 's/"policy_id":"//;s/"//' | tr '\n' ', ' | sed 's/, $//' || echo "post-merge-qa-runtime-delivery")
 
-          body="**Post-Merge QA Gate** — ${icon}
+          body=$(cat <<EOF
+          **Post-Merge QA Gate** - ${icon}
 
-Tier: \`${TIER}\` | Policy: \`${policy_ids}\` | Mode: \`fast\` | Regression: \`true\`
+          Tier: \`${TIER}\` | Policy: \`${policy_ids}\` | Mode: \`fast\` | Regression: \`true\`
 
-${summary}
+          ${summary}
 
-> This is an informational check (Phase 3.3). The merge is not affected.
-> Triggered by policy engine: \`scripts/ops/policy-engine.ts\`"
+          > This is an informational check (Phase 3.3). The merge is not affected.
+          > Triggered by policy engine: \`scripts/ops/policy-engine.ts\`
+          EOF
+          )
 
           curl -sS -X POST \
             -H "Authorization: Bearer $GITHUB_TOKEN" \

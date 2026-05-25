@@ -9,7 +9,7 @@
 #     compact systemMessage so Claude starts the session warm
 #
 # Sources (local only — no MCP, no network):
-#   - .claude/lanes.json        → active lane state
+#   - docs/06_status/lanes/*.json → active lane state
 #   - docs/06_status/PROGRAM_STATUS.md → active milestone
 #   - git log / git status      → recent commits and working tree
 #
@@ -58,26 +58,32 @@ if [ -f "$PROG_FILE" ]; then
   [ -z "$MILESTONE" ] && MILESTONE="see PROGRAM_STATUS.md"
 fi
 
-# Lane state — parse lanes.json with node (always available in this repo)
+# Lane state — parse canonical lane manifests with node (always available in this repo)
 LANES_OUT=$(node -e "
 try {
   const fs = require('fs');
-  const raw = fs.readFileSync('$ROOT/.claude/lanes.json', 'utf8');
-  const d = JSON.parse(raw);
-  const active = (d.lanes || []).filter(l =>
-    !['done','merged','cancelled'].includes((l.status || '').toLowerCase())
-  );
+  const path = require('path');
+  const dir = '$ROOT/docs/06_status/lanes';
+  const activeStatuses = new Set(['started','in_progress','in_review','blocked','reopened']);
+  if (!fs.existsSync(dir)) {
+    process.stdout.write('  no lane manifest directory');
+    process.exit(0);
+  }
+  const active = fs.readdirSync(dir)
+    .filter(f => f.endsWith('.json'))
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch(e) { return null; } })
+    .filter(l => l && activeStatuses.has(String(l.status || '').toLowerCase()));
   if (active.length === 0) {
     process.stdout.write('  none');
   } else {
     active.forEach(l => {
       const pr  = l.pr_url ? '  PR #' + l.pr_url.split('/').pop() : '';
       const ttl = (l.title || l.branch || '').slice(0, 55);
-      process.stdout.write('  [' + (l.status || '?').toUpperCase() + '] ' + (l.id || '?') + ' — ' + ttl + pr + '\n');
+      process.stdout.write('  [' + (l.status || '?').toUpperCase() + '] ' + (l.issue_id || '?') + ' - ' + ttl + pr + '\n');
     });
   }
 } catch(e) {
-  process.stdout.write('  lanes.json unreadable: ' + e.message);
+  process.stdout.write('  lane manifests unreadable: ' + e.message);
 }
 " 2>/dev/null || echo "  unavailable")
 
@@ -95,6 +101,10 @@ try {
   const fs = require('fs');
   const path = require('path');
   const dir = '$ROOT/docs/06_status/lanes';
+  const configPath = '$ROOT/docs/governance/CONCURRENCY_CONFIG.json';
+  const config = fs.existsSync(configPath)
+    ? JSON.parse(fs.readFileSync(configPath, 'utf8'))
+    : { executors: { claude: 2, codex: 4 } };
   if (!fs.existsSync(dir)) { process.stdout.write('slots:unknown'); process.exit(0); }
   const active = fs.readdirSync(dir)
     .filter(f => f.endsWith('.json') && f !== 'README.md')
@@ -102,7 +112,7 @@ try {
     .filter(m => m && ['started','in_progress','in_review','blocked','reopened'].includes(m.status));
   const claudeUsed = active.filter(m => m.executor === 'claude').length;
   const codexUsed = active.filter(m => ['codex-cli','codex-cloud'].includes(m.executor)).length;
-  process.stdout.write('claude:' + claudeUsed + '/2 codex:' + codexUsed + '/4');
+  process.stdout.write('claude:' + claudeUsed + '/' + config.executors.claude + ' codex:' + codexUsed + '/' + config.executors.codex);
 } catch(e) { process.stdout.write('slots:error'); }
 " 2>/dev/null || echo "slots:unavailable")
 

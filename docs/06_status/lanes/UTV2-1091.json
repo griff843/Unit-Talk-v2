@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1091-init-121-isolated-full-pipeline-replay-harness",
   "branch": "griffadavi/utv2-1091-init-121-isolated-full-pipeline-replay-harness",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "bc270345003d38773c8141e033bc4b950b2f94de",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/847",
   "files_changed": [],
   "file_scope_lock": [
@@ -20,14 +20,44 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1091/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-25T00:01:38.517Z",
-  "heartbeat_at": "2026-05-25T00:18:38.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T09:31:24.359Z",
+  "closed_at": "2026-05-25T09:31:24.359Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1091-init-121-isolated-full-pipeline-replay-harness.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T09:23:29.205Z",
+      "verdict": "pass",
+      "merge_sha": "bc270345003d38773c8141e033bc4b950b2f94de",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/847"
+    },
+    {
+      "checked_at": "2026-05-25T09:26:30.805Z",
+      "verdict": "fail",
+      "merge_sha": "bc270345003d38773c8141e033bc4b950b2f94de",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T09:30:07.138Z",
+      "verdict": "pass",
+      "merge_sha": "bc270345003d38773c8141e033bc4b950b2f94de",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

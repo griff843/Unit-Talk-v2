@@ -26,7 +26,7 @@ A GitHub Actions workflow that fires on `pull_request` events where the PR has a
 
 **Fail-closed behavior:**
 - Any missing required proof file → workflow fails with a clear message naming the missing file
-- Missing lane manifest → workflow fails directing developer to `ops:lane:start`
+- Missing lane manifest → workflow fails directing developer to `ops:lane-start`
 - No issue ID in branch name → skipped with neutral conclusion (not all PRs are lanes)
 
 **New file: `.ops/sync/UTV2-1024.yml`**

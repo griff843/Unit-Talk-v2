@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import type { LaneManifest } from './shared.js';
+import { ACTIVE_LOCK_STATUSES, pathsOverlap, type LaneManifest } from './shared.js';
+import { loadConcurrencyConfig } from './concurrency-config.js';
 
 export interface MergeRiskCondition {
   code: string;
@@ -33,24 +34,32 @@ interface SharedModule {
   readAllManifests: () => LaneManifest[];
 }
 
-const ACTIVE_STATUSES = new Set(['started', 'open']);
 const STALE_HEARTBEAT_MS = 72 * 60 * 60 * 1000;
+const TIER_C_EXACT_PATHS = new Set([
+  'packages/db/src/lifecycle.ts',
+  'packages/db/src/repositories.ts',
+  'packages/db/src/runtime-repositories.ts',
+  'packages/db/src/database.types.ts',
+  'apps/api/src/distribution-service.ts',
+  'apps/api/src/auth.ts',
+]);
+const TIER_C_PATH_PREFIXES = [
+  'supabase/migrations/',
+  'packages/contracts/src/',
+  'packages/domain/src/',
+  'apps/worker/',
+];
 
 function manifestStatus(manifest: LaneManifest): string {
   return String(manifest.status ?? '').toLowerCase();
 }
 
 function activeLanesOnly(lanes: LaneManifest[]): LaneManifest[] {
-  return lanes.filter((lane) => ACTIVE_STATUSES.has(manifestStatus(lane)));
+  return lanes.filter((lane) => ACTIVE_LOCK_STATUSES.has(lane.status));
 }
 
 function uniqueSorted(values: string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
-}
-
-function intersect(left: string[], right: string[]): string[] {
-  const rightSet = new Set(right);
-  return left.filter((entry) => rightSet.has(entry));
 }
 
 function laneFiles(lane: LaneManifest): string[] {
@@ -62,7 +71,9 @@ function blockedByIds(lane: LaneManifest): string[] {
 }
 
 function touchesTierC(lane: LaneManifest): boolean {
-  return laneFiles(lane).some((filePath) => filePath.startsWith('packages/'));
+  return laneFiles(lane).some((filePath) =>
+    TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
+  );
 }
 
 function classifyExecutor(lane: LaneManifest): 'codex' | 'claude' | 'unknown' {
@@ -95,7 +106,9 @@ export function detectFileOverlap(lanes: LaneManifest[]): MergeRiskCondition[] {
     for (let otherIndex = index + 1; otherIndex < activeLanes.length; otherIndex += 1) {
       const left = activeLanes[index];
       const right = activeLanes[otherIndex];
-      const overlap = uniqueSorted(intersect(laneFiles(left), laneFiles(right)));
+      const overlap = uniqueSorted(
+        laneFiles(left).filter((leftPath) => laneFiles(right).some((rightPath) => pathsOverlap(leftPath, rightPath))),
+      );
       if (overlap.length === 0) {
         continue;
       }
@@ -219,21 +232,25 @@ export function detectStaleHeartbeat(
 }
 
 export function detectDispatchSaturation(lanes: LaneManifest[]): MergeRiskCondition[] {
+  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const maxClaude = cfg?.executors.claude ?? 2;
+  const maxCodex = cfg?.executors.codex ?? 4;
+
   const activeLanes = activeLanesOnly(lanes);
   const codexLanes = activeLanes.filter((lane) => classifyExecutor(lane) === 'codex');
   const claudeLanes = activeLanes.filter((lane) => classifyExecutor(lane) === 'claude');
-  const saturated = codexLanes.length >= 2 || claudeLanes.length >= 1;
+  const saturated = codexLanes.length >= maxCodex || claudeLanes.length >= maxClaude;
 
   if (!saturated) {
     return [];
   }
 
   const detailParts: string[] = [];
-  if (codexLanes.length >= 2) {
-    detailParts.push(`codex active lanes=${codexLanes.length} (max 2 — slot full)`);
+  if (codexLanes.length >= maxCodex) {
+    detailParts.push(`codex active lanes=${codexLanes.length} (max ${maxCodex} — slot full)`);
   }
-  if (claudeLanes.length >= 1) {
-    detailParts.push(`claude active lanes=${claudeLanes.length} (max 1 — slot full)`);
+  if (claudeLanes.length >= maxClaude) {
+    detailParts.push(`claude active lanes=${claudeLanes.length} (max ${maxClaude} — slot full)`);
   }
 
   return [
@@ -254,14 +271,18 @@ export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[]
     for (let otherIndex = index + 1; otherIndex < activeTierCLanes.length; otherIndex += 1) {
       const left = activeTierCLanes[index];
       const right = activeTierCLanes[otherIndex];
-      const leftTierC = laneFiles(left).filter((filePath) => filePath.startsWith('packages/'));
-      const rightTierC = laneFiles(right).filter((filePath) => filePath.startsWith('packages/'));
+      const leftTierC = laneFiles(left).filter((filePath) =>
+        TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
+      );
+      const rightTierC = laneFiles(right).filter((filePath) =>
+        TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
+      );
 
       conditions.push({
         code: 'TIER_C_CONFLICT',
         severity: 'hard_fail',
         lanes: [left.issue_id, right.issue_id],
-        detail: `Both active lanes touch Tier C paths under packages/ (${uniqueSorted([...leftTierC, ...rightTierC]).join(', ')})`,
+        detail: `Both active lanes touch Tier C paths (${uniqueSorted([...leftTierC, ...rightTierC]).join(', ')})`,
       });
     }
   }

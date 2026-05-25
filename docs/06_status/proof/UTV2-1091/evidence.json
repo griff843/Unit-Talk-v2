@@ -5,9 +5,10 @@
   "tier": "T1",
   "lane_type": "verification",
   "sha_binding": {
+    "merge_sha": "bc270345003d38773c8141e033bc4b950b2f94de",
     "verified_source_sha": "8a35a9e410198821701d1de941ac21dbd90969a7",
     "verified_source_note": "Branch HEAD at proof assembly — IsolatedReplayStore + FullPipelineReplayHarness + replay-types, rebased onto main 41bcdeaa",
-    "evidence_commit_sha": "set-by-ci",
+    "evidence_commit_sha": "bc270345003d38773c8141e033bc4b950b2f94de",
     "current_pr_head_sha": "set-by-ci"
   },
   "executor": "claude",
@@ -52,7 +53,7 @@
   },
   "runtime_proof": {
     "project_ref": "zfzdnfwdarxucxtaojxm",
-    "verified_at": "2026-05-25T00:00:00Z",
+    "verified_at": "2026-05-25T09:28:00Z",
     "pnpm_test_db": {
       "status": "PASS",
       "tests_pass": 7,
@@ -60,7 +61,24 @@
       "skipped": 0,
       "file": "apps/api/src/database-smoke.test.ts",
       "note": "7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm. Submission, settlement, outbox atomicity, participant dedup, and correction chain all verified against real DB."
-    }
+    },
+    "queries": [
+      {
+        "command": "pnpm test:db",
+        "file": "apps/api/src/database-smoke.test.ts",
+        "result": "PASS",
+        "checked_at": "2026-05-25T09:28:00Z"
+      }
+    ],
+    "row_counts": [
+      {
+        "surface": "database-smoke.test.ts",
+        "tests": 7,
+        "passed": 7,
+        "failed": 0,
+        "duration_ms": 108977.872511
+      }
+    ]
   },
   "constitutional_claims": [
     "IsolatedReplayStore rejects production-mode construction at object level — dual mechanical write rejection",

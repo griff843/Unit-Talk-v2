@@ -50,7 +50,7 @@
         "P5",
         "S1"
       ],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     },
     {
       "checked_at": "2026-05-07T03:57:06.419Z",
@@ -62,14 +62,14 @@
         "P10",
         "G5"
       ],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     },
     {
       "checked_at": "2026-05-07T03:57:56.592Z",
       "verdict": "pass",
       "merge_sha": "2844dce57d90985a7cbea4e46c009ce5ff859bc4",
       "failures": [],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [
@@ -78,7 +78,7 @@
       "reasons": [
         "commits touched locked files after merge without linked follow-up issue: e5561e50450736e2a4e3ceda40ea475e97b332b3"
       ],
-      "detected_by": "ops:lane:close"
+      "detected_by": "ops:lane-close"
     }
   ]
 }

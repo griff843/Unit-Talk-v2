@@ -3,13 +3,13 @@
 **Status:** Ratified  
 **Authority:** PM + Orchestrator  
 **Effective:** 2026-05-16  
-**Registry authority:** UTV2-962 canonical lane registry at `.claude/lanes.json`
+**Registry authority:** UTV2-962 canonical lane registry at `docs/06_status/lanes/*.json`
 
 ---
 
 ## 1. Execution-location decision model: `main_checkout` vs `worktree`
 
-This policy defines where a lane executes. It does not create a second routing registry. The only canonical lane record remains `.claude/lanes.json`; this document defines how the registry fields must be interpreted and validated.
+This policy defines where a lane executes. It does not create a second routing registry. The only canonical lane record remains `docs/06_status/lanes/*.json`; this document defines how the registry fields must be interpreted and validated.
 
 Decision inputs:
 - `executor`
@@ -122,7 +122,7 @@ Invalid worktree routing is therefore detectable by inspection:
 
 ## 3. Registry field definitions: `execution_location` and `worktree_path` fields for lane manifests
 
-The lane manifest stored in `.claude/lanes.json` is the canonical registry. This policy defines two fields that must be interpreted there; it does not create any duplicate manifest store.
+The lane manifest stored in `docs/06_status/lanes/*.json` is the canonical registry. This policy defines two fields that must be interpreted there; it does not create any duplicate manifest store.
 
 `execution_location`
 - Type: string enum
@@ -204,7 +204,7 @@ Existing lane-start behavior conflicts in two ways:
 - Older routing behavior may infer worktree eligibility from broad app/docs scope without enforcing the Codex override or the package-adjacent app exclusions.
 
 Resolution:
-- Treat `.claude/lanes.json` from UTV2-962 as the only canonical registry and extend its lane manifest interpretation with `execution_location`; do not create a second routing file.
+- Treat `docs/06_status/lanes/*.json` from UTV2-962 as the only canonical registry and extend its lane manifest interpretation with `execution_location`; do not create a second routing file.
 - When a lane record lacks `execution_location`, derive it once from `executor` plus `file_scope_lock`, then persist the normalized value back into the canonical registry workflow.
 - Normalize all control/merge lanes to `execution_location = 'main_checkout'` and `worktree_path: "."`.
 - Normalize normal parallel implementation lanes to `execution_location = 'worktree'` and a dedicated `.out/worktrees/...` path.
@@ -222,4 +222,4 @@ Migration normalization rule:
 }
 ```
 
-This resolves the current conflict between legacy lane-start assumptions and the ratified worktree isolation constraints while preserving a single source of lane truth in `.claude/lanes.json`.
+This resolves the current conflict between legacy lane-start assumptions and the ratified worktree isolation constraints while preserving a single source of lane truth in `docs/06_status/lanes/*.json`.

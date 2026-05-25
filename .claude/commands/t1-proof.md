@@ -97,7 +97,7 @@ Exit 0 = bundle conforms to v1 schema. Any other exit = stop and regenerate.
 If verdict is `READY FOR T1 CLOSE`:
 1. Attach bundle path to PR body
 2. Surface T1 merge gate (PM_VERDICT required) — see `/dispatch-board` Phase 5 or `/verification`
-3. After PM approval + merge: `ops:lane:close <UTV2-###>` (wraps `ops:truth-check`)
+3. After PM approval + merge: `ops:lane-close <UTV2-###>` (wraps `ops:truth-check`)
 
 ---
 

@@ -2,13 +2,13 @@
 
 **Status:** Retired. Superseded by `LANE_MANIFEST_SPEC.md`.
 
-This document previously described the legacy `.claude/lanes.json` lane registry and the `scripts/lane.ts` workflow manager. Both are retired as of the canonical-lane migration wave (PRs #246–#251).
+This document previously described the legacy `legacy lane registry` lane registry and the `scripts/lane.ts` workflow manager. Both are retired as of the canonical-lane migration wave (PRs #246–#251).
 
 ## Canonical replacements
 
 | Legacy surface | Canonical replacement |
 |---|---|
-| `.claude/lanes.json` | `docs/06_status/lanes/*.json` (canonical manifests) |
+| `legacy lane registry` | `docs/06_status/lanes/*.json` (canonical manifests) |
 | `scripts/lane.ts` (`lane:spawn`, `lane:list`, etc.) | `scripts/ops/lane-start.ts`, `scripts/ops/lane-close.ts`, `scripts/ops/lane-manifest.ts` |
 | `lane-manager.md` (this file) | `docs/05_operations/LANE_MANIFEST_SPEC.md` |
 

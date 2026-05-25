@@ -25,7 +25,6 @@
         "hooks": [
           {
             "type": "command",
-            "if": "Bash(git commit *)",
             "command": "bash .claude/hooks/commit-msg-linear-check.sh"
           }
         ]

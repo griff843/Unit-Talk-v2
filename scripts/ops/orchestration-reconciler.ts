@@ -27,6 +27,7 @@ export type OrchestrationVerdict =
   | 'warn'
   | 'fail'
   | 'infra_error'
+  | 'historical_decay'
   | 'stale_reclaim_required'
   | 'cleanup_candidate';
 
@@ -87,11 +88,68 @@ export interface OrchestrationReconcilerReport {
   transition_window_minutes: number;
   summary: Record<OrchestrationVerdict, number>;
   checks: OrchestrationCheck[];
+  state_machine: OrchestrationStateMachineReport;
+  repair_plan: OrchestrationRepairPlan;
   cleanup_plan: OrchestrationCleanupPlan;
   scheduling: {
     status: 'proposed';
     detail: string;
   };
+}
+
+export type LaneReconciliationState =
+  | 'clean_active'
+  | 'clean_closed'
+  | 'lease_without_manifest'
+  | 'manifest_without_branch'
+  | 'open_pr_without_manifest'
+  | 'active_pr_closed_manifest'
+  | 'merged_branch_active_lease'
+  | 'stale_lease_safe_reclaim'
+  | 'stale_lease_manual_escalation'
+  | 'closed_branch_cleanup'
+  | 'historical_decay'
+  | 'unknown';
+
+export interface LaneReconciliationSnapshot {
+  issue_id: string;
+  state: LaneReconciliationState;
+  lifecycle: 'active' | 'closing' | 'closed' | 'orphaned' | 'decayed' | 'unknown';
+  fail_closed: boolean;
+  detail: string;
+}
+
+export interface OrchestrationStateMachineReport {
+  lane_lifecycle: string[];
+  reconcile_lifecycle: string[];
+  stale_criteria: string[];
+  cleanup_criteria: string[];
+  repair_semantics: string[];
+  lanes: LaneReconciliationSnapshot[];
+}
+
+export interface OrchestrationRepairAction {
+  id:
+    | 'reclaim_stale_lease'
+    | 'repair_missing_manifest'
+    | 'escalate_manual_repair'
+    | 'record_pr_on_manifest'
+    | 'record_merge_on_manifest'
+    | 'cleanup_closed_branch'
+    | 'acknowledge_historical_decay';
+  issue_id: string;
+  state: LaneReconciliationState;
+  command: string | null;
+  reason: string;
+  safe_to_apply: boolean;
+  requires_pm: boolean;
+  audit_trail: string[];
+}
+
+export interface OrchestrationRepairPlan {
+  dry_run: boolean;
+  applied: boolean;
+  actions: OrchestrationRepairAction[];
 }
 
 export interface OrchestrationCleanupAction {
@@ -134,6 +192,7 @@ export interface OrchestrationReconcilerInput {
   now?: Date;
   transitionWindowMinutes?: number;
   infraErrors?: string[];
+  historicalDecayErrors?: string[];
 }
 
 const DEFAULT_TRANSITION_WINDOW_MINUTES = 60;
@@ -523,6 +582,276 @@ function buildCleanupPlan(input: FilteredInput): OrchestrationCleanupPlan {
   };
 }
 
+function openPrForIssue(issueId: string, prs: PullRequestSnapshot[]): PullRequestSnapshot | undefined {
+  const normalizedIssueId = normalizeIssueId(issueId);
+  return prs.find((pr) => pr.state === 'open' && issueIdFromBranch(pr.branch) === normalizedIssueId);
+}
+
+function anyPrForIssue(issueId: string, prs: PullRequestSnapshot[]): PullRequestSnapshot | undefined {
+  const normalizedIssueId = normalizeIssueId(issueId);
+  return prs.find((pr) => issueIdFromBranch(pr.branch) === normalizedIssueId);
+}
+
+function isLeaseExpired(lease: DispatchLease, now: Date): boolean {
+  return Date.parse(lease.expires_at) <= now.getTime();
+}
+
+function classifyLane(
+  issueId: string,
+  input: FilteredInput,
+  now: Date,
+): LaneReconciliationSnapshot {
+  const manifest = input.manifests.find((entry) => normalizeIssueId(entry.issue_id) === issueId);
+  const lease = input.leases.find((entry) => normalizeIssueId(entry.issue_id) === issueId);
+  const linear = input.linearIssues.find((entry) => normalizeIssueId(entry.issue_id) === issueId);
+  const pr = anyPrForIssue(issueId, input.pullRequests);
+  const openPr = openPrForIssue(issueId, input.pullRequests);
+  const activeLease = lease && isLeaseActive(lease) ? lease : undefined;
+  const activeManifest = manifest && isManifestActive(manifest) ? manifest : undefined;
+  const closedManifest = manifest && CLOSED_MANIFEST_STATUSES.has(manifest.status) ? manifest : undefined;
+  const branch = manifest?.branch ?? lease?.branch ?? pr?.branch;
+  const branchPresent = branch ? branchExists(input.branches, branch) : false;
+  const expired = activeLease ? isLeaseExpired(activeLease, now) : false;
+  const linearActive = linear ? isLinearActive(linear) : false;
+
+  if (activeLease && !activeManifest) {
+    if (expired && !linearActive && !openPr) {
+      return {
+        issue_id: issueId,
+        state: 'stale_lease_safe_reclaim',
+        lifecycle: 'orphaned',
+        fail_closed: true,
+        detail: `Expired active lease has no active manifest and no active Linear/PR owner; reclaim is safe with audit history.`,
+      };
+    }
+    return {
+      issue_id: issueId,
+      state: 'lease_without_manifest',
+      lifecycle: 'orphaned',
+      fail_closed: true,
+      detail: expired
+        ? 'Expired active lease has no active manifest but still needs manual ownership verification.'
+        : 'Active lease has no active manifest; lane ownership is not reconstructable without repair.',
+    };
+  }
+
+  if (activeLease && pr?.state === 'merged') {
+    return {
+      issue_id: issueId,
+      state: 'merged_branch_active_lease',
+      lifecycle: 'closing',
+      fail_closed: true,
+      detail: 'PR is merged but lease remains active; closeout/release must run before cleanup.',
+    };
+  }
+
+  if (activeManifest && !branchPresent) {
+    return {
+      issue_id: issueId,
+      state: 'manifest_without_branch',
+      lifecycle: 'orphaned',
+      fail_closed: true,
+      detail: 'Active manifest branch is missing from local and remote refs.',
+    };
+  }
+
+  if (openPr && !manifest) {
+    return {
+      issue_id: issueId,
+      state: 'open_pr_without_manifest',
+      lifecycle: 'orphaned',
+      fail_closed: true,
+      detail: 'Open PR exists but lane manifest is missing; workflows must repair manifest before tier/proof gates can trust it.',
+    };
+  }
+
+  if (openPr && closedManifest) {
+    return {
+      issue_id: issueId,
+      state: 'active_pr_closed_manifest',
+      lifecycle: 'orphaned',
+      fail_closed: true,
+      detail: `Open PR exists while manifest is ${closedManifest.status}; reopen or close the PR before merge authorization.`,
+    };
+  }
+
+  if (closedManifest && branchPresent) {
+    return {
+      issue_id: issueId,
+      state: 'closed_branch_cleanup',
+      lifecycle: 'closed',
+      fail_closed: false,
+      detail: `Manifest is ${closedManifest.status} and branch still exists; eligible for deterministic cleanup after merge/proof links are preserved.`,
+    };
+  }
+
+  if (activeLease || activeManifest || linearActive || openPr) {
+    return {
+      issue_id: issueId,
+      state: 'clean_active',
+      lifecycle: 'active',
+      fail_closed: false,
+      detail: 'Active lane surfaces have a coherent owner record.',
+    };
+  }
+
+  if (closedManifest || (linear && isLinearDone(linear))) {
+    return {
+      issue_id: issueId,
+      state: 'clean_closed',
+      lifecycle: 'closed',
+      fail_closed: false,
+      detail: 'Closed lane has no active orchestration owner.',
+    };
+  }
+
+  return {
+    issue_id: issueId,
+    state: 'unknown',
+    lifecycle: 'unknown',
+    fail_closed: true,
+    detail: 'Insufficient orchestration evidence to classify lane deterministically.',
+  };
+}
+
+function buildStateMachineReport(input: FilteredInput, now: Date): OrchestrationStateMachineReport {
+  return {
+    lane_lifecycle: [
+      'started -> in_progress -> in_review -> merged -> done',
+      'started|in_progress|in_review|merged|done -> reopened when truth-check detects failed closeout',
+      'active leases are execution locks, not completion proof',
+    ],
+    reconcile_lifecycle: [
+      'observe all surfaces',
+      'classify lane state',
+      'emit required failures for unsafe/orphaned state',
+      'emit dry-run repair/cleanup plan',
+      'apply only explicit idempotent commands under merge mutex/PM authority',
+    ],
+    stale_criteria: [
+      'lease.status is active or stale_reclaim_required',
+      'lease.expires_at <= reconciliation clock',
+      'safe reclaim additionally requires no active manifest, no open PR, and Linear not active',
+    ],
+    cleanup_criteria: [
+      'manifest status is merged or done',
+      'merge SHA or merged PR evidence is preserved before branch cleanup',
+      'no active lease, active manifest, active Linear state, or open PR remains',
+      'worktree/branch cleanup is dry-run until explicitly applied',
+    ],
+    repair_semantics: [
+      'missing manifests fail closed and route to manifest repair/reconstruction',
+      'lease reclaim appends reclaim_history instead of deleting the lease',
+      'historical Linear decay is advisory unless the issue is current or active',
+      'all repair commands must be safe to rerun or must no-op when already repaired',
+    ],
+    lanes: input.selectedIssueIds.map((issueId) => classifyLane(issueId, input, now)),
+  };
+}
+
+function buildRepairPlan(
+  input: FilteredInput,
+  stateMachine: OrchestrationStateMachineReport,
+): OrchestrationRepairPlan {
+  const actions: OrchestrationRepairAction[] = [];
+  const manifestByIssue = mapByIssueId(input.manifests);
+  const leaseByIssue = mapByIssueId(input.leases);
+  const prByIssue = new Map(
+    input.pullRequests
+      .map((pr) => {
+        const issueId = issueIdFromBranch(pr.branch);
+        return issueId ? [issueId, pr] as const : null;
+      })
+      .filter((entry): entry is readonly [string, PullRequestSnapshot] => entry !== null),
+  );
+
+  for (const lane of stateMachine.lanes) {
+    const manifest = manifestByIssue.get(lane.issue_id);
+    const lease = leaseByIssue.get(lane.issue_id);
+    const pr = prByIssue.get(lane.issue_id);
+    const auditTrail = [
+      `state=${lane.state}`,
+      manifest ? `manifest=${manifest.status}:${manifest.branch}` : 'manifest=missing',
+      lease ? `lease=${lease.status}:${lease.branch}` : 'lease=missing',
+      pr ? `pr=${pr.state}:${pr.url}` : 'pr=missing',
+    ];
+
+    if (lane.state === 'stale_lease_safe_reclaim' && lease) {
+      actions.push({
+        id: 'reclaim_stale_lease',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: `pnpm ops:lease reclaim --issue ${lane.issue_id} --actor ops:reconcile --reason "safe stale lease reclaim: expired lease without active manifest/open PR/active Linear" --branch-status ${branchExists(input.branches, lease.branch) ? 'present' : 'missing'} --pr-status none`,
+        reason: lane.detail,
+        safe_to_apply: true,
+        requires_pm: false,
+        audit_trail: auditTrail,
+      });
+    } else if (lane.state === 'lease_without_manifest' || lane.state === 'manifest_without_branch' || lane.state === 'merged_branch_active_lease') {
+      actions.push({
+        id: 'escalate_manual_repair',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: null,
+        reason: lane.detail,
+        safe_to_apply: false,
+        requires_pm: true,
+        audit_trail: auditTrail,
+      });
+    } else if (lane.state === 'open_pr_without_manifest' && pr) {
+      actions.push({
+        id: 'repair_missing_manifest',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: `pnpm ops:manifest-repair --issue ${lane.issue_id} --from-pr ${pr.number} --dry-run`,
+        reason: lane.detail,
+        safe_to_apply: false,
+        requires_pm: false,
+        audit_trail: auditTrail,
+      });
+    } else if (lane.state === 'active_pr_closed_manifest') {
+      actions.push({
+        id: 'escalate_manual_repair',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: null,
+        reason: lane.detail,
+        safe_to_apply: false,
+        requires_pm: true,
+        audit_trail: auditTrail,
+      });
+    } else if (lane.state === 'closed_branch_cleanup' && manifest) {
+      actions.push({
+        id: 'cleanup_closed_branch',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: `pnpm ops:lane-clean --issue ${lane.issue_id} --dry-run`,
+        reason: lane.detail,
+        safe_to_apply: true,
+        requires_pm: false,
+        audit_trail: auditTrail,
+      });
+    } else if (lane.state === 'historical_decay') {
+      actions.push({
+        id: 'acknowledge_historical_decay',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: null,
+        reason: lane.detail,
+        safe_to_apply: true,
+        requires_pm: false,
+        audit_trail: auditTrail,
+      });
+    }
+  }
+
+  return {
+    dry_run: true,
+    applied: false,
+    actions,
+  };
+}
+
 export function buildOrchestrationReconcilerReport(
   rawInput: OrchestrationReconcilerInput,
 ): OrchestrationReconcilerReport {
@@ -544,6 +873,18 @@ export function buildOrchestrationReconcilerReport(
       verdict: 'infra_error',
       detail: message,
       evidence: [evidence('scheduler', 'orchestration-reconciler', message)],
+    });
+  }
+
+  for (const message of input.historicalDecayErrors ?? []) {
+    const match = message.match(/\b((?:UTV2|UNI)-\d+)\b/i);
+    addCheck(checks, {
+      id: 'ORCH-HISTORICAL-DECAY',
+      requirement: 'advisory',
+      verdict: 'historical_decay',
+      issue_id: match ? normalizeIssueId(match[1] ?? '') : undefined,
+      detail: message,
+      evidence: [evidence('linear', 'historical lookup', message)],
     });
   }
 
@@ -780,6 +1121,7 @@ export function buildOrchestrationReconcilerReport(
     warn: 0,
     fail: 0,
     infra_error: 0,
+    historical_decay: 0,
     stale_reclaim_required: 0,
     cleanup_candidate: 0,
   };
@@ -789,8 +1131,13 @@ export function buildOrchestrationReconcilerReport(
 
   const hasFail = checks.some((check) => FAIL_CLASS_VERDICTS.has(check.verdict));
   const hasInfra = checks.some((check) => check.verdict === 'infra_error');
-  const hasWarn = checks.some((check) => check.verdict === 'warn' || check.verdict === 'cleanup_candidate');
+  const hasWarn = checks.some((check) =>
+    check.verdict === 'warn'
+    || check.verdict === 'cleanup_candidate'
+    || check.verdict === 'historical_decay'
+  );
   const verdict = hasFail ? 'FAIL' : hasInfra ? 'INFRA' : hasWarn ? 'WARN' : 'PASS';
+  const stateMachine = buildStateMachineReport(input, now);
 
   return {
     schema_version: 1,
@@ -808,6 +1155,8 @@ export function buildOrchestrationReconcilerReport(
     transition_window_minutes: transitionWindowMinutes,
     summary,
     checks,
+    state_machine: stateMachine,
+    repair_plan: buildRepairPlan(input, stateMachine),
     cleanup_plan: buildCleanupPlan(input),
     scheduling: {
       status: 'proposed',
@@ -829,7 +1178,7 @@ function runCommand(command: string, args: string[]): string {
   return (result.stdout ?? '').trim();
 }
 
-function gitBranches(): BranchSnapshot[] {
+export function gitBranches(): BranchSnapshot[] {
   const branches: BranchSnapshot[] = [];
   const local = runCommand('git', ['for-each-ref', '--format=%(refname:short)', 'refs/heads']);
   for (const line of local.split(/\r?\n/).map((entry) => entry.trim()).filter(Boolean)) {
@@ -933,7 +1282,12 @@ interface LinearIssueQueryData {
   } | null;
 }
 
-async function fetchLinearIssues(issueIds: string[], infraErrors: string[]): Promise<LinearIssueSnapshot[]> {
+async function fetchLinearIssues(
+  issueIds: string[],
+  infraErrors: string[],
+  historicalDecayErrors: string[],
+  currentIssueIds: Set<string>,
+): Promise<LinearIssueSnapshot[]> {
   const token = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY');
   if (!token) {
     infraErrors.push('Linear query skipped: LINEAR_API_TOKEN or LINEAR_API_KEY is required');
@@ -954,7 +1308,12 @@ async function fetchLinearIssues(issueIds: string[], infraErrors: string[]): Pro
       { token, userAgent: 'unit-talk-orchestration-reconciler' },
     );
     if (!result.ok || !result.data?.issue) {
-      infraErrors.push(`Linear issue query failed for ${issueId}: ${result.error ?? 'not found'}`);
+      const message = `Linear issue query failed for ${issueId}: ${result.error ?? 'not found'}`;
+      if (!currentIssueIds.has(issueId) && isHistoricalLinearDecay(result.error ?? 'not found')) {
+        historicalDecayErrors.push(message);
+      } else {
+        infraErrors.push(message);
+      }
       continue;
     }
     issues.push({
@@ -967,12 +1326,16 @@ async function fetchLinearIssues(issueIds: string[], infraErrors: string[]): Pro
   return issues;
 }
 
+function isHistoricalLinearDecay(error: string): boolean {
+  return /entity not found|not found/i.test(error);
+}
+
 export function renderHuman(report: OrchestrationReconcilerReport): string {
   const lines = [
     `[ops:orchestration-reconcile] generated_at=${report.generated_at} verdict=${report.verdict} mode=${report.mode}`,
     `  filters issue_id=${report.filters.issue_id ?? '-'} since=${report.filters.since ?? '-'} selected_issue_ids=${report.filters.selected_issue_ids.join(',') || '-'}`,
     `  transition_window_minutes=${report.transition_window_minutes}`,
-    `  summary pass=${report.summary.pass} warn=${report.summary.warn} fail=${report.summary.fail} stale_reclaim_required=${report.summary.stale_reclaim_required} cleanup_candidate=${report.summary.cleanup_candidate} infra_error=${report.summary.infra_error}`,
+    `  summary pass=${report.summary.pass} warn=${report.summary.warn} fail=${report.summary.fail} stale_reclaim_required=${report.summary.stale_reclaim_required} cleanup_candidate=${report.summary.cleanup_candidate} historical_decay=${report.summary.historical_decay} infra_error=${report.summary.infra_error}`,
   ];
 
   const currentRequiredFailures = report.checks.filter((check) =>
@@ -1003,6 +1366,29 @@ export function renderHuman(report: OrchestrationReconcilerReport): string {
       );
       for (const item of check.evidence) {
         lines.push(`      - ${item.surface} ${item.source}: ${item.detail}`);
+      }
+    }
+  }
+  lines.push('  reconciliation states:');
+  if (report.state_machine.lanes.length === 0) {
+    lines.push('    none');
+  } else {
+    for (const lane of report.state_machine.lanes) {
+      lines.push(
+        `    [${lane.fail_closed ? 'FAIL-CLOSED' : 'OPEN'}] ${lane.issue_id} ${lane.state} ${lane.lifecycle} :: ${lane.detail}`,
+      );
+    }
+  }
+  lines.push('  repair plan:');
+  if (report.repair_plan.actions.length === 0) {
+    lines.push('    none');
+  } else {
+    for (const action of report.repair_plan.actions) {
+      lines.push(
+        `    [${action.safe_to_apply ? 'SAFE' : 'MANUAL'}] ${action.id} ${action.issue_id} :: ${action.reason}`,
+      );
+      if (action.command) {
+        lines.push(`      command: ${action.command}`);
       }
     }
   }
@@ -1049,6 +1435,7 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
   const since = parseSinceFilter(parsed);
   const transitionWindow = Number.parseInt(parsed.flags.get('transition-window-minutes')?.at(-1) ?? '', 10);
   const infraErrors: string[] = [];
+  const historicalDecayErrors: string[] = [];
 
   const manifests = readAllManifests();
   const leases = readAllLeases();
@@ -1061,11 +1448,24 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     branches,
     pullRequests,
   });
+  const currentIssueIds = collectCurrentIssueIds({
+    linearIssues: [],
+    leases,
+    manifests,
+    branches,
+    pullRequests,
+  });
   const linearIssueIds = new Set(issueIds);
   if (issueId) {
     linearIssueIds.add(issueId);
+    currentIssueIds.add(issueId);
   }
-  const linearIssues = await fetchLinearIssues([...linearIssueIds].sort((left, right) => left.localeCompare(right)), infraErrors);
+  const linearIssues = await fetchLinearIssues(
+    [...linearIssueIds].sort((left, right) => left.localeCompare(right)),
+    infraErrors,
+    historicalDecayErrors,
+    currentIssueIds,
+  );
 
   const report = buildOrchestrationReconcilerReport({
     linearIssues,
@@ -1081,6 +1481,7 @@ async function main(argv = process.argv.slice(2)): Promise<void> {
     ),
     transitionWindowMinutes: Number.isFinite(transitionWindow) ? transitionWindow : undefined,
     infraErrors,
+    historicalDecayErrors,
   });
   if (applyCleanup) {
     throw new Error('Cleanup apply is not automated yet; run the dry-run cleanup_plan commands explicitly under the merge mutex.');

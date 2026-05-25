@@ -43,8 +43,7 @@ jobs:
     env:
       SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
       SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-      # Anon key is publishable (role: anon, no elevated privileges) — safe to commit
-      SUPABASE_ANON_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InpmemRuZndkYXJ4dWN4dGFvanhtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY3MDU0ODYsImV4cCI6MjA5MjI4MTQ4Nn0._6qqIY7B91RFZhZOow5pUPIa38otJiLli9f7QNWiG84
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
       SGO_API_KEY: ${{ secrets.SGO_API_KEY }}
       SGO_API_KEY_FALLBACK: ${{ secrets.SGO_API_KEY_FALLBACK }}
       UNIT_TALK_OPS_ALERT_WEBHOOK_URL: ${{ secrets.UNIT_TALK_OPS_ALERT_WEBHOOK_URL }}

@@ -63,7 +63,7 @@
         "R2",
         "R3"
       ],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [],

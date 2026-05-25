@@ -1,4 +1,4 @@
-# System State — 2026-05-24 12:03
+# System State — 2026-05-25 07:15
 
 ## Branch
 main
@@ -7,10 +7,10 @@ main
 Phase 7A 
 
 ## Active Lanes
-  lanes.json unreadable: ENOENT: no such file or directory, open '/home/griff843/code/Unit-Talk-v2/.claude/lanes.json'
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/griff843/code/Unit-Talk-v2/docs/06_status/lanes/*.json'
 
 ## Dispatch Slots
-claude:0/2 codex:0/4
+claude:2/2 codex:0/4
 
 ## Ghost Lanes
 none
@@ -22,11 +22,11 @@ dispatch:no-digest
 codex:ok(codex-cli 0.133.0)
 
 ## Working Tree
-Clean
+21 file(s) modified/untracked
 
 ## Recent Commits
-2a55be1 chore(ops): close UTV2-1155 + bind proof to merge SHA 04055ee4
-04055ee fix(ingestor): UTV2-1155 fail-closed on missing SGO_API_KEY at startup
-eadafd0 chore(ops): close UTV2-1034 + governance exception documented
-e14e60f chore(ops): UTV2-1034 proof SHA binding + manifest status update
-3081cca feat(analytics): UTV2-1034 calibration baseline script + live DB run (squash)
+49705023 chore(verification): stub placeholders for UTV2-1093 and UTV2-1092 lane-start scope
+3faf25cf chore(lanes): UTV2-1071 post-merge closeout — SHA bind proof, status done
+f828881d [codex] UTV2-1071 five-lane validation proof (#844)
+bc270345 feat(verification): UTV2-1091 INIT-1.2.1 — Isolated full-pipeline replay harness (#847)
+97e36627 feat(governance): UTV2-1089 INIT-1.3.2 — InvariantEngine runtime evaluable set (#846)

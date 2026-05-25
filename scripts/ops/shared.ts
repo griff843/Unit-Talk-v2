@@ -34,7 +34,7 @@ export interface TruthCheckHistoryEntry {
   verdict: 'pass' | 'fail' | 'reopen';
   merge_sha: string | null;
   failures: string[];
-  runner: 'ops:lane:close' | 'ops:reconcile' | 'manual';
+  runner: 'ops:lane-close' | 'ops:reconcile' | 'manual';
 }
 
 export interface ReopenHistoryEntry {
@@ -853,6 +853,16 @@ export function assertStatusTransition(
   }
 }
 
+function normalizeLockPath(p: string): string {
+  return p.replace(/\\/g, '/').replace(/^\.\//, '').replace(/\/+$/, '');
+}
+
+export function pathsOverlap(a: string, b: string): boolean {
+  const na = normalizeLockPath(a);
+  const nb = normalizeLockPath(b);
+  return na === nb || na.startsWith(`${nb}/`) || nb.startsWith(`${na}/`);
+}
+
 export function activeManifestOverlap(
   issueId: string,
   requestedFiles: string[],
@@ -865,8 +875,8 @@ export function activeManifestOverlap(
       continue;
     }
 
-    const overlappingFiles = requestedFiles.filter((filePath) =>
-      manifest.file_scope_lock.includes(filePath),
+    const overlappingFiles = requestedFiles.filter((requested) =>
+      manifest.file_scope_lock.some((locked) => pathsOverlap(requested, locked)),
     );
     if (overlappingFiles.length > 0) {
       return {

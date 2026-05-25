@@ -76,11 +76,11 @@ Phase 7A shipped: `awaiting_approval` lifecycle state + governance brake on auto
 
 ## Lane execution expectations
 
-Start a lane with `ops:lane:start <UTV2-###>`. Close with `ops:lane:close <UTV2-###>`. These are the only sanctioned transitions. No Done without `ops:truth-check` pass.
+Start a lane with `ops:lane-start <UTV2-###>`. Close with `ops:lane-close <UTV2-###>`. These are the only sanctioned transitions. No Done without `ops:truth-check` pass.
 
 Before starting: preflight token valid, tier label set, file scope declared, no overlap with active lanes.
 
-**Pre-closure checklist (7 steps — all required before `ops:lane:close`):**
+**Pre-closure checklist (7 steps — all required before `ops:lane-close`):**
 1. `pnpm verify` green on the branch
 2. R-level lookup in `docs/05_operations/r1-r5-rules.json` — all triggered `required[]` artifacts present
 3. Proof tied to merge SHA (not the branch HEAD SHA — the SHA after merge)

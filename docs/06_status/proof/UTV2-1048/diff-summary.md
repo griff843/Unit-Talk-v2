@@ -9,7 +9,7 @@ UTV2-1048: Promoted lane-governor into automatic dispatch preflight artifact pol
 Policy changes made:
 - Dispatch preflight artifact now required for every lane attempt
 - Artifact must record: active lane count, executor limits, forbidden combos, file-scope overlap, Tier C exposure, dependency blockers, final dispatch decision
-- `ops:lane:start` must refuse when deterministic blockers are present
+- `ops:lane-start` must refuse when deterministic blockers are present
 - Manual `lane-governor` prompt demoted to investigation aid only
 - Pre-dispatch gate list for ≥4-lane waves updated (2 → 4 gates)
 
