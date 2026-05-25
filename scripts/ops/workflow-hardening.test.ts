@@ -183,3 +183,16 @@ test('proof and runtime gates watch proof, lane, and ops control-plane paths', (
   assert.ok(runtimePaths.includes('docs/06_status/lanes/**'), 'runtime verifier must watch lane manifests');
   assert.ok(runtimePaths.includes('scripts/ops/**'), 'runtime verifier must watch ops control-plane changes');
 });
+
+test('CI avoids duplicate verify jobs for codex PR branches', () => {
+  const workflow = readWorkflowYaml('ci.yml');
+  const on = objectField(workflow, 'on');
+  const push = objectField(on, 'push');
+  const branches = stringArrayField(push, 'branches');
+  const concurrency = objectField(workflow, 'concurrency');
+
+  assert.deepStrictEqual(branches, ['main']);
+  assert.ok(on.pull_request !== undefined, 'CI must still run for pull requests');
+  assert.match(stringField(concurrency, 'group'), /pull_request\.number/);
+  assert.strictEqual(concurrency['cancel-in-progress'], true);
+});

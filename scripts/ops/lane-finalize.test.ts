@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   buildLaneFinalizePlan,
+  resolveLaneFinalizeInput,
   runLaneFinalizePlan,
   type LaneFinalizeRunner,
 } from './lane-finalize.js';
@@ -53,6 +54,16 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     '123',
     '--json',
   ]);
+  assert.deepEqual(plan.steps[1]?.args, [
+    'ops:proof-generate',
+    'UTV2-1073',
+    '--json',
+    '--current',
+    '--branch',
+    'codex/utv2-1073-closeout',
+    '--pr-url',
+    'https://github.com/griff843/Unit-Talk-v2/pull/123',
+  ]);
 });
 
 test('lane finalize dry run returns planned steps without executing commands', () => {
@@ -95,4 +106,12 @@ test('already closed lane only reconciles current state', () => {
 
   assert.equal(plan.already_closed, true);
   assert.deepEqual(plan.steps.map((step) => step.id), ['reconcile_current']);
+});
+
+test('resolveLaneFinalizeInput falls back to manifest PR URL', () => {
+  const resolved = resolveLaneFinalizeInput({
+    manifest: manifest({ pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/853' }),
+  });
+
+  assert.deepStrictEqual(resolved, { issueId: 'UTV2-1073', pr: '853' });
 });

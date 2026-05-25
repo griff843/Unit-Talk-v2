@@ -11,6 +11,7 @@ test('MERGE_READY_GATES preserves pnpm verify gate order', () => {
   assert.deepStrictEqual(
     MERGE_READY_GATES.map((gate) => gate.id),
     [
+      'pm-readiness',
       'ops-sync-check',
       'system-alignment-check',
       'automation-coverage-check',
@@ -31,6 +32,8 @@ test('parseMergeReadyArgs defaults to dry-run for safe local summaries', () => {
   assert.equal(options.dryRun, true);
   assert.equal(options.json, true);
   assert.deepStrictEqual(options.gates, ['lint']);
+  assert.equal(options.issueId, null);
+  assert.equal(options.prNumber, null);
 });
 
 test('parseMergeReadyArgs requires --run before executing gates', () => {
@@ -49,7 +52,7 @@ test('selectMergeReadyGates keeps requested gates in canonical order', () => {
 test('runMergeReady dry-run summarizes commands without invoking runner', () => {
   let invoked = false;
   const report = runMergeReady(
-    { dryRun: true, gates: ['lint'] },
+    { dryRun: true, gates: ['lint'], issueId: null, prNumber: null },
     () => {
       invoked = true;
       return { status: 0, stdout: '', stderr: '' };
@@ -65,7 +68,7 @@ test('runMergeReady dry-run summarizes commands without invoking runner', () => 
 test('runMergeReady stops after first required gate failure', () => {
   const calls: string[] = [];
   const report = runMergeReady(
-    { dryRun: false, gates: ['lint', 'build'] },
+    { dryRun: false, gates: ['lint', 'build'], issueId: null, prNumber: null },
     (_command, args) => {
       calls.push(args[0] ?? '');
       return calls.length === 1
@@ -78,4 +81,42 @@ test('runMergeReady stops after first required gate failure', () => {
   assert.deepStrictEqual(calls, ['lint']);
   assert.equal(report.summary.fail, 1);
   assert.equal(report.gates[0]?.stderr, 'lint failed');
+});
+
+test('pm-readiness requires issue and PR before PM verdict approval', () => {
+  const report = runMergeReady({
+    dryRun: false,
+    gates: ['pm-readiness'],
+    issueId: null,
+    prNumber: null,
+  });
+
+  assert.equal(report.ok, false);
+  assert.equal(report.gates[0]?.id, 'pm-readiness');
+  assert.equal(report.gates[0]?.exit_code, 2);
+  assert.match(report.gates[0]?.stderr ?? '', /requires --issue/);
+});
+
+test('pm-readiness invokes truth-check with issue and PR context', () => {
+  const calls: Array<{ command: string; args: string[] }> = [];
+  const report = runMergeReady(
+    {
+      dryRun: false,
+      gates: ['pm-readiness'],
+      issueId: 'UTV2-1200',
+      prNumber: 44,
+    },
+    (command, args) => {
+      calls.push({ command, args });
+      return { status: 0, stdout: '{}', stderr: '' };
+    },
+  );
+
+  assert.equal(report.ok, true);
+  assert.deepStrictEqual(calls, [
+    {
+      command: 'pnpm',
+      args: ['ops:truth-check', 'UTV2-1200', '--json', '--explain', '--pr', '44'],
+    },
+  ]);
 });

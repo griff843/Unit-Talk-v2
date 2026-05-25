@@ -80,6 +80,10 @@ test('clean candidate with no overlaps is recommended', () => {
 
   assert.deepStrictEqual(findDecisionIssueIds(report, 'recommended'), ['UTV2-96801']);
   assert.deepStrictEqual(report.recommended[0]?.reason_codes, []);
+  assert.equal(
+    report.dispatch_plan.fill_now[0]?.dispatch_command,
+    'pnpm ops:lane-start UTV2-96801 --executor codex-cli --lane-type hygiene',
+  );
 });
 
 test('candidate whose blocked_by is not done is blocked with BLOCKED_DEP', () => {
