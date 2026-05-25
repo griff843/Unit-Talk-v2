@@ -19,7 +19,8 @@
     "scripts/ops/system-alignment-check.ts",
     "docs/06_status/lanes/UTV2-1025.json",
     "docs/06_status/proof/UTV2-1025/diff-summary.md",
-    "docs/06_status/proof/UTV2-1025/verification.log"
+    "docs/06_status/proof/UTV2-1025/verification.log",
+    "docs/06_status/proof/UTV2-1025/runtime-verification.md"
   ],
   "file_scope_lock": [
     "package.json",
@@ -31,11 +32,12 @@
     "scripts/ops/system-alignment-check.ts",
     "docs/06_status/lanes/UTV2-1025.json",
     "docs/06_status/proof/UTV2-1025/diff-summary.md",
-    "docs/06_status/proof/UTV2-1025/verification.log"
+    "docs/06_status/proof/UTV2-1025/verification.log",
+    "docs/06_status/proof/UTV2-1025/runtime-verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1025/diff-summary.md",
-    "docs/06_status/proof/UTV2-1025/verification.log"
+    "docs/06_status/proof/UTV2-1025/runtime-verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-05-19T12:30:20.097Z",
