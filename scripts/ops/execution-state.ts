@@ -1,4 +1,5 @@
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import {
@@ -72,8 +73,18 @@ export interface LaneSummary {
   executor: string;
   tier: string;
   status: string;
+  started_at: string;
   heartbeat_at: string;
+  lane_age_hours: number;
+  heartbeat_age_hours: number;
   pr_url: string | null;
+  pr_state: 'none' | 'linked' | 'open' | 'merged';
+  check_state: 'unknown' | 'pending' | 'success' | 'failure';
+  branch_drift: 'unknown' | 'remote_present' | 'remote_missing' | 'merged_pr_active_manifest';
+  proof_ready: boolean;
+  merge_ready: boolean;
+  conflict_risk: 'clear' | MergeRiskConditionLike['severity'];
+  recommended_action: string;
   blockers: string[];
   source_url: string;
 }
@@ -109,6 +120,8 @@ interface MergeRiskBuilderInput {
   remoteBranches: string[];
   openPrBranches: string[];
   mergedPrBranches: string[];
+  checkStateByBranch?: Record<string, string>;
+  checkStateByIssue?: Record<string, string>;
   nowMs?: number;
   generatedAt?: string;
 }
@@ -171,23 +184,49 @@ export function buildExecutionStateReport(
   const activeManifests = manifests.filter(isActiveLane);
   const blockedManifests = activeManifests.filter(isBlockedLane);
   const artifactExists = options.artifactExists ?? defaultArtifactExists;
+  const nowMs = options.nowMs ?? Date.now();
 
   const mergeRiskReport = (options.mergeRiskBuilder ?? fallbackBuildMergeRiskReport)({
     lanes: activeManifests,
     remoteBranches: options.mergeRiskInput?.remoteBranches ?? [],
     openPrBranches: options.mergeRiskInput?.openPrBranches ?? [],
     mergedPrBranches: options.mergeRiskInput?.mergedPrBranches ?? [],
-    nowMs: options.nowMs,
+    checkStateByBranch: options.mergeRiskInput?.checkStateByBranch,
+    checkStateByIssue: options.mergeRiskInput?.checkStateByIssue,
+    nowMs,
     generatedAt,
   });
+  const proofReadiness = activeManifests
+    .map((manifest) => buildProofReadiness(manifest, artifactExists))
+    .sort((left, right) => left.issue_id.localeCompare(right.issue_id));
 
   return {
     generated_at: generatedAt,
     active_lanes: activeManifests
-      .map((manifest) => summarizeLane(manifest, linearBaseUrl))
+      .map((manifest) => summarizeLane(manifest, {
+        nowMs,
+        linearBaseUrl,
+        proofReadiness,
+        mergeRiskConditions: mergeRiskReport.conditions,
+        remoteBranches: options.mergeRiskInput?.remoteBranches ?? [],
+        openPrBranches: options.mergeRiskInput?.openPrBranches ?? [],
+        mergedPrBranches: options.mergeRiskInput?.mergedPrBranches ?? [],
+        checkStateByBranch: options.mergeRiskInput?.checkStateByBranch ?? {},
+        checkStateByIssue: options.mergeRiskInput?.checkStateByIssue ?? {},
+      }))
       .sort(compareLaneSummary),
     blocked_lanes: blockedManifests
-      .map((manifest) => summarizeLane(manifest, linearBaseUrl))
+      .map((manifest) => summarizeLane(manifest, {
+        nowMs,
+        linearBaseUrl,
+        proofReadiness,
+        mergeRiskConditions: mergeRiskReport.conditions,
+        remoteBranches: options.mergeRiskInput?.remoteBranches ?? [],
+        openPrBranches: options.mergeRiskInput?.openPrBranches ?? [],
+        mergedPrBranches: options.mergeRiskInput?.mergedPrBranches ?? [],
+        checkStateByBranch: options.mergeRiskInput?.checkStateByBranch ?? {},
+        checkStateByIssue: options.mergeRiskInput?.checkStateByIssue ?? {},
+      }))
       .sort(compareLaneSummary),
     dispatch_slots: buildDispatchSlots(activeManifests),
     merge_risk_summary: {
@@ -197,12 +236,10 @@ export function buildExecutionStateReport(
       top_conditions: topConditionCodes(mergeRiskReport.conditions, 3),
     },
     dispatch_dashboard: buildDispatchDashboard(activeManifests, {
-      nowMs: options.nowMs ?? Date.now(),
+      nowMs,
       mergeRiskConditions: mergeRiskReport.conditions,
     }),
-    proof_readiness: activeManifests
-      .map((manifest) => buildProofReadiness(manifest, artifactExists))
-      .sort((left, right) => left.issue_id.localeCompare(right.issue_id)),
+    proof_readiness: proofReadiness,
     source_of_truth: {
       manifests_path: MANIFEST_DIR,
       linear_url: linearBaseUrl,
@@ -410,17 +447,60 @@ function defaultArtifactExists(artifact: string, manifest: LaneManifest): boolea
   return fs.existsSync(path.join(ROOT, artifact));
 }
 
-function summarizeLane(manifest: LaneManifest, linearBaseUrl: string): LaneSummary {
+function summarizeLane(
+  manifest: LaneManifest,
+  context: {
+    nowMs: number;
+    linearBaseUrl: string;
+    proofReadiness: ProofReadiness[];
+    mergeRiskConditions: MergeRiskConditionLike[];
+    remoteBranches: string[];
+    openPrBranches: string[];
+    mergedPrBranches: string[];
+    checkStateByBranch: Record<string, string>;
+    checkStateByIssue: Record<string, string>;
+  },
+): LaneSummary {
+  const proofReady = context.proofReadiness.find((entry) => entry.issue_id === manifest.issue_id)?.ready ?? false;
+  const conflictRisk = conflictRiskForLane(manifest, context.mergeRiskConditions);
+  const prState = prStateForLane(manifest, context.openPrBranches, context.mergedPrBranches);
+  const checkState = checkStateForLane(manifest, context.checkStateByBranch, context.checkStateByIssue);
+  const branchDrift = branchDriftForLane(manifest, context.remoteBranches, context.mergedPrBranches);
+  const mergeReady = isLaneMergeReady({
+    proofReady,
+    conflictRisk,
+    prState,
+    checkState,
+    branchDrift,
+  });
+
   return {
     issue_id: manifest.issue_id,
     branch: manifest.branch,
     executor: resolveExecutor(manifest),
     tier: manifest.tier,
     status: manifest.status,
+    started_at: manifest.started_at,
     heartbeat_at: manifest.heartbeat_at,
+    lane_age_hours: ageHours(manifest.started_at, context.nowMs),
+    heartbeat_age_hours: ageHours(manifest.heartbeat_at, context.nowMs),
     pr_url: manifest.pr_url,
+    pr_state: prState,
+    check_state: checkState,
+    branch_drift: branchDrift,
+    proof_ready: proofReady,
+    merge_ready: mergeReady,
+    conflict_risk: conflictRisk,
+    recommended_action: recommendedActionForLane({
+      proofReady,
+      conflictRisk,
+      prState,
+      checkState,
+      branchDrift,
+      mergeReady,
+    }),
     blockers: [...manifest.blocked_by],
-    source_url: `${linearBaseUrl}/issue/${manifest.issue_id}/`,
+    source_url: `${context.linearBaseUrl}/issue/${manifest.issue_id}/`,
   };
 }
 
@@ -479,6 +559,128 @@ function classifyExecutor(manifest: LaneManifest): 'claude' | 'codex' | 'unknown
   }
 
   return 'unknown';
+}
+
+function ageHours(timestamp: string, nowMs: number): number {
+  const timestampMs = Date.parse(timestamp);
+  if (Number.isNaN(timestampMs)) {
+    return 0;
+  }
+  return Math.max(0, Math.round((nowMs - timestampMs) / (60 * 60 * 1000)));
+}
+
+function prStateForLane(
+  manifest: LaneManifest,
+  openPrBranches: string[],
+  mergedPrBranches: string[],
+): LaneSummary['pr_state'] {
+  if (mergedPrBranches.includes(manifest.branch)) {
+    return 'merged';
+  }
+  if (openPrBranches.includes(manifest.branch)) {
+    return 'open';
+  }
+  return manifest.pr_url == null ? 'none' : 'linked';
+}
+
+function checkStateForLane(
+  manifest: LaneManifest,
+  checkStateByBranch: Record<string, string>,
+  checkStateByIssue: Record<string, string>,
+): LaneSummary['check_state'] {
+  const raw = checkStateByIssue[manifest.issue_id] ?? checkStateByBranch[manifest.branch];
+  const normalized = String(raw ?? '').toLowerCase();
+  if (['success', 'succeeded', 'pass', 'passed', 'passing', 'green'].includes(normalized)) {
+    return 'success';
+  }
+  if (['failure', 'failed', 'failing', 'error', 'cancelled', 'canceled', 'timed_out'].includes(normalized)) {
+    return 'failure';
+  }
+  if (['pending', 'queued', 'in_progress', 'running', 'waiting'].includes(normalized)) {
+    return 'pending';
+  }
+  return 'unknown';
+}
+
+function branchDriftForLane(
+  manifest: LaneManifest,
+  remoteBranches: string[],
+  mergedPrBranches: string[],
+): LaneSummary['branch_drift'] {
+  if (mergedPrBranches.includes(manifest.branch)) {
+    return 'merged_pr_active_manifest';
+  }
+  if (remoteBranches.length === 0) {
+    return 'unknown';
+  }
+  return remoteBranches.includes(manifest.branch) ? 'remote_present' : 'remote_missing';
+}
+
+function conflictRiskForLane(
+  manifest: LaneManifest,
+  conditions: MergeRiskConditionLike[],
+): LaneSummary['conflict_risk'] {
+  const matching = conditions.filter((condition) => condition.lanes.includes(manifest.issue_id));
+  if (matching.length === 0) {
+    return 'clear';
+  }
+  return matching.sort((left, right) => SEVERITY_RANK[left.severity] - SEVERITY_RANK[right.severity])[0].severity;
+}
+
+function isLaneMergeReady(input: {
+  proofReady: boolean;
+  conflictRisk: LaneSummary['conflict_risk'];
+  prState: LaneSummary['pr_state'];
+  checkState: LaneSummary['check_state'];
+  branchDrift: LaneSummary['branch_drift'];
+}): boolean {
+  return input.proofReady
+    && input.conflictRisk === 'clear'
+    && (input.prState === 'open' || input.prState === 'linked')
+    && input.checkState === 'success'
+    && input.branchDrift !== 'remote_missing'
+    && input.branchDrift !== 'merged_pr_active_manifest';
+}
+
+function recommendedActionForLane(input: {
+  proofReady: boolean;
+  conflictRisk: LaneSummary['conflict_risk'];
+  prState: LaneSummary['pr_state'];
+  checkState: LaneSummary['check_state'];
+  branchDrift: LaneSummary['branch_drift'];
+  mergeReady: boolean;
+}): string {
+  if (input.branchDrift === 'merged_pr_active_manifest') {
+    return 'record merge evidence and close lane';
+  }
+  if (input.conflictRisk === 'hard_fail') {
+    return 'resolve hard-fail merge risk';
+  }
+  if (input.conflictRisk === 'block') {
+    return 'resolve blocking merge risk';
+  }
+  if (input.branchDrift === 'remote_missing') {
+    return 'push branch before PR review';
+  }
+  if (input.prState === 'none') {
+    return 'open PR';
+  }
+  if (!input.proofReady) {
+    return 'complete proof artifacts';
+  }
+  if (input.checkState === 'failure') {
+    return 'fix failing checks';
+  }
+  if (input.checkState === 'pending') {
+    return 'wait for checks';
+  }
+  if (input.checkState === 'unknown') {
+    return 'verify PR checks';
+  }
+  if (input.conflictRisk === 'warning') {
+    return 'review merge warning';
+  }
+  return input.mergeReady ? 'ready to merge' : 'continue lane work';
 }
 
 function topConditionCodes(conditions: MergeRiskConditionLike[], limit: number): string[] {
@@ -653,8 +855,135 @@ function isDefined<T>(value: T | null | undefined): value is T {
   return value != null;
 }
 
+function readLiveTelemetryInput(): Partial<Omit<MergeRiskBuilderInput, 'lanes'>> {
+  const prTelemetry = readGitHubPrTelemetry();
+  return {
+    remoteBranches: readRemoteBranches(),
+    openPrBranches: prTelemetry.openPrBranches,
+    mergedPrBranches: prTelemetry.mergedPrBranches,
+    checkStateByBranch: prTelemetry.checkStateByBranch,
+  };
+}
+
+function readRemoteBranches(): string[] {
+  const output = execFileText('git', [
+    'for-each-ref',
+    '--format=%(refname:short)',
+    'refs/remotes/origin',
+  ]);
+  if (output == null) {
+    return [];
+  }
+
+  return uniqueSorted(
+    output
+      .split('\n')
+      .map((entry) => entry.trim())
+      .filter((entry) => entry.length > 0 && entry !== 'origin/HEAD')
+      .map((entry) => entry.replace(/^origin\//, '')),
+  );
+}
+
+function readGitHubPrTelemetry(): {
+  openPrBranches: string[];
+  mergedPrBranches: string[];
+  checkStateByBranch: Record<string, string>;
+} {
+  const openPrs = readGhPrList('open');
+  const mergedPrs = readGhPrList('merged');
+  const checkStateByBranch: Record<string, string> = {};
+  for (const pr of openPrs) {
+    if (pr.headRefName == null) {
+      continue;
+    }
+    checkStateByBranch[pr.headRefName] = summarizeStatusCheckRollup(pr.statusCheckRollup);
+  }
+
+  return {
+    openPrBranches: uniqueSorted(openPrs.map((pr) => pr.headRefName).filter(isDefined)),
+    mergedPrBranches: uniqueSorted(mergedPrs.map((pr) => pr.headRefName).filter(isDefined)),
+    checkStateByBranch,
+  };
+}
+
+function readGhPrList(state: 'open' | 'merged'): Array<{
+  headRefName?: string;
+  statusCheckRollup?: unknown[];
+}> {
+  const output = execFileText('gh', [
+    'pr',
+    'list',
+    '--state',
+    state,
+    '--limit',
+    state === 'open' ? '100' : '200',
+    '--json',
+    'headRefName,statusCheckRollup',
+  ]);
+  if (output == null) {
+    return [];
+  }
+
+  try {
+    const parsed = JSON.parse(output) as unknown;
+    return Array.isArray(parsed)
+      ? parsed.filter(isObjectLike).map((entry) => ({
+        headRefName: typeof entry.headRefName === 'string' ? entry.headRefName : undefined,
+        statusCheckRollup: Array.isArray(entry.statusCheckRollup) ? entry.statusCheckRollup : undefined,
+      }))
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+function summarizeStatusCheckRollup(rollup: unknown[] | undefined): LaneSummary['check_state'] {
+  if (rollup == null || rollup.length === 0) {
+    return 'unknown';
+  }
+
+  let sawPending = false;
+  for (const entry of rollup) {
+    if (!isObjectLike(entry)) {
+      continue;
+    }
+    const conclusion = typeof entry.conclusion === 'string' ? entry.conclusion.toLowerCase() : null;
+    const status = typeof entry.status === 'string' ? entry.status.toLowerCase() : null;
+    if (conclusion != null && ['failure', 'failed', 'cancelled', 'canceled', 'timed_out', 'action_required'].includes(conclusion)) {
+      return 'failure';
+    }
+    if (status != null && ['queued', 'in_progress', 'pending', 'waiting'].includes(status)) {
+      sawPending = true;
+    }
+    if (conclusion == null && status == null) {
+      sawPending = true;
+    }
+  }
+
+  return sawPending ? 'pending' : 'success';
+}
+
+function execFileText(command: string, args: string[]): string | null {
+  try {
+    return execFileSync(command, args, {
+      cwd: ROOT,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+      timeout: 10_000,
+    });
+  } catch {
+    return null;
+  }
+}
+
+function isObjectLike(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
 function main(): void {
-  emitJson(buildExecutionStateReport(readAllManifests()));
+  emitJson(buildExecutionStateReport(readAllManifests(), {
+    mergeRiskInput: readLiveTelemetryInput(),
+  }));
 }
 
 const isDirectRun = process.argv[1] != null
