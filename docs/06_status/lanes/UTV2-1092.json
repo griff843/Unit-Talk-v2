@@ -23,14 +23,22 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1092/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-25T10:47:24.573Z",
-  "heartbeat_at": "2026-05-25T12:31:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T12:40:22.807Z",
+  "closed_at": "2026-05-25T12:40:22.807Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1092-init-123-replay-divergence-engine.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T12:39:51.145Z",
+      "verdict": "pass",
+      "merge_sha": "5b28a606103b1a9a94022b1871238d97021c912b",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
