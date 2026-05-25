@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-1095",
+  "title": "INIT-1.2.4 — 30-Day Replay Driver and Latent-Divergence Remediation",
+  "tier": "T1",
+  "lane_type": "verification",
+  "sha_binding": {
+    "verified_source_sha": "fa634d5166286f7f339e0951d05252d547f5b07d",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": {
+      "verdict": "PASS",
+      "tests": 10,
+      "fail": 0,
+      "file": "packages/verification/src/engine/replay-driver.test.ts"
+    },
+    "r_level_check": {
+      "verdict": "PASS",
+      "rules_matched": "none",
+      "note": "No R-level artifacts required for this diff (2 changed files, no schema/contract changes)"
+    }
+  },
+  "runtime_proof": {
+    "test_db": {
+      "verdict": "PASS",
+      "tests": 7,
+      "fail": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "duration_ms": 110528,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    }
+  },
+  "file_scope": [
+    "packages/verification/src/engine/replay-driver.ts",
+    "packages/verification/src/engine/replay-driver.test.ts",
+    "packages/verification/src/engine/index.ts",
+    "docs/06_status/proof/UTV2-1095/evidence.json",
+    "docs/06_status/proof/UTV2-1095/verification.md"
+  ],
+  "invariants_asserted": [
+    "productionWritesAttempted === 0 always enforced",
+    "Divergence is never suppressed — halts run and populates divergenceDetails",
+    "dryRun defaults to true (fail-closed)",
+    "Window computed from new Date() minus windowDays*24*60*60*1000",
+    "ReplayProofBundle is the authoritative output artifact",
+    "No Supabase/HTTP/external I/O in replay-driver.ts"
+  ]
+}

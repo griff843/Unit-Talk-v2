@@ -104,3 +104,7 @@ export * from './fault/index.js';
 
 // R5: Strategy evaluation
 export * from './strategy/index.js';
+
+// INIT-1.2.4 (UTV2-1095): 30-Day Replay Driver
+export { ReplayDriver } from './replay-driver.js';
+export type { ReplayDriverOptions, ReplayProofBundle, ReplayPickRecord } from './replay-driver.js';
