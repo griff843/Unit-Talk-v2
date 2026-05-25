@@ -4,8 +4,8 @@
   "title": "INIT-1.2.2 — Replay Validator Un-Stubbing",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "a0ae1e31caff06909080575f2483fb0829016314",
-    "note": "Branch HEAD SHA — will be updated to merge SHA post-merge",
+    "verified_source_sha": "3be39b330e66e8ec3de2116ee8f1c694ebbad71f",
+    "note": "Merge SHA — PR #848 squash-merged to main 2026-05-25",
     "ci_sentinels": {
       "pnpm_verify": "PASS",
       "pnpm_test_db": "PASS",
