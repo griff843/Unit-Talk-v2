@@ -19,3 +19,12 @@ export {
 
 export { InvariantEngine } from './engine.js';
 export type { InvariantViolation, RuntimeContext } from './engine.js';
+
+export { QuarantineManager } from './quarantine.js';
+export type {
+  QuarantineRecord,
+  QuarantineStatus,
+  QuarantineResult,
+  AuditEvent,
+  EscalationNotice,
+} from './quarantine.js';
