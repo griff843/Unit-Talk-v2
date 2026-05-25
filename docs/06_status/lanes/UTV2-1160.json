@@ -4,12 +4,15 @@
   "lane_type": "hygiene",
   "executor": "claude",
   "tier": "T3",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1160-truth-check-g3-ancestry",
-  "branch": "griffadavi/utv2-1160-truth-check-g3-ancestry",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__g4-admin-merge-truth",
+  "branch": "codex/utv2-1160-g4-admin-merge-truth",
   "base_branch": "main",
-  "commit_sha": "0d7b5a0654a3df6d15cde7788adb178754950be8",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/845",
-  "files_changed": [],
+  "commit_sha": "faf0a99a991b0faf0cad679f152b475c28683da6",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/863",
+  "files_changed": [
+    "scripts/ops/truth-check-lib.test.ts",
+    "scripts/ops/truth-check-lib.ts"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1160/evidence.json",
     "scripts/ops/truth-check-lib.test.ts",
@@ -18,8 +21,8 @@
   "expected_proof_paths": [],
   "status": "done",
   "started_at": "2026-05-25T00:00:59.473Z",
-  "heartbeat_at": "2026-05-25T09:04:39.807Z",
-  "closed_at": "2026-05-25T09:04:39.807Z",
+  "heartbeat_at": "2026-05-25T21:26:34.986Z",
+  "closed_at": "2026-05-25T21:26:34.986Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1160-truth-check-g3-ancestry.json",
   "created_by": "claude",
@@ -58,12 +61,29 @@
       "merge_sha": "0d7b5a0654a3df6d15cde7788adb178754950be8",
       "failures": [],
       "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T21:25:55.260Z",
+      "verdict": "pass",
+      "merge_sha": "faf0a99a991b0faf0cad679f152b475c28683da6",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/863",
+      "note": "Follow-up G4 admin-merge recovery fix merged and closeout rebound to latest PR."
+    },
+    {
+      "checked_at": "2026-05-25T21:26:23.352Z",
+      "verdict": "pass",
+      "merge_sha": "faf0a99a991b0faf0cad679f152b475c28683da6",
+      "failures": [],
+      "runner": "manual"
     }
   ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1160-truth-check-g3-ancestry",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__g4-admin-merge-truth",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
