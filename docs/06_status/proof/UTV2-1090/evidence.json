@@ -6,8 +6,8 @@
   "executor": "claude",
   "sha_binding": {
     "branch_head_sha": "4c42ff25428f93bb611630604b7abef6bbc7366b",
-    "verified_source_sha": "PENDING_MERGE_SHA",
-    "note": "verified_source_sha must be updated to the merge SHA after PR merges — proof is not final until then"
+    "verified_source_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+    "note": "SHA-bound to merge commit on main (squash merge of PR #856)"
   },
   "verification": {
     "pnpm_verify": "PASS",
