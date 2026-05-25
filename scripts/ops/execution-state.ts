@@ -11,6 +11,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { loadConcurrencyConfig } from './concurrency-config.js';
+import { MERGE_LOCK_PATH, readMergeLock } from './merge-mutex.js';
 
 export interface ExecutionStateReport {
   generated_at: string;
@@ -26,12 +27,43 @@ export interface ExecutionStateReport {
     warning: number;
     top_conditions: string[];
   };
+  dispatch_dashboard: DispatchDashboard;
   proof_readiness: ProofReadiness[];
   source_of_truth: {
     manifests_path: string;
     linear_url: string;
     github_url: string;
   };
+}
+
+export interface DispatchDashboard {
+  active_by_executor: {
+    claude: number;
+    codex: number;
+    unknown: number;
+  };
+  active_by_lane_type: Record<string, number>;
+  stale_heartbeats: Array<{
+    issue_id: string;
+    heartbeat_at: string;
+    age_hours: number;
+  }>;
+  singleton_blockers: Array<{
+    lane_type: string;
+    active_issue_ids: string[];
+  }>;
+  forbidden_pair_blockers: Array<{
+    pair: [string, string];
+    active_issue_ids: string[];
+  }>;
+  merge_mutex: {
+    serialized_max: number;
+    lock_path: string;
+    status: string;
+    issue_id: string | null;
+    expires_at: string | null;
+  };
+  recommended_actions: string[];
 }
 
 export interface LaneSummary {
@@ -103,6 +135,9 @@ const GITHUB_BASE_URL = 'https://github.com/griff843/Unit-Talk-v2';
 const _cc = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
 export const MAX_CLAUDE_LANES = _cc?.executors.claude ?? 2;
 export const MAX_CODEX_LANES = _cc?.executors.codex ?? 4;
+const SINGLETON_TYPES = _cc?.singleton_types ?? ['runtime', 'migration', 'modeling', 'data-canonical'];
+const FORBIDDEN_COMBINATIONS = (_cc?.forbidden_combinations ?? []) as Array<[string, string]>;
+const MERGE_SERIALIZED_MAX = _cc?.merge_serialized_max ?? 1;
 
 const TIER_VERIFICATION_MAP: Record<'T1' | 'T2' | 'T3', TierVerificationRule> = {
   T1: {
@@ -161,6 +196,10 @@ export function buildExecutionStateReport(
       warning: mergeRiskReport.summary.warning,
       top_conditions: topConditionCodes(mergeRiskReport.conditions, 3),
     },
+    dispatch_dashboard: buildDispatchDashboard(activeManifests, {
+      nowMs: options.nowMs ?? Date.now(),
+      mergeRiskConditions: mergeRiskReport.conditions,
+    }),
     proof_readiness: activeManifests
       .map((manifest) => buildProofReadiness(manifest, artifactExists))
       .sort((left, right) => left.issue_id.localeCompare(right.issue_id)),
@@ -170,6 +209,148 @@ export function buildExecutionStateReport(
       github_url: githubBaseUrl,
     },
   };
+}
+
+function buildDispatchDashboard(
+  manifests: LaneManifest[],
+  options: { nowMs: number; mergeRiskConditions: MergeRiskConditionLike[] },
+): DispatchDashboard {
+  const activeByExecutor = {
+    claude: manifests.filter((manifest) => classifyExecutor(manifest) === 'claude').length,
+    codex: manifests.filter((manifest) => classifyExecutor(manifest) === 'codex').length,
+    unknown: manifests.filter((manifest) => classifyExecutor(manifest) === 'unknown').length,
+  };
+  const activeByLaneType = buildActiveByLaneType(manifests);
+  const singletonBlockers = SINGLETON_TYPES.flatMap((laneType) => {
+    const activeIssueIds = manifests
+      .filter((manifest) => manifest.lane_type === laneType)
+      .map((manifest) => manifest.issue_id)
+      .sort();
+    return activeIssueIds.length > 0 ? [{ lane_type: laneType, active_issue_ids: activeIssueIds }] : [];
+  });
+  const forbiddenPairBlockers = FORBIDDEN_COMBINATIONS.flatMap((pair) => {
+    const activeIssueIds = manifests
+      .filter((manifest) => pair.includes(manifest.lane_type))
+      .map((manifest) => manifest.issue_id)
+      .sort();
+    const activeTypes = new Set(
+      manifests
+        .filter((manifest) => activeIssueIds.includes(manifest.issue_id))
+        .map((manifest) => manifest.lane_type),
+    );
+    return activeTypes.has(pair[0]) && activeTypes.has(pair[1])
+      ? [{ pair, active_issue_ids: activeIssueIds }]
+      : [];
+  });
+  const staleHeartbeats = buildStaleHeartbeatSummaries(manifests, options.nowMs);
+  const dispatchSlots = buildDispatchSlots(manifests);
+  const mergeMutex = readMergeMutexSummary();
+
+  return {
+    active_by_executor: activeByExecutor,
+    active_by_lane_type: activeByLaneType,
+    stale_heartbeats: staleHeartbeats,
+    singleton_blockers: singletonBlockers,
+    forbidden_pair_blockers: forbiddenPairBlockers,
+    merge_mutex: mergeMutex,
+    recommended_actions: buildRecommendedDashboardActions({
+      staleHeartbeats,
+      singletonBlockers,
+      forbiddenPairBlockers,
+      mergeMutex,
+      dispatchSlots,
+      mergeRiskConditions: options.mergeRiskConditions,
+    }),
+  };
+}
+
+function buildActiveByLaneType(manifests: LaneManifest[]): Record<string, number> {
+  const counts: Record<string, number> = {};
+  for (const manifest of manifests) {
+    counts[manifest.lane_type] = (counts[manifest.lane_type] ?? 0) + 1;
+  }
+  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
+}
+
+function buildStaleHeartbeatSummaries(
+  manifests: LaneManifest[],
+  nowMs: number,
+): DispatchDashboard['stale_heartbeats'] {
+  return manifests
+    .filter((manifest) => Date.parse(manifest.heartbeat_at) + STALE_HEARTBEAT_MS < nowMs)
+    .map((manifest) => ({
+      issue_id: manifest.issue_id,
+      heartbeat_at: manifest.heartbeat_at,
+      age_hours: Math.round((nowMs - Date.parse(manifest.heartbeat_at)) / (60 * 60 * 1000)),
+    }))
+    .sort((left, right) => left.issue_id.localeCompare(right.issue_id));
+}
+
+function readMergeMutexSummary(): DispatchDashboard['merge_mutex'] {
+  const result = readMergeLock(MERGE_LOCK_PATH);
+  if (!result.ok) {
+    return {
+      serialized_max: MERGE_SERIALIZED_MAX,
+      lock_path: MERGE_LOCK_PATH,
+      status: result.code === 'merge_lock_missing' ? 'released' : result.code,
+      issue_id: null,
+      expires_at: null,
+    };
+  }
+  if (result.lock.status === 'released') {
+    return {
+      serialized_max: MERGE_SERIALIZED_MAX,
+      lock_path: MERGE_LOCK_PATH,
+      status: 'released',
+      issue_id: null,
+      expires_at: null,
+    };
+  }
+  return {
+    serialized_max: MERGE_SERIALIZED_MAX,
+    lock_path: MERGE_LOCK_PATH,
+    status: result.lock.status,
+    issue_id: result.lock.issue_id,
+    expires_at: result.lock.expires_at,
+  };
+}
+
+function buildRecommendedDashboardActions(input: {
+  staleHeartbeats: DispatchDashboard['stale_heartbeats'];
+  singletonBlockers: DispatchDashboard['singleton_blockers'];
+  forbiddenPairBlockers: DispatchDashboard['forbidden_pair_blockers'];
+  mergeMutex: DispatchDashboard['merge_mutex'];
+  dispatchSlots: ExecutionStateReport['dispatch_slots'];
+  mergeRiskConditions: MergeRiskConditionLike[];
+}): string[] {
+  const actions: string[] = [];
+  if (input.staleHeartbeats.length > 0) {
+    actions.push(`reconcile stale heartbeat lanes: ${input.staleHeartbeats.map((lane) => lane.issue_id).join(', ')}`);
+  }
+  for (const blocker of input.singletonBlockers.filter((blocker) => blocker.active_issue_ids.length > 1)) {
+    actions.push(`resolve duplicate singleton lane_type:${blocker.lane_type}`);
+  }
+  for (const blocker of input.forbiddenPairBlockers) {
+    actions.push(`resolve forbidden lane pair: ${blocker.pair.join(' + ')}`);
+  }
+  if (input.mergeMutex.status === 'held') {
+    actions.push(`merge mutex held by ${input.mergeMutex.issue_id ?? 'unknown'}`);
+  } else if (input.mergeMutex.status === 'stale_reclaim_required') {
+    actions.push(`reclaim stale merge mutex from ${input.mergeMutex.issue_id ?? 'unknown'}`);
+  }
+  if (input.mergeRiskConditions.some((condition) => condition.severity === 'hard_fail')) {
+    actions.push('resolve hard-fail merge risk before dispatching more lanes');
+  }
+  if (input.dispatchSlots.codex.available > 0) {
+    actions.push(`codex slots available: ${input.dispatchSlots.codex.available}`);
+  }
+  if (input.dispatchSlots.claude.available > 0) {
+    actions.push(`claude slots available: ${input.dispatchSlots.claude.available}`);
+  }
+  if (actions.length === 0) {
+    actions.push('dispatch board saturated; close or merge existing lanes first');
+  }
+  return actions;
 }
 
 function buildProofReadiness(

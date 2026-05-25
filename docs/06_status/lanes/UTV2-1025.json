@@ -4,27 +4,45 @@
   "lane_type": "governance",
   "executor": "codex-cli",
   "tier": "T2",
-  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1025-preflight-token-validation",
-  "branch": "codex/utv2-1025-preflight-token-validation",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2",
+  "branch": "codex/utv2-1025-elite-ops-wave-v2",
   "base_branch": "main",
-  "commit_sha": "1f6fedf1361f392d85b2325a519742c8cf831720",
-  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/774",
-  "files_changed": [],
+  "commit_sha": "053bb9effe3575e9c77e0a4cf7dec18fede66112",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/851",
+  "files_changed": [
+    "package.json",
+    "scripts/ops/daily-digest.test.ts",
+    "scripts/ops/daily-digest.ts",
+    "scripts/ops/execution-state.test.ts",
+    "scripts/ops/execution-state.ts",
+    "scripts/ops/system-alignment-check.test.ts",
+    "scripts/ops/system-alignment-check.ts",
+    "docs/06_status/lanes/UTV2-1025.json",
+    "docs/06_status/proof/UTV2-1025/diff-summary.md",
+    "docs/06_status/proof/UTV2-1025/verification.log",
+    "docs/06_status/proof/UTV2-1025/runtime-verification.md"
+  ],
   "file_scope_lock": [
-    "scripts/ops/lane-start.ts",
-    "scripts/ops/preflight.test.ts",
-    "scripts/ops/preflight.ts",
-    "scripts/ops/shared.test.ts",
-    "scripts/ops/shared.ts"
+    "package.json",
+    "scripts/ops/daily-digest.test.ts",
+    "scripts/ops/daily-digest.ts",
+    "scripts/ops/execution-state.test.ts",
+    "scripts/ops/execution-state.ts",
+    "scripts/ops/system-alignment-check.test.ts",
+    "scripts/ops/system-alignment-check.ts",
+    "docs/06_status/lanes/UTV2-1025.json",
+    "docs/06_status/proof/UTV2-1025/diff-summary.md",
+    "docs/06_status/proof/UTV2-1025/verification.log",
+    "docs/06_status/proof/UTV2-1025/runtime-verification.md"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1025/diff-summary.md",
-    "docs/06_status/proof/UTV2-1025/verification.log"
+    "docs/06_status/proof/UTV2-1025/runtime-verification.md"
   ],
-  "status": "done",
+  "status": "in_review",
   "started_at": "2026-05-19T12:30:20.097Z",
-  "heartbeat_at": "2026-05-19T13:42:47.532Z",
-  "closed_at": "2026-05-20T17:00:16.000Z",
+  "heartbeat_at": "2026-05-25T13:02:28Z",
+  "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1025-preflight-token-validation.json",
   "created_by": "codex-cli",
@@ -44,10 +62,16 @@
       "runner": "manual"
     }
   ],
-  "reopen_history": [],
+  "reopen_history": [
+    {
+      "reopened_at": "2026-05-25T13:02:28Z",
+      "reason": "Reopened for dispatch visibility, digest ranking, and active alignment gate hardening follow-up.",
+      "previous_pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/774"
+    }
+  ],
   "execution_location": {
-    "mode": "worktree",
-    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1025-preflight-token-validation",
+    "mode": "main-control",
+    "cwd": "/home/griff843/code/Unit-Talk-v2",
     "package_install": "verified",
     "setup_command": null,
     "main_checkout_control_only": true
