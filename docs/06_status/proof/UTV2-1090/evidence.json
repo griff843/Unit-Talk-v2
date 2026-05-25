@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1090",
+  "title": "INIT-1.3.3 — Automatic Quarantine and Escalation",
+  "tier": "T1",
+  "lane_type": "governance",
+  "sha_binding": {
+    "merge_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+    "verified_source_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+    "verified_source_note": "PR #856 squash-merged to main; test fix cherry-picked at 62d8ace8",
+    "evidence_commit_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-25T18:35:00.000Z",
+  "r_level": {
+    "level": "R0",
+    "reason": "R-level check PASS — no R-level artifacts required for this diff (governance tooling only)"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1090-dispatch"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "quarantine_tests": {
+      "status": "PASS",
+      "file": "packages/invariants/src/quarantine.test.ts",
+      "tests_pass": 21,
+      "tests_fail": 0,
+      "suites": 4
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required (governance tooling; no lifecycle-fsm, ingestor-provider, or outbox paths)"
+    },
+    "adversarial_tests": [
+      "constructor accepts no suppression options — no config path to bypass quarantine: PASS",
+      "AUTO_QUARANTINE_BEHAVIORS contains fail-closed and quarantine, excludes advisory: PASS",
+      "quarantine fires on repeated process() calls — no state degradation (5 iterations): PASS",
+      "injected INV-0009 fail-closed violation → QuarantineRecord + AuditEvent, no human action: PASS",
+      "QuarantineResult is frozen — TypeError on write attempt: PASS",
+      "AuditEvent.payload is frozen — TypeError on write attempt: PASS"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-25T18:33:00Z",
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "skipped": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "note": "7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm. Submission, settlement, outbox atomicity, participant dedup, and correction chain all verified against real DB."
+    },
+    "queries": [
+      {
+        "command": "pnpm test:db",
+        "file": "apps/api/src/database-smoke.test.ts",
+        "result": "PASS",
+        "checked_at": "2026-05-25T18:33:00Z"
+      }
+    ],
+    "row_counts": [
+      {
+        "surface": "database-smoke.test.ts",
+        "tests": 7,
+        "passed": 7,
+        "failed": 0,
+        "duration_ms": 98932.449237
+      }
+    ]
+  },
+  "constitutional_claims": [
+    "QuarantineManager implements mechanical quarantine: every fail-closed and quarantine-behavior violation auto-quarantines without human action",
+    "Every violation (including advisory) emits an immutable AuditEvent — no exceptions",
+    "Escalation routed mechanically to the registry escalation_target for all quarantined violations",
+    "No constructor options exist that can suppress quarantine — adversarial invariant proven",
+    "QuarantineResult and AuditEvent.payload are Object.freeze()'d — immutable after creation",
+    "Unblocks UTV2-1094 (INIT-1.3.4 — Production and Replay Integration)",
+    "Runtime Certification dependency satisfied for Stage 2"
+  ]
+}
