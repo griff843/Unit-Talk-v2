@@ -84,9 +84,30 @@ export interface InvariantEvaluator {
     invariant_id: string;
     title: string;
     severity: string;
+    quarantine_behavior?: string;
     detected_at: string;
     context: Record<string, unknown>;
   }>;
+}
+
+/**
+ * Minimal interface for quarantine processing.
+ *
+ * Satisfied by QuarantineManager from @unit-talk/invariants.
+ * Defined locally to avoid a cross-package dependency — callers inject.
+ *
+ * INIT-1.3.4 (UTV2-1094): violations detected in replay also get quarantined.
+ */
+export interface QuarantineProcessor {
+  process(violations: ReadonlyArray<{
+    invariant_id: string;
+    title: string;
+    severity: string;
+    quarantine_behavior?: string;
+    detected_at: string;
+    context: Record<string, unknown>;
+    replay_run_id?: string;
+  }>): unknown;
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -131,14 +152,20 @@ export class ReplayLifecycleRunner {
   private readonly traces: LifecycleTrace[] = [];
   private traceCounter = 0;
   private readonly invariantEngine: InvariantEvaluator | null;
+  private readonly quarantineProcessor: QuarantineProcessor | null;
   private readonly replayRunId: string;
 
   constructor(
     store: IsolatedPickStore,
-    options?: { invariantEngine?: InvariantEvaluator; replayRunId?: string }
+    options?: {
+      invariantEngine?: InvariantEvaluator;
+      quarantineProcessor?: QuarantineProcessor;
+      replayRunId?: string;
+    }
   ) {
     this.store = store;
     this.invariantEngine = options?.invariantEngine ?? null;
+    this.quarantineProcessor = options?.quarantineProcessor ?? null;
     this.replayRunId = options?.replayRunId ?? `replay-${Date.now()}`;
   }
 
@@ -170,6 +197,10 @@ export class ReplayLifecycleRunner {
     const violations = this.invariantEngine.evaluateForReplay(context, this.replayRunId);
 
     if (violations.length > 0) {
+      // Forward to quarantine processor before halting (INIT-1.3.4 / UTV2-1094)
+      if (this.quarantineProcessor) {
+        this.quarantineProcessor.process(violations);
+      }
       const summary = violations
         .map(v => `[${v.invariant_id}] ${v.title}`)
         .join('; ');
