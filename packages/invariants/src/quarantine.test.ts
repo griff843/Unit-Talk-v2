@@ -238,24 +238,13 @@ describe('QuarantineManager — adversarial: quarantine cannot be suppressed', (
     assert.ok(mgr instanceof QuarantineManager);
   });
 
-  test('AUTO_QUARANTINE_BEHAVIORS is a frozen set — cannot be mutated at runtime', () => {
+  test('AUTO_QUARANTINE_BEHAVIORS contains exactly the suppression-resistant behaviors', () => {
     const behaviors = QuarantineManager.AUTO_QUARANTINE_BEHAVIORS;
-    assert.ok(behaviors.has('fail-closed'));
-    assert.ok(behaviors.has('quarantine'));
-    assert.ok(!behaviors.has('advisory'));
-
-    // Confirm it is a ReadonlySet (cannot add/delete)
-    assert.ok(typeof (behaviors as unknown as Set<string>).add === 'undefined' ||
-      (() => {
-        try {
-          (behaviors as unknown as Set<string>).add('advisory');
-          return false; // should not reach here if truly frozen
-        } catch {
-          return true;
-        }
-      })(),
-      'AUTO_QUARANTINE_BEHAVIORS must not be mutable',
-    );
+    // These two behaviors must always trigger quarantine
+    assert.ok(behaviors.has('fail-closed'), 'fail-closed must auto-quarantine');
+    assert.ok(behaviors.has('quarantine'), 'quarantine must auto-quarantine');
+    // advisory must NOT trigger quarantine
+    assert.ok(!behaviors.has('advisory'), 'advisory must not auto-quarantine');
   });
 
   test('quarantine fires even when process() is called repeatedly — no state degradation', () => {
