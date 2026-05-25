@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1094-production-and-replay-integration",
   "branch": "claude/utv2-1094-production-and-replay-integration",
   "base_branch": "main",
-  "commit_sha": "5a06f1a104729890a2a08c70b9778653ce5415f8",
+  "commit_sha": "a2272d203f129d67b39687a2aba4fd0dea1d9b9e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/864",
   "files_changed": [
     "apps/api/package.json",

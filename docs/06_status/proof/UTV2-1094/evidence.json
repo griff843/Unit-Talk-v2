@@ -5,11 +5,11 @@
   "tier": "T1",
   "lane_type": "governance",
   "sha_binding": {
-    "merge_sha": "set-by-ci",
-    "verified_source_sha": "b9ec51dcaf04af0c7c768972304cfe3d3594ab1b",
-    "verified_source_note": "Branch HEAD at time of static verification; merge SHA will be bound post-merge",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "merge_sha": "a2272d203f129d67b39687a2aba4fd0dea1d9b9e",
+    "verified_source_sha": "a2272d203f129d67b39687a2aba4fd0dea1d9b9e",
+    "verified_source_note": "PR #864 squash-merged to main at a2272d20",
+    "evidence_commit_sha": "a2272d203f129d67b39687a2aba4fd0dea1d9b9e",
+    "current_pr_head_sha": "5a06f1a104729890a2a08c70b9778653ce5415f8"
   },
   "executor": "claude",
   "executed_at": "2026-05-25T21:10:00.000Z",
