@@ -263,7 +263,7 @@ export class FullPipelineReplayHarness {
         pipeline_stages: stageResults.map(r => r.stage),
         production_write_count: this.store.productionWriteCount,
       };
-    } catch (_err) {
+    } catch {
       return {
         ...run,
         completed_at: new Date().toISOString(),
