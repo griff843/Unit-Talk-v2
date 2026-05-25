@@ -160,6 +160,31 @@ test('stale heartbeat lanes remain visible in active_lanes', () => {
   ]);
 });
 
+test('merged PR branches with active manifests surface hard-fail repair guidance', () => {
+  const branch = 'codex/utv2-984-merged-pr-active-manifest';
+  const report = buildExecutionStateReport([
+    createManifest({
+      issue_id: 'UTV2-984',
+      status: 'in_review',
+      branch,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/984',
+    }),
+  ], {
+    nowMs: Date.parse('2026-05-15T12:30:00.000Z'),
+    mergeRiskInput: {
+      mergedPrBranches: [branch],
+    },
+  });
+
+  assert.equal(report.merge_risk_summary.hard_fail, 1);
+  assert.deepStrictEqual(report.merge_risk_summary.top_conditions, ['MERGED_PR_ACTIVE_MANIFEST']);
+  assert.ok(
+    report.dispatch_dashboard.recommended_actions.includes(
+      'record merged PR evidence on lane manifests: UTV2-984',
+    ),
+  );
+});
+
 test('dispatch dashboard summarizes lane types, singleton blockers, and recommended actions', () => {
   const report = buildExecutionStateReport([
     createManifest({

@@ -338,6 +338,14 @@ function buildRecommendedDashboardActions(input: {
   } else if (input.mergeMutex.status === 'stale_reclaim_required') {
     actions.push(`reclaim stale merge mutex from ${input.mergeMutex.issue_id ?? 'unknown'}`);
   }
+  const mergedPrActiveManifestIssues = uniqueSorted(
+    input.mergeRiskConditions
+      .filter((condition) => condition.code === 'MERGED_PR_ACTIVE_MANIFEST')
+      .flatMap((condition) => condition.lanes),
+  );
+  if (mergedPrActiveManifestIssues.length > 0) {
+    actions.push(`record merged PR evidence on lane manifests: ${mergedPrActiveManifestIssues.join(', ')}`);
+  }
   if (input.mergeRiskConditions.some((condition) => condition.severity === 'hard_fail')) {
     actions.push('resolve hard-fail merge risk before dispatching more lanes');
   }
@@ -508,6 +516,7 @@ function fallbackBuildMergeRiskReport(input: MergeRiskBuilderInput): MergeRiskRe
     ...detectFileOverlap(input.lanes),
     ...detectBlockedDeps(input.lanes),
     ...detectStaleHeartbeat(input.lanes, input.nowMs ?? Date.now()),
+    ...detectMergedPrActiveManifests(input.lanes, input.mergedPrBranches),
     ...fallbackDetectDispatchSaturation(input.lanes),
   ];
 
@@ -589,6 +598,21 @@ function detectStaleHeartbeat(
       };
     })
     .filter(isDefined);
+}
+
+function detectMergedPrActiveManifests(
+  lanes: LaneManifest[],
+  mergedPrBranches: string[],
+): MergeRiskConditionLike[] {
+  const mergedBranches = new Set(mergedPrBranches);
+  return lanes
+    .filter((lane) => mergedBranches.has(lane.branch))
+    .map((lane) => ({
+      code: 'MERGED_PR_ACTIVE_MANIFEST',
+      severity: 'hard_fail' as const,
+      lanes: [lane.issue_id],
+      detail: `PR branch "${lane.branch}" is merged but manifest status is "${lane.status}"; run ops:lane-manifest record-merge before closeout`,
+    }));
 }
 
 function fallbackDetectDispatchSaturation(lanes: LaneManifest[]): MergeRiskConditionLike[] {

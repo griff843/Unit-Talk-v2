@@ -67,7 +67,7 @@ interface DispatchCandidate {
   labels: string[];
 }
 
-type ConflictRisk = 'none' | 'singleton_active' | 'capacity_full';
+type ConflictRisk = 'none' | 'singleton_active' | 'forbidden_combination' | 'capacity_full';
 
 interface RankedDispatchCandidate extends DispatchCandidate {
   rank: number;
@@ -88,6 +88,50 @@ interface RankDispatchOptions {
   max_claude: number;
   max_codex: number;
   singleton_lane_types: string[];
+  forbidden_combinations?: [string, string][];
+}
+
+interface DigestDispatchPlanEntry {
+  identifier: string;
+  title: string;
+  rank: number;
+  executor: 'claude' | 'codex';
+  lane_type: string;
+  work_class: string;
+  slot_index: number;
+  explanation: string;
+}
+
+interface DigestDispatchPlanBlocked {
+  identifier: string;
+  title: string;
+  rank: number;
+  reason_codes: string[];
+  explanation: string;
+}
+
+interface DigestLaneSaturationForecast {
+  executors: {
+    claude: {
+      max: number;
+      active: number;
+      available_slots: number;
+    };
+    codex: {
+      max: number;
+      active: number;
+      available_slots: number;
+    };
+  };
+  active_singletons: string[];
+  forbidden_combinations_active: string[][];
+  safe_class_recommendations: string[];
+}
+
+interface DigestDispatchPlan {
+  fill_now: DigestDispatchPlanEntry[];
+  blocked: DigestDispatchPlanBlocked[];
+  lane_saturation_forecast: DigestLaneSaturationForecast;
 }
 
 
@@ -108,6 +152,7 @@ interface DigestReport {
   ci_failures: string[];
   linear: LinearSummary;
   dispatch_candidates: RankedDispatchCandidate[];
+  dispatch_plan: DigestDispatchPlan;
   p0_events: P0EventsSummary;
   recommended_next: string[];
   infra_errors: string[];
@@ -406,6 +451,27 @@ function classifyExecutor(manifest: LaneManifest): 'claude' | 'codex' | 'unknown
   return 'unknown';
 }
 
+function activeLaneTypes(activeLanes: LaneManifest[]): string[] {
+  return Array.from(new Set(activeLanes.map((lane) => String(lane.lane_type)).filter(Boolean))).sort();
+}
+
+function hasForbiddenCombination(
+  laneType: string,
+  activeTypes: string[],
+  forbiddenCombinations: [string, string][],
+): boolean {
+  return forbiddenCombinations.some(([left, right]) =>
+    (left === laneType && activeTypes.includes(right)) || (right === laneType && activeTypes.includes(left)),
+  );
+}
+
+function activeForbiddenCombinations(
+  activeTypes: string[],
+  forbiddenCombinations: [string, string][],
+): string[][] {
+  return forbiddenCombinations.filter(([left, right]) => activeTypes.includes(left) && activeTypes.includes(right));
+}
+
 function scoreCandidate(
   candidate: DispatchCandidate,
   options: RankDispatchOptions,
@@ -419,13 +485,17 @@ function scoreCandidate(
     ? options.max_claude
     : options.max_codex;
   const executorAvailable = activeForExecutor < maxForExecutor;
+  const activeTypes = activeLaneTypes(options.active_lanes);
   const singletonActive = options.singleton_lane_types.includes(laneType)
-    && options.active_lanes.some((manifest) => manifest.lane_type === laneType);
+    && activeTypes.includes(laneType);
+  const forbiddenActive = hasForbiddenCombination(laneType, activeTypes, options.forbidden_combinations ?? []);
   const conflictRisk: ConflictRisk = singletonActive
     ? 'singleton_active'
-    : executorAvailable
-      ? 'none'
-      : 'capacity_full';
+    : forbiddenActive
+      ? 'forbidden_combination'
+      : executorAvailable
+        ? 'none'
+        : 'capacity_full';
 
   let score = 0;
   const reasons: string[] = [];
@@ -456,6 +526,10 @@ function scoreCandidate(
   if (singletonActive) {
     score -= 50;
     reasons.push(`active singleton lane_type:${laneType}`);
+  }
+  if (forbiddenActive) {
+    score -= 45;
+    reasons.push(`forbidden with active lane_type:${laneType}`);
   }
   if (workClass === 'safe') {
     score += 5;
@@ -495,6 +569,102 @@ export function rankDispatchCandidates(
       ...candidate,
       rank: index + 1,
     }));
+}
+
+export function buildDispatchPlan(
+  candidates: RankedDispatchCandidate[],
+  options: RankDispatchOptions,
+): DigestDispatchPlan {
+  const activeClaude = options.active_lanes.filter((manifest) => classifyExecutor(manifest) === 'claude').length;
+  const activeCodex = options.active_lanes.filter((manifest) => classifyExecutor(manifest) === 'codex').length;
+  const initialActiveTypes = activeLaneTypes(options.active_lanes);
+  const forbiddenCombinations = options.forbidden_combinations ?? [];
+  let plannedClaude = 0;
+  let plannedCodex = 0;
+  const plannedLaneTypes = [...initialActiveTypes];
+
+  const fill_now: DigestDispatchPlanEntry[] = [];
+  const blocked: DigestDispatchPlanBlocked[] = [];
+
+  const remainingSlots = (executor: 'claude' | 'codex'): number => {
+    if (executor === 'claude') return Math.max(0, options.max_claude - activeClaude - plannedClaude);
+    return Math.max(0, options.max_codex - activeCodex - plannedCodex);
+  };
+
+  for (const candidate of candidates) {
+    const reasonCodes: string[] = [];
+    if (!candidate.has_acceptance_criteria) reasonCodes.push('MISSING_ACCEPTANCE_CRITERIA');
+    if (remainingSlots(candidate.recommended_executor) <= 0) reasonCodes.push('CAPACITY_FULL');
+    if (options.singleton_lane_types.includes(candidate.lane_type) && plannedLaneTypes.includes(candidate.lane_type)) {
+      reasonCodes.push('SINGLETON_ACTIVE');
+    }
+    if (hasForbiddenCombination(candidate.lane_type, plannedLaneTypes, forbiddenCombinations)) {
+      reasonCodes.push('FORBIDDEN_COMBINATION');
+    }
+
+    if (reasonCodes.length > 0 || candidate.conflict_risk !== 'none') {
+      const riskCode = candidate.conflict_risk === 'none'
+        ? null
+        : candidate.conflict_risk.toUpperCase();
+      const uniqueCodes = Array.from(new Set(riskCode ? [...reasonCodes, riskCode] : reasonCodes));
+      blocked.push({
+        identifier: candidate.identifier,
+        title: candidate.title,
+        rank: candidate.rank,
+        reason_codes: uniqueCodes,
+        explanation: `Cannot dispatch now: ${uniqueCodes.join(', ')}.`,
+      });
+      continue;
+    }
+
+    const slotIndex = candidate.recommended_executor === 'claude'
+      ? activeClaude + plannedClaude + 1
+      : activeCodex + plannedCodex + 1;
+    fill_now.push({
+      identifier: candidate.identifier,
+      title: candidate.title,
+      rank: candidate.rank,
+      executor: candidate.recommended_executor,
+      lane_type: candidate.lane_type,
+      work_class: candidate.work_class,
+      slot_index: slotIndex,
+      explanation: `${candidate.recommended_executor} slot ${slotIndex} can run now; no active singleton, forbidden combination, or capacity conflict.`,
+    });
+    if (candidate.recommended_executor === 'claude') plannedClaude += 1;
+    else plannedCodex += 1;
+    if (!plannedLaneTypes.includes(candidate.lane_type)) plannedLaneTypes.push(candidate.lane_type);
+  }
+
+  const claudeSlots = Math.max(0, options.max_claude - activeClaude - plannedClaude);
+  const codexSlots = Math.max(0, options.max_codex - activeCodex - plannedCodex);
+  const totalOpenSlots = claudeSlots + codexSlots;
+
+  return {
+    fill_now,
+    blocked,
+    lane_saturation_forecast: {
+      executors: {
+        claude: {
+          max: options.max_claude,
+          active: activeClaude,
+          available_slots: claudeSlots,
+        },
+        codex: {
+          max: options.max_codex,
+          active: activeCodex,
+          available_slots: codexSlots,
+        },
+      },
+      active_singletons: initialActiveTypes.filter((laneType) => options.singleton_lane_types.includes(laneType)),
+      forbidden_combinations_active: activeForbiddenCombinations(initialActiveTypes, forbiddenCombinations),
+      safe_class_recommendations: totalOpenSlots > 0
+        ? [
+            `Queue up to ${totalOpenSlots} safe hygiene, verification, governance, or ops-tooling lanes.`,
+            'Prefer candidates with disjoint file scopes and acceptance criteria before singleton runtime, migration, modeling, or data-canonical work.',
+          ]
+        : ['All configured executor slots are saturated by active or planned lanes.'],
+    },
+  };
 }
 
 function hasAcceptanceCriteria(description: string | null | undefined): boolean {
@@ -577,6 +747,7 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
       max_claude: concurrency.executors.claude,
       max_codex: concurrency.executors.codex,
       singleton_lane_types: concurrency.singleton_types,
+      forbidden_combinations: concurrency.forbidden_combinations,
     }).slice(0, 5);
   } catch (err) {
     infraErrors.push(
@@ -655,6 +826,7 @@ function buildBriefText(input: {
   ci_failures: string[];
   linear: LinearSummary;
   dispatch_candidates: RankedDispatchCandidate[];
+  dispatch_plan: DigestDispatchPlan;
   p0_events: P0EventsSummary;
   recommended_next: string[];
   infra_errors: string[];
@@ -679,6 +851,8 @@ function buildBriefText(input: {
   lines.push(`- active_linear=${input.linear.active_lanes.length}${input.linear.skipped ? ' (skipped)' : ''}`);
   lines.push(`- backlog_top3=${input.linear.backlog_top3.length}${input.linear.skipped ? ' (skipped)' : ''}`);
   lines.push(`- dispatch_candidates=${input.dispatch_candidates.length}`);
+  lines.push(`- fill_now=${input.dispatch_plan.fill_now.length}`);
+  lines.push(`- open_slots claude=${input.dispatch_plan.lane_saturation_forecast.executors.claude.available_slots} codex=${input.dispatch_plan.lane_saturation_forecast.executors.codex.available_slots}`);
   for (const candidate of input.dispatch_candidates.slice(0, 3)) {
     lines.push(
       `- #${candidate.rank} ${candidate.identifier} ${candidate.tier}/${candidate.recommended_executor} score=${candidate.ranking_score} risk=${candidate.conflict_risk}`,
@@ -716,6 +890,17 @@ async function main(): Promise<void> {
   const ci_failures = fetchCiFailures(infraErrors);
   const linear = await fetchLinearSummary(infraErrors);
   const dispatch_candidates = await fetchDispatchCandidates(infraErrors);
+  const concurrency = loadConcurrencyConfig();
+  const activeManifests = readAllManifests().filter((manifest) =>
+    ['started', 'in_progress', 'blocked', 'in_review'].includes(manifest.status),
+  );
+  const dispatch_plan = buildDispatchPlan(dispatch_candidates, {
+    active_lanes: activeManifests,
+    max_claude: concurrency.executors.claude,
+    max_codex: concurrency.executors.codex,
+    singleton_lane_types: concurrency.singleton_types,
+    forbidden_combinations: concurrency.forbidden_combinations,
+  });
   const p0_events = fetchP0EventsSummary(infraErrors);
   const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, dispatch_candidates, p0_events);
   const brief_text = buildBriefText({
@@ -723,6 +908,7 @@ async function main(): Promise<void> {
     ci_failures,
     linear,
     dispatch_candidates,
+    dispatch_plan,
     p0_events,
     recommended_next,
     infra_errors: infraErrors,
@@ -736,6 +922,7 @@ async function main(): Promise<void> {
     ci_failures,
     linear,
     dispatch_candidates,
+    dispatch_plan,
     p0_events,
     recommended_next,
     infra_errors: infraErrors,
@@ -762,6 +949,8 @@ async function main(): Promise<void> {
       console.warn(`  p0_misconfig: ${p0_events.misconfig_detail}`);
     }
     console.log(`  dispatch_candidates: ${dispatch_candidates.length}`);
+    console.log(`  dispatch_fill_now: ${dispatch_plan.fill_now.length}`);
+    console.log(`  open_slots: claude=${dispatch_plan.lane_saturation_forecast.executors.claude.available_slots} codex=${dispatch_plan.lane_saturation_forecast.executors.codex.available_slots}`);
     for (let i = 0; i < dispatch_candidates.length; i++) {
       const d = dispatch_candidates[i];
       console.log(`    ${i + 1}. ${d.identifier} [${d.tier} → ${d.recommended_executor} score=${d.ranking_score} risk=${d.conflict_risk}] "${d.title}"`);

@@ -230,6 +230,43 @@ test('warns inside transition window and fails after it when merged PR is not Li
   assert.equal(stale.exit_code, 1);
 });
 
+test('fails when merged PR still has an active manifest and recommends record-merge repair', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [],
+    manifests: [
+      lane({
+        status: 'in_review',
+        pr_url: 'https://github.com/unit-talk/v2/pull/1059',
+        commit_sha: null,
+      }),
+    ],
+    branches: [branch()],
+    pullRequests: [
+      pr({
+        state: 'merged',
+        merged_at: '2026-05-18T10:00:00.000Z',
+        merge_sha: 'abc123',
+      }),
+    ],
+    now: NOW,
+  });
+
+  const entry = check(report.checks, 'ORCH-MERGED-PR-ACTIVE-MANIFEST');
+  assert.equal(entry.verdict, 'fail');
+  assert.match(entry.detail, /manifest remains in_review/);
+  const laneState = report.state_machine.lanes.find((item) => item.issue_id === 'UTV2-1059');
+  assert.equal(laneState?.state, 'merged_pr_active_manifest');
+  const action = report.repair_plan.actions.find((item) => item.id === 'record_merge_on_manifest');
+  assert.equal(action?.safe_to_apply, true);
+  assert.equal(action?.requires_pm, false);
+  assert.equal(
+    action?.command,
+    'pnpm ops:lane-manifest -- record-merge UTV2-1059 --pr 1059 --json',
+  );
+  assert.equal(report.exit_code, 1);
+});
+
 test('fails when Linear Done has no merge SHA evidence', () => {
   const report = buildOrchestrationReconcilerReport({
     linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
