@@ -44,7 +44,7 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
 
   assert.deepEqual(
     plan.steps.map((step) => step.id),
-    ['record_merge', 'generate_proof', 'close_lane', 'reconcile_current'],
+    ['record_merge', 'generate_proof', 'generate_t2_proof_bundle', 'close_lane', 'reconcile_current'],
   );
   assert.deepEqual(plan.steps[0]?.args, [
     'ops:lane-manifest',
@@ -64,6 +64,30 @@ test('lane finalize plan chains merge record, proof generation, lane close, and 
     '--pr-url',
     'https://github.com/griff843/Unit-Talk-v2/pull/123',
   ]);
+  assert.deepEqual(plan.steps[2]?.args, [
+    'exec',
+    'tsx',
+    'scripts/ops/t2-proof-bundle.ts',
+    'UTV2-1073',
+    '--json',
+    '--force',
+    '--diff-summary',
+    'docs/06_status/proof/UTV2-1073/diff-summary.md',
+    '--verification-log',
+    'docs/06_status/proof/UTV2-1073/runtime-verification.md',
+  ]);
+});
+
+test('lane finalize leaves runtime T2 proof generation to the existing proof path', () => {
+  const plan = buildLaneFinalizePlan({
+    manifest: manifest({ lane_type: 'runtime' }),
+    pr: '123',
+  });
+
+  assert.deepEqual(
+    plan.steps.map((step) => step.id),
+    ['record_merge', 'generate_proof', 'close_lane', 'reconcile_current'],
+  );
 });
 
 test('lane finalize dry run returns planned steps without executing commands', () => {
@@ -88,14 +112,14 @@ test('lane finalize stops at the first failed command', () => {
   const result = runLaneFinalizePlan(buildLaneFinalizePlan({ manifest: manifest(), pr: '123' }), {
     runner: ((command, args) => {
       calls.push(`${command} ${args.join(' ')}`);
-      return { status: calls.length === 2 ? 1 : 0, stdout: '', stderr: 'missing proof' };
+      return { status: calls.length === 3 ? 1 : 0, stdout: '', stderr: 'missing proof' };
     }) as LaneFinalizeRunner,
   });
 
   assert.equal(result.ok, false);
   assert.equal(result.code, 'lane_finalize_failed');
-  assert.equal(result.steps.at(-1)?.id, 'generate_proof');
-  assert.equal(calls.length, 2);
+  assert.equal(result.steps.at(-1)?.id, 'generate_t2_proof_bundle');
+  assert.equal(calls.length, 3);
 });
 
 test('already closed lane only reconciles current state', () => {
@@ -114,4 +138,16 @@ test('resolveLaneFinalizeInput falls back to manifest PR URL', () => {
   });
 
   assert.deepStrictEqual(resolved, { issueId: 'UTV2-1073', pr: '853' });
+});
+
+test('resolveLaneFinalizeInput rejects issue ids that do not match the manifest', () => {
+  assert.throws(
+    () =>
+      resolveLaneFinalizeInput({
+        issueId: 'UTV2-9999',
+        manifest: manifest(),
+        pr: '123',
+      }),
+    /does not match manifest issue/,
+  );
 });
