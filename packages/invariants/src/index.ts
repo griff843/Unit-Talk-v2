@@ -28,3 +28,11 @@ export type {
   AuditEvent,
   EscalationNotice,
 } from './quarantine.js';
+
+export { createGovernanceException, GovernanceExceptionValidationError } from './governance-exception.js';
+export type {
+  ExceptionAuthorization,
+  GovernanceExceptionType,
+  GovernanceExceptionInput,
+  GovernanceException,
+} from './governance-exception.js';

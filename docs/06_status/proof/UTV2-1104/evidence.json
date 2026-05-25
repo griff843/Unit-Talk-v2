@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1104",
+  "title": "INIT-2.3.1 — GovernanceException Entity",
+  "tier": "T2",
+  "branch": "claude/utv2-1104-governanceexception-entity",
+  "static_proof": {
+    "pnpm_verify": "PASS",
+    "lint": "PASS",
+    "type_check": "PASS",
+    "build": "PASS",
+    "test": {
+      "status": "PASS",
+      "total": 113,
+      "pass": 113,
+      "fail": 0,
+      "governance_exception_tests": 15
+    }
+  },
+  "r_level_check": {
+    "verdict": "PASS",
+    "changed_files": 2,
+    "rules_matched": "none — no R-level artifacts required"
+  },
+  "files_changed": [
+    "packages/invariants/src/governance-exception.ts",
+    "packages/invariants/src/governance-exception.test.ts",
+    "packages/invariants/src/index.ts"
+  ],
+  "generated_at": "2026-05-25T00:00:00.000Z"
+}
