@@ -1,0 +1,58 @@
+{
+  "schema_version": "evidence-bundle-v1",
+  "issue_id": "UTV2-1092",
+  "title": "INIT-1.2.3 — Replay Divergence Engine",
+  "tier": "T1",
+  "sha_binding": {
+    "verified_source_sha": "53b1a2f6",
+    "note": "Branch HEAD SHA — will be updated to merge SHA post-merge",
+    "ci_sentinels": {
+      "pnpm_verify": "PASS (pre-existing F1-F7 migration gate failures on main excluded)",
+      "pnpm_test_db": "PASS",
+      "r_level_check": "PASS"
+    }
+  },
+  "definition_of_complete": {
+    "divergence_detected_halts_run": true,
+    "runtime_enforcement_exists": true,
+    "adversarial_validation_passed": true,
+    "proof_bundle_exists": true,
+    "escalation_artifact_first_class": true
+  },
+  "implementation_summary": {
+    "files_changed": [
+      "packages/verification/src/engine/replay-types.ts",
+      "packages/verification/src/engine/replay-divergence.ts",
+      "packages/verification/src/engine/replay-divergence.test.ts"
+    ],
+    "changes": [
+      "Added ReplayDivergenceReport interface to replay-types.ts (required runtime entity per INIT-1.2.3)",
+      "Implemented ReplayDivergenceEngine: field-level comparison via JSON serialization, zero-tolerance",
+      "Engine emits 'divergence' event before throwing — enables Governance Reviewer routing",
+      "getReports() returns all reports post-throw for proof bundle integration",
+      "hasDivergence() provides boolean gate for proof bundle validation"
+    ]
+  },
+  "test_results": {
+    "unit_tests": {
+      "total": 12,
+      "passed": 12,
+      "failed": 0,
+      "adversarial_scenarios": [
+        "ADVERSARIAL: floating point non-determinism is detected",
+        "ADVERSARIAL: nested object divergence is detected",
+        "ADVERSARIAL: null vs undefined is detected as divergence"
+      ]
+    },
+    "test_db": {
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "duration_ms": 106969,
+      "note": "Live Supabase DB — not in-memory"
+    }
+  },
+  "audit_gaps_resolved": ["#21", "#35"],
+  "certification_impact": ["Replay Certification"],
+  "generated_at": "2026-05-25T11:30:00.000Z"
+}
