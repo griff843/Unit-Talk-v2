@@ -21,10 +21,10 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1093/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-25T10:47:15.561Z",
-  "heartbeat_at": "2026-05-25T12:35:30.455Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T12:40:15.580Z",
+  "closed_at": "2026-05-25T12:40:15.580Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1093-init-122-replay-validator-un-stubbing.json",
   "created_by": "claude",
@@ -46,6 +46,13 @@
         "R2",
         "R3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T12:39:36.987Z",
+      "verdict": "pass",
+      "merge_sha": "3be39b330e66e8ec3de2116ee8f1c694ebbad71f",
+      "failures": [],
       "runner": "manual"
     }
   ],
