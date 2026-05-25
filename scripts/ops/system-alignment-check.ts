@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 
 export type AlignmentSeverity = 'fail' | 'warn';
@@ -57,6 +57,53 @@ const DEFAULT_REGISTRY = 'docs/05_operations/system-alignment-registry.json';
 const PATH_PATTERN = /`(docs\/[^`*]+\.(?:md|json|yml|yaml))`/g;
 const GATE_CLAIM_PATTERN = /\b(prompt agent|\.claude\/agents|agent)\b.*\b(blocking|required gate|blocks merge|prevents merge)\b/i;
 const ISSUE_PATTERN = /^UTV2-\d+$/;
+const CONTROL_PLANE_ROOTS = [
+  'AGENTS.md',
+  'CLAUDE.md',
+  '.agents',
+  '.claude',
+  '.github',
+  'docs',
+  'scripts',
+  'package.json',
+];
+const CONTROL_PLANE_EXCLUDED_PARTS = new Set([
+  '.git',
+  'node_modules',
+  'dist',
+  'coverage',
+  'docs/archive',
+  '.claude/worktrees',
+]);
+const STALE_CONTROL_PLANE_PATTERNS: Array<{ code: string; pattern: RegExp; detail: string }> = [
+  {
+    code: 'ALIGN_STALE_LANES_JSON_REFERENCE',
+    pattern: /\.claude\/lanes\.json/,
+    detail: 'active control-plane file references removed .claude/lanes.json authority',
+  },
+  {
+    code: 'ALIGN_STALE_LANE_START_COMMAND',
+    pattern: /ops:lane:start/,
+    detail: 'active control-plane file references stale colon-style ops:lane:start command',
+  },
+  {
+    code: 'ALIGN_STALE_LANE_CLOSE_COMMAND',
+    pattern: /ops:lane:close/,
+    detail: 'active control-plane file references stale colon-style ops:lane:close command',
+  },
+  {
+    code: 'ALIGN_STALE_CONCURRENCY_LIMIT',
+    pattern: /Claude Code\s*\|\s*1 active lane|Codex CLI\s*\|\s*2 active lane|Default:\s*max 2 active Codex|third Codex slot/i,
+    detail: 'active control-plane file references pre-6-lane concurrency limits',
+  },
+];
+const REQUIRED_CONCURRENCY_CONSUMERS = [
+  'scripts/ops/lane-start.ts',
+  'scripts/ops/execution-state.ts',
+  'scripts/ops/merge-risk.ts',
+  'scripts/ops/lane-maximizer.ts',
+  'scripts/ops/merge-mutex.ts',
+];
 
 function readJson<T>(filePath: string): T {
   return JSON.parse(readFileSync(filePath, 'utf8')) as T;
@@ -77,6 +124,26 @@ function patternMatches(line: string, pattern: string): boolean {
 
 function resolveFromRoot(filePath: string, root = process.cwd()): string {
   return path.isAbsolute(filePath) ? filePath : path.resolve(root, filePath);
+}
+
+function shouldSkipControlPlanePath(relativePath: string): boolean {
+  if (relativePath.endsWith('.test.ts')) return true;
+  if (relativePath === 'scripts/ops/system-alignment-check.ts') return true;
+  for (const excluded of CONTROL_PLANE_EXCLUDED_PARTS) {
+    if (relativePath === excluded || relativePath.startsWith(`${excluded}/`)) return true;
+  }
+  return false;
+}
+
+function walkFiles(root: string, relativePath: string): string[] {
+  if (shouldSkipControlPlanePath(relativePath)) return [];
+  const absolutePath = resolveFromRoot(relativePath, root);
+  if (!existsSync(absolutePath)) return [];
+  const stat = statSync(absolutePath);
+  if (stat.isFile()) return [relativePath];
+  if (!stat.isDirectory()) return [];
+  return readdirSync(absolutePath)
+    .flatMap((entry) => walkFiles(root, path.posix.join(relativePath, entry)));
 }
 
 export function checkRegistryShape(registry: AlignmentRegistry, registryPath: string): AlignmentFinding[] {
@@ -247,13 +314,70 @@ export function checkPromptAgentGateClaims(registry: AlignmentRegistry): Alignme
   return findings;
 }
 
+export function checkActiveControlPlaneStaleReferences(root = process.cwd()): AlignmentFinding[] {
+  const findings: AlignmentFinding[] = [];
+  const files = CONTROL_PLANE_ROOTS.flatMap((entry) => walkFiles(root, entry));
+
+  for (const file of files) {
+    const absolutePath = resolveFromRoot(file, root);
+    const lines = readFileSync(absolutePath, 'utf8').split(/\r?\n/);
+    for (let index = 0; index < lines.length; index += 1) {
+      const line = lines[index];
+      for (const rule of STALE_CONTROL_PLANE_PATTERNS) {
+        if (!rule.pattern.test(line)) continue;
+        findings.push({
+          severity: 'fail',
+          category: 'current-authority-contradiction',
+          code: rule.code,
+          file,
+          line: index + 1,
+          detail: `${rule.detail}: ${line.trim()}`,
+        });
+      }
+    }
+  }
+
+  return findings;
+}
+
+export function checkConcurrencyConfigConsumers(root = process.cwd()): AlignmentFinding[] {
+  const findings: AlignmentFinding[] = [];
+  for (const file of REQUIRED_CONCURRENCY_CONSUMERS) {
+    const absolutePath = resolveFromRoot(file, root);
+    if (!existsSync(absolutePath)) {
+      findings.push({
+        severity: 'fail',
+        category: 'implementation-gap',
+        code: 'ALIGN_CONCURRENCY_CONSUMER_MISSING',
+        file,
+        detail: 'required concurrency config consumer file is missing',
+      });
+      continue;
+    }
+    const source = readFileSync(absolutePath, 'utf8');
+    if (!source.includes("from './concurrency-config.js'") || !source.includes('loadConcurrencyConfig')) {
+      findings.push({
+        severity: 'fail',
+        category: 'implementation-gap',
+        code: 'ALIGN_CONCURRENCY_CONFIG_NOT_USED',
+        file,
+        detail: 'required consumer must import and call loadConcurrencyConfig from ./concurrency-config.js',
+      });
+    }
+  }
+  return findings;
+}
+
 export function buildAlignmentReport(registryPath = DEFAULT_REGISTRY): AlignmentReport {
   const registry = readJson<AlignmentRegistry>(registryPath);
+  const referenceRoot = registry.reference_root ?? process.cwd();
   const findings = [
     ...checkRegistryShape(registry, registryPath),
     ...checkDeprecatedControlPlaneClaims(registry),
     ...checkMissingReferences(registry),
     ...checkPromptAgentGateClaims(registry),
+    ...checkActiveControlPlaneStaleReferences(referenceRoot),
+    ...checkConcurrencyConfigConsumers(referenceRoot),
   ];
 
   const fail = findings.filter(finding => finding.severity === 'fail').length;

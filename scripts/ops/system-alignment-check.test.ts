@@ -9,6 +9,8 @@ import type { AlignmentRegistry } from './system-alignment-check.js';
 const requireFromTest = createRequire(import.meta.url);
 const {
   buildAlignmentReport,
+  checkActiveControlPlaneStaleReferences,
+  checkConcurrencyConfigConsumers,
   checkDeprecatedControlPlaneClaims,
   checkMissingReferences,
   checkRegistryShape,
@@ -28,6 +30,15 @@ function write(root: string, relativePath: string, content: string): string {
 function registry(root: string, overrides: Partial<AlignmentRegistry> = {}): AlignmentRegistry {
   const active = write(root, 'docs/05_operations/ACTIVE.md', 'Linear is live.\n`docs/06_status/ISSUE_QUEUE.md` is historical only.\n');
   const historical = write(root, 'docs/06_status/ISSUE_QUEUE.md', '# Historical\n');
+  for (const consumer of [
+    'scripts/ops/lane-start.ts',
+    'scripts/ops/execution-state.ts',
+    'scripts/ops/merge-risk.ts',
+    'scripts/ops/lane-maximizer.ts',
+    'scripts/ops/merge-mutex.ts',
+  ]) {
+    write(root, consumer, "import { loadConcurrencyConfig } from './concurrency-config.js';\nloadConcurrencyConfig();\n");
+  }
 
   return {
     schema_version: 1,
@@ -119,4 +130,50 @@ test('system alignment allows diagnostic-only manual tooling', () => {
   const findings = checkRegistryShape(reg, join(root, 'registry.json'));
 
   assert.equal(findings.filter(finding => finding.severity === 'fail').length, 0);
+});
+
+test('system alignment fails stale dispatch control-plane references', () => {
+  const root = tempRoot();
+  write(root, '.claude/commands/dispatch-board.md', [
+    'Read `.claude/lanes.json` before dispatch.',
+    'Run `pnpm ops:lane:start UTV2-123`.',
+    'Default: max 2 active Codex lanes.',
+    '',
+  ].join('\n'));
+
+  const findings = checkActiveControlPlaneStaleReferences(root);
+
+  assert.ok(findings.some(finding => finding.code === 'ALIGN_STALE_LANES_JSON_REFERENCE'));
+  assert.ok(findings.some(finding => finding.code === 'ALIGN_STALE_LANE_START_COMMAND'));
+  assert.ok(findings.some(finding => finding.code === 'ALIGN_STALE_CONCURRENCY_LIMIT'));
+});
+
+test('system alignment ignores stale examples in tests and archives', () => {
+  const root = tempRoot();
+  write(root, 'scripts/ops/example.test.ts', 'const stale = ".claude/lanes.json";\n');
+  write(root, 'docs/archive/old.md', 'Run `pnpm ops:lane:close UTV2-123`.\n');
+
+  const findings = checkActiveControlPlaneStaleReferences(root);
+
+  assert.deepStrictEqual(findings, []);
+});
+
+test('system alignment fails when required concurrency consumers stop importing shared config', () => {
+  const root = tempRoot();
+  for (const consumer of [
+    'scripts/ops/lane-start.ts',
+    'scripts/ops/execution-state.ts',
+    'scripts/ops/merge-risk.ts',
+    'scripts/ops/lane-maximizer.ts',
+    'scripts/ops/merge-mutex.ts',
+  ]) {
+    write(root, consumer, '// no shared config\n');
+  }
+
+  const findings = checkConcurrencyConfigConsumers(root);
+
+  assert.equal(
+    findings.filter(finding => finding.code === 'ALIGN_CONCURRENCY_CONFIG_NOT_USED').length,
+    5,
+  );
 });

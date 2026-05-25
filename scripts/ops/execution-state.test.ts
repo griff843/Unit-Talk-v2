@@ -97,10 +97,10 @@ test('dispatch slot counting uses active manifest executor routing', () => {
 
   assert.equal(report.dispatch_slots.codex.used, 2);
   assert.equal(report.dispatch_slots.codex.max, MAX_CODEX_LANES);
-  assert.equal(report.dispatch_slots.codex.available, 0);
+  assert.equal(report.dispatch_slots.codex.available, Math.max(0, MAX_CODEX_LANES - 2));
   assert.equal(report.dispatch_slots.claude.used, 1);
   assert.equal(report.dispatch_slots.claude.max, MAX_CLAUDE_LANES);
-  assert.equal(report.dispatch_slots.claude.available, 0);
+  assert.equal(report.dispatch_slots.claude.available, Math.max(0, MAX_CLAUDE_LANES - 1));
 });
 
 test('proof readiness shows T1 missing pnpm test:db as not ready and T2 empty proof as ready', () => {
@@ -151,4 +151,59 @@ test('stale heartbeat lanes remain visible in active_lanes', () => {
   assert.equal(report.active_lanes.length, 1);
   assert.equal(report.active_lanes[0]?.issue_id, 'UTV2-981');
   assert.deepStrictEqual(report.merge_risk_summary.top_conditions, ['STALE_LANE_HEARTBEAT']);
+  assert.deepStrictEqual(report.dispatch_dashboard.stale_heartbeats, [
+    {
+      issue_id: 'UTV2-981',
+      heartbeat_at: '2026-05-10T00:00:00.000Z',
+      age_hours: 132,
+    },
+  ]);
+});
+
+test('dispatch dashboard summarizes lane types, singleton blockers, and recommended actions', () => {
+  const report = buildExecutionStateReport([
+    createManifest({
+      issue_id: 'UTV2-982',
+      lane_type: 'runtime',
+      executor: 'codex-cli',
+      branch: 'codex/utv2-982-runtime',
+    }),
+    createManifest({
+      issue_id: 'UTV2-983',
+      lane_type: 'governance',
+      executor: 'claude',
+      created_by: 'claude',
+      branch: 'claude/utv2-983-governance',
+    }),
+  ], {
+    mergeRiskBuilder: () => ({
+      generated_at: '2026-05-15T15:00:00.000Z',
+      total_active_lanes: 2,
+      conditions: [],
+      summary: {
+        hard_fail: 0,
+        block: 0,
+        warning: 0,
+      },
+    }),
+  });
+
+  assert.deepStrictEqual(report.dispatch_dashboard.active_by_executor, {
+    claude: 1,
+    codex: 1,
+    unknown: 0,
+  });
+  assert.deepStrictEqual(report.dispatch_dashboard.active_by_lane_type, {
+    governance: 1,
+    runtime: 1,
+  });
+  assert.deepStrictEqual(report.dispatch_dashboard.singleton_blockers, [
+    {
+      lane_type: 'runtime',
+      active_issue_ids: ['UTV2-982'],
+    },
+  ]);
+  assert.ok(
+    report.dispatch_dashboard.recommended_actions.some((action) => action.includes('codex slots available')),
+  );
 });

@@ -19,6 +19,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import {
   ROOT,
   emitJson,
@@ -29,6 +30,7 @@ import {
   type LaneManifest,
 } from './shared.js';
 import { linearQuery } from './linear-client.js';
+import { loadConcurrencyConfig } from './concurrency-config.js';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -65,6 +67,29 @@ interface DispatchCandidate {
   labels: string[];
 }
 
+type ConflictRisk = 'none' | 'singleton_active' | 'capacity_full';
+
+interface RankedDispatchCandidate extends DispatchCandidate {
+  rank: number;
+  ranking_score: number;
+  ranking_reasons: string[];
+  lane_type: string;
+  work_class: string;
+  conflict_risk: ConflictRisk;
+  executor_capacity: {
+    active: number;
+    max: number;
+    available: boolean;
+  };
+}
+
+interface RankDispatchOptions {
+  active_lanes: LaneManifest[];
+  max_claude: number;
+  max_codex: number;
+  singleton_lane_types: string[];
+}
+
 
 interface P0EventsSummary {
   total_failures: number;
@@ -82,7 +107,7 @@ interface DigestReport {
   stale_lanes: StaleLaneEntry[];
   ci_failures: string[];
   linear: LinearSummary;
-  dispatch_candidates: DispatchCandidate[];
+  dispatch_candidates: RankedDispatchCandidate[];
   p0_events: P0EventsSummary;
   recommended_next: string[];
   infra_errors: string[];
@@ -351,6 +376,127 @@ function routeExecutor(tier: 'T1' | 'T2' | 'T3', labels: string[]): 'claude' | '
   return 'codex';
 }
 
+function inferLaneType(labels: string[], title: string): string {
+  const normalizedLabels = labels.map((label) => label.toLowerCase());
+  const explicit = normalizedLabels.find((label) => label.startsWith('lane:'));
+  if (explicit) return explicit.slice('lane:'.length);
+  const searchable = `${normalizedLabels.join(' ')} ${title}`.toLowerCase();
+  if (/migration|schema|supabase/.test(searchable)) return 'migration';
+  if (/runtime|worker|api|delivery|outbox/.test(searchable)) return 'runtime';
+  if (/model|scoring|calibration/.test(searchable)) return 'modeling';
+  if (/canonical|reference data|taxonomy/.test(searchable)) return 'data-canonical';
+  if (/governance|policy|doc|alignment/.test(searchable)) return 'governance';
+  if (/hygiene|cleanup|ops|tooling|ci/.test(searchable)) return 'hygiene';
+  if (/verification|proof|test/.test(searchable)) return 'verification';
+  return 'unknown';
+}
+
+function inferWorkClass(labels: string[], laneType: string): string {
+  const normalizedLabels = labels.map((label) => label.toLowerCase());
+  const explicit = normalizedLabels.find((label) => label.startsWith('work:'));
+  if (explicit) return explicit.slice('work:'.length);
+  if (['runtime', 'migration', 'modeling', 'data-canonical'].includes(laneType)) return 'singleton';
+  return 'safe';
+}
+
+function classifyExecutor(manifest: LaneManifest): 'claude' | 'codex' | 'unknown' {
+  const value = `${manifest.executor ?? ''} ${manifest.created_by ?? ''} ${manifest.branch ?? ''}`.toLowerCase();
+  if (value.includes('claude')) return 'claude';
+  if (value.includes('codex')) return 'codex';
+  return 'unknown';
+}
+
+function scoreCandidate(
+  candidate: DispatchCandidate,
+  options: RankDispatchOptions,
+): Omit<RankedDispatchCandidate, keyof DispatchCandidate | 'rank'> {
+  const laneType = inferLaneType(candidate.labels, candidate.title);
+  const workClass = inferWorkClass(candidate.labels, laneType);
+  const activeForExecutor = options.active_lanes.filter(
+    (manifest) => classifyExecutor(manifest) === candidate.recommended_executor,
+  ).length;
+  const maxForExecutor = candidate.recommended_executor === 'claude'
+    ? options.max_claude
+    : options.max_codex;
+  const executorAvailable = activeForExecutor < maxForExecutor;
+  const singletonActive = options.singleton_lane_types.includes(laneType)
+    && options.active_lanes.some((manifest) => manifest.lane_type === laneType);
+  const conflictRisk: ConflictRisk = singletonActive
+    ? 'singleton_active'
+    : executorAvailable
+      ? 'none'
+      : 'capacity_full';
+
+  let score = 0;
+  const reasons: string[] = [];
+  if (candidate.tier === 'T1') {
+    score += 20;
+    reasons.push('tier:T1 requires careful dispatch');
+  } else if (candidate.tier === 'T2') {
+    score += 45;
+    reasons.push('tier:T2 dispatchable default');
+  } else {
+    score += 30;
+    reasons.push('tier:T3 lower urgency');
+  }
+  if (candidate.has_acceptance_criteria) {
+    score += 20;
+    reasons.push('acceptance criteria present');
+  } else {
+    score -= 15;
+    reasons.push('acceptance criteria missing');
+  }
+  if (executorAvailable) {
+    score += 10;
+    reasons.push(`${candidate.recommended_executor} capacity available`);
+  } else {
+    score -= 25;
+    reasons.push(`${candidate.recommended_executor} capacity full`);
+  }
+  if (singletonActive) {
+    score -= 50;
+    reasons.push(`active singleton lane_type:${laneType}`);
+  }
+  if (workClass === 'safe') {
+    score += 5;
+    reasons.push('safe work class');
+  }
+
+  return {
+    ranking_score: score,
+    ranking_reasons: reasons,
+    lane_type: laneType,
+    work_class: workClass,
+    conflict_risk: conflictRisk,
+    executor_capacity: {
+      active: activeForExecutor,
+      max: maxForExecutor,
+      available: executorAvailable,
+    },
+  };
+}
+
+export function rankDispatchCandidates(
+  candidates: DispatchCandidate[],
+  options: RankDispatchOptions,
+): RankedDispatchCandidate[] {
+  return candidates
+    .map((candidate, index) => ({
+      ...candidate,
+      ...scoreCandidate(candidate, options),
+      rank: index + 1,
+      originalIndex: index,
+    }))
+    .sort((left, right) => {
+      if (right.ranking_score !== left.ranking_score) return right.ranking_score - left.ranking_score;
+      return left.originalIndex - right.originalIndex;
+    })
+    .map(({ originalIndex: _originalIndex, ...candidate }, index) => ({
+      ...candidate,
+      rank: index + 1,
+    }));
+}
+
 function hasAcceptanceCriteria(description: string | null | undefined): boolean {
   if (!description) return false;
   return /acceptance\s+criteria|AC:/i.test(description);
@@ -420,10 +566,18 @@ async function fetchDispatchCandidates(infraErrors: string[]): Promise<DispatchC
         labels: labelNames,
       });
 
-      if (candidates.length >= 3) break;
+      if (candidates.length >= 10) break;
     }
 
-    return candidates;
+    const concurrency = loadConcurrencyConfig();
+    return rankDispatchCandidates(candidates, {
+      active_lanes: readAllManifests().filter((manifest) =>
+        ['started', 'in_progress', 'blocked', 'in_review'].includes(manifest.status),
+      ),
+      max_claude: concurrency.executors.claude,
+      max_codex: concurrency.executors.codex,
+      singleton_lane_types: concurrency.singleton_types,
+    }).slice(0, 5);
   } catch (err) {
     infraErrors.push(
       `Dispatch candidates fetch error: ${err instanceof Error ? err.message : String(err)}`,
@@ -467,23 +621,12 @@ function fetchP0EventsSummary(infraErrors: string[]): P0EventsSummary {
   }
 }
 
-// ── ops:brief subprocess ───────────────────────────────────────────────────
-
-function runBriefText(): string {
-  const { stdout } = runSubprocess('pnpm', ['ops:brief']);
-  const text = stdout.trim();
-  // Strip pnpm banner lines (start with '>' and immediately following blank line)
-  const lines = text.split('\n');
-  const jsonOrContent = lines.findIndex((l) => !l.startsWith('>') && l.trim() !== '');
-  return jsonOrContent === -1 ? '(ops:brief unavailable)' : lines.slice(jsonOrContent).join('\n').trim();
-}
-
 // ── Derived recommendations ────────────────────────────────────────────────
 
 function deriveRecommendedNext(
   stale_lanes: StaleLaneEntry[],
   ci_failures: string[],
-  dispatch_candidates: DispatchCandidate[],
+  dispatch_candidates: RankedDispatchCandidate[],
   p0_events: P0EventsSummary,
 ): string[] {
   const recs: string[] = [];
@@ -502,9 +645,46 @@ function deriveRecommendedNext(
   }
   if (dispatch_candidates.length > 0) {
     const d = dispatch_candidates[0];
-    recs.push(`Next dispatch: ${d.identifier} [${d.tier} → ${d.recommended_executor}]`);
+    recs.push(`Next dispatch: ${d.identifier} [${d.tier} → ${d.recommended_executor} score=${d.ranking_score}]`);
   }
   return recs;
+}
+
+function buildBriefText(input: {
+  stale_lanes: StaleLaneEntry[];
+  ci_failures: string[];
+  linear: LinearSummary;
+  dispatch_candidates: RankedDispatchCandidate[];
+  p0_events: P0EventsSummary;
+  recommended_next: string[];
+  infra_errors: string[];
+}): string {
+  const lines: string[] = [];
+  lines.push('Recommendation');
+  if (input.recommended_next.length > 0) {
+    for (const recommendation of input.recommended_next) {
+      lines.push(`- ${recommendation}`);
+    }
+  } else {
+    lines.push('- no immediate dispatch action surfaced by digest inputs');
+  }
+  lines.push('');
+  lines.push('Overview');
+  lines.push(`- stale_lanes=${input.stale_lanes.length}`);
+  lines.push(`- ci_failures=${input.ci_failures.length}`);
+  lines.push(`- p0_failures_7d=${input.p0_events.total_failures}`);
+  lines.push(`- infra_errors=${input.infra_errors.length}`);
+  lines.push('');
+  lines.push('Queue');
+  lines.push(`- active_linear=${input.linear.active_lanes.length}${input.linear.skipped ? ' (skipped)' : ''}`);
+  lines.push(`- backlog_top3=${input.linear.backlog_top3.length}${input.linear.skipped ? ' (skipped)' : ''}`);
+  lines.push(`- dispatch_candidates=${input.dispatch_candidates.length}`);
+  for (const candidate of input.dispatch_candidates.slice(0, 3)) {
+    lines.push(
+      `- #${candidate.rank} ${candidate.identifier} ${candidate.tier}/${candidate.recommended_executor} score=${candidate.ranking_score} risk=${candidate.conflict_risk}`,
+    );
+  }
+  return lines.join('\n');
 }
 
 // ── Discord alert ──────────────────────────────────────────────────────────
@@ -537,8 +717,16 @@ async function main(): Promise<void> {
   const linear = await fetchLinearSummary(infraErrors);
   const dispatch_candidates = await fetchDispatchCandidates(infraErrors);
   const p0_events = fetchP0EventsSummary(infraErrors);
-  const brief_text = runBriefText();
   const recommended_next = deriveRecommendedNext(stale_lanes, ci_failures, dispatch_candidates, p0_events);
+  const brief_text = buildBriefText({
+    stale_lanes,
+    ci_failures,
+    linear,
+    dispatch_candidates,
+    p0_events,
+    recommended_next,
+    infra_errors: infraErrors,
+  });
 
   const report: DigestReport = {
     schema_version: 2,
@@ -576,7 +764,7 @@ async function main(): Promise<void> {
     console.log(`  dispatch_candidates: ${dispatch_candidates.length}`);
     for (let i = 0; i < dispatch_candidates.length; i++) {
       const d = dispatch_candidates[i];
-      console.log(`    ${i + 1}. ${d.identifier} [${d.tier} → ${d.recommended_executor}] "${d.title}"`);
+      console.log(`    ${i + 1}. ${d.identifier} [${d.tier} → ${d.recommended_executor} score=${d.ranking_score} risk=${d.conflict_risk}] "${d.title}"`);
     }
     if (infraErrors.length > 0) {
       console.log(`  infra_errors:   ${infraErrors.length}`);
@@ -627,11 +815,16 @@ async function main(): Promise<void> {
   process.exitCode = 0;
 }
 
-void main().catch((error: unknown) => {
-  console.error(
-    '[daily-digest] fatal:',
-    error instanceof Error ? error.message : String(error),
-  );
-  // Still exit 0 — digest must not block CI
-  process.exitCode = 0;
-});
+const isDirectRun = process.argv[1] != null
+  && pathToFileURL(process.argv[1]).href === import.meta.url;
+
+if (isDirectRun) {
+  void main().catch((error: unknown) => {
+    console.error(
+      '[daily-digest] fatal:',
+      error instanceof Error ? error.message : String(error),
+    );
+    // Still exit 0 — digest must not block CI
+    process.exitCode = 0;
+  });
+}
