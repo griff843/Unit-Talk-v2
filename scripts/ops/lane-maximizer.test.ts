@@ -7,6 +7,7 @@ import {
   type CandidateLane,
   type LaneManifest,
   evaluateCandidates,
+  parseQueueCandidates,
 } from './lane-maximizer.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -64,6 +65,19 @@ function withTempManifests(manifests: LaneManifest[], run: () => void): void {
   }
 }
 
+function withTempFile(contents: string, run: (filePath: string) => void): void {
+  const filePath = path.join(
+    fs.mkdtempSync(path.join(process.env.TMPDIR ?? '/tmp', 'lane-maximizer-')),
+    'queue.md',
+  );
+  fs.writeFileSync(filePath, contents, 'utf8');
+  try {
+    run(filePath);
+  } finally {
+    fs.rmSync(path.dirname(filePath), { recursive: true, force: true });
+  }
+}
+
 function findDecisionIssueIds(
   report: ReturnType<typeof evaluateCandidates>,
   bucket: keyof Pick<ReturnType<typeof evaluateCandidates>, 'recommended' | 'blocked' | 'risky' | 'deferred'>,
@@ -82,8 +96,104 @@ test('clean candidate with no overlaps is recommended', () => {
   assert.deepStrictEqual(report.recommended[0]?.reason_codes, []);
   assert.equal(
     report.dispatch_plan.fill_now[0]?.dispatch_command,
-    'pnpm ops:lane-start UTV2-96801 --executor codex-cli --lane-type hygiene',
+    'pnpm ops:lane-start UTV2-96801 --tier T2 --branch codex/utv2-96801-utv2-96801 --executor codex-cli --lane-type hygiene --files scripts/ops/clean-a.ts',
   );
+});
+
+test('dispatch command includes lane-start required tier branch and file flags', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96801B', {
+        title: 'Queue Intake Wave Builder',
+        branch: 'codex/utv2-96801b-wave-builder',
+        file_scope: ['scripts/ops/lane-maximizer.ts', 'scripts/ops/lane-maximizer.test.ts'],
+      }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.equal(
+    report.dispatch_plan.fill_now[0]?.dispatch_command,
+    'pnpm ops:lane-start UTV2-96801B --tier T2 --branch codex/utv2-96801b-wave-builder --executor codex-cli --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+  );
+});
+
+test('candidate without file scope is blocked before lane-start command is emitted', () => {
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-96801M', { file_scope: [] })],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MISSING_FILE_SCOPE']);
+  assert.deepStrictEqual(report.dispatch_plan.fill_now, []);
+});
+
+test('candidate with explicit missing acceptance criteria is blocked', () => {
+  const report = evaluateCandidates(
+    [makeCandidate('UTV2-96801A', { has_acceptance_criteria: false, file_scope: ['scripts/ops/ac.ts'] })],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['MISSING_ACCEPTANCE_CRITERIA']);
+});
+
+test('candidates are ranked before filling wave slots', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96801T3', { tier: 'T3', file_scope: ['scripts/ops/t3.ts'] }),
+      makeCandidate('UTV2-96801T2', { tier: 'T2', file_scope: ['scripts/ops/t2.ts'] }),
+    ],
+    [],
+    { maxClaude: 1, maxCodex: 2 },
+  );
+
+  assert.deepStrictEqual(report.dispatch_plan.fill_now.map((entry) => entry.issue_id), [
+    'UTV2-96801T2',
+    'UTV2-96801T3',
+  ]);
+  assert.equal(report.recommended[0]?.rank, 1);
+});
+
+test('queue intake parses ready issues into dispatchable candidates', () => {
+  const queue = [
+    '# Queue',
+    '',
+    '### UTV2-96818 — T2 Queue Intake Smoke',
+    '',
+    '| Field | Value |',
+    '|---|---|',
+    '| **ID** | UTV2-96818 |',
+    '| **Tier** | T2 |',
+    '| **Lane** | `lane:codex` |',
+    '| **Status** | **READY** |',
+    '| **Blocked by** | — |',
+    '| **Branch** | `codex/utv2-96818-queue-intake-smoke` |',
+    '',
+    'Acceptance criteria:',
+    '- emits lane-start command',
+    '',
+    'Allowed file scope',
+    '- scripts/ops/lane-maximizer.ts',
+    '- scripts/ops/lane-maximizer.test.ts',
+  ].join('\n');
+
+  withTempFile(queue, (filePath) => {
+    const candidates = parseQueueCandidates(filePath);
+    const report = evaluateCandidates(candidates, [], { maxClaude: 1, maxCodex: 2 });
+
+    assert.deepStrictEqual(candidates.map((candidate) => candidate.issue_id), ['UTV2-96818']);
+    assert.deepStrictEqual(candidates[0]?.file_scope, [
+      'scripts/ops/lane-maximizer.ts',
+      'scripts/ops/lane-maximizer.test.ts',
+    ]);
+    assert.equal(
+      report.dispatch_plan.fill_now[0]?.dispatch_command,
+      'pnpm ops:lane-start UTV2-96818 --tier T2 --branch codex/utv2-96818-queue-intake-smoke --executor codex-cli --lane-type verification --files scripts/ops/lane-maximizer.ts --files scripts/ops/lane-maximizer.test.ts',
+    );
+  });
 });
 
 test('candidate whose blocked_by is not done is blocked with BLOCKED_DEP', () => {
