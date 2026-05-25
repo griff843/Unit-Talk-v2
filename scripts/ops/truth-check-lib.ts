@@ -427,10 +427,19 @@ export async function runTruthCheck(
       addCheck('G2', 'pass', 'PR merge commit SHA matches manifest.commit_sha');
     }
 
-    if (mergeSha && isCommitOnMainFirstParent(mergeSha)) {
-      addCheck('G3', 'pass', 'merge commit is reachable on main first-parent history');
+    if (mergeSha) {
+      const g3 = checkCommitReachableFromMain(mergeSha);
+      if (g3.reachable && !g3.firstParent) {
+        // SHA is reachable via a secondary-parent chain (e.g. squash merge that landed
+        // on a --no-ff merge commit). This is valid — emit a warning but do not fail.
+        addCheck('G3', 'pass', 'merge commit is reachable from main (via secondary-parent chain; squash-merge anomaly)');
+      } else if (g3.reachable) {
+        addCheck('G3', 'pass', 'merge commit is reachable on main first-parent history');
+      } else {
+        addCheck('G3', 'fail', 'merge commit is not reachable from main via any ancestor path');
+      }
     } else {
-      addCheck('G3', 'fail', 'merge commit is not reachable on main first-parent history');
+      addCheck('G3', 'fail', 'merge commit is not reachable from main via any ancestor path');
     }
 
     const requiredChecks = await fetchRequiredChecks(prRef.owner, prRef.repo, githubToken);
@@ -1239,13 +1248,48 @@ async function fetchCommitChecks(
   };
 }
 
-function isCommitOnMainFirstParent(sha: string): boolean {
-  const revList = parseGit(['rev-list', '--first-parent', 'main']);
-  return revList.includes(sha);
+export interface G3ReachabilityResult {
+  /** SHA is reachable from main HEAD via any ancestor path (first or secondary parent). */
+  reachable: boolean;
+  /** SHA is on the first-parent chain specifically (fast-forward / squash-merge-to-main). */
+  firstParent: boolean;
+}
+
+/**
+ * Check whether `sha` is reachable from main HEAD.
+ *
+ * Option A implementation: uses `git merge-base --is-ancestor` for full-ancestry
+ * reachability (first-parent OR secondary-parent), then separately checks
+ * first-parent-only to surface a warning when the SHA landed via a --no-ff merge
+ * commit (e.g. UTV2-1087 squash-merge anomaly, issue UTV2-1160).
+ *
+ * G3 passes for both cases; only a genuinely absent SHA causes G3 to fail.
+ */
+export function checkCommitReachableFromMain(
+  sha: string,
+  gitCommand: typeof git = git,
+): G3ReachabilityResult {
+  // Full-ancestry check: exit code 0 = ancestor, non-zero = not ancestor
+  const ancestorResult = gitCommand(['merge-base', '--is-ancestor', sha, 'main']);
+  const reachable = ancestorResult.ok;
+
+  if (!reachable) {
+    return { reachable: false, firstParent: false };
+  }
+
+  // First-parent check: is it on the linear history?
+  const firstParentList = parseGitWithCommand(['rev-list', '--first-parent', 'main'], gitCommand);
+  const firstParent = firstParentList.includes(sha);
+
+  return { reachable: true, firstParent };
 }
 
 function parseGit(args: string[]): string[] {
-  const { stdout, ok } = git(args);
+  return parseGitWithCommand(args, git);
+}
+
+function parseGitWithCommand(args: string[], gitCommand: typeof git): string[] {
+  const { stdout, ok } = gitCommand(args);
   if (!ok) {
     return [];
   }

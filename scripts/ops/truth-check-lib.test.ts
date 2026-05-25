@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   addUnsupportedRuntimeChecks,
+  checkCommitReachableFromMain,
   evaluateCloseoutTruthGate,
   evaluateRequiredChecksWithHeadFallback,
   evaluateTestRunLogEvidence,
@@ -612,4 +613,64 @@ test('closeout truth gate fails Done manifest with unmerged PR', () => {
     ),
     ['C7'],
   );
+});
+
+// ── G3 ancestry regression tests (UTV2-1160) ──────────────────────────────────
+//
+// G3 must PASS when the merge SHA is reachable via any ancestor path (first-parent
+// OR secondary-parent).  It must only FAIL when the SHA is genuinely absent from
+// all of main's history.
+
+/**
+ * Build a minimal git() stub that mimics the two commands G3 invokes:
+ *   1. `git merge-base --is-ancestor <sha> main`  → ok: true/false
+ *   2. `git rev-list --first-parent main`          → lines of SHAs
+ */
+function makeGitStub(options: {
+  isAncestor: boolean;
+  firstParentShas: string[];
+}): (args: string[]) => { ok: boolean; stdout: string; stderr: string } {
+  return (args: string[]) => {
+    if (args[0] === 'merge-base' && args[1] === '--is-ancestor') {
+      return { ok: options.isAncestor, stdout: '', stderr: '' };
+    }
+    if (args[0] === 'rev-list' && args.includes('--first-parent')) {
+      return { ok: true, stdout: options.firstParentShas.join('\n'), stderr: '' };
+    }
+    return { ok: false, stdout: '', stderr: 'unexpected args in stub' };
+  };
+}
+
+test('G3: SHA on first-parent chain → reachable=true, firstParent=true', () => {
+  const sha = '01952daa';
+  const stub = makeGitStub({ isAncestor: true, firstParentShas: [sha, 'aaaabbbb'] });
+  const result = checkCommitReachableFromMain(sha, stub);
+  assert.strictEqual(result.reachable, true);
+  assert.strictEqual(result.firstParent, true);
+});
+
+test('G3: SHA reachable only via secondary-parent (squash-merge anomaly) → reachable=true, firstParent=false', () => {
+  // Reproduces the UTV2-1087 closeout scenario: squash merge SHA 01952daa was
+  // reachable from main but NOT on the first-parent chain because local main was
+  // synced with --no-ff, placing it on a secondary-parent chain.
+  const sha = '01952daa';
+  const stub = makeGitStub({
+    isAncestor: true,
+    firstParentShas: ['aaaabbbb', 'ccccdddd'], // sha absent from first-parent list
+  });
+  const result = checkCommitReachableFromMain(sha, stub);
+  assert.strictEqual(result.reachable, true, 'SHA must be reachable (is an ancestor)');
+  assert.strictEqual(result.firstParent, false, 'SHA is not on first-parent chain');
+  // Callers must treat this as PASS (with optional warning), not FAIL.
+});
+
+test('G3: SHA absent from all of main history → reachable=false, firstParent=false', () => {
+  const sha = 'deadbeef';
+  const stub = makeGitStub({
+    isAncestor: false,
+    firstParentShas: ['aaaabbbb', 'ccccdddd'],
+  });
+  const result = checkCommitReachableFromMain(sha, stub);
+  assert.strictEqual(result.reachable, false);
+  assert.strictEqual(result.firstParent, false);
 });
