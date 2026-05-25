@@ -7,10 +7,20 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1094-production-and-replay-integration",
   "branch": "claude/utv2-1094-production-and-replay-integration",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "5a06f1a104729890a2a08c70b9778653ce5415f8",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/864",
+  "files_changed": [
+    "apps/api/package.json",
+    "apps/api/src/governance-readiness.test.ts",
+    "apps/api/src/invariant-production-integration.test.ts",
+    "packages/verification/src/engine/replay-lifecycle-runner.ts",
+    "pnpm-lock.yaml",
+    ".ops/sync/UTV2-1094.yml",
+    "docs/06_status/proof/UTV2-1094/evidence.json",
+    "docs/06_status/proof/UTV2-1094/verification.md"
+  ],
   "file_scope_lock": [
+    "apps/api/package.json",
     "apps/api/src/governance-readiness.test.ts",
     "apps/api/src/invariant-production-integration.test.ts",
     "docs/06_status/proof/UTV2-1094/evidence.json",
