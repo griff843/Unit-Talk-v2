@@ -3,29 +3,66 @@
   "issue_id": "UTV2-1104",
   "title": "INIT-2.3.1 — GovernanceException Entity",
   "tier": "T2",
-  "branch": "claude/utv2-1104-governanceexception-entity",
+  "lane_type": "governance",
+  "sha_binding": {
+    "merge_sha": "a59a8c3a387ff452701f8add0b3ef004f629cdf1",
+    "verified_source_sha": "2818501a",
+    "verified_source_note": "PR #865 squash-merged to main at a59a8c3a",
+    "evidence_commit_sha": "a59a8c3a387ff452701f8add0b3ef004f629cdf1",
+    "current_pr_head_sha": "2818501a"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-25T21:49:00.000Z",
+  "r_level": {
+    "level": "R0",
+    "reason": "R-level check PASS — no R-level artifacts required (governance entity; no lifecycle-fsm, ingestor-provider, or outbox paths changed)"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1104-dispatch"
+  },
   "static_proof": {
-    "pnpm_verify": "PASS",
-    "lint": "PASS",
-    "type_check": "PASS",
-    "build": "PASS",
-    "test": {
+    "pnpm_verify": {
       "status": "PASS",
-      "total": 113,
-      "pass": 113,
-      "fail": 0,
-      "governance_exception_tests": 15
-    }
+      "exit_code": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "governance_exception_tests": {
+      "status": "PASS",
+      "file": "packages/invariants/src/governance-exception.test.ts",
+      "tests_pass": 15,
+      "tests_fail": 0
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required"
+    },
+    "adversarial_tests": [
+      "Valid exception → created with id + createdAt + status=active: PASS",
+      "Valid exception → auditEvent emitted with correct fields: PASS",
+      "Missing scope → GovernanceExceptionValidationError: PASS",
+      "Missing approver → GovernanceExceptionValidationError: PASS",
+      "Missing secondaryApprover → GovernanceExceptionValidationError: PASS",
+      "Same approver and secondaryApprover → GovernanceExceptionValidationError: PASS",
+      "Empty justification → GovernanceExceptionValidationError: PASS",
+      "Short justification (< 10 chars) → GovernanceExceptionValidationError: PASS",
+      "Missing expiration → GovernanceExceptionValidationError: PASS",
+      "Past expiration → GovernanceExceptionValidationError: PASS",
+      "Missing rollbackCondition → GovernanceExceptionValidationError: PASS",
+      "Missing auditRef → GovernanceExceptionValidationError: PASS",
+      "Missing type → GovernanceExceptionValidationError: PASS",
+      "Invalid type → GovernanceExceptionValidationError: PASS",
+      "All fields valid → JSON round-trip replayable: PASS"
+    ]
   },
-  "r_level_check": {
-    "verdict": "PASS",
-    "changed_files": 2,
-    "rules_matched": "none — no R-level artifacts required"
-  },
-  "files_changed": [
-    "packages/invariants/src/governance-exception.ts",
-    "packages/invariants/src/governance-exception.test.ts",
-    "packages/invariants/src/index.ts"
-  ],
-  "generated_at": "2026-05-25T00:00:00.000Z"
+  "constitutional_claims": [
+    "GovernanceException entity requires all 9 fields — creation throws GovernanceExceptionValidationError on any missing field",
+    "Dual-approver enforcement: approver !== secondaryApprover, both non-empty",
+    "Justification minimum 10 chars — prevents trivial/placeholder justifications",
+    "Expiration must be future — no permanent exceptions possible",
+    "Exception creation emits AuditEvent with severity: governance-critical",
+    "Entity is replayable from stored lineage — pure data structure, no I/O",
+    "Resolves gap #23"
+  ]
 }
