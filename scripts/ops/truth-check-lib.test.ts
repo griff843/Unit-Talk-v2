@@ -113,6 +113,65 @@ test('G4 falls back to PR head SHA when merge commit checks are missing', async 
   assert.deepStrictEqual(checkedShas, ['merge-sha', 'head-sha']);
 });
 
+test('G4 accepts admin-merged PR when only Merge Gate is stuck on head SHA', async () => {
+  const result = await evaluateRequiredChecksWithHeadFallback({
+    mergeSha: 'merge-sha',
+    headSha: 'head-sha',
+    requiredChecks: ['verify', 'Executor Result Validation', 'Merge Gate', 'P0 Protocol'],
+    allowAdminMergeGateBypass: true,
+    fetchChecks: async (sha): Promise<CommitCheckResult> => {
+      if (sha === 'head-sha') {
+        return { passed: false, missing: ['Merge Gate'] };
+      }
+      return {
+        passed: false,
+        missing: ['verify', 'Executor Result Validation', 'Merge Gate', 'P0 Protocol'],
+      };
+    },
+  });
+
+  assert.strictEqual(result.passed, true);
+  assert.strictEqual(result.checkedSha, 'head-admin-merge');
+  assert.deepStrictEqual(result.missing, []);
+  assert.deepStrictEqual(result.bypassed, ['Merge Gate']);
+});
+
+test('G4 admin-merge recovery fails closed when non-governance checks are missing', async () => {
+  const result = await evaluateRequiredChecksWithHeadFallback({
+    mergeSha: 'merge-sha',
+    headSha: 'head-sha',
+    requiredChecks: ['verify', 'Executor Result Validation', 'Merge Gate'],
+    allowAdminMergeGateBypass: true,
+    fetchChecks: async (sha): Promise<CommitCheckResult> => {
+      if (sha === 'head-sha') {
+        return { passed: false, missing: ['verify', 'Merge Gate'] };
+      }
+      return { passed: false, missing: ['verify', 'Executor Result Validation', 'Merge Gate'] };
+    },
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.checkedSha, 'merge');
+  assert.deepStrictEqual(result.missing, ['verify', 'Executor Result Validation', 'Merge Gate']);
+});
+
+test('G4 admin-merge recovery is disabled unless caller confirms merged PR context', async () => {
+  const result = await evaluateRequiredChecksWithHeadFallback({
+    mergeSha: 'merge-sha',
+    headSha: 'head-sha',
+    requiredChecks: ['verify', 'Merge Gate'],
+    fetchChecks: async (sha): Promise<CommitCheckResult> => {
+      if (sha === 'head-sha') {
+        return { passed: false, missing: ['Merge Gate'] };
+      }
+      return { passed: false, missing: ['verify', 'Merge Gate'] };
+    },
+  });
+
+  assert.strictEqual(result.passed, false);
+  assert.strictEqual(result.checkedSha, 'merge');
+});
+
 test('required check fallback parses branch-protection script contexts', () => {
   const checks = parseRequiredChecksFromBranchProtectionScript(`
 gh api -X PATCH "repos/\${REPO}/branches/\${BRANCH}/protection/required_status_checks" \\
