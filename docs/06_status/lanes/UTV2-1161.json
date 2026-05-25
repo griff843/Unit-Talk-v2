@@ -18,6 +18,11 @@
     "scripts/ops/execution-state.ts"
   ],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1161.yml",
+    "docs/06_status/lanes/UTV2-1161.json",
+    "docs/06_status/proof/UTV2-1161/diff-summary.md",
+    "docs/06_status/proof/UTV2-1161/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1161/verification.log",
     "scripts/ops/execution-state.test.ts",
     "scripts/ops/execution-state.ts"
   ],
