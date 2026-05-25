@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1089",
+  "lane_type": "runtime",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1089-init-132-invariant-engine",
+  "branch": "griffadavi/utv2-1089-init-132-invariant-engine",
+  "base_branch": "main",
+  "commit_sha": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/846",
+  "files_changed": [],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1089/evidence.json",
+    "docs/06_status/proof/UTV2-1089/verification.md",
+    "packages/invariants/src/engine.test.ts",
+    "packages/invariants/src/engine.ts",
+    "packages/invariants/src/index.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1089/evidence.json"
+  ],
+  "status": "in_review",
+  "started_at": "2026-05-25T00:00:59.531Z",
+  "heartbeat_at": "2026-05-25T00:18:38.000Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/griffadavi/utv2-1089-init-132-invariant-engine.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1089-init-132-invariant-engine",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}
