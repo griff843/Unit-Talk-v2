@@ -24,6 +24,8 @@ export interface CandidateLane {
   issue_id: string;
   tier: 'T1' | 'T2' | 'T3';
   executor: 'claude' | 'codex-cli';
+  lane_type?: string;
+  work_class?: string;
   file_scope: string[];
   blocked_by: string[];
   isolated_install_verified?: boolean;
@@ -47,9 +49,49 @@ export interface DispatchLimits {
   codex_available: boolean;
 }
 
+export interface DispatchPlanEntry {
+  issue_id: string;
+  executor: 'claude' | 'codex-cli';
+  lane_type: string;
+  work_class: string;
+  file_scope: string[];
+  slot_index: number;
+  explanation: string;
+}
+
+export interface LaneSaturationForecast {
+  executors: {
+    claude: {
+      max: number;
+      active: number;
+      available_slots: number;
+    };
+    codex: {
+      max: number;
+      active: number;
+      available_slots: number;
+    };
+  };
+  active_singletons: string[];
+  forbidden_combinations_active: string[][];
+  safe_class_recommendations: string[];
+}
+
+export interface DispatchPlan {
+  fill_now: DispatchPlanEntry[];
+  lane_saturation_forecast: LaneSaturationForecast;
+}
+
+export interface EvaluateCandidateOptions {
+  doneIssueIds?: Set<string>;
+  singletonLaneTypes?: string[];
+  forbiddenCombinations?: [string, string][];
+}
+
 export interface MaximizationReport {
   generated_at: string;
   dispatch_limits: DispatchLimits;
+  dispatch_plan: DispatchPlan;
   recommended: RecommendationResult[];
   blocked: RecommendationResult[];
   risky: RecommendationResult[];
@@ -67,6 +109,8 @@ const REASON_MESSAGES: Record<string, string> = {
   TIER_C_PATH: 'Candidate touches a Tier C path and should be treated as risky.',
   MIGRATION_PATH: 'Candidate touches a migration-sensitive path and is fail-closed blocked.',
   T1_REQUIRES_PM: 'T1 work requires PM authorization before recommendation.',
+  SINGLETON_ACTIVE: 'Candidate lane type is singleton and already active.',
+  FORBIDDEN_COMBINATION: 'Candidate lane type is forbidden alongside an active lane type.',
   ISOLATED_INSTALL_REQUIRED:
     'Package/API/worker/ingestor lanes stay singleton until isolated install is proven green in the lane cwd.',
 };
@@ -101,6 +145,42 @@ function isTierCPath(fileScope: string): boolean {
     normalized.startsWith('apps/worker/') ||
     normalized.startsWith('apps/ingestor/')
   );
+}
+
+function inferLaneType(fileScope: string[]): string {
+  const searchable = fileScope.map(normalizePath).join(' ');
+  if (/supabase\/migrations|schema|database\.types/.test(searchable)) return 'migration';
+  if (/apps\/worker|apps\/api|distribution|outbox|runtime/.test(searchable)) return 'runtime';
+  if (/model|scoring|calibration/.test(searchable)) return 'modeling';
+  if (/canonical|taxonomy|reference-data/.test(searchable)) return 'data-canonical';
+  if (/docs\/governance|policy|governance/.test(searchable)) return 'governance';
+  if (/test|verification|proof/.test(searchable)) return 'verification';
+  return 'hygiene';
+}
+
+function inferWorkClass(laneType: string, singletonLaneTypes: string[]): string {
+  return singletonLaneTypes.includes(laneType) ? 'singleton' : 'safe';
+}
+
+function activeLaneTypes(activeLanes: LaneManifest[]): string[] {
+  return Array.from(new Set(activeLanes.map((lane) => lane.lane_type).filter(Boolean))).sort();
+}
+
+function hasForbiddenCombination(
+  laneType: string,
+  activeTypes: string[],
+  forbiddenCombinations: [string, string][],
+): boolean {
+  return forbiddenCombinations.some(([left, right]) =>
+    (left === laneType && activeTypes.includes(right)) || (right === laneType && activeTypes.includes(left)),
+  );
+}
+
+function activeForbiddenCombinations(
+  activeTypes: string[],
+  forbiddenCombinations: [string, string][],
+): string[][] {
+  return forbiddenCombinations.filter(([left, right]) => activeTypes.includes(left) && activeTypes.includes(right));
 }
 
 function buildResult(
@@ -194,13 +274,23 @@ export function evaluateCandidates(
   candidates: CandidateLane[],
   activeLanes: LaneManifest[],
   limits: { maxClaude: number; maxCodex: number },
+  options: EvaluateCandidateOptions = {},
 ): MaximizationReport {
-  const doneIssueIds = readDoneIssueIds();
+  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const doneIssueIds = options.doneIssueIds ?? readDoneIssueIds();
+  const singletonLaneTypes = options.singletonLaneTypes ?? cfg?.singleton_types ?? [
+    'runtime',
+    'migration',
+    'modeling',
+    'data-canonical',
+  ];
+  const forbiddenCombinations = options.forbiddenCombinations ?? cfg?.forbidden_combinations ?? [];
   const activeClaude = activeLanes.filter((lane) => resolveLaneExecutor(lane) === 'claude').length;
   const activeCodex = activeLanes.filter((lane) => {
     const executor = resolveLaneExecutor(lane);
     return executor === 'codex-cli' || executor === 'codex-cloud';
   }).length;
+  const initialActiveTypes = activeLaneTypes(activeLanes);
 
   const report: MaximizationReport = {
     generated_at: new Date().toISOString(),
@@ -212,14 +302,62 @@ export function evaluateCandidates(
       claude_available: activeClaude < limits.maxClaude,
       codex_available: activeCodex < limits.maxCodex,
     },
+    dispatch_plan: {
+      fill_now: [],
+      lane_saturation_forecast: {
+        executors: {
+          claude: {
+            max: limits.maxClaude,
+            active: activeClaude,
+            available_slots: Math.max(0, limits.maxClaude - activeClaude),
+          },
+          codex: {
+            max: limits.maxCodex,
+            active: activeCodex,
+            available_slots: Math.max(0, limits.maxCodex - activeCodex),
+          },
+        },
+        active_singletons: initialActiveTypes.filter((laneType) => singletonLaneTypes.includes(laneType)),
+        forbidden_combinations_active: activeForbiddenCombinations(initialActiveTypes, forbiddenCombinations),
+        safe_class_recommendations: [],
+      },
+    },
     recommended: [],
     blocked: [],
     risky: [],
     deferred: [],
   };
+  let plannedClaude = 0;
+  let plannedCodex = 0;
+  const plannedLaneTypes = [...initialActiveTypes];
+
+  const remainingSlots = (executor: CandidateLane['executor']): number => {
+    if (executor === 'claude') return Math.max(0, limits.maxClaude - activeClaude - plannedClaude);
+    return Math.max(0, limits.maxCodex - activeCodex - plannedCodex);
+  };
+
+  const pushPlan = (candidate: CandidateLane, laneType: string, workClass: string): void => {
+    const slotIndex = candidate.executor === 'claude'
+      ? activeClaude + plannedClaude + 1
+      : activeCodex + plannedCodex + 1;
+    report.dispatch_plan.fill_now.push({
+      issue_id: candidate.issue_id,
+      executor: candidate.executor,
+      lane_type: laneType,
+      work_class: workClass,
+      file_scope: candidate.file_scope.map(normalizePath),
+      slot_index: slotIndex,
+      explanation: `${candidate.executor} slot ${slotIndex} can run now; ${workClass} ${laneType} work has no active singleton, forbidden combination, or path overlap conflict.`,
+    });
+    if (candidate.executor === 'claude') plannedClaude += 1;
+    else plannedCodex += 1;
+    if (!plannedLaneTypes.includes(laneType)) plannedLaneTypes.push(laneType);
+  };
 
   for (const candidate of candidates) {
     const fileScope = candidate.file_scope.map(normalizePath);
+    const laneType = candidate.lane_type ?? inferLaneType(fileScope);
+    const workClass = candidate.work_class ?? inferWorkClass(laneType, singletonLaneTypes);
     const hasIncompleteDependency = candidate.blocked_by.some((issueId) => !doneIssueIds.has(issueId));
     if (hasIncompleteDependency) {
       report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'BLOCKED_DEP'));
@@ -236,13 +374,23 @@ export function evaluateCandidates(
       continue;
     }
 
-    if (candidate.executor === 'claude' && activeClaude >= limits.maxClaude) {
+    if (candidate.executor === 'claude' && remainingSlots(candidate.executor) <= 0) {
       report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'DISPATCH_LIMIT_CLAUDE'));
       continue;
     }
 
-    if (candidate.executor === 'codex-cli' && activeCodex >= limits.maxCodex) {
+    if (candidate.executor === 'codex-cli' && remainingSlots(candidate.executor) <= 0) {
       report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'DISPATCH_LIMIT_CODEX'));
+      continue;
+    }
+
+    if (singletonLaneTypes.includes(laneType) && plannedLaneTypes.includes(laneType)) {
+      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'SINGLETON_ACTIVE'));
+      continue;
+    }
+
+    if (hasForbiddenCombination(laneType, plannedLaneTypes, forbiddenCombinations)) {
+      report.blocked.push(buildResult(candidate.issue_id, 'blocked', 'FORBIDDEN_COMBINATION'));
       continue;
     }
 
@@ -268,7 +416,19 @@ export function evaluateCandidates(
     }
 
     report.recommended.push(buildResult(candidate.issue_id, 'recommended'));
+    pushPlan(candidate, laneType, workClass);
   }
+
+  const forecast = report.dispatch_plan.lane_saturation_forecast;
+  forecast.executors.claude.available_slots = Math.max(0, limits.maxClaude - activeClaude - plannedClaude);
+  forecast.executors.codex.available_slots = Math.max(0, limits.maxCodex - activeCodex - plannedCodex);
+  const availableSafeSlots = forecast.executors.claude.available_slots + forecast.executors.codex.available_slots;
+  forecast.safe_class_recommendations = availableSafeSlots > 0
+    ? [
+        `Queue up to ${availableSafeSlots} hygiene, verification, governance, or ops-tooling lanes with disjoint file scopes.`,
+        'Avoid runtime, migration, modeling, and data-canonical work while matching singleton classes are active.',
+      ]
+    : ['All configured executor slots are saturated by active or planned lanes.'];
 
   return report;
 }

@@ -104,6 +104,7 @@ export type LaneReconciliationState =
   | 'manifest_without_branch'
   | 'open_pr_without_manifest'
   | 'active_pr_closed_manifest'
+  | 'merged_pr_active_manifest'
   | 'merged_branch_active_lease'
   | 'stale_lease_safe_reclaim'
   | 'stale_lease_manual_escalation'
@@ -645,6 +646,16 @@ function classifyLane(
     };
   }
 
+  if (activeManifest && pr?.state === 'merged') {
+    return {
+      issue_id: issueId,
+      state: 'merged_pr_active_manifest',
+      lifecycle: 'closing',
+      fail_closed: true,
+      detail: `PR is merged but manifest status is ${activeManifest.status}; record merge evidence before closeout/cleanup.`,
+    };
+  }
+
   if (activeManifest && !branchPresent) {
     return {
       issue_id: issueId,
@@ -742,6 +753,7 @@ function buildStateMachineReport(input: FilteredInput, now: Date): Orchestration
     repair_semantics: [
       'missing manifests fail closed and route to manifest repair/reconstruction',
       'lease reclaim appends reclaim_history instead of deleting the lease',
+      'merged PRs with active manifests route to lane-manifest record-merge before lane-close',
       'historical Linear decay is advisory unless the issue is current or active',
       'all repair commands must be safe to rerun or must no-op when already repaired',
     ],
@@ -806,6 +818,17 @@ function buildRepairPlan(
         command: `pnpm ops:manifest-repair --issue ${lane.issue_id} --from-pr ${pr.number} --dry-run`,
         reason: lane.detail,
         safe_to_apply: false,
+        requires_pm: false,
+        audit_trail: auditTrail,
+      });
+    } else if (lane.state === 'merged_pr_active_manifest' && pr) {
+      actions.push({
+        id: 'record_merge_on_manifest',
+        issue_id: lane.issue_id,
+        state: lane.state,
+        command: `pnpm ops:lane-manifest -- record-merge ${lane.issue_id} --pr ${pr.number} --json`,
+        reason: lane.detail,
+        safe_to_apply: true,
         requires_pm: false,
         audit_trail: auditTrail,
       });
@@ -972,6 +995,30 @@ export function buildOrchestrationReconcilerReport(
       evidence: [
         evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, `status=${manifest.status}`),
         branchEvidence(input.branches, manifest.branch),
+      ],
+    });
+  }
+
+  for (const pr of input.pullRequests.filter((entry) => entry.state === 'merged')) {
+    const issueId = issueIdFromBranch(pr.branch);
+    if (!issueId) {
+      continue;
+    }
+    const manifest = activeManifestsByIssue.get(issueId);
+    if (!manifest) {
+      continue;
+    }
+    addCheck(checks, {
+      id: 'ORCH-MERGED-PR-ACTIVE-MANIFEST',
+      requirement: 'required',
+      verdict: 'fail',
+      issue_id: issueId,
+      branch: pr.branch,
+      pr_url: pr.url,
+      detail: `PR is merged but lane manifest remains ${manifest.status}; record merge SHA/status before lane closeout`,
+      evidence: [
+        evidence('github_pr', pr.url, `state=merged; merged_at=${pr.merged_at ?? 'unknown'}; merge_sha=${pr.merge_sha ?? 'missing'}`),
+        evidence('lane_manifest', `docs/06_status/lanes/${issueId}.json`, `status=${manifest.status}; commit_sha=${manifest.commit_sha ?? 'null'}`),
       ],
     });
   }

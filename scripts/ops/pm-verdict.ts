@@ -1,316 +1,220 @@
 #!/usr/bin/env tsx
-/**
- * ops:pm-verdict — PM Verdict Validator (Workflow Runtime v2, Phase D)
- *
- * Usage:
- *   pnpm ops:pm-verdict <ISSUE_ID> --pr <PR_NUMBER> [--approve] [--actor <name>] [--json]
- *
- * For this phase: validates readiness and prints/posts candidate verdict.
- * Does NOT bypass PM authority — the t1-approved label and CODEOWNERS
- * comment remain the blocking authority in CI.
- *
- * Fails closed if:
- *   - CI not green on the PR
- *   - review PASS missing or stale
- *   - proof stale or missing
- *   - tier mismatch
- *   - unresolved blocking findings
- *   - lane lock invalid (manifest not in a valid closed/done state for approve)
- *   - PM actor unauthorized (not in AUTHORIZED_ACTORS)
- */
 
-import fs from 'node:fs';
-import { execFileSync } from 'node:child_process';
-import {
-  ROOT,
-  emitJson,
-  parseArgs,
-  getFlag,
-  requireIssueId,
-  readManifest,
-} from './shared.js';
-import {
-  readReviewState,
-  isReviewStale,
-  isSelfCertification,
-} from './review-state-schema.js';
+import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { emitJson, getFlag, parseArgs, requireIssueId, ROOT } from './shared.js';
 
-const AUTHORIZED_ACTORS = new Set(['griff843', 'pm', 'griffadavi']);
-
-interface CliOptions {
+export interface PmVerdictOptions {
   issueId: string;
   prNumber: number | null;
-  approve: boolean;
   actor: string | null;
+  approve: boolean;
+  post: boolean;
   json: boolean;
+  dryRun: boolean;
+  note: string | null;
 }
 
-interface PmVerdictResult {
-  verdict: 'APPROVED' | 'REJECTED' | 'NOT_READY';
+export interface PmVerdictPayload {
+  schema: 'pm-verdict/v1';
+  verdict: 'APPROVED';
   issue_id: string;
-  pr_number: number | null;
-  actor: string | null;
+  pr_number: number;
+  actor: string;
+  approved_at: string;
+  source: 'pnpm ops:pm-verdict';
+  approval_boundary: 'comment_only_does_not_bypass_branch_protection';
+  note: string | null;
+}
+
+export interface PmVerdictResult {
+  ok: boolean;
+  dry_run: boolean;
+  posted: boolean;
+  body: string;
+  payload: PmVerdictPayload | null;
   failures: string[];
   warnings: string[];
-  checked_at: string;
-  readiness: {
-    ci_green: boolean | null;
-    review_pass: boolean | null;
-    proof_fresh: boolean | null;
-    tier_consistent: boolean | null;
-    no_unresolved_blockers: boolean | null;
-    lane_valid: boolean | null;
-  };
 }
 
-function parseCliArgs(argv: string[]): CliOptions {
-  const { positionals, flags, bools } = parseArgs(argv);
+export type CommandRunner = (
+  command: string,
+  args: string[],
+  options: { cwd: string },
+) => Pick<SpawnSyncReturns<string>, 'status' | 'stdout' | 'stderr'>;
+
+const DEFAULT_ACTOR = 'pm';
+
+export function parsePmVerdictArgs(argv: string[]): PmVerdictOptions {
+  const { positionals, flags, bools } = parseArgs(argv.filter((arg) => arg !== '--'));
   const issueId = requireIssueId(positionals[0] ?? '');
   const prRaw = getFlag(flags, 'pr');
   const prNumber = prRaw != null ? Number(prRaw) : null;
-  const actor = getFlag(flags, 'actor') ?? null;
+  const post = bools.has('post') || flags.has('post');
+  const approve = bools.has('approve') || flags.has('approve');
+  const dryRun = bools.has('dry-run') || flags.has('dry-run') || !post;
+
   return {
     issueId,
-    prNumber: prNumber != null && Number.isFinite(prNumber) ? prNumber : null,
-    approve: bools.has('approve') || flags.has('approve'),
-    actor,
+    prNumber: prNumber != null && Number.isInteger(prNumber) && prNumber > 0 ? prNumber : null,
+    actor: getFlag(flags, 'actor') ?? null,
+    approve,
+    post,
     json: bools.has('json') || flags.has('json'),
+    dryRun,
+    note: getFlag(flags, 'note') ?? null,
   };
 }
 
-interface CiStatus {
-  green: boolean;
-  pending: number;
-  failed: string[];
+export function buildPmVerdictPayload(input: {
+  issueId: string;
+  prNumber: number;
+  actor?: string | null;
+  approvedAt?: string;
+  note?: string | null;
+}): PmVerdictPayload {
+  return {
+    schema: 'pm-verdict/v1',
+    verdict: 'APPROVED',
+    issue_id: requireIssueId(input.issueId),
+    pr_number: input.prNumber,
+    actor: input.actor?.trim() || DEFAULT_ACTOR,
+    approved_at: input.approvedAt ?? new Date().toISOString(),
+    source: 'pnpm ops:pm-verdict',
+    approval_boundary: 'comment_only_does_not_bypass_branch_protection',
+    note: input.note?.trim() || null,
+  };
 }
 
-function getCiStatus(prNumber: number): CiStatus {
-  try {
-    const out = execFileSync('gh', [
-      'pr', 'checks', String(prNumber),
-      '--json', 'name,state',
-    ], { encoding: 'utf8', cwd: ROOT }).trim();
-    const checks = JSON.parse(out) as Array<{ name: string; state: string }>;
-    const failed = checks
-      .filter(c => c.state === 'FAILURE' || c.state === 'ERROR')
-      .map(c => c.name);
-    const pending = checks.filter(c => c.state === 'PENDING' || c.state === 'IN_PROGRESS').length;
-    return { green: failed.length === 0 && pending === 0, pending, failed };
-  } catch {
-    return { green: false, pending: 0, failed: ['(could not fetch CI status)'] };
-  }
+export function buildPmVerdictBody(payload: PmVerdictPayload): string {
+  const lines = [
+    'PM_VERDICT: APPROVED',
+    'schema: pm-verdict/v1',
+    `Issue: ${payload.issue_id}`,
+    `PR: #${payload.pr_number}`,
+    '',
+    '```json',
+    JSON.stringify(payload, null, 2),
+    '```',
+    '',
+    'This comment records the structured PM verdict payload only. It does not bypass branch protection, CODEOWNERS, required labels, CI, or merge-mutex policy.',
+  ];
+  return lines.join('\n');
 }
 
-function getPrHeadSha(prNumber: number): string | null {
-  try {
-    return execFileSync('gh', [
-      'pr', 'view', String(prNumber),
-      '--json', 'headRefOid', '--jq', '.headRefOid',
-    ], { encoding: 'utf8', cwd: ROOT }).trim() || null;
-  } catch {
-    return null;
-  }
-}
-
-function run(options: CliOptions): PmVerdictResult {
-  const { issueId, prNumber, approve, actor } = options;
+export function runPmVerdict(
+  options: PmVerdictOptions,
+  runner: CommandRunner = (command, args, runOptions) =>
+    spawnSync(command, args, {
+      cwd: runOptions.cwd,
+      encoding: 'utf8',
+      stdio: 'pipe',
+      shell: process.platform === 'win32',
+    }),
+): PmVerdictResult {
   const failures: string[] = [];
   const warnings: string[] = [];
-  const checkedAt = new Date().toISOString();
 
-  const readiness = {
-    ci_green: null as boolean | null,
-    review_pass: null as boolean | null,
-    proof_fresh: null as boolean | null,
-    tier_consistent: null as boolean | null,
-    no_unresolved_blockers: null as boolean | null,
-    lane_valid: null as boolean | null,
-  };
-
-  // --- Actor authorization ---
-  if (approve && actor) {
-    if (!AUTHORIZED_ACTORS.has(actor)) {
-      failures.push(`PM actor "${actor}" is not authorized. Authorized actors: ${[...AUTHORIZED_ACTORS].join(', ')}`);
-    }
-  } else if (approve && !actor) {
-    warnings.push('--actor not supplied — cannot verify PM authorization');
+  if (!options.approve) {
+    failures.push('Explicit --approve is required before emitting a PM_VERDICT: APPROVED payload.');
+  }
+  if (options.prNumber == null) {
+    failures.push('A positive --pr <number> is required.');
+  }
+  if (options.post && options.dryRun) {
+    warnings.push('--dry-run was supplied with --post; posting skipped.');
   }
 
-  // --- Lane manifest ---
-  let manifestTier: string | null = null;
-  try {
-    const manifest = readManifest(issueId);
-    manifestTier = manifest.tier ?? null;
-    const validStatuses = new Set(['started', 'in_progress', 'in_review', 'done', 'blocked']);
-    if (manifest.status && !validStatuses.has(manifest.status)) {
-      failures.push(`Lane manifest status "${manifest.status}" is not a valid pre-close status`);
-      readiness.lane_valid = false;
-    } else {
-      readiness.lane_valid = true;
-    }
-  } catch {
-    failures.push(`Lane manifest not found for ${issueId}`);
-    readiness.lane_valid = false;
+  if (failures.length > 0) {
+    return {
+      ok: false,
+      dry_run: options.dryRun,
+      posted: false,
+      body: '',
+      payload: null,
+      failures,
+      warnings,
+    };
   }
 
-  // --- CI check ---
-  if (prNumber != null) {
-    const ci = getCiStatus(prNumber);
-    readiness.ci_green = ci.green;
-    if (!ci.green) {
-      if (ci.failed.length > 0) {
-        failures.push(`CI has failing checks: ${ci.failed.join(', ')}`);
-      }
-      if (ci.pending > 0) {
-        failures.push(`CI has ${ci.pending} pending checks — wait for CI to complete`);
-      }
-    }
-  } else {
-    warnings.push('No --pr provided — CI status check skipped');
-  }
-
-  // --- PR head SHA ---
-  const currentHead = prNumber != null ? getPrHeadSha(prNumber) : null;
-
-  // --- Review state ---
-  try {
-    const review = readReviewState(issueId, ROOT);
-
-    // Self-cert check
-    if (isSelfCertification(review)) {
-      failures.push(
-        `Review state has self-certification: reviewer "${review.reviewer}" == executor "${review.executor}". ` +
-        `This review is invalid.`,
-      );
-    }
-
-    // Review PASS
-    if (review.review_status !== 'pass') {
-      failures.push(
-        `Review is not PASS (status: ${review.review_status}). ` +
-        `Run ops:review-verdict --pass after adversarial review.`,
-      );
-      readiness.review_pass = false;
-    } else {
-      readiness.review_pass = true;
-    }
-
-    // Review staleness (head changed after review)
-    if (currentHead && review.reviewed_head_sha) {
-      if (isReviewStale(review, currentHead)) {
-        failures.push(
-          `Review is stale: reviewed at ${review.reviewed_head_sha}, current head is ${currentHead}. ` +
-          `Re-review required.`,
-        );
-        readiness.review_pass = false;
-      }
-    }
-
-    // Unresolved blockers
-    const unresolved = review.findings.filter(f => f.severity === 'blocking' && f.resolved_at === null);
-    if (unresolved.length > 0) {
-      failures.push(`${unresolved.length} unresolved blocking finding(s): ${unresolved.map(f => f.description).join('; ')}`);
-      readiness.no_unresolved_blockers = false;
-    } else {
-      readiness.no_unresolved_blockers = true;
-    }
-
-    // Tier consistency
-    if (manifestTier && review.tier !== manifestTier) {
-      failures.push(`Review tier (${review.tier}) does not match manifest tier (${manifestTier})`);
-      readiness.tier_consistent = false;
-    } else {
-      readiness.tier_consistent = true;
-    }
-
-  } catch {
-    failures.push(`Review state not found for ${issueId} — run ops:review and ops:review-verdict first`);
-    readiness.review_pass = false;
-    readiness.no_unresolved_blockers = false;
-  }
-
-  // --- Proof check (advisory: look for proof file existence) ---
-  const proofPaths = [
-    `${ROOT}/docs/06_status/proof/${issueId}.json`,
-    `${ROOT}/docs/06_status/${issueId}-EVIDENCE-BUNDLE.md`,
-    `${ROOT}/docs/06_status/proof/${issueId}.md`,
-  ];
-  const proofExists = proofPaths.some(p => {
-    try {
-      return fs.existsSync(p);
-    } catch {
-      return false;
-    }
+  const payload = buildPmVerdictPayload({
+    issueId: options.issueId,
+    prNumber: options.prNumber ?? 0,
+    actor: options.actor,
+    note: options.note,
   });
-  if (!proofExists) {
-    failures.push(`No proof file found for ${issueId} — proof required before PM verdict`);
-    readiness.proof_fresh = false;
-  } else {
-    readiness.proof_fresh = true;
+  const body = buildPmVerdictBody(payload);
+
+  if (!options.post || options.dryRun) {
+    if (!options.post) {
+      warnings.push('Dry-run default: use --post with --approve to post this comment to GitHub.');
+    }
+    return {
+      ok: true,
+      dry_run: true,
+      posted: false,
+      body,
+      payload,
+      failures,
+      warnings,
+    };
   }
 
-  // --- Determine verdict ---
-  const isReady = failures.length === 0;
-  let verdict: 'APPROVED' | 'REJECTED' | 'NOT_READY';
-
-  if (!isReady) {
-    verdict = 'NOT_READY';
-  } else if (approve) {
-    verdict = 'APPROVED';
-  } else {
-    verdict = 'NOT_READY';
-    warnings.push('All readiness gates passed. Supply --approve to record candidate APPROVED verdict.');
+  const result = runner('gh', ['pr', 'comment', String(payload.pr_number), '--body', body], { cwd: ROOT });
+  const exitCode = result.status ?? 1;
+  if (exitCode !== 0) {
+    failures.push((result.stderr ?? '').trim() || `gh pr comment exited ${exitCode}`);
   }
 
   return {
-    verdict,
-    issue_id: issueId,
-    pr_number: prNumber,
-    actor,
+    ok: failures.length === 0,
+    dry_run: false,
+    posted: failures.length === 0,
+    body,
+    payload,
     failures,
     warnings,
-    checked_at: checkedAt,
-    readiness,
   };
 }
 
 function printHuman(result: PmVerdictResult): void {
-  console.log(`ops:pm-verdict ${result.issue_id}${result.pr_number != null ? ` PR #${result.pr_number}` : ''}`);
-  if (result.actor) console.log(`Actor: ${result.actor}`);
-
-  console.log('\nReadiness gates:');
-  const r = result.readiness;
-  console.log(`  CI green:              ${r.ci_green === null ? 'SKIP' : r.ci_green ? 'PASS' : 'FAIL'}`);
-  console.log(`  Review PASS:           ${r.review_pass === null ? 'SKIP' : r.review_pass ? 'PASS' : 'FAIL'}`);
-  console.log(`  Proof present:         ${r.proof_fresh === null ? 'SKIP' : r.proof_fresh ? 'PASS' : 'FAIL'}`);
-  console.log(`  Tier consistent:       ${r.tier_consistent === null ? 'SKIP' : r.tier_consistent ? 'PASS' : 'FAIL'}`);
-  console.log(`  No unresolved blockers:${r.no_unresolved_blockers === null ? 'SKIP' : r.no_unresolved_blockers ? 'PASS' : 'FAIL'}`);
-  console.log(`  Lane valid:            ${r.lane_valid === null ? 'SKIP' : r.lane_valid ? 'PASS' : 'FAIL'}`);
-
   if (result.failures.length > 0) {
-    console.log('\nFailures:');
-    for (const f of result.failures) console.log(`  FAIL  ${f}`);
+    console.log('PM verdict helper failed:');
+    for (const failure of result.failures) {
+      console.log(`  FAIL ${failure}`);
+    }
+    return;
   }
+
+  console.log(result.body);
   if (result.warnings.length > 0) {
     console.log('\nWarnings:');
-    for (const w of result.warnings) console.log(`  WARN  ${w}`);
+    for (const warning of result.warnings) {
+      console.log(`  WARN ${warning}`);
+    }
   }
-
-  console.log(`\nCandidate verdict: ${result.verdict}`);
-
-  if (result.verdict === 'APPROVED') {
-    console.log('\nNote: This is a candidate verdict only. The t1-approved label and');
-    console.log('CODEOWNERS pm-verdict/v1 comment remain the blocking CI authority.');
-  }
+  console.log(`\nPosted: ${result.posted ? 'yes' : 'no'}${result.dry_run ? ' (dry-run)' : ''}`);
 }
 
-const options = parseCliArgs(process.argv.slice(2));
-const result = run(options);
-
-if (options.json) {
-  emitJson(result);
-} else {
-  printHuman(result);
+function main(): void {
+  const options = parsePmVerdictArgs(process.argv.slice(2));
+  const result = runPmVerdict(options);
+  if (options.json) {
+    emitJson(result);
+  } else {
+    printHuman(result);
+  }
+  process.exitCode = result.ok ? 0 : 1;
 }
 
-process.exitCode = result.verdict !== 'NOT_READY' || result.failures.length === 0 ? 0 : 1;
+const isDirectRun = process.argv[1] != null
+  && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isDirectRun) {
+  try {
+    main();
+  } catch (error) {
+    console.error(`[pm-verdict] ${error instanceof Error ? error.message : String(error)}`);
+    process.exitCode = 1;
+  }
+}

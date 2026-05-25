@@ -2,9 +2,45 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse as parseYaml } from 'yaml';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
 import { evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
 import { ROOT } from './shared.js';
+
+type WorkflowDocument = Record<string, unknown>;
+
+function readWorkflow(name: string): string {
+  return fs.readFileSync(path.join(ROOT, '.github', 'workflows', name), 'utf8');
+}
+
+function readWorkflowYaml(name: string): WorkflowDocument {
+  const parsed = parseYaml(readWorkflow(name)) as unknown;
+  assert.ok(parsed && typeof parsed === 'object' && !Array.isArray(parsed), `${name} must parse as a YAML object`);
+  return parsed as WorkflowDocument;
+}
+
+function objectField(input: WorkflowDocument, key: string): WorkflowDocument {
+  const value = input[key];
+  assert.ok(value && typeof value === 'object' && !Array.isArray(value), `${key} must be an object`);
+  return value as WorkflowDocument;
+}
+
+function stringArrayField(input: WorkflowDocument, key: string): string[] {
+  const value = input[key];
+  assert.ok(Array.isArray(value), `${key} must be an array`);
+  assert.ok(value.every((item) => typeof item === 'string'), `${key} must contain only strings`);
+  return value as string[];
+}
+
+function stringField(input: WorkflowDocument, key: string): string {
+  const value = input[key];
+  assert.strictEqual(typeof value, 'string', `${key} must be a string`);
+  return value;
+}
+
+function workflowEvent(name: string, eventName: string): WorkflowDocument {
+  return objectField(objectField(readWorkflowYaml(name), 'on'), eventName);
+}
 
 test('migration linter flags destructive audit_log statements with file and statement context', async () => {
   const { lintMigrationContent } = await import('../lint-migrations.mjs');
@@ -94,4 +130,56 @@ test('tier label sync runs on opened so PM does not manually apply GitHub tier l
     /(^|,\s*)opened(\s*,|$)/,
     'tier-label-check.yml must run on pull_request.opened to apply missing tier evidence automatically',
   );
+});
+
+test('merge gate is structurally wired for PM verdict comments without opened PR races', () => {
+  const pullRequest = workflowEvent('merge-gate.yml', 'pull_request');
+  const issueComment = workflowEvent('merge-gate.yml', 'issue_comment');
+  const jobs = objectField(readWorkflowYaml('merge-gate.yml'), 'jobs');
+  const gateIf = stringField(objectField(jobs, 'gate'), 'if');
+
+  assert.deepStrictEqual(stringArrayField(pullRequest, 'types'), [
+    'synchronize',
+    'reopened',
+    'labeled',
+    'unlabeled',
+    'ready_for_review',
+  ]);
+  assert.deepStrictEqual(stringArrayField(issueComment, 'types'), ['created', 'edited']);
+  assert.match(gateIf, /PM_VERDICT:/, 'merge gate must respond to PM verdict comments');
+});
+
+test('required pull-request gates are wired to executable blocking jobs', () => {
+  const requiredGateJobs = [
+    ['executor-result-validator.yml', 'validate', 'Executor Result Validation'],
+    ['file-scope-lock-check.yml', 'check', 'File scope lock'],
+    ['r-level-compliance-check.yml', 'r-level-compliance-check', 'R-Level Compliance Check'],
+    ['return-review-packet.yml', 'return-review-packet', 'Return review packet'],
+    ['proof-auditor-gate.yml', 'proof-auditor-gate', 'Proof Auditor Gate'],
+    ['runtime-verifier-gate.yml', 'runtime-verifier-gate', 'Runtime Verifier Gate'],
+  ] as const;
+
+  for (const [workflowName, jobId, jobName] of requiredGateJobs) {
+    const workflow = readWorkflowYaml(workflowName);
+    const pullRequest = objectField(objectField(workflow, 'on'), 'pull_request');
+    const jobs = objectField(workflow, 'jobs');
+    const job = objectField(jobs, jobId);
+
+    assert.ok(
+      stringArrayField(pullRequest, 'types').includes('synchronize'),
+      `${workflowName} must rerun on synchronize`,
+    );
+    assert.strictEqual(job.name, jobName, `${workflowName} must expose the required check name`);
+    assert.ok(Array.isArray(job.steps), `${workflowName} job ${jobId} must have executable steps`);
+  }
+});
+
+test('proof and runtime gates watch proof, lane, and ops control-plane paths', () => {
+  const proofPaths = stringArrayField(workflowEvent('proof-auditor-gate.yml', 'pull_request'), 'paths');
+  const runtimePaths = stringArrayField(workflowEvent('runtime-verifier-gate.yml', 'pull_request'), 'paths');
+
+  assert.ok(proofPaths.includes('docs/06_status/proof/**'), 'proof auditor must watch proof directories');
+  assert.ok(runtimePaths.includes('docs/06_status/proof/**'), 'runtime verifier must watch proof directories');
+  assert.ok(runtimePaths.includes('docs/06_status/lanes/**'), 'runtime verifier must watch lane manifests');
+  assert.ok(runtimePaths.includes('scripts/ops/**'), 'runtime verifier must watch ops control-plane changes');
 });

@@ -239,6 +239,70 @@ test('dispatch_limits reports the correct active counts', () => {
   });
 });
 
+test('dispatch_plan fills available executor slots sequentially and forecasts remaining capacity', () => {
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96816C1', { executor: 'codex-cli', file_scope: ['scripts/ops/c1.ts'] }),
+      makeCandidate('UTV2-96816C2', { executor: 'codex-cli', file_scope: ['scripts/ops/c2.ts'] }),
+      makeCandidate('UTV2-96816C3', { executor: 'codex-cli', file_scope: ['scripts/ops/c3.ts'] }),
+      makeCandidate('UTV2-96816CL', { executor: 'claude', file_scope: ['scripts/ops/claude-safe.ts'] }),
+    ],
+    [makeManifest('UTV2-96816A', { executor: 'codex-cli', file_scope_lock: ['scripts/ops/active.ts'] })],
+    { maxClaude: 2, maxCodex: 3 },
+    { doneIssueIds: new Set(), singletonLaneTypes: ['runtime'], forbiddenCombinations: [] },
+  );
+
+  assert.deepStrictEqual(report.dispatch_plan.fill_now.map((entry) => entry.issue_id), [
+    'UTV2-96816C1',
+    'UTV2-96816C2',
+    'UTV2-96816CL',
+  ]);
+  assert.deepStrictEqual(report.blocked[0]?.reason_codes, ['DISPATCH_LIMIT_CODEX']);
+  assert.deepStrictEqual(report.dispatch_plan.lane_saturation_forecast.executors, {
+    claude: { max: 2, active: 0, available_slots: 1 },
+    codex: { max: 3, active: 1, available_slots: 0 },
+  });
+});
+
+test('dispatch_plan explains singleton and forbidden-combination constraints', () => {
+  const activeLanes = [
+    makeManifest('UTV2-96817A', {
+      lane_type: 'runtime',
+      file_scope_lock: ['scripts/ops/runtime-active.ts'],
+    }),
+  ];
+  const report = evaluateCandidates(
+    [
+      makeCandidate('UTV2-96817S', {
+        lane_type: 'runtime',
+        file_scope: ['scripts/ops/runtime-next.ts'],
+      }),
+      makeCandidate('UTV2-96817F', {
+        lane_type: 'modeling',
+        file_scope: ['scripts/ops/modeling-next.ts'],
+      }),
+      makeCandidate('UTV2-96817H', {
+        lane_type: 'hygiene',
+        file_scope: ['scripts/ops/hygiene-next.ts'],
+      }),
+    ],
+    activeLanes,
+    { maxClaude: 1, maxCodex: 4 },
+    {
+      doneIssueIds: new Set(),
+      singletonLaneTypes: ['runtime', 'modeling'],
+      forbiddenCombinations: [['runtime', 'modeling']],
+    },
+  );
+
+  assert.deepStrictEqual(report.blocked.map((entry) => entry.reason_codes), [
+    ['SINGLETON_ACTIVE'],
+    ['FORBIDDEN_COMBINATION'],
+  ]);
+  assert.deepStrictEqual(report.dispatch_plan.fill_now.map((entry) => entry.issue_id), ['UTV2-96817H']);
+  assert.deepStrictEqual(report.dispatch_plan.lane_saturation_forecast.active_singletons, ['runtime']);
+});
+
 test('multiple candidates with mixed outcomes appear in the correct buckets', () => {
   const activeLanes = [makeManifest('UTV2-96813A', { file_scope_lock: ['scripts/ops/locked'] })];
   withTempManifests([makeManifest('UTV2-96813D', { status: 'done' })], () => {
