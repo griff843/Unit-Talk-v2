@@ -100,3 +100,46 @@ export interface StageReplayResult {
   started_at: string;
   completed_at: string;
 }
+
+// ─────────────────────────────────────────────────────────────
+// DIVERGENCE REPORT (INIT-1.2.3 / UTV2-1092)
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * A structured report of divergence detected between replay output and
+ * historical production output.
+ *
+ * Design laws:
+ *   - Divergence is zero-tolerance — every divergence produces a report.
+ *   - Reports are first-class escalation artifacts; they are never suppressed.
+ *   - Severity is always 'critical' — there is no advisory divergence in replay.
+ *   - The report is emitted and routed to the Governance Reviewer before halt.
+ *
+ * INIT-1.2.3 (UTV2-1092): required runtime entity.
+ */
+export interface ReplayDivergenceReport {
+  /** Unique ID for this divergence report. */
+  report_id: string;
+  /** The replay run that produced the divergence. */
+  run_id: string;
+  /** ISO-8601 timestamp when divergence was detected. */
+  detected_at: string;
+  /** Pipeline stage where divergence occurred. */
+  stage: PipelineStage;
+  /** Item identifier within the stage (e.g., pick_id, record_id). */
+  item_id: string;
+  /** Expected output from historical production data (immutable reference). */
+  expected: Readonly<Record<string, unknown>>;
+  /** Actual output from the replay run. */
+  actual: Readonly<Record<string, unknown>>;
+  /** Field-level differences: each entry names a field and its expected/actual values. */
+  field_diffs: ReadonlyArray<{
+    field: string;
+    expected_value: unknown;
+    actual_value: unknown;
+  }>;
+  /** Human-readable summary of what diverged. */
+  description: string;
+  /** Always 'critical' — divergence is zero-tolerance in replay. */
+  severity: 'critical';
+}
