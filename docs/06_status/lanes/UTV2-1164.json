@@ -18,6 +18,11 @@
     "scripts/ops/merge-risk.ts"
   ],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1164.yml",
+    "docs/06_status/lanes/UTV2-1164.json",
+    "docs/06_status/proof/UTV2-1164/diff-summary.md",
+    "docs/06_status/proof/UTV2-1164/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1164/verification.log",
     "scripts/ops/merge-risk.test.ts",
     "scripts/ops/merge-risk.ts"
   ],
