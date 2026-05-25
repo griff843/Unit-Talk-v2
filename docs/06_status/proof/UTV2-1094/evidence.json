@@ -1,0 +1,102 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1094",
+  "title": "INIT-1.3.4 — Production and Replay Integration; False-Confidence Test Retirement",
+  "tier": "T1",
+  "lane_type": "governance",
+  "sha_binding": {
+    "merge_sha": "set-by-ci",
+    "verified_source_sha": "b9ec51dcaf04af0c7c768972304cfe3d3594ab1b",
+    "verified_source_note": "Branch HEAD at time of static verification; merge SHA will be bound post-merge",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-25T21:10:00.000Z",
+  "r_level": {
+    "level": "R0",
+    "reason": "R-level check PASS — no R-level artifacts required for this diff (governance integration; no lifecycle-fsm, ingestor-provider, or outbox paths changed)"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1094-dispatch"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "exit_code": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "invariant_integration_tests": {
+      "status": "PASS",
+      "file": "apps/api/src/invariant-production-integration.test.ts",
+      "tests_pass": 28,
+      "tests_fail": 0,
+      "suites": 5
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — no R-level artifacts required (governance integration; no lifecycle-fsm, ingestor-provider, or outbox paths)"
+    },
+    "false_confidence_retirement": {
+      "status": "PASS",
+      "file_deleted": "apps/api/src/governance-readiness.test.ts",
+      "replacement": "apps/api/src/invariant-production-integration.test.ts",
+      "reason": "Static source-grep test (gap #45) retired and replaced with real invariant injection tests"
+    },
+    "adversarial_tests": [
+      "INV-0009: delivery_bypassed_outbox=true → violation + quarantine: PASS",
+      "INV-0009: in_memory_queue_used=true → violation + quarantine: PASS",
+      "INV-0009: outbox_outcomes_per_attempt=2 → violation + quarantine: PASS",
+      "INV-0010: silent_fallback_state=qualified → violation + quarantine: PASS",
+      "INV-0010: fallback_on_ambiguity=true → violation + quarantine: PASS",
+      "INV-0014: audit_log_delete_attempted=true → violation + quarantine: PASS",
+      "INV-0014: audit_log_update_attempted=true → violation + quarantine: PASS",
+      "INV-0014: audit_log_rows_pruned=5 → violation + quarantine: PASS",
+      "INV-0015: transition settled→pending → violation + quarantine: PASS",
+      "INV-0015: retroactive_terminal_change=true → violation + quarantine: PASS",
+      "clean context → zero runtime violations: PASS",
+      "QuarantineProcessor wired in replay runner → quarantine fires before replay halts: PASS",
+      "All registered invariants are fail-closed — no bypass class: PASS"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-25T21:10:00Z",
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "skipped": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "note": "7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm. Submission, settlement, outbox atomicity, participant dedup, and correction chain all verified against real DB."
+    },
+    "queries": [
+      {
+        "command": "pnpm test:db",
+        "file": "apps/api/src/database-smoke.test.ts",
+        "result": "PASS",
+        "checked_at": "2026-05-25T21:10:00Z"
+      }
+    ],
+    "row_counts": [
+      {
+        "surface": "database-smoke.test.ts",
+        "tests": 7,
+        "passed": 7,
+        "failed": 0,
+        "duration_ms": 117917.783964
+      }
+    ]
+  },
+  "constitutional_claims": [
+    "InvariantEngine is wired to QuarantineManager in the production integration path — violations auto-quarantine",
+    "Every RUNTIME_EVALUABLE invariant (INV-0009, INV-0010, INV-0014, INV-0015) has an injection test proving detection and quarantine",
+    "governance-readiness.test.ts (static source-grep, gap #45) is retired — replaced by 28 real injection tests",
+    "QuarantineProcessor interface added to ReplayLifecycleRunner — violations detected in replay trigger quarantine before halting",
+    "All 15 registered invariants have quarantine_behavior: fail-closed — no advisory bypass class exists",
+    "Replay runner with InvariantEngine injection: clean pick passes, violated pick halts with quarantine",
+    "Unblocks UTV2-1104"
+  ]
+}

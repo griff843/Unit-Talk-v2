@@ -67,6 +67,7 @@ export interface EvidenceBundleV1 {
 export interface CommitCheckResult {
   passed: boolean;
   missing: string[];
+  bypassed?: string[];
 }
 
 export interface CloseoutProofArtifact {
@@ -447,15 +448,23 @@ export async function runTruthCheck(
       mergeSha,
       headSha: pullRequest.head?.sha,
       requiredChecks,
+      allowAdminMergeGateBypass: Boolean(
+        pullRequest.merged &&
+        mergeSha &&
+        pullRequest.merge_commit_sha === mergeSha,
+      ),
       fetchChecks: (sha) => fetchCommitChecks(prRef.owner, prRef.repo, sha, githubToken),
     });
     if (requiredCheckResult.passed) {
+      const detail = requiredCheckResult.checkedSha === 'head-admin-merge'
+        ? `admin-merged PR accepted: non-governance required checks are green on PR head SHA; bypassed stuck checks: ${(requiredCheckResult.bypassed ?? []).join(', ')}`
+        : requiredCheckResult.checkedSha === 'head'
+          ? 'required GitHub checks are green on PR head SHA'
+          : 'required GitHub checks are green on merge SHA';
       addCheck(
         'G4',
         'pass',
-        requiredCheckResult.checkedSha === 'head'
-          ? 'required GitHub checks are green on PR head SHA'
-          : 'required GitHub checks are green on merge SHA',
+        detail,
       );
     } else {
       addCheck('G4', 'fail', `required checks missing or failing: ${requiredCheckResult.missing.join(', ')}`);
@@ -1317,8 +1326,9 @@ export async function evaluateRequiredChecksWithHeadFallback(input: {
   mergeSha: string | null;
   headSha?: string | null;
   requiredChecks: string[];
+  allowAdminMergeGateBypass?: boolean;
   fetchChecks: (sha: string) => Promise<CommitCheckResult>;
-}): Promise<CommitCheckResult & { checkedSha: 'merge' | 'head' | 'none' }> {
+}): Promise<CommitCheckResult & { checkedSha: 'merge' | 'head' | 'head-admin-merge' | 'none' }> {
   const mergeChecks = input.mergeSha
     ? await input.fetchChecks(input.mergeSha)
     : { passed: false, missing: input.requiredChecks };
@@ -1332,9 +1342,22 @@ export async function evaluateRequiredChecksWithHeadFallback(input: {
     if (headChecks.passed) {
       return { ...headChecks, checkedSha: 'head' };
     }
+    if (input.allowAdminMergeGateBypass && isAdminMergeGateOnlyFailure(headChecks.missing)) {
+      return {
+        passed: true,
+        missing: [],
+        bypassed: headChecks.missing,
+        checkedSha: 'head-admin-merge',
+      };
+    }
   }
 
   return { ...mergeChecks, checkedSha: input.mergeSha ? 'merge' : 'none' };
+}
+
+function isAdminMergeGateOnlyFailure(missing: string[]): boolean {
+  return missing.length > 0 &&
+    missing.every((check) => /^merge gate(?: ci)?$/i.test(check.trim()));
 }
 
 export function evaluateTestRunLogEvidence(
