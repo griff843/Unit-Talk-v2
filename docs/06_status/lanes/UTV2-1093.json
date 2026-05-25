@@ -13,6 +13,8 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1093/evidence.json",
     "docs/06_status/proof/UTV2-1093/verification.md",
+    "docs/06_status/lanes/UTV2-1093.json",
+    ".ops/sync/UTV2-1093.yml",
     "packages/verification/src/engine/replay-lifecycle-runner.test.ts",
     "packages/verification/src/engine/replay-lifecycle-runner.ts"
   ],
