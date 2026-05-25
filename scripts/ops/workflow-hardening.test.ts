@@ -158,6 +158,18 @@ test('session start state cache writes only to ignored local output', () => {
   assert.match(fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8'), /^\.out\/$/m);
 });
 
+test('governance lane authority covers Claude hook orchestration files', () => {
+  const manifest = parseYaml(fs.readFileSync(path.join(ROOT, '.lane', 'lanes', 'governance.yml'), 'utf8')) as {
+    allowed_path_globs?: unknown;
+  };
+
+  assert.ok(Array.isArray(manifest.allowed_path_globs), 'governance allowed_path_globs must be an array');
+  assert.ok(
+    manifest.allowed_path_globs.includes('.claude/hooks/**'),
+    'governance lane must allow Claude hook orchestration changes',
+  );
+});
+
 test('required PR check workflows do not create stale merge-gate contexts on opened events', () => {
   const mergeGate = fs.readFileSync(path.join(ROOT, '.github', 'workflows', 'merge-gate.yml'), 'utf8');
   const mergeGatePullRequestBlock = mergeGate.match(/pull_request:\s*\r?\n\s+types:\s*\[([^\]]+)\]/);
