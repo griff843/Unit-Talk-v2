@@ -26,14 +26,58 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1090/evidence.json"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-25T18:24:15.548Z",
-  "heartbeat_at": "2026-05-25T18:24:15.548Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T19:14:41.650Z",
+  "closed_at": "2026-05-25T19:20:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1090-automatic-quarantine-and-escalation.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T19:11:13.854Z",
+      "verdict": "fail",
+      "merge_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+      "failures": [
+        "G4",
+        "C6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T19:13:45.279Z",
+      "verdict": "fail",
+      "merge_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T19:13:53.262Z",
+      "verdict": "fail",
+      "merge_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T19:14:41.650Z",
+      "verdict": "fail",
+      "merge_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+      "failures": [
+        "G4"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
