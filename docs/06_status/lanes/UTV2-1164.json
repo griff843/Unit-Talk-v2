@@ -1,0 +1,50 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1164",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1164-conflict-forecasting",
+  "branch": "codex/utv2-1164-conflict-forecasting",
+  "base_branch": "main",
+  "commit_sha": "61686a8386ac5dc856c658360d64556e525606ea",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/858",
+  "files_changed": [
+    ".ops/sync/UTV2-1164.yml",
+    "docs/06_status/proof/UTV2-1164/diff-summary.md",
+    "docs/06_status/proof/UTV2-1164/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1164/verification.log",
+    "scripts/ops/merge-risk.test.ts",
+    "scripts/ops/merge-risk.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1164.yml",
+    "docs/06_status/lanes/UTV2-1164.json",
+    "docs/06_status/proof/UTV2-1164/diff-summary.md",
+    "docs/06_status/proof/UTV2-1164/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1164/verification.log",
+    "scripts/ops/merge-risk.test.ts",
+    "scripts/ops/merge-risk.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1164/diff-summary.md",
+    "docs/06_status/proof/UTV2-1164/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1164/verification.log"
+  ],
+  "status": "pr_open",
+  "started_at": "2026-05-25T18:48:45.203Z",
+  "heartbeat_at": "2026-05-25T18:48:45.203Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1164-conflict-forecasting.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1164-conflict-forecasting",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

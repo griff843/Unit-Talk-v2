@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
-import { ACTIVE_LOCK_STATUSES, pathsOverlap, type LaneManifest } from './shared.js';
+import { ACTIVE_LOCK_STATUSES, normalizeRepoRelativePaths, pathsOverlap, type LaneManifest } from './shared.js';
 import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 
 export interface MergeRiskCondition {
@@ -14,11 +14,31 @@ export interface MergeRiskReport {
   generated_at: string;
   total_active_lanes: number;
   conditions: MergeRiskCondition[];
+  forecast?: MergeRiskForecast;
   summary: {
     hard_fail: number;
     block: number;
     warning: number;
   };
+}
+
+export interface MergeRiskForecast {
+  candidate_branch: string;
+  base_branch: string;
+  candidate_files: string[];
+  declared_file_scope: string[];
+  conditions: MergeRiskCondition[];
+  merge_order_recommendation: string;
+}
+
+export interface MergeRiskForecastInput {
+  candidateBranch: string;
+  baseBranch: string;
+  candidateFiles: string[];
+  declaredFileScope?: string[];
+  activeLanes: LaneManifest[];
+  baseChangedFiles?: string[];
+  activeLaneChangedFiles?: Record<string, string[]>;
 }
 
 interface PullRequestSummary {
@@ -74,6 +94,32 @@ function touchesTierC(lane: LaneManifest): boolean {
   return laneFiles(lane).some((filePath) =>
     TIER_C_EXACT_PATHS.has(filePath) || TIER_C_PATH_PREFIXES.some((prefix) => filePath.startsWith(prefix)),
   );
+}
+
+function overlappingPaths(leftPaths: string[], rightPaths: string[]): string[] {
+  return uniqueSorted(leftPaths.filter((leftPath) => rightPaths.some((rightPath) => pathsOverlap(leftPath, rightPath))));
+}
+
+function mergeOrderRecommendation(conditions: MergeRiskCondition[]): string {
+  const blockingLaneIds = uniqueSorted(
+    conditions
+      .filter((condition) => condition.severity === 'block' || condition.severity === 'hard_fail')
+      .flatMap((condition) => condition.lanes),
+  );
+  if (blockingLaneIds.length > 0) {
+    return `Must merge after ${blockingLaneIds.join(', ')} or re-scope the candidate branch before merge.`;
+  }
+
+  const hasMainDrift = conditions.some((condition) => condition.code === 'CANDIDATE_MAIN_DRIFT');
+  if (hasMainDrift) {
+    return 'Rebase candidate branch onto base before merge; main has overlapping changes since the branch point.';
+  }
+
+  if (conditions.length > 0) {
+    return 'Review forecast warnings before merge; no active-lane merge dependency was detected.';
+  }
+
+  return 'No active lane or main-drift conflicts forecast.';
 }
 
 function classifyExecutor(lane: LaneManifest): 'codex' | 'claude' | 'unknown' {
@@ -290,6 +336,69 @@ export function detectTierCConflict(lanes: LaneManifest[]): MergeRiskCondition[]
   return conditions;
 }
 
+export function buildMergeConflictForecast(input: MergeRiskForecastInput): MergeRiskForecast {
+  const activeLanes = activeLanesOnly(input.activeLanes);
+  const candidateFiles = normalizeRepoRelativePaths(input.candidateFiles);
+  const declaredFileScope = normalizeRepoRelativePaths(input.declaredFileScope ?? candidateFiles);
+  const baseChangedFiles = normalizeRepoRelativePaths(input.baseChangedFiles ?? []);
+  const activeLaneChangedFiles = input.activeLaneChangedFiles ?? {};
+  const conditions: MergeRiskCondition[] = [];
+
+  const mainOverlap = overlappingPaths(candidateFiles, baseChangedFiles);
+  if (mainOverlap.length > 0) {
+    conditions.push({
+      code: 'CANDIDATE_MAIN_DRIFT',
+      severity: 'warning',
+      lanes: [],
+      detail: `Base branch "${input.baseBranch}" changed candidate paths since branch point: ${mainOverlap.join(', ')}`,
+    });
+  }
+
+  const outOfScope = candidateFiles.filter((filePath) =>
+    !declaredFileScope.some((scopePath) => pathsOverlap(filePath, scopePath)),
+  );
+  if (outOfScope.length > 0) {
+    conditions.push({
+      code: 'CANDIDATE_SCOPE_BLEED',
+      severity: 'warning',
+      lanes: [],
+      detail: `Candidate branch changes files outside declared scope: ${outOfScope.join(', ')}`,
+    });
+  }
+
+  for (const lane of activeLanes) {
+    const lockedOverlap = overlappingPaths(declaredFileScope, laneFiles(lane));
+    if (lockedOverlap.length > 0) {
+      conditions.push({
+        code: 'CANDIDATE_SCOPE_OVERLAP',
+        severity: 'block',
+        lanes: [lane.issue_id],
+        detail: `Candidate declared scope overlaps active lane "${lane.issue_id}": ${lockedOverlap.join(', ')}`,
+      });
+    }
+
+    const laneChangedFiles = normalizeRepoRelativePaths(activeLaneChangedFiles[lane.branch] ?? []);
+    const branchOverlap = overlappingPaths(candidateFiles, laneChangedFiles);
+    if (branchOverlap.length > 0) {
+      conditions.push({
+        code: 'CANDIDATE_ACTIVE_BRANCH_CONFLICT',
+        severity: 'block',
+        lanes: [lane.issue_id],
+        detail: `Candidate branch and active lane "${lane.issue_id}" both change: ${branchOverlap.join(', ')}`,
+      });
+    }
+  }
+
+  return {
+    candidate_branch: input.candidateBranch,
+    base_branch: input.baseBranch,
+    candidate_files: candidateFiles,
+    declared_file_scope: declaredFileScope,
+    conditions,
+    merge_order_recommendation: mergeOrderRecommendation(conditions),
+  };
+}
+
 export function buildMergeRiskReport(input: {
   lanes: LaneManifest[];
   remoteBranches: string[];
@@ -363,11 +472,59 @@ function queryRemoteBranches(root: string): string[] {
     .map((ref) => ref.slice('refs/heads/'.length));
 }
 
+function listDiffFiles(root: string, leftRef: string, rightRef: string): string[] {
+  const stdout = runCommand('git', ['diff', '--name-only', `${leftRef}...${rightRef}`], root);
+  return normalizeRepoRelativePaths(stdout.split(/\r?\n/).map((line) => line.trim()).filter(Boolean));
+}
+
+function currentBranch(root: string): string {
+  return runCommand('git', ['branch', '--show-current'], root);
+}
+
+function parseValue(args: string[], flag: string): string | null {
+  const index = args.indexOf(flag);
+  if (index === -1) {
+    return null;
+  }
+
+  const value = args[index + 1];
+  return value != null && !value.startsWith('--') ? value : null;
+}
+
+function parseList(value: string | null): string[] {
+  if (value == null || value.trim() === '') {
+    return [];
+  }
+
+  return value
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+}
+
+function collectActiveLaneChangedFiles(root: string, baseBranch: string, lanes: LaneManifest[]): Record<string, string[]> {
+  const changedFiles: Record<string, string[]> = {};
+  for (const lane of lanes) {
+    try {
+      changedFiles[lane.branch] = listDiffFiles(root, baseBranch, lane.branch);
+    } catch {
+      try {
+        changedFiles[lane.branch] = listDiffFiles(root, baseBranch, `origin/${lane.branch}`);
+      } catch {
+        changedFiles[lane.branch] = [];
+      }
+    }
+  }
+
+  return changedFiles;
+}
+
 async function main(): Promise<void> {
   const shared = (await import('./shared.js')) as SharedModule;
-  const args = new Set(process.argv.slice(2));
+  const rawArgs = process.argv.slice(2);
+  const args = new Set(rawArgs);
   if (args.has('--help')) {
-    process.stdout.write('Usage: npx tsx scripts/ops/merge-risk.ts [--json]\n');
+    process.stdout.write('Usage: npx tsx scripts/ops/merge-risk.ts [--json] [--forecast] [--branch <branch>] [--base <branch>] [--files <a,b>] [--scope <a,b>]\n');
     process.exitCode = 0;
     return;
   }
@@ -383,6 +540,26 @@ async function main(): Promise<void> {
     openPrBranches: openPrs.map((pr) => pr.headRefName),
     mergedPrBranches: mergedPrs.map((pr) => pr.headRefName),
   });
+
+  if (args.has('--forecast')) {
+    const baseBranch = parseValue(rawArgs, '--base') ?? 'main';
+    const candidateBranch = parseValue(rawArgs, '--branch') ?? currentBranch(shared.ROOT);
+    const candidateFiles = parseList(parseValue(rawArgs, '--files'));
+    const declaredFileScope = parseList(parseValue(rawArgs, '--scope'));
+    const resolvedCandidateFiles = candidateFiles.length > 0
+      ? candidateFiles
+      : listDiffFiles(shared.ROOT, baseBranch, candidateBranch);
+
+    report.forecast = buildMergeConflictForecast({
+      candidateBranch,
+      baseBranch,
+      candidateFiles: resolvedCandidateFiles,
+      declaredFileScope: declaredFileScope.length > 0 ? declaredFileScope : undefined,
+      activeLanes: lanes.filter((lane) => lane.branch !== candidateBranch),
+      baseChangedFiles: listDiffFiles(shared.ROOT, candidateBranch, baseBranch),
+      activeLaneChangedFiles: collectActiveLaneChangedFiles(shared.ROOT, baseBranch, lanes),
+    });
+  }
 
   shared.emitJson(report);
   process.exitCode = report.summary.hard_fail > 0 ? 1 : 0;

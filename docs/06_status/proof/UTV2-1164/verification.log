@@ -1,0 +1,88 @@
+# UTV2-1164 Verification Log
+
+Date: 2026-05-25
+Branch: codex/utv2-1164-conflict-forecasting
+
+## Commands
+
+```bash
+npx tsx --test scripts/ops/merge-risk.test.ts
+```
+
+Result: PASS
+
+```bash
+pnpm type-check
+```
+
+Result: PASS
+
+```bash
+npx tsx scripts/ops/merge-risk.ts --forecast --branch codex/utv2-1164-conflict-forecasting --base main --files scripts/ops/merge-risk.ts,scripts/ops/merge-risk.test.ts --scope scripts/ops/merge-risk.ts,scripts/ops/merge-risk.test.ts
+```
+
+Result: PASS
+
+Forecast excerpt:
+
+```json
+{
+  "forecast": {
+    "candidate_branch": "codex/utv2-1164-conflict-forecasting",
+    "base_branch": "main",
+    "candidate_files": [
+      "scripts/ops/merge-risk.test.ts",
+      "scripts/ops/merge-risk.ts"
+    ],
+    "declared_file_scope": [
+      "scripts/ops/merge-risk.test.ts",
+      "scripts/ops/merge-risk.ts"
+    ],
+    "conditions": [],
+    "merge_order_recommendation": "No active lane or main-drift conflicts forecast."
+  }
+}
+```
+
+```bash
+pnpm test
+```
+
+Result: PASS
+
+Summary excerpt:
+
+```text
+1..555
+# tests 567
+# pass 567
+# fail 0
+```
+
+```bash
+pnpm verify
+```
+
+Result: PASS
+
+Final excerpt:
+
+```text
+[command-manifest] Verified 14 command definition(s) against apps/discord-bot/command-manifest.json
+[check-migration-versions] 110 migration file(s) verified - no duplicate versions.
+[lint-migrations] 110 migration file(s) checked - no findings.
+```
+
+Note: the first `pnpm verify` attempt failed at `ops:sync-check` because `.ops/sync.yml` listed `UTV2-1072` while the branch expects `UTV2-1164`. Added `.ops/sync/UTV2-1164.yml` and reran `pnpm verify` successfully.
+
+```bash
+npx tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+```
+
+Pre-commit result: PASS, no committed diff yet.
+
+Closeout blocker:
+
+- Local `git add` failed because the shared worktree git metadata path is mounted read-only in this sandbox: `.git/worktrees/codex__utv2-1164-conflict-forecasting/index.lock`.
+- `gh auth status` reported an invalid GitHub CLI token for `griff843`.
+- GitHub connector PR creation fallback failed with a transport error before repository metadata could be read.
