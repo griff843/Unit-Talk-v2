@@ -30,14 +30,25 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1094/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-25T20:57:46.363Z",
-  "heartbeat_at": "2026-05-25T20:57:46.363Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T21:20:00.000Z",
+  "closed_at": "2026-05-25T21:25:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1094-production-and-replay-integration.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T21:25:00.000Z",
+      "verdict": "fail",
+      "merge_sha": "a2272d203f129d67b39687a2aba4fd0dea1d9b9e",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual",
+      "note": "G4 systematic: squash merge SHA has verify:cancelled — same pattern as UTV2-1090. PM_VERDICT:APPROVED is the blocking authority. Lane closed manually per established exception."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
