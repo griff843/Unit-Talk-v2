@@ -1,0 +1,62 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1165",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T2",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1165-7-8-trial-governor",
+  "branch": "claude/utv2-1165-7-8-trial-governor",
+  "base_branch": "main",
+  "commit_sha": "92c707f8a323ba623ee89fa7abc01c889fb817ea",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/861",
+  "files_changed": [
+    ".ops/sync/UTV2-1165.yml",
+    "docs/06_status/proof/UTV2-1165/diff-summary.md",
+    "docs/06_status/proof/UTV2-1165/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1165/verification.log",
+    "docs/governance/CONCURRENCY_CONFIG.json",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ops/concurrency-config.ts",
+    "scripts/ops/concurrency-simulation.test.ts",
+    "scripts/ops/execution-state.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/merge-risk.ts"
+  ],
+  "file_scope_lock": [
+    ".ops/sync/UTV2-1165.yml",
+    "docs/06_status/lanes/UTV2-1165.json",
+    "docs/06_status/proof/UTV2-1165/diff-summary.md",
+    "docs/06_status/proof/UTV2-1165/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1165/verification.log",
+    "docs/governance/CONCURRENCY_CONFIG.json",
+    "docs/governance/LANE_CONCURRENCY_POLICY.md",
+    "scripts/ops/concurrency-config.ts",
+    "scripts/ops/concurrency-simulation.test.ts",
+    "scripts/ops/execution-state.ts",
+    "scripts/ops/lane-maximizer.ts",
+    "scripts/ops/lane-start.ts",
+    "scripts/ops/merge-risk.ts"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1165/diff-summary.md",
+    "docs/06_status/proof/UTV2-1165/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1165/verification.log"
+  ],
+  "status": "pr_open",
+  "started_at": "2026-05-25T18:49:03.578Z",
+  "heartbeat_at": "2026-05-25T18:54:50.542Z",
+  "closed_at": null,
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1165-7-8-trial-governor.json",
+  "created_by": "claude",
+  "truth_check_history": [],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1165-7-8-trial-governor",
+    "package_install": "verified",
+    "setup_command": null,
+    "main_checkout_control_only": true
+  }
+}

@@ -266,3 +266,53 @@ To raise limits above 6 requires a PM-authorized change to `CONCURRENCY_CONFIG.j
 ### Canonical citation
 
 When `dispatch-board`, `dispatch`, or any agent skill references executor-level lane count limits, this section (§10) is the single authoritative source. Do not duplicate limit values in prose — link here.
+
+---
+
+## 11. Trial governor (7–8 lane ceiling)
+
+**Issued under:** UTV2-1165  
+**Effective:** 2026-05-25
+
+The ratified default ceiling is 6 lanes (§1, §10). When operational demand requires temporarily operating at 7–8 lanes, a PM-authorized trial governor may raise the ceiling for a bounded period.
+
+### Enabling the trial governor
+
+The trial governor is configured in `docs/governance/CONCURRENCY_CONFIG.json` under the `trial` key:
+
+```json
+"trial": {
+  "enabled": true,
+  "total": 8,
+  "executors": { "claude": 3, "codex": 5 },
+  "allowed_until": "2026-06-30T00:00:00Z",
+  "rationale": "UTV2-XXXX: reason for trial authorization",
+  "safe_types_only": ["governance", "hygiene", "delivery-ui", "verification"]
+}
+```
+
+**Only PM may enable the trial governor.** Enabling it requires a PR changing `CONCURRENCY_CONFIG.json` with `tier:T1` label and PM approval.
+
+### Behavior
+
+`getEffectiveConfig()` in `scripts/ops/concurrency-config.ts` returns the active limit set:
+
+| Condition | Effective limits |
+|---|---|
+| `trial.enabled = false` | Base limits (total: 6, claude: 2, codex: 4) |
+| `trial.enabled = true` AND `allowed_until` is in the future (or null) | Trial limits (total: 8, claude: 3, codex: 5) |
+| `trial.enabled = true` AND `allowed_until` is in the past | **Auto-reverts** to base limits — no action required |
+
+### Safe-types constraint
+
+During a trial, only `safe_types_only` lane types may fill slots above the base ceiling. Singleton-type rules (§1) are unchanged — runtime, migration, modeling, and data-canonical remain singletons regardless of trial state.
+
+### Auto-revert
+
+The trial governor is time-bounded. When `allowed_until` passes, `getEffectiveConfig()` silently returns base limits. No manual intervention is required. The next `ops:lane-start` call will enforce the reverted base ceiling.
+
+### Audit trail
+
+- Trial enables/disables are tracked in `CONCURRENCY_CONFIG.json` git history.
+- The rationale field must cite the authorizing Linear issue.
+- Trial must not be extended past its `allowed_until` without a new PM-authorized PR.

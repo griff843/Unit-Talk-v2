@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "total": 6,
   "executors": {
     "claude": 2,
@@ -13,5 +13,16 @@
     ["migration", "data-canonical"],
     ["runtime", "runtime"],
     ["modeling", "modeling"]
-  ]
+  ],
+  "trial": {
+    "enabled": false,
+    "total": 8,
+    "executors": {
+      "claude": 3,
+      "codex": 5
+    },
+    "allowed_until": null,
+    "rationale": "UTV2-1165: 7–8 lane trial governor. PM enables by setting enabled=true and allowed_until ISO date. Reverts automatically when allowed_until is in the past.",
+    "safe_types_only": ["governance", "hygiene", "delivery-ui", "verification"]
+  }
 }

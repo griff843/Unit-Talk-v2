@@ -1,7 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import { spawnSync } from 'node:child_process';
 import { ACTIVE_LOCK_STATUSES, normalizeRepoRelativePaths, pathsOverlap, type LaneManifest } from './shared.js';
-import { loadConcurrencyConfig } from './concurrency-config.js';
+import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 
 export interface MergeRiskCondition {
   code: string;
@@ -278,7 +278,7 @@ export function detectStaleHeartbeat(
 }
 
 export function detectDispatchSaturation(lanes: LaneManifest[]): MergeRiskCondition[] {
-  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const cfg = (() => { try { return getEffectiveConfig(loadConcurrencyConfig()); } catch { return null; } })();
   const maxClaude = cfg?.executors.claude ?? 2;
   const maxCodex = cfg?.executors.codex ?? 4;
 
