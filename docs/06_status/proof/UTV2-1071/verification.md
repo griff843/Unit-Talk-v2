@@ -4,6 +4,8 @@
 
 UTV2-1071 is a T2 verification lane for the five-lane orchestration validation closeout. This proof packet records workflow-runtime state only; it does not modify product runtime behavior, migrations, contracts, domain logic, or database schema.
 
+Merge SHA: f828881d5b000db049a3b98ada005febc287d52e
+
 ## Evidence
 
 - PR: https://github.com/griff843/Unit-Talk-v2/pull/844

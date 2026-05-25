@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1071-five-lane-validation-run",
   "branch": "codex/utv2-1071-five-lane-validation-run",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "f828881d5b000db049a3b98ada005febc287d52e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/844",
   "files_changed": [],
   "file_scope_lock": [
@@ -22,14 +22,60 @@
     "docs/06_status/proof/UTV2-1071/verification.log",
     "docs/06_status/proof/UTV2-1071/verification.md"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-24T23:33:45.089Z",
-  "heartbeat_at": "2026-05-25T09:47:00.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T09:58:40.598Z",
+  "closed_at": "2026-05-25T09:58:40.598Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1071-five-lane-validation-run.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T09:56:58.410Z",
+      "verdict": "fail",
+      "merge_sha": "f828881d",
+      "failures": [
+        "G2",
+        "P3",
+        "C3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T09:57:22.011Z",
+      "verdict": "pass",
+      "merge_sha": "f828881d5b000db049a3b98ada005febc287d52e",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/844"
+    },
+    {
+      "checked_at": "2026-05-25T09:57:45.602Z",
+      "verdict": "fail",
+      "merge_sha": "f828881d5b000db049a3b98ada005febc287d52e",
+      "failures": [
+        "P3",
+        "C4"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T09:58:04.324Z",
+      "verdict": "pass",
+      "merge_sha": "f828881d5b000db049a3b98ada005febc287d52e",
+      "failures": [],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T09:58:16.871Z",
+      "verdict": "pass",
+      "merge_sha": "f828881d5b000db049a3b98ada005febc287d52e",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
