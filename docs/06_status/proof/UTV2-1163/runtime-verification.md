@@ -4,7 +4,7 @@ Branch: `codex/utv2-1163-one-command-lane-closeout`
 
 Head checked before this gate repair: `126304d845dd373cce514cd20bf69899df54559c`
 
-## Runtime Verification
+## Verification
 
 This lane changes ops-control lane finalization only. It does not change API, worker, database, lifecycle, promotion, or Discord delivery runtime behavior.
 

@@ -10,12 +10,16 @@
   "commit_sha": "126304d845dd373cce514cd20bf69899df54559c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/857",
   "files_changed": [
+    ".ops/sync/UTV2-1163.yml",
     "docs/06_status/lanes/UTV2-1163.json",
     "docs/06_status/proof/UTV2-1163/runtime-verification.md",
     "scripts/ops/lane-finalize.test.ts",
     "scripts/ops/lane-finalize.ts"
   ],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1163.yml",
+    "docs/06_status/lanes/UTV2-1163.json",
+    "docs/06_status/proof/UTV2-1163/runtime-verification.md",
     "scripts/ops/lane-finalize.test.ts",
     "scripts/ops/lane-finalize.ts"
   ],
