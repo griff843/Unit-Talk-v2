@@ -46,6 +46,7 @@ export type LaneFinalizeRunner = (
 export function buildLaneFinalizePlan(input: {
   manifest: LaneManifest;
   pr: string;
+  branch?: string | null;
   dryRun?: boolean;
 }): LaneFinalizePlan {
   const alreadyClosed = input.manifest.status === 'done';
@@ -62,7 +63,16 @@ export function buildLaneFinalizePlan(input: {
     steps.push({
       id: 'generate_proof',
       command: 'pnpm',
-      args: ['ops:proof-generate', issueId, '--json', '--force'],
+      args: [
+        'ops:proof-generate',
+        issueId,
+        '--json',
+        '--current',
+        '--branch',
+        input.branch ?? input.manifest.branch,
+        '--pr-url',
+        normalizePrUrl(input.pr),
+      ],
       required: true,
     });
     steps.push({
@@ -88,6 +98,32 @@ export function buildLaneFinalizePlan(input: {
     already_closed: alreadyClosed,
     steps,
   };
+}
+
+export function resolveLaneFinalizeInput(input: {
+  issueId?: string | null;
+  pr?: string | null;
+  manifest: LaneManifest;
+}): { issueId: string; pr: string } {
+  const issueId = requireIssueId(input.issueId ?? input.manifest.issue_id);
+  const pr = input.pr ?? extractPrNumber(input.manifest.pr_url);
+  if (!pr) {
+    throw new Error('Missing required --pr and manifest.pr_url does not contain a PR number.');
+  }
+
+  return { issueId, pr };
+}
+
+function extractPrNumber(prUrl: string | null): string | null {
+  if (!prUrl) return null;
+  const match = prUrl.match(/\/pull\/(\d+)(?:$|[/?#])/);
+  return match?.[1] ?? null;
+}
+
+function normalizePrUrl(pr: string): string {
+  return pr.startsWith('http')
+    ? pr
+    : `https://github.com/griff843/Unit-Talk-v2/pull/${pr}`;
 }
 
 export function runLaneFinalizePlan(
@@ -153,16 +189,19 @@ export function runLaneFinalizePlan(
 
 function main(argv = process.argv.slice(2)): number {
   const { flags, bools } = parseArgs(argv);
-  const issueId = requireIssueId(getFlag(flags, 'issue') ?? '');
-  const pr = getFlag(flags, 'pr') ?? getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr-number');
+  const rawIssueId = getFlag(flags, 'issue') ?? '';
   const json = bools.has('json');
-  if (!pr) {
-    throw new Error('Missing required --pr');
-  }
+  const manifest = readManifest(requireIssueId(rawIssueId));
+  const { pr } = resolveLaneFinalizeInput({
+    issueId: rawIssueId,
+    pr: getFlag(flags, 'pr') ?? getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr-number'),
+    manifest,
+  });
 
   const plan = buildLaneFinalizePlan({
-    manifest: readManifest(issueId),
+    manifest,
     pr,
+    branch: getFlag(flags, 'branch') ?? null,
     dryRun: bools.has('dry-run') || bools.has('explain'),
   });
   const result = runLaneFinalizePlan(plan);

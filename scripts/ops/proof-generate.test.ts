@@ -6,7 +6,9 @@ import path from 'node:path';
 import {
   buildDiffSummary,
   buildRuntimeVerification,
+  applyProofManifestOverrides,
   collectProofGitTruth,
+  detectCurrentProofContext,
   generateProofArtifacts,
   standardProofPaths,
   type ProofGitTruth,
@@ -167,6 +169,48 @@ test('pre-merge artifacts bind head SHA and use N/A for merge SHA', () => {
   assert.match(diffContent, /Merge SHA: N\/A/);
   assert.match(runtimeContent, new RegExp(`Head SHA: ${HEAD_SHA}`));
   assert.match(runtimeContent, /Merge SHA: N\/A/);
+});
+
+test('manifest overrides bind proof artifacts to the current branch and PR', () => {
+  const overridden = applyProofManifestOverrides(manifest(), {
+    branch: 'codex/utv2-1170-current-proof',
+    prUrl: 'https://github.com/griff843/Unit-Talk-v2/pull/1700',
+  });
+  const diffContent = buildDiffSummary({
+    ...input(),
+    manifest: overridden,
+  });
+
+  assert.match(diffContent, /Branch: codex\/utv2-1170-current-proof/);
+  assert.match(diffContent, /PR URL: https:\/\/github\.com\/griff843\/Unit-Talk-v2\/pull\/1700/);
+});
+
+test('detectCurrentProofContext reads branch and head from git without requiring manifest truth', () => {
+  const calls: string[][] = [];
+  const detected = detectCurrentProofContext({
+    root: '/repo',
+    gitRunner: (args) => {
+      calls.push(args);
+      if (args.join(' ') === 'rev-parse --abbrev-ref HEAD') {
+        return { ok: true, stdout: 'codex/current-proof\n', stderr: '' };
+      }
+      if (args.join(' ') === 'rev-parse HEAD') {
+        return { ok: true, stdout: HEAD_SHA, stderr: '' };
+      }
+      return { ok: false, stdout: '', stderr: 'unset' };
+    },
+  });
+
+  assert.deepStrictEqual(detected, {
+    branch: 'codex/current-proof',
+    prUrl: null,
+    headSha: HEAD_SHA,
+  });
+  assert.deepStrictEqual(calls.map((call) => call.join(' ')), [
+    'rev-parse --abbrev-ref HEAD',
+    'config --get branch.codex/current-proof.pr-url',
+    'rev-parse HEAD',
+  ]);
 });
 
 test('collectProofGitTruth prefers manifest merge SHA and diffs against first parent', () => {

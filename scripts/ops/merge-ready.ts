@@ -2,7 +2,7 @@
 
 import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { emitJson, getFlags, parseArgs, ROOT } from './shared.js';
+import { emitJson, getFlag, getFlags, parseArgs, ROOT, requireIssueId } from './shared.js';
 
 export interface MergeReadyGate {
   id: string;
@@ -16,6 +16,8 @@ export interface MergeReadyOptions {
   dryRun: boolean;
   json: boolean;
   gates: string[];
+  issueId: string | null;
+  prNumber: number | null;
 }
 
 export interface MergeReadyGateResult {
@@ -47,6 +49,13 @@ export type CommandRunner = (
 ) => Pick<SpawnSyncReturns<string>, 'status' | 'stdout' | 'stderr'>;
 
 export const MERGE_READY_GATES: readonly MergeReadyGate[] = [
+  {
+    id: 'pm-readiness',
+    command: 'pnpm',
+    args: ['ops:truth-check'],
+    required: true,
+    description: 'PM verdict readiness: proof, review, tier, and PR truth checks',
+  },
   {
     id: 'ops-sync-check',
     command: 'pnpm',
@@ -127,13 +136,22 @@ export function parseMergeReadyArgs(argv: string[]): MergeReadyOptions {
   const dryRun = bools.has('dry-run') || flags.has('dry-run') || !run;
   const gates = getFlags(flags, 'gate');
   const json = bools.has('json') || flags.has('json');
+  const rawIssueId = getFlag(flags, 'issue') ?? null;
+  const prRaw = getFlag(flags, 'pr') ?? null;
+  const prNumber = prRaw == null ? null : Number.parseInt(prRaw, 10);
 
   const unknown = gates.filter((gate) => !GATE_IDS.has(gate));
   if (unknown.length > 0) {
     throw new Error(`Unknown merge-ready gate(s): ${unknown.join(', ')}. Valid gates: ${[...GATE_IDS].join(', ')}`);
   }
 
-  return { dryRun, json, gates };
+  return {
+    dryRun,
+    json,
+    gates,
+    issueId: rawIssueId == null ? null : requireIssueId(rawIssueId),
+    prNumber: prNumber != null && Number.isInteger(prNumber) && prNumber > 0 ? prNumber : null,
+  };
 }
 
 export function selectMergeReadyGates(ids: string[]): MergeReadyGate[] {
@@ -146,7 +164,7 @@ export function selectMergeReadyGates(ids: string[]): MergeReadyGate[] {
 }
 
 export function runMergeReady(
-  options: Pick<MergeReadyOptions, 'dryRun' | 'gates'>,
+  options: Pick<MergeReadyOptions, 'dryRun' | 'gates' | 'issueId' | 'prNumber'>,
   runner: CommandRunner = (command, args, runOptions) =>
     spawnSync(command, args, {
       cwd: runOptions.cwd,
@@ -159,7 +177,8 @@ export function runMergeReady(
   const results: MergeReadyGateResult[] = [];
 
   for (const gate of gates) {
-    const command = [gate.command, ...gate.args];
+    const gateArgs = buildGateArgs(gate, options);
+    const command = [gate.command, ...gateArgs];
     if (options.dryRun) {
       results.push({
         id: gate.id,
@@ -171,8 +190,19 @@ export function runMergeReady(
       });
       continue;
     }
+    if (gate.id === 'pm-readiness' && (options.issueId == null || options.prNumber == null)) {
+      results.push({
+        id: gate.id,
+        command,
+        status: 'fail',
+        exit_code: 2,
+        stdout: '',
+        stderr: 'pm-readiness requires --issue UTV2-### and --pr <number>.',
+      });
+      break;
+    }
 
-    const result = runner(gate.command, gate.args, { cwd: ROOT });
+    const result = runner(gate.command, gateArgs, { cwd: ROOT });
     const exitCode = result.status ?? 1;
     results.push({
       id: gate.id,
@@ -204,6 +234,25 @@ export function runMergeReady(
       dry_run: dryRun,
     },
   };
+}
+
+function buildGateArgs(
+  gate: MergeReadyGate,
+  options: Pick<MergeReadyOptions, 'issueId' | 'prNumber'>,
+): string[] {
+  if (gate.id !== 'pm-readiness') {
+    return gate.args;
+  }
+
+  const args = [...gate.args];
+  if (options.issueId != null) {
+    args.push(options.issueId);
+  }
+  args.push('--json', '--explain');
+  if (options.prNumber != null) {
+    args.push('--pr', String(options.prNumber));
+  }
+  return args;
 }
 
 function printHuman(report: MergeReadyReport): void {

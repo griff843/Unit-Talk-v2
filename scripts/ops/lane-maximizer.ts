@@ -57,6 +57,7 @@ export interface DispatchPlanEntry {
   file_scope: string[];
   slot_index: number;
   explanation: string;
+  dispatch_command: string;
 }
 
 export interface LaneSaturationForecast {
@@ -348,6 +349,7 @@ export function evaluateCandidates(
       file_scope: candidate.file_scope.map(normalizePath),
       slot_index: slotIndex,
       explanation: `${candidate.executor} slot ${slotIndex} can run now; ${workClass} ${laneType} work has no active singleton, forbidden combination, or path overlap conflict.`,
+      dispatch_command: `pnpm ops:lane-start ${candidate.issue_id} --executor ${candidate.executor} --lane-type ${laneType}`,
     });
     if (candidate.executor === 'claude') plannedClaude += 1;
     else plannedCodex += 1;

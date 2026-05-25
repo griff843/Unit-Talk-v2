@@ -51,6 +51,11 @@ export interface ProofGenerateOptions {
   write?: boolean;
 }
 
+export interface ProofManifestOverrides {
+  branch?: string | null;
+  prUrl?: string | null;
+}
+
 type GitRunner = (args: string[], cwd?: string) => { ok: boolean; stdout: string; stderr: string };
 
 const STANDARD_PROOF_FILES: ProofArtifactName[] = ['diff-summary.md', 'runtime-verification.md'];
@@ -66,14 +71,19 @@ export function standardProofPaths(issueId: string): Record<ProofArtifactName, s
 
 export function collectProofGitTruth(
   manifest: LaneManifest,
-  options: { root?: string; gitRunner?: GitRunner } = {},
+  options: {
+    root?: string;
+    gitRunner?: GitRunner;
+    headSha?: string | null;
+    mergeSha?: string | null;
+  } = {},
 ): ProofGitTruth {
   const root = options.root ?? ROOT;
   const runGit = options.gitRunner ?? git;
   const worktreePath = path.resolve(root, manifest.worktree_path);
   const hasWorktree = fs.existsSync(worktreePath);
   const cwd = hasWorktree ? worktreePath : root;
-  const headSha = firstGitStdout(
+  const headSha = options.headSha?.trim() || firstGitStdout(
     hasWorktree
       ? [
           ['rev-parse', 'HEAD'],
@@ -88,7 +98,7 @@ export function collectProofGitTruth(
     runGit,
     cwd,
   );
-  const mergeSha = manifest.commit_sha?.trim() || null;
+  const mergeSha = options.mergeSha?.trim() || manifest.commit_sha?.trim() || null;
   const diffTargetRef = mergeSha ?? headSha;
   const diffBaseRef = mergeSha
     ? `${mergeSha}^1`
@@ -113,6 +123,30 @@ export function collectProofGitTruth(
     name_status: diffRange
       ? gitStdoutOrEmpty(runGit(['diff', '--name-status', ...diffRange], cwd))
       : '',
+  };
+}
+
+export function applyProofManifestOverrides(
+  manifest: LaneManifest,
+  overrides: ProofManifestOverrides,
+): LaneManifest {
+  return {
+    ...manifest,
+    branch: overrides.branch?.trim() || manifest.branch,
+    pr_url: overrides.prUrl?.trim() || manifest.pr_url,
+  };
+}
+
+export function detectCurrentProofContext(
+  options: { root?: string; gitRunner?: GitRunner } = {},
+): ProofManifestOverrides & { headSha: string | null } {
+  const root = options.root ?? ROOT;
+  const runGit = options.gitRunner ?? git;
+  const branch = gitStdoutOrEmpty(runGit(['rev-parse', '--abbrev-ref', 'HEAD'], root)) || null;
+  return {
+    branch,
+    prUrl: branch ? gitStdoutOrEmpty(runGit(['config', '--get', `branch.${branch}.pr-url`], root)) || null : null,
+    headSha: gitStdoutOrEmpty(runGit(['rev-parse', 'HEAD'], root)) || null,
   };
 }
 
@@ -280,11 +314,18 @@ function safeRepoPath(root: string, repoRelativePath: string): string {
 function main(argv = process.argv.slice(2)): number {
   const { positionals, flags, bools } = parseArgs(argv);
   const issueId = requireIssueId(getFlag(flags, 'issue') ?? positionals[0] ?? '');
-  const manifest = readManifest(issueId);
+  const detected = bools.has('current') ? detectCurrentProofContext() : { headSha: null };
+  const manifest = applyProofManifestOverrides(readManifest(issueId), {
+    branch: getFlag(flags, 'branch') ?? detected.branch ?? null,
+    prUrl: getFlag(flags, 'pr-url') ?? getFlag(flags, 'pr') ?? detected.prUrl ?? null,
+  });
   const input: ProofGenerateInput = {
     manifest,
     generatedAt: new Date().toISOString(),
-    gitTruth: collectProofGitTruth(manifest),
+    gitTruth: collectProofGitTruth(manifest, {
+      headSha: getFlag(flags, 'head-sha') ?? detected.headSha ?? null,
+      mergeSha: getFlag(flags, 'merge-sha') ?? null,
+    }),
     runtimeResult: (getFlag(flags, 'runtime-result') as ProofGenerateInput['runtimeResult']) ?? 'not_run',
   };
   const result = generateProofArtifacts(input, { root: ROOT, write: !bools.has('dry-run') });
