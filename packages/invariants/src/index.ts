@@ -16,3 +16,6 @@ export {
   registryHash,
   validateConsistency,
 } from './registry/loader.js';
+
+export { InvariantEngine } from './engine.js';
+export type { InvariantViolation, RuntimeContext } from './engine.js';
