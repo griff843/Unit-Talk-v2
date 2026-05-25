@@ -7,9 +7,10 @@
   "executor": "claude",
   "sha_binding": {
     "verified_source_sha": "f086fc7579232b3ae79d2dc05960a6780b23af4e",
-    "merge_sha": "set-by-ci",
-    "ci_run_url": "set-by-ci",
-    "ci_status": "set-by-ci"
+    "merge_sha": "142c1f7cd478e0d7533adb1e19bc0a748fa734ab",
+    "verified_source_note": "PR #868 squash-merged to main at 142c1f7c",
+    "evidence_commit_sha": "142c1f7cd478e0d7533adb1e19bc0a748fa734ab",
+    "current_pr_head_sha": "30f1e8d6"
   },
   "static_proof": {
     "type_check": "PASS — pnpm type-check exits 0, zero TS errors",
