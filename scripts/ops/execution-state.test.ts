@@ -45,6 +45,7 @@ test('active lane summary includes active manifests with expected fields', () =>
     }),
   ], {
     generatedAt: '2026-05-15T15:00:00.000Z',
+    nowMs: Date.parse('2026-05-15T15:00:00.000Z'),
   });
 
   assert.equal(report.active_lanes.length, 1);
@@ -54,11 +55,80 @@ test('active lane summary includes active manifests with expected fields', () =>
     executor: 'codex-cli',
     tier: 'T2',
     status: 'started',
+    started_at: '2026-05-15T12:00:00.000Z',
     heartbeat_at: '2026-05-15T14:00:00.000Z',
+    lane_age_hours: 3,
+    heartbeat_age_hours: 1,
     pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/999',
+    pr_state: 'linked',
+    check_state: 'unknown',
+    branch_drift: 'unknown',
+    proof_ready: false,
+    merge_ready: false,
+    conflict_risk: 'clear',
+    recommended_action: 'complete proof artifacts',
     blockers: [],
     source_url: 'https://linear.app/unit-talk-v2/issue/UTV2-974/',
   });
+});
+
+test('lane telemetry summarizes age, PR, check, drift, proof, and merge readiness', () => {
+  const branch = 'codex/utv2-1161-live-lane-telemetry-board';
+  const report = buildExecutionStateReport([
+    createManifest({
+      issue_id: 'UTV2-1161',
+      branch,
+      pr_url: 'https://github.com/griff843/Unit-Talk-v2/pull/1161',
+      expected_proof_paths: ['docs/06_status/proof/UTV2-1161/diff-summary.md'],
+    }),
+  ], {
+    nowMs: Date.parse('2026-05-15T15:00:00.000Z'),
+    artifactExists: (artifact) => artifact === 'docs/06_status/proof/UTV2-1161/diff-summary.md',
+    mergeRiskInput: {
+      remoteBranches: [branch],
+      openPrBranches: [branch],
+      checkStateByBranch: {
+        [branch]: 'success',
+      },
+    },
+  });
+
+  assert.equal(report.active_lanes[0]?.lane_age_hours, 3);
+  assert.equal(report.active_lanes[0]?.heartbeat_age_hours, 3);
+  assert.equal(report.active_lanes[0]?.branch_drift, 'remote_present');
+  assert.equal(report.active_lanes[0]?.pr_state, 'open');
+  assert.equal(report.active_lanes[0]?.check_state, 'success');
+  assert.equal(report.active_lanes[0]?.proof_ready, true);
+  assert.equal(report.active_lanes[0]?.merge_ready, true);
+  assert.equal(report.active_lanes[0]?.conflict_risk, 'clear');
+  assert.equal(report.active_lanes[0]?.recommended_action, 'ready to merge');
+});
+
+test('lane telemetry surfaces missing remote branch before PR and check remediation', () => {
+  const branch = 'codex/utv2-1162-local-only-lane';
+  const report = buildExecutionStateReport([
+    createManifest({
+      issue_id: 'UTV2-1162',
+      branch,
+      pr_url: null,
+      expected_proof_paths: [],
+    }),
+  ], {
+    nowMs: Date.parse('2026-05-15T15:00:00.000Z'),
+    mergeRiskInput: {
+      remoteBranches: ['main'],
+      checkStateByIssue: {
+        'UTV2-1162': 'failure',
+      },
+    },
+  });
+
+  assert.equal(report.active_lanes[0]?.branch_drift, 'remote_missing');
+  assert.equal(report.active_lanes[0]?.pr_state, 'none');
+  assert.equal(report.active_lanes[0]?.check_state, 'failure');
+  assert.equal(report.active_lanes[0]?.proof_ready, true);
+  assert.equal(report.active_lanes[0]?.merge_ready, false);
+  assert.equal(report.active_lanes[0]?.recommended_action, 'push branch before PR review');
 });
 
 test('blocked lane detection surfaces manifests with non-empty blocked_by', () => {
