@@ -23,6 +23,7 @@ import {
   ROOT,
   emitJson,
   ensureDir,
+  readConfiguredEnvValue,
   readAllManifests,
   type CiDoctorResult,
   type LaneManifest,
@@ -93,7 +94,7 @@ interface DigestReport {
 const ZOMBIE_THRESHOLD_MS = 48 * 60 * 60 * 1000; // 48 hours
 const DIGEST_DIR = path.join(ROOT, '.out', 'ops', 'digest');
 
-const linearToken = process.env.LINEAR_API_TOKEN?.trim() ?? '';
+const linearToken = readConfiguredEnvValue('LINEAR_API_TOKEN') || readConfiguredEnvValue('LINEAR_API_KEY') || '';
 const linearTeamKey = process.env.LINEAR_TEAM_KEY?.trim() ?? 'UTV2';
 const webhookUrl = process.env.UNIT_TALK_OPS_ALERT_WEBHOOK_URL?.trim() ?? '';
 
@@ -196,7 +197,7 @@ let _cachedTeamId: string | null | undefined;
 async function resolveLinearTeamId(infraErrors: string[]): Promise<string | null> {
   if (_cachedTeamId !== undefined) return _cachedTeamId;
   if (!linearToken) {
-    infraErrors.push('LINEAR_API_TOKEN not set — skipping Linear query');
+    infraErrors.push('LINEAR_API_TOKEN or LINEAR_API_KEY not set — skipping Linear query');
     _cachedTeamId = null;
     return null;
   }

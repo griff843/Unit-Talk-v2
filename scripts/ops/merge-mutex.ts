@@ -11,6 +11,7 @@ import {
   relativeToRoot,
   requireIssueId,
 } from './shared.js';
+import { loadConcurrencyConfig } from './concurrency-config.js';
 
 export type MergeLockStatus = 'held' | 'stale_reclaim_required' | 'released';
 
@@ -63,6 +64,7 @@ export type MergeLockResult =
         | 'merge_lock_stale_reclaim_required'
         | 'merge_lock_not_stale'
         | 'merge_lock_invalid'
+        | 'merge_lock_config_unsupported'
         | 'merge_lock_owner_mismatch';
       lock?: MergeLock;
       lock_path?: string;
@@ -79,6 +81,18 @@ const VALID_STATUSES = new Set<MergeLockStatus>([
 
 export const MERGE_LOCK_PATH = path.join(ROOT, '.ops', 'merge-lock.json');
 
+function requireSupportedMergeSerialization(): MergeLockResult | null {
+  const max = loadConcurrencyConfig().merge_serialized_max;
+  if (max === 1) {
+    return null;
+  }
+  return {
+    ok: false,
+    code: 'merge_lock_config_unsupported',
+    message: `Unsupported merge_serialized_max=${max}. The merge mutex currently enforces exactly one serialized merge at a time.`,
+  };
+}
+
 export function defaultMergeLockOwner(sessionId = process.env.CODEX_SESSION_ID): MergeLockOwner {
   return {
     user: os.userInfo().username || 'unknown',
@@ -94,6 +108,10 @@ export function acquireMergeLock(
 ): MergeLockResult {
   const lockPath = options.lockPath ?? MERGE_LOCK_PATH;
   const now = options.now ?? new Date();
+  const configViolation = requireSupportedMergeSerialization();
+  if (configViolation) {
+    return configViolation;
+  }
   const missingFields = missingInputFields(input);
   if (missingFields.length > 0) {
     return {

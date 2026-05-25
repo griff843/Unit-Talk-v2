@@ -4,7 +4,7 @@ name: File Scope Lock Check
 # file_scope_lock arrays. Prevents concurrent edits to the same files across
 # parallel lanes.
 #
-# This is a CI-time enforcement of the advisory lock that ops:lane:start
+# This is a CI-time enforcement of the advisory lock that ops:lane-start
 # checks at lane creation. Without this, Codex or Claude can push commits
 # touching files locked by another active lane.
 #

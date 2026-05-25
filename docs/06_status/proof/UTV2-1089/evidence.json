@@ -5,9 +5,10 @@
   "tier": "T1",
   "lane_type": "governance",
   "sha_binding": {
+    "merge_sha": "97e36627d1fee74e3c64694a29fb2fc6519e6c73",
     "verified_source_sha": "cfe8e8d2d43f9f73099aae2d43dcc57c57b37fc7",
     "verified_source_note": "Branch HEAD at proof assembly — InvariantEngine implementation + stale workflow step removal, rebased onto main 41bcdeaa",
-    "evidence_commit_sha": "set-by-ci",
+    "evidence_commit_sha": "97e36627d1fee74e3c64694a29fb2fc6519e6c73",
     "current_pr_head_sha": "set-by-ci"
   },
   "executor": "claude",
@@ -56,7 +57,7 @@
   },
   "runtime_proof": {
     "project_ref": "zfzdnfwdarxucxtaojxm",
-    "verified_at": "2026-05-25T00:00:00Z",
+    "verified_at": "2026-05-25T09:28:00Z",
     "pnpm_test_db": {
       "status": "PASS",
       "tests_pass": 7,
@@ -64,7 +65,24 @@
       "skipped": 0,
       "file": "apps/api/src/database-smoke.test.ts",
       "note": "7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm. Submission, settlement, outbox atomicity, participant dedup, and correction chain all verified against real DB."
-    }
+    },
+    "queries": [
+      {
+        "command": "pnpm test:db",
+        "file": "apps/api/src/database-smoke.test.ts",
+        "result": "PASS",
+        "checked_at": "2026-05-25T09:28:00Z"
+      }
+    ],
+    "row_counts": [
+      {
+        "surface": "database-smoke.test.ts",
+        "tests": 7,
+        "passed": 7,
+        "failed": 0,
+        "duration_ms": 108977.872511
+      }
+    ]
   },
   "constitutional_claims": [
     "InvariantEngine implements all 15 active invariants from invariant-registry.json",

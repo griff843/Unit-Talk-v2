@@ -27,7 +27,7 @@ interface RunTruthCheckOptions {
   sinceSha?: string;
   noRuntime?: boolean;
   explain?: boolean;
-  runner?: 'ops:lane:close' | 'ops:reconcile' | 'manual';
+  runner?: 'ops:lane-close' | 'ops:reconcile' | 'manual';
 }
 
 interface LinearIssueRecord {

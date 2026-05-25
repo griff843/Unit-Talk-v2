@@ -56,7 +56,7 @@
       "verdict": "pass",
       "merge_sha": "c76104658120dbd1674ee369c384602b376b0884",
       "failures": [],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": []

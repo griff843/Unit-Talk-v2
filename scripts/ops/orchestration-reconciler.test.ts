@@ -282,6 +282,43 @@ test('marks active expired lease as stale reclaim required', () => {
   assert.equal(report.exit_code, 1);
 });
 
+test('classifies expired orphan lease as safe reclaim with audit command', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'Done', state_type: 'completed' })],
+    leases: [lease({ expires_at: '2026-05-18T11:59:59.000Z' })],
+    manifests: [],
+    branches: [branch()],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  const laneState = report.state_machine.lanes.find((entry) => entry.issue_id === 'UTV2-1059');
+  assert.equal(laneState?.state, 'stale_lease_safe_reclaim');
+  assert.equal(laneState?.fail_closed, true);
+  const action = report.repair_plan.actions.find((entry) => entry.id === 'reclaim_stale_lease');
+  assert.equal(action?.safe_to_apply, true);
+  assert.equal(action?.requires_pm, false);
+  assert.match(action?.command ?? '', /pnpm ops:lease reclaim/);
+});
+
+test('keeps active owner stale lease in manual repair lane', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [linear({ state_name: 'In Codex', state_type: 'started' })],
+    leases: [lease({ expires_at: '2026-05-18T11:59:59.000Z' })],
+    manifests: [],
+    branches: [branch()],
+    pullRequests: [],
+    now: NOW,
+  });
+
+  const laneState = report.state_machine.lanes.find((entry) => entry.issue_id === 'UTV2-1059');
+  assert.equal(laneState?.state, 'lease_without_manifest');
+  const action = report.repair_plan.actions.find((entry) => entry.issue_id === 'UTV2-1059');
+  assert.equal(action?.id, 'escalate_manual_repair');
+  assert.equal(action?.safe_to_apply, false);
+  assert.equal(action?.requires_pm, true);
+});
+
 test('marks branch for closed lane as cleanup candidate', () => {
   const report = buildOrchestrationReconcilerReport({
     linearIssues: [],
@@ -317,6 +354,24 @@ test('cleanup plan refuses active current lanes', () => {
     report.cleanup_plan.actions.some((action) => action.id === 'refuse_active_lane' && action.safe_to_apply === false),
     true,
   );
+});
+
+test('open PR without manifest fails closed with deterministic manifest repair action', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [],
+    manifests: [],
+    branches: [branch()],
+    pullRequests: [pr()],
+    now: NOW,
+  });
+
+  assert.equal(check(report.checks, 'ORCH-OPEN-PR-MANIFEST-URL').verdict, 'fail');
+  const laneState = report.state_machine.lanes.find((entry) => entry.issue_id === 'UTV2-1059');
+  assert.equal(laneState?.state, 'open_pr_without_manifest');
+  const action = report.repair_plan.actions.find((entry) => entry.id === 'repair_missing_manifest');
+  assert.equal(action?.safe_to_apply, false);
+  assert.match(action?.command ?? '', /pnpm ops:manifest-repair --issue UTV2-1059 --from-pr 1059 --dry-run/);
 });
 
 test('cleanup plan treats released leases as no-op safe state', () => {
@@ -445,6 +500,28 @@ test('human output separates required checks from cleanup candidates', () => {
   assert.match(output, /historical debt \/ cleanup candidates:/);
   assert.match(output, /ORCH-DONE-MERGE-SHA/);
   assert.match(output, /ORCH-CLOSED-LANE-BRANCH-CLEANUP/);
+  assert.match(output, /reconciliation states:/);
+  assert.match(output, /repair plan:/);
+});
+
+test('historical Linear decay is advisory and does not become infra failure', () => {
+  const report = buildOrchestrationReconcilerReport({
+    linearIssues: [],
+    leases: [],
+    manifests: [lane({ status: 'done', commit_sha: 'abc123' })],
+    branches: [],
+    pullRequests: [],
+    mode: 'all',
+    now: NOW,
+    historicalDecayErrors: ['Linear issue query failed for UTV2-1059: Entity not found: Issue'],
+  });
+
+  const decay = check(report.checks, 'ORCH-HISTORICAL-DECAY');
+  assert.equal(decay.requirement, 'advisory');
+  assert.equal(decay.verdict, 'historical_decay');
+  assert.equal(report.summary.historical_decay, 1);
+  assert.equal(report.verdict, 'WARN');
+  assert.equal(report.exit_code, 0);
 });
 
 test('distinguishes required and advisory GitHub checks', () => {
@@ -486,7 +563,7 @@ test('passes when Linear, lease, manifest, branch, PR, and checks agree', () => 
             verdict: 'pass',
             merge_sha: 'abc123',
             failures: [],
-            runner: 'ops:lane:close',
+            runner: 'ops:lane-close',
           },
         ],
       }),

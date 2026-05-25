@@ -143,6 +143,214 @@ Fields beyond `name` and `environment` are tolerated (parser uses `additionalPro
       "scope": "repo",
       "used_by": [".github/workflows/deploy.yml"],
       "purpose": "Ed25519 private key for SSH access to the production server. Must match an authorized key on UNIT_TALK_DEPLOY_USER@UNIT_TALK_DEPLOY_HOST."
+    },
+    {
+      "name": "DISCORD_CLIENT_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord application client ID written into deployment runtime env."
+    },
+    {
+      "name": "UNIT_TALK_BOT_API_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml", ".github/workflows/staging-deploy.yml"],
+      "purpose": "Internal bot API key written into production and staging runtime env."
+    },
+    {
+      "name": "UNIT_TALK_INGESTOR_API_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml", ".github/workflows/staging-deploy.yml"],
+      "purpose": "Internal ingestor API key written into production and staging runtime env."
+    },
+    {
+      "name": "SGO_API_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml", ".github/workflows/ingestor-scheduled-run.yml", ".github/workflows/ops-fix-ingestor-api-key.yml"],
+      "purpose": "SportsGameOdds primary API key for ingestor runtime and scheduled operations."
+    },
+    {
+      "name": "SGO_API_KEY_FALLBACK",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml", ".github/workflows/ingestor-scheduled-run.yml", ".github/workflows/ops-fix-ingestor-api-key.yml"],
+      "purpose": "SportsGameOdds fallback API key for ingestor runtime and repair workflows."
+    },
+    {
+      "name": "DISCORD_GUILD_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord guild ID written into deployment runtime env."
+    },
+    {
+      "name": "DISCORD_CAPPER_ROLE_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord capper role ID written into deployment runtime env."
+    },
+    {
+      "name": "DISCORD_VIP_ROLE_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord VIP role ID written into deployment runtime env."
+    },
+    {
+      "name": "DISCORD_VIP_PLUS_ROLE_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord VIP Plus role ID written into deployment runtime env."
+    },
+    {
+      "name": "DISCORD_CAPPER_CHANNEL_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord capper onboarding channel ID written into deployment runtime env."
+    },
+    {
+      "name": "DISCORD_OPERATOR_ROLE_ID",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Discord operator role ID written into deployment runtime env."
+    },
+    {
+      "name": "UNIT_TALK_DISTRIBUTION_TARGETS",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Production distribution target allowlist written into deployment runtime env."
+    },
+    {
+      "name": "UNIT_TALK_DISCORD_TARGET_MAP",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Production Discord target mapping written into deployment runtime env."
+    },
+    {
+      "name": "UNIT_TALK_ENABLED_TARGETS",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "Production enabled delivery targets written into deployment runtime env."
+    },
+    {
+      "name": "GHCR_PAT",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy.yml"],
+      "purpose": "GitHub Container Registry token for remote docker login during deploy."
+    },
+    {
+      "name": "DISCORD_OPS_WEBHOOK_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy-monitoring.yml"],
+      "purpose": "Discord ops webhook URL for the monitoring deployment stack."
+    },
+    {
+      "name": "UPTIME_KUMA_ADMIN_PASSWORD",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/deploy-monitoring.yml"],
+      "purpose": "Uptime Kuma admin password written into the monitoring deployment stack."
+    },
+    {
+      "name": "SUPABASE_DB_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/live-schema-parity.yml"],
+      "purpose": "Direct Supabase database URL for live schema parity checks."
+    },
+    {
+      "name": "UNIT_TALK_STAGING_DEPLOY_HOST",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "Hostname or IP of the staging deployment server."
+    },
+    {
+      "name": "UNIT_TALK_STAGING_DEPLOY_USER",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "SSH username for the staging deployment server."
+    },
+    {
+      "name": "UNIT_TALK_STAGING_DEPLOY_PATH",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "Absolute path to the staging deployment directory."
+    },
+    {
+      "name": "UNIT_TALK_STAGING_DEPLOY_HEALTH_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "HTTP URL polled after staging deployment startup."
+    },
+    {
+      "name": "UNIT_TALK_STAGING_DEPLOY_SSH_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "Ed25519 private key for SSH access to the staging deployment server."
+    },
+    {
+      "name": "STAGING_SUPABASE_URL",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "Supabase URL written into staging runtime env."
+    },
+    {
+      "name": "STAGING_SUPABASE_ANON_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "Supabase anon key written into staging runtime env."
+    },
+    {
+      "name": "STAGING_SUPABASE_SERVICE_ROLE_KEY",
+      "required": false,
+      "source": "manual",
+      "scope": "repo",
+      "used_by": [".github/workflows/staging-deploy.yml"],
+      "purpose": "Supabase service role key written into staging runtime env."
     }
   ]
 }

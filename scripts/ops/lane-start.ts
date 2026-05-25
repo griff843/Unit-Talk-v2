@@ -1,6 +1,7 @@
 import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import {
   prepareLaneExecutionDirectory,
   validateExecutionCwd,
@@ -10,6 +11,7 @@ import {
   reserveLease,
 } from './lease-registry.js';
 import {
+  ACTIVE_LOCK_STATUSES,
   activeManifestOverlap,
   branchExists,
   createBranchAndWorktree,
@@ -21,6 +23,7 @@ import {
   manifestExists,
   normalizeFileScope,
   parseArgs,
+  readAllManifests,
   readManifest,
   relativeToRoot,
   requireIssueId,
@@ -33,7 +36,87 @@ import {
   ROOT,
   type CanonicalLaneType,
   type LaneExecutor,
+  type LaneManifest,
 } from './shared.js';
+import { loadConcurrencyConfig, type ConcurrencyConfig } from './concurrency-config.js';
+
+export interface ConcurrencyViolation {
+  code: string;
+  message: string;
+}
+
+export function checkConcurrencyLimits(
+  activeManifests: LaneManifest[],
+  incomingLaneType: CanonicalLaneType,
+  incomingExecutor: LaneExecutor,
+  config: ConcurrencyConfig,
+): ConcurrencyViolation[] {
+  const active = activeManifests.filter((m) => ACTIVE_LOCK_STATUSES.has(m.status));
+  const violations: ConcurrencyViolation[] = [];
+
+  // Total cap
+  if (active.length >= config.total) {
+    violations.push({
+      code: 'total_cap_exceeded',
+      message: `Total active lanes (${active.length}) is at the hard cap of ${config.total}. Close a lane before starting a new one.`,
+    });
+  }
+
+  // Executor caps
+  const claudeActive = active.filter((m) => m.executor === 'claude').length;
+  const codexActive = active.filter(
+    (m) => m.executor === 'codex-cli' || m.executor === 'codex-cloud',
+  ).length;
+
+  if (incomingExecutor === 'claude' && claudeActive >= config.executors.claude) {
+    violations.push({
+      code: 'claude_cap_exceeded',
+      message: `Claude active lanes (${claudeActive}) is at the cap of ${config.executors.claude}. Close a Claude lane before starting another.`,
+    });
+  }
+
+  if (
+    (incomingExecutor === 'codex-cli' || incomingExecutor === 'codex-cloud') &&
+    codexActive >= config.executors.codex
+  ) {
+    violations.push({
+      code: 'codex_cap_exceeded',
+      message: `Codex active lanes (${codexActive}) is at the cap of ${config.executors.codex}. Close a Codex lane before starting another.`,
+    });
+  }
+
+  // Singleton type enforcement
+  if ((config.singleton_types as string[]).includes(incomingLaneType)) {
+    const existing = active.filter((m) => {
+      const lt = String(m.lane_type ?? '');
+      return lt === incomingLaneType;
+    });
+    if (existing.length > 0) {
+      violations.push({
+        code: 'singleton_type_conflict',
+        message: `Lane type "${incomingLaneType}" is singleton. Active lane ${existing[0]!.issue_id} already holds this type. Close it before starting another ${incomingLaneType} lane.`,
+      });
+    }
+  }
+
+  // Forbidden combinations
+  for (const [typeA, typeB] of config.forbidden_combinations) {
+    const incomingIsA = incomingLaneType === typeA;
+    const incomingIsB = incomingLaneType === typeB;
+    if (!incomingIsA && !incomingIsB) continue;
+
+    const conflictType = incomingIsA ? typeB : typeA;
+    const conflicting = active.filter((m) => String(m.lane_type ?? '') === conflictType);
+    if (conflicting.length > 0) {
+      violations.push({
+        code: 'forbidden_combination',
+        message: `Forbidden combination: "${incomingLaneType}" cannot run concurrently with "${conflictType}" (active lane: ${conflicting[0]!.issue_id}). See docs/governance/LANE_CONCURRENCY_POLICY.md §3.`,
+      });
+    }
+  }
+
+  return violations;
+}
 
 const CANONICAL_LANE_TYPES: CanonicalLaneType[] = [
   'runtime',
@@ -225,6 +308,24 @@ function main(): void {
       process.exit(1);
     }
 
+    const concurrencyConfig = loadConcurrencyConfig();
+    const concurrencyViolations = checkConcurrencyLimits(
+      readAllManifests(),
+      canonicalLaneType,
+      executor,
+      concurrencyConfig,
+    );
+    if (concurrencyViolations.length > 0) {
+      emitJson({
+        ok: false,
+        code: 'concurrency_limit_exceeded',
+        message: concurrencyViolations[0]!.message,
+        violations: concurrencyViolations,
+        config_path: 'docs/governance/CONCURRENCY_CONFIG.json',
+      });
+      process.exit(1);
+    }
+
     const overlap = activeManifestOverlap(issueId, normalizedFiles);
     if (overlap) {
       emitJson({
@@ -379,4 +480,9 @@ function main(): void {
   }
 }
 
-main();
+const isDirectRun =
+  process.argv[1] != null && fileURLToPath(import.meta.url) === process.argv[1];
+
+if (isDirectRun) {
+  main();
+}

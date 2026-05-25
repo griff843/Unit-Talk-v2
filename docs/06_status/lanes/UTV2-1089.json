@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/griffadavi__utv2-1089-init-132-invariant-engine",
   "branch": "griffadavi/utv2-1089-init-132-invariant-engine",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "97e36627d1fee74e3c64694a29fb2fc6519e6c73",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/846",
   "files_changed": [],
   "file_scope_lock": [
@@ -21,14 +21,44 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1089/evidence.json"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-25T00:00:59.531Z",
-  "heartbeat_at": "2026-05-25T00:18:38.000Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T09:30:39.918Z",
+  "closed_at": "2026-05-25T09:30:39.918Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/griffadavi/utv2-1089-init-132-invariant-engine.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T09:23:29.053Z",
+      "verdict": "pass",
+      "merge_sha": "97e36627d1fee74e3c64694a29fb2fc6519e6c73",
+      "failures": [],
+      "runner": "manual",
+      "source": "github_pr_merge_commit",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/846"
+    },
+    {
+      "checked_at": "2026-05-25T09:26:27.740Z",
+      "verdict": "fail",
+      "merge_sha": "97e36627d1fee74e3c64694a29fb2fc6519e6c73",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "R1",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-25T09:30:06.887Z",
+      "verdict": "pass",
+      "merge_sha": "97e36627d1fee74e3c64694a29fb2fc6519e6c73",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -85,7 +85,7 @@ jobs:
             echo "::error title=T1 Proof Gate - Missing Lane Manifest::Lane manifest not found: $manifest_path"
             echo ""
             echo "T1 lanes require a lane manifest before merging."
-            echo "Run 'ops:lane:start ${issue_id}' to create the manifest."
+            echo "Run 'ops:lane-start ${issue_id}' to create the manifest."
             echo ""
             echo "If this PR is not a lane (e.g., a hotfix), remove the tier:T1 label"
             echo "and add tier:T2 or tier:T3 as appropriate."

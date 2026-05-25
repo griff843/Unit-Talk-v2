@@ -164,18 +164,18 @@ Codex is the **implementation lane**. You own:
 
 ## Executor Concurrency Limits
 
-These limits are set by PM and enforced by the orchestrator. Codex does not self-authorize lane expansion.
+These limits are set by PM and enforced by the orchestrator from `docs/governance/CONCURRENCY_CONFIG.json`. Codex does not self-authorize lane expansion.
 
-| Executor | Default limit | Trial limit (PM-authorized only) |
+| Executor | Default limit | Notes |
 |---|---|---|
-| Claude Code | 1 active lane | 2 lanes (IAOS/tooling safe-class waves only) |
-| Codex CLI | 2 active lanes | 3 lanes (IAOS/tooling safe-class waves only) |
+| Claude Code | 2 active lanes | Governed by config and lane-start enforcement |
+| Codex CLI | 4 active lanes | Governed by config and lane-start enforcement |
 
-**Safe work classes** (eligible for PM trial expansion): governance, hygiene, verification, delivery/UI.
+**Current total cap:** 6 active execution lanes.
 
-**Ineligible for trial expansion** (hard singleton regardless of PM wave): runtime, migration, modeling, data/canonical.
+**Hard singleton work classes:** runtime, migration, modeling, data-canonical.
 
-Canonical policy: `docs/governance/LANE_CONCURRENCY_POLICY.md §10`
+Canonical policy: `docs/governance/LANE_CONCURRENCY_POLICY.md`; machine-readable authority: `docs/governance/CONCURRENCY_CONFIG.json`.
 
 ---
 

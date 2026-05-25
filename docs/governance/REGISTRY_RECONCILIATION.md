@@ -23,7 +23,7 @@ This document:
 
 ### 2.1 `docs/06_status/lanes/*.json` — **CANONICAL active-lane registry**
 
-158 manifests at audit. Per `LANE_MANIFEST_SPEC.md §1`, this is the **sole authoritative source for active lane state**. It is written by `ops:lane:start`, updated by any `ops:*` call, and read by `ops:truth-check` and `ops:reconcile`.
+158 manifests at audit. Per `LANE_MANIFEST_SPEC.md §1`, this is the **sole authoritative source for active lane state**. It is written by `ops:lane-start`, updated by any `ops:*` call, and read by `ops:truth-check` and `ops:reconcile`.
 
 Status breakdown at audit:
 
@@ -44,12 +44,12 @@ Status breakdown at audit:
 
 ---
 
-### 2.2 `.claude/lanes.json` — **LEGACY — DEPRECATED**
+### 2.2 `legacy lane registry` — **LEGACY — DEPRECATED**
 
-5 entries (UTV2-450, 452, 497, 510, 511), all `done` or `merged`. Last updated 2026-04-08. A separate cleanup commit (`395872a5 chore(ops): retire legacy .claude/lanes.json path — final cleanup`) was already merged but the file remains. The file contains duplicate state for entries already in `docs/06_status/lanes/*.json`.
+5 entries (UTV2-450, 452, 497, 510, 511), all `done` or `merged`. Last updated 2026-04-08. A separate cleanup commit (`395872a5 chore(ops): retire legacy legacy lane registry path — final cleanup`) was already merged but the file remains. The file contains duplicate state for entries already in `docs/06_status/lanes/*.json`.
 
 **Canonical owner for this data:** `docs/06_status/lanes/*.json`.  
-**Action:** File can remain as a historical artifact but must not be written to. Any tool or script that reads `.claude/lanes.json` for active state must be migrated to `docs/06_status/lanes/*.json`.
+**Action:** File can remain as a historical artifact but must not be written to. Any tool or script that reads `legacy lane registry` for active state must be migrated to `docs/06_status/lanes/*.json`.
 
 ---
 
@@ -196,7 +196,7 @@ When an agent needs to know the state of a lane, it must read in this order:
 | Did CI pass on merge? | GitHub PR `pr_url` | `gh pr view` |
 | What paths may this lane_type touch? | `.lane/lanes/{lane_type}.yml` | Read config file |
 
-**Never read `.claude/lanes.json` for active state.** It is a historical artifact.  
+**Never read `legacy lane registry` for active state.** It is a historical artifact.
 **Never read Linear for merge SHAs.** Linear does not store merge SHAs.  
 **Never read agent memory or chat for lane status.** Always verify against the manifest.
 
@@ -207,7 +207,7 @@ When an agent needs to know the state of a lane, it must read in this order:
 1. **`post-merge-lane-close.yml` must fire on every merge.** The actor guard (`github.actor != 'github-actions[bot]'`) prevents loops. Admin merges should trigger the workflow via `workflow_dispatch` if automation does not fire.
 2. **No new registry file.** Before creating any file that tracks lane/execution state, map it to the existing truth sources in this document. If it overlaps with `docs/06_status/lanes/*.json`, it is a duplicate.
 3. **`ops:reconcile` should run on a schedule.** It detects stale, stranded, and orphaned manifests automatically. Currently triggered manually; a cron job would prevent long-lived drift.
-4. **`.claude/lanes.json` must not be written to.** Any script that updates it should be migrated to `scripts/ops/lane-start.ts` + `docs/06_status/lanes/`.
+4. **`legacy lane registry` must not be written to.** Any script that updates it should be migrated to `scripts/ops/lane-start.ts` + `docs/06_status/lanes/`.
 5. **Status values must be from the canonical enum.** `closed`, `abandoned`, `cancelled` are non-canonical. Use `done` for all terminal states; document the reason in a `notes` field if needed.
 
 ---
@@ -220,7 +220,7 @@ When an agent needs to know the state of a lane, it must read in this order:
 | Fix UTV2-958 manifest: `in_review` → `done` with SHA `955f7fc9` | Claude | High |
 | Normalize 15 `closed`/`abandoned`/`cancelled` manifests to `done` | Script / Claude | Medium |
 | Wire `ops:reconcile` on a cron schedule | Claude | Medium |
-| Remove `.claude/lanes.json` write path from any remaining scripts | Claude | Low |
+| Remove `legacy lane registry` write path from any remaining scripts | Claude | Low |
 
 ---
 

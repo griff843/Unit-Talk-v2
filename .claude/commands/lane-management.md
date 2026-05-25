@@ -20,8 +20,8 @@ Ready → Started → In Progress → In Review → Merged → Done
 | Command | Purpose |
 |---|---|
 | `ops:preflight` | verify env/git/deps, emit preflight token |
-| `ops:lane:start <UTV2-###>` | create manifest, worktree, branch, file locks |
-| `ops:lane:close <UTV2-###>` | run truth-check, transition Linear, close manifest |
+| `ops:lane-start <UTV2-###>` | create manifest, worktree, branch, file locks |
+| `ops:lane-close <UTV2-###>` | run truth-check, transition Linear, close manifest |
 | `ops:truth-check <UTV2-###>` | the done-gate |
 | `ops:lane:resume <UTV2-###>` | re-preflight and resume stranded/blocked lane |
 | `ops:lane:block <UTV2-###>` | mark blocked with reason |
@@ -41,7 +41,7 @@ Ready → Started → In Progress → In Review → Merged → Done
 
 ## Lane close checklist
 
-Pre-closure checklist (R-level, proof, CI, tier label, truth-check) lives in `/verification`. Run it before `ops:lane:close`.
+Pre-closure checklist (R-level, proof, CI, tier label, truth-check) lives in `/verification`. Run it before `ops:lane-close`.
 
 ---
 

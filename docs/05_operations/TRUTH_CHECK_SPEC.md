@@ -6,7 +6,7 @@
 **Script path (target):** `scripts/ops/truth-check.ts`
 **Package script (target):** `pnpm ops:truth-check -- <UTV2-###>`
 
-This spec defines the mechanical done-gate for all Unit Talk V2 lanes. Truth-check is the single authority that decides whether an issue is Done. It is run by `ops:lane:close`, by scheduled reconciliation, and on demand.
+This spec defines the mechanical done-gate for all Unit Talk V2 lanes. Truth-check is the single authority that decides whether an issue is Done. It is run by `ops:lane-close`, by scheduled reconciliation, and on demand.
 
 Implementation must not deviate from this spec without an update to this document.
 
@@ -185,7 +185,7 @@ Output must be written to stdout. Logs and explanations go to stderr. No other s
 
 ## 6. Pass/Fail Behavior
 
-- **Pass (`0`):** Write pass record into manifest `truth_check_history[]` with `checked_at` and merge SHA. `ops:lane:close` proceeds. Linear transitioned to Done. Manifest `status` → `done`, `closed_at` set.
+- **Pass (`0`):** Write pass record into manifest `truth_check_history[]` with `checked_at` and merge SHA. `ops:lane-close` proceeds. Linear transitioned to Done. Manifest `status` → `done`, `closed_at` set.
 - **Fail (`1`):** Write fail record into manifest. Lane stays in `merged` or previous state. Do not transition Linear. Emit failures to stderr for agent visibility.
 - **Ineligible (`2`):** No state mutation. Caller should retry later.
 - **Infra error (`3`):** No state mutation. Alert PM via daily digest if persistent.

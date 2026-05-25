@@ -62,7 +62,7 @@ console.log(JSON.stringify({ count: ghosts.length, ids: ghosts.map(m => m.issue_
 If ghost count ≥ 2:
 
 ```
-[loop-dispatch] HALTED — {N} ghost lane(s) detected. Run /lane-reconciler first.
+[loop-dispatch] HALTED — {N} ghost lane(s) detected. Run `pnpm ops:reconcile` first.
 Ghost lanes: {IDs}
 ```
 
@@ -128,7 +128,7 @@ Parse the cycle report for merge count:
 If `consecutive_zero ≥ 2`:
 ```
 [loop-dispatch] STALLED — two cycles with no merges. Check blocked lanes.
-Run /lane-reconciler to inspect stale state, then re-invoke /loop-dispatch.
+Run `pnpm ops:reconcile` to inspect and repair stale state, then re-invoke /loop-dispatch.
 ```
 Exit the loop.
 
@@ -197,7 +197,7 @@ Cycle breakdown:
 Next action:
   Board clear   → nothing; run /loop-dispatch again when new issues are Ready
   Cycle limit   → run /loop-dispatch to continue
-  Stalled       → run /lane-reconciler, then /loop-dispatch
+  Stalled       → run `pnpm ops:reconcile`, then /loop-dispatch
   T1 gate       → review T1 PR(s) and post PM_VERDICT; then /loop-dispatch
   Halted        → resolve the reported gate failure, then /loop-dispatch
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

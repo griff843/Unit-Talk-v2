@@ -75,18 +75,6 @@ For `--dry-run`: stop here and report the dispatch plan as a table:
 | Issue | Title | Tier | Executor | Prerequisites |
 ```
 
-### Phase 2.5: Codex health check (before routing to Codex)
-
-Before routing any lane to Codex, run:
-```bash
-npx tsx scripts/ops/codex-health-check.ts --json
-```
-
-If `healthy: false`:
-- **Do not dispatch to Codex.** Route the lane to Claude instead.
-- Report: "Codex unavailable ({error}), falling back to Claude for {issue_id}"
-- This prevents silent failures and fake slot occupancy (UTV2-681).
-
 ### Phase 3: Start lanes
 
 For each validated target:

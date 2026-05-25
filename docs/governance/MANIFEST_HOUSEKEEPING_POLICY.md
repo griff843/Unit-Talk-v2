@@ -37,7 +37,7 @@ The chain reaction:
 
 Feature branch housekeeping commits are either:
 1. The lane-open manifest commit (no `[skip ci]`) — always followed by implementation commits
-2. The PR-open manifest update — if added to the branch, must not be the HEAD commit when CI gates run (add after PR is open or use `[skip ci]` only on the separate manifest-update commit to main via `ops:lane:close`)
+2. The PR-open manifest update — if added to the branch, must not be the HEAD commit when CI gates run (add after PR is open or use `[skip ci]` only on the separate manifest-update commit to main via `ops:lane-close`)
 
 ### Post-merge (on main, by automation)
 

@@ -2,16 +2,18 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packageTouchingLaneRequiresSingleton } from './lane-execution.js';
+import { loadConcurrencyConfig } from './concurrency-config.js';
+import { ACTIVE_LOCK_STATUSES, resolveLaneExecutor } from './shared.js';
 
 export interface LaneManifest {
   schema_version: number;
   issue_id: string;
   lane_type: string;
-  executor: 'claude' | 'codex-cli';
+  executor: 'claude' | 'codex-cli' | 'codex-cloud';
   tier: 'T1' | 'T2' | 'T3';
   branch: string;
   base_branch: string;
-  status: 'started' | 'done' | 'blocked';
+  status: 'started' | 'in_progress' | 'in_review' | 'merged' | 'done' | 'blocked' | 'reopened';
   file_scope_lock: string[];
   blocked_by: string[];
   commit_sha: string | null;
@@ -143,9 +145,7 @@ function readLaneManifests(dir: string = LANE_DIR): LaneManifest[] {
 }
 
 function readActiveLanes(dir: string = LANE_DIR): LaneManifest[] {
-  return readLaneManifests(dir).filter(
-    (manifest) => manifest.status === 'started' && manifest.commit_sha === null,
-  );
+  return readLaneManifests(dir).filter((manifest) => ACTIVE_LOCK_STATUSES.has(manifest.status));
 }
 
 function readDoneIssueIds(dir: string = LANE_DIR): Set<string> {
@@ -171,6 +171,10 @@ function parseCandidatesArg(argv: string[]): CandidateLane[] {
 }
 
 function parseLimits(argv: string[]): { maxClaude: number; maxCodex: number } {
+  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const defaultClaude = cfg?.executors.claude ?? 2;
+  const defaultCodex = cfg?.executors.codex ?? 4;
+
   const getNumberFlag = (name: string, fallback: number): number => {
     const index = argv.indexOf(name);
     if (index === -1) {
@@ -181,8 +185,8 @@ function parseLimits(argv: string[]): { maxClaude: number; maxCodex: number } {
   };
 
   return {
-    maxClaude: getNumberFlag('--max-claude', 1),
-    maxCodex: getNumberFlag('--max-codex', 2),
+    maxClaude: getNumberFlag('--max-claude', defaultClaude),
+    maxCodex: getNumberFlag('--max-codex', defaultCodex),
   };
 }
 
@@ -192,8 +196,11 @@ export function evaluateCandidates(
   limits: { maxClaude: number; maxCodex: number },
 ): MaximizationReport {
   const doneIssueIds = readDoneIssueIds();
-  const activeClaude = activeLanes.filter((lane) => lane.executor === 'claude').length;
-  const activeCodex = activeLanes.filter((lane) => lane.executor === 'codex-cli').length;
+  const activeClaude = activeLanes.filter((lane) => resolveLaneExecutor(lane) === 'claude').length;
+  const activeCodex = activeLanes.filter((lane) => {
+    const executor = resolveLaneExecutor(lane);
+    return executor === 'codex-cli' || executor === 'codex-cloud';
+  }).length;
 
   const report: MaximizationReport = {
     generated_at: new Date().toISOString(),
@@ -269,7 +276,9 @@ export function evaluateCandidates(
 function runCli(): void {
   let candidates: CandidateLane[] = [];
   let activeLanes: LaneManifest[] = [];
-  let limits = { maxClaude: 1, maxCodex: 2 };
+  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const defaultLimits = { maxClaude: cfg?.executors.claude ?? 2, maxCodex: cfg?.executors.codex ?? 4 };
+  let limits = defaultLimits;
 
   try {
     candidates = parseCandidatesArg(process.argv.slice(2));
@@ -278,7 +287,7 @@ function runCli(): void {
   } catch {
     candidates = [];
     activeLanes = [];
-    limits = { maxClaude: 1, maxCodex: 2 };
+    limits = defaultLimits;
   }
 
   const report = evaluateCandidates(candidates, activeLanes, limits);

@@ -6,7 +6,7 @@
 
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
 STATE_FILE="$ROOT/docs/06_status/SYSTEM_STATE.md"
-LANES_FILE="$ROOT/.claude/lanes.json"
+LANE_DIR="$ROOT/docs/06_status/lanes"
 
 # Build a compact state summary
 BRANCH=$(git -C "$ROOT" branch --show-current 2>/dev/null || echo "unknown")
@@ -14,19 +14,22 @@ DIRTY=$(git -C "$ROOT" status --short 2>/dev/null | wc -l | tr -d ' ')
 TREE_LINE="$DIRTY file(s) modified"
 [ "$DIRTY" -eq 0 ] && TREE_LINE="Clean"
 
-# Extract active lanes
+# Extract active lanes from manifest directory (authoritative source)
 LANE_SUMMARY=$(node -e "
 try {
-  const fs = require('fs');
-  const d = JSON.parse(fs.readFileSync('$LANES_FILE', 'utf8'));
-  const active = (d.lanes || []).filter(l =>
-    !['done','merged','cancelled'].includes((l.status || '').toLowerCase())
-  );
+  const fs = require('fs'), path = require('path');
+  const dir = '$LANE_DIR';
+  if (!fs.existsSync(dir)) { process.stdout.write('none'); process.exit(0); }
+  const ACTIVE = new Set(['started','in_progress','in_review','blocked','reopened']);
+  const active = fs.readdirSync(dir)
+    .filter(f => f.endsWith('.json') && f !== 'README.md')
+    .map(f => { try { return JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')); } catch(e) { return null; } })
+    .filter(m => m && ACTIVE.has(m.status));
   if (active.length === 0) process.stdout.write('none');
   else active.forEach(l =>
-    process.stdout.write('[' + (l.status||'?').toUpperCase() + '] ' + (l.id||'?') + ' — ' + (l.title||l.branch||'').slice(0,50) + '\n')
+    process.stdout.write('[' + (l.status||'?').toUpperCase() + '] ' + (l.issue_id||'?') + ' — ' + (l.branch||'').slice(0,50) + '\n')
   );
-} catch(e) { process.stdout.write('lanes.json unreadable'); }
+} catch(e) { process.stdout.write('manifest dir unreadable'); }
 " 2>/dev/null || echo "unavailable")
 
 # Dispatch slot counts from manifests

@@ -30,7 +30,7 @@
       "failures": [
         "G5"
       ],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": [
@@ -39,7 +39,7 @@
       "reasons": [
         "commits touched locked files after merge without linked follow-up issue: 6181d8e5266160f9963ba343179103bac5d2fe95"
       ],
-      "detected_by": "ops:lane:close"
+      "detected_by": "ops:lane-close"
     }
   ]
 }

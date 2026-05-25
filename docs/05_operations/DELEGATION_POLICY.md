@@ -218,7 +218,7 @@ Stopping is not a failure mode. Stopping with precise evidence is the correct be
 
 ## Delegation to Codex CLI lanes
 
-When the orchestrator dispatches work to a Codex CLI lane (via `pnpm codex:dispatch`), the lane inherits the Tier classification of the task it is executing. A Codex lane cannot autonomously upgrade its own authorization — it reports results back to the orchestrator, which then applies the appropriate merge policy from its own tier.
+When the orchestrator dispatches work to a Codex CLI lane (via `pnpm ops:codex-exec --issue UTV2-###`), the lane inherits the Tier classification of the task it is executing. A Codex lane cannot autonomously upgrade its own authorization — it reports results back to the orchestrator, which then applies the appropriate merge policy from its own tier.
 
 **Specifically:**
 - A Codex lane running a Tier A task may open a PR that the orchestrator merges on green without PM touchpoint

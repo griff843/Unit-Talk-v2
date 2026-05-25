@@ -39,7 +39,7 @@ Additionally, the merge mechanics (`sync.yml` conflict model, `[skip ci]` deadlo
 | Source | Location | Purpose | Status |
 |---|---|---|---|
 | **Individual lane manifests** | `docs/06_status/lanes/*.json` | Active lane state, file locks, heartbeat, truth-check history | **Canonical** — declared by `LANE_MANIFEST_SPEC.md` |
-| **Global lanes registry** | `.claude/lanes.json` | Per-lane entry with `owner`, `status`, `allowedFiles`, `packetPath` | **Legacy** — 5 entries, all done/merged (April 2026), no new entries since |
+| **Global lanes registry** | `legacy lane registry` | Per-lane entry with `owner`, `status`, `allowedFiles`, `packetPath` | **Legacy** — 5 entries, all done/merged (April 2026), no new entries since |
 | **Lane type contracts** | `.lane/lanes/*.yml` | Path authority per lane type, proof requirements, concurrency rules | **New, unintegrated** — merged 2026-05-15; not cross-referenced from EXECUTION_TRUTH_MODEL.md |
 | **sync metadata** | `.ops/sync.yml` | RETIRED_EXTERNAL_SYNC/CI sync — links PR to issue, controls `allow_multiple_issues` flag | **Operational but conflicted** — single shared mutable file causes guaranteed rebase conflicts |
 | **Linear issue state** | Linear API | Workflow intent, tier label, ownership | Rank 4 truth — follows manifest, never leads |
@@ -49,7 +49,7 @@ Additionally, the merge mechanics (`sync.yml` conflict model, `[skip ci]` deadlo
 
 | Data category | Canonical owner | Non-canonical (retire) |
 |---|---|---|
-| Active lane existence | `docs/06_status/lanes/<issue>.json` | `.claude/lanes.json` |
+| Active lane existence | `docs/06_status/lanes/<issue>.json` | `legacy lane registry` |
 | Lane file-scope locks | `docs/06_status/lanes/<issue>.json` `.file_scope_lock` | (none) |
 | Lane type path authority | `docs/governance/LANE_TAXONOMY.md` | `.lane/lanes/*.yml` (conflict — see §1.3) |
 | Merge SHA / CI outcome | GitHub `main` first-parent | (none) |
@@ -76,9 +76,9 @@ These two documents, both merged on 2026-05-15, give **opposite answers** to whe
 
 `docs/governance/LANE_TAXONOMY.md` §6 lists `docs/governance/**` as an allowed path for Governance lanes. The `.lane/lanes/governance.yml` does NOT include `docs/governance/**` in its `allowed_path_globs`. This means `pnpm lane:check -- --lane governance` would fail for this very PR (UTV2-975).
 
-### 1.5 `.claude/lanes.json` retirement recommendation
+### 1.5 `legacy lane registry` retirement recommendation
 
-`.claude/lanes.json` contains 5 entries, all with `status: done` or `status: merged`, from April 2026. The youngest entry is UTV2-511 (April 2026). No new lanes have been registered here. `LANE_MANIFEST_SPEC.md` defines `docs/06_status/lanes/*.json` as canonical. `.claude/lanes.json` is dead weight and should be removed after confirming no tooling reads it.
+`legacy lane registry` contains 5 entries, all with `status: done` or `status: merged`, from April 2026. The youngest entry is UTV2-511 (April 2026). No new lanes have been registered here. `LANE_MANIFEST_SPEC.md` defines `docs/06_status/lanes/*.json` as canonical. `legacy lane registry` is dead weight and should be removed after confirming no tooling reads it.
 
 ---
 
@@ -311,8 +311,8 @@ For every governance subsystem:
 |---|---|---|---|
 | `EXECUTION_TRUTH_MODEL.md` | PM + orchestrator | **Yes — T0** | No change. Keep as the root authority. |
 | `LANE_MANIFEST_SPEC.md` | PM + orchestrator | **Yes — T1** | No change. Canonical for manifest schema and lifecycle. |
-| `docs/06_status/lanes/*.json` | `ops:lane:start` / `ops:lane:close` | **Yes** | Continue as canonical active lane state. Close ghost UTV2-955. |
-| `.claude/lanes.json` | Legacy | **No — superseded** | **Remove.** No new entries since April 2026. Superseded by individual manifests. |
+| `docs/06_status/lanes/*.json` | `ops:lane-start` / `ops:lane-close` | **Yes** | Continue as canonical active lane state. Close ghost UTV2-955. |
+| `legacy lane registry` | Legacy | **No — superseded** | **Remove.** No new entries since April 2026. Superseded by individual manifests. |
 | `docs/governance/LANE_TAXONOMY.md` | Claude/governance | **Yes — policy** | Keep. Authoritative for lane type definitions. Fix path conflict with `.lane/runtime.yml`. |
 | `docs/governance/LANE_CONCURRENCY_POLICY.md` | Claude/governance | **Yes — policy** | Keep. Authoritative for concurrency rules. |
 | `docs/governance/PROOF_BUNDLE_STANDARD.md` | Claude/governance | **Yes — policy** (in_review UTV2-958) | Keep pending merge. |
@@ -363,7 +363,7 @@ These three changes make lane merges boring. Nothing else should proceed until t
 
 **Part of UTV2-962:**
 
-8. **Retire `.claude/lanes.json`.** Archive the file (rename to `.claude/lanes.legacy.json` or delete). Update any tooling that reads it (check via `grep -r "lanes.json" .`). Add a comment in LANE_MANIFEST_SPEC.md noting the supersession.
+8. **Retire `legacy lane registry`.** Archive the file (rename to `.claude/lanes.legacy.json` or delete). Update any tooling that reads it (check via `grep -r "lanes.json" .`). Add a comment in LANE_MANIFEST_SPEC.md noting the supersession.
 
 9. **Close ghost lane UTV2-955.** Branch `claude/utv2-955-lane-taxonomy-execution-contracts` — LANE_TAXONOMY.md is already on main. Run `lane-reconciler` agent or manually close the manifest. Heartbeat is stale (>8h as of audit).
 
@@ -410,7 +410,7 @@ These three changes make lane merges boring. Nothing else should proceed until t
 - Tier: T2 — already labeled correctly
 - Recommended executor: Claude (governance judgment required for canonical owner decisions)
 - Dependencies: Requires UTV2-961 to have resolved the sync.yml model (otherwise reconciling registries still has the merge friction problem)
-- This audit's §1 findings (`.claude/lanes.json` retirement, `.lane/` reconciliation) are the primary input to UTV2-962
+- This audit's §1 findings (`legacy lane registry` retirement, `.lane/` reconciliation) are the primary input to UTV2-962
 - Sequencing: UTV2-961 → UTV2-962 → `.lane/` CI integration
 
 ### Internal Agent Operating System project
@@ -472,7 +472,7 @@ Lane branch ──▶ pnpm verify (required)
 
 ```
 Backlog ──▶ Ready (tier label + AC + file scope declared)
-        ──▶ [ops:lane:start] manifest created, branch created, file locks acquired
+        ──▶ [ops:lane-start] manifest created, branch created, file locks acquired
         ──▶ In Progress (commits landing)
         ──▶ In Review (PR open, CI running)
         ──▶ Merged (PR merged to main)
@@ -485,7 +485,7 @@ Backlog ──▶ Ready (tier label + AC + file scope declared)
 | Authority question | Authoritative source | Non-authoritative |
 |---|---|---|
 | Is the code shipped? | GitHub main first-parent history | Lane manifest, Linear |
-| What is this lane doing right now? | `docs/06_status/lanes/<issue>.json` | `.claude/lanes.json`, session memory |
+| What is this lane doing right now? | `docs/06_status/lanes/<issue>.json` | `legacy lane registry`, session memory |
 | Can this lane type write this path? | `docs/governance/LANE_TAXONOMY.md` | `.lane/lanes/*.yml` (until reconciled) |
 | Is this issue Done? | `ops:truth-check` exit code 0 | Agent narrative, Linear state alone |
 | Who may merge T1? | PM `t1-approved` label + pm-verdict/v1 | Any agent claim |

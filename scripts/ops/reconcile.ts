@@ -102,7 +102,7 @@ export function reconcileManifest(
       detail: `branch "${manifest.branch}" deleted on remote but manifest still active`,
       branch: manifest.branch,
       heartbeat_age_h: ageH,
-      action_taken: 'logged — manual close required (ops:lane:close)',
+      action_taken: 'logged — manual close required (ops:lane-close)',
       planned_mutation: null,
     };
   }

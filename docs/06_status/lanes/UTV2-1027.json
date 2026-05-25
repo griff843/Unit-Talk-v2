@@ -87,7 +87,7 @@
       "failures": [
         "G5"
       ],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     },
     {
       "checked_at": "2026-05-21T12:05:19.600Z",
@@ -132,7 +132,7 @@
       "reasons": [
         "commits touched locked files after merge without linked follow-up issue: c510e72b03ab0650055a864f67f9ab9c9e04779d"
       ],
-      "detected_by": "ops:lane:close"
+      "detected_by": "ops:lane-close"
     }
   ],
   "execution_location": {

@@ -45,7 +45,7 @@ T2 clear-scope (Codex) merge gate: Claude diff-review only. No PM_VERDICT.
 2. Query Linear (MCP `mcp__claude_ai_Linear__list_issues`):
    - **Include:** Ready / Ready for Codex / Ready for Claude / Backlog with a tier label
    - **Exclude:** In Claude, In Codex (already active), Done, Cancelled, Blocked, untiered
-3. `cat .claude/lanes.json` — note active lanes, `file_scope_lock[]`, slot usage (default: max 2 Claude, max 4 Codex for safe work classes; total cap 6 — see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
+3. Read `docs/06_status/lanes/*.json` — enumerate active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`), note `file_scope_lock[]` and executor counts. Slot limits (per `docs/governance/CONCURRENCY_CONFIG.json`): max 2 Claude, max 4 Codex for safe work classes; total cap 6. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`.
 4. Build candidate list — exclude:
    - File-scope overlap with any active lane
    - Missing tier label
@@ -103,7 +103,7 @@ For each approved issue: `/dispatch UTV2-###`. That skill owns branch creation, 
 Dispatch order:
 1. Approved T1 Claude lanes first
 2. Non-T1 Claude lanes — sequentially (default: max 2 active for safe work classes; see `docs/governance/LANE_CONCURRENCY_POLICY.md §10`)
-3. Codex lanes — up to 2 in parallel (default); up to 3 if PM trial includes a third Codex slot
+3. Codex lanes — up to 4 in parallel (default per `docs/governance/CONCURRENCY_CONFIG.json`)
 
 Parallel dispatch guard:
 - Every active implementation lane must have a distinct worktree path.
@@ -124,7 +124,9 @@ After PR open:
 4. Pre-merge diagnostic: `pnpm ops:pr-block-diagnostic --pr <n>` → if genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
 5. On PASS: `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
 6. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-7. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. Then dispatch next Claude candidate.
+7. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release.
+8. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes the closed lane's git worktree. Non-blocking: if worktree already absent, command exits 0.
+9. Then dispatch next Claude candidate.
 8. On FAIL: mark blocked with specific failing check → dispatch next from unblocked pool
 
 ### Codex lanes (async)
@@ -140,7 +142,9 @@ On `--check-codex`: query GitHub for open PRs on active Codex branches, then for
 2. Run `pnpm ops:pr-block-diagnostic --pr <n>`; if a genuine branch update is required, run `pnpm ops:merge-wrapper pr-update-branch --issue UTV2-### --branch <branch> --pr <n>`
 3. Clean → `gh pr review <n> --approve` → `pnpm ops:merge-wrapper pr-merge --issue UTV2-### --branch <branch> --pr <n> --method squash`
 4. Acquire closeout mutex ownership, then close: `pnpm ops:merge-lock acquire --issue UTV2-### --branch <branch> --reason ops:lane-close` → `pnpm ops:lane-close UTV2-###`
-5. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release. Then dispatch next Codex candidate.
+5. `ops:lane-close` owns Linear Done, manifest closeout, dispatch lease release, and merge mutex release.
+6. After `ops:lane-close` exits 0: `pnpm ops:lane-clean UTV2-###` — prunes closed worktree.
+7. Then dispatch next Codex candidate.
 6. Scope bleed / verify failure → leave PR open, mark blocked, dispatch next
 
 ### T1 merge gate
@@ -201,4 +205,4 @@ pnpm ops:merge-wrapper main-sync --issue UTV2-### --branch main
 - **Default: max 2 Claude lanes, max 4 Codex lanes for safe work classes** (Governance, Hygiene, Verification, Delivery/UI). Total hard cap 6. Runtime, migration, modeling, and data/canonical lanes are singleton per type regardless of executor count. See `docs/governance/LANE_CONCURRENCY_POLICY.md §10`. Queue — never stack.
 - **No scope overlap.** Check `file_scope_lock` before every dispatch.
 - **Codex lanes are async.** Dispatch and continue. Review on `--check-codex` re-entry.
-- **Board truth over Linear truth.** If `lanes.json` says active but Linear says Done, reconcile before dispatching.
+- **Board truth over Linear truth.** If `docs/06_status/lanes/*.json` manifests say active but Linear says Done, reconcile before dispatching (`pnpm ops:reconcile`).

@@ -30,18 +30,18 @@ The manifest is **not** authoritative for: shipped code (use `main`), CI outcome
 
 | Event | Trigger | State Change | Writer |
 |---|---|---|---|
-| **Create** | `ops:lane:start <issue>` succeeds | file created, `status: started` | `ops:lane:start` |
+| **Create** | `ops:lane-start <issue>` succeeds | file created, `status: started` | `ops:lane-start` |
 | **Heartbeat** | any `ops:*` call for the lane, any commit on the lane branch, or explicit `ops:lane:heartbeat` | `heartbeat_at` updated | any `ops:*` tool |
-| **Progress** | first commit pushed | `status: in_progress` | `ops:lane:start` or commit hook |
+| **Progress** | first commit pushed | `status: in_progress` | `ops:lane-start` or commit hook |
 | **Review** | PR opened and linked | `status: in_review`, `pr_url` set | `ops:lane:link-pr` or auto-detect |
-| **Merge** | PR merged into `main` | `status: merged`, `commit_sha` set, `files_changed[]` finalized | reconcile or `ops:lane:close` |
-| **Close** | `ops:truth-check` passes | `status: done`, `closed_at` set | `ops:lane:close` |
+| **Merge** | PR merged into `main` | `status: merged`, `commit_sha` set, `files_changed[]` finalized | reconcile or `ops:lane-close` |
+| **Close** | `ops:truth-check` passes | `status: done`, `closed_at` set | `ops:lane-close` |
 | **Block** | explicit block or heartbeat timeout | `status: blocked`, `blocked_by` populated | `ops:lane:block` or reconcile |
 | **Reopen** | truth-check exit code `4` | `status: reopened`, `reopen_history[]` appended | `ops:truth-check` |
-| **Override close** | PM force-close | `status: done`, `override: {reason, by}` set | `ops:lane:close --override` |
+| **Override close** | PM force-close | `status: done`, `override: {reason, by}` set | `ops:lane-close --override` |
 
 **Laws:**
-- A manifest file is created **only** by `ops:lane:start`. No manual creation.
+- A manifest file is created **only** by `ops:lane-start`. No manual creation.
 - A manifest is never deleted. Closed manifests remain for audit.
 - State transitions follow the lifecycle in `EXECUTION_TRUTH_MODEL.md` §2. Illegal transitions are rejected by the writer.
 - Concurrent writes are prevented by the file-scope lock mechanism (§6).
@@ -73,9 +73,9 @@ The manifest is a single JSON object. Unknown fields are preserved but not acted
 {
   "schema_version": 1,
   "issue_id": "UTV2-###",
-  "lane_type": "claude" | "codex-cli" | "codex-cloud",
+  "lane_type": "runtime" | "modeling" | "verification" | "hygiene" | "migration" | "governance" | "delivery-ui" | "data-canonical",
   "tier": "T1" | "T2" | "T3",
-  "worktree_path": "C:/Dev/Unit-Talk-v2-main.worktrees/UTV2-###",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/UTV2-###",
   "branch": "fix/utv2-###-short-slug",
   "base_branch": "main",
   "commit_sha": null | "abc123...",
@@ -142,7 +142,7 @@ Optional fields are additive. They do not change truth-check behavior unless exp
   "verdict": "pass" | "fail" | "reopen",
   "merge_sha": "abc123...",
   "failures": ["G4"],
-  "runner": "ops:lane:close" | "ops:reconcile" | "manual"
+  "runner": "ops:lane-close" | "ops:reconcile" | "manual"
 }
 ```
 
@@ -160,7 +160,7 @@ Reconciliation rules:
 
 - If Linear says Done but manifest is not closed → manifest wins, Linear is corrected by `ops:reconcile`.
 - If GitHub says merged but manifest is `in_review` → reconcile transitions manifest to `merged`.
-- If manifest is `done` but Linear is not → reconcile transitions Linear to Done (this path is only reached via `ops:lane:close`, so it is normally impossible).
+- If manifest is `done` but Linear is not → reconcile transitions Linear to Done (this path is only reached via `ops:lane-close`, so it is normally impossible).
 - If manifest does not exist but Linear is In Progress → Linear is stale; reconcile transitions Linear to Ready and notifies PM.
 
 **The manifest is never patched from Linear.** Linear is patched from the manifest. This is the enforcement of §1 authority.
@@ -169,11 +169,11 @@ Reconciliation rules:
 
 ## 6. File-Scope Lock Behavior
 
-`file_scope_lock` declares the set of files the lane claims exclusive write access to. It is declared at `ops:lane:start` and immutable for the life of the lane.
+`file_scope_lock` declares the set of files the lane claims exclusive write access to. It is declared at `ops:lane-start` and immutable for the life of the lane.
 
 Rules:
 
-- `ops:lane:start` scans all active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`) and refuses if any `file_scope_lock` entries overlap with the incoming lane's declared locks.
+- `ops:lane-start` scans all active manifests (`status ∈ {started, in_progress, in_review, blocked, reopened}`) and refuses if any `file_scope_lock` entries overlap with the incoming lane's declared locks.
 - Overlap is computed on glob-expanded absolute paths. `apps/api/src/**` overlaps with `apps/api/src/foo.ts`.
 - Overlap refusal is hard; the only resolution is to wait for the conflicting lane to close, or to redefine scope.
 - A lane may widen its declared scope only by explicit `ops:lane:relock` which re-runs the overlap check.
@@ -187,13 +187,13 @@ A pre-commit hook (future) may promote locks to hard enforcement.
 
 ## 7. Stranded Lane Detection
 
-Handled by `ops:reconcile` on a cron schedule. Also runs as part of `ops:lane:start` to clean up before creating a new lane.
+Handled by `ops:reconcile` on a cron schedule. Also runs as part of `ops:lane-start` to clean up before creating a new lane.
 
 Detection:
 
 - Stale: 4h < `now - heartbeat_at` ≤ 24h → flag `stale: true`.
 - Stranded: `now - heartbeat_at` > 24h → transition to `blocked`, append `blocked_by: ["stranded"]`, append note to `truth_check_history` as `{verdict: "fail", failures: ["stranded"], runner: "ops:reconcile"}`.
-- Orphaned: branch not present locally or on origin → flag `orphaned: true`, require `ops:lane:resume --force-orphan` or `ops:lane:close --abandon`.
+- Orphaned: branch not present locally or on origin → flag `orphaned: true`, require `ops:lane:resume --force-orphan` or `ops:lane-close --abandon`.
 
 Stranded detection never merges code, never modifies branches, and never touches Linear outside of marking the issue Blocked with a reason.
 
@@ -203,13 +203,13 @@ Stranded detection never merges code, never modifies branches, and never touches
 
 | Concern | Mechanism |
 |---|---|
-| Manifest exists | `ops:lane:start` creates; `ops:truth-check` requires |
+| Manifest exists | `ops:lane-start` creates; `ops:truth-check` requires |
 | Schema validity | `lane_manifest_v1.schema.json` + validator invoked on every write |
 | Append-only history fields | validator + writer refuses overwrites |
-| File-scope locks | `ops:lane:start` overlap check |
+| File-scope locks | `ops:lane-start` overlap check |
 | Heartbeat freshness | `ops:reconcile` scheduled |
 | Status legality | writer refuses illegal transitions |
-| One-manifest-per-issue | filename uniqueness; second `ops:lane:start` on same issue refuses unless previous manifest is `done` |
+| One-manifest-per-issue | filename uniqueness; second `ops:lane-start` on same issue refuses unless previous manifest is `done` |
 
 No prose enforces these. Scripts enforce these. Prose only references the scripts.
 

@@ -10,6 +10,7 @@ import {
   readAllManifests,
   type LaneManifest,
 } from './shared.js';
+import { loadConcurrencyConfig } from './concurrency-config.js';
 
 export interface ExecutionStateReport {
   generated_at: string;
@@ -97,8 +98,11 @@ interface TierVerificationRule {
 
 const LINEAR_BASE_URL = 'https://linear.app/unit-talk-v2';
 const GITHUB_BASE_URL = 'https://github.com/griff843/Unit-Talk-v2';
-export const MAX_CLAUDE_LANES = 1;
-export const MAX_CODEX_LANES = 2;
+
+// Load from CONCURRENCY_CONFIG.json — single source of truth
+const _cc = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+export const MAX_CLAUDE_LANES = _cc?.executors.claude ?? 2;
+export const MAX_CODEX_LANES = _cc?.executors.codex ?? 4;
 
 const TIER_VERIFICATION_MAP: Record<'T1' | 'T2' | 'T3', TierVerificationRule> = {
   T1: {

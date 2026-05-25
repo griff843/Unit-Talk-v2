@@ -23,7 +23,7 @@
 
 ## Section 1: Ready to Close — Pending Done Transition
 
-Three issues carry PM Decision "Approved / ready to close" in their descriptions but remain at **Ready to Close**, not Done. Each requires `ops:truth-check` + `ops:lane:close` before moving.
+Three issues carry PM Decision "Approved / ready to close" in their descriptions but remain at **Ready to Close**, not Done. Each requires `ops:truth-check` + `ops:lane-close` before moving.
 
 ### UTV2-860 — Reconcile D3 live schema gap from Phase 9
 - **Priority:** Urgent (T1)
@@ -43,7 +43,7 @@ Three issues carry PM Decision "Approved / ready to close" in their descriptions
 - **Recommendation: Done**
 - Implementation shipped in `scripts/ci/` (schema-drift-gate, live-schema-parity-workflow). PM approved. Pending lane close only.
 
-**Action required (PM):** Run `ops:truth-check` on each, then `ops:lane:close`. All three can be closed in one session.
+**Action required (PM):** Run `ops:truth-check` on each, then `ops:lane-close`. All three can be closed in one session.
 
 ---
 
@@ -174,7 +174,7 @@ These blocks are recent, well-scoped, and should remain Blocked Internal.
 
 ## Priority Actions for PM
 
-1. **Run `ops:truth-check` + `ops:lane:close` on UTV2-860, UTV2-861, UTV2-865.** These are already approved and blocking clean sprint accounting.
+1. **Run `ops:truth-check` + `ops:lane-close` on UTV2-860, UTV2-861, UTV2-865.** These are already approved and blocking clean sprint accounting.
 2. **Record purchase/no-purchase decision on UTV2-780 and move to Needs PM Decision.** The EX44 research is complete; only the decision remains.
 3. **Close or supersede UTV2-853.** It is a planning artifact, not an execution lane. Keeping it at Needs Standard will cause confusion next sprint.
 4. **Move UTV2-652 to Deferred** with an explicit re-entry condition written into the description.

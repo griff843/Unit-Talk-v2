@@ -50,14 +50,14 @@
         "P9",
         "P10"
       ],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     },
     {
       "checked_at": "2026-05-06T19:41:12.399Z",
       "verdict": "pass",
       "merge_sha": "78b025d8d95dd1ed3a260d69c418ee2ae9d34fd1",
       "failures": [],
-      "runner": "ops:lane:close"
+      "runner": "ops:lane-close"
     }
   ],
   "reopen_history": []

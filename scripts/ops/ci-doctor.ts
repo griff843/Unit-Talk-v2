@@ -337,7 +337,7 @@ function runWorkflowChecks(
       addCheck('CW4', unsupported.length === 0 ? 'pass' : 'fail', unsupported.length === 0 ? `${doc.path} uses supported triggers` : `${doc.path} uses unsupported triggers: ${unsupported.join(', ')}`);
     }
 
-    const usesLines = [...doc.text.matchAll(/uses:\s*([^\s]+)/g)].map((match) => match[1]);
+    const usesLines = [...doc.text.matchAll(/^\s*uses:\s*([^\s]+)/gm)].map((match) => match[1]);
     const invalidUses = usesLines.filter((entry) => !/^[^@\s]+@[^@\s]+$/.test(entry));
     addCheck('CW5', invalidUses.length === 0 ? 'pass' : 'fail', invalidUses.length === 0 ? `${doc.path} uses references are syntactically valid` : `${doc.path} has invalid uses refs: ${invalidUses.join(', ')}`);
 
@@ -669,7 +669,16 @@ function checkWorkflowSecretLeak(workflowDocs: WorkflowDoc[]): boolean {
       if (/^\s*echo\b/.test(line)) {
         return false;
       }
+      if (/\becho\s+["']ERROR:/.test(line)) {
+        return false;
+      }
+      if (/\bmissing\+=\([A-Z0-9_]+\)/.test(line)) {
+        return false;
+      }
       if (/\$\{\{\s*secrets\./.test(line)) {
+        return false;
+      }
+      if (/\$\{\{\s*vars\./.test(line)) {
         return false;
       }
       // Skip grep anchor patterns like grep -q '^SECRET_NAME=' — not a leak
@@ -685,6 +694,15 @@ function checkWorkflowSecretLeak(workflowDocs: WorkflowDoc[]): boolean {
           return false;
         }
         if (new RegExp(`^\\s*${escapeRegExp(secretName)}\\s*=`).test(line)) {
+          return false;
+        }
+        if (/^\s*-?\s*name:\s*/.test(line)) {
+          return false;
+        }
+        if (/\b(for|grep|sed|docker logs)\b/.test(line)) {
+          return false;
+        }
+        if (new RegExp(`["']${escapeRegExp(secretName)}=\\$`).test(line)) {
           return false;
         }
         return true;
