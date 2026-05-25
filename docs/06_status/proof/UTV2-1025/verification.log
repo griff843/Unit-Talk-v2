@@ -1,0 +1,27 @@
+Verification captured 2026-05-25.
+
+Commands:
+
+- pnpm verify
+- pnpm test:db
+- pnpm exec tsx scripts/ops/concurrency-simulation.test.ts
+- pnpm ops:execution-state
+- pnpm ops:merge-risk
+- pnpm ops:lane-maximizer
+- pnpm ops:system-alignment-check
+- pnpm exec tsx --test scripts/ops/daily-digest.test.ts scripts/ops/execution-state.test.ts scripts/ops/system-alignment-check.test.ts
+- pnpm type-check
+- tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD
+
+Results:
+
+- pnpm verify: PASS
+- pnpm test:db: PASS, 7/7
+- concurrency simulation: PASS, 15/15
+- ops:execution-state: PASS, Claude 0/2 and Codex 0/4 available
+- ops:merge-risk: PASS, total_active_lanes=0
+- ops:lane-maximizer: PASS, max_claude=2 and max_codex=4
+- ops:system-alignment-check: PASS
+- focused ops tests: PASS
+- type-check: PASS
+- R-level check: PASS, no rules matched
