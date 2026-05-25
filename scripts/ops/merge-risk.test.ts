@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import type { LaneManifest } from './shared.js';
 import {
+  buildMergeConflictForecast,
   detectBlockedDeps,
   detectBranchNoPr,
   detectFileOverlap,
@@ -117,4 +118,92 @@ test('detectStaleHeartbeat emits STALE_LANE_HEARTBEAT warning when heartbeat is 
   assert.equal(conditions[0]?.code, 'STALE_LANE_HEARTBEAT');
   assert.equal(conditions[0]?.severity, 'warning');
   assert.deepStrictEqual(conditions[0]?.lanes, ['UTV2-979']);
+});
+
+test('buildMergeConflictForecast reports candidate branch drift against main', () => {
+  const forecast = buildMergeConflictForecast({
+    candidateBranch: 'codex/utv2-1164-conflict-forecasting',
+    baseBranch: 'main',
+    candidateFiles: ['scripts/ops/merge-risk.ts'],
+    activeLanes: [],
+    baseChangedFiles: ['scripts/ops/merge-risk.ts', 'scripts/ops/other.ts'],
+  });
+
+  assert.deepStrictEqual(forecast.conditions.map((condition) => condition.code), [
+    'CANDIDATE_MAIN_DRIFT',
+  ]);
+  assert.equal(forecast.conditions[0]?.severity, 'warning');
+  assert.match(forecast.merge_order_recommendation, /Rebase candidate branch/);
+});
+
+test('buildMergeConflictForecast blocks active lane branch file conflicts', () => {
+  const lane = createLane({
+    issue_id: 'UTV2-1161',
+    branch: 'codex/utv2-1161-live-lane-telemetry-board',
+    file_scope_lock: ['scripts/ops/telemetry.ts'],
+  });
+
+  const forecast = buildMergeConflictForecast({
+    candidateBranch: 'codex/utv2-1164-conflict-forecasting',
+    baseBranch: 'main',
+    candidateFiles: ['scripts/ops/merge-risk.ts'],
+    activeLanes: [lane],
+    activeLaneChangedFiles: {
+      'codex/utv2-1161-live-lane-telemetry-board': ['scripts/ops/merge-risk.ts'],
+    },
+  });
+
+  assert.deepStrictEqual(forecast.conditions.map((condition) => condition.code), [
+    'CANDIDATE_ACTIVE_BRANCH_CONFLICT',
+  ]);
+  assert.equal(forecast.conditions[0]?.severity, 'block');
+  assert.deepStrictEqual(forecast.conditions[0]?.lanes, ['UTV2-1161']);
+  assert.match(forecast.merge_order_recommendation, /Must merge after UTV2-1161/);
+});
+
+test('buildMergeConflictForecast detects declared scope overlap and scope bleed', () => {
+  const lane = createLane({
+    issue_id: 'UTV2-1162',
+    branch: 'codex/utv2-1162-queue-intake-wave-builder',
+    file_scope_lock: ['scripts/ops'],
+  });
+
+  const forecast = buildMergeConflictForecast({
+    candidateBranch: 'codex/utv2-1164-conflict-forecasting',
+    baseBranch: 'main',
+    candidateFiles: ['scripts/ops/merge-risk.ts', 'docs/06_status/proof/UTV2-1164/diff-summary.md'],
+    declaredFileScope: ['scripts/ops/merge-risk.ts'],
+    activeLanes: [lane],
+  });
+
+  assert.deepStrictEqual(forecast.conditions.map((condition) => condition.code), [
+    'CANDIDATE_SCOPE_BLEED',
+    'CANDIDATE_SCOPE_OVERLAP',
+  ]);
+  assert.equal(forecast.conditions[0]?.severity, 'warning');
+  assert.equal(forecast.conditions[1]?.severity, 'block');
+  assert.deepStrictEqual(forecast.conditions[1]?.lanes, ['UTV2-1162']);
+});
+
+test('buildMergeConflictForecast recommends independent merge when no conflicts are forecast', () => {
+  const forecast = buildMergeConflictForecast({
+    candidateBranch: 'codex/utv2-1164-conflict-forecasting',
+    baseBranch: 'main',
+    candidateFiles: ['scripts/ops/merge-risk.ts'],
+    declaredFileScope: ['scripts/ops/merge-risk.ts'],
+    activeLanes: [
+      createLane({
+        issue_id: 'UTV2-1163',
+        branch: 'codex/utv2-1163-one-command-lane-closeout',
+        file_scope_lock: ['scripts/ops/lane-finalize.ts'],
+      }),
+    ],
+    baseChangedFiles: ['scripts/ops/other.ts'],
+    activeLaneChangedFiles: {
+      'codex/utv2-1163-one-command-lane-closeout': ['scripts/ops/lane-finalize.ts'],
+    },
+  });
+
+  assert.deepStrictEqual(forecast.conditions, []);
+  assert.equal(forecast.merge_order_recommendation, 'No active lane or main-drift conflicts forecast.');
 });
