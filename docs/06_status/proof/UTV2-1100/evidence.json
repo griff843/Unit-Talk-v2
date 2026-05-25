@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1100",
+  "title": "INIT-2.2.1 — ProofBundle Entity and Proof Contract",
+  "tier": "T1",
+  "lane_type": "governance",
+  "executor": "claude",
+  "sha_binding": {
+    "verified_source_sha": "f086fc7579232b3ae79d2dc05960a6780b23af4e",
+    "merge_sha": "set-by-ci",
+    "ci_run_url": "set-by-ci",
+    "ci_status": "set-by-ci"
+  },
+  "static_proof": {
+    "type_check": "PASS — pnpm type-check exits 0, zero TS errors",
+    "lint": "PASS — pnpm lint exits 0, zero ESLint findings",
+    "build": "PASS — pnpm build exits 0",
+    "unit_tests": "PASS — 18/18 tests in proof-bundle.test.ts, 113/113 total suite tests",
+    "r_level_check": "PASS — r-level-check.ts exits 0, no R-level artifacts required for this diff",
+    "test_wiring": "VERIFIED — proof-bundle.test.ts added to packages/invariants/package.json test script"
+  },
+  "runtime_proof": {
+    "test_db": "PASS — 7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm (duration: ~115612ms)",
+    "supabase_project_ref": "zfzdnfwdarxucxtaojxm"
+  },
+  "scope_compliance": {
+    "file_scope_lock_respected": true,
+    "files_changed": [
+      ".ops/sync/UTV2-1100.yml",
+      "docs/06_status/lanes/UTV2-1100.json",
+      "docs/06_status/proof/UTV2-1100/evidence.json",
+      "docs/06_status/proof/UTV2-1100/verification.md",
+      "packages/invariants/package.json",
+      "packages/invariants/src/index.ts",
+      "packages/invariants/src/proof-bundle.test.ts",
+      "packages/invariants/src/proof-bundle.ts"
+    ]
+  },
+  "created_at": "2026-05-25T23:30:00.000Z",
+  "created_by": "claude"
+}
