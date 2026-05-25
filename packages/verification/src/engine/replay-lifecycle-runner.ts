@@ -11,12 +11,13 @@
  *     2. validateWrite          — write + immutability check
  *     3. deriveLifecycleStage   — derive current stage
  *     4. assertTransition       — validate stage transition
- *     5. validateInvariants     — post-transition invariants
+ *     5. runInvariantCheck      — post-transition invariants via InvariantEngine
  *
  *   The ONLY differences from production:
  *     - assertNotFrozen() is NOT called (replay is never frozen — intentional)
  *     - Writes go to IsolatedPickStore, not Supabase (storage swap)
  *     - resolveNow(clock) provides virtual timestamps (clock swap)
+ *     - InvariantEngine is injected at construction time
  *
  *   There are NO `if (mode === 'replay')` branches in this file.
  *   If validation functions need to change, they change in their source modules
@@ -38,25 +39,55 @@ function assertTransition(from: LifecycleStage, to: LifecycleStage, _context?: R
   }
 }
 
-function validateInvariants(_pick: LifecyclePick): void {
-  // V2 validates invariants at the repository layer via transitionPickLifecycle
-  // In replay mode, this is a no-op — invariants are checked on write
+function assertWriterAuthority(role: string, _fields: string | string[]): void {
+  if (!role || typeof role !== 'string') {
+    throw new Error(`assertWriterAuthority: invalid writer role: ${String(role)}`);
+  }
+  // Historical replay events have already passed production authority checks.
+  // Writer role presence is the minimum integrity guard for replay.
 }
 
-function assertWriterAuthority(_role: string, _fields: string | string[]): void {
-  // V2 has writer authority in @unit-talk/db/writer-authority.ts
-  // In replay mode, authority is trusted — the recorded events already passed auth
-}
-
-function validateWrite(_role: string, _fields: string[], _currentState?: unknown): void {
-  // V2 validates writes at the repository layer
-  // In replay mode, writes are recorded events — already validated
+function validateWrite(role: string, fields: string[], _currentState?: unknown): void {
+  if (!role || typeof role !== 'string') {
+    throw new Error(`validateWrite: invalid writer role: ${String(role)}`);
+  }
+  if (!Array.isArray(fields) || fields.length === 0) {
+    throw new Error('validateWrite: field list must be non-empty');
+  }
+  // Historical replay writes have already been validated in production.
+  // Field-level immutability is enforced by the isolated store layer.
 }
 
 import { resolveNow } from './clock.js';
 
 import type { ClockProvider } from './clock.js';
 import type { IsolatedPickStore, UpdateCondition } from './isolated-pick-store.js';
+
+// ─────────────────────────────────────────────────────────────
+// INVARIANT EVALUATOR INTERFACE
+// ─────────────────────────────────────────────────────────────
+
+/**
+ * Minimal interface for post-transition invariant enforcement.
+ *
+ * Satisfied by InvariantEngine from @unit-talk/invariants.
+ * Defined here to avoid a hard cross-package dependency — callers inject
+ * the concrete engine; this package stays decoupled.
+ *
+ * INIT-1.2.2 (UTV2-1093): wires replay to real invariant evaluation.
+ */
+export interface InvariantEvaluator {
+  evaluateForReplay(
+    context: { snapshot_at: string; replay_run_id?: string; [key: string]: unknown },
+    replayRunId: string
+  ): ReadonlyArray<{
+    invariant_id: string;
+    title: string;
+    severity: string;
+    detected_at: string;
+    context: Record<string, unknown>;
+  }>;
+}
 
 // ─────────────────────────────────────────────────────────────
 // TYPES
@@ -90,14 +121,60 @@ export interface LifecycleTrace {
  * pure validation logic as the production lifecycle adapters.
  *
  * All lifecycle-critical timestamps are resolved through the provided clock.
+ *
+ * Pass an InvariantEvaluator (InvariantEngine from @unit-talk/invariants) to
+ * enforce constitutional invariants after every state transition. Replay halts
+ * on any violation — see runInvariantCheck().
  */
 export class ReplayLifecycleRunner {
   private readonly store: IsolatedPickStore;
   private readonly traces: LifecycleTrace[] = [];
   private traceCounter = 0;
+  private readonly invariantEngine: InvariantEvaluator | null;
+  private readonly replayRunId: string;
 
-  constructor(store: IsolatedPickStore) {
+  constructor(
+    store: IsolatedPickStore,
+    options?: { invariantEngine?: InvariantEvaluator; replayRunId?: string }
+  ) {
     this.store = store;
+    this.invariantEngine = options?.invariantEngine ?? null;
+    this.replayRunId = options?.replayRunId ?? `replay-${Date.now()}`;
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // INVARIANT CHECK (INIT-1.2.2)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Runs the InvariantEngine against the post-transition pick state.
+   *
+   * Any violation halts the replay by throwing. No invariant is advisory
+   * in replay context — every registered invariant is enforced.
+   *
+   * If no engine was injected at construction time this is a no-op (the caller
+   * chose not to enforce invariants — permitted for legacy/isolated tests).
+   */
+  private runInvariantCheck(pick: LifecyclePick, clock?: ClockProvider): void {
+    if (!this.invariantEngine) return;
+
+    const context = {
+      snapshot_at: resolveNow(clock).toISOString(),
+      replay_run_id: this.replayRunId,
+      pick_id: pick.id,
+      pick_status: pick.status,
+      pick_settlement_status: pick.settlement_status ?? null,
+      pick_posted_to_discord: pick.posted_to_discord ?? null,
+    };
+
+    const violations = this.invariantEngine.evaluateForReplay(context, this.replayRunId);
+
+    if (violations.length > 0) {
+      const summary = violations
+        .map(v => `[${v.invariant_id}] ${v.title}`)
+        .join('; ');
+      throw new Error(`Invariant violation halted replay: ${summary}`);
+    }
   }
 
   // ─────────────────────────────────────────────────────────────
@@ -205,7 +282,7 @@ export class ReplayLifecycleRunner {
           });
         }
 
-        validateInvariants(nextState);
+        this.runInvariantCheck(nextState, context.clock);
         fromStage = currentStage;
         toStage = nextStage;
       }
