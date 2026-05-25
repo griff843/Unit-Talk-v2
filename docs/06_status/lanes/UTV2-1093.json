@@ -7,8 +7,8 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1093-init-122-replay-validator-un-stubbing",
   "branch": "claude/utv2-1093-init-122-replay-validator-un-stubbing",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
+  "commit_sha": "3be39b330e66e8ec3de2116ee8f1c694ebbad71f",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/848",
   "files_changed": [],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1093/evidence.json",
@@ -21,14 +21,34 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1093/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-25T10:47:15.561Z",
-  "heartbeat_at": "2026-05-25T10:47:15.561Z",
+  "heartbeat_at": "2026-05-25T12:35:30.455Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1093-init-122-replay-validator-un-stubbing.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T12:35:30.455Z",
+      "verdict": "fail",
+      "merge_sha": "3be39b330e66e8ec3de2116ee8f1c694ebbad71f",
+      "failures": [
+        "L2",
+        "P3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
