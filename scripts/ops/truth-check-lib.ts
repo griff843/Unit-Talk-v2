@@ -1419,7 +1419,11 @@ export function findPostMergeTouches(input: {
   if (!mergeCommit?.timestamp) {
     return [];
   }
-  const windowEnd = new Date(mergeCommit.timestamp).getTime() + 24 * 60 * 60 * 1000;
+  const mergeTime = new Date(mergeCommit.timestamp).getTime();
+  if (Number.isNaN(mergeTime)) {
+    return [];
+  }
+  const windowEnd = mergeTime + 24 * 60 * 60 * 1000;
   const output: string[] = [];
   for (const line of result.stdout.split(/\r?\n/)) {
     if (!line) {
@@ -1434,6 +1438,9 @@ export function findPostMergeTouches(input: {
     }
     const committedTime = Date.parse(committedAt);
     if (Number.isNaN(committedTime) || committedTime > windowEnd) {
+      continue;
+    }
+    if (committedTime <= mergeTime) {
       continue;
     }
     if (input.laneStartedAt && committedTime < new Date(input.laneStartedAt).getTime()) {
