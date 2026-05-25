@@ -38,7 +38,7 @@ import {
   type LaneExecutor,
   type LaneManifest,
 } from './shared.js';
-import { loadConcurrencyConfig, type ConcurrencyConfig } from './concurrency-config.js';
+import { getEffectiveConfig, loadConcurrencyConfig, type ConcurrencyConfig, type EffectiveConcurrencyConfig } from './concurrency-config.js';
 
 export interface ConcurrencyViolation {
   code: string;
@@ -49,7 +49,7 @@ export function checkConcurrencyLimits(
   activeManifests: LaneManifest[],
   incomingLaneType: CanonicalLaneType,
   incomingExecutor: LaneExecutor,
-  config: ConcurrencyConfig,
+  config: ConcurrencyConfig | EffectiveConcurrencyConfig,
 ): ConcurrencyViolation[] {
   const active = activeManifests.filter((m) => ACTIVE_LOCK_STATUSES.has(m.status));
   const violations: ConcurrencyViolation[] = [];
@@ -82,6 +82,18 @@ export function checkConcurrencyLimits(
     violations.push({
       code: 'codex_cap_exceeded',
       message: `Codex active lanes (${codexActive}) is at the cap of ${config.executors.codex}. Close a Codex lane before starting another.`,
+    });
+  }
+
+  if (
+    'trial_active' in config &&
+    config.trial_active &&
+    active.length >= config.base_total &&
+    !config.trial_safe_types_only.includes(incomingLaneType)
+  ) {
+    violations.push({
+      code: 'trial_unsafe_lane_type',
+      message: `Trial slots above the base cap of ${config.base_total} are restricted to safe lane types (${config.trial_safe_types_only.join(', ')}). Lane type "${incomingLaneType}" is not eligible for trial expansion.`,
     });
   }
 
@@ -308,7 +320,7 @@ function main(): void {
       process.exit(1);
     }
 
-    const concurrencyConfig = loadConcurrencyConfig();
+    const concurrencyConfig = getEffectiveConfig(loadConcurrencyConfig());
     const concurrencyViolations = checkConcurrencyLimits(
       readAllManifests(),
       canonicalLaneType,

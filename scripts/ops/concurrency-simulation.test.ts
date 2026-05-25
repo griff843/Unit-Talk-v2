@@ -3,7 +3,7 @@ import test from 'node:test';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { checkConcurrencyLimits, type ConcurrencyViolation } from './lane-start.js';
-import type { ConcurrencyConfig } from './concurrency-config.js';
+import { getEffectiveConfig, type ConcurrencyConfig } from './concurrency-config.js';
 import type { LaneManifest } from './shared.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -226,4 +226,164 @@ test('zero active lanes — any lane type is allowed', () => {
     const violations = checkConcurrencyLimits([], laneType, 'claude', POLICY);
     assert.strictEqual(violations.length, 0, `Expected no violations for ${laneType} on empty board`);
   }
+});
+
+// ── 11. Trial governor — getEffectiveConfig ───────────────────────────────
+
+const TRIAL_DISABLED: ConcurrencyConfig = {
+  ...POLICY,
+  trial: {
+    enabled: false,
+    total: 8,
+    executors: { claude: 3, codex: 5 },
+    allowed_until: null,
+    rationale: 'test',
+    safe_types_only: ['governance', 'hygiene', 'delivery-ui', 'verification'],
+  },
+};
+
+const FUTURE = new Date(Date.now() + 86_400_000).toISOString(); // +1 day
+const PAST = new Date(Date.now() - 86_400_000).toISOString();   // -1 day
+
+const TRIAL_ACTIVE: ConcurrencyConfig = {
+  ...POLICY,
+  trial: {
+    enabled: true,
+    total: 8,
+    executors: { claude: 3, codex: 5 },
+    allowed_until: FUTURE,
+    rationale: 'test',
+    safe_types_only: ['governance', 'hygiene', 'delivery-ui', 'verification'],
+  },
+};
+
+const TRIAL_EXPIRED: ConcurrencyConfig = {
+  ...POLICY,
+  trial: {
+    enabled: true,
+    total: 8,
+    executors: { claude: 3, codex: 5 },
+    allowed_until: PAST,
+    rationale: 'test',
+    safe_types_only: ['governance', 'hygiene', 'delivery-ui', 'verification'],
+  },
+};
+
+test('getEffectiveConfig: trial disabled → base limits returned', () => {
+  const eff = getEffectiveConfig(TRIAL_DISABLED);
+  assert.strictEqual(eff.total, 6, 'total must be 6 when trial disabled');
+  assert.strictEqual(eff.executors.claude, 2);
+  assert.strictEqual(eff.executors.codex, 4);
+  assert.strictEqual(eff.trial_active, false);
+});
+
+test('getEffectiveConfig: trial enabled with future expiry → trial limits returned', () => {
+  const eff = getEffectiveConfig(TRIAL_ACTIVE);
+  assert.strictEqual(eff.total, 8, 'total must be 8 when trial active');
+  assert.strictEqual(eff.executors.claude, 3);
+  assert.strictEqual(eff.executors.codex, 5);
+  assert.strictEqual(eff.trial_active, true);
+  assert.strictEqual(eff.trial_expires_at, FUTURE);
+});
+
+test('getEffectiveConfig: trial expired (allowed_until in past) → base limits returned', () => {
+  const eff = getEffectiveConfig(TRIAL_EXPIRED);
+  assert.strictEqual(eff.total, 6, 'must revert to 6 after expiry');
+  assert.strictEqual(eff.executors.claude, 2);
+  assert.strictEqual(eff.trial_active, false);
+});
+
+test('getEffectiveConfig: trial enabled with null allowed_until → never expires', () => {
+  const cfg: ConcurrencyConfig = {
+    ...POLICY,
+    trial: {
+      enabled: true,
+      total: 8,
+      executors: { claude: 3, codex: 5 },
+      allowed_until: null,
+      rationale: 'test',
+      safe_types_only: [],
+    },
+  };
+  const eff = getEffectiveConfig(cfg);
+  assert.strictEqual(eff.total, 8);
+  assert.strictEqual(eff.trial_active, true);
+  assert.strictEqual(eff.trial_expires_at, null);
+});
+
+test('trial mode: 7th lane allowed when trial active (6 active → add 1 more)', () => {
+  const eff = getEffectiveConfig(TRIAL_ACTIVE);
+  const trialPolicy: ConcurrencyConfig = {
+    ...POLICY,
+    total: eff.total,
+    executors: { claude: eff.executors.claude, codex: eff.executors.codex },
+  };
+  const active = [
+    manifest('UTV2-T01', 'claude', 'governance', ['scripts/ops/t01.ts']),
+    manifest('UTV2-T02', 'claude', 'hygiene', ['scripts/ops/t02.ts']),
+    manifest('UTV2-T03', 'claude', 'governance', ['scripts/ops/t03.ts']),
+    manifest('UTV2-T04', 'codex-cli', 'hygiene', ['scripts/ops/t04.ts']),
+    manifest('UTV2-T05', 'codex-cli', 'hygiene', ['scripts/ops/t05.ts']),
+    manifest('UTV2-T06', 'codex-cli', 'hygiene', ['scripts/ops/t06.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'hygiene', 'codex-cli', trialPolicy);
+  assert.strictEqual(violations.length, 0, `Expected no violations at 7th lane under trial: ${JSON.stringify(violations)}`);
+});
+
+test('trial mode: 9th lane blocked even when trial allows 8', () => {
+  const eff = getEffectiveConfig(TRIAL_ACTIVE);
+  const trialPolicy: ConcurrencyConfig = {
+    ...POLICY,
+    total: eff.total,
+    executors: { claude: eff.executors.claude, codex: eff.executors.codex },
+  };
+  const active = [
+    manifest('UTV2-T10', 'claude', 'governance', ['scripts/ops/t10.ts']),
+    manifest('UTV2-T11', 'claude', 'hygiene', ['scripts/ops/t11.ts']),
+    manifest('UTV2-T12', 'claude', 'governance', ['scripts/ops/t12.ts']),
+    manifest('UTV2-T13', 'codex-cli', 'hygiene', ['scripts/ops/t13.ts']),
+    manifest('UTV2-T14', 'codex-cli', 'hygiene', ['scripts/ops/t14.ts']),
+    manifest('UTV2-T15', 'codex-cli', 'hygiene', ['scripts/ops/t15.ts']),
+    manifest('UTV2-T16', 'codex-cli', 'hygiene', ['scripts/ops/t16.ts']),
+    manifest('UTV2-T17', 'codex-cli', 'hygiene', ['scripts/ops/t17.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'hygiene', 'codex-cli', trialPolicy);
+  assert.ok(violations.length > 0, 'Expected violation at 9th lane even under trial');
+});
+
+test('trial mode: expired trial still blocks at 7 (reverts to base 6 cap)', () => {
+  const eff = getEffectiveConfig(TRIAL_EXPIRED);
+  assert.strictEqual(eff.trial_active, false);
+  const basePolicy: ConcurrencyConfig = {
+    ...POLICY,
+    total: eff.total,
+    executors: { claude: eff.executors.claude, codex: eff.executors.codex },
+  };
+  const active = [
+    manifest('UTV2-E01', 'claude', 'governance', ['scripts/ops/e01.ts']),
+    manifest('UTV2-E02', 'claude', 'hygiene', ['scripts/ops/e02.ts']),
+    manifest('UTV2-E03', 'codex-cli', 'hygiene', ['scripts/ops/e03.ts']),
+    manifest('UTV2-E04', 'codex-cli', 'hygiene', ['scripts/ops/e04.ts']),
+    manifest('UTV2-E05', 'codex-cli', 'hygiene', ['scripts/ops/e05.ts']),
+    manifest('UTV2-E06', 'codex-cli', 'hygiene', ['scripts/ops/e06.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'governance', 'claude', basePolicy);
+  assert.ok(violations.length > 0, `Expected violation at 7th lane after trial expiry: ${JSON.stringify(violations)}`);
+});
+
+test('trial mode: unsafe lane types cannot fill slots above the base cap', () => {
+  const eff = getEffectiveConfig(TRIAL_ACTIVE);
+  const active = [
+    manifest('UTV2-U01', 'claude', 'governance', ['scripts/ops/u01.ts']),
+    manifest('UTV2-U02', 'claude', 'hygiene', ['scripts/ops/u02.ts']),
+    manifest('UTV2-U03', 'codex-cli', 'hygiene', ['scripts/ops/u03.ts']),
+    manifest('UTV2-U04', 'codex-cli', 'verification', ['scripts/ops/u04.ts']),
+    manifest('UTV2-U05', 'codex-cli', 'governance', ['scripts/ops/u05.ts']),
+    manifest('UTV2-U06', 'codex-cli', 'hygiene', ['scripts/ops/u06.ts']),
+  ];
+  const violations = checkConcurrencyLimits(active, 'runtime', 'codex-cli', eff);
+  assert.ok(
+    violations.some((violation) => violation.code === 'trial_unsafe_lane_type'),
+    `Expected trial_unsafe_lane_type violation above base cap: ${JSON.stringify(violations)}`,
+  );
 });

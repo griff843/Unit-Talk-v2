@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { packageTouchingLaneRequiresSingleton } from './lane-execution.js';
-import { loadConcurrencyConfig } from './concurrency-config.js';
+import { getEffectiveConfig, loadConcurrencyConfig } from './concurrency-config.js';
 import { ACTIVE_LOCK_STATUSES, resolveLaneExecutor } from './shared.js';
 
 export interface LaneManifest {
@@ -252,7 +252,7 @@ function parseCandidatesArg(argv: string[]): CandidateLane[] {
 }
 
 function parseLimits(argv: string[]): { maxClaude: number; maxCodex: number } {
-  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const cfg = (() => { try { return getEffectiveConfig(loadConcurrencyConfig()); } catch { return null; } })();
   const defaultClaude = cfg?.executors.claude ?? 2;
   const defaultCodex = cfg?.executors.codex ?? 4;
 
@@ -277,7 +277,7 @@ export function evaluateCandidates(
   limits: { maxClaude: number; maxCodex: number },
   options: EvaluateCandidateOptions = {},
 ): MaximizationReport {
-  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const cfg = (() => { try { return getEffectiveConfig(loadConcurrencyConfig()); } catch { return null; } })();
   const doneIssueIds = options.doneIssueIds ?? readDoneIssueIds();
   const singletonLaneTypes = options.singletonLaneTypes ?? cfg?.singleton_types ?? [
     'runtime',
@@ -438,7 +438,7 @@ export function evaluateCandidates(
 function runCli(): void {
   let candidates: CandidateLane[] = [];
   let activeLanes: LaneManifest[] = [];
-  const cfg = (() => { try { return loadConcurrencyConfig(); } catch { return null; } })();
+  const cfg = (() => { try { return getEffectiveConfig(loadConcurrencyConfig()); } catch { return null; } })();
   const defaultLimits = { maxClaude: cfg?.executors.claude ?? 2, maxCodex: cfg?.executors.codex ?? 4 };
   let limits = defaultLimits;
 
