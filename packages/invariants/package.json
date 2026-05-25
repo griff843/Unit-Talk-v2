@@ -14,6 +14,6 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "type-check": "tsc -p tsconfig.json --noEmit",
-    "test": "tsx --test src/engine.test.ts src/quarantine.test.ts src/governance-exception.test.ts"
+    "test": "tsx --test src/engine.test.ts src/quarantine.test.ts src/governance-exception.test.ts src/proof-bundle.test.ts"
   }
 }

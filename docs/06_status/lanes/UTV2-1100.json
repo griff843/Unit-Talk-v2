@@ -11,8 +11,11 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1100.yml",
+    "docs/06_status/lanes/UTV2-1100.json",
     "docs/06_status/proof/UTV2-1100/evidence.json",
     "docs/06_status/proof/UTV2-1100/verification.md",
+    "packages/invariants/package.json",
     "packages/invariants/src/index.ts",
     "packages/invariants/src/proof-bundle.test.ts",
     "packages/invariants/src/proof-bundle.ts"

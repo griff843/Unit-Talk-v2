@@ -36,3 +36,12 @@ export type {
   GovernanceExceptionInput,
   GovernanceException,
 } from './governance-exception.js';
+
+export { createProofBundle, validateProofBundle, ProofBundleValidationError } from './proof-bundle.js';
+export type {
+  ProofArtifactKind,
+  ProofArtifact,
+  ProofBundle,
+  ProofBundleInput,
+  ProofBundleValidationResult,
+} from './proof-bundle.js';
