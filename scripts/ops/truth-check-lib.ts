@@ -1284,10 +1284,6 @@ export function checkCommitReachableFromMain(
   return { reachable: true, firstParent };
 }
 
-function parseGit(args: string[]): string[] {
-  return parseGitWithCommand(args, git);
-}
-
 function parseGitWithCommand(args: string[], gitCommand: typeof git): string[] {
   const { stdout, ok } = gitCommand(args);
   if (!ok) {
