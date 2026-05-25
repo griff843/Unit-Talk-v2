@@ -7,9 +7,15 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1090-automatic-quarantine-and-escalation",
   "branch": "claude/utv2-1090-automatic-quarantine-and-escalation",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "d318db08a4c5e97c25cc05cbea4aa14d57ddc32b",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/856",
+  "files_changed": [
+    "packages/invariants/src/quarantine.ts",
+    "packages/invariants/src/quarantine.test.ts",
+    "packages/invariants/src/index.ts",
+    "docs/06_status/proof/UTV2-1090/verification.md",
+    "docs/06_status/proof/UTV2-1090/evidence.json"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1090/evidence.json",
     "docs/06_status/proof/UTV2-1090/verification.md",
@@ -20,7 +26,7 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1090/evidence.json"
   ],
-  "status": "started",
+  "status": "merged",
   "started_at": "2026-05-25T18:24:15.548Z",
   "heartbeat_at": "2026-05-25T18:24:15.548Z",
   "closed_at": null,
