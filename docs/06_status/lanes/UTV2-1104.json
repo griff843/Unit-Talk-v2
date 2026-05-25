@@ -7,9 +7,18 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1104-governanceexception-entity",
   "branch": "claude/utv2-1104-governanceexception-entity",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "a59a8c3a387ff452701f8add0b3ef004f629cdf1",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/865",
+  "files_changed": [
+    "packages/invariants/src/governance-exception.ts",
+    "packages/invariants/src/governance-exception.test.ts",
+    "packages/invariants/src/index.ts",
+    "packages/invariants/package.json",
+    "docs/06_status/proof/UTV2-1104/evidence.json",
+    "docs/06_status/proof/UTV2-1104/verification.md",
+    "docs/06_status/proof/UTV2-1104/diff-summary.md",
+    "docs/06_status/proof/UTV2-1104/verification.log"
+  ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1104.yml",
     "docs/06_status/lanes/UTV2-1104.json",
@@ -26,14 +35,23 @@
     "docs/06_status/proof/UTV2-1104/diff-summary.md",
     "docs/06_status/proof/UTV2-1104/verification.log"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-25T21:38:34.208Z",
-  "heartbeat_at": "2026-05-25T21:38:34.208Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T22:55:00.000Z",
+  "closed_at": "2026-05-25T22:55:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1104-governanceexception-entity.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T22:55:00.000Z",
+      "verdict": "fail",
+      "merge_sha": "a59a8c3a387ff452701f8add0b3ef004f629cdf1",
+      "failures": ["G4"],
+      "runner": "manual",
+      "note": "G4 systematic: squash merge SHA has verify:cancelled — same pattern as UTV2-1090, UTV2-1094. PM_VERDICT:APPROVED is the blocking authority. Lane closed manually per established exception."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
