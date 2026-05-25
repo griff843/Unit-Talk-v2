@@ -45,3 +45,15 @@ export type {
   ProofBundleInput,
   ProofBundleValidationResult,
 } from './proof-bundle.js';
+
+export {
+  validateProofBundle as validateProofBundleV2,
+  ProofValidatorCertificationGate,
+  ProofValidationGateError,
+} from './proof-validator.js';
+export type {
+  ProofValidationFailureKind,
+  ProofValidationFailure,
+  ProofValidationResult,
+  ProofValidatorOptions,
+} from './proof-validator.js';
