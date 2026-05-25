@@ -1,16 +1,16 @@
-# System State — 2026-05-24 12:03
+# System State — 2026-05-25 08:03
 
 ## Branch
-main
+
 
 ## Active Milestone
 Phase 7A 
 
 ## Active Lanes
-  lanes.json unreadable: ENOENT: no such file or directory, open '/home/griff843/code/Unit-Talk-v2/.claude/lanes.json'
+  lanes.json unreadable: ENOENT: no such file or directory, open '/home/user/Unit-Talk-v2/.claude/lanes.json'
 
 ## Dispatch Slots
-claude:0/2 codex:0/4
+claude:3/2 codex:0/4
 
 ## Ghost Lanes
 none
@@ -19,14 +19,14 @@ none
 dispatch:no-digest
 
 ## Codex Status
-codex:ok(codex-cli 0.133.0)
+codex:unavailable
 
 ## Working Tree
 Clean
 
 ## Recent Commits
-2a55be1 chore(ops): close UTV2-1155 + bind proof to merge SHA 04055ee4
-04055ee fix(ingestor): UTV2-1155 fail-closed on missing SGO_API_KEY at startup
-eadafd0 chore(ops): close UTV2-1034 + governance exception documented
-e14e60f chore(ops): UTV2-1034 proof SHA binding + manifest status update
-3081cca feat(analytics): UTV2-1034 calibration baseline script + live DB run (squash)
+0d7b5a0 fix(ops): UTV2-1160 truth-check G3 full-ancestry via git merge-base --is-ancestor
+41bcdea fix(lanes): correct lane_type for UTV2-1089 (governance) and UTV2-1091 (verification); add workflow to 1089 scope
+ead58b5 chore(lanes): UTV2-1089/1091/1160 — PRs opened, manifests linked in_review
+73d9c3f chore(lanes): UTV2-1087 close lane — done, G3 infra anomaly documented
+01e2a16 chore(proof): UTV2-1087 fix schema_version→1 and add .ops/sync to scope lock
