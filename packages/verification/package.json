@@ -11,7 +11,8 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "powershell -NoProfile -Command \"if (Test-Path dist) { Remove-Item -Recurse -Force dist }\"",
-    "type-check": "tsc -p tsconfig.json --noEmit"
+    "type-check": "tsc -p tsconfig.json --noEmit",
+    "test": "tsx --test src/engine/determinism-gate.test.ts src/engine/determinism-validator.test.ts src/engine/event-store.test.ts src/engine/fault-injection.test.ts src/engine/full-pipeline-replay.test.ts src/engine/replay-divergence.test.ts src/engine/replay-driver.test.ts src/engine/replay-lifecycle-runner.test.ts src/engine/shadow-comparison.test.ts src/engine/slate-replay.test.ts"
   },
   "dependencies": {
     "@unit-talk/contracts": "workspace:*"
