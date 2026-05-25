@@ -11,8 +11,13 @@
   "pr_url": null,
   "files_changed": [],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1104.yml",
+    "docs/06_status/lanes/UTV2-1104.json",
+    "docs/06_status/proof/UTV2-1104/diff-summary.md",
     "docs/06_status/proof/UTV2-1104/evidence.json",
+    "docs/06_status/proof/UTV2-1104/verification.log",
     "docs/06_status/proof/UTV2-1104/verification.md",
+    "packages/invariants/package.json",
     "packages/invariants/src/governance-exception.test.ts",
     "packages/invariants/src/governance-exception.ts",
     "packages/invariants/src/index.ts"
