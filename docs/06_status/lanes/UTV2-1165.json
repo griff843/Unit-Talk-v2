@@ -24,6 +24,11 @@
     "scripts/ops/merge-risk.ts"
   ],
   "file_scope_lock": [
+    ".ops/sync/UTV2-1165.yml",
+    "docs/06_status/lanes/UTV2-1165.json",
+    "docs/06_status/proof/UTV2-1165/diff-summary.md",
+    "docs/06_status/proof/UTV2-1165/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1165/verification.log",
     "docs/governance/CONCURRENCY_CONFIG.json",
     "docs/governance/LANE_CONCURRENCY_POLICY.md",
     "scripts/ops/concurrency-config.ts",
