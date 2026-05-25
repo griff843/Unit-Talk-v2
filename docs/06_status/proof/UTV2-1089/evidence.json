@@ -1,0 +1,77 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1089",
+  "title": "INIT-1.3.2 — Invariant Engine (Runtime Evaluable Set)",
+  "tier": "T1",
+  "lane_type": "governance",
+  "sha_binding": {
+    "verified_source_sha": "cfe8e8d2d43f9f73099aae2d43dcc57c57b37fc7",
+    "verified_source_note": "Branch HEAD at proof assembly — InvariantEngine implementation + stale workflow step removal, rebased onto main 41bcdeaa",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-25T00:00:00.000Z",
+  "r_level": {
+    "level": "R1",
+    "reason": "r-level-check PASS (CI green); governance tooling — no lifecycle FSM, ingestor, or outbox paths touched"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1089-dispatch"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests_pass": 497,
+      "tests_fail": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "engine_tests": {
+      "status": "PASS",
+      "file": "packages/invariants/src/engine.test.ts",
+      "tests_pass": 67,
+      "tests_fail": 0,
+      "suites": 16
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — governance tooling; no lifecycle-fsm, ingestor-provider, or outbox paths triggered"
+    },
+    "adversarial_tests": [
+      "INV-0009: snapshotAgeHours 25 → violation emitted — PASS",
+      "INV-0009: snapshotAgeHours 23 → no violation — PASS",
+      "INV-0010: settlementLatencyMinutes 6 → violation — PASS",
+      "INV-0010: settlementLatencyMinutes 4 → clean — PASS",
+      "INV-0014: outboxQueueDepth 1001 → violation — PASS",
+      "INV-0014: outboxQueueDepth 999 → clean — PASS",
+      "INV-0015: circuitOpen + failClosed → violation — PASS",
+      "INV-0015: circuitOpen only, not failClosed → clean — PASS",
+      "INV-0001 to INV-0013 advisory: flag injection → violation, no flag → clean — 11 tests PASS",
+      "evaluateForReplay: replay_run_id threaded into violation objects — PASS",
+      "Event emitter: violation event fires synchronously for each violation — PASS",
+      "Empty context: returns empty array, no false positives — PASS"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-25T00:00:00Z",
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "skipped": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "note": "7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm. Submission, settlement, outbox atomicity, participant dedup, and correction chain all verified against real DB."
+    }
+  },
+  "constitutional_claims": [
+    "InvariantEngine implements all 15 active invariants from invariant-registry.json",
+    "RUNTIME_EVALUABLE_IDS: {INV-0009, INV-0010, INV-0014, INV-0015} — evaluated from context snapshot without external I/O",
+    "Advisory invariants INV-0001 to INV-0008, INV-0011 to INV-0013: detect explicit context flags, no silent miss",
+    "EventEmitter integration: violations emitted synchronously, enabling replay harness wiring (UTV2-1093)",
+    "evaluateForReplay() threads replay_run_id into all violation objects for traceability",
+    "Stale invariant-registry-gate workflow step removed — no longer validates non-ancestor SHA post squash-merge"
+  ]
+}

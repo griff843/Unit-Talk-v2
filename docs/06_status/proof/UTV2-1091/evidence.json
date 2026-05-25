@@ -1,0 +1,73 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1091",
+  "title": "INIT-1.2.1 — Isolated Full-Pipeline Replay Harness",
+  "tier": "T1",
+  "lane_type": "verification",
+  "sha_binding": {
+    "verified_source_sha": "8a35a9e410198821701d1de941ac21dbd90969a7",
+    "verified_source_note": "Branch HEAD at proof assembly — IsolatedReplayStore + FullPipelineReplayHarness + replay-types, rebased onto main 41bcdeaa",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "executor": "claude",
+  "executed_at": "2026-05-25T00:00:00.000Z",
+  "r_level": {
+    "level": "R1",
+    "reason": "r-level-check PASS (CI green); verification tooling only — no production pipeline paths, no lifecycle FSM, no outbox"
+  },
+  "verifier": {
+    "identity": "claude/utv2-1091-dispatch"
+  },
+  "static_proof": {
+    "pnpm_verify": {
+      "status": "PASS",
+      "tests_pass": 113,
+      "tests_fail": 0
+    },
+    "pnpm_type_check": {
+      "status": "PASS"
+    },
+    "replay_harness_tests": {
+      "status": "PASS",
+      "file": "packages/verification/src/engine/full-pipeline-replay.test.ts",
+      "tests_pass": 9,
+      "tests_fail": 0
+    },
+    "r_level_check": {
+      "status": "PASS",
+      "verdict": "PASS — verification tooling; no lifecycle-fsm, ingestor-provider, or outbox paths triggered"
+    },
+    "adversarial_tests": [
+      "IsolatedReplayStore isolated mode: accepts writes — PASS",
+      "IsolatedReplayStore production mode: constructor throws ReplayProductionWriteError — PASS",
+      "writeProduction() always throws regardless of mode — PASS",
+      "writeProduction() increments trace counter on each call — PASS",
+      "ReplaySnapshot.data frozen: mutation attempt throws — PASS",
+      "FullPipelineReplayHarness.run() returns production_write_count 0 on clean run — PASS",
+      "FullPipelineReplayHarness.run() covers all four pipeline stages — PASS",
+      "FullPipelineReplayHarness.getProductionWriteCount() delegates to store — PASS",
+      "Failed stage results in status: failed on ReplayRun — PASS"
+    ]
+  },
+  "runtime_proof": {
+    "project_ref": "zfzdnfwdarxucxtaojxm",
+    "verified_at": "2026-05-25T00:00:00Z",
+    "pnpm_test_db": {
+      "status": "PASS",
+      "tests_pass": 7,
+      "tests_fail": 0,
+      "skipped": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "note": "7/7 live-DB tests against Supabase zfzdnfwdarxucxtaojxm. Submission, settlement, outbox atomicity, participant dedup, and correction chain all verified against real DB."
+    }
+  },
+  "constitutional_claims": [
+    "IsolatedReplayStore rejects production-mode construction at object level — dual mechanical write rejection",
+    "writeProduction() always throws ReplayProductionWriteError — no silent degradation path",
+    "ReplaySnapshot.data immutable via Object.freeze() — replay snapshots cannot be mutated during harness run",
+    "FullPipelineReplayHarness runs all four pipeline stages: ingestion → scoring → promotion → distribution",
+    "production_write_count invariant: always 0 on clean replay run",
+    "ReplayRun returned with divergence_detected flag and per-stage results for downstream UTV2-1093 wiring"
+  ]
+}
