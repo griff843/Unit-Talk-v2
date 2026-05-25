@@ -132,7 +132,7 @@ gh api -X PATCH "repos/\${REPO}/branches/\${BRANCH}/protection/required_status_c
   ]);
 });
 
-test('G5 ignores commits before the lane start timestamp', () => {
+test('G5 ignores commits before the lane start timestamp and merge timestamp', () => {
   const result = findPostMergeTouches({
     mergeSha: 'merge-sha',
     filesChanged: ['scripts/ops/truth-check-lib.ts'],
@@ -147,7 +147,8 @@ test('G5 ignores commits before the lane start timestamp', () => {
         return {
           ok: true,
           stdout: [
-            'post-lane-sha\tfix(ops): UTV2-714 post lane\t2026-04-22T11:00:00.000Z',
+            'post-merge-sha\tfix(ops): UTV2-714 post merge\t2026-04-22T13:00:00.000Z',
+            'pre-merge-sha\tfix(ops): UTV2-714 pre merge\t2026-04-22T11:00:00.000Z',
             'pre-lane-sha\tfix(ops): UTV2-714 pre lane\t2026-04-22T09:00:00.000Z',
           ].join('\n'),
           stderr: '',
@@ -162,7 +163,7 @@ test('G5 ignores commits before the lane start timestamp', () => {
     },
   });
 
-  assert.deepStrictEqual(result, ['post-lane-sha']);
+  assert.deepStrictEqual(result, ['post-merge-sha']);
 });
 
 test('G5 allows same-issue closeout repair commits before lane is done', () => {

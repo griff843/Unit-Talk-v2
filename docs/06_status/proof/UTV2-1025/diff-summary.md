@@ -6,6 +6,8 @@ Reopened scope: dispatch visibility, digest ranking, and active control-plane al
 
 Head SHA at proof capture: `d9c5ed2855ea11d714e19f0e30834b8ef199a457`.
 
+Merge SHA: `0f858a133fd7f4abff474a020d63265036b0c7d0`.
+
 ## Evidence
 
 Changed files:

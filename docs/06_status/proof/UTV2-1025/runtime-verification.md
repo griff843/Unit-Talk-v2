@@ -6,6 +6,8 @@ Runtime and control-plane verification for the reopened dispatch visibility hard
 
 Head SHA at proof capture: `d9c5ed2855ea11d714e19f0e30834b8ef199a457`.
 
+Merge SHA: `0f858a133fd7f4abff474a020d63265036b0c7d0`.
+
 ## Evidence
 
 - `pnpm ops:execution-state` reported Claude 0/2 and Codex 0/4 available, merge mutex released, and no active lane blockers.
