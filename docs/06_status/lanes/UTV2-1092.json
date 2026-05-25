@@ -13,6 +13,9 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1092/evidence.json",
     "docs/06_status/proof/UTV2-1092/verification.md",
+    "docs/06_status/lanes/UTV2-1092.json",
+    "docs/06_status/lanes/UTV2-1091.json",
+    ".ops/sync/UTV2-1092.yml",
     "packages/verification/src/engine/replay-divergence.test.ts",
     "packages/verification/src/engine/replay-divergence.ts",
     "packages/verification/src/engine/replay-types.ts"

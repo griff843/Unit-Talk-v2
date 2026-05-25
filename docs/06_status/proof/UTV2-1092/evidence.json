@@ -4,7 +4,7 @@
   "title": "INIT-1.2.3 — Replay Divergence Engine",
   "tier": "T1",
   "sha_binding": {
-    "verified_source_sha": "53b1a2f6",
+    "verified_source_sha": "b6c23416a0acb78b41600c46369c91fa0de69931",
     "note": "Branch HEAD SHA — will be updated to merge SHA post-merge",
     "ci_sentinels": {
       "pnpm_verify": "PASS (pre-existing F1-F7 migration gate failures on main excluded)",
