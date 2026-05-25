@@ -4,6 +4,21 @@ Generated: 2026-05-24T23:48:24Z
 Branch: codex/utv2-1071-five-lane-validation-run
 Base SHA: f3198b343929962b6d2b6407084d7c2c7c38c812
 
+## Summary
+
+UTV2-1071 is a proof-only T2 verification lane for the five-lane orchestration validation run. The lane documents workflow-runtime closeout state and does not change product runtime behavior.
+
+## Evidence
+
+- PR #844 contains proof artifacts under `docs/06_status/proof/UTV2-1071/`.
+- The lane manifest is committed at `docs/06_status/lanes/UTV2-1071.json`.
+- The PR carries authoritative tier evidence through the lane manifest tier `T2`.
+- Local reconciliation now selects only UTV2-1071 as active and reports no fail, infra, stale reclaim, or cleanup debt.
+
+## Verification
+
+The local verification and reconciliation work established that remaining PR failures are workflow/proof/manifest gates, not product/runtime blockers. The dedicated runtime verification proof is recorded in `docs/06_status/proof/UTV2-1071/verification.md`.
+
 ## Scope
 
 UTV2-1071 is a T2 verification lane for the orchestration kernel five-lane validation run. This lane does not change runtime, migration, modeling, contract, domain, or data-canonical code.
