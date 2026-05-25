@@ -3,10 +3,11 @@
 # UserPromptSubmit hook: injects a compact system-state summary at session start.
 #
 # Logic:
-#   - Reads .claude/.state-stamp (unix timestamp of last generation)
+#   - Reads .out/ops/session-state/.state-stamp (unix timestamp of last generation)
 #   - If stamp is < 30 min old: exits 0 silently (no disruption mid-session)
-#   - If stale: generates SYSTEM_STATE.md from local sources and outputs a
-#     compact systemMessage so Claude starts the session warm
+#   - If stale: generates .out/ops/session-state/SYSTEM_STATE.md from local
+#     sources and outputs a compact systemMessage so Claude starts warm without
+#     dirtying tracked repo files.
 #
 # Sources (local only — no MCP, no network):
 #   - docs/06_status/lanes/*.json → active lane state
@@ -18,8 +19,9 @@
 set -euo pipefail
 
 ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
-STAMP_FILE="$ROOT/.claude/.state-stamp"
-STATE_FILE="$ROOT/docs/06_status/SYSTEM_STATE.md"
+SESSION_STATE_DIR="$ROOT/.out/ops/session-state"
+STAMP_FILE="$SESSION_STATE_DIR/.state-stamp"
+STATE_FILE="$SESSION_STATE_DIR/SYSTEM_STATE.md"
 MAX_AGE=1800  # 30 minutes
 
 # ── Staleness check ──────────────────────────────────────────────────────────
@@ -88,7 +90,8 @@ try {
 " 2>/dev/null || echo "  unavailable")
 
 # ── Build compact one-liner for systemMessage ────────────────────────────────
-LANE_COUNT=$(echo "$LANES_OUT" | grep -c '^\s*\[' || echo "0")
+LANE_COUNT=$(printf '%s\n' "$LANES_OUT" | grep -c '^[[:space:]]*\[' || true)
+LANE_COUNT=${LANE_COUNT:-0}
 if [ "$LANE_COUNT" -eq 0 ]; then
   LANE_SUMMARY="no active lanes"
 else
@@ -197,13 +200,13 @@ date +%s > "$STAMP_FILE"
 
 GHOST_PART=""
 [ -n "$GHOST_WARNING" ] && GHOST_PART=" | $GHOST_WARNING"
-MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE | Full state: docs/06_status/SYSTEM_STATE.md"
+MSG="[session-start] State loaded $TODAY | branch: $BRANCH | $LANE_SUMMARY | $SLOT_INFO | $CODEX_STATUS$GHOST_PART | $DISPATCH_SUMMARY | tree: $TREE_LINE | Full state: .out/ops/session-state/SYSTEM_STATE.md"
 
 # ── Output systemMessage JSON ─────────────────────────────────────────────────
 python3 -c "
 import json, sys
 msg = sys.argv[1]
 print(json.dumps({'systemMessage': msg}))
-" "$MSG" 2>/dev/null || echo "{\"systemMessage\": \"[session-start] State loaded $TODAY — see docs/06_status/SYSTEM_STATE.md\"}"
+" "$MSG" 2>/dev/null || echo "{\"systemMessage\": \"[session-start] State loaded $TODAY — see .out/ops/session-state/SYSTEM_STATE.md\"}"
 
 exit 0

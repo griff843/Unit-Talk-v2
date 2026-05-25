@@ -4,6 +4,7 @@ lane_type: governance
 allowed_path_globs:
   - .claude/agents/**
   - .claude/commands/**
+  - .claude/hooks/**
   - .github/**
   - .lane/**
   - .ops/**

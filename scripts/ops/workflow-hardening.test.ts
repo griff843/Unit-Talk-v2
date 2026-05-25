@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
-import { evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
+import { evaluateBranchDiscipline, evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
 import { ROOT } from './shared.js';
 
 type WorkflowDocument = Record<string, unknown>;
@@ -101,11 +101,73 @@ test('branch discipline extracts unique issue IDs case-insensitively', () => {
   ]);
 });
 
-test('branch discipline warns without failing on multiple issue IDs', () => {
+test('branch discipline fails on multiple issue IDs', () => {
   const result = evaluateIssueReferences('PR title UTV2-123\nBody mentions UTV2-124');
-  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.ok, false);
   assert.strictEqual(result.code, 'multiple_issue_references');
+  assert.match(result.errors.join('\n'), /UTV2-123, UTV2-124/);
   assert.match(result.warning ?? '', /UTV2-123, UTV2-124/);
+});
+
+test('branch discipline requires an issue ID in the PR branch', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix runtime truth check',
+    branch: 'codex/g4-admin-merge-truth',
+    commits: 'fix runtime truth check',
+  });
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'missing_branch_issue_reference');
+  assert.match(result.errors.join('\n'), /must include exactly one/);
+});
+
+test('branch discipline requires all PR issue references to match the branch issue', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix ops UTV2-124',
+    branch: 'codex/utv2-123-branch-discipline',
+    commits: 'fix(ops): UTV2-123 branch discipline',
+  });
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'multiple_issue_references');
+  assert.deepStrictEqual(result.branch_issue_ids, ['UTV2-123']);
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-123', 'UTV2-124']);
+});
+
+test('branch discipline accepts a single matching branch issue reference', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix ops guard',
+    branch: 'codex/utv2-123-branch-discipline',
+    commits: 'fix(ops): UTV2-123 branch discipline',
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'single_issue_reference');
+  assert.deepStrictEqual(result.branch_issue_ids, ['UTV2-123']);
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-123']);
+});
+
+test('session start state cache writes only to ignored local output', () => {
+  const hook = fs.readFileSync(path.join(ROOT, '.claude', 'hooks', 'session-start.sh'), 'utf8');
+
+  assert.match(hook, /SESSION_STATE_DIR="\$ROOT\/\.out\/ops\/session-state"/);
+  assert.match(hook, /STAMP_FILE="\$SESSION_STATE_DIR\/\.state-stamp"/);
+  assert.match(hook, /STATE_FILE="\$SESSION_STATE_DIR\/SYSTEM_STATE\.md"/);
+  assert.doesNotMatch(hook, /STAMP_FILE="\$ROOT\/\.claude\/\.state-stamp"/);
+  assert.doesNotMatch(hook, /STATE_FILE="\$ROOT\/docs\/06_status\/SYSTEM_STATE\.md"/);
+  assert.match(fs.readFileSync(path.join(ROOT, '.gitignore'), 'utf8'), /^\.out\/$/m);
+});
+
+test('governance lane authority covers Claude hook orchestration files', () => {
+  const manifest = parseYaml(fs.readFileSync(path.join(ROOT, '.lane', 'lanes', 'governance.yml'), 'utf8')) as {
+    allowed_path_globs?: unknown;
+  };
+
+  assert.ok(Array.isArray(manifest.allowed_path_globs), 'governance allowed_path_globs must be an array');
+  assert.ok(
+    manifest.allowed_path_globs.includes('.claude/hooks/**'),
+    'governance lane must allow Claude hook orchestration changes',
+  );
 });
 
 test('required PR check workflows do not create stale merge-gate contexts on opened events', () => {
