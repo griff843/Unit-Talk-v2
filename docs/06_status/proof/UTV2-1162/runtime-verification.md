@@ -4,6 +4,8 @@ Branch: `codex/utv2-1162-queue-intake-wave-builder`
 
 Head checked before this gate repair: `5f90052b1e50164e4da5fc8104a7406f1a966199`
 
+Merged on main as `f991bc0bb4b9b9d05f405a1ba0207215a5b0eacf`.
+
 ## Runtime Verification
 
 This lane changes ops-control queue intake and wave planning only. It does not change API, worker, database, lifecycle, promotion, or Discord delivery runtime behavior.

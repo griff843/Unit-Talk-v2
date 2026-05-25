@@ -1,5 +1,7 @@
 # UTV2-1165 — Diff Summary
 
+Merged on main as `cf9ac4f73abac79816e5886afc8d676667129a07`.
+
 **Issue:** UTV2-1165 · 7–8 Lane Trial Governor  
 **Tier:** T2  
 **Branch:** claude/utv2-1165-7-8-trial-governor  

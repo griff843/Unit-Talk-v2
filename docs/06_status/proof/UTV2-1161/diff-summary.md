@@ -1,5 +1,7 @@
 # UTV2-1161 Diff Summary
 
+Merged on main as `c4bab0f03bd574bc5ca1637293a5398c7f4d3673`.
+
 ## Summary
 
 - Extended `scripts/ops/execution-state.ts` lane summaries with lane age, heartbeat age, branch drift, PR state, check state, proof readiness, merge readiness, conflict risk, and a single recommended action.
@@ -10,4 +12,3 @@
 
 - Runtime/domain/migration files were not changed.
 - Code changes are limited to the allowed ops execution-state implementation and test files.
-

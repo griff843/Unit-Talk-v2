@@ -1,5 +1,7 @@
 # UTV2-1165 — Verification Log
 
+Merged on main as `cf9ac4f73abac79816e5886afc8d676667129a07`.
+
 **Branch:** claude/utv2-1165-7-8-trial-governor
 **Tier:** T2
 **Date:** 2026-05-25
@@ -60,6 +62,9 @@ PASS — 23 tests, 0 failed
 
 pnpm type-check
 PASS
+
+pnpm test
+PASS through pnpm verify
 
 pnpm verify
 PASS

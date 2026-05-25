@@ -7,33 +7,50 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1163-one-command-lane-closeout",
   "branch": "codex/utv2-1163-one-command-lane-closeout",
   "base_branch": "main",
-  "commit_sha": "126304d845dd373cce514cd20bf69899df54559c",
+  "commit_sha": "18ad8003c669b1565ef0dec89cd7b03fa8216d7c",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/857",
   "files_changed": [
     ".ops/sync/UTV2-1163.yml",
     "docs/06_status/lanes/UTV2-1163.json",
+    "docs/06_status/proof/UTV2-1163/diff-summary.md",
     "docs/06_status/proof/UTV2-1163/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1163/verification.log",
     "scripts/ops/lane-finalize.test.ts",
     "scripts/ops/lane-finalize.ts"
   ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1163.yml",
     "docs/06_status/lanes/UTV2-1163.json",
+    "docs/06_status/proof/UTV2-1163/diff-summary.md",
     "docs/06_status/proof/UTV2-1163/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1163/verification.log",
     "scripts/ops/lane-finalize.test.ts",
     "scripts/ops/lane-finalize.ts"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1163/runtime-verification.md"
+    "docs/06_status/proof/UTV2-1163/diff-summary.md",
+    "docs/06_status/proof/UTV2-1163/runtime-verification.md",
+    "docs/06_status/proof/UTV2-1163/verification.log"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-05-25T18:48:29.377Z",
-  "heartbeat_at": "2026-05-25T18:48:29.377Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T20:51:52.185Z",
+  "closed_at": "2026-05-25T20:51:52.185Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1163-one-command-lane-closeout.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T20:30:32.764Z",
+      "verdict": "fail",
+      "merge_sha": "18ad8003c669b1565ef0dec89cd7b03fa8216d7c",
+      "failures": [
+        "P11",
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

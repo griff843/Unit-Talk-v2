@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1162-queue-intake-wave-builder",
   "branch": "codex/utv2-1162-queue-intake-wave-builder",
   "base_branch": "main",
-  "commit_sha": "5f90052b1e50164e4da5fc8104a7406f1a966199",
+  "commit_sha": "f991bc0bb4b9b9d05f405a1ba0207215a5b0eacf",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/860",
   "files_changed": [
     ".ops/sync/UTV2-1162.yml",
@@ -31,10 +31,10 @@
     "docs/06_status/proof/UTV2-1162/runtime-verification.md",
     "docs/06_status/proof/UTV2-1162/verification.log"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-05-25T18:48:13.128Z",
-  "heartbeat_at": "2026-05-25T18:48:13.128Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T20:30:30.375Z",
+  "closed_at": "2026-05-25T20:30:30.375Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1162-queue-intake-wave-builder.json",
   "created_by": "codex-cli",

@@ -4,6 +4,8 @@ Branch: `claude/utv2-1165-7-8-trial-governor`
 
 Head checked before this gate repair: `92c707f8a323ba623ee89fa7abc01c889fb817ea`
 
+Merged on main as `cf9ac4f73abac79816e5886afc8d676667129a07`.
+
 ## Runtime Verification
 
 This lane changes ops-control concurrency governance only. It does not change API, worker, database, lifecycle, promotion, or Discord delivery runtime behavior.

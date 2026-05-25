@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1165-7-8-trial-governor",
   "branch": "claude/utv2-1165-7-8-trial-governor",
   "base_branch": "main",
-  "commit_sha": "92c707f8a323ba623ee89fa7abc01c889fb817ea",
+  "commit_sha": "cf9ac4f73abac79816e5886afc8d676667129a07",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/861",
   "files_changed": [
     ".ops/sync/UTV2-1165.yml",
@@ -43,14 +43,24 @@
     "docs/06_status/proof/UTV2-1165/runtime-verification.md",
     "docs/06_status/proof/UTV2-1165/verification.log"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-05-25T18:49:03.578Z",
-  "heartbeat_at": "2026-05-25T18:54:50.542Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T20:53:44.329Z",
+  "closed_at": "2026-05-25T20:53:44.329Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1165-7-8-trial-governor.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T20:52:18.185Z",
+      "verdict": "fail",
+      "merge_sha": "cf9ac4f73abac79816e5886afc8d676667129a07",
+      "failures": [
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

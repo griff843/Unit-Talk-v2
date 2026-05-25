@@ -1,5 +1,7 @@
 # UTV2-1162 Diff Summary
 
+Merged on main as `f991bc0bb4b9b9d05f405a1ba0207215a5b0eacf`.
+
 ## Summary
 
 - Added queue/backlog intake support to `scripts/ops/lane-maximizer.ts` through `--from-queue` and `--from-linear`.

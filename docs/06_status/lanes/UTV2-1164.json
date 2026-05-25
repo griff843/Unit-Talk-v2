@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1164-conflict-forecasting",
   "branch": "codex/utv2-1164-conflict-forecasting",
   "base_branch": "main",
-  "commit_sha": "61686a8386ac5dc856c658360d64556e525606ea",
+  "commit_sha": "ed1f83bc9044b43719575c26fa28f96f0c7dab7e",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/858",
   "files_changed": [
     ".ops/sync/UTV2-1164.yml",
@@ -31,10 +31,10 @@
     "docs/06_status/proof/UTV2-1164/runtime-verification.md",
     "docs/06_status/proof/UTV2-1164/verification.log"
   ],
-  "status": "pr_open",
+  "status": "done",
   "started_at": "2026-05-25T18:48:45.203Z",
-  "heartbeat_at": "2026-05-25T18:48:45.203Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T20:52:15.887Z",
+  "closed_at": "2026-05-25T20:52:15.887Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1164-conflict-forecasting.json",
   "created_by": "codex-cli",

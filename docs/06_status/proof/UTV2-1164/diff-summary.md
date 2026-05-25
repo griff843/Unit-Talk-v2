@@ -1,5 +1,7 @@
 # UTV2-1164 Diff Summary
 
+Merged on main as `ed1f83bc9044b43719575c26fa28f96f0c7dab7e`.
+
 ## Summary
 
 - Added merge-risk forecast support for candidate branch vs base drift, active-lane branch file conflicts, declared scope overlap, and candidate scope bleed.

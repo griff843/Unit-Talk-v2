@@ -4,6 +4,8 @@ Branch: `codex/utv2-1164-conflict-forecasting`
 
 Head checked before this gate repair: `61686a8386ac5dc856c658360d64556e525606ea`
 
+Merged on main as `ed1f83bc9044b43719575c26fa28f96f0c7dab7e`.
+
 ## Runtime Verification
 
 This lane changes ops-control merge-risk forecasting only. It does not change API, worker, database, lifecycle, promotion, or Discord delivery runtime behavior.

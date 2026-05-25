@@ -4,6 +4,8 @@ Branch: `codex/utv2-1161-live-lane-telemetry-board`
 
 Head checked before this gate repair: `87fe736b95e3c392b359fbf25649fda0c93bbb9f`
 
+Merged on main as `c4bab0f03bd574bc5ca1637293a5398c7f4d3673`.
+
 ## Runtime Verification
 
 This lane changes ops-control telemetry only. It does not change API, worker, database, lifecycle, promotion, or Discord delivery runtime behavior.
