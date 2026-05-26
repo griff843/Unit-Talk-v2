@@ -9,13 +9,27 @@
   "base_branch": "main",
   "commit_sha": null,
   "pr_url": null,
-  "files_changed": [],
+  "files_changed": [
+    "docs/06_status/proof/UTV2-1099/evidence.json",
+    "docs/06_status/proof/UTV2-1099/runtime-verification.md",
+    "package.json",
+    "packages/invariants/src/certification/dependent-gate.test.ts",
+    "packages/invariants/src/certification/dependent-gate.ts",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/types.ts",
+    "scripts/ops/cert-check.ts"
+  ],
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1099/evidence.json",
     "docs/06_status/proof/UTV2-1099/runtime-verification.md",
+    "package.json",
+    "packages/invariants/src/certification/dependent-gate.test.ts",
+    "packages/invariants/src/certification/dependent-gate.ts",
     "packages/invariants/src/certification/index.ts",
     "packages/invariants/src/certification/lifecycle-manager.ts",
-    "packages/invariants/src/certification/types.ts"
+    "packages/invariants/src/certification/types.ts",
+    "scripts/ops/cert-check.ts"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1099/evidence.json"
