@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1175-normalize-skill-agent-metadata",
   "branch": "codex/utv2-1175-normalize-skill-agent-metadata",
   "base_branch": "main",
-  "commit_sha": "03a486588ca803e1a65d4910e03f3963ddcbcad0",
+  "commit_sha": "e7c19b27c3345ef84f96a779f4569524674e218f",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/879",
   "files_changed": [
     ".ops/sync/UTV2-1175.yml",
@@ -72,14 +72,30 @@
     "scripts/ops/contract-validator.ts"
   ],
   "expected_proof_paths": [],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-26T13:33:25.551Z",
-  "heartbeat_at": "2026-05-26T13:52:35.014Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T14:03:56.962Z",
+  "closed_at": "2026-05-26T14:03:56.962Z",
   "blocked_by": [],
-  "preflight_token": ".out/ops/preflight/codex/utv2-1175-normalize-skill-agent-metadata.json",
+  "preflight_token": "dispatch-auto",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T14:03:53.671Z",
+      "verdict": "pass",
+      "merge_sha": "e7c19b27c3345ef84f96a779f4569524674e218f",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/879",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "preflight_token",
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
