@@ -33,7 +33,8 @@
     "docs/06_status/proof/UTV2-1098/evidence.json",
     "docs/06_status/proof/UTV2-1098/verification.md",
     "docs/06_status/proof/UTV2-1098/runtime-verification.md",
-    "docs/06_status/lanes/UTV2-1098.json"
+    "docs/06_status/lanes/UTV2-1098.json",
+    ".ops/sync/UTV2-1098.yml"
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1098/evidence.json",
@@ -42,12 +43,23 @@
   ],
   "status": "merged",
   "started_at": "2026-05-26T17:06:50.884Z",
-  "heartbeat_at": "2026-05-26T17:06:50.884Z",
+  "heartbeat_at": "2026-05-26T19:17:26.985Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1098-revocation-trigger-wiring.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T19:17:26.985Z",
+      "verdict": "fail",
+      "merge_sha": "41ee170d32aa496b0958c99fc5676192987d9cf1",
+      "failures": [
+        "L5",
+        "S1"
+      ],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
