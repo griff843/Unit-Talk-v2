@@ -1,6 +1,9 @@
 ---
 name: promotion-routing
 description: Guard Unit Talk promotion policy and routing behavior. Use when changing promotion scores, target selection, routing gates, edge/trust/readiness interpretation, or promotion history persistence.
+category: implementation
+owner: codex
+trigger: Changing promotion scores, target selection, routing gates, edge/trust/readiness interpretation, or promotion history.
 ---
 
 # Promotion Routing

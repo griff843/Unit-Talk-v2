@@ -1,6 +1,9 @@
 ---
 name: betting-domain
 description: Guard Unit Talk domain and contract changes. Use when touching CanonicalPick, promotion scores, lifecycle rules, grading, contracts, or anything in packages/contracts or packages/domain.
+category: implementation
+owner: codex
+trigger: Touching CanonicalPick, promotion scores, lifecycle rules, grading, contracts, or domain logic.
 ---
 
 # Betting Domain

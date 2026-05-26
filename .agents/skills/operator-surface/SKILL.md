@@ -1,6 +1,9 @@
 ---
 name: operator-surface
 description: Guard Unit Talk operator-web and command-center changes. Use when touching operator snapshots, pick detail/search views, command-center actions, or operational truth surfaces.
+category: implementation
+owner: codex
+trigger: Touching operator snapshots, pick detail/search views, command-center actions, or operational truth surfaces.
 ---
 
 # Operator Surface

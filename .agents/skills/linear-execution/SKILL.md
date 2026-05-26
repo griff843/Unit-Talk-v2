@@ -1,6 +1,9 @@
 ---
 name: linear-execution
 description: Use Unit Talk's CLI-first queue flow when a task explicitly depends on Linear issue state. Use when asked to read, update, close, or reconcile Linear execution lanes from the repo.
+category: governance
+owner: codex
+trigger: Task explicitly depends on reading, updating, closing, or reconciling Linear issue state.
 ---
 
 # Linear Execution

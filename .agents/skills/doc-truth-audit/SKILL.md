@@ -1,6 +1,9 @@
 ---
 name: doc-truth-audit
 description: Audits docs that claim metadata.domainAnalysis runtime consumers or producers
+category: documentation
+owner: codex
+trigger: Auditing docs that claim metadata.domainAnalysis runtime consumers or producers.
 version: "1.0"
 ---
 

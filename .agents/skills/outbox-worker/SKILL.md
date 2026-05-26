@@ -1,6 +1,9 @@
 ---
 name: outbox-worker
 description: Guard Unit Talk outbox and worker changes. Use when touching apps/worker, distribution_outbox, distribution_receipts, delivery adapters, retry logic, or circuit breakers.
+category: implementation
+owner: codex
+trigger: Touching apps/worker, distribution_outbox, distribution_receipts, delivery adapters, retry logic, or circuit breakers.
 ---
 
 # Outbox Worker

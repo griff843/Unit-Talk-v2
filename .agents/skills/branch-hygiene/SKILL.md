@@ -1,6 +1,9 @@
 ---
 name: branch-hygiene
 description: Keep Unit Talk branch, worktree, and staging state clean. Use when splitting mixed work, staging coherent slices, merging finished branches, or pruning stale Codex branches safely.
+category: governance
+owner: codex
+trigger: Splitting mixed work, staging coherent slices, merging finished branches, or pruning stale Codex branches.
 ---
 
 # Branch Hygiene

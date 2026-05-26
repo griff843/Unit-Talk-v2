@@ -1,6 +1,9 @@
 ---
 name: smart-form-submission
 description: Guard Unit Talk smart-form and submission pipeline changes. Use when touching smart-form intake, browse/manual fallback, submission payloads, capper attribution, or smart-form promotion routing.
+category: implementation
+owner: codex
+trigger: Touching smart-form intake, browse/manual fallback, submission payloads, capper attribution, or promotion routing.
 ---
 
 # Smart Form Submission

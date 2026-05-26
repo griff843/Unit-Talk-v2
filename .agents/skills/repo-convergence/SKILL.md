@@ -1,6 +1,9 @@
 ---
 name: repo-convergence
 description: Converge Unit Talk repo state after parallel work. Use when reconciling branches, merged work, local-only commits, stale remote refs, or deciding what can safely be merged or retired.
+category: governance
+owner: codex
+trigger: Reconciling branches, merged work, local-only commits, stale remote refs, or merge/retirement decisions.
 ---
 
 # Repo Convergence
