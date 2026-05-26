@@ -41,10 +41,10 @@
     "docs/06_status/proof/UTV2-1098/verification.md",
     "docs/06_status/proof/UTV2-1098/runtime-verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-26T17:06:50.884Z",
-  "heartbeat_at": "2026-05-26T19:17:26.985Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T19:18:01.075Z",
+  "closed_at": "2026-05-26T19:18:01.075Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1098-revocation-trigger-wiring.json",
   "created_by": "codex-cli",
@@ -57,6 +57,13 @@
         "L5",
         "S1"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T19:17:41.929Z",
+      "verdict": "pass",
+      "merge_sha": "41ee170d32aa496b0958c99fc5676192987d9cf1",
+      "failures": [],
       "runner": "manual"
     }
   ],
