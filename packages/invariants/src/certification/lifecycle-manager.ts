@@ -17,6 +17,11 @@ import {
   type TransitionResult,
   type PropagationResult,
 } from './state-machine.js';
+import {
+  dependentGateChecker,
+  DependentGateViolationError,
+  type DependentGateEvent,
+} from './dependent-gate.js';
 import type {
   CertificationDomain,
   CertificationRecord,
@@ -80,6 +85,13 @@ export interface ActivateResult {
   readonly domain: CertificationDomain;
   readonly record: CertificationRecord;
   readonly event: CertificationTransitionEvent;
+  /**
+   * Gate event produced by the dependent-gate check.
+   * Present only when the result came from activate() (pending→active).
+   * Absent for initiate() (null→pending) since gate checks apply only to activation.
+   * When present, callers must persist it alongside the transition record.
+   */
+  readonly gateEvent?: DependentGateEvent;
 }
 
 export interface SuspendResult {
@@ -194,11 +206,30 @@ export class CertificationLifecycleManager {
 
   /**
    * Activate a domain — transitions pending → active or suspended → active.
-   * Fails closed if no current record exists (must initiate first).
+   *
+   * Fails closed on two conditions:
+   * 1. No current record exists (must initiate first).
+   * 2. Any upstream dependency is not certified (dependent-gate check).
+   *
+   * The DependentGateEvent is returned alongside the transition result so
+   * callers can persist it for replay-visible audit reconstruction.
+   * Throws DependentGateViolationError if dependencies are unmet — fail-closed.
    */
   async activate(input: TransitionInput): Promise<ActivateResult> {
     const { programId, domain, evidenceSha, mergeSha, transitionedBy, transitionReason, expiresAt } = input;
-    const current = await this.repo.getCurrentRecord(programId, domain);
+    const now = input.occurredAt ?? new Date().toISOString();
+
+    const [current, allRecords] = await Promise.all([
+      this.repo.getCurrentRecord(programId, domain),
+      this.repo.getAllCurrentRecords(programId),
+    ]);
+
+    // Dependent-gate check — fail closed if any upstream dep is not certified.
+    // DependentGateViolationError is thrown and propagates to the caller.
+    const gateResult = dependentGateChecker.checkDomainGates(programId, domain, allRecords, now);
+    if (!gateResult.allowed) {
+      throw new DependentGateViolationError(gateResult.event);
+    }
 
     const result = certificationStateMachine.transition(
       current,
@@ -211,10 +242,10 @@ export class CertificationLifecycleManager {
         revocationTrigger: null,
         predecessorId: current?.id ?? null,
       },
-      input.occurredAt,
+      now,
     );
     await this.repo.insertTransition(result.record, result.event);
-    return { domain, record: result.record, event: result.event };
+    return { domain, record: result.record, event: result.event, gateEvent: gateResult.event };
   }
 
   /**
@@ -461,6 +492,8 @@ export class CertificationLifecycleManager {
 }
 
 // ---------------------------------------------------------------------------
-// Domain dependency re-export (useful for callers implementing the repo)
+// Re-exports for callers that need gate types alongside lifecycle types
 // ---------------------------------------------------------------------------
 export { DOMAIN_DEPENDENCIES };
+export type { DependentGateEvent } from './dependent-gate.js';
+export { DependentGateViolationError } from './dependent-gate.js';

@@ -118,6 +118,7 @@
     "ops:pr-block-diagnostic": "tsx scripts/ops/pr-block-diagnostic.ts",
     "ops:pr-review-packet": "tsx scripts/ops/pr-review-packet.ts",
     "ops:scope-diff": "tsx scripts/ops/scope-diff.ts",
+    "ops:cert-check": "tsx scripts/ops/cert-check.ts",
     "ops:truth-check": "tsx scripts/ops/truth-check.ts",
     "ops:p0-detect": "tsx scripts/ops/p0-detect.ts",
     "ops:p0-events": "tsx scripts/ops/p0-events.ts",
