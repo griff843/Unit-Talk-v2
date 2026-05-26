@@ -34,16 +34,16 @@
       "UTV2-996: re-settling creates correction row — no duplicate base rows",
       "UTV2-996: correction chain additive — original settlement row not mutated"
     ],
-    "row_counts": {
-      "picks": 5283,
-      "certification_records": 0,
-      "certification_transition_events": 0,
-      "pick_lifecycle": 13622,
-      "distribution_outbox": 439,
-      "settlement_records": 398,
-      "sampled_at": "2026-05-26T18:35:00Z",
-      "project_ref": "zfzdnfwdarxucxtaojxm"
-    },
+    "row_counts": [
+      { "table": "picks", "count": 5283 },
+      { "table": "certification_records", "count": 0 },
+      { "table": "certification_transition_events", "count": 0 },
+      { "table": "pick_lifecycle", "count": 13622 },
+      { "table": "distribution_outbox", "count": 439 },
+      { "table": "settlement_records", "count": 398 }
+    ],
+    "row_counts_sampled_at": "2026-05-26T18:35:00Z",
+    "row_counts_project_ref": "zfzdnfwdarxucxtaojxm",
     "command": "pnpm test:db"
   }
 }
