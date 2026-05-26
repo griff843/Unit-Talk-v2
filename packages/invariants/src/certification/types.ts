@@ -48,6 +48,120 @@ export const REVOCATION_TRIGGERS = [
 
 export type RevocationTrigger = (typeof REVOCATION_TRIGGERS)[number];
 
+export const REVOCATION_TRIGGER_SIGNALS = [
+  'replay_nondeterminism',
+  'invariant_violation',
+  'stale_proof_lineage',
+  'freshness_enforcement_failure',
+  'divergence_threshold_breach',
+  'quarantine_escalation',
+  'dependency_invalidation',
+] as const;
+
+export type RevocationTriggerSignal = (typeof REVOCATION_TRIGGER_SIGNALS)[number];
+
+export interface RevocationTriggerMatrixEntry {
+  readonly signal: RevocationTriggerSignal;
+  readonly revocationTrigger: RevocationTrigger;
+  readonly defaultDomain: CertificationDomain;
+  readonly triggeredBy: string;
+  readonly reasonPrefix: string;
+  readonly propagates: true;
+  readonly replayVisible: true;
+  readonly evidenceMode: 'append_only';
+  readonly failClosed: true;
+}
+
+export const REVOCATION_TRIGGER_EXECUTION_MATRIX: readonly RevocationTriggerMatrixEntry[] = [
+  {
+    signal: 'replay_nondeterminism',
+    revocationTrigger: 'replay_nondeterminism',
+    defaultDomain: 'replay',
+    triggeredBy: 'replay-harness',
+    reasonPrefix: 'Replay nondeterminism detected',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+  {
+    signal: 'invariant_violation',
+    revocationTrigger: 'invariant_gap',
+    defaultDomain: 'invariant',
+    triggeredBy: 'invariant-engine',
+    reasonPrefix: 'Invariant violation escalated',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+  {
+    signal: 'stale_proof_lineage',
+    revocationTrigger: 'proof_corruption',
+    defaultDomain: 'proof_lineage',
+    triggeredBy: 'proof-lineage-enforcement',
+    reasonPrefix: 'Stale proof lineage detected',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+  {
+    signal: 'freshness_enforcement_failure',
+    revocationTrigger: 'stale_replay_acceptance',
+    defaultDomain: 'freshness',
+    triggeredBy: 'freshness-enforcement',
+    reasonPrefix: 'Freshness enforcement failed',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+  {
+    signal: 'divergence_threshold_breach',
+    revocationTrigger: 'divergence_leakage',
+    defaultDomain: 'divergence',
+    triggeredBy: 'divergence-monitor',
+    reasonPrefix: 'Divergence threshold breached',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+  {
+    signal: 'quarantine_escalation',
+    revocationTrigger: 'quarantine_bypass',
+    defaultDomain: 'quarantine',
+    triggeredBy: 'quarantine-enforcement',
+    reasonPrefix: 'Quarantine escalation triggered',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+  {
+    signal: 'dependency_invalidation',
+    revocationTrigger: 'dependency_revoked',
+    defaultDomain: 'cert_evidence',
+    triggeredBy: 'certification-lifecycle-manager',
+    reasonPrefix: 'Dependency invalidation propagated',
+    propagates: true,
+    replayVisible: true,
+    evidenceMode: 'append_only',
+    failClosed: true,
+  },
+];
+
+export function getRevocationTriggerMatrixEntry(
+  signal: RevocationTriggerSignal,
+): RevocationTriggerMatrixEntry {
+  const entry = REVOCATION_TRIGGER_EXECUTION_MATRIX.find(item => item.signal === signal);
+  if (!entry) {
+    throw new Error(`Unknown revocation trigger signal: ${signal}`);
+  }
+  return entry;
+}
+
 export const PROGRAM_IDS = ['P1', 'P2', 'P3', 'P4', 'P5'] as const;
 export type ProgramId = (typeof PROGRAM_IDS)[number];
 
