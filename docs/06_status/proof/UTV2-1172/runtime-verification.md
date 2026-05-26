@@ -2,7 +2,7 @@
 
 Issue: UTV2-1172 - Make branch discipline proof-aware without weakening issue binding
 Branch: codex/utv2-1172-proof-aware-branch-discipline
-Head: 233bf886bc02be993125b881f2e39cf1924fdf5e
+Head: a0ad626549061b1e1fa991b4e78ec6183e0f644c
 
 ## Verification
 
