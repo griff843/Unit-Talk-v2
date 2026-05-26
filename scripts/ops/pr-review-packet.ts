@@ -243,7 +243,7 @@ export async function generatePRReviewPacket(input: PacketInput): Promise<PRRevi
   );
   const rLevelCompliance = input.prebuilt?.r_level_compliance ?? readRLevelCompliance(baseRef, headRef);
   const syncMetadata = input.prebuilt?.sync_metadata ?? readSyncMetadata(manifest.issue_id);
-  const scopeDiff = buildScopeDiff(changedFiles, manifest.file_scope_lock);
+  const scopeDiff = buildScopeDiff(changedFiles, manifest.file_scope_lock, manifest.issue_id);
   const packageTestDrift = buildPackageTestDrift({
     diffEntries,
     basePackageJson: input.prebuilt?.base_package_json ?? readPackageJsonAtRef(baseRef),
@@ -473,10 +473,14 @@ function buildChecks(input: {
   return checks;
 }
 
-function buildScopeDiff(changedFiles: string[], scopeLock: string[]): ScopeDiffResult {
+function buildScopeDiff(changedFiles: string[], scopeLock: string[], issueId: string): ScopeDiffResult {
+  const allowedFileScope = normalizePaths([
+    ...scopeLock,
+    ...sameIssueLaneMetadataPaths(issueId),
+  ]);
   return {
-    allowed_file_scope: normalizePaths(scopeLock),
-    out_of_scope_files: changedFiles.filter((filePath) => !matchesAnyScopeLock(filePath, scopeLock)),
+    allowed_file_scope: allowedFileScope,
+    out_of_scope_files: changedFiles.filter((filePath) => !matchesAnyScopeLock(filePath, allowedFileScope)),
   };
 }
 
@@ -550,7 +554,10 @@ function buildPackageTestDrift(input: {
 
 function buildTestFileWiring(file: string, scripts: Record<string, string>): TestFileWiring {
   const rootMatchedScripts = Object.entries(scripts)
-    .filter(([name, script]) => isTestScript(name, script) && scriptReferencesFile(script, file))
+    .filter(([name, script]) =>
+      isTestScript(name, script) &&
+      (scriptReferencesFile(script, file) || scriptRunsDiscoverableTests(script)),
+    )
     .map(([name]) => name)
     .sort((left, right) => left.localeCompare(right));
   if (rootMatchedScripts.length > 0) {
@@ -570,7 +577,11 @@ function buildTestFileWiring(file: string, scripts: Record<string, string>): Tes
       const pkgMatchedScripts = Object.entries(pkgScripts)
         .filter(([name, script]) =>
           isTestScript(name, script) &&
-          (scriptReferencesFile(script, pkgRelFile) || scriptReferencesFile(script, file)),
+          (
+            scriptReferencesFile(script, pkgRelFile) ||
+            scriptReferencesFile(script, file) ||
+            scriptRunsDiscoverableTests(script)
+          ),
         )
         .map(([name]) => `${pkgDir}#${name}`)
         .sort((left, right) => left.localeCompare(right));
@@ -635,6 +646,14 @@ function matchesAnyScopeLock(filePath: string, scopeLock: string[]): boolean {
       filePath === normalizedPattern ||
       filePath.startsWith(`${normalizedPattern}/`);
   });
+}
+
+function sameIssueLaneMetadataPaths(issueId: string): string[] {
+  const normalizedIssueId = issueId.toUpperCase();
+  return [
+    `.ops/sync/${normalizedIssueId}.yml`,
+    `docs/06_status/lanes/${normalizedIssueId}.json`,
+  ];
 }
 
 function isTierCPath(filePath: string): boolean {
@@ -928,6 +947,10 @@ function scriptReferencesFile(script: string, file: string): boolean {
   }
   const patterns = extractGlobLikeTokens(normalizedScript);
   return patterns.some((pattern) => micromatch.isMatch(file, pattern, { dot: true }));
+}
+
+function scriptRunsDiscoverableTests(script: string): boolean {
+  return /\btsx\s+--test\b/u.test(script) && extractPathLikeTokens(script).length === 0;
 }
 
 function extractScriptTestFiles(scripts: Record<string, string>): string[] {
