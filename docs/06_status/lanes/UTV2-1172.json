@@ -8,7 +8,7 @@
   "branch": "codex/utv2-1172-proof-aware-branch-discipline",
   "base_branch": "main",
   "commit_sha": null,
-  "pr_url": null,
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/872",
   "files_changed": [],
   "file_scope_lock": [
     "scripts/ops/branch-discipline-guard.ts",
@@ -18,9 +18,9 @@
     "docs/06_status/proof/UTV2-1172/diff-summary.md",
     "docs/06_status/proof/UTV2-1172/verification.log"
   ],
-  "status": "started",
+  "status": "in_review",
   "started_at": "2026-05-26T03:07:26.084Z",
-  "heartbeat_at": "2026-05-26T03:07:26.084Z",
+  "heartbeat_at": "2026-05-26T03:21:13.992Z",
   "closed_at": null,
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1172-proof-aware-branch-discipline.json",
