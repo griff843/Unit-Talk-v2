@@ -1,0 +1,68 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-1103",
+  "title": "INIT-2.2.4 — Proof Freshness Enforcement",
+  "tier": "T1",
+  "lane_type": "governance",
+  "sha_binding": {
+    "verified_source_sha": "7f9d9cfe6548e42c08590af2e5df5872d59833a9",
+    "merge_sha": "set-by-ci",
+    "verified_source_note": "Branch HEAD before merge — merge SHA will be bound post-squash",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "7f9d9cfe6548e42c08590af2e5df5872d59833a9"
+  },
+  "static_proof": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": {
+      "verdict": "PASS",
+      "tests": 24,
+      "fail": 0,
+      "file": "packages/invariants/src/proof-freshness.test.ts"
+    },
+    "r_level_check": {
+      "verdict": "PASS",
+      "rules_matched": "none",
+      "note": "No R-level artifacts required for this diff"
+    }
+  },
+  "runtime_proof": {
+    "test_db": {
+      "verdict": "PASS",
+      "tests": 7,
+      "fail": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "duration_ms": 100585,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    }
+  },
+  "file_scope": [
+    "packages/invariants/src/proof-freshness.ts",
+    "packages/invariants/src/proof-freshness.test.ts",
+    "packages/invariants/src/index.ts",
+    "packages/invariants/package.json",
+    "docs/06_status/proof/UTV2-1103/evidence.json",
+    "docs/06_status/proof/UTV2-1103/verification.md"
+  ],
+  "invariants_asserted": [
+    "Fresh bundle (within window) → valid=true, fresh=true, no failures",
+    "Stale bundle (ageMs >= windowMs) → stale-bundle failure — boundary >= semantics enforced",
+    "Null/undefined createdAt → missing-created-at failure",
+    "Empty string createdAt → invalid-created-at failure",
+    "Non-string createdAt → invalid-created-at failure",
+    "Unparseable ISO string → invalid-created-at failure",
+    "Future createdAt → future-created-at failure (clock skew / tampered)",
+    "AuditEvent emitted on every check (pass and fail)",
+    "AuditEvent.quarantine_behavior = fail-closed on invalid result",
+    "FRESHNESS_WINDOWS_MS: t1=24h, governance=7d, t2=7d, t3=30d, certification=90d",
+    "checkBundleFreshness reads createdAt from bundle object",
+    "checkBundleFreshness propagates bundle.id as bundleId context",
+    "Non-object bundle → missing-created-at failure",
+    "requireFreshProof returns FreshnessResult for fresh bundle",
+    "requireFreshProof throws ProofFreshnessGateError for stale bundle",
+    "ProofFreshnessGateError carries full FreshnessResult",
+    "requireFreshProof throws for null bundle (fail-closed)",
+    "No I/O, Supabase, or HTTP — pure freshness logic"
+  ]
+}
