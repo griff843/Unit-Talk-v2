@@ -7,9 +7,16 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1101-proof-validator",
   "branch": "claude/utv2-1101-proof-validator",
   "base_branch": "main",
-  "commit_sha": null,
-  "pr_url": null,
-  "files_changed": [],
+  "commit_sha": "05b58ec4854beee9ce0888a65b305a33a5cfa802",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/869",
+  "files_changed": [
+    "packages/invariants/src/proof-validator.ts",
+    "packages/invariants/src/proof-validator.test.ts",
+    "packages/invariants/src/index.ts",
+    "packages/invariants/package.json",
+    "docs/06_status/proof/UTV2-1101/evidence.json",
+    "docs/06_status/proof/UTV2-1101/verification.md"
+  ],
   "file_scope_lock": [
     ".ops/sync/UTV2-1101.yml",
     "docs/06_status/lanes/UTV2-1101.json",
@@ -23,14 +30,25 @@
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1101/evidence.json"
   ],
-  "status": "started",
+  "status": "done",
   "started_at": "2026-05-25T23:33:03.856Z",
-  "heartbeat_at": "2026-05-25T23:33:03.856Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-25T23:55:00.000Z",
+  "closed_at": "2026-05-25T23:55:00.000Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1101-proof-validator.json",
   "created_by": "claude",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-25T23:55:00.000Z",
+      "verdict": "fail",
+      "merge_sha": "05b58ec4854beee9ce0888a65b305a33a5cfa802",
+      "failures": [
+        "G4"
+      ],
+      "runner": "manual",
+      "note": "G4 systematic: squash merge SHA has verify:cancelled \u2014 same pattern as UTV2-1090, UTV2-1094, UTV2-1095, UTV2-1100, UTV2-1104. PM_VERDICT:APPROVED is the blocking authority. Lane closed manually per established exception."
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

@@ -5,10 +5,11 @@
   "tier": "T1",
   "lane_type": "governance",
   "sha_binding": {
-    "verified_source_sha": "set-by-ci",
-    "merge_sha": "set-by-ci",
-    "evidence_commit_sha": "set-by-ci",
-    "current_pr_head_sha": "set-by-ci"
+    "verified_source_sha": "9a3b3be7",
+    "merge_sha": "05b58ec4854beee9ce0888a65b305a33a5cfa802",
+    "verified_source_note": "PR #869 squash-merged to main at 05b58ec4",
+    "evidence_commit_sha": "05b58ec4854beee9ce0888a65b305a33a5cfa802",
+    "current_pr_head_sha": "9a3b3be7"
   },
   "static_proof": {
     "type_check": "PASS",
