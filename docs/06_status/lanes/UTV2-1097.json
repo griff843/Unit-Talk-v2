@@ -32,10 +32,10 @@
     "docs/06_status/proof/UTV2-1097/verification.md",
     "docs/06_status/proof/UTV2-1097/runtime-verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-26T17:05:19.949Z",
-  "heartbeat_at": "2026-05-26T18:21:16.870Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T18:25:18.894Z",
+  "closed_at": "2026-05-26T18:25:18.894Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1097-certification-lifecycle-manager.json",
   "created_by": "claude",
@@ -82,6 +82,32 @@
         "R2",
         "R3"
       ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:23:31.536Z",
+      "verdict": "fail",
+      "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+      "failures": [
+        "L5",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:24:38.752Z",
+      "verdict": "fail",
+      "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+      "failures": [
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:25:02.457Z",
+      "verdict": "pass",
+      "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+      "failures": [],
       "runner": "manual"
     }
   ],
