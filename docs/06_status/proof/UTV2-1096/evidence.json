@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1096",
+  "title": "INIT-2.3.1 — Certification Entity and Lifecycle States",
+  "tier": "T1",
+  "lane_type": "governance",
+  "executor": "claude",
+  "sha_binding": {
+    "verified_source_sha": "efef79d58b21a8f27c1a39a4c0e9f4e19c2fca3e",
+    "merge_sha": "c2974f9d9296f92b9148aa9db6728c75dd711573",
+    "verified_source_note": "Two commits pushed to main: efef79d5 (feat) and c2974f9d (chore: types regen)",
+    "evidence_commit_sha": "c2974f9d9296f92b9148aa9db6728c75dd711573",
+    "current_pr_head_sha": "c2974f9d"
+  },
+  "static_proof": {
+    "type_check": "PASS — pnpm --filter @unit-talk/invariants type-check exits 0, zero TS errors",
+    "lint": "PASS — pnpm --filter @unit-talk/db type-check exits 0, zero TS errors",
+    "unit_tests": "PASS — 209/209 tests in packages/invariants (15 new certification tests: initiate, valid/invalid transitions, propagation, fail-closed gate, blockers, DOMAIN_DEPENDENCIES invariants)",
+    "test_wiring": "VERIFIED — certification.test.ts added to packages/invariants/package.json test script",
+    "db_types_regen": "VERIFIED — database.types.ts regenerated with certification_records, certification_transition_events, certification_domain, certification_status, revocation_trigger"
+  },
+  "runtime_proof": {
+    "migration_applied": "PASS — 20260526001_utv2_1096_certification_records.sql applied to Supabase zfzdnfwdarxucxtaojxm via MCP apply_migration (success: true)",
+    "tables_created": ["certification_records", "certification_transition_events"],
+    "view_created": "current_certification_state",
+    "enums_created": ["certification_domain", "certification_status", "revocation_trigger"],
+    "immutability_triggers": ["certification_records_no_update", "certification_records_no_delete", "cert_events_no_update", "cert_events_no_delete"],
+    "supabase_project_ref": "zfzdnfwdarxucxtaojxm"
+  },
+  "scope_compliance": {
+    "file_scope_lock_respected": true,
+    "files_changed": [
+      "docs/06_status/CERT_BOARD.md",
+      "docs/06_status/proof/UTV2-1096/evidence.json",
+      "docs/06_status/proof/UTV2-1096/verification.md",
+      "packages/db/src/database.types.ts",
+      "packages/invariants/package.json",
+      "packages/invariants/src/index.ts",
+      "packages/invariants/src/certification/certification.test.ts",
+      "packages/invariants/src/certification/index.ts",
+      "packages/invariants/src/certification/state-machine.ts",
+      "packages/invariants/src/certification/types.ts",
+      "supabase/migrations/20260526001_utv2_1096_certification_records.sql"
+    ]
+  },
+  "created_at": "2026-05-26T00:00:00.000Z",
+  "created_by": "claude"
+}
