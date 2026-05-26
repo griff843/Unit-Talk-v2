@@ -40,10 +40,10 @@
     "docs/06_status/proof/UTV2-1174/verification.log",
     "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-26T03:13:01.653Z",
-  "heartbeat_at": "2026-05-26T13:22:57.709Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T13:23:27.246Z",
+  "closed_at": "2026-05-26T13:23:27.246Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/claude/utv2-1174-map-prompt-agents-authority.json",
   "created_by": "claude",
