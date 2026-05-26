@@ -3,7 +3,9 @@
 ## Verification
 
 Branch: claude/utv2-1097-certification-lifecycle-manager
-Commit: 4cbd08369478aee90b3909b459555e6bc1d28aae
+Commit (branch HEAD): 4cbd08369478aee90b3909b459555e6bc1d28aae
+Merge SHA (main): c6e03cc84f36195ffbcd064ae762e12b2cce99d0
+PR: https://github.com/griff843/Unit-Talk-v2/pull/881
 
 pnpm verify — EXIT 0
 

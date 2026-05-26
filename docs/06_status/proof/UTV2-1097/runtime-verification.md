@@ -27,3 +27,4 @@ All 7 live Supabase DB tests pass.
 ## SHA binding
 
 Branch commit SHA: 788a598b744fe84d910be3e76004868c8cc03467
+Merge SHA (main): c6e03cc84f36195ffbcd064ae762e12b2cce99d0
