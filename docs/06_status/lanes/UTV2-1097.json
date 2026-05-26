@@ -19,10 +19,18 @@
   "file_scope_lock": [
     "docs/06_status/proof/UTV2-1097/evidence.json",
     "docs/06_status/proof/UTV2-1097/verification.md",
-    "packages/invariants/src/certification/index.ts"
+    "docs/06_status/proof/UTV2-1097/runtime-verification.md",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/lifecycle-manager.test.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    "packages/invariants/package.json",
+    ".ops/sync/UTV2-1097.yml"
   ],
   "expected_proof_paths": [
-    "docs/06_status/proof/UTV2-1097/evidence.json"
+    "docs/06_status/proof/UTV2-1097/evidence.json",
+    "docs/06_status/proof/UTV2-1097/verification.md",
+    "docs/06_status/proof/UTV2-1097/runtime-verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-05-26T17:05:19.949Z",
