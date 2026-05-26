@@ -1,0 +1,57 @@
+{
+  "schema_version": 1,
+  "issue": "UTV2-1101",
+  "title": "INIT-2.2.2 — Proof Validator",
+  "tier": "T1",
+  "lane_type": "governance",
+  "sha_binding": {
+    "verified_source_sha": "set-by-ci",
+    "merge_sha": "set-by-ci",
+    "evidence_commit_sha": "set-by-ci",
+    "current_pr_head_sha": "set-by-ci"
+  },
+  "static_proof": {
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "unit_tests": {
+      "verdict": "PASS",
+      "tests": 18,
+      "fail": 0,
+      "file": "packages/invariants/src/proof-validator.test.ts"
+    },
+    "r_level_check": {
+      "verdict": "PASS",
+      "rules_matched": "none",
+      "note": "No R-level artifacts required for this diff (2 changed files, no schema/contract changes)"
+    }
+  },
+  "runtime_proof": {
+    "test_db": {
+      "verdict": "PASS",
+      "tests": 7,
+      "fail": 0,
+      "file": "apps/api/src/database-smoke.test.ts",
+      "duration_ms": 104446,
+      "supabase_project": "zfzdnfwdarxucxtaojxm"
+    }
+  },
+  "file_scope": [
+    "packages/invariants/src/proof-validator.ts",
+    "packages/invariants/src/proof-validator.test.ts",
+    "packages/invariants/src/index.ts",
+    "packages/invariants/package.json",
+    "docs/06_status/proof/UTV2-1101/evidence.json",
+    "docs/06_status/proof/UTV2-1101/verification.md"
+  ],
+  "invariants_asserted": [
+    "Incomplete bundles rejected (missing-field failures)",
+    "Mis-bound bundles rejected — mergeSha must be exactly 40 hex chars, sentinels rejected",
+    "Stale bundles rejected — configurable maxAgeMs, default 7 days",
+    "Hash-tampered bundles rejected — validationHash recomputed from artifacts",
+    "schemaVersion must be exactly 1",
+    "ProofValidationGateError thrown on any rejection — certification halted",
+    "AuditEvent emitted for every validation (pass or fail)",
+    "No I/O, Supabase, or HTTP — pure data structure"
+  ]
+}
