@@ -57,23 +57,45 @@ Each agent's markdown body must define:
 
 ## Current agent inventory
 
-### 1. `codex-return-reviewer`
+### 1. `ci-triage`
+
+**File:** `.claude/agents/ci-triage.md`
+
+| Field | Value |
+|---|---|
+| Owner | `claude-governance` |
+| Authority | **Advisory** — diagnostic findings only; no merge block, no auto-trigger |
+| Trigger | Manual — operator invokes after a CI run is already red |
+| Lane types | All (cross-cutting diagnostic) |
+| Proof responsibility | None — produces a remediation recommendation, not a proof artifact |
+| CI enforcement | None — reactive diagnostic only (UTV2-1050 tracks automatic CI failure triage) |
+
+**Purpose:** Diagnoses failing GitHub Actions workflow runs. Reads logs, identifies root cause, pattern-matches failure types (TypeScript, test, lint, build, env/secret, R-level, merge conflicts), returns a specific remediation. Invoked after a failure exists — never preventive.
+
+**Checks performed:** failing step identification, log pattern matching, root cause classification, remediation recommendation.
+
+**Classification:** Governance-owned. Advisory diagnostic — MUST NOT be cited as autonomous enforcement or proof that a guarantee holds. (UTV2-1008)
+
+---
+
+### 2. `codex-return-reviewer`
 
 **File:** `.claude/agents/codex-return-reviewer.md`
 
 | Field | Value |
 |---|---|
 | Owner | `claude-governance` |
-| Authority | **Blocking** — returns APPROVE or REJECT |
-| Trigger | After any Codex lane returns a PR; before T2 standing merge authorization is applied |
+| Authority | **Advisory** — returns APPROVE or REJECT recommendations to the orchestrator; GitHub checks, Merge Gate, and PM policy are the blocking authority |
+| Trigger | Manual — after any Codex lane returns a PR; before the orchestrator applies T2 merge authorization |
 | Lane types | T2 Codex lanes |
 | Proof responsibility | Validates PR scope, Tier C paths, test existence, commit format, tier label, R-level compliance |
+| CI enforcement | None — transitional review aid pending UTV2-1047 automation (UTV2-1008) |
 
-**Purpose:** Structured gate between Codex output and Claude merge authorization. Prevents scope bleed, Tier C path touches, and malformed PRs from reaching main under the T2 standing authorization.
+**Purpose:** Structured advisory pass over a Codex-returned PR. Catches scope bleed, Tier C path touches, and malformed PRs before the orchestrator applies merge authorization. APPROVE/REJECT findings are recommendations — not enforceable verdicts.
 
 **Checks performed:** file scope, Tier C path guard, new `any` casts, test existence, commit message format, tier label presence, R-level compliance section, merge order section, CI check status, `Closes` marker.
 
-**Classification:** Governance-owned. Codex must not modify this agent's check logic or authority boundary.
+**Classification:** Governance-owned. Codex must not modify this agent's check logic or authority boundary. Advisory only — cannot be cited as proof that a PR was gated correctly. (UTV2-1008)
 
 ---
 
@@ -117,23 +139,106 @@ Each agent's markdown body must define:
 
 ---
 
-### 4. `pr-risk-reviewer`
+### 4. `lane-governor`
+
+**File:** `.claude/agents/lane-governor.md`
+
+| Field | Value |
+|---|---|
+| Owner | `claude-governance` |
+| Authority | **Advisory** — concurrency recommendations to the orchestrator; dispatch scripts and manifest policy are the blocking authority |
+| Trigger | Manual — invoked before `/dispatch` or `/dispatch-board` for a concise concurrency headroom summary |
+| Lane types | All (cross-cutting dispatch advisory) |
+| Proof responsibility | None — produces a dispatch recommendation, not a proof artifact |
+| CI enforcement | None — dispatch scripts (`ops:execution-state`, `ops:lane-maximizer`) are the real enforcement layer; UTV2-1048 tracks promotion into automatic preflight artifact |
+
+**Purpose:** Reads live lane manifests, execution state, and the concurrency policy (`docs/governance/LANE_CONCURRENCY_POLICY.md`) and recommends which lanes are safe to start. Does not start lanes, dispatch Codex, or mutate any state.
+
+**Checks performed:** active lane count by type, executor slot availability, singleton/forbidden-combination violations, file-scope overlap, recommended dispatch plan.
+
+**Classification:** Governance-owned. Advisory only — the actual dispatch enforcement comes from `ops:execution-state`, `ops:lane-maximizer`, and `ops:merge-risk` scripts. (UTV2-1008, UTV2-1048)
+
+---
+
+### 5. `lane-reconciler`
+
+**File:** `.claude/agents/lane-reconciler.md`
+
+| Field | Value |
+|---|---|
+| Owner | `claude-governance` |
+| Authority | **Advisory** — reports findings only; orchestrator applies fixes |
+| Trigger | When `ops:health` reports drift; before starting a new dispatch cycle; automatically via `.github/workflows/ops-reconcile.yml` (daily cron + workflow_dispatch) |
+| Lane types | All (cross-cutting reconciliation) |
+| Proof responsibility | None — produces a reconciliation report |
+| CI enforcement | Partial — `ops-reconcile.yml` is the real scheduled actor; prompt agent is for operator-directed investigation |
+
+**Purpose:** Finds ghost lanes — cases where lane manifests, Linear state, and GitHub PR/branch state have drifted. Reports four categories: stale manifests, ghost manifests (no branch), orphan branches (no PR), unreconciled merges (PR merged but Linear still active).
+
+**Checks performed:** stale manifests in `docs/06_status/lanes/`, active manifests with no remote branch, active branches with no open PR, merged PRs with active manifests, Linear state mismatch.
+
+**Classification:** Governance-owned. Report-only — never mutates Linear, Git, or manifests. Orchestrator decides which reconciliations to apply after reviewing the report. The scheduled script (`ops-reconcile.yml`) is the real automated actor.
+
+---
+
+### 6. `pr-risk-reviewer`
 
 **File:** `.claude/agents/pr-risk-reviewer.md`
 
 | Field | Value |
 |---|---|
 | Owner | `claude-governance` |
-| Authority | **Advisory + conditional blocking** — LOW/MEDIUM/HIGH; HIGH on Tier C = blocks merge pending PM review |
-| Trigger | Before any merge where diff is large (>500 lines), scope is wide, or tier is T1/T2 |
+| Authority | **Advisory** — returns RISK: LOW/MEDIUM/HIGH recommendations to the orchestrator; GitHub checks, Merge Gate, and PM policy are the blocking authority |
+| Trigger | Manual — before any merge where diff is large (>500 lines), scope is wide, or tier is T1/T2 |
 | Lane types | T1, T2 primarily; optional for T3 |
 | Proof responsibility | Produces risk score report |
+| CI enforcement | None — transitional review aid pending UTV2-1047 automation (UTV2-1008) |
 
-**Purpose:** Scores merge risk across six dimensions before the orchestrator applies merge authorization. Catches Tier C path exposure, new dependencies, schema changes, test coverage gaps, scope bleed, and diff size issues.
+**Purpose:** Scores merge risk across six dimensions before the orchestrator applies merge authorization. Catches Tier C path exposure, new dependencies, schema changes, test coverage gaps, scope bleed, and diff size issues. RISK ratings are recommendations — not enforceable verdicts.
 
 **Dimensions scored:** Tier C path exposure, dependency changes, schema changes, test coverage delta, scope bleed, diff size/complexity.
 
-**Classification:** Governance-owned. HIGH risk on any Tier C dimension escalates to PM review regardless of tier classification. Must not be modified to lower its own sensitivity without PM approval.
+**Classification:** Governance-owned. Advisory only — cannot be cited as proof that a PR was risk-reviewed or gated correctly. HIGH risk findings should prompt operator escalation to PM but do not automatically block merge. (UTV2-1008)
+
+### 7. `proof-auditor`
+
+**File:** `.claude/agents/proof-auditor.md`
+
+| Field | Value |
+|---|---|
+| Owner | `claude-governance` |
+| Authority | **Advisory** — returns VALID or INVALID findings to the orchestrator; CI (`proof-auditor-gate`) and PM policy are the blocking authority |
+| Trigger | Manual — operator invokes during lane review to assess proof bundle completeness |
+| Lane types | All tiers (proof review applies to any lane with required proof paths) |
+| Proof responsibility | Reviews existing proof artifacts; does not produce or own any required artifact |
+| CI enforcement | Partial — `proof-auditor-gate.yml` CI workflow is the automated structural gate on `docs/06_status/proof/**` PRs (UTV2-1046) |
+
+**Purpose:** Reviews proof bundles for completeness, correct structure, SHA binding, and R-level compliance. Does not write proof files, open gates, apply labels, or block merges — audits and reports findings only.
+
+**Checks performed:** proof file existence, required sections present, SHA binding (merge SHA not branch HEAD), R-level compliance keywords, placeholder text, evidence shape types.
+
+**Classification:** Governance-owned. Advisory only — CI and PM policy are the blocking authorities. VALID/INVALID findings inform operator decisions; they cannot be cited as enforcement that the proof is complete. (UTV2-1008, UTV2-1046)
+
+---
+
+### 8. `runtime-verifier`
+
+**File:** `.claude/agents/runtime-verifier.md`
+
+| Field | Value |
+|---|---|
+| Owner | `claude-governance` |
+| Authority | **Advisory** — returns VERIFIED or FAILED findings to the orchestrator; CI and PM `t1-approved` label are the blocking authority |
+| Trigger | Manual — operator invokes before applying merge gate or `t1-approved` label; partial CI trigger via `runtime-verifier-gate.yml` on proof-path PRs |
+| Lane types | T1 primarily; T2/T3 optional |
+| Proof responsibility | Reviews CI state on the merge SHA; for T1 verifies `pnpm test:db` ran against real Supabase |
+| CI enforcement | Partial — `runtime-verifier-gate.yml` runs `scripts/ops/runtime-verifier-gate.ts` only on PRs touching `docs/06_status/proof/**`; UTV2-1045 tracks expanded coverage |
+
+**Purpose:** Confirms that a lane has actual runtime evidence — CI on the merge SHA, not just on the branch — before the merge gate opens. Checks CI status, proof readiness from execution-state, and for T1 verifies live-DB evidence. Does not re-run tests or modify files.
+
+**Checks performed:** CI status on merge SHA (via `gh pr checks`), proof artifact readiness from `execution-state.ts`, pnpm verify status, T1-specific `pnpm test:db` evidence.
+
+**Classification:** Governance-owned. Advisory only — VERIFIED output informs the orchestrator but is not itself a blocking gate. The CI workflow (`runtime-verifier-gate.yml`) is a real check for proof-path PRs; the prompt agent is a manual complement for broader review. (UTV2-1008, UTV2-1045)
 
 ---
 
@@ -141,32 +246,36 @@ Each agent's markdown body must define:
 
 ```
 Claude/governance-owned (never delegate to Codex):
-  codex-return-reviewer   — T2 Codex merge gate
+  codex-return-reviewer   — T2 Codex PR advisory review
+  ci-triage               — CI failure diagnostic
+  lane-governor           — dispatch concurrency advisory
   lane-reconciler         — drift detection (report only)
   pr-risk-reviewer        — risk scoring
+  proof-auditor           — proof bundle advisory review
+  runtime-verifier        — pre-merge runtime evidence advisory
 
 Advisory only (may be used by any executor):
   db-proof-reviewer       — T1 evidence narrative review aid (not a gate, UTV2-1049)
 
 Codex/implementation-owned (support roles):
-  (none currently — all blocking agents are governance-owned)
+  (none currently — all agents are governance-owned)
 ```
 
-Blocking agents hold governance or proof authority. None may be modified by a Codex lane without PM plan approval (Tier C by the self-amendment rule — modifying review authority is equivalent to widening orchestrator autonomy). Advisory agents (`db-proof-reviewer`) do not hold gate authority and are not subject to this restriction.
+All prompt agents are advisory. None hold blocking gate authority — CI workflows, the Merge Gate, and PM policy are the sole blocking authorities. None may be modified by a Codex lane without PM plan approval (Tier C by the self-amendment rule — modifying review authority is equivalent to widening orchestrator autonomy).
 
 ---
 
 ## Lane type → agent responsibility map
 
-| Lane type | codex-return-reviewer | db-proof-reviewer | lane-reconciler | pr-risk-reviewer |
-|---|---|---|---|---|
-| T1 / Claude | — | Optional advisory | On drift | Recommended |
-| T2 / Codex | Required | — | On drift | Optional |
-| T2 / Claude | — | — | On drift | Optional |
-| T3 / Claude | — | — | On drift | — |
-| Reconciliation | — | — | Primary | — |
+| Lane type | ci-triage | codex-return-reviewer | lane-governor | lane-reconciler | pr-risk-reviewer | proof-auditor | runtime-verifier | db-proof-reviewer |
+|---|---|---|---|---|---|---|---|---|
+| T1 / Claude | On CI fail | — | Pre-dispatch | On drift | Recommended | On proof review | Recommended pre-merge | Optional advisory |
+| T2 / Codex | On CI fail | Recommended | Pre-dispatch | On drift | Optional | On proof review | Optional | — |
+| T2 / Claude | On CI fail | — | Pre-dispatch | On drift | Optional | On proof review | Optional | — |
+| T3 / Claude | On CI fail | — | Pre-dispatch | On drift | — | — | — | — |
+| Reconciliation | — | — | — | Primary | — | — | — | — |
 
-*`db-proof-reviewer` is advisory only — operator invokes at their discretion. The hard T1 proof gate is `proof-auditor-gate` (CI) + `pnpm test:db` (required check). (UTV2-1049)*
+*All agents are advisory — they inform operator decisions but do not enforce merge gates. The automated blocking gates are CI workflows, `proof-auditor-gate.yml`, and PM `t1-approved` label policy. `db-proof-reviewer` is advisory only — not a gate (UTV2-1049).*
 
 ---
 

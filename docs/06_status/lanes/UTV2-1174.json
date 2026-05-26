@@ -11,7 +11,10 @@
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/878",
   "files_changed": [
     "docs/05_operations/agent-role-contracts.md",
-    ".ops/sync/UTV2-1174.yml"
+    ".ops/sync/UTV2-1174.yml",
+    "docs/06_status/proof/UTV2-1174/diff-summary.md",
+    "docs/06_status/proof/UTV2-1174/verification.log",
+    "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
   "file_scope_lock": [
     ".claude/agents/ci-triage.md",
@@ -33,7 +36,8 @@
   ],
   "expected_proof_paths": [
     "docs/06_status/proof/UTV2-1174/diff-summary.md",
-    "docs/06_status/proof/UTV2-1174/verification.log"
+    "docs/06_status/proof/UTV2-1174/verification.log",
+    "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
   "status": "in_review",
   "started_at": "2026-05-26T03:13:01.653Z",
