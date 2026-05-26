@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.5"
+  }
   public: {
     Tables: {
       alert_detections: {
@@ -160,6 +165,138 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      certification_records: {
+        Row: {
+          created_at: string
+          domain: Database["public"]["Enums"]["certification_domain"]
+          evidence_sha: string
+          expires_at: string | null
+          id: string
+          merge_sha: string
+          predecessor_id: string | null
+          program_id: string
+          revocation_trigger:
+            | Database["public"]["Enums"]["revocation_trigger"]
+            | null
+          status: Database["public"]["Enums"]["certification_status"]
+          transition_reason: string
+          transitioned_at: string
+          transitioned_by: string
+        }
+        Insert: {
+          created_at?: string
+          domain: Database["public"]["Enums"]["certification_domain"]
+          evidence_sha: string
+          expires_at?: string | null
+          id?: string
+          merge_sha: string
+          predecessor_id?: string | null
+          program_id: string
+          revocation_trigger?:
+            | Database["public"]["Enums"]["revocation_trigger"]
+            | null
+          status: Database["public"]["Enums"]["certification_status"]
+          transition_reason: string
+          transitioned_at?: string
+          transitioned_by: string
+        }
+        Update: {
+          created_at?: string
+          domain?: Database["public"]["Enums"]["certification_domain"]
+          evidence_sha?: string
+          expires_at?: string | null
+          id?: string
+          merge_sha?: string
+          predecessor_id?: string | null
+          program_id?: string
+          revocation_trigger?:
+            | Database["public"]["Enums"]["revocation_trigger"]
+            | null
+          status?: Database["public"]["Enums"]["certification_status"]
+          transition_reason?: string
+          transitioned_at?: string
+          transitioned_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certification_records_predecessor_id_fkey"
+            columns: ["predecessor_id"]
+            isOneToOne: false
+            referencedRelation: "certification_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certification_records_predecessor_id_fkey"
+            columns: ["predecessor_id"]
+            isOneToOne: false
+            referencedRelation: "current_certification_state"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      certification_transition_events: {
+        Row: {
+          cert_record_id: string
+          domain: Database["public"]["Enums"]["certification_domain"]
+          evidence_sha: string | null
+          from_status:
+            | Database["public"]["Enums"]["certification_status"]
+            | null
+          id: string
+          occurred_at: string
+          program_id: string
+          replay_safe: boolean
+          to_status: Database["public"]["Enums"]["certification_status"]
+          trigger_reason: string
+          triggered_by: string
+        }
+        Insert: {
+          cert_record_id: string
+          domain: Database["public"]["Enums"]["certification_domain"]
+          evidence_sha?: string | null
+          from_status?:
+            | Database["public"]["Enums"]["certification_status"]
+            | null
+          id?: string
+          occurred_at?: string
+          program_id: string
+          replay_safe?: boolean
+          to_status: Database["public"]["Enums"]["certification_status"]
+          trigger_reason: string
+          triggered_by: string
+        }
+        Update: {
+          cert_record_id?: string
+          domain?: Database["public"]["Enums"]["certification_domain"]
+          evidence_sha?: string | null
+          from_status?:
+            | Database["public"]["Enums"]["certification_status"]
+            | null
+          id?: string
+          occurred_at?: string
+          program_id?: string
+          replay_safe?: boolean
+          to_status?: Database["public"]["Enums"]["certification_status"]
+          trigger_reason?: string
+          triggered_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certification_transition_events_cert_record_id_fkey"
+            columns: ["cert_record_id"]
+            isOneToOne: false
+            referencedRelation: "certification_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certification_transition_events_cert_record_id_fkey"
+            columns: ["cert_record_id"]
+            isOneToOne: false
+            referencedRelation: "current_certification_state"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       combo_stat_type_components: {
         Row: {
@@ -1113,6 +1250,102 @@ export type Database = {
           version?: string
         }
         Relationships: []
+      }
+      odds_snapshot_corrections: {
+        Row: {
+          corrected_by: string
+          created_at: string
+          id: string
+          new_snapshot_id: string
+          reason: string
+          snapshot_id: string
+        }
+        Insert: {
+          corrected_by: string
+          created_at?: string
+          id?: string
+          new_snapshot_id: string
+          reason: string
+          snapshot_id: string
+        }
+        Update: {
+          corrected_by?: string
+          created_at?: string
+          id?: string
+          new_snapshot_id?: string
+          reason?: string
+          snapshot_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_snapshot_corrections_new_snapshot_id_fkey"
+            columns: ["new_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "odds_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "odds_snapshot_corrections_snapshot_id_fkey"
+            columns: ["snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "odds_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      odds_snapshots: {
+        Row: {
+          created_at: string
+          id: string
+          league: string
+          market_key: string
+          price_blob: Json
+          prior_snapshot_id: string | null
+          provider_key: string
+          raw_payload_id: string | null
+          run_id: string
+          snapshot_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          league: string
+          market_key: string
+          price_blob: Json
+          prior_snapshot_id?: string | null
+          provider_key: string
+          raw_payload_id?: string | null
+          run_id: string
+          snapshot_at: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          league?: string
+          market_key?: string
+          price_blob?: Json
+          prior_snapshot_id?: string | null
+          provider_key?: string
+          raw_payload_id?: string | null
+          run_id?: string
+          snapshot_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "odds_snapshots_prior_snapshot_id_fkey"
+            columns: ["prior_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "odds_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "odds_snapshots_raw_payload_id_fkey"
+            columns: ["raw_payload_id"]
+            isOneToOne: false
+            referencedRelation: "raw_payloads"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       participant_memberships: {
         Row: {
@@ -2354,186 +2587,6 @@ export type Database = {
           },
         ]
       }
-      provider_offer_history_p20260429: {
-        Row: {
-          bookmaker_key: string | null
-          created_at: string
-          devig_mode: string
-          id: string
-          idempotency_key: string
-          is_closing: boolean
-          is_opening: boolean
-          line: number | null
-          over_odds: number | null
-          provider_event_id: string
-          provider_key: string
-          provider_market_key: string
-          provider_participant_id: string | null
-          snapshot_at: string
-          source_run_id: string | null
-          sport_key: string | null
-          under_odds: number | null
-        }
-        Insert: {
-          bookmaker_key?: string | null
-          created_at?: string
-          devig_mode: string
-          id?: string
-          idempotency_key: string
-          is_closing?: boolean
-          is_opening?: boolean
-          line?: number | null
-          over_odds?: number | null
-          provider_event_id: string
-          provider_key: string
-          provider_market_key: string
-          provider_participant_id?: string | null
-          snapshot_at: string
-          source_run_id?: string | null
-          sport_key?: string | null
-          under_odds?: number | null
-        }
-        Update: {
-          bookmaker_key?: string | null
-          created_at?: string
-          devig_mode?: string
-          id?: string
-          idempotency_key?: string
-          is_closing?: boolean
-          is_opening?: boolean
-          line?: number | null
-          over_odds?: number | null
-          provider_event_id?: string
-          provider_key?: string
-          provider_market_key?: string
-          provider_participant_id?: string | null
-          snapshot_at?: string
-          source_run_id?: string | null
-          sport_key?: string | null
-          under_odds?: number | null
-        }
-        Relationships: []
-      }
-      provider_offer_history_p20260430: {
-        Row: {
-          bookmaker_key: string | null
-          created_at: string
-          devig_mode: string
-          id: string
-          idempotency_key: string
-          is_closing: boolean
-          is_opening: boolean
-          line: number | null
-          over_odds: number | null
-          provider_event_id: string
-          provider_key: string
-          provider_market_key: string
-          provider_participant_id: string | null
-          snapshot_at: string
-          source_run_id: string | null
-          sport_key: string | null
-          under_odds: number | null
-        }
-        Insert: {
-          bookmaker_key?: string | null
-          created_at?: string
-          devig_mode: string
-          id?: string
-          idempotency_key: string
-          is_closing?: boolean
-          is_opening?: boolean
-          line?: number | null
-          over_odds?: number | null
-          provider_event_id: string
-          provider_key: string
-          provider_market_key: string
-          provider_participant_id?: string | null
-          snapshot_at: string
-          source_run_id?: string | null
-          sport_key?: string | null
-          under_odds?: number | null
-        }
-        Update: {
-          bookmaker_key?: string | null
-          created_at?: string
-          devig_mode?: string
-          id?: string
-          idempotency_key?: string
-          is_closing?: boolean
-          is_opening?: boolean
-          line?: number | null
-          over_odds?: number | null
-          provider_event_id?: string
-          provider_key?: string
-          provider_market_key?: string
-          provider_participant_id?: string | null
-          snapshot_at?: string
-          source_run_id?: string | null
-          sport_key?: string | null
-          under_odds?: number | null
-        }
-        Relationships: []
-      }
-      provider_offer_history_p20260501: {
-        Row: {
-          bookmaker_key: string | null
-          created_at: string
-          devig_mode: string
-          id: string
-          idempotency_key: string
-          is_closing: boolean
-          is_opening: boolean
-          line: number | null
-          over_odds: number | null
-          provider_event_id: string
-          provider_key: string
-          provider_market_key: string
-          provider_participant_id: string | null
-          snapshot_at: string
-          source_run_id: string | null
-          sport_key: string | null
-          under_odds: number | null
-        }
-        Insert: {
-          bookmaker_key?: string | null
-          created_at?: string
-          devig_mode: string
-          id?: string
-          idempotency_key: string
-          is_closing?: boolean
-          is_opening?: boolean
-          line?: number | null
-          over_odds?: number | null
-          provider_event_id: string
-          provider_key: string
-          provider_market_key: string
-          provider_participant_id?: string | null
-          snapshot_at: string
-          source_run_id?: string | null
-          sport_key?: string | null
-          under_odds?: number | null
-        }
-        Update: {
-          bookmaker_key?: string | null
-          created_at?: string
-          devig_mode?: string
-          id?: string
-          idempotency_key?: string
-          is_closing?: boolean
-          is_opening?: boolean
-          line?: number | null
-          over_odds?: number | null
-          provider_event_id?: string
-          provider_key?: string
-          provider_market_key?: string
-          provider_participant_id?: string | null
-          snapshot_at?: string
-          source_run_id?: string | null
-          sport_key?: string | null
-          under_odds?: number | null
-        }
-        Relationships: []
-      }
       provider_offer_history_p20260502: {
         Row: {
           bookmaker_key: string | null
@@ -3314,6 +3367,2826 @@ export type Database = {
         }
         Relationships: []
       }
+      provider_offer_history_p20260515: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260516: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260517: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260518: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260519: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260520: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260521: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260522: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260523: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260524: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260525: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260526: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260527: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260528: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260529: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260530: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260531: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260601: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260602: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260603: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260604: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260605: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260606: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260607: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260608: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260609: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260610: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260611: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260612: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260613: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260614: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260615: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260616: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260617: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260618: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260619: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260620: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260621: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260622: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260623: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260624: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260625: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260626: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260627: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260628: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260629: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
+      provider_offer_history_p20260630: {
+        Row: {
+          bookmaker_key: string | null
+          created_at: string
+          devig_mode: string
+          id: string
+          idempotency_key: string
+          is_closing: boolean
+          is_opening: boolean
+          line: number | null
+          over_odds: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id: string | null
+          snapshot_at: string
+          source_run_id: string | null
+          sport_key: string | null
+          under_odds: number | null
+        }
+        Insert: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode: string
+          id?: string
+          idempotency_key: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id: string
+          provider_key: string
+          provider_market_key: string
+          provider_participant_id?: string | null
+          snapshot_at: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Update: {
+          bookmaker_key?: string | null
+          created_at?: string
+          devig_mode?: string
+          id?: string
+          idempotency_key?: string
+          is_closing?: boolean
+          is_opening?: boolean
+          line?: number | null
+          over_odds?: number | null
+          provider_event_id?: string
+          provider_key?: string
+          provider_market_key?: string
+          provider_participant_id?: string | null
+          snapshot_at?: string
+          source_run_id?: string | null
+          sport_key?: string | null
+          under_odds?: number | null
+        }
+        Relationships: []
+      }
       provider_offer_line_snapshots: {
         Row: {
           bookmaker_key: string | null
@@ -3530,6 +6403,42 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      raw_payloads: {
+        Row: {
+          created_at: string
+          id: string
+          kind: string
+          league: string
+          payload: Json
+          payload_hash: string
+          provider_key: string
+          run_id: string
+          snapshot_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          kind: string
+          league: string
+          payload: Json
+          payload_hash: string
+          provider_key: string
+          run_id: string
+          snapshot_at: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          kind?: string
+          league?: string
+          payload?: Json
+          payload_hash?: string
+          provider_key?: string
+          run_id?: string
+          snapshot_at?: string
+        }
+        Relationships: []
       }
       selection_types: {
         Row: {
@@ -4043,6 +6952,41 @@ export type Database = {
           },
         ]
       }
+      current_certification_state: {
+        Row: {
+          created_at: string | null
+          domain: Database["public"]["Enums"]["certification_domain"] | null
+          evidence_sha: string | null
+          expires_at: string | null
+          id: string | null
+          merge_sha: string | null
+          predecessor_id: string | null
+          program_id: string | null
+          revocation_trigger:
+            | Database["public"]["Enums"]["revocation_trigger"]
+            | null
+          status: Database["public"]["Enums"]["certification_status"] | null
+          transition_reason: string | null
+          transitioned_at: string | null
+          transitioned_by: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "certification_records_predecessor_id_fkey"
+            columns: ["predecessor_id"]
+            isOneToOne: false
+            referencedRelation: "certification_records"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "certification_records_predecessor_id_fkey"
+            columns: ["predecessor_id"]
+            isOneToOne: false
+            referencedRelation: "current_certification_state"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       picks_current_state: {
         Row: {
           approval_status: string | null
@@ -4443,7 +7387,30 @@ export type Database = {
       }
     }
     Enums: {
-      [_ in never]: never
+      certification_domain:
+        | "replay"
+        | "invariant"
+        | "divergence"
+        | "quarantine"
+        | "proof_lineage"
+        | "freshness"
+        | "cert_evidence"
+      certification_status:
+        | "pending"
+        | "active"
+        | "suspended"
+        | "revoked"
+        | "expired"
+      revocation_trigger:
+        | "replay_nondeterminism"
+        | "invariant_gap"
+        | "proof_corruption"
+        | "divergence_leakage"
+        | "quarantine_bypass"
+        | "stale_replay_acceptance"
+        | "evidence_invalidation"
+        | "dependency_revoked"
+        | "manual_governance"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -4570,7 +7537,34 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      certification_domain: [
+        "replay",
+        "invariant",
+        "divergence",
+        "quarantine",
+        "proof_lineage",
+        "freshness",
+        "cert_evidence",
+      ],
+      certification_status: [
+        "pending",
+        "active",
+        "suspended",
+        "revoked",
+        "expired",
+      ],
+      revocation_trigger: [
+        "replay_nondeterminism",
+        "invariant_gap",
+        "proof_corruption",
+        "divergence_leakage",
+        "quarantine_bypass",
+        "stale_replay_acceptance",
+        "evidence_invalidation",
+        "dependency_revoked",
+        "manual_governance",
+      ],
+    },
   },
 } as const
-
