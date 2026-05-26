@@ -5,12 +5,21 @@ Issue: UTV2-1171
 Tier: T2
 Lane type: governance
 Branch: codex/utv2-1171-align-dispatch-board-governor
-Head SHA: pending
-Merge SHA: N/A
+Head SHA: 0bf2fd500dcd06fe31ba2ec6a2831eb9a842c37c
+Merge SHA: d2c8b4da53767674a30cfc8e13590a189f93d7f9
 
 ## Commands
 
 - `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: PASS
+- `pnpm type-check`: PASS as part of final-head `pnpm verify`
+- `pnpm test`: PASS as part of final-head `pnpm verify`
+- `pnpm verify`: PASS on final PR head before merge
+
+## Merge Binding
+
+- PR: https://github.com/griff843/Unit-Talk-v2/pull/877
+- Head SHA: 0bf2fd500dcd06fe31ba2ec6a2831eb9a842c37c
+- Merge SHA: d2c8b4da53767674a30cfc8e13590a189f93d7f9
 
 ## Focused Test Tail
 

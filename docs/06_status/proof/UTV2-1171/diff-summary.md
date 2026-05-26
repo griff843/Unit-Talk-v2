@@ -5,8 +5,8 @@ Issue: UTV2-1171
 Tier: T2
 Lane type: governance
 Branch: codex/utv2-1171-align-dispatch-board-governor
-Head SHA: see PR head
-Merge SHA: N/A
+Head SHA: 0bf2fd500dcd06fe31ba2ec6a2831eb9a842c37c
+Merge SHA: d2c8b4da53767674a30cfc8e13590a189f93d7f9
 
 ## Summary
 
