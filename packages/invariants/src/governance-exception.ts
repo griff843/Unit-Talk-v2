@@ -43,6 +43,12 @@ export interface GovernanceException extends GovernanceExceptionInput {
   status: 'active' | 'expired' | 'rolled-back';
 }
 
+export interface GovernanceExceptionExpirationResult {
+  exception: GovernanceException;
+  auditEvent?: AuditEvent;
+  expired: boolean;
+}
+
 // ---------------------------------------------------------------------------
 // Error type
 // ---------------------------------------------------------------------------
@@ -66,6 +72,11 @@ const VALID_EXCEPTION_TYPES: ReadonlySet<string> = new Set<GovernanceExceptionTy
   'operational-override',
   'emergency-exception',
   'scheduled-maintenance',
+]);
+
+const TERMINAL_STATUSES: ReadonlySet<GovernanceException['status']> = new Set([
+  'expired',
+  'rolled-back',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -150,6 +161,51 @@ function validate(input: GovernanceExceptionInput): void {
   }
 }
 
+function parseExpiration(exception: Pick<GovernanceException, 'expiration'>): Date {
+  const expirationDate = new Date(exception.expiration);
+  if (isNaN(expirationDate.getTime())) {
+    throw new GovernanceExceptionValidationError(
+      'expiration',
+      `stored expiration is not a valid ISO-8601 datetime: ${exception.expiration}`,
+    );
+  }
+  return expirationDate;
+}
+
+function normalizeNow(now: Date = new Date()): Date {
+  if (isNaN(now.getTime())) {
+    throw new GovernanceExceptionValidationError('now', 'now must be a valid Date');
+  }
+  return now;
+}
+
+function buildExpirationAuditEvent(
+  exception: GovernanceException,
+  expiredAt: string,
+): AuditEvent {
+  return Object.freeze({
+    id: crypto.randomUUID(),
+    event_type: 'invariant_violation' as const,
+    invariant_id: exception.scope,
+    severity: 'governance-critical' as InvariantSeverity,
+    quarantine_behavior: 'fail-closed' as InvariantQuarantineBehavior,
+    recorded_at: expiredAt,
+    payload: Object.freeze({
+      entity_type: 'governance_exception',
+      action: 'expired',
+      exception_id: exception.id,
+      scope: exception.scope,
+      type: exception.type,
+      previous_status: exception.status,
+      status: 'expired',
+      expiration: exception.expiration,
+      expiredAt,
+      auditRef: exception.auditRef,
+    }),
+    immutable: true as const,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Factory function
 // ---------------------------------------------------------------------------
@@ -192,4 +248,68 @@ export function createGovernanceException(input: GovernanceExceptionInput): {
   });
 
   return { exception, auditEvent };
+}
+
+// ---------------------------------------------------------------------------
+// Expiration enforcement
+// ---------------------------------------------------------------------------
+
+export function getGovernanceExceptionStatus(
+  exception: GovernanceException,
+  now: Date = new Date(),
+): GovernanceException['status'] {
+  const currentTime = normalizeNow(now);
+
+  if (TERMINAL_STATUSES.has(exception.status)) {
+    return exception.status;
+  }
+
+  return parseExpiration(exception) <= currentTime ? 'expired' : exception.status;
+}
+
+export function isGovernanceExceptionExpired(
+  exception: GovernanceException,
+  now: Date = new Date(),
+): boolean {
+  return getGovernanceExceptionStatus(exception, now) === 'expired';
+}
+
+export function enforceGovernanceExceptionExpiration(
+  exception: GovernanceException,
+  now: Date = new Date(),
+): GovernanceExceptionExpirationResult {
+  const currentTime = normalizeNow(now);
+  const status = getGovernanceExceptionStatus(exception, currentTime);
+
+  if (status !== 'expired' || exception.status === 'expired') {
+    return {
+      exception: status === exception.status ? exception : { ...exception, status },
+      expired: status === 'expired',
+    };
+  }
+
+  const expiredAt = currentTime.toISOString();
+  const expiredException: GovernanceException = {
+    ...exception,
+    status: 'expired',
+  };
+
+  return {
+    exception: expiredException,
+    auditEvent: buildExpirationAuditEvent(exception, expiredAt),
+    expired: true,
+  };
+}
+
+export function assertGovernanceExceptionActive(
+  exception: GovernanceException,
+  now: Date = new Date(),
+): void {
+  const status = getGovernanceExceptionStatus(exception, now);
+  if (status !== 'active') {
+    throw new GovernanceExceptionValidationError(
+      'status',
+      `governance exception is not active; status=${status}`,
+    );
+  }
 }
