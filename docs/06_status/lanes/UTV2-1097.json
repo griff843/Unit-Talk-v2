@@ -1,0 +1,122 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1097",
+  "lane_type": "governance",
+  "executor": "claude",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1097-certification-lifecycle-manager",
+  "branch": "claude/utv2-1097-certification-lifecycle-manager",
+  "base_branch": "main",
+  "commit_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/881",
+  "files_changed": [
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/lifecycle-manager.test.ts",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    ".ops/sync/UTV2-1097.yml"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1097/evidence.json",
+    "docs/06_status/proof/UTV2-1097/verification.md",
+    "docs/06_status/proof/UTV2-1097/runtime-verification.md",
+    "packages/invariants/src/certification/index.ts",
+    "packages/invariants/src/certification/lifecycle-manager.ts",
+    "packages/invariants/src/certification/lifecycle-manager.test.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    "packages/invariants/package.json",
+    ".ops/sync/UTV2-1097.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1097/evidence.json",
+    "docs/06_status/proof/UTV2-1097/verification.md",
+    "docs/06_status/proof/UTV2-1097/runtime-verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-05-26T17:05:19.949Z",
+  "heartbeat_at": "2026-05-26T18:25:18.894Z",
+  "closed_at": "2026-05-26T18:25:18.894Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/claude/utv2-1097-certification-lifecycle-manager.json",
+  "created_by": "claude",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T18:20:52.082Z",
+      "verdict": "fail",
+      "merge_sha": "c6e03cc8",
+      "failures": [
+        "G2",
+        "G4",
+        "L5",
+        "P3",
+        "C3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:21:16.870Z",
+      "verdict": "fail",
+      "merge_sha": "c6e03cc8",
+      "failures": [
+        "G2",
+        "G4",
+        "L5",
+        "P3",
+        "C3",
+        "C4",
+        "C6",
+        "P6",
+        "P7",
+        "P9",
+        "P10",
+        "R1",
+        "R2",
+        "R3"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:23:31.536Z",
+      "verdict": "fail",
+      "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+      "failures": [
+        "L5",
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:24:38.752Z",
+      "verdict": "fail",
+      "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+      "failures": [
+        "R2"
+      ],
+      "runner": "manual"
+    },
+    {
+      "checked_at": "2026-05-26T18:25:02.457Z",
+      "verdict": "pass",
+      "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/claude__utv2-1097-certification-lifecycle-manager",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

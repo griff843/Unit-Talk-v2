@@ -27,3 +27,18 @@ export {
 } from './state-machine.js';
 
 export type { TransitionResult, PropagationResult } from './state-machine.js';
+
+export {
+  CertificationLifecycleManager,
+  DOMAIN_DEPENDENCIES as LIFECYCLE_DOMAIN_DEPENDENCIES,
+} from './lifecycle-manager.js';
+
+export type {
+  CertificationRepository,
+  ActivateResult,
+  SuspendResult,
+  RevokeResult,
+  GateCheckResult,
+  TransitionInput,
+  RevokeInput,
+} from './lifecycle-manager.js';

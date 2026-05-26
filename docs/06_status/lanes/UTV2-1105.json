@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1105",
+  "lane_type": "governance",
+  "executor": "codex-cli",
+  "tier": "T1",
+  "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1105-mechanical-expiration-enforcement",
+  "branch": "codex/utv2-1105-mechanical-expiration-enforcement",
+  "base_branch": "main",
+  "commit_sha": "c40678e3585cc4d256d870070711922333a78857",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/882",
+  "files_changed": [
+    "packages/invariants/src/governance-exception.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    ".ops/sync/UTV2-1105.yml"
+  ],
+  "file_scope_lock": [
+    "docs/06_status/proof/UTV2-1105/evidence.json",
+    "docs/06_status/proof/UTV2-1105/verification.md",
+    "packages/invariants/src/governance-exception.ts",
+    "packages/invariants/src/certification/state-machine.ts",
+    ".ops/sync/UTV2-1105.yml"
+  ],
+  "expected_proof_paths": [
+    "docs/06_status/proof/UTV2-1105/evidence.json",
+    "docs/06_status/proof/UTV2-1105/verification.md"
+  ],
+  "status": "done",
+  "started_at": "2026-05-26T17:06:39.328Z",
+  "heartbeat_at": "2026-05-26T18:27:23.636Z",
+  "closed_at": "2026-05-26T18:27:23.636Z",
+  "blocked_by": [],
+  "preflight_token": ".out/ops/preflight/codex/utv2-1105-mechanical-expiration-enforcement.json",
+  "created_by": "codex-cli",
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T18:27:12.223Z",
+      "verdict": "pass",
+      "merge_sha": "c40678e3585cc4d256d870070711922333a78857",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
+  "reopen_history": [],
+  "execution_location": {
+    "mode": "worktree",
+    "cwd": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1105-mechanical-expiration-enforcement",
+    "package_install": "verified",
+    "setup_command": "pnpm install --frozen-lockfile",
+    "main_checkout_control_only": true
+  }
+}

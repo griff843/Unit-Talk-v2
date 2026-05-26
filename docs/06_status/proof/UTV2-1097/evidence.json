@@ -1,0 +1,49 @@
+{
+  "schema_version": 1,
+  "issue_id": "UTV2-1097",
+  "tier": "T1",
+  "executor": "claude",
+  "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0",
+  "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/881",
+  "verified_at": "2026-05-26T18:30:00Z",
+  "verifier": {
+    "identity": "claude/utv2-1097-certification-lifecycle-manager"
+  },
+  "static_proof": {
+    "pnpm_verify": "EXIT 0",
+    "test_count": 612,
+    "test_pass": 612,
+    "test_fail": 0,
+    "type_check": "PASS",
+    "lint": "PASS",
+    "build": "PASS",
+    "branch_sha": "4cbd08369478aee90b3909b459555e6bc1d28aae",
+    "merge_sha": "c6e03cc84f36195ffbcd064ae762e12b2cce99d0"
+  },
+  "runtime_proof": {
+    "environment": "live Supabase — project ref: zfzdnfwdarxucxtaojxm",
+    "run_at": "2026-05-26T18:30:00Z",
+    "test_count": 7,
+    "test_pass": 7,
+    "test_fail": 0,
+    "duration_ms": 28991,
+    "queries": [
+      "UTV2-920: delivery confirmation rollback — outbox status, receipt, lifecycle, audit rows",
+      "UTV2-920: invalid settlement writes no settlement row",
+      "UTV2-883: no duplicate participants for same external_id and sport",
+      "UTV2-996: re-settling creates correction row — no duplicate base rows",
+      "UTV2-996: correction chain additive — original settlement row not mutated"
+    ],
+    "row_counts": [
+      { "table": "picks", "count": 5283 },
+      { "table": "certification_records", "count": 0 },
+      { "table": "certification_transition_events", "count": 0 },
+      { "table": "pick_lifecycle", "count": 13622 },
+      { "table": "distribution_outbox", "count": 439 },
+      { "table": "settlement_records", "count": 398 }
+    ],
+    "row_counts_sampled_at": "2026-05-26T18:35:00Z",
+    "row_counts_project_ref": "zfzdnfwdarxucxtaojxm",
+    "command": "pnpm test:db"
+  }
+}
