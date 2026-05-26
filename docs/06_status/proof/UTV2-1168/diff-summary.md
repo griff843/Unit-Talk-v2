@@ -2,7 +2,7 @@
 
 Issue: UTV2-1168 - Auto-close merged lanes after PR merge
 Branch: codex/utv2-1168-auto-close-merged-lanes
-Head: 0cf9d0ce3855fcfc924258e70a6c74514355202f
+Head: 208cbeb7e1c5a61a4a3d27d136de34d4078a3065
 
 ## Summary
 
