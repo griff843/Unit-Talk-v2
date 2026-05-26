@@ -5,13 +5,14 @@ Issue: UTV2-1170
 Tier: T2
 Lane type: governance
 Branch: codex/utv2-1170-wire-loop-dispatch-governor-gates
-Head SHA: daa17fcb
-Merge SHA: N/A
+Head SHA: 5ac914d6ed4e4c4d5f24c48d0cb638cd033ab031
+Merge SHA: fce760fc96e6b8c6d05c756d551a894f47eb31d1
 
 ## Commands
 
 - `pnpm exec tsx --test scripts/ops/workflow-hardening.test.ts`: PASS
 - `pnpm type-check`: PASS
+- `pnpm test`: PASS via `pnpm verify`
 - `pnpm verify`: PASS
 - `tsx scripts/ci/r-level-check.ts --base origin/main --head HEAD`: PASS; no R-level artifacts required for this scope.
 

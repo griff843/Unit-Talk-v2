@@ -7,7 +7,7 @@
   "worktree_path": "/home/griff843/code/Unit-Talk-v2/.out/worktrees/codex__utv2-1170-wire-loop-dispatch-governor-gates",
   "branch": "codex/utv2-1170-wire-loop-dispatch-governor-gates",
   "base_branch": "main",
-  "commit_sha": null,
+  "commit_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
   "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/876",
   "files_changed": [],
   "file_scope_lock": [
@@ -18,14 +18,65 @@
     "docs/06_status/proof/UTV2-1170/diff-summary.md",
     "docs/06_status/proof/UTV2-1170/verification.log"
   ],
-  "status": "in_review",
+  "status": "done",
   "started_at": "2026-05-26T09:01:23.276Z",
-  "heartbeat_at": "2026-05-26T09:14:00.867Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T11:52:55.619Z",
+  "closed_at": "2026-05-26T11:52:55.619Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1170-wire-loop-dispatch-governor-gates.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T11:45:58.465Z",
+      "verdict": "pass",
+      "merge_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/876",
+      "repaired_fields": [
+        "status",
+        "commit_sha",
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-05-26T11:50:06.908Z",
+      "verdict": "pass",
+      "merge_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/876",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    },
+    {
+      "checked_at": "2026-05-26T11:50:06.916Z",
+      "verdict": "fail",
+      "merge_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
+      "failures": [
+        "G4",
+        "P3",
+        "C4",
+        "P12"
+      ],
+      "runner": "ops:lane-close"
+    },
+    {
+      "checked_at": "2026-05-26T11:52:54.348Z",
+      "verdict": "pass",
+      "merge_sha": "fce760fc96e6b8c6d05c756d551a894f47eb31d1",
+      "failures": [],
+      "runner": "ops:lane-close --repair-merged",
+      "source": "github_pr_merge_commit_repair",
+      "pr_url": "https://github.com/griff843/Unit-Talk-v2/pull/876",
+      "repaired_fields": [
+        "truth_check_history"
+      ]
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",

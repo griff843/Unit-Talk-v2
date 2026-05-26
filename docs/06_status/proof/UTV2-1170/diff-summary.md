@@ -5,8 +5,8 @@ Issue: UTV2-1170
 Tier: T2
 Lane type: governance
 Branch: codex/utv2-1170-wire-loop-dispatch-governor-gates
-Head SHA: daa17fcb
-Merge SHA: N/A
+Head SHA: 5ac914d6ed4e4c4d5f24c48d0cb638cd033ab031
+Merge SHA: fce760fc96e6b8c6d05c756d551a894f47eb31d1
 
 ## Summary
 
