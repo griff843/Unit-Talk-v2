@@ -1,0 +1,30 @@
+{
+  "schema": "evidence-bundle/v1",
+  "issue_id": "UTV2-1106",
+  "tier": "T1",
+  "executor": "claude",
+  "sha_binding": {
+    "verified_source_sha": "07bedb48c3ddce09dd6abef7c5fba04160d10a43",
+    "ci_sentinels": [
+      "pnpm verify EXIT 0",
+      "612/612 tests pass"
+    ]
+  },
+  "artifacts": [
+    {
+      "path": "packages/invariants/src/certification/bypass-audit.md",
+      "type": "audit-document",
+      "description": "Bypass/exception path inventory and classification for packages/invariants"
+    },
+    {
+      "path": "packages/invariants/src/certification/state-machine.ts",
+      "type": "lint-fix",
+      "description": "Removed unused RevocationTrigger import"
+    }
+  ],
+  "verification_files": [
+    "docs/06_status/proof/UTV2-1106/verification.md",
+    "docs/06_status/proof/UTV2-1106/runtime-verification.md"
+  ],
+  "notes": "Audit/discovery lane. No behavioral changes. 15 bypass paths catalogued."
+}
