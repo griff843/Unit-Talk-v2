@@ -1,6 +1,7 @@
 UTV2-1173 verification evidence
 Generated: 2026-05-26
 Branch: codex/utv2-1173-pr-review-packet-lane-metadata
+Merge: 96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f
 
 Command: tsx --test scripts/ops/pr-review-packet.test.ts
 Result: PASS
@@ -13,6 +14,11 @@ Summary:
 # cancelled 0
 # skipped 0
 # todo 0
+
+Command: pnpm test
+Result: PASS
+Summary:
+Covered by the full pnpm verify gate, which runs the repository test suite after lint, type-check, and build.
 
 Command: pnpm type-check
 Result: PASS

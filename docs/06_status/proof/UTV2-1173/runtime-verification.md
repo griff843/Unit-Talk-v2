@@ -3,6 +3,7 @@
 Issue: UTV2-1173 - Align PR review packet scope rules with lane metadata
 Branch: codex/utv2-1173-pr-review-packet-lane-metadata
 Head: 41ab633332e25c954e2f3684c83330c1ad2cc384
+Merge: 96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f
 
 ## Verification
 
@@ -13,3 +14,5 @@ Head: 41ab633332e25c954e2f3684c83330c1ad2cc384
 - `pnpm verify`
 
 The lane changes only PR review packet scope classification and test discovery logic. No production runtime service, database, domain, worker, or migration path was changed.
+
+Post-merge closeout proof is bound to merge SHA `96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f`.

@@ -3,6 +3,7 @@
 Issue: UTV2-1173 - Align PR review packet scope rules with lane metadata
 Branch: codex/utv2-1173-pr-review-packet-lane-metadata
 Head: f91d4a800a26e019a5d57caf3605d8edf7ce1235
+Merge: 96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f
 
 ## Summary
 
@@ -25,3 +26,5 @@ The PR review packet scope model now allows same-issue generated lane metadata a
 ## Verification
 
 No Tier C paths were changed. The implementation is limited to the PR review packet generator and its regression tests.
+
+Post-merge closeout proof is bound to merge SHA `96ef8c24d07f2a9b118f4e20b072e9f63ed8a60f`.
