@@ -84,3 +84,30 @@ export type {
   FreshnessFailure,
   FreshnessResult,
 } from './proof-freshness.js';
+
+export type {
+  CertificationDomain,
+  CertificationStatus,
+  RevocationTrigger,
+  ProgramId,
+  CertificationRecord,
+  CertificationTransitionEvent,
+  CertificationRecordInput,
+  PropagationInput,
+  DomainCertificationState,
+  ProgramCertificationState,
+} from './certification/index.js';
+
+export {
+  CERTIFICATION_DOMAINS,
+  CERTIFICATION_STATUSES,
+  REVOCATION_TRIGGERS,
+  PROGRAM_IDS,
+  DOMAIN_DEPENDENCIES,
+  getDependents,
+  CertificationStateMachine,
+  CertificationTransitionError,
+  certificationStateMachine,
+} from './certification/index.js';
+
+export type { TransitionResult, PropagationResult } from './certification/index.js';
