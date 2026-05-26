@@ -39,7 +39,7 @@
     "docs/06_status/proof/UTV2-1174/verification.log",
     "docs/06_status/proof/UTV2-1174/runtime-verification.md"
   ],
-  "status": "in_review",
+  "status": "merged",
   "started_at": "2026-05-26T03:13:01.653Z",
   "heartbeat_at": "2026-05-26T12:38:10Z",
   "closed_at": null,
