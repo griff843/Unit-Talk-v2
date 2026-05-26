@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { parse as parseYaml } from 'yaml';
 import { normalizeUntrackedScriptFiles } from './clean-scripts.js';
-import { evaluateBranchDiscipline, evaluateIssueReferences, extractIssueIds } from './branch-discipline-guard.js';
+import {
+  evaluateBranchDiscipline,
+  evaluateIssueReferences,
+  extractIssueIds,
+  normalizeProofOutputForIssueBinding,
+} from './branch-discipline-guard.js';
 import { ROOT } from './shared.js';
 
 type WorkflowDocument = Record<string, unknown>;
@@ -145,6 +150,69 @@ test('branch discipline accepts a single matching branch issue reference', () =>
   assert.strictEqual(result.code, 'single_issue_reference');
   assert.deepStrictEqual(result.branch_issue_ids, ['UTV2-123']);
   assert.deepStrictEqual(result.issue_ids, ['UTV2-123']);
+});
+
+test('branch discipline ignores historical issue ids in fenced proof output', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix(ops): UTV2-1172 branch discipline proof handling',
+    branch: 'codex/utv2-1172-proof-aware-branch-discipline',
+    body: [
+      '## Summary',
+      'Fixes proof parsing for UTV2-1172.',
+      '',
+      '## Verification',
+      '```text',
+      'TAP version 13',
+      'ok 1 UTV2-866 live DB proof output',
+      '# tests 1',
+      '```',
+    ].join('\n'),
+    commits: 'fix(ops): UTV2-1172 proof-aware branch discipline',
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.strictEqual(result.code, 'single_issue_reference');
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-1172']);
+});
+
+test('branch discipline ignores marked proof sections and TAP lines', () => {
+  const body = [
+    '## Summary',
+    'Only UTV2-1172 is prose.',
+    '',
+    '## Live-DB proof',
+    '[proof] UTV2-866 legacy closeout fixture',
+    'not ok 2 UTV2-901 historical fixture',
+    '# fail 1',
+    '',
+    '## Merge order',
+    'No overlapping files.',
+  ].join('\n');
+
+  assert.doesNotMatch(normalizeProofOutputForIssueBinding(body), /UTV2-866|UTV2-901/);
+
+  const result = evaluateBranchDiscipline({
+    title: 'fix(ops): UTV2-1172 branch discipline proof handling',
+    branch: 'codex/utv2-1172-proof-aware-branch-discipline',
+    body,
+    commits: 'fix(ops): UTV2-1172 proof-aware branch discipline',
+  });
+
+  assert.strictEqual(result.ok, true);
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-1172']);
+});
+
+test('branch discipline still fails mismatched prose issue references', () => {
+  const result = evaluateBranchDiscipline({
+    title: 'fix(ops): UTV2-1172 branch discipline proof handling',
+    branch: 'codex/utv2-1172-proof-aware-branch-discipline',
+    body: 'This also changes UTV2-999 in normal prose.',
+    commits: 'fix(ops): UTV2-1172 proof-aware branch discipline',
+  });
+
+  assert.strictEqual(result.ok, false);
+  assert.strictEqual(result.code, 'multiple_issue_references');
+  assert.deepStrictEqual(result.issue_ids, ['UTV2-1172', 'UTV2-999']);
 });
 
 test('session start state cache writes only to ignored local output', () => {
