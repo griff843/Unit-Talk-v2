@@ -25,14 +25,22 @@
     "docs/06_status/proof/UTV2-1105/evidence.json",
     "docs/06_status/proof/UTV2-1105/verification.md"
   ],
-  "status": "merged",
+  "status": "done",
   "started_at": "2026-05-26T17:06:39.328Z",
-  "heartbeat_at": "2026-05-26T17:06:39.328Z",
-  "closed_at": null,
+  "heartbeat_at": "2026-05-26T18:27:23.636Z",
+  "closed_at": "2026-05-26T18:27:23.636Z",
   "blocked_by": [],
   "preflight_token": ".out/ops/preflight/codex/utv2-1105-mechanical-expiration-enforcement.json",
   "created_by": "codex-cli",
-  "truth_check_history": [],
+  "truth_check_history": [
+    {
+      "checked_at": "2026-05-26T18:27:12.223Z",
+      "verdict": "pass",
+      "merge_sha": "c40678e3585cc4d256d870070711922333a78857",
+      "failures": [],
+      "runner": "manual"
+    }
+  ],
   "reopen_history": [],
   "execution_location": {
     "mode": "worktree",
